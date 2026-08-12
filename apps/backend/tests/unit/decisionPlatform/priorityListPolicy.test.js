@@ -114,6 +114,23 @@ test('derivePriorityListItemState surfaces suppression, completion, unavailable,
   assert.deepEqual(clean, { suppressed: false, completed: false, unavailable: false, stale: false });
 });
 
+test('derivePriorityListItemState threads a fatigue-suppressed rating through as suppressed, without touching other flags (FRD §17.2: engagement flags, never removes)', () => {
+  const state = derivePriorityListItemState(rankedAction(), true);
+  assert.deepEqual(state, { suppressed: true, completed: false, unavailable: false, stale: false });
+});
+
+test('buildPriorityListView marks items in the suppressedHomeActionIds set as suppressed without removing them from the list', () => {
+  const actions = [rankedAction({ id: 'a' }), rankedAction({ id: 'b' })];
+  const view = buildPriorityListView(
+    { propertyId: 'prop-1', generatedAt: '2026-08-01T00:00:00.000Z', actions },
+    'ASK',
+    { suppressedHomeActionIds: new Set(['a']) },
+  );
+  assert.equal(view.items.length, 2);
+  assert.equal(view.items.find((item) => item.homeActionId === 'a').suppressed, true);
+  assert.equal(view.items.find((item) => item.homeActionId === 'b').suppressed, false);
+});
+
 test('buildPriorityListView never reorders the already-ranked feed and stamps the current policy version', () => {
   const actions = [rankedAction({ id: 'a' }), rankedAction({ id: 'b' }), rankedAction({ id: 'c' })];
   const view = buildPriorityListView({ propertyId: 'prop-1', generatedAt: '2026-08-01T00:00:00.000Z', actions }, 'ASK');

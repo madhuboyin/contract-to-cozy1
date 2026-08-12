@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { askRateLimiter } from '../middleware/rateLimiter.middleware';
-import { deleteAskSession, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskFeedback } from '../controllers/ask.controller';
+import { deleteAskSession, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskFeedback, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
@@ -15,6 +15,7 @@ router.post('/ask/executions/:executionId/property', postAskExecutionProperty);
 router.post('/ask/executions/:executionId/confirm', postAskConfirmation);
 router.post('/ask/executions/:executionId/cancel', postAskCancellation);
 router.post('/ask/executions/:executionId/feedback', postAskFeedback);
+router.post('/ask/executions/:executionId/priority-list/:homeActionId/feedback', postHomeActionUsefulnessFeedback);
 router.post('/ask/executions/:executionId/continue', postAskContinuation);
 router.post('/ask/executions/:executionId/corrections', postAskCorrection);
 router.get('/ask/executions/:executionId', getAskExecutionById);

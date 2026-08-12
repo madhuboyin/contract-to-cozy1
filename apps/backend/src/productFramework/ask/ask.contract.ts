@@ -347,6 +347,14 @@ export const SubmitAskFeedbackSchema = z.object({
   comment: z.string().trim().max(1000).optional(),
 }).strict();
 
+// Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable.
+// Per-item feedback on a single PRIORITY_LIST entry (FRD §21.2), distinct
+// from SubmitAskFeedbackSchema's whole-execution UP/DOWN rating.
+export const SubmitHomeActionUsefulnessFeedbackSchema = z.object({
+  rating: z.enum(['USEFUL', 'NOT_USEFUL']),
+  comment: z.string().trim().max(1000).optional(),
+}).strict();
+
 export const RequestAskCorrectionSchema = z.object({
   kind: z.enum(['HOME_RECORD', 'RETRY_RESPONSE']),
 }).strict();
@@ -470,6 +478,7 @@ export type SubmitAskCaptureRequest = z.infer<typeof SubmitAskCaptureRequestSche
 export type RecordAskCaptureEvent = z.infer<typeof RecordAskCaptureEventSchema>;
 export type SubmitAskConfirmation = z.infer<typeof SubmitAskConfirmationSchema>;
 export type SubmitAskFeedback = z.infer<typeof SubmitAskFeedbackSchema>;
+export type SubmitHomeActionUsefulnessFeedback = z.infer<typeof SubmitHomeActionUsefulnessFeedbackSchema>;
 export type RequestAskCorrection = z.infer<typeof RequestAskCorrectionSchema>;
 export type ContinueAskExecution = z.infer<typeof ContinueAskExecutionSchema>;
 export type ResolveAskExecutionProperty = z.infer<typeof ResolveAskExecutionPropertySchema>;

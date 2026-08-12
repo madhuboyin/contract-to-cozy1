@@ -18,6 +18,7 @@ import {
   type SubmitAskClarification,
   type SubmitAskConfirmation,
   type SubmitAskFeedback,
+  type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
 import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal } from '../../lib/metrics';
@@ -75,6 +76,7 @@ import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '.
 import { listPropertyChanges } from '../../propertyChanges/propertyChange.service';
 import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/homeChangeSummaryMapping';
 import { buildPriorityListView } from '../decisionPlatform/priorityListPolicy';
+import { getSuppressedHomeActionIds, recordHomeActionUsefulnessFeedback } from '../decisionPlatform/homeActionUsefulnessFeedback.service';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
@@ -3113,11 +3115,14 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
   // honest empty-state copy, and an empty PRIORITY_LIST block risks reading
   // as "nothing needs attention" rather than "feed has no eligible items".
   if (feed.actions.length) {
+    const suppressedHomeActionIds = await getSuppressedHomeActionIds({
+      userId, propertyId, homeActionIds: feed.actions.map((action) => action.id),
+    }).catch(() => new Set<string>());
     blocks.push({
       type: 'PRIORITY_LIST',
       id: 'home-actions-priority-list',
       title: 'What matters now',
-      ...buildPriorityListView(feed, 'ASK'),
+      ...buildPriorityListView(feed, 'ASK', { suppressedHomeActionIds }),
     });
   }
 
@@ -5964,4 +5969,27 @@ export async function submitAskExecutionFeedback(userId: string, executionId: st
     : await prisma.feedback.create({ data: { userId, propertyId: execution.propertyId, rating: input.rating.toLowerCase(), comment: input.comment ?? null, page } });
   askFeedbackTotal.inc({ rating: input.rating.toLowerCase() });
   return { id: saved.id, rating: input.rating };
+}
+
+// Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
+// per-PRIORITY_LIST-item rating, distinct from submitAskExecutionFeedback's
+// whole-execution UP/DOWN. Ownership is verified the same way
+// submitAskExecutionFeedback does (the execution belongs to this user);
+// homeActionsResult() already ran ensurePropertyAccess before this execution
+// could have surfaced any PRIORITY_LIST item for its property.
+export async function submitHomeActionUsefulnessFeedback(
+  userId: string,
+  executionId: string,
+  homeActionId: string,
+  input: SubmitHomeActionUsefulnessFeedback,
+): Promise<{ id: string; rating: 'USEFUL' | 'NOT_USEFUL' }> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { id: true, propertyId: true } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  return recordHomeActionUsefulnessFeedback({
+    userId, propertyId: execution.propertyId, homeActionId, rating: input.rating, comment: input.comment ?? null,
+  });
 }

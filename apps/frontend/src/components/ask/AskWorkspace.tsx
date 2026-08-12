@@ -161,7 +161,31 @@ function CapabilityCard({ capability }: {
     : <Link href={capability.href} className={className}>{content}</Link>;
 }
 
-function BlockView({ block }: { block: AskPresentationBlock }) {
+// Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
+// per-PRIORITY_LIST-item rating, distinct from ExecutionFeedback's
+// whole-response UP/DOWN thumbs.
+function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionId: string; homeActionId: string }) {
+  const [rating, setRating] = useState<'USEFUL' | 'NOT_USEFUL' | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (nextRating: 'USEFUL' | 'NOT_USEFUL') => {
+    setSaving(true);
+    try {
+      const response = await api.submitHomeActionUsefulnessFeedback(executionId, homeActionId, { rating: nextRating });
+      if (response.success) setRating(nextRating);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="flex items-center gap-1 text-xs text-slate-500">
+      <span>{rating ? 'Thanks—saved.' : 'Useful?'}</span>
+      <button type="button" disabled={saving} aria-label="Mark useful" aria-pressed={rating === 'USEFUL'} onClick={() => void submit('USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'USEFUL' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-3.5 w-3.5" /></button>
+      <button type="button" disabled={saving} aria-label="Mark not useful" aria-pressed={rating === 'NOT_USEFUL'} onClick={() => void submit('NOT_USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'NOT_USEFUL' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-3.5 w-3.5" /></button>
+    </div>
+  );
+}
+
+function BlockView({ block, executionId }: { block: AskPresentationBlock; executionId: string }) {
   if (block.type === 'SUMMARY') {
     return (
       <section className={cn(
@@ -469,8 +493,9 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
                   {item.confidenceLabel.toLowerCase()} confidence
                   {item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}
                 </p>
-                <div className="mt-3">
-                  {item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <div>{item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
+                  <HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />
                 </div>
               </li>
             ))}
@@ -1161,7 +1186,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                 <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
                   <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>
-                  {execution.blocks.map((block) => <BlockView key={block.id} block={block} />)}
+                  {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} />)}
                   {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
                   {execution.status === 'FAILED_RETRYABLE' && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again</button></div>}
                   {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} autoFocus={index === 0 && execution.executionId === justUpdatedExecutionId} />)}

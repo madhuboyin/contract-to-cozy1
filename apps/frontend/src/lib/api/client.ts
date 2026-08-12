@@ -1038,6 +1038,9 @@ class APIClient {
   async submitAskFeedback(executionId: string, payload: { rating: 'UP' | 'DOWN'; comment?: string }): Promise<APIResponse<import('@/features/ask/types').AskFeedbackResponse>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/feedback`, { method: 'POST', body: payload });
   }
+  async submitHomeActionUsefulnessFeedback(executionId: string, homeActionId: string, payload: { rating: 'USEFUL' | 'NOT_USEFUL'; comment?: string }): Promise<APIResponse<{ id: string; rating: 'USEFUL' | 'NOT_USEFUL' }>> {
+    return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/priority-list/${encodeURIComponent(homeActionId)}/feedback`, { method: 'POST', body: payload });
+  }
   async deleteAskSession(sessionId: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
   }

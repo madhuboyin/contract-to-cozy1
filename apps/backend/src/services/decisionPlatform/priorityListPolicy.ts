@@ -102,10 +102,17 @@ export interface PriorityListItemState {
  * flags cover the residual per-item states FRD §21.2 still requires be
  * disclosed for whatever remains eligible (e.g. an accepted-but-snoozed work
  * item, or a degraded recommendation response).
+ *
+ * `fatigueSuppressed` is the in-product fatigue/suppression signal (Phase
+ * 9B): a user who rated this item "not useful" recently (see
+ * homeActionUsefulnessFeedback.service.ts's cooldown window). Per FRD
+ * §17.2 ("engagement cannot override safety or consent") this only ever
+ * flags the item -- it never removes it from the list or from a DO_NOW
+ * category.
  */
-export function derivePriorityListItemState(action: RankedHomeAction): PriorityListItemState {
+export function derivePriorityListItemState(action: RankedHomeAction, fatigueSuppressed = false): PriorityListItemState {
   return {
-    suppressed: action.state === 'SNOOZED' || action.state === 'DEFERRED' || action.workItem?.state === 'DEFERRED',
+    suppressed: action.state === 'SNOOZED' || action.state === 'DEFERRED' || action.workItem?.state === 'DEFERRED' || fatigueSuppressed,
     completed: action.state === 'COMPLETED' || action.workItem?.state === 'VERIFIED' || action.workItem?.state === 'CLOSED',
     unavailable: action.recommendationResponse.status !== 'AVAILABLE',
     stale: action.evidence.some((item) => item.freshness === 'STALE'),
@@ -148,6 +155,7 @@ export type PriorityListChannel = keyof typeof PRIORITY_LIST_CHANNEL_DISPLAY_LIM
 export function buildPriorityListView(
   feed: { propertyId: string; generatedAt: string; actions: RankedHomeAction[] },
   channel: PriorityListChannel,
+  options: { suppressedHomeActionIds?: ReadonlySet<string> } = {},
 ): PriorityListView {
   const displayLimit = PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS[channel];
   const ordered = feed.actions;
@@ -155,7 +163,7 @@ export function buildPriorityListView(
 
   const items = visible.map((action, index) => {
     const next = ordered[index + 1] ?? null;
-    const state = derivePriorityListItemState(action);
+    const state = derivePriorityListItemState(action, options.suppressedHomeActionIds?.has(action.id));
     const cta = !state.unavailable && action.primaryCta.href && action.primaryCta.label
       ? { id: action.id, label: action.primaryCta.label, href: action.primaryCta.href, style: 'PRIMARY' as const }
       : null;
