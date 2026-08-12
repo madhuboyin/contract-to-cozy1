@@ -19,6 +19,7 @@ export type AskOperationId =
   | 'MAINTENANCE_TASK_COMPLETE'
   | 'MAINTENANCE_TASK_UPDATE'
   | 'COVERAGE_GAPS'
+  | 'INCIDENT_CLAIM_STATUS'
   | 'SAVINGS_OPPORTUNITIES'
   | 'OWNERSHIP_COSTS'
   | 'INVENTORY_LOOKUP'
@@ -116,6 +117,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MAINTENANCE_TASK_COMPLETE: definition('MAINTENANCE_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   MAINTENANCE_TASK_UPDATE: definition('MAINTENANCE_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
   COVERAGE_GAPS: definition('COVERAGE_GAPS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
+  INCIDENT_CLAIM_STATUS: definition('INCIDENT_CLAIM_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'incident-claim.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   SAVINGS_OPPORTUNITIES: definition('SAVINGS_OPPORTUNITIES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'savings.opportunities', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   OWNERSHIP_COSTS: definition('OWNERSHIP_COSTS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'ownership.costs', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   INVENTORY_LOOKUP: definition('INVENTORY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inventory.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
@@ -175,8 +177,16 @@ const homeDeadlineMonitorPattern = /\b(?:notify|alert|remind|monitor|tell me)\b.
 const capitalReservePattern = /\b(?:reserve fund|sinking fund|capital timeline|capital plan|major replacements?|future home expenses?|how much should i save|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
 const propertyTaxAppealPattern = /\b(?:property tax|assessment|assessed value|tax class|tax exemption)\b.{0,80}\b(?:appeal|contest|challenge|readiness|overassessed|too high|evidence|deadline)\b|\b(?:appeal|contest|challenge)\b.{0,60}\b(?:property tax|assessment|assessed value|tax class|exemption)\b/i;
 const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit|inspection|hoa)\b.{0,80}\b(?:ready|readiness|start|require|needed|block|blocking|blockers?|compliance|status)\b|\b(?:can i start|am i ready|what is blocking|what are the blockers?)\b.{0,60}\b(?:renovation|remodel|project|work)\b/i;
-const majorEventPattern = /\b(?:help|guide|prepare|plan|checklist|what should i do)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|major renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
+const majorEventPattern = /\b(?:help|guide|prepare|plan|checklist|what should i do|what do i need)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|major renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
+// Record-query status of already-recorded canonical Incident/Claim rows
+// (§9.2 requires "active projects, incidents, claims, permits, and
+// inspections" coverage). Deliberately distinct from majorEventPattern's
+// guide/prepare/plan/checklist/"what should I do" phrasing (e.g. Appendix
+// A's "What do I need for an insurance claim?"), which is a request to
+// start/navigate a claim, not a query about existing recorded ones -- that
+// pattern is checked earlier in the cascade and wins for that overlap.
+const incidentClaimStatusPattern = /\b(?:status of|track|do i have|open|active|recent|pending|filed|submitted)\b.{0,40}\b(?:insurance )?claims?\b|\bclaims?\b.{0,40}\b(?:status|open|active|pending|filed|submitted|history|recorded)\b|\b(?:recorded|logged|detected|any|active|recent|open|new)\b.{0,40}\bincidents?\b|\bincidents?\b.{0,40}\b(?:recorded|logged|detected|history|status|active|recent)\b|\bwhat incidents?\b/i;
 const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b/i;
 const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of owning\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
 const inventoryLookupPattern = /\b(?:what do you know about|tell me about|show|find|list|which|do i have)\b.{0,65}\b(?:inventory|appliances?|systems?|equipment|hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b|\b(?:inventory|appliance|system|equipment)\s+(?:record|records|details|items|list)\b|\b(?:incomplete|missing)\b.{0,35}\b(?:inventory|appliance|system)\s+(?:record|records|details|information)\b|\b(?:my|the|this)\s+(?:hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b.{0,45}\b(?:history|record|details|information|know)\b|\b(?:systems?|equipment|appliances?)\b.{0,45}\b(?:end of life|expiry|expire|incomplete)\b/i;
@@ -242,6 +252,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (coveragePattern.test(message)) {
     return resolved('COVERAGE_GAPS', 0.96);
+  }
+  if (incidentClaimStatusPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('INCIDENT_CLAIM_STATUS', 0.95);
   }
   if (savingsOpportunitiesPattern.test(message)) {
     return resolved('SAVINGS_OPPORTUNITIES', 0.97);

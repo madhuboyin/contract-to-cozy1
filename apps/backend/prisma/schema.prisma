@@ -16007,6 +16007,7 @@ model RefinanceRateMonitor {
   lastEvaluatedSnapshotId String?
   lastTriggeredSnapshotId String?
   lastTriggeredAt         DateTime?
+  lastTriggeredRateBps    Int?
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
 

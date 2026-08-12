@@ -10,6 +10,7 @@ import type { AskOperationId } from './askOperationRegistry';
 const FILTER_CONTINUABLE_OPERATIONS: ReadonlySet<AskOperationId> = new Set([
   'MAINTENANCE_STATUS',
   'COVERAGE_GAPS',
+  'INCIDENT_CLAIM_STATUS',
   'SAVINGS_OPPORTUNITIES',
   'OWNERSHIP_COSTS',
   'INVENTORY_LOOKUP',
@@ -100,7 +101,15 @@ async function findRecentPriorExecution(sessionId: string, propertyId: string | 
   const row = await prisma.askExecution.findFirst({
     where: {
       sessionId,
-      propertyId: propertyId ?? undefined,
+      // `undefined` makes Prisma omit this filter entirely rather than
+      // matching NULL, so before the current turn's property is resolved
+      // (first message of a session, a NEEDS_PROPERTY turn, a no-property
+      // launch) this must not silently widen to "any property in this
+      // session" -- a session can legitimately carry executions for more
+      // than one property over its lifetime (NEEDS_PROPERTY resumption
+      // mutates session.propertyId in place). Explicit null scopes a
+      // property-less turn to only reuse other property-less prior turns.
+      propertyId: propertyId ?? null,
       operationId: { not: null },
       status: { in: REUSABLE_PRIOR_STATUSES },
       createdAt: { gte: new Date(Date.now() - FOLLOW_UP_LOOKBACK_MS) },
@@ -134,7 +143,16 @@ export async function resolveAskFollowUpMessage(input: {
     const entityTitle = extractSingularEntityTitle(prior.resultJson);
     if (!entityTitle) return fallback;
     const pronounSpan = entityMatch[1];
-    const rewritten = input.message.replace(pronounSpan, entityTitle);
+    // String.replace(pronounSpan, ...) would rewrite the *first* occurrence
+    // of that substring anywhere in the message, not necessarily the one
+    // the regex matched -- e.g. "I know it's overdue, mark it complete"
+    // would garble the "it" inside "it's" instead. The capture group is
+    // always the tail of the whole match (the pattern's trailing \b is
+    // zero-width, nothing follows the group), so its exact position can be
+    // computed from the match length instead of searched for.
+    const groupStart = entityMatch.index + entityMatch[0].length - pronounSpan.length;
+    const groupEnd = groupStart + pronounSpan.length;
+    const rewritten = `${input.message.slice(0, groupStart)}${entityTitle}${input.message.slice(groupEnd)}`;
     return { effectiveMessage: rewritten, forcedOperationId: null, sourceExecutionId: prior.id };
   }
 

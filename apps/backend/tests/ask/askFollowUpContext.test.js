@@ -4,9 +4,11 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 let mockRow = null;
+let lastWhere = null;
 const prismaMock = {
   askExecution: {
     findFirst: async (args) => {
+      lastWhere = args.where;
       if (!mockRow) return null;
       // Sanity-check the caller is actually scoping the lookback, not
       // reaching across the whole session unbounded.
@@ -116,4 +118,43 @@ test('an operationId-less prior execution (boundary/grounded) is not treated as 
   mockRow = priorRow({ operationId: null });
   const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'Now complete it.' });
   assert.equal(result.effectiveMessage, 'Now complete it.');
+});
+
+test('a property-less turn queries for propertyId IS NULL, not an unscoped lookup across every property in the session', async () => {
+  mockRow = priorRow();
+  await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: null, message: 'Now complete it.' });
+  // Prisma treats `undefined` as "omit this filter" (matches any property)
+  // and `null` as "match rows where propertyId IS NULL". Before the current
+  // turn's property is resolved, only property-less prior turns may be
+  // reused -- an execution scoped to a *different* property in the same
+  // session must never leak in as follow-up context.
+  assert.equal(lastWhere.propertyId, null);
+  assert.notEqual(lastWhere.propertyId, undefined);
+
+  mockRow = priorRow();
+  await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: undefined, message: 'Now complete it.' });
+  assert.equal(lastWhere.propertyId, null);
+});
+
+test('entity continuation substitutes only the matched pronoun occurrence, not an earlier lookalike substring', async () => {
+  mockRow = priorRow({
+    operationId: 'MAINTENANCE_TASK_COMPLETE',
+    message: 'Complete the gutter cleaning task',
+    resultJson: {
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS',
+        id: 'maintenance-complete-select',
+        details: [{ label: 'Task', value: 'Clean the gutters' }],
+      }],
+    },
+  });
+  const result = await resolveAskFollowUpMessage({
+    sessionId: 'session-1',
+    propertyId: 'property-1',
+    message: "I know it's overdue, mark it complete",
+  });
+  // A naive String.replace(pronounSpan, ...) would rewrite the "it" inside
+  // "it's" (the first occurrence in the string) instead of the "it" the
+  // regex actually matched in "mark it complete", garbling the sentence.
+  assert.equal(result.effectiveMessage, "I know it's overdue, mark Clean the gutters complete");
 });

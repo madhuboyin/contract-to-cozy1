@@ -20,11 +20,12 @@ const {
   ASK_RESPONSE_SCHEMA_VERSION,
   AskExecutionResponseSchema,
   AskPendingWorkItemSchema,
+  AskPresentationBlockSchema,
 } = require('../../src/productFramework/ask/ask.contract.ts');
 
 test('every Ask operation has a complete governed definition', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 28);
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 29);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -81,6 +82,45 @@ test('orphaned RUNNING executions (no confirmation receipt) are reclaimed on a t
   assert.match(createFn.slice(0, 1500), /reclaimOrphanedRunningExecution\(duplicate\)/);
 });
 
+test('home-deadline monitor confirmation rechecks warranty/insurance source freshness, not just maintenance-sourced tasks', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  // Prep time must capture a version signature for the warranty/policy
+  // source alongside the monitor input.
+  assert.match(orchestrator, /parameters: \{ homeDeadlineMonitor: input, homeDeadlineSourceVersion: homeDeadlineSourceVersion\(source\)/);
+  // Confirm time must re-fetch the actual current source record and fail
+  // closed (ASK_CONTEXT_VERSION_CONFLICT) if it no longer matches, instead
+  // of reusing candidate.data.dueDate/title from prep time unchecked.
+  const elseBranchStart = orchestrator.indexOf('} else {', orchestrator.indexOf("candidate.data.sourceType === 'MAINTENANCE'"));
+  const elseBranchEnd = orchestrator.indexOf('const actionKey = `ask-deadline:', elseBranchStart);
+  const freshnessCheck = orchestrator.slice(elseBranchStart, elseBranchEnd + 200);
+  assert.match(freshnessCheck, /prisma\.warranty\.findFirst/);
+  assert.match(freshnessCheck, /prisma\.insurancePolicy\.findFirst/);
+  assert.match(freshnessCheck, /parameters\.homeDeadlineSourceVersion !== homeDeadlineSourceVersion\(currentSource/);
+  assert.match(freshnessCheck, /'ASK_CONTEXT_VERSION_CONFLICT'/);
+});
+
+test('financing-profile capture claims its idempotency receipt before writing, not after', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const claimIndex = orchestrator.indexOf("canonicalOwner: 'PropertyFinancingProfile', answerHash },\n      });");
+  const writeIndex = orchestrator.indexOf('await upsertProfile(execution.propertyId,');
+  assert.ok(claimIndex > 0, 'pre-write receipt claim not found');
+  assert.ok(writeIndex > claimIndex, 'upsertProfile must run after the receipt claim, not before it');
+  assert.match(orchestrator, /let alreadyCaptured = false;/);
+  assert.match(orchestrator, /if \(!alreadyCaptured\) \{\s*\n\s*await upsertProfile/);
+});
+
+test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections already do', () => {
+  const tableBlock = { type: 'TABLE', id: 't1', title: 'Upcoming capital windows', columns: [{ key: 'item', label: 'Item' }], rows: [{ id: 'r1', values: { item: 'Roof' } }], totalCount: 15, actions: [] };
+  const parsed = AskPresentationBlockSchema.parse(tableBlock);
+  assert.equal(parsed.totalCount, 15);
+  // Omitting it (every pre-existing TABLE producer) must remain valid.
+  const withoutCount = AskPresentationBlockSchema.parse({ ...tableBlock, totalCount: undefined });
+  assert.equal(withoutCount.totalCount, undefined);
+
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(orchestrator, /id: 'capital-timeline-table'.*totalCount: items\.length/);
+});
+
 test('material monitor notifications link to durable Ask continuations', () => {
   const continuation = readFileSync(resolve(__dirname, '../../src/services/ask/askNotificationContinuation.service.ts'), 'utf8');
   const refinance = readFileSync(resolve(__dirname, '../../src/refinanceRadar/refinanceRateMonitor.service.ts'), 'utf8');
@@ -98,6 +138,13 @@ test('golden and negative prompts route before remote generation', () => {
   const cases = [
     ['List maintenance completed this year and pending', 'MAINTENANCE_STATUS'],
     ['Which items are missing coverage?', 'COVERAGE_GAPS'],
+    ['What is the status of my insurance claim?', 'INCIDENT_CLAIM_STATUS'],
+    ['Do I have any open claims?', 'INCIDENT_CLAIM_STATUS'],
+    ['Are there any recorded incidents for this home?', 'INCIDENT_CLAIM_STATUS'],
+    // Appendix A: this is a request to start/navigate a claim, not a status
+    // query about existing ones -- must keep routing to MAJOR_EVENT_ENTRY,
+    // not get captured by the new incident/claim status pattern.
+    ['What do I need for an insurance claim?', 'MAJOR_EVENT_ENTRY'],
     ['Where can I save money on home costs?', 'SAVINGS_OPPORTUNITIES'],
     ['Show my appliance inventory', 'INVENTORY_LOOKUP'],
     ['Summarize my home record', 'PROPERTY_SUMMARY'],

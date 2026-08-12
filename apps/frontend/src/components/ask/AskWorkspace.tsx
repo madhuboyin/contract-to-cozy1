@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, Ref, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, Clock3, ExternalLink, Home, Loader2, Maximize2, Send, Sparkles, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -15,6 +15,27 @@ const starterQuestions = [
   'Is there a tool to help me refinance?',
   'Where could I save money on this home?',
 ];
+
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// Moves focus into a newly-appeared pending-action card (clarification,
+// capture, confirmation, property selection) so keyboard/screen-reader
+// users land on the next required action instead of having to tab-hunt for
+// it after every turn. `autoFocus` is read only at mount: each of these
+// cards is a distinct component instance for the pending state it renders
+// (a capture card unmounts and a confirmation card mounts fresh when the
+// execution advances), so "on mount" already means "just appeared" and
+// deliberately does not re-fire on later prop updates to the same instance.
+function useAutoFocusFirstControl<T extends HTMLElement>(autoFocus: boolean) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (!autoFocus) return;
+    ref.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus({ preventScroll: true });
+    // Intentionally mount-only -- see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return ref;
+}
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -280,6 +301,11 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
       <div className="mt-3 hidden overflow-x-auto sm:block">
         <table className="min-w-full text-left text-sm"><thead><tr>{block.columns.map((column) => <th key={column.key} className="border-b px-2 py-2 text-xs text-slate-500">{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr key={row.id}>{block.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-2 py-2 text-slate-700">{row.values[column.key]}</td>)}</tr>)}</tbody></table>
       </div>
+      {block.totalCount != null && block.totalCount > block.rows.length && (
+        block.actions[0]?.href
+          ? <Link href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{block.totalCount - block.rows.length} more · {block.actions[0].label}</Link>
+          : <p className="mt-3 text-sm text-slate-500">+{block.totalCount - block.rows.length} more not shown here.</p>
+      )}
     </section>
   );
 
@@ -287,8 +313,9 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
   return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4" role="status"><h3 className="font-semibold text-slate-950">{unsupported.title ?? 'Response unavailable'}</h3><p className="mt-2 text-sm text-slate-700">This response section uses an unsupported format ({unsupported.type ?? 'unknown'}). Refresh Ask or ask the question again.</p></section>;
 }
 
-function PropertySelectionCard({ executionId, onCompleted }: { executionId: string; onCompleted: (execution: AskExecutionResponse) => void }) {
+function PropertySelectionCard({ executionId, onCompleted, autoFocus = false }: { executionId: string; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean }) {
   const { setSelectedPropertyId } = usePropertyContext();
+  const containerRef = useRef<HTMLElement>(null);
   const [properties, setProperties] = useState<{ id: string; label: string }[] | null>(null);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -304,6 +331,16 @@ function PropertySelectionCard({ executionId, onCompleted }: { executionId: stri
       .catch(() => { if (active) setProperties([]); });
     return () => { active = false; };
   }, []);
+  // Unlike the other pending-action cards, this one's real content is
+  // gated behind an async fetch, so the mount-only focus hook would fire
+  // before the property buttons exist. Focus once the list actually
+  // renders instead.
+  useEffect(() => {
+    if (autoFocus && properties && properties.length > 0) {
+      containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus({ preventScroll: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [properties]);
 
   const choose = async (propertyId: string) => {
     if (selecting) return;
@@ -325,7 +362,7 @@ function PropertySelectionCard({ executionId, onCompleted }: { executionId: stri
   if (properties.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4" aria-busy={Boolean(selecting)}>
+    <section ref={containerRef} className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4" aria-busy={Boolean(selecting)}>
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800">Select a home</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {properties.map((property) => (
@@ -339,7 +376,8 @@ function PropertySelectionCard({ executionId, onCompleted }: { executionId: stri
   );
 }
 
-function ClarificationCard({ executionId, clarification, onCompleted }: { executionId: string; clarification: AskClarification; onCompleted: (execution: AskExecutionResponse) => void }) {
+function ClarificationCard({ executionId, clarification, onCompleted, autoFocus = false }: { executionId: string; clarification: AskClarification; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean }) {
+  const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
   const [answer, setAnswer] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -363,7 +401,7 @@ function ClarificationCard({ executionId, clarification, onCompleted }: { execut
   };
 
   return (
-    <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4" aria-busy={saving}>
+    <section ref={containerRef} className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4" aria-busy={saving}>
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-800">One detail needed</p>
       <h3 className="mt-1 font-semibold text-slate-950">{clarification.question}</h3>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -376,7 +414,8 @@ function ClarificationCard({ executionId, clarification, onCompleted }: { execut
   );
 }
 
-function ConfirmationCard({ executionId, confirmation, onCompleted }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void }) {
+function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = false }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean }) {
+  const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -424,7 +463,7 @@ function ConfirmationCard({ executionId, confirmation, onCompleted }: { executio
     finally { setSaving(false); }
   };
   return (
-    <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
+    <section ref={containerRef} className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>
       <h3 className="mt-1 font-semibold text-slate-950">{confirmation.title}</h3><p className="mt-1 text-sm leading-5 text-slate-700">{confirmation.description}</p>
       <dl className="mt-4 divide-y divide-violet-100 rounded-xl border border-violet-100 bg-white px-3">{confirmation.fields.map((field) => <div key={field.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{field.label}</dt><dd className="font-medium text-slate-800">{field.value}</dd></div>)}</dl>
@@ -439,11 +478,14 @@ function InlineCaptureCard({
   executionId,
   request,
   onCompleted,
+  autoFocus = false,
 }: {
   executionId: string;
   request: AskCaptureRequest;
   onCompleted: (execution: AskExecutionResponse) => void;
+  autoFocus?: boolean;
 }) {
+  const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
   const schema = request.inputSchema;
   const policy = capturePolicy[request.classification];
   const scalarCapture = schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' && schema.type !== 'GROUP';
@@ -521,7 +563,7 @@ function InlineCaptureCard({
     };
 
     return (
-      <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4" aria-busy={saving}>
+      <section ref={containerRef} className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4" aria-busy={saving}>
         <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">More information needed</p>
         <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
         <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
@@ -609,7 +651,7 @@ function InlineCaptureCard({
   };
 
   return (
-    <form onSubmit={save} className={cn('rounded-2xl border p-4', policy.border)} aria-busy={saving}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border p-4', policy.border)} aria-busy={saving}>
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">{policy.eyebrow}</p>
       <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
       <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
@@ -717,6 +759,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [pendingWork, setPendingWork] = useState<AskPendingWorkItem[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [continuingId, setContinuingId] = useState<string | null>(null);
+  // Marks the execution whose pending card should receive focus: set right
+  // after a turn this session actually produced (a new question answered,
+  // or an existing execution advancing after a capture/clarification/
+  // confirmation), never on the initial history load or a resumed session
+  // read -- so restoring old conversation state on page load doesn't yank
+  // focus away from wherever the user actually is.
+  const [justUpdatedExecutionId, setJustUpdatedExecutionId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
@@ -793,6 +842,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
       setExecutions((current) => [...current, response.data!]);
+      setJustUpdatedExecutionId(response.data.executionId);
     } catch (caught) {
       setInput(message);
       window.localStorage.setItem(draftStorageKey(selectedPropertyId), message);
@@ -823,6 +873,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const updateExecution = (updated: AskExecutionResponse) => {
     setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item));
+    setJustUpdatedExecutionId(updated.executionId);
     if (!['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'].includes(updated.status)) {
       setPendingWork((current) => current.filter((item) => item.execution.executionId !== updated.executionId));
     }
@@ -841,6 +892,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       const history = await api.getAskSession(resumed.sessionId);
       if (!history.success || !history.data) throw new Error(history.message || 'Could not load the pending conversation.');
       setExecutions(history.data.executions);
+      setJustUpdatedExecutionId(resumed.executionId);
       setPendingWork((current) => current.filter((pending) => pending.execution.sessionId !== resumed.sessionId));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not resume this request.');
@@ -851,7 +903,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <div className={cn('flex min-h-0 flex-col bg-slate-50', mode === 'page' ? 'min-h-[calc(100vh-11rem)] rounded-[28px] border border-slate-200 shadow-sm' : 'h-full')}>
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+      {/* Safe-area padding only changes anything on the mobile full-screen
+          sheet (mode="panel" below the lg breakpoint, where this header sits
+          flush against the device's actual top edge/notch); env() resolves
+          to 0 on the desktop floating panel and the dashboard-embedded page
+          view, so it's harmless to apply unconditionally rather than
+          threading a separate "is this the mobile sheet" signal through. */}
+      <header className={cn('flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-5', mode === 'panel' && 'pt-[calc(env(safe-area-inset-top)+0.75rem)]')}>
         <div className="min-w-0"><div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" /></span><div><h2 className="font-semibold text-slate-950">Ask Cozy</h2><p className="truncate text-xs text-slate-500">{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
           {mode === 'page' && executions.length > 0 && <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />Clear history</button>}
@@ -881,11 +939,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
                   <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} />)}
-                  {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} />}
+                  {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
                   {execution.status === 'FAILED_RETRYABLE' && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again</button></div>}
-                  {execution.captureRequests.map((request) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} />)}
-                  {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} />}
-                  {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} />}
+                  {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} autoFocus={index === 0 && execution.executionId === justUpdatedExecutionId} />)}
+                  {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
+                  {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
                   {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
                   <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} />
                 </div>
@@ -897,7 +955,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white p-3 sm:p-4">
+      <footer className={cn('border-t border-slate-200 bg-white p-3 sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>
         <form onSubmit={submit} className="mx-auto max-w-3xl">
           {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700"><AlertTriangle className="h-4 w-4" />{error}</div>}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100">

@@ -108,6 +108,18 @@ export async function getRefinanceRateMonitor(userId: string, monitorId: string)
   return toDTO(monitor);
 }
 
+// §17.2 requires monitors to "respect ... cooldown, deduplication, and
+// materiality rules." Snapshots arrive weekly (see workerJobRegistry.ts);
+// deduplicating only against the exact previous snapshot id meant a
+// monitor re-fired every single week indefinitely as long as the rate
+// stayed under threshold, with no floor on notification frequency and no
+// requirement that the rate actually moved. A cooldown puts a minimum
+// spacing between notifications regardless of how often snapshots land;
+// materiality additionally requires the rate to have dropped meaningfully
+// further since the last notification, not merely stayed under threshold.
+const REFINANCE_MONITOR_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const REFINANCE_MONITOR_MATERIALITY_BPS = 10;
+
 export async function evaluateRefinanceRateMonitors(snapshot: {
   id: string; date: string; rate30yr: number; rate15yr: number; source: string; sourceRef: string | null;
 }) {
@@ -116,7 +128,13 @@ export async function evaluateRefinanceRateMonitors(snapshot: {
   for (const monitor of active) {
     const observedRate = monitor.product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? snapshot.rate15yr : snapshot.rate30yr;
     const thresholdPct = monitor.thresholdBps / 100;
-    const shouldTrigger = observedRate <= thresholdPct && monitor.lastTriggeredSnapshotId !== snapshot.id;
+    const observedRateBps = Math.round(observedRate * 100);
+    const underThreshold = observedRate <= thresholdPct && monitor.lastTriggeredSnapshotId !== snapshot.id;
+    const neverTriggered = !monitor.lastTriggeredAt;
+    const cooldownElapsed = neverTriggered || (Date.now() - monitor.lastTriggeredAt!.getTime()) >= REFINANCE_MONITOR_COOLDOWN_MS;
+    const materiallyLower = neverTriggered || monitor.lastTriggeredRateBps == null
+      || (monitor.lastTriggeredRateBps - observedRateBps) >= REFINANCE_MONITOR_MATERIALITY_BPS;
+    const shouldTrigger = underThreshold && (neverTriggered || (cooldownElapsed && materiallyLower));
     if (shouldTrigger) {
       const domainActionUrl = `/dashboard/properties/${monitor.propertyId}/tools/mortgage-refinance-radar?from=notification&monitorId=${encodeURIComponent(monitor.id)}&snapshotId=${encodeURIComponent(snapshot.id)}`;
       const productLabel = monitor.product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? '15-year' : '30-year';
@@ -163,7 +181,7 @@ export async function evaluateRefinanceRateMonitors(snapshot: {
       where: { id: monitor.id },
       data: {
         lastEvaluatedSnapshotId: snapshot.id,
-        ...(shouldTrigger ? { lastTriggeredSnapshotId: snapshot.id, lastTriggeredAt: new Date() } : {}),
+        ...(shouldTrigger ? { lastTriggeredSnapshotId: snapshot.id, lastTriggeredAt: new Date(), lastTriggeredRateBps: observedRateBps } : {}),
       },
     });
   }

@@ -730,6 +730,10 @@ async function maintenanceTaskCreateResult(
   };
 }
 
+function homeDeadlineSourceVersion(source: { id: string; expiryDate: Date | null; updatedAt: Date }): string {
+  return createHash('sha256').update(JSON.stringify({ id: source.id, expiryDate: source.expiryDate, updatedAt: source.updatedAt })).digest('hex');
+}
+
 function maintenanceTaskVersion(task: { id: string; status: MaintenanceTaskStatus; updatedAt: Date }): string {
   return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, updatedAt: task.updatedAt })).digest('hex');
 }
@@ -1151,7 +1155,7 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
   const input = HomeDeadlineMonitorInputSchema.parse({ sourceType, sourceId: source.id, title: `Review ${provider} ${warranty ? 'warranty' : 'insurance policy'} before expiration`, dueDate: due.toISOString().slice(0, 10), leadDays });
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_DEADLINE_MONITOR_CONFIRMATION_REQUIRED', parameters: { homeDeadlineMonitor: input, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_DEADLINE_MONITOR_CONFIRMATION_REQUIRED', parameters: { homeDeadlineMonitor: input, homeDeadlineSourceVersion: homeDeadlineSourceVersion(source), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'deadline-monitor-review', title: 'Review this expiration reminder', body: 'Ask will create a dated canonical Maintenance obligation so the existing governed reminder worker can notify you.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: `home-deadline-${source.id}-1`, version: 1, title: `Monitor this ${warranty ? 'warranty' : 'policy'} expiration?`, description: 'This creates one deduplicated reminder task and enables expiration-deadline email preferences for this home. It does not change maintenance-task email preferences.', fields: [{ label: 'Provider', value: provider }, { label: 'Expires', value: expiry.toISOString().slice(0, 10) }, { label: 'Reminder date', value: input.dueDate }, { label: 'Channel', value: 'In-app plus email' }], confirmLabel: 'Activate reminder', consentText: 'I consent to receive this expiration-deadline reminder by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
@@ -1524,6 +1528,125 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
     { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
     suggestions: ['How much should I reserve for this item?', 'Show my capital timeline'],
+  };
+}
+
+async function incidentClaimStatusResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const claimFocus = /\bclaims?\b/i.test(message) && !/\bincidents?\b/i.test(message);
+  const incidentFocus = /\bincidents?\b/i.test(message) && !/\bclaims?\b/i.test(message);
+  const [incidents, claims] = await Promise.all([
+    claimFocus ? Promise.resolve([]) : prisma.incident.findMany({
+      where: { propertyId, isSuppressed: false },
+      orderBy: [{ openedAt: 'desc' }],
+      take: 20,
+      select: { id: true, title: true, summary: true, status: true, severity: true, openedAt: true, resolvedAt: true, typeKey: true },
+    }),
+    incidentFocus ? Promise.resolve([]) : prisma.claim.findMany({
+      where: { propertyId },
+      orderBy: [{ updatedAt: 'desc' }],
+      take: 20,
+      select: { id: true, title: true, status: true, type: true, sourceType: true, providerName: true, incidentAt: true, openedAt: true, closedAt: true },
+    }),
+  ]);
+
+  const incidentsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/incidents`;
+  const claimsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
+  const humanizeEnum = (value: string) => value.toLowerCase().replace(/_/g, ' ');
+
+  const openIncidentStatuses: string[] = ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED'];
+  const activeIncidents = incidents.filter((incident) => openIncidentStatuses.includes(incident.status));
+  const resolvedIncidents = incidents.filter((incident) => !openIncidentStatuses.includes(incident.status));
+
+  const openClaimStatuses: string[] = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW'];
+  const activeClaims = claims.filter((claim) => openClaimStatuses.includes(claim.status));
+  const closedClaims = claims.filter((claim) => !openClaimStatuses.includes(claim.status));
+
+  type Section = { id: string; title: string; count: number; items: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: string | null }> };
+  const sections: Section[] = [];
+  if (!claimFocus) {
+    sections.push({
+      id: 'active-incidents', title: 'Active incidents', count: activeIncidents.length,
+      items: activeIncidents.slice(0, 12).map((incident) => ({
+        id: incident.id, title: incident.title,
+        description: incident.summary ?? humanizeEnum(incident.typeKey),
+        meta: [humanizeEnum(incident.status), incident.severity ? humanizeEnum(incident.severity) : null, humanDate(incident.openedAt) ? `Opened ${humanDate(incident.openedAt)}` : null].filter((value): value is string => Boolean(value)),
+        status: incident.status, href: `${incidentsHref}/${encodeURIComponent(incident.id)}`,
+      })),
+    });
+    if (resolvedIncidents.length) sections.push({
+      id: 'resolved-incidents', title: 'Resolved incidents', count: resolvedIncidents.length,
+      items: resolvedIncidents.slice(0, 8).map((incident) => ({
+        id: incident.id, title: incident.title,
+        description: incident.summary ?? humanizeEnum(incident.typeKey),
+        meta: [humanizeEnum(incident.status), humanDate(incident.resolvedAt) ? `Resolved ${humanDate(incident.resolvedAt)}` : null].filter((value): value is string => Boolean(value)),
+        status: incident.status, href: `${incidentsHref}/${encodeURIComponent(incident.id)}`,
+      })),
+    });
+  }
+  if (!incidentFocus) {
+    sections.push({
+      id: 'active-claims', title: 'Open claims', count: activeClaims.length,
+      items: activeClaims.slice(0, 12).map((claim) => ({
+        id: claim.id, title: claim.title,
+        description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
+        meta: [humanizeEnum(claim.status), humanDate(claim.openedAt) ? `Opened ${humanDate(claim.openedAt)}` : null].filter((value): value is string => Boolean(value)),
+        status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`,
+      })),
+    });
+    if (closedClaims.length) sections.push({
+      id: 'closed-claims', title: 'Closed claims', count: closedClaims.length,
+      items: closedClaims.slice(0, 8).map((claim) => ({
+        id: claim.id, title: claim.title,
+        description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
+        meta: [humanizeEnum(claim.status), humanDate(claim.closedAt) ? `Closed ${humanDate(claim.closedAt)}` : null].filter((value): value is string => Boolean(value)),
+        status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`,
+      })),
+    });
+  }
+
+  const totalActive = activeIncidents.length + activeClaims.length;
+  const nothingRecorded = incidents.length === 0 && claims.length === 0;
+
+  if (nothingRecorded) {
+    return {
+      status: 'ANSWERED', reasonCode: 'INCIDENT_CLAIM_NONE_RECORDED',
+      blocks: [{
+        type: 'EMPTY_STATE', id: 'incident-claim-empty',
+        title: claimFocus ? 'No claims are recorded for this home' : incidentFocus ? 'No incidents are recorded for this home' : 'No incidents or claims are recorded for this home',
+        body: 'This reflects what has been logged in the home record; it is not confirmation that nothing has ever happened at this property.',
+        actions: [
+          ...(claimFocus ? [] : [{ id: 'open-incidents', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
+          ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
+        ],
+      }],
+      suggestions: ['What do I need for an insurance claim?'],
+    };
+  }
+
+  return {
+    status: 'ANSWERED', reasonCode: totalActive > 0 ? 'INCIDENT_CLAIM_ACTIVE' : 'INCIDENT_CLAIM_HISTORICAL',
+    blocks: [
+      {
+        type: 'SUMMARY', id: 'incident-claim-summary',
+        title: totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : 'No active incidents or claims right now',
+        body: `${incidents.length} recorded incident${incidents.length === 1 ? '' : 's'} and ${claims.length} recorded claim${claims.length === 1 ? '' : 's'} are on file for this home.`,
+        tone: totalActive > 0 ? 'CAUTION' : 'DEFAULT',
+        actions: [
+          ...(claimFocus ? [] : [{ id: 'open-incidents', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
+          ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'PRIMARY' as const }]),
+        ],
+      },
+      { type: 'GROUPED_LIST', id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections, actions: [] },
+      {
+        type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness',
+        items: [
+          ...incidents.slice(0, 10).map((incident) => ({ label: incident.title, source: 'Canonical Incident record', observedAt: incident.openedAt.toISOString() })),
+          ...claims.slice(0, 10).map((claim) => ({ label: claim.title, source: claim.sourceType ? `Canonical Claim record · ${humanizeEnum(claim.sourceType)}` : 'Canonical Claim record', observedAt: (claim.openedAt ?? claim.incidentAt)?.toISOString() ?? null })),
+        ],
+      },
+    ],
+    suggestions: claimFocus ? ['What do I need for an insurance claim?'] : incidentFocus ? ['What should I do next?'] : ['What do I need for an insurance claim?', 'What should I do next?'],
   };
 }
 
@@ -1924,7 +2047,7 @@ async function capitalReservePlanResult(userId: string, propertyId: string): Pro
     type: 'SUMMARY', id: 'capital-reserve-summary', title: `${upcoming.length} upcoming capital event${upcoming.length === 1 ? '' : 's'} are in the current plan`,
     body: `The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}. The canonical reserve plan currently suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} shortfall.`,
     tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }, { id: 'open-reserve', label: 'Open reserve fund', href: reserveHref, style: 'SECONDARY' }],
-  }, { type: 'TABLE', id: 'capital-timeline-table', title: 'Upcoming capital windows', description: 'Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Planning window' }, { key: 'cost', label: 'Estimated range' }, { key: 'confidence', label: 'Confidence' }], rows: upcoming.map((item) => ({ id: item.id, values: { item: item.inventoryItem?.name ?? String(item.category).toLowerCase().replace(/_/g, ' '), window: `${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`, cost: item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null ? 'Not available' : `${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`, confidence: String(item.confidence).toLowerCase() } })), actions: [] },
+  }, { type: 'TABLE', id: 'capital-timeline-table', title: 'Upcoming capital windows', description: 'Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Planning window' }, { key: 'cost', label: 'Estimated range' }, { key: 'confidence', label: 'Confidence' }], rows: upcoming.map((item) => ({ id: item.id, values: { item: item.inventoryItem?.name ?? String(item.category).toLowerCase().replace(/_/g, ' '), window: `${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`, cost: item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null ? 'Not available' : `${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`, confidence: String(item.confidence).toLowerCase() } })), totalCount: items.length, actions: items.length > upcoming.length ? [{ id: 'open-timeline-table', label: 'Open capital timeline', href, style: 'SECONDARY' }] : [] },
   { type: 'GROUPED_LIST', id: 'reserve-allocations', title: 'Active reserve allocations', description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.', sections: [{ id: 'allocations', title: 'Funding plan', count: lineItems.length, items: lineItems.slice(0, 20).map((line) => ({ id: line.id, title: line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' '), description: `${money(line.allocatedMonthlyCents / 100)}/month toward ${money(line.targetCostCents / 100)}`, meta: [String(line.status).toLowerCase()], status: line.status, href: reserveHref })) }], actions: [] },
   { type: 'EVIDENCE', id: 'capital-plan-evidence', title: 'Planning sources and freshness', items: upcoming.map((item) => ({ label: item.inventoryItem?.name ?? String(item.category), source: `Home Capital Timeline · ${String(item.confidence).toLowerCase()} confidence`, observedAt: analysis.computedAt?.toISOString?.() ?? String(analysis.computedAt) })) },
   { type: 'BOUNDARY', id: 'capital-plan-boundary', title: 'Planning range—not a guaranteed expense schedule', body: 'Actual condition, inspections, maintenance, local labor and material prices, financing, insurance, and homeowner choices can move timing and cost. Keep emergency savings and capital reserves conceptually separate.', severity: 'INFO', suggestions: [] }];
@@ -3182,6 +3305,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'MAINTENANCE_TASK_UPDATE': return maintenanceTaskUpdateResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
     case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
+    case 'INCIDENT_CLAIM_STATUS': return incidentClaimStatusResult(input.userId, input.propertyId!, input.message);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
@@ -4226,28 +4350,52 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
       throw error;
     }
-    await upsertProfile(execution.propertyId, {
-      currentMortgageBalanceCents: Math.round(candidate.data.currentMortgageBalanceUsd * 100),
-      mortgageBalanceAsOfDate: input.answer.currentMortgageBalanceUsd === undefined ? undefined : new Date().toISOString(),
-      interestRateBps: Math.round(candidate.data.interestRatePct * 100),
-      remainingTermMonths: Math.max(1, Math.round(candidate.data.remainingTermYears * 12)),
-      monthlyPaymentCents: candidate.data.monthlyPaymentUsd === undefined ? undefined : Math.round(candidate.data.monthlyPaymentUsd * 100),
-    });
+    // Claim the idempotency receipt BEFORE the write, not after: previously
+    // this branch called upsertProfile unconditionally and only recorded a
+    // receipt afterward (a no-op upsert), so two concurrent submissions
+    // (double-click, two tabs) could both pass the version check above and
+    // both write, racing to a silent last-write-wins outcome. The unique
+    // (executionId, idempotencyKey) create below is the same
+    // claim-before-mutate compare-and-swap already used for command
+    // confirmations (AskConfirmationReceipt) elsewhere in this file.
+    let alreadyCaptured = false;
+    try {
+      await prisma.askCaptureReceipt.create({
+        data: { executionId: execution.id, idempotencyKey: input.idempotencyKey, captureKey: input.captureKey, canonicalOwner: 'PropertyFinancingProfile', answerHash },
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      const existing = await prisma.askCaptureReceipt.findUnique({
+        where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
+      });
+      if (!existing || existing.answerHash !== answerHash) {
+        const conflict = new Error('The idempotency key was already used for a different inline answer.');
+        (conflict as Error & { code?: string }).code = 'ASK_CAPTURE_IDEMPOTENCY_CONFLICT';
+        throw conflict;
+      }
+      // A concurrent request already claimed this exact answer and wrote
+      // it (or is about to); skip the duplicate write and fall through to
+      // recomputing the result from the now-current profile.
+      alreadyCaptured = true;
+    }
+    if (!alreadyCaptured) {
+      await upsertProfile(execution.propertyId, {
+        currentMortgageBalanceCents: Math.round(candidate.data.currentMortgageBalanceUsd * 100),
+        mortgageBalanceAsOfDate: input.answer.currentMortgageBalanceUsd === undefined ? undefined : new Date().toISOString(),
+        interestRateBps: Math.round(candidate.data.interestRatePct * 100),
+        remainingTermMonths: Math.max(1, Math.round(candidate.data.remainingTermYears * 12)),
+        monthlyPaymentCents: candidate.data.monthlyPaymentUsd === undefined ? undefined : Math.round(candidate.data.monthlyPaymentUsd * 100),
+      });
+    }
     const nextContext = await getFinancialContextDecisions(execution.propertyId, userId, 'REFINANCE_RADAR');
     captureId = input.idempotencyKey;
     capturedContextVersion = nextContext.contextVersion;
-    await prisma.askCaptureReceipt.upsert({
-      where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
-      create: {
-        executionId: execution.id,
-        idempotencyKey: input.idempotencyKey,
-        captureKey: input.captureKey,
-        canonicalOwner: 'PropertyFinancingProfile',
-        answerHash,
-        contextVersion: capturedContextVersion,
-      },
-      update: {},
-    });
+    if (!alreadyCaptured) {
+      await prisma.askCaptureReceipt.update({
+        where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
+        data: { contextVersion: capturedContextVersion },
+      });
+    }
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
       userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
@@ -4704,6 +4852,20 @@ export async function confirmAskExecution(userId: string, executionId: string, i
         throw error;
       }
     } else {
+      // Unlike the MAINTENANCE branch above, this previously reused
+      // candidate.data.dueDate/title from prep time with no recheck at all
+      // -- editing or deleting the warranty/policy during the confirmation
+      // window would silently create a reminder pinned to a stale
+      // expiration date. Re-fetch the actual source record and require it
+      // to match the version captured at prep time before proceeding.
+      const currentSource = candidate.data.sourceType === 'WARRANTY'
+        ? await prisma.warranty.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } })
+        : await prisma.insurancePolicy.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } });
+      if (!currentSource || !currentSource.expiryDate || parameters.homeDeadlineSourceVersion !== homeDeadlineSourceVersion(currentSource as { id: string; expiryDate: Date | null; updatedAt: Date })) {
+        const error = new Error(`This ${candidate.data.sourceType === 'WARRANTY' ? 'warranty' : 'insurance policy'} changed while confirmation was open. Review the current record and try again.`);
+        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+        throw error;
+      }
       const actionKey = `ask-deadline:${candidate.data.sourceType}:${candidate.data.sourceId}`;
       task = await prisma.propertyMaintenanceTask.findUnique({ where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } } });
       if (!task) {

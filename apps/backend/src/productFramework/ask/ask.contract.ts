@@ -72,6 +72,13 @@ const TableBlockSchema = z.object({
   description: z.string().nullable().optional(),
   columns: z.array(z.object({ key: z.string(), label: z.string() })).min(1).max(12),
   rows: z.array(z.object({ id: z.string(), values: z.record(z.string(), z.string()) })).max(100),
+  // The true row count when the adapter truncated for display (e.g. a
+  // 20-item capital timeline shown as 12 rows). Omitted or equal to
+  // rows.length means nothing was truncated. Mirrors the count/items.length
+  // distinction GROUPED_LIST sections already carry, so tables can render
+  // the same "+N more" affordance instead of silently dropping rows from
+  // view with no indication more exist.
+  totalCount: z.number().int().nonnegative().optional(),
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 
