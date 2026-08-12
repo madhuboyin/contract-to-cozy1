@@ -3133,7 +3133,19 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     blocks.push({ type: 'EVIDENCE', id: 'grounded-evidence', title: 'Sources used', items: answer.evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })) });
   }
   blocks.push({ type: 'BOUNDARY', id: 'grounded-professional-boundary', title: 'Educational guidance—not a controlling determination', body: answer.safetyBoundary, severity: 'INFO', suggestions: [] });
-  return { status: 'ANSWERED', blocks, suggestions: [answer.nextAction].filter(Boolean) };
+  // The remote fallback's own confidence was previously used only to set a
+  // CAUTION tone, so a low-confidence, weakly-grounded answer was still
+  // returned as an ordinary confident ANSWERED result. Matches the
+  // low-confidence => READY_WITH_LIMITATIONS convention already used by
+  // every other operation in this file (capital plan, repair/replace,
+  // ownership costs, sell/hold/rent, refinance, etc.) rather than inventing
+  // a separate contract just for this path.
+  return {
+    status: answer.confidence.label === 'LOW' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: answer.confidence.label === 'LOW' ? 'GROUNDED_GUIDANCE_LOW_CONFIDENCE' : undefined,
+    blocks,
+    suggestions: [answer.nextAction].filter(Boolean),
+  };
 }
 
 async function executeOperationCore(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
@@ -3415,7 +3427,15 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   if (input.propertyId) await ensurePropertyAccess(userId, input.propertyId);
   await enterAskPropertyTimezoneContext(input.propertyId);
   const duplicate = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
-  if (duplicate) return mapPersistedExecution(duplicate, await propertySummary(duplicate.propertyId));
+  if (duplicate) {
+    // Without this, a retry that reuses the same clientRequestId (the
+    // client's own idempotency key for this question) just returns a
+    // crash-orphaned RUNNING row verbatim, forever — an infinite spinner
+    // with no path forward. Reclaim it first so the retry actually observes
+    // a terminal, retryable state instead.
+    const current = await reclaimOrphanedRunningExecution(duplicate);
+    return mapPersistedExecution(current, await propertySummary(current.propertyId));
+  }
 
   const controls = readAskOperationalControls();
   const expiresAt = new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000);
@@ -4968,8 +4988,43 @@ function pendingInteractionExpiresAt(execution: { resultJson: Prisma.JsonValue |
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+// A restart/crash/OOM between "status: RUNNING" (set immediately before the
+// operation runs) and the follow-up write that records its outcome leaves
+// the row physically stuck at RUNNING forever: no in-process catch block
+// ever runs again to move it forward. Confirmed-command executions always
+// create an AskConfirmationReceipt before flipping to RUNNING and already
+// have a correct lease-based recovery path (confirmAskExecution's
+// recoveringClaim) — this only reclaims RUNNING rows with no confirmation
+// receipt at all, i.e. a plain read/analysis operation, once enough time
+// has passed that it could not still be legitimately executing.
+const ASK_RUNNING_RECLAIM_GRACE_MS = 30_000;
+
+async function reclaimOrphanedRunningExecution(execution: AskExecution): Promise<AskExecution> {
+  if (execution.status !== 'RUNNING') return execution;
+  const controls = readAskOperationalControls();
+  const orphanThresholdMs = controls.executionTimeoutMs + ASK_RUNNING_RECLAIM_GRACE_MS;
+  if (Date.now() - execution.updatedAt.getTime() < orphanThresholdMs) return execution;
+  const activeClaim = await prisma.askConfirmationReceipt.findFirst({ where: { executionId: execution.id }, select: { id: true } });
+  if (activeClaim) return execution;
+  const updated = await prisma.askExecution.updateMany({
+    where: { id: execution.id, userId: execution.userId, status: 'RUNNING' },
+    data: {
+      status: 'FAILED_RETRYABLE', reasonCode: 'ASK_EXECUTION_INTERRUPTED', completedAt: null,
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+        blocks: [{ type: 'ERROR_STATE', id: 'execution-interrupted', title: 'This got interrupted', body: 'The system restarted while this was running. No action was performed — try asking again.', retryable: true, actions: [] }],
+        captureRequests: [], clarification: null, confirmation: null, suggestions: ['Ask this question again'],
+      }),
+    },
+  });
+  if (updated.count === 1) {
+    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'RECLAIMED_ORPHANED_RUNNING', metadataJson: asInputJson({ reason: 'RUNNING_TIMEOUT_EXCEEDED' }) } });
+  }
+  return prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+}
+
 async function expirePendingInteraction(execution: AskExecution): Promise<AskExecution> {
-  if (execution.status === 'RUNNING') return execution;
+  if (execution.status === 'RUNNING') return reclaimOrphanedRunningExecution(execution);
   const interactionExpiresAt = pendingInteractionExpiresAt(execution);
   if (!interactionExpiresAt || interactionExpiresAt > new Date()) return execution;
   const updated = await prisma.askExecution.updateMany({
@@ -4991,6 +5046,13 @@ async function expirePendingInteraction(execution: AskExecution): Promise<AskExe
 
 export async function getAskPendingWork(userId: string, propertyId: string | null): Promise<AskPendingWorkItem[]> {
   if (propertyId) await ensurePropertyAccess(userId, propertyId);
+  // A RUNNING row with no confirmation receipt at all is a plain
+  // read/analysis operation; it's only worth sweeping here once it's old
+  // enough that it can no longer be a normal, currently-executing request
+  // (matching reclaimOrphanedRunningExecution's own threshold) — otherwise
+  // every question in flight on any tab/device would flicker into "pending
+  // work" for the second or two it takes to answer.
+  const orphanRunningCutoff = new Date(Date.now() - (readAskOperationalControls().executionTimeoutMs + ASK_RUNNING_RECLAIM_GRACE_MS));
   const rows = await prisma.askExecution.findMany({
     where: {
       userId,
@@ -4999,6 +5061,7 @@ export async function getAskPendingWork(userId: string, propertyId: string | nul
         { OR: [
           { status: { in: INTERACTIVE_ASK_STATUSES } },
           { status: 'RUNNING', confirmations: { some: { status: 'CLAIMED' } } },
+          { status: 'RUNNING', confirmations: { none: {} }, updatedAt: { lte: orphanRunningCutoff } },
         ] },
         { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
       ],

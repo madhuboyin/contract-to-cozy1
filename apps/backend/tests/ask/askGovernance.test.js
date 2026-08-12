@@ -60,6 +60,27 @@ test('material confirmations acquire a unique leased claim before domain mutatio
   assert.match(orchestrator, /status: 'COMPLETED', artifactType, artifactId, completedAt/);
 });
 
+test('grounded-guidance remote fallback demotes low-confidence answers instead of always returning ANSWERED', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const fnStart = orchestrator.indexOf('async function groundedGuidanceResult(');
+  const fnEnd = orchestrator.indexOf('\nasync function executeOperationCore(', fnStart);
+  const fn = orchestrator.slice(fnStart, fnEnd);
+  assert.match(fn, /status: answer\.confidence\.label === 'LOW' \? 'READY_WITH_LIMITATIONS' : 'ANSWERED'/);
+  assert.doesNotMatch(fn, /return \{ status: 'ANSWERED', blocks, suggestions/);
+});
+
+test('orphaned RUNNING executions (no confirmation receipt) are reclaimed on a timeout, not left stuck forever', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(orchestrator, /async function reclaimOrphanedRunningExecution/);
+  assert.match(orchestrator, /status: 'FAILED_RETRYABLE', reasonCode: 'ASK_EXECUTION_INTERRUPTED'/);
+  // Both recovery entry points must use it: the pending-work sweep and a
+  // same-clientRequestId retry, so neither leaves the stuck row as-is.
+  const pendingWorkFn = orchestrator.slice(orchestrator.indexOf('export async function getAskPendingWork('));
+  assert.match(pendingWorkFn.slice(0, 1500), /confirmations: \{ none: \{\} \}, updatedAt: \{ lte: orphanRunningCutoff \} \}/);
+  const createFn = orchestrator.slice(orchestrator.indexOf('export async function createAskExecution('));
+  assert.match(createFn.slice(0, 1500), /reclaimOrphanedRunningExecution\(duplicate\)/);
+});
+
 test('material monitor notifications link to durable Ask continuations', () => {
   const continuation = readFileSync(resolve(__dirname, '../../src/services/ask/askNotificationContinuation.service.ts'), 'utf8');
   const refinance = readFileSync(resolve(__dirname, '../../src/refinanceRadar/refinanceRateMonitor.service.ts'), 'utf8');
