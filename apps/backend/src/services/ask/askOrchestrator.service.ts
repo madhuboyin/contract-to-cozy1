@@ -2,6 +2,7 @@ import { AskExecution, AskExecutionStatus, HouseholdRole, MaintenanceTaskPriorit
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
+import { logger } from '../../lib/logger';
 import {
   ASK_RESPONSE_SCHEMA_VERSION,
   AskExecutionResponseSchema,
@@ -77,6 +78,7 @@ import { listPropertyChanges } from '../../propertyChanges/propertyChange.servic
 import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/homeChangeSummaryMapping';
 import { buildPriorityListView } from '../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds, recordHomeActionUsefulnessFeedback } from '../decisionPlatform/homeActionUsefulnessFeedback.service';
+import type { ConciergeHomeView } from '../../productFramework/conciergeHome.contract';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
@@ -5992,4 +5994,112 @@ export async function submitHomeActionUsefulnessFeedback(
   return recordHomeActionUsefulnessFeedback({
     userId, propertyId: execution.propertyId, homeActionId, rating: input.rating, comment: input.comment ?? null,
   });
+}
+
+// Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" deliverable. A
+// read-only composition of three already-governed sources -- never a
+// fourth ranking/change/decision system of its own (mirrors PRIORITY_LIST's
+// "no second feed" discipline from §17.1). Each section fails independently
+// and reports its own honest state rather than one section's outage taking
+// down the whole panel or silently reading as "all clear".
+export async function getConciergeHome(userId: string, propertyId: string): Promise<ConciergeHomeView> {
+  await ensurePropertyAccess(userId, propertyId);
+  const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
+  const askHref = `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}`;
+
+  const priorityListPromise = (async (): Promise<ConciergeHomeView['priorityList']> => {
+    try {
+      const feed = await getHomeActionFeed(propertyId, userId);
+      const suppressedHomeActionIds = await getSuppressedHomeActionIds({
+        userId, propertyId, homeActionIds: feed.actions.map((action) => action.id),
+      }).catch(() => new Set<string>());
+      const view = buildPriorityListView(feed, 'CONCIERGE_HOME', { suppressedHomeActionIds });
+      return {
+        state: view.items.length ? 'AVAILABLE' : 'NO_ACTION',
+        rankingPolicyVersion: view.rankingPolicyVersion,
+        generatedAt: view.generatedAt,
+        items: view.items.map((item) => ({
+          homeActionId: item.homeActionId,
+          title: item.title,
+          consumerPriority: item.consumerPriority,
+          comparativeReasonCodes: item.comparativeReasonCodes,
+          confidenceLabel: item.confidenceLabel,
+          deadlineAt: item.deadlineAt,
+          cta: item.cta ? { label: item.cta.label, href: item.cta.href } : null,
+          watchState: item.watchState,
+          suppressed: item.suppressed,
+          completed: item.completed,
+          unavailable: item.unavailable,
+          stale: item.stale,
+        })),
+        truncated: view.truncated,
+        href: homeHref,
+      };
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home priority list section failed closed');
+      return { state: 'UNAVAILABLE', rankingPolicyVersion: null, generatedAt: null, items: [], truncated: false, href: homeHref };
+    }
+  })();
+
+  const changesPromise = (async (): Promise<ConciergeHomeView['changes']> => {
+    try {
+      const since = new Date(Date.now() - HOME_CHANGE_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+      const changes = await listPropertyChanges({ propertyId, userId, since });
+      const material = changes.filter((change) => change.materiality !== 'INFORMATIONAL').slice(0, 5);
+      return {
+        state: material.length ? 'AVAILABLE' : 'NO_CHANGE',
+        windowDays: HOME_CHANGE_SUMMARY_WINDOW_DAYS,
+        items: material.map((change) => ({
+          id: change.id,
+          source: sourceTypeLabel(change.sourceType),
+          summary: buildChangeSummaryText({ sourceType: change.sourceType, changeType: change.changeType }),
+          materiality: change.materiality,
+          detectedAt: change.detectedAt.toISOString(),
+          effectiveAt: change.occurredAt ? change.occurredAt.toISOString() : null,
+        })),
+        href: askHref,
+      };
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home changed-recently section failed closed');
+      return { state: 'UNAVAILABLE', windowDays: HOME_CHANGE_SUMMARY_WINDOW_DAYS, items: [], href: askHref };
+    }
+  })();
+
+  const decisionsPromise = (async (): Promise<ConciergeHomeView['decisions']> => {
+    try {
+      const threads = await decisionThreadService.listActiveDecisionThreadsForProperty(propertyId);
+      return {
+        state: threads.length ? 'AVAILABLE' : 'NO_DECISIONS',
+        items: threads.map((thread) => ({
+          decisionThreadId: thread.id,
+          title: thread.title,
+          lifecycleStatus: thread.lifecycleStatus,
+          contextStatus: thread.contextStatus,
+          verdict: thread.currentRecommendationSnapshot?.verdictCode ?? null,
+          confidenceLabel: (thread.currentRecommendationSnapshot?.confidenceBreakdown as { label?: 'HIGH' | 'MEDIUM' | 'LOW' } | null)?.label ?? null,
+          updatedAt: thread.updatedAt.toISOString(),
+        })),
+        href: askHref,
+      };
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home decisions-in-progress section failed closed');
+      return { state: 'UNAVAILABLE', items: [], href: askHref };
+    }
+  })();
+
+  const [priorityList, changes, decisions] = await Promise.all([priorityListPromise, changesPromise, decisionsPromise]);
+
+  return {
+    propertyId,
+    generatedAt: new Date().toISOString(),
+    priorityList,
+    changes,
+    decisions,
+    suggestedQuestions: [
+      'What maintenance tasks are pending?',
+      'Which items are missing coverage?',
+      'Is there a tool to help me refinance?',
+      'Where could I save money on this home?',
+    ],
+  };
 }

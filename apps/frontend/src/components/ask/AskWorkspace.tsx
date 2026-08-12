@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, Clock3, ExternalLink
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskPendingWorkItem, AskPresentationBlock } from '@/features/ask/types';
+import type { AskAction, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskPendingWorkItem, AskPresentationBlock, ConciergeHomeView } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 
 const starterQuestions = [
@@ -159,6 +159,108 @@ function CapabilityCard({ capability }: {
   return unavailable
     ? <div className={className} aria-label={`${capability.label} unavailable`}>{content}</div>
     : <Link href={capability.href} className={className}>{content}</Link>;
+}
+
+// Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" deliverable — the
+// Ask starting surface's "What matters now" / "Changed recently" /
+// "Decisions in progress" panel, shown only while no conversation has
+// started yet. Distinguishes loading, unavailable, no-change, and
+// no-action per FRD §18.4: an empty/failed section must never read as "the
+// home needs no attention" -- each state gets its own honest copy.
+function ConciergeHome({ propertyId }: { propertyId?: string }) {
+  const [view, setView] = useState<ConciergeHomeView | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!propertyId) { setView(null); setFailed(false); return; }
+    const controller = new AbortController();
+    setLoading(true); setFailed(false);
+    api.getConciergeHome(propertyId, { signal: controller.signal })
+      .then((response) => {
+        if (response.success && response.data) setView(response.data);
+        else setFailed(true);
+      })
+      .catch((caught) => { if (caught?.name !== 'AbortError') setFailed(true); })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [propertyId]);
+
+  if (!propertyId) return null;
+
+  if (loading) {
+    return (
+      <div className="mx-auto mb-6 max-w-xl rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500" role="status">
+        <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading your home overview…
+      </div>
+    );
+  }
+
+  if (failed || !view) {
+    return (
+      <div className="mx-auto mb-6 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        Your home overview is temporarily unavailable. This does not mean your home needs no attention — try a question below, or open Home Actions directly.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto mb-6 max-w-xl space-y-3 text-left">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">What matters now</h2>
+          <Link href={view.priorityList.href} className="text-xs font-semibold text-teal-700 hover:underline">Open Home Actions</Link>
+        </div>
+        {view.priorityList.state === 'UNAVAILABLE' ? (
+          <p className="mt-2 text-xs text-slate-500">This is temporarily unavailable — that does not mean your home needs no attention.</p>
+        ) : view.priorityList.state === 'NO_ACTION' ? (
+          <p className="mt-2 text-xs text-slate-500">Nothing is currently surfaced from your governed action feed.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {view.priorityList.items.slice(0, 3).map((item) => (
+              <li key={item.homeActionId} className="text-sm text-slate-700">
+                <span className="font-medium text-slate-900">{item.title}</span>
+                {item.suppressed && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">suppressed</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Changed recently</h2>
+        {view.changes.state === 'UNAVAILABLE' ? (
+          <p className="mt-2 text-xs text-slate-500">Change history is temporarily unavailable.</p>
+        ) : view.changes.state === 'NO_CHANGE' ? (
+          <p className="mt-2 text-xs text-slate-500">No material change in the last {view.changes.windowDays} days across covered sources.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {view.changes.items.map((change) => (
+              <li key={change.id} className="text-sm text-slate-700"><span className="font-medium text-slate-900">{change.source}:</span> {change.summary}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {view.decisions.state !== 'NO_DECISIONS' && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <h2 className="text-sm font-semibold text-slate-900">Decisions in progress</h2>
+          {view.decisions.state === 'UNAVAILABLE' ? (
+            <p className="mt-2 text-xs text-slate-500">Decisions in progress are temporarily unavailable.</p>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {view.decisions.items.map((decision) => (
+                <li key={decision.decisionThreadId} className="text-sm text-slate-700">
+                  <span className="font-medium text-slate-900">{decision.title}</span>
+                  <span className="ml-1.5 text-xs text-slate-500">{decision.lifecycleStatus.toLowerCase().replace(/_/g, ' ')}{decision.verdict ? ` · ${decision.verdict.toLowerCase().replace(/_/g, ' ')}` : ''}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+    </div>
+  );
 }
 
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
@@ -1177,6 +1279,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-teal-100 text-teal-800"><Home className="h-6 w-6" /></div>
             <h1 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">What can I help with?</h1>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">Ask about records, maintenance, protection, costs, decisions, projects, or tools available for your home.</p>
+            <div className="mt-6"><ConciergeHome propertyId={selectedPropertyId} /></div>
             <div className="mt-6 grid gap-2 sm:grid-cols-2">{starterQuestions.map((question) => <button key={question} onClick={() => void ask(question)} className="rounded-2xl border border-slate-200 bg-white p-3 text-left text-sm font-medium text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-800">{question}</button>)}</div>
           </div>
         ) : (

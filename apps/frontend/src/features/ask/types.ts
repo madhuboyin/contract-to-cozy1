@@ -134,4 +134,47 @@ export interface CreateAskExecutionPayload {
     returnTo?: string | null;
   };
 }
+// Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" — a dedicated
+// composed read surface for the Ask starting page, distinct from
+// AskExecutionResponse (no message, no execution created). See
+// apps/backend/src/productFramework/conciergeHome.contract.ts for the
+// authoritative shape.
+export interface ConciergeHomeView {
+  propertyId: string;
+  generatedAt: string;
+  priorityList: {
+    state: 'AVAILABLE' | 'NO_ACTION' | 'UNAVAILABLE';
+    rankingPolicyVersion: string | null;
+    generatedAt: string | null;
+    items: Array<{
+      homeActionId: string;
+      title: string;
+      consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH' | 'OPTIONAL' | 'NO_ACTION';
+      comparativeReasonCodes: string[];
+      confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
+      deadlineAt: string | null;
+      cta: { label: string; href: string } | null;
+      watchState: string | null;
+      suppressed: boolean;
+      completed: boolean;
+      unavailable: boolean;
+      stale: boolean;
+    }>;
+    truncated: boolean;
+    href: string;
+  };
+  changes: {
+    state: 'AVAILABLE' | 'NO_CHANGE' | 'UNAVAILABLE';
+    windowDays: number;
+    items: Array<{ id: string; source: string; summary: string; materiality: 'INFORMATIONAL' | 'MEANINGFUL' | 'IMPORTANT' | 'URGENT'; detectedAt: string; effectiveAt: string | null }>;
+    href: string;
+  };
+  decisions: {
+    state: 'AVAILABLE' | 'NO_DECISIONS' | 'UNAVAILABLE';
+    items: Array<{ decisionThreadId: string; title: string; lifecycleStatus: string; contextStatus: string; verdict: string | null; confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null; updatedAt: string }>;
+    href: string;
+  };
+  suggestedQuestions: string[];
+}
+
 import type { CaptureInputSchema } from '@/components/property-context/featureContextTypes';

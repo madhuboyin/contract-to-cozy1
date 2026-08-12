@@ -148,7 +148,7 @@ import type {
   CapabilityContextType,
   RelatedCapabilitiesResponse,
 } from '@/features/tools/capabilityTypes';
-import type { AskExecutionResponse, CreateAskExecutionPayload, SubmitAskCapturePayload } from '@/features/ask/types';
+import type { AskExecutionResponse, ConciergeHomeView, CreateAskExecutionPayload, SubmitAskCapturePayload } from '@/features/ask/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
@@ -1000,6 +1000,9 @@ class APIClient {
   }
   async createAskExecution(payload: CreateAskExecutionPayload): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>('/api/ask/executions', { method: 'POST', body: payload });
+  }
+  async getConciergeHome(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<ConciergeHomeView>> {
+    return this.request<ConciergeHomeView>(`/api/ask/concierge-home?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
   async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
     return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);

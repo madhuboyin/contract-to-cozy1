@@ -2,7 +2,7 @@ import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
 import { ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
-import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, getAskExecution, getAskPendingWork, getAskSession, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
+import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
   PropertyContextCaptureValidationError,
@@ -87,6 +87,20 @@ export async function postAskExecutionProperty(req: AuthRequest, res: Response, 
     if (code === 'ASK_PROPERTY_SELECTION_NOT_ACTIVE') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'This request no longer needs a home selection.' } });
     const dependencyResponse = sendAskDependencyError(res, error);
     if (dependencyResponse) return dependencyResponse;
+    return next(error);
+  }
+}
+
+export async function getAskConciergeHome(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const propertyId = z.string().trim().min(1).max(120).safeParse(req.query.propertyId);
+    if (!propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required.' } });
+    return res.json({ success: true, data: await getConciergeHome(userId, propertyId.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(403).json({ success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'That home is not available for your account.' } });
     return next(error);
   }
 }

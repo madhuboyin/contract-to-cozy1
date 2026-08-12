@@ -55,7 +55,7 @@ export type ThreadSelection<T> =
   | { kind: 'UNIQUE'; thread: T }
   | { kind: 'AMBIGUOUS'; candidates: T[] };
 
-const ACTIVE_LIFECYCLE_STATUSES = [
+export const ACTIVE_LIFECYCLE_STATUSES = [
   'OPEN', 'GATHERING_CONTEXT', 'READY_TO_COMPARE', 'RECOMMENDATION_AVAILABLE',
   'ACTION_IN_PROGRESS', 'DECIDED',
 ] as const;
@@ -78,6 +78,24 @@ export async function selectHvacDecisionThread(propertyId: string, inventoryItem
     orderBy: { createdAt: 'asc' },
   });
   return classifyThreadSelection(candidates);
+}
+
+// Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" — "Decisions in
+// progress from authorized Decision Threads". Property-scoped, not
+// entity-scoped like selectHvacDecisionThread, since Concierge Home surfaces
+// whatever active threads exist rather than resolving one for a specific
+// item.
+export async function listActiveDecisionThreadsForProperty(propertyId: string, limit = 5) {
+  return prisma.decisionThread.findMany({
+    where: { propertyId, lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] } },
+    orderBy: { updatedAt: 'desc' },
+    take: limit,
+    include: {
+      currentRecommendationSnapshot: {
+        select: { verdictCode: true, confidenceBreakdown: true, generatedAt: true },
+      },
+    },
+  });
 }
 
 function inputDigestFor(context: HvacDecisionContext): string {
