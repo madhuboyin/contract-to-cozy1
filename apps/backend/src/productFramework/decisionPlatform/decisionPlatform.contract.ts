@@ -96,6 +96,12 @@ export interface DecisionContextContract {
   professionalBoundaryCode: string | null;
   maximumFacts: number;
   maximumSerializedBytes: number;
+  // FRD §12.2/Phase 8C: a timed-out required input degrades or blocks; a
+  // timed-out optional enhancer is omitted and disclosed. Both budgets are
+  // enforced by decisionContextEnhancer.ts's withEnhancerTimeout, not left
+  // as unenforced metadata (Phase 7A declared maximumEnhancerLatencyMs but
+  // nothing read it until Phase 8C).
+  requiredFactLatencyMs: number;
   maximumEnhancerLatencyMs: number;
   overallLatencyMs: number;
   staleInputPolicy: string;
@@ -118,4 +124,26 @@ export interface DecisionDefinition {
   allowedPreferenceDefinitionIds: string[];
   professionalBoundaryCode: string | null;
   evalSuite: string;
+}
+
+// FRD §15.2 — the Home Intelligence Graph is a typed read abstraction over
+// canonical relational identifiers, not a graph database (§15.1). Every
+// supported edge shall declare this metadata; LLM output cannot create an
+// authoritative edge (§15.2). See
+// services/decisionPlatform/homeIntelligenceGraph.ts.
+export interface HomeIntelligenceGraphEdge {
+  edgeType: string;
+  version: string;
+  sourceEntityType: string;
+  targetEntityType: string;
+  canonicalSourceOwner: string;
+  derivationMethod: 'DIRECT_FOREIGN_KEY' | 'POLYMORPHIC_REFERENCE' | 'JSON_LINEAGE_SCAN';
+  direction: 'FORWARD' | 'BIDIRECTIONAL';
+  temporalValidity: 'CURRENT_ONLY' | 'HISTORICAL';
+  // How property/role authorization propagates across this edge — every
+  // read function scopes by propertyId itself (defense in depth), but this
+  // documents the intended rule per §15.2.
+  authorizationPropagationRule: string;
+  freshnessPolicy: string;
+  requiresHomeownerConfirmation: boolean;
 }

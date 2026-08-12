@@ -44,8 +44,12 @@ export const DECISION_CONTEXT_CONTRACTS: Readonly<Record<DecisionContextContract
     maximumFacts: 10,
     maximumSerializedBytes: 32_768,
     // FRD §24.1: "context composition before canonical engine execution:
-    // p95 <500 ms for the first slice." The enhancer budget leaves headroom
-    // for required-fact loading and the canonical engine call within that.
+    // p95 <500 ms for the first slice." requiredFactLatencyMs +
+    // maximumEnhancerLatencyMs leaves headroom under overallLatencyMs for
+    // the canonical engine call itself. Both are enforced by
+    // decisionContextEnhancer.ts's withEnhancerTimeout (Phase 8C) — not
+    // just declared metadata.
+    requiredFactLatencyMs: 300,
     maximumEnhancerLatencyMs: 200,
     overallLatencyMs: 500,
     staleInputPolicy: 'MARK_STALE_AND_DISCLOSE',
@@ -77,11 +81,14 @@ export function validateDecisionContextContracts(): string[] {
         issues.push(`${mapKey}: allowedPreferenceDefinitions references unknown preference key "${preferenceKey}"`);
       }
     }
-    if (entry.overallLatencyMs <= 0 || entry.maximumEnhancerLatencyMs <= 0) {
+    if (entry.overallLatencyMs <= 0 || entry.maximumEnhancerLatencyMs <= 0 || entry.requiredFactLatencyMs <= 0) {
       issues.push(`${mapKey}: latency budgets must be positive`);
     }
     if (entry.maximumEnhancerLatencyMs > entry.overallLatencyMs) {
       issues.push(`${mapKey}: an optional enhancer's latency budget exceeds the overall operation deadline`);
+    }
+    if (entry.requiredFactLatencyMs + entry.maximumEnhancerLatencyMs > entry.overallLatencyMs) {
+      issues.push(`${mapKey}: required-fact and enhancer latency budgets together exceed the overall operation deadline`);
     }
   }
   return issues;

@@ -189,6 +189,7 @@ import { validateDecisionPreferenceRegistry } from './services/decisionPlatform/
 import { validateDecisionContextContracts } from './services/decisionPlatform/decisionContextContracts';
 import { validateDecisionDefinitionRegistry } from './services/decisionPlatform/decisionDefinitionRegistry';
 import { validateDecisionThreadTransitionContract } from './services/decisionPlatform/decisionThreadTransitions';
+import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
 dotenv.config();
 
 const askRegistryIssues = [...validateAskOperationDefinitions(), ...validateAskDomainCommandRegistry()];
@@ -203,6 +204,7 @@ const decisionPlatformRegistryIssues = [
   ...validateDecisionContextContracts(),
   ...validateDecisionDefinitionRegistry(),
   ...validateDecisionThreadTransitionContract(),
+  ...validateHomeIntelligenceGraphEdges(),
 ];
 if (decisionPlatformRegistryIssues.length) {
   throw new Error(`FATAL: Decision Platform registry validation failed: ${decisionPlatformRegistryIssues.join('; ')}`);

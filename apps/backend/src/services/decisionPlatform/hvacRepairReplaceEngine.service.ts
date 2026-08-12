@@ -16,6 +16,7 @@ import { InventoryItemCondition } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ageYearsFromDate, conditionAdjustment } from '../replaceRepairAnalysis.service';
 import { DECISION_CONTEXT_CONTRACTS } from './decisionContextContracts';
+import { withEnhancerTimeout } from './decisionContextEnhancer';
 
 export const HVAC_ENGINE_VERSION = '1.0';
 
@@ -174,6 +175,18 @@ export function evaluateHvacRepairReplace(context: HvacDecisionContext): HvacRep
 
 const REPAIR_HISTORY_LOOKBACK_MONTHS = 30;
 
+// FRD §12.2/Phase 8C: composition-level outcomes (an optional enhancer timed
+// out) are distinct from evaluation-level outcomes (a field was simply never
+// recorded) — evaluateHvacRepairReplace is a pure function over already-
+// resolved context values and has no way to know *why* a value is null, so
+// this is returned alongside the context rather than folded into it, and
+// merged into the eventual RecommendationSnapshot.limitationCodes by the
+// caller (decisionThreadService.ts) together with evaluation.limitationCodes.
+export interface HvacDecisionContextComposition {
+  context: HvacDecisionContext;
+  compositionLimitationCodes: string[];
+}
+
 export async function composeHvacDecisionContext(
   propertyId: string,
   inventoryItemId: string,
@@ -181,57 +194,83 @@ export async function composeHvacDecisionContext(
     ownershipHorizonMonths: number | null;
     repairReplaceApproach: HvacDecisionContext['repairReplaceApproach'];
   },
-): Promise<HvacDecisionContext | null> {
-  const item = await prisma.inventoryItem.findFirst({
-    where: { id: inventoryItemId, propertyId, category: 'HVAC' },
-    select: {
-      id: true, name: true, condition: true, installedOn: true, purchasedOn: true,
-      replacementCostCents: true, warrantyId: true,
-      warranty: { select: { expiryDate: true } },
-    },
-  });
+): Promise<HvacDecisionContextComposition | null> {
+  const contract = DECISION_CONTEXT_CONTRACTS.HVAC_REPAIR_REPLACE;
+
+  // Required facts: a timeout here is treated exactly like "item not found"
+  // (FRD §12.2 "a typed degraded or blocked result"; a deliberate scope
+  // decision for the first slice — see Phase 8C plan — rather than a new
+  // partial-context type). Any non-timeout error still propagates.
+  const itemLookup = await withEnhancerTimeout(
+    () => prisma.inventoryItem.findFirst({
+      where: { id: inventoryItemId, propertyId, category: 'HVAC' },
+      select: {
+        id: true, name: true, condition: true, installedOn: true, purchasedOn: true,
+        replacementCostCents: true, warrantyId: true,
+        warranty: { select: { expiryDate: true } },
+      },
+    }),
+    contract.requiredFactLatencyMs,
+    'HVAC_IDENTITY_LOOKUP_TIMED_OUT',
+  );
+  const item = itemLookup.value;
   if (!item) return null;
 
   const lookbackDate = new Date();
   lookbackDate.setMonth(lookbackDate.getMonth() - REPAIR_HISTORY_LOOKBACK_MONTHS);
-  const repairEvents = await prisma.homeEvent.findMany({
-    where: {
-      propertyId, inventoryItemId, isCurrent: true,
-      type: { in: ['REPAIR', 'MAINTENANCE'] },
-      occurredAt: { gte: lookbackDate },
-    },
-    select: { amount: true },
-  });
+  const repairHistoryLookup = await withEnhancerTimeout(
+    () => prisma.homeEvent.findMany({
+      where: {
+        propertyId, inventoryItemId, isCurrent: true,
+        type: { in: ['REPAIR', 'MAINTENANCE'] },
+        occurredAt: { gte: lookbackDate },
+      },
+      select: { amount: true },
+    }),
+    contract.requiredFactLatencyMs,
+    'HVAC_REPAIR_HISTORY_LOOKUP_TIMED_OUT',
+  );
+  if (repairHistoryLookup.value === null) return null;
+  const repairEvents = repairHistoryLookup.value;
   const repairSpendCentsLast30Months = repairEvents.reduce(
     (sum, event) => sum + (event.amount ? Math.round(Number(event.amount) * 100) : 0),
     0,
   );
 
-  const workspace = await prisma.quoteComparisonWorkspace.findFirst({
-    where: { propertyId, inventoryItemId },
-    orderBy: { updatedAt: 'desc' },
-    select: {
-      selectedVendorName: true, selectedQuoteAmount: true,
-      quotes: { orderBy: { createdAt: 'desc' }, take: 1, select: { vendorName: true, quoteAmount: true } },
-    },
-  });
+  // Optional enhancer: a timeout is omitted and disclosed, never blocking.
+  const workspaceLookup = await withEnhancerTimeout(
+    () => prisma.quoteComparisonWorkspace.findFirst({
+      where: { propertyId, inventoryItemId },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        selectedVendorName: true, selectedQuoteAmount: true,
+        quotes: { orderBy: { createdAt: 'desc' }, take: 1, select: { vendorName: true, quoteAmount: true } },
+      },
+    }),
+    contract.maximumEnhancerLatencyMs,
+    'HVAC_CURRENT_QUOTE_LOOKUP_TIMED_OUT',
+  );
+  const workspace = workspaceLookup.value;
   const bestQuote = workspace
     ? (workspace.selectedQuoteAmount ? { vendorName: workspace.selectedVendorName, amount: workspace.selectedQuoteAmount } : workspace.quotes[0] ? { vendorName: workspace.quotes[0].vendorName, amount: workspace.quotes[0].quoteAmount } : null)
     : null;
 
   return {
-    propertyId,
-    inventoryItemId: item.id,
-    itemName: item.name,
-    ageYears: ageYearsFromDate(item.installedOn ?? item.purchasedOn),
-    condition: item.condition,
-    repairSpendCentsLast30Months,
-    repairEventCountLast30Months: repairEvents.length,
-    warrantyActive: Boolean(item.warranty?.expiryDate && item.warranty.expiryDate.getTime() > Date.now()),
-    currentQuoteAmountCents: bestQuote?.amount ? Math.round(Number(bestQuote.amount) * 100) : null,
-    currentQuoteVendor: bestQuote?.vendorName ?? null,
-    recordedReplacementCostCents: item.replacementCostCents ?? null,
-    ownershipHorizonMonths: preferences.ownershipHorizonMonths,
-    repairReplaceApproach: preferences.repairReplaceApproach,
+    context: {
+      propertyId,
+      inventoryItemId: item.id,
+      itemName: item.name,
+      ageYears: ageYearsFromDate(item.installedOn ?? item.purchasedOn),
+      condition: item.condition,
+      repairSpendCentsLast30Months,
+      repairEventCountLast30Months: repairEvents.length,
+      warrantyActive: Boolean(item.warranty?.expiryDate && item.warranty.expiryDate.getTime() > Date.now()),
+      currentQuoteAmountCents: bestQuote?.amount ? Math.round(Number(bestQuote.amount) * 100) : null,
+      currentQuoteVendor: bestQuote?.vendorName ?? null,
+      recordedReplacementCostCents: item.replacementCostCents ?? null,
+      ownershipHorizonMonths: preferences.ownershipHorizonMonths,
+      repairReplaceApproach: preferences.repairReplaceApproach,
+    },
+    compositionLimitationCodes: workspaceLookup.limitationCodes,
   };
 }

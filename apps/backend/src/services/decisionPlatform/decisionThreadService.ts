@@ -109,13 +109,15 @@ interface CreateThreadInput {
 
 export async function createHvacDecisionThread(input: CreateThreadInput) {
   const preferences = await getActiveHvacPreferences(input.propertyId, input.userId);
-  const context = await composeHvacDecisionContext(input.propertyId, input.inventoryItemId, {
+  const composed = await composeHvacDecisionContext(input.propertyId, input.inventoryItemId, {
     ownershipHorizonMonths: preferences.ownershipHorizonMonths,
     repairReplaceApproach: preferences.repairReplaceApproach,
   });
-  if (!context) throw new Error('The selected item is not a recorded HVAC system on this property.');
+  if (!composed) throw new Error('The selected item is not a recorded HVAC system on this property.');
+  const { context, compositionLimitationCodes } = composed;
 
   const evaluation = evaluateHvacRepairReplace(context);
+  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   return prisma.$transaction(async (tx) => {
@@ -159,7 +161,7 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
         resultPayloadVersion: '1.0',
         verdictCode: evaluation.verdict,
         reasonCodes: evaluation.reasonCodes,
-        limitationCodes: evaluation.limitationCodes,
+        limitationCodes,
         confidenceBreakdown: evaluation.confidenceBreakdown,
         inputDigest: inputDigestFor(context),
       },
@@ -248,9 +250,11 @@ export async function recomputeStaleThread(threadId: string) {
   // system-triggered recompute — this isn't a new user action, just a
   // continuation of the existing thread's own preference basis.
   const preferences = await getActiveHvacPreferences(thread.propertyId, thread.createdByUserId);
-  const context = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
-  if (!context) throw new Error('The referenced HVAC item is no longer available on this property.');
+  const composed = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
+  if (!composed) throw new Error('The referenced HVAC item is no longer available on this property.');
+  const { context, compositionLimitationCodes } = composed;
   const evaluation = evaluateHvacRepairReplace(context);
+  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   return prisma.$transaction(async (tx) => {
@@ -280,7 +284,7 @@ export async function recomputeStaleThread(threadId: string) {
         resultPayloadVersion: '1.0',
         verdictCode: evaluation.verdict,
         reasonCodes: evaluation.reasonCodes,
-        limitationCodes: evaluation.limitationCodes,
+        limitationCodes,
         confidenceBreakdown: evaluation.confidenceBreakdown,
         supersedesSnapshotId: current.currentRecommendationSnapshotId,
         inputDigest: inputDigestFor(context),
@@ -380,9 +384,11 @@ export async function createHvacScenario(threadId: string, userId: string, input
   if (!thread.primaryEntityId) throw new Error(`Decision thread ${threadId} has no primary entity.`);
 
   const preferences = await getActiveHvacPreferences(thread.propertyId, userId);
-  const baselineContext = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
-  if (!baselineContext) throw new Error('The referenced HVAC item is no longer available on this property.');
+  const composedBaseline = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
+  if (!composedBaseline) throw new Error('The referenced HVAC item is no longer available on this property.');
+  const { context: baselineContext, compositionLimitationCodes } = composedBaseline;
   const scenarioEvaluation = evaluateHvacRepairReplace({ ...baselineContext, scenarioQuoteAmountCents: input.quoteAmountCents });
+  const scenarioLimitationCodes = Array.from(new Set([...scenarioEvaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   return prisma.$transaction(async (tx) => {
@@ -418,7 +424,7 @@ export async function createHvacScenario(threadId: string, userId: string, input
         resultPayloadVersion: '1.0',
         verdictCode: scenarioEvaluation.verdict,
         reasonCodes: scenarioEvaluation.reasonCodes,
-        limitationCodes: scenarioEvaluation.limitationCodes,
+        limitationCodes: scenarioLimitationCodes,
         confidenceBreakdown: scenarioEvaluation.confidenceBreakdown,
         inputDigest: inputDigestFor({ ...baselineContext, scenarioQuoteAmountCents: input.quoteAmountCents }),
       },
