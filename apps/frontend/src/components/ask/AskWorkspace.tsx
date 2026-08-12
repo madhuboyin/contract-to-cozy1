@@ -433,6 +433,54 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
     );
   }
 
+  if (block.type === 'PRIORITY_LIST') {
+    const categoryLabel: Record<typeof block.items[number]['consumerPriority'], string> = {
+      DO_NOW: 'Do now', PLAN_SOON: 'Plan soon', WATCH: 'Watch', OPTIONAL: 'Optional', NO_ACTION: 'No action needed',
+    };
+    const categoryBadge: Record<typeof block.items[number]['consumerPriority'], string> = {
+      DO_NOW: 'bg-red-100 text-red-800', PLAN_SOON: 'bg-amber-200 text-amber-900',
+      WATCH: 'bg-slate-100 text-slate-700', OPTIONAL: 'bg-slate-100 text-slate-500', NO_ACTION: 'bg-emerald-100 text-emerald-800',
+    };
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold text-slate-950">{block.title}</h3>
+          <span className="text-xs text-slate-500">Ranking policy {block.rankingPolicyVersion}</span>
+        </div>
+        {block.items.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-600">No ranked item is currently available on this channel. This does not mean the home needs no attention — it means the governed feed has nothing eligible to show right now.</p>
+        ) : (
+          <ol className="mt-4 space-y-3">
+            {block.items.map((item, index) => (
+              <li key={item.homeActionId} className="rounded-xl border border-slate-200 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-400">#{index + 1}</span>
+                  <h4 className="font-semibold text-slate-900">{item.title}</h4>
+                  <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>
+                  {item.suppressed && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Suppressed</span>}
+                  {item.completed && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Completed</span>}
+                  {item.unavailable && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Unavailable</span>}
+                  {item.stale && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Stale</span>}
+                </div>
+                {item.comparativeReasonCodes.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-600">Ranked here because: {item.comparativeReasonCodes.map((code) => code.replace(/_/g, ' ').toLowerCase()).join(', ')}.</p>
+                )}
+                <p className="mt-1 text-xs text-slate-500">
+                  {item.confidenceLabel.toLowerCase()} confidence
+                  {item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}
+                </p>
+                <div className="mt-3">
+                  {item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+        {block.truncated && <p className="mt-3 text-xs text-slate-500">More ranked items exist than are shown here. Open Home Actions to see the full list.</p>}
+      </section>
+    );
+  }
+
   if (block.type === 'ASSUMPTIONS') return <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title}</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">{block.items.map((item) => <li key={item}>{item}</li>)}</ul></details>;
 
   if (block.type === 'LIMITATION' || block.type === 'EMPTY_STATE' || block.type === 'ERROR_STATE') {

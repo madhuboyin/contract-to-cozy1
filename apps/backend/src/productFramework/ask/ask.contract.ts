@@ -261,6 +261,39 @@ const ChangeSummaryBlockSchema = z.object({
   linkedAction: z.object({ label: z.string(), href: z.string() }).nullable(),
 });
 
+// Ask Intelligence FRD §17/§21.2, Phase 9B. Renders the versioned,
+// channel-specific ranked view of the existing governed Home Actions feed
+// (see priorityListPolicy.ts) -- never a second ranking, just an
+// explainable annotation of the same feed homeActionsResult() already
+// queries. No internal numeric score is exposed, only the comparative
+// reason codes and consumer category FRD §17.3 requires; `truncated` is a
+// list-level flag, not per item, per §21.2's bullet list.
+const PriorityListItemSchema = z.object({
+  homeActionId: z.string(),
+  title: z.string(),
+  consumerPriority: z.enum(['DO_NOW', 'PLAN_SOON', 'WATCH', 'OPTIONAL', 'NO_ACTION']),
+  comparativeReasonCodes: z.array(z.string()).max(8),
+  confidenceLabel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+  deadlineAt: z.string().nullable(),
+  dependencyRefs: z.array(z.string()).max(10).default([]),
+  cta: AskActionSchema.nullable(),
+  watchState: z.string().nullable(),
+  suppressed: z.boolean(),
+  completed: z.boolean(),
+  unavailable: z.boolean(),
+  stale: z.boolean(),
+});
+
+const PriorityListBlockSchema = z.object({
+  type: z.literal('PRIORITY_LIST'), id: z.string(), title: z.string(),
+  propertyId: z.string(),
+  rankingPolicyVersion: z.string(),
+  generatedAt: z.string(),
+  sourceFreshnessAt: z.string().nullable(),
+  items: z.array(PriorityListItemSchema).max(20),
+  truncated: z.boolean(),
+});
+
 const AssumptionsBlockSchema = z.object({ type: z.literal('ASSUMPTIONS'), id: z.string(), title: z.string(), items: z.array(z.string()).min(1).max(20) });
 const LimitationBlockSchema = z.object({ type: z.literal('LIMITATION'), id: z.string(), title: z.string(), body: z.string(), severity: z.enum(['INFO', 'CAUTION']) });
 const EmptyStateBlockSchema = z.object({ type: z.literal('EMPTY_STATE'), id: z.string(), title: z.string(), body: z.string(), actions: z.array(AskActionSchema).max(3).default([]) });
@@ -285,6 +318,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   WhyNowBlockSchema,
   RecommendationChangeBlockSchema,
   ChangeSummaryBlockSchema,
+  PriorityListBlockSchema,
   AssumptionsBlockSchema,
   LimitationBlockSchema,
   EmptyStateBlockSchema,

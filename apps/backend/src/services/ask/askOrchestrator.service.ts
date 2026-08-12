@@ -74,6 +74,7 @@ import * as decisionPreferenceService from '../decisionPlatform/decisionPreferen
 import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '../decisionPlatform/decisionPreferenceService';
 import { listPropertyChanges } from '../../propertyChanges/propertyChange.service';
 import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/homeChangeSummaryMapping';
+import { buildPriorityListView } from '../decisionPlatform/priorityListPolicy';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
@@ -3103,6 +3104,22 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     tone: empty?.tone ?? (selectedActions.some((action) => action.priority === 'NOW') ? 'CAUTION' : 'DEFAULT'),
     actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: homeHref, style: 'PRIMARY' }],
   }];
+
+  // Phase 9B (FRD §17/§21.2): the versioned, explainable channel view of the
+  // full governed feed -- independent of this message's ad hoc timing
+  // filter (urgentFocus/soonFocus/etc.), since PRIORITY_LIST is meant to be
+  // a stable "what matters now" view, not a query-shaped one. Omitted when
+  // the feed itself is empty; the SUMMARY block above already carries the
+  // honest empty-state copy, and an empty PRIORITY_LIST block risks reading
+  // as "nothing needs attention" rather than "feed has no eligible items".
+  if (feed.actions.length) {
+    blocks.push({
+      type: 'PRIORITY_LIST',
+      id: 'home-actions-priority-list',
+      title: 'What matters now',
+      ...buildPriorityListView(feed, 'ASK'),
+    });
+  }
 
   if (selectedActions.length) {
     const priorities = ['NOW', 'SOON', 'PLAN', 'CONSIDER'] as const;
