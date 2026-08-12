@@ -2002,6 +2002,7 @@ model User {
   canonicalNotificationPreferences NotificationPreference[]
   pushSubscriptions                PushSubscription[]
   notificationOutcomes             NotificationOutcome[]
+  notificationChannelConsents      NotificationChannelConsent[]
   favorites                        Favorite[]
   refreshTokenSessions             RefreshTokenSession[]
   mfaRecoveryCodes                 MfaRecoveryCode[]
@@ -6732,6 +6733,34 @@ model NotificationPreference {
   @@unique([userId, scopeKey, category, channel])
   @@index([userId, propertyId, category])
   @@map("notification_preferences")
+}
+
+// Ask Intelligence FRD §18.3/§22.2, Phase 9C. Explicit, versioned, revocable
+// consent to receive a (category, channel) pair externally -- distinct from
+// NotificationPreference.enabled/cadence, which is a delivery *preference*
+// a user already holding consent can tune. FRD §22.2 requires zero
+// tolerance for "external notification without applicable consent"; a
+// preference row alone (defaulted to enabled=true) cannot satisfy that,
+// since it was never an affirmative grant. Shape mirrors the existing
+// outcomeMeasurementConsent* fields (versioned + consentedAt + revokedAt)
+// rather than reusing NotificationPreference.
+model NotificationChannelConsent {
+  id                String              @id @default(uuid())
+  userId            String
+  category          String
+  channel           NotificationChannel
+  consentVersion    String
+  consentedAt       DateTime?
+  consentedByUserId String?
+  revokedAt         DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, channel])
+  @@index([userId, revokedAt])
+  @@map("notification_channel_consents")
 }
 
 model PushSubscription {

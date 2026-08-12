@@ -149,6 +149,11 @@ export interface PriorityListView {
 export const PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS = {
   ASK: 8,
   CONCIERGE_HOME: 5,
+  // Phase 9C (FRD §18.2/§18.3): external delivery only ever considers the
+  // single top-ranked item per evaluation pass -- see
+  // homeActionProactiveDelivery.service.ts's "send at most one, break after
+  // the first eligible item" design.
+  EXTERNAL_PROACTIVE: 1,
 } as const;
 export type PriorityListChannel = keyof typeof PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS;
 

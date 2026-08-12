@@ -10,6 +10,12 @@ router.get('/preferences', authenticate, NotificationController.listPreferences)
 router.put('/preferences', authenticate, NotificationController.updatePreference);
 router.get('/quality', authenticate, NotificationController.quality);
 
+// Ask Intelligence FRD §18.3/§22.2, Phase 9C — affirmative per-category/
+// channel consent, distinct from the preference tuning above.
+router.get('/channel-consents', authenticate, NotificationController.listChannelConsents);
+router.post('/channel-consents', authenticate, NotificationController.grantChannelConsent);
+router.post('/channel-consents/revoke', authenticate, NotificationController.revokeChannelConsent);
+
 /**
  * ============================================================
  * IN-APP NOTIFICATIONS (User-facing)

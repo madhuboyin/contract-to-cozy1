@@ -8,7 +8,7 @@ import { JOB_REGISTRY } from '../config/workerJobRegistry';
 import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 import { NotificationChannel, DeliveryStatus,SignalSourceType, SignalTriggerType } from '@prisma/client';
 import { z } from 'zod';
-import { NotificationOutcomeSchema, NotificationPreferenceInputSchema } from '../productFramework/notificationPolicy.contract';
+import { NotificationChannelConsentInputSchema, NotificationOutcomeSchema, NotificationPreferenceInputSchema } from '../productFramework/notificationPolicy.contract';
 import {
   getNotificationQuality,
   listNotificationPreferences,
@@ -16,6 +16,11 @@ import {
   revokeNotificationOutcome,
   upsertNotificationPreference,
 } from '../services/notificationPreference.service';
+import {
+  grantNotificationChannelConsent,
+  listNotificationChannelConsents,
+  revokeNotificationChannelConsent,
+} from '../services/decisionPlatform/notificationChannelConsent.service';
 
 type SignalSourceBadge = {
   sourceType: SignalSourceType;
@@ -152,6 +157,30 @@ export class NotificationController {
     const parsed = NotificationPreferenceInputSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, error: { message: 'Invalid notification preference', details: parsed.error.issues } });
     return res.json({ success: true, data: await upsertNotificationPreference(userId, parsed.data) });
+  }
+
+  static async listChannelConsents(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    return res.json({ success: true, data: await listNotificationChannelConsents(userId) });
+  }
+
+  static async grantChannelConsent(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    const parsed = NotificationChannelConsentInputSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: { message: 'Invalid channel consent request', details: parsed.error.issues } });
+    return res.json({ success: true, data: await grantNotificationChannelConsent({ userId, ...parsed.data }) });
+  }
+
+  static async revokeChannelConsent(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    const parsed = NotificationChannelConsentInputSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: { message: 'Invalid channel consent request', details: parsed.error.issues } });
+    const result = await revokeNotificationChannelConsent({ userId, ...parsed.data });
+    if (!result) return res.status(404).json({ success: false, error: { message: 'No active consent found for that category and channel' } });
+    return res.json({ success: true, data: result });
   }
 
   static async recordOutcome(req: AuthRequest, res: Response) {

@@ -37,6 +37,15 @@ export const NotificationPreferenceInputSchema = z.object({
   deadlineLeadDays: z.number().int().min(1).max(90).nullable().optional(),
 }).strict();
 
+// Ask Intelligence FRD §18.3/§22.2, Phase 9C. Grant/revoke input for the
+// affirmative per-category/channel consent gate (notificationChannelConsent
+// .service.ts) -- distinct from NotificationPreferenceInputSchema, which
+// tunes delivery for a user who already holds consent.
+export const NotificationChannelConsentInputSchema = z.object({
+  category: NotificationCategorySchema,
+  channel: z.enum(PILOT_CONFIGURABLE_NOTIFICATION_CHANNELS),
+}).strict();
+
 export function notificationScopeKey(input: { propertyId?: string | null; memberUserId?: string | null }) {
   if (input.propertyId && input.memberUserId) return `PROPERTY:${input.propertyId}:MEMBER:${input.memberUserId}`;
   if (input.propertyId) return `PROPERTY:${input.propertyId}`;
