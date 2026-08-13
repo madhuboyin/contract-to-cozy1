@@ -115,3 +115,43 @@ test('a bare emergency HVAC phrase is still caught by the safety boundary before
   // adding new deterministic routing patterns.
   assert.equal(resolveAskOperation('I smell gas by the furnace').operationId, 'EMERGENCY_BOUNDARY');
 });
+
+// Ask Intelligence FRD Phase 10A (§19.2's homeowner-report source, §21.5's
+// correction/unlink controls).
+test('past-tense completion/repair phrasing routes to HVAC_DECISION_OUTCOME_REPORT', () => {
+  const cases = [
+    'I already replaced my furnace, it cost $6,200',
+    'We fixed the heat pump last week',
+    'My air conditioner was repaired yesterday',
+  ];
+  for (const prompt of cases) {
+    const result = resolveAskOperation(prompt);
+    assert.equal(result.operationId, 'HVAC_DECISION_OUTCOME_REPORT', prompt);
+    assert.equal(ASK_OPERATION_DEFINITIONS.HVAC_DECISION_OUTCOME_REPORT.safetyClass, 'STANDARD');
+    assert.equal(ASK_OPERATION_DEFINITIONS.HVAC_DECISION_OUTCOME_REPORT.propertyRoleFloor, 'CONTRIBUTOR');
+  }
+});
+
+test('outcome/result phrasing routes to the read-only HVAC_DECISION_OUTCOME_VIEW', () => {
+  const cases = [
+    'What was the outcome of my furnace decision?',
+    'What was the result for my HVAC system?',
+  ];
+  for (const prompt of cases) {
+    const result = resolveAskOperation(prompt);
+    assert.equal(result.operationId, 'HVAC_DECISION_OUTCOME_VIEW', prompt);
+    assert.equal(ASK_OPERATION_DEFINITIONS.HVAC_DECISION_OUTCOME_VIEW.safetyClass, 'STANDARD');
+    assert.equal(ASK_OPERATION_DEFINITIONS.HVAC_DECISION_OUTCOME_VIEW.propertyRoleFloor, 'VIEWER');
+  }
+});
+
+test('dispute phrasing routes to HVAC_DECISION_OUTCOME_UNLINK, checked ahead of the report pattern', () => {
+  const cases = [
+    "That's wrong for my furnace",
+    'That outcome is wrong for my furnace',
+    'Undo that outcome for the heat pump',
+  ];
+  for (const prompt of cases) {
+    assert.equal(resolveAskOperation(prompt).operationId, 'HVAC_DECISION_OUTCOME_UNLINK', prompt);
+  }
+});

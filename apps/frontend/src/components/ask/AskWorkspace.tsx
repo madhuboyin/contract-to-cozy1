@@ -608,6 +608,40 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
     );
   }
 
+  if (block.type === 'OUTCOME_SUMMARY') {
+    const verificationBadge: Record<typeof block.entries[number]['verificationStatus'], string> = {
+      REPORTED: 'bg-slate-100 text-slate-700', CORROBORATED: 'bg-teal-100 text-teal-800',
+      VERIFIED: 'bg-emerald-100 text-emerald-800', REJECTED: 'bg-red-100 text-red-800', SUPERSEDED: 'bg-slate-100 text-slate-400',
+    };
+    const verificationLabel: Record<typeof block.entries[number]['verificationStatus'], string> = {
+      REPORTED: 'Reported', CORROBORATED: 'Corroborated', VERIFIED: 'Verified', REJECTED: 'Disputed', SUPERSEDED: 'Superseded',
+    };
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <h3 className="font-semibold text-slate-950">{block.title}</h3>
+        {block.entries.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-600">No outcome has been recorded for this decision yet.</p>
+        ) : (
+          <ol className="mt-4 space-y-3">
+            {block.entries.map((entry) => (
+              <li key={`${entry.outcomeObservationId}-${entry.relationshipType}`} className={cn('rounded-xl border border-slate-200 p-3', entry.verificationStatus === 'SUPERSEDED' && 'opacity-60')}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', verificationBadge[entry.verificationStatus])}>{verificationLabel[entry.verificationStatus]}</span>
+                  <span className="text-xs text-slate-500">{entry.relationshipType.replace(/_/g, ' ').toLowerCase()}</span>
+                  {entry.reviewStatus === 'DISPUTED' && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-800">Disputed</span>}
+                </div>
+                <p className="mt-2 text-sm text-slate-800">{entry.sourceLabel} · {new Date(entry.occurredAt).toLocaleDateString()}</p>
+                {entry.observedCostLabel && <p className="mt-1 text-sm text-slate-700">Cost observed: {entry.observedCostLabel}</p>}
+                {entry.note && <p className="mt-1 text-xs text-slate-600">{entry.note}</p>}
+              </li>
+            ))}
+          </ol>
+        )}
+        <p className="mt-3 text-xs text-slate-500">{block.limitation}</p>
+      </section>
+    );
+  }
+
   if (block.type === 'ASSUMPTIONS') return <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title}</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">{block.items.map((item) => <li key={item}>{item}</li>)}</ul></details>;
 
   if (block.type === 'LIMITATION' || block.type === 'EMPTY_STATE' || block.type === 'ERROR_STATE') {

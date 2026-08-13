@@ -12,6 +12,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'HVAC_DECISION_ABANDON',
   'HVAC_PREFERENCE_SAVE',
   'HVAC_PREFERENCE_FORGET',
+  'HVAC_DECISION_OUTCOME_REPORT',
+  'HVAC_DECISION_OUTCOME_UNLINK',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -67,6 +69,8 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   HVAC_DECISION_ABANDON: command('HVAC_DECISION_ABANDON', 'HVAC_DECISION_ABANDON', 'decision-platform.hvac.abandon', 'CONTRIBUTOR', 'DECISION_THREAD', ['REOPEN'], { title: 'Decision thread not abandoned', body: 'The decision thread remains active with its current recommendation.', suggestion: 'Show my HVAC decision' }),
   HVAC_PREFERENCE_SAVE: command('HVAC_PREFERENCE_SAVE', 'HVAC_PREFERENCE_SAVE', 'decision-platform.hvac.preference.save', 'CONTRIBUTOR', 'DECISION_PREFERENCE_VALUE', ['EDIT', 'REVOKE'], { title: 'Preference not saved', body: 'No decision preference was created or changed.', suggestion: 'Show my HVAC decision' }),
   HVAC_PREFERENCE_FORGET: command('HVAC_PREFERENCE_FORGET', 'HVAC_PREFERENCE_FORGET', 'decision-platform.hvac.preference.forget', 'CONTRIBUTOR', 'DECISION_PREFERENCE_VALUE', ['REOPEN'], { title: 'Preference not forgotten', body: 'The preference remains active and in use.', suggestion: 'Show my HVAC decision' }),
+  HVAC_DECISION_OUTCOME_REPORT: command('HVAC_DECISION_OUTCOME_REPORT', 'HVAC_DECISION_OUTCOME_REPORT', 'decision-platform.hvac.outcome.report', 'CONTRIBUTOR', 'OUTCOME_OBSERVATION', ['EDIT'], { title: 'Outcome not recorded', body: 'No reported outcome or attribution was created; the decision thread is unchanged.', suggestion: 'Show my HVAC decision' }),
+  HVAC_DECISION_OUTCOME_UNLINK: command('HVAC_DECISION_OUTCOME_UNLINK', 'HVAC_DECISION_OUTCOME_UNLINK', 'decision-platform.hvac.outcome.unlink', 'CONTRIBUTOR', 'OUTCOME_OBSERVATION', ['REOPEN'], { title: 'Outcome not disputed', body: 'The reported outcome remains as recorded.', suggestion: 'Show my HVAC decision' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

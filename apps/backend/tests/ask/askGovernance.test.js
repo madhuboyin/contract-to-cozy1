@@ -25,7 +25,7 @@ const {
 
 test('every Ask operation has a complete governed definition', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 36);
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 39);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -35,7 +35,7 @@ test('every Ask operation has a complete governed definition', () => {
 
 test('every material Ask command has governed confirmation, authorization, cancellation, and correction metadata', () => {
   assert.deepEqual(validateAskDomainCommandRegistry(), []);
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 13);
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 15);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);
@@ -172,6 +172,11 @@ test('golden and negative prompts route before remote generation', () => {
     // through to the same place it did before this operation existed
     // (GROUNDED_GUIDANCE), not get captured by the new generic pattern.
     ['What changed about this decision?', 'GROUNDED_GUIDANCE'],
+    // Phase 10A: outcome observation.
+    ['I already replaced my furnace, it cost $6,200', 'HVAC_DECISION_OUTCOME_REPORT'],
+    ['My heat pump was repaired last week', 'HVAC_DECISION_OUTCOME_REPORT'],
+    ['What was the outcome of my furnace decision?', 'HVAC_DECISION_OUTCOME_VIEW'],
+    ["That outcome is wrong for my furnace", 'HVAC_DECISION_OUTCOME_UNLINK'],
     ['Create a maintenance task to clean gutters', 'MAINTENANCE_TASK_CREATE'],
     ['Mark the gutter cleaning task complete', 'MAINTENANCE_TASK_COMPLETE'],
     ['Reschedule the gutter maintenance task', 'MAINTENANCE_TASK_UPDATE'],

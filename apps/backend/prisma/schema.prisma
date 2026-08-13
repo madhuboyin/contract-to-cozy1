@@ -2137,6 +2137,8 @@ model User {
   decisionThreadsCreated           DecisionThread[]          @relation("DecisionThreadCreatedBy")
   decisionThreadParticipations     DecisionThreadParticipant[]
   scenariosCreated                 Scenario[]                @relation("ScenarioCreatedBy")
+  // Decision Platform Phase 10A (FRD §19)
+  outcomeObservationsRecorded      OutcomeObservation[]      @relation("OutcomeObservationRecordedBy")
 
   @@index([email])
   @@index([role])
@@ -3195,6 +3197,8 @@ model Property {
   decisionPreferenceValues DecisionPreferenceValue[]
   decisionThreads          DecisionThread[]
   recommendationSnapshots  RecommendationSnapshot[]
+  // Decision Platform Phase 10A (FRD §19)
+  outcomeObservations      OutcomeObservation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -7018,9 +7022,11 @@ model GroundedAskArtifact {
 // implements. Definition/registry objects (DecisionPreferenceDefinition,
 // DecisionContextContract, decision-family catalog) are code-based —
 // apps/backend/src/services/decisionPlatform/ — not stored here. Only
-// durable instance/value records get Prisma models. Out of scope for this
-// phase (deferred to Phase 9A/10A per the FRD): HomeChangeView,
-// OutcomeObservation, RecommendationAttribution, DecisionOutcomeLink.
+// durable instance/value records get Prisma models. HomeChangeView remains
+// out of scope: FRD §6.1 declares it a non-authoritative, disposable read
+// projection, never a durable canonical record. OutcomeObservation and
+// RecommendationAttribution (the FRD's "DecisionOutcomeLink" concept, §19.1)
+// are Phase 10A -- see outcomeObservationService.ts.
 
 enum DecisionPreferenceSubjectType {
   USER
@@ -7355,10 +7361,119 @@ model RecommendationSnapshot {
 
   currentForThread     DecisionThread? @relation("DecisionThreadCurrentSnapshot")
   baselineForScenarios Scenario[]      @relation("ScenarioBaselineSnapshot")
+  // Decision Platform Phase 10A (FRD §19)
+  outcomeAttributions  RecommendationAttribution[]
 
   @@index([propertyId, recommendationDefinitionId, generatedAt])
   @@index([decisionThreadId, generatedAt])
   @@map("recommendation_snapshots")
+}
+
+// ----------------------------------------------------------------------------
+// Decision Platform Phase 10A — P2 outcome observation (FRD §19, §25 "Phase
+// 10A"). Links a supported completed decision to a provenance-bearing
+// observation WITHOUT changing production guidance (no calibration reads
+// these rows yet -- that is the separate, still-unbuilt Phase 10B gate).
+//
+// verificationStatus is the load-bearing trust axis (FRD §19.1/§21.5):
+// REPORTED observations (raw homeowner claim, sourceType HOMEOWNER_REPORTED)
+// must never be silently promoted to VERIFIED -- see
+// outcomeObservationService.ts's recordHomeownerReportedOutcome, which always
+// writes REPORTED regardless of what the homeowner's message asserts.
+// CORROBORATED observations come only from a registered domain-owned source
+// adapter (recordCompletedMaintenanceOutcome), never from conversation text.
+// REJECTED/SUPERSEDED are homeowner correction states (FRD §21.5's
+// "correction, dispute ... controls"): SUPERSEDED means a newer report
+// replaced this one (self-relation below, mirrors
+// DecisionPreferenceValue.supersedesId); REJECTED means the homeowner
+// disputed/unlinked this specific observation without replacing it.
+// ----------------------------------------------------------------------------
+
+enum OutcomeObservationSourceType {
+  HOMEOWNER_REPORTED
+  COMPLETED_MAINTENANCE_RECORD
+}
+
+enum OutcomeObservationVerificationStatus {
+  REPORTED
+  CORROBORATED
+  VERIFIED
+  REJECTED
+  SUPERSEDED
+}
+
+enum RecommendationAttributionRelationshipType {
+  SELECTED_OPTION
+  ACTION_STARTED
+  ACTION_COMPLETED
+  COST_OBSERVED
+  TIMING_OBSERVED
+  RESULT_OBSERVED
+}
+
+enum RecommendationAttributionReviewStatus {
+  PENDING
+  CONFIRMED
+  DISPUTED
+  REJECTED
+}
+
+// FRD §19.1. sourceEntityType/sourceEntityId are a polymorphic reference
+// (e.g. 'DecisionThread'/'PropertyMaintenanceTask'), mirroring the existing
+// Signal.sourceModel/sourceId and DecisionThreadFactReference patterns --
+// deliberately no FK, since the source can be any domain-owned record.
+model OutcomeObservation {
+  id                     String                                @id @default(uuid())
+  propertyId             String
+  sourceType             OutcomeObservationSourceType
+  sourceEntityType       String
+  sourceEntityId         String
+  observedType           String
+  observedPayloadVersion String
+  observedPayload        Json
+  occurredAt             DateTime
+  recordedAt             DateTime                              @default(now())
+  recordedByUserId       String?
+  verificationStatus     OutcomeObservationVerificationStatus   @default(REPORTED)
+  provenanceRefs         String[]                              @default([])
+  sensitivityClass       String                                @default("STANDARD")
+  supersedesId           String?                               @unique
+  version                Int                                   @default(1)
+  createdAt              DateTime                              @default(now())
+  updatedAt              DateTime                              @updatedAt
+
+  property     Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  recordedBy   User?                @relation("OutcomeObservationRecordedBy", fields: [recordedByUserId], references: [id])
+  supersedes   OutcomeObservation?  @relation("OutcomeObservationSupersession", fields: [supersedesId], references: [id])
+  supersededBy OutcomeObservation?  @relation("OutcomeObservationSupersession")
+
+  attributions RecommendationAttribution[]
+
+  @@index([propertyId, sourceEntityType, sourceEntityId])
+  @@index([propertyId, verificationStatus])
+  @@map("outcome_observations")
+}
+
+// FRD §19.1. attributionWindowDefinitionId references a code-based
+// attribution-window registry (not a DB row), mirroring
+// DecisionPreferenceValue.definitionId's code-registry convention elsewhere
+// in this schema.
+model RecommendationAttribution {
+  id                             String                                     @id @default(uuid())
+  recommendationSnapshotId      String
+  outcomeObservationId           String
+  relationshipType                RecommendationAttributionRelationshipType
+  attributionWindowDefinitionId String
+  confidence                      Float?
+  reviewStatus                    RecommendationAttributionReviewStatus     @default(PENDING)
+  createdAt                       DateTime                                  @default(now())
+
+  recommendationSnapshot RecommendationSnapshot @relation(fields: [recommendationSnapshotId], references: [id], onDelete: Cascade)
+  outcomeObservation      OutcomeObservation     @relation(fields: [outcomeObservationId], references: [id], onDelete: Cascade)
+
+  @@unique([recommendationSnapshotId, outcomeObservationId, relationshipType])
+  @@index([outcomeObservationId])
+  @@map("recommendation_attributions")
 }
 
 // ============================================================================

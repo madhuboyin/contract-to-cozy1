@@ -74,6 +74,8 @@ import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
 import * as decisionPreferenceService from '../decisionPlatform/decisionPreferenceService';
 import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '../decisionPlatform/decisionPreferenceService';
+import * as outcomeObservationService from '../decisionPlatform/outcomeObservationService';
+import { sourceTypeLabel as outcomeSourceTypeLabel } from '../decisionPlatform/outcomeObservationService';
 import { listPropertyChanges } from '../../propertyChanges/propertyChange.service';
 import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/homeChangeSummaryMapping';
 import { buildPriorityListView } from '../decisionPlatform/priorityListPolicy';
@@ -202,6 +204,19 @@ const HvacDecisionScenarioInputSchema = z.object({
 
 const HvacDecisionAbandonInputSchema = z.object({
   decisionThreadId: z.string().trim().min(1).max(160),
+}).strict();
+
+// Ask Intelligence FRD Phase 10A (§19.2's homeowner-report source).
+const HvacDecisionOutcomeReportInputSchema = z.object({
+  decisionThreadId: z.string().trim().min(1).max(160),
+  actionState: z.enum(['STARTED', 'COMPLETED']),
+  costCents: z.number().int().nonnegative().nullable(),
+  note: z.string().trim().max(500).nullable(),
+}).strict();
+
+const HvacDecisionOutcomeUnlinkInputSchema = z.object({
+  decisionThreadId: z.string().trim().min(1).max(160),
+  outcomeObservationId: z.string().trim().min(1).max(160),
 }).strict();
 
 function asInputJson(value: unknown): Prisma.InputJsonValue {
@@ -1643,6 +1658,39 @@ function recommendationChangeBlock(id: string, decisionThreadId: string, change:
   };
 }
 
+function formatOutcomeCents(cents: number | null): string | null {
+  return cents == null ? null : `$${(cents / 100).toFixed(2)}`;
+}
+
+// Ask Intelligence FRD §21.5, Phase 10A. `comparable` is always false and
+// `predictedCostLabel` always null for this slice -- the HVAC engine does not
+// yet emit a normalized predicted cost to compare against, and §21.5
+// requires the block hide the delta rather than show a non-comparable one.
+function outcomeSummaryBlock(id: string, decisionThreadId: string, rows: outcomeObservationService.OutcomeSummaryAttribution[]): AskPresentationBlock {
+  return {
+    type: 'OUTCOME_SUMMARY', id, title: 'Outcome for this decision', decisionThreadId,
+    entries: rows.map((row) => {
+      const payload = row.observation.observedPayload as { costCents?: number | null; note?: string | null } | null;
+      return {
+        outcomeObservationId: row.observation.id,
+        recommendationSnapshotId: row.attribution.recommendationSnapshotId,
+        observedType: row.observation.observedType,
+        occurredAt: row.observation.occurredAt.toISOString(),
+        verificationStatus: row.observation.verificationStatus,
+        sourceLabel: outcomeSourceTypeLabel(row.observation.sourceType),
+        relationshipType: row.attribution.relationshipType,
+        attributionConfidence: row.attribution.confidence,
+        reviewStatus: row.attribution.reviewStatus,
+        comparable: false,
+        observedCostLabel: formatOutcomeCents(typeof payload?.costCents === 'number' ? payload.costCents : null),
+        predictedCostLabel: null,
+        note: typeof payload?.note === 'string' ? payload.note : null,
+      };
+    }),
+    limitation: 'A different outcome or homeowner choice does not by itself prove the recommendation was incorrect.',
+  };
+}
+
 // Built from a specific snapshot's own recorded preferenceReferenceIds
 // (FRD §14.1 lineage), NOT a fresh "what's active right now" read -- those
 // can diverge (a different household member viewing later, or the
@@ -1857,6 +1905,143 @@ async function hvacDecisionAbandonResult(userId: string, propertyId: string, mes
       description: 'You can start a new decision for this system at any time.',
       fields: [{ label: 'System', value: item.name }],
       confirmLabel: 'Abandon decision', consentText: 'I authorize abandoning this decision thread.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+// Ask Intelligence FRD Phase 10A (§19.2's fourth allowed source: "an
+// explicit homeowner report marked REPORTED, not VERIFIED"). Recording an
+// outcome never derives verificationStatus from the message -- see
+// outcomeObservationService.recordHomeownerReportedOutcome, which always
+// writes REPORTED regardless of what this function parses.
+async function hvacDecisionOutcomeReportResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const { item } = await findHvacItemForMessage(propertyId, message);
+  if (!item) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_OUTCOME_REPORT', 'Which HVAC decision does this outcome apply to?'),
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-report-item-required', title: 'Which HVAC system?', body: 'Name the HVAC system exactly as recorded.', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
+  if (selection.kind === 'AMBIGUOUS') return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_OUTCOME_REPORT', selection.candidates);
+  if (selection.kind !== 'UNIQUE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-report-no-thread', title: 'No active decision to record an outcome for', body: `Start a repair-or-replace decision for ${item.name} first.`, actions: [] }],
+      suggestions: [`Should I repair or replace my ${item.name}?`],
+    };
+  }
+
+  const actionState: outcomeObservationService.ReportedOutcomeActionState =
+    /\bstarted\b/i.test(message) && !/\b(?:completed|finished|done|already)\b/i.test(message) ? 'STARTED' : 'COMPLETED';
+  const amountMatch = message.match(/\$\s*([\d][\d,]*(?:\.\d{2})?)/) ?? message.match(/([\d][\d,]*(?:\.\d{2})?)\s*dollars/i);
+  const costCents = amountMatch ? Math.round(Number(amountMatch[1].replace(/,/g, '')) * 100) : null;
+
+  const contextVersion = await hvacDecisionThreadVersionFingerprint(selection.thread.id);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const actionLabel = actionState === 'COMPLETED' ? 'completed' : 'started';
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HVAC_DECISION_OUTCOME_REPORT_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      hvacDecisionOutcomeReport: { decisionThreadId: selection.thread.id, actionState, costCents, note: message.slice(0, 500) },
+      hvacDecisionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{
+      type: 'SUMMARY', id: 'hvac-outcome-report-review', title: `Record that ${item.name} was ${actionLabel}?`,
+      body: `This records a homeowner-reported outcome${costCents != null ? ` (${formatOutcomeCents(costCents)})` : ''}. It is marked as reported, not independently verified, and does not change the recorded recommendation.`,
+      tone: 'DEFAULT', actions: [],
+    }],
+    confirmation: {
+      confirmationId: `hvac-decision-outcome-report-${selection.thread.id}-1`, version: 1, title: `Record this outcome for ${item.name}?`,
+      description: 'Ask records this as a homeowner-reported outcome. It is never automatically treated as verified, and it never changes the existing recommendation.',
+      fields: [
+        { label: 'System', value: item.name }, { label: 'Status', value: actionLabel },
+        ...(costCents != null ? [{ label: 'Cost', value: formatOutcomeCents(costCents)! }] : []),
+      ],
+      confirmLabel: 'Record outcome', consentText: 'I confirm this reported outcome is accurate to the best of my knowledge.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function hvacDecisionOutcomeViewResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const { item } = await findHvacItemForMessage(propertyId, message);
+  if (!item) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_OUTCOME_VIEW', 'Which HVAC decision do you want the outcome for?'),
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-view-item-required', title: 'Which HVAC system?', body: 'Name the HVAC system exactly as recorded.', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
+  if (selection.kind === 'AMBIGUOUS') return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_OUTCOME_VIEW', selection.candidates);
+  if (selection.kind !== 'UNIQUE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-view-no-thread', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [] }],
+      suggestions: [`Should I repair or replace my ${item.name}?`],
+    };
+  }
+  const rows = await outcomeObservationService.getOutcomeSummaryForThread(selection.thread.id, propertyId);
+  if (!rows.length) {
+    return {
+      status: 'ANSWERED', reasonCode: 'HVAC_DECISION_OUTCOME_NONE',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-view-empty', title: 'No outcome recorded yet', body: `Once ${item.name} is repaired or replaced, tell Ask what happened to record the outcome.`, actions: [] }],
+      suggestions: [`I replaced my ${item.name}`],
+    };
+  }
+  const disputable = rows.some((row) => (['REPORTED', 'CORROBORATED', 'VERIFIED'] as string[]).includes(row.observation.verificationStatus));
+  return {
+    status: 'ANSWERED', reasonCode: 'HVAC_DECISION_OUTCOME_FOUND',
+    blocks: [outcomeSummaryBlock('hvac-outcome-summary', selection.thread.id, rows)],
+    suggestions: disputable ? [`That outcome is wrong for my ${item.name}`] : [],
+  };
+}
+
+async function hvacDecisionOutcomeUnlinkResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const { item } = await findHvacItemForMessage(propertyId, message);
+  if (!item) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_OUTCOME_UNLINK', "Which HVAC decision's outcome should Ask dispute?"),
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-unlink-item-required', title: 'Which HVAC system?', body: 'Name the HVAC system exactly as recorded.', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
+  if (selection.kind === 'AMBIGUOUS') return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_OUTCOME_UNLINK', selection.candidates);
+  if (selection.kind !== 'UNIQUE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-unlink-no-thread', title: 'No active decision for this system', body: `There is no active decision for ${item.name}.`, actions: [] }],
+      suggestions: [],
+    };
+  }
+  const rows = await outcomeObservationService.getOutcomeSummaryForThread(selection.thread.id, propertyId);
+  const disputable = rows.find((row) => (['REPORTED', 'CORROBORATED', 'VERIFIED'] as string[]).includes(row.observation.verificationStatus));
+  if (!disputable) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_OUTCOME_NONE',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-unlink-empty', title: 'No outcome to dispute', body: `There is no active reported outcome for ${item.name}.`, actions: [] }],
+      suggestions: [],
+    };
+  }
+
+  const contextVersion = await hvacDecisionThreadVersionFingerprint(selection.thread.id);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HVAC_DECISION_OUTCOME_UNLINK_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { hvacDecisionOutcomeUnlink: { decisionThreadId: selection.thread.id, outcomeObservationId: disputable.observation.id }, hvacDecisionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'hvac-outcome-unlink-review', title: `Dispute this reported outcome for ${item.name}?`, body: 'This marks the recorded outcome as disputed. It does not change the recorded recommendation.', tone: 'CAUTION', actions: [] }],
+    confirmation: {
+      confirmationId: `hvac-decision-outcome-unlink-${disputable.observation.id}-1`, version: 1, title: 'Dispute this outcome?',
+      description: 'The disputed outcome remains visible with its status changed; it is never permanently deleted.',
+      fields: [{ label: 'System', value: item.name }],
+      confirmLabel: 'Dispute outcome', consentText: 'I confirm this reported outcome is incorrect.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -3837,6 +4022,9 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_PREFERENCE_FORGET': return hvacPreferenceForgetResult(input.userId, input.propertyId!, input.message);
     case 'HOME_CHANGE_SUMMARY': return homeChangeSummaryResult(input.userId, input.propertyId!);
+    case 'HVAC_DECISION_OUTCOME_REPORT': return hvacDecisionOutcomeReportResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_OUTCOME_VIEW': return hvacDecisionOutcomeViewResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_OUTCOME_UNLINK': return hvacDecisionOutcomeUnlinkResult(input.userId, input.propertyId!, input.message);
   }
 }
 
@@ -5440,6 +5628,50 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     };
     artifactType = command.artifactType;
     artifactId = abandonedThread.id;
+  } else if (execution.operationId === 'HVAC_DECISION_OUTCOME_REPORT') {
+    const candidate = HvacDecisionOutcomeReportInputSchema.safeParse(parameters.hvacDecisionOutcomeReport);
+    if (!candidate.success) {
+      const error = new Error('The outcome details are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const { observation } = await outcomeObservationService.recordHomeownerReportedOutcome({
+      propertyId: execution.propertyId, userId, decisionThreadId: candidate.data.decisionThreadId,
+      actionState: candidate.data.actionState, costCents: candidate.data.costCents, occurredOn: null, note: candidate.data.note,
+    });
+    const reportedRows = await outcomeObservationService.getOutcomeSummaryForThread(candidate.data.decisionThreadId, execution.propertyId);
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_RECORDED',
+      blocks: [outcomeSummaryBlock('hvac-outcome-recorded', candidate.data.decisionThreadId, reportedRows)],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = observation.id;
+  } else if (execution.operationId === 'HVAC_DECISION_OUTCOME_UNLINK') {
+    const candidate = HvacDecisionOutcomeUnlinkInputSchema.safeParse(parameters.hvacDecisionOutcomeUnlink);
+    if (!candidate.success) {
+      const error = new Error('The outcome selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const disputed = await outcomeObservationService.disputeOutcomeObservation(candidate.data.outcomeObservationId, execution.propertyId);
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_DISPUTED',
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `hvac-outcome-disputed-${disputed.id}`, title: 'Outcome disputed', status: 'COMPLETED', description: 'The reported outcome is now marked as disputed. It was not deleted.', details: [], actions: [] }],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = disputed.id;
   } else if (execution.operationId === 'HVAC_PREFERENCE_SAVE') {
     const candidate = parameters.hvacPreferenceSave as {
       ownership: decisionPreferenceService.ParsedOwnershipHorizon | null;

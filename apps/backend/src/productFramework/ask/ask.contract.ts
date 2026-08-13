@@ -294,6 +294,40 @@ const PriorityListBlockSchema = z.object({
   truncated: z.boolean(),
 });
 
+// Ask Intelligence FRD §19.1/§21.5, Phase 10A. One entry per recorded
+// RecommendationAttribution + its OutcomeObservation. `comparable` is false
+// (and cost/timing labels are omitted) whenever units, inclusions, time
+// basis, or attribution are not comparable -- per §21.5, the block must not
+// show a predicted-vs-observed delta in that case. Correction/dispute/unlink
+// controls are surfaced as suggested follow-up messages (see
+// askOrchestrator.service.ts), not action hrefs, matching
+// PREFERENCE_REFERENCE's "change"/"forget" convention -- these are commands,
+// not navigation.
+const OutcomeSummaryEntrySchema = z.object({
+  outcomeObservationId: z.string(),
+  recommendationSnapshotId: z.string(),
+  observedType: z.string(),
+  occurredAt: z.string(),
+  verificationStatus: z.enum(['REPORTED', 'CORROBORATED', 'VERIFIED', 'REJECTED', 'SUPERSEDED']),
+  sourceLabel: z.string(),
+  relationshipType: z.enum(['SELECTED_OPTION', 'ACTION_STARTED', 'ACTION_COMPLETED', 'COST_OBSERVED', 'TIMING_OBSERVED', 'RESULT_OBSERVED']),
+  attributionConfidence: z.number().min(0).max(1).nullable(),
+  reviewStatus: z.enum(['PENDING', 'CONFIRMED', 'DISPUTED', 'REJECTED']),
+  comparable: z.boolean(),
+  observedCostLabel: z.string().nullable(),
+  predictedCostLabel: z.string().nullable(),
+  note: z.string().nullable(),
+});
+
+const OutcomeSummaryBlockSchema = z.object({
+  type: z.literal('OUTCOME_SUMMARY'), id: z.string(), title: z.string(),
+  decisionThreadId: z.string(),
+  entries: z.array(OutcomeSummaryEntrySchema).max(20),
+  // FRD §21.5's required limitation: "deviation or a different homeowner
+  // choice does not by itself prove that the recommendation was incorrect."
+  limitation: z.string(),
+});
+
 const AssumptionsBlockSchema = z.object({ type: z.literal('ASSUMPTIONS'), id: z.string(), title: z.string(), items: z.array(z.string()).min(1).max(20) });
 const LimitationBlockSchema = z.object({ type: z.literal('LIMITATION'), id: z.string(), title: z.string(), body: z.string(), severity: z.enum(['INFO', 'CAUTION']) });
 const EmptyStateBlockSchema = z.object({ type: z.literal('EMPTY_STATE'), id: z.string(), title: z.string(), body: z.string(), actions: z.array(AskActionSchema).max(3).default([]) });
@@ -319,6 +353,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   RecommendationChangeBlockSchema,
   ChangeSummaryBlockSchema,
   PriorityListBlockSchema,
+  OutcomeSummaryBlockSchema,
   AssumptionsBlockSchema,
   LimitationBlockSchema,
   EmptyStateBlockSchema,
