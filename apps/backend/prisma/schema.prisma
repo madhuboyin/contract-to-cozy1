@@ -2139,6 +2139,9 @@ model User {
   scenariosCreated                 Scenario[]                @relation("ScenarioCreatedBy")
   // Decision Platform Phase 10A (FRD §19)
   outcomeObservationsRecorded      OutcomeObservation[]      @relation("OutcomeObservationRecordedBy")
+  // Decision Platform Phase 10B (FRD §19.4)
+  calibrationReleasesProposed      CalibrationRelease[]
+  calibrationGovernanceReviews     CalibrationGovernanceReview[]
 
   @@index([email])
   @@index([role])
@@ -7364,6 +7367,19 @@ model RecommendationSnapshot {
   // Decision Platform Phase 10A (FRD §19)
   outcomeAttributions  RecommendationAttribution[]
 
+  // Decision Platform Phase 10B (FRD §19.4). All additive/nullable: existing
+  // rows and every pre-Phase-10B caller are unaffected. `score` and
+  // `engineInputSnapshot` capture what evaluateHvacRepairReplace actually
+  // produced/consumed at generation time -- inputDigestFor() above only ever
+  // stored a one-way hash, not the values themselves, so without these two
+  // columns there is no valid calibration training signal, ever, regardless
+  // of how much real usage accumulates. `calibrationReleaseId` records which
+  // weight set (if any) produced this snapshot.
+  score                Float?
+  engineInputSnapshot  Json?
+  calibrationReleaseId String?
+  calibrationRelease   CalibrationRelease? @relation(fields: [calibrationReleaseId], references: [id])
+
   @@index([propertyId, recommendationDefinitionId, generatedAt])
   @@index([decisionThreadId, generatedAt])
   @@map("recommendation_snapshots")
@@ -7474,6 +7490,112 @@ model RecommendationAttribution {
   @@unique([recommendationSnapshotId, outcomeObservationId, relationshipType])
   @@index([outcomeObservationId])
   @@map("recommendation_attributions")
+}
+
+// ----------------------------------------------------------------------------
+// Decision Platform Phase 10B — P2 reviewed calibration (FRD §19.4, §25
+// "Phase 10B"). "No observation changes production guidance directly. A
+// calibration release requires: an approved dataset version; privacy-minimum
+// cohort and aggregation thresholds; exclusion and outlier policy; source
+// reliability weights; censored/no-action handling; holdout evaluation;
+// segment-level regression checks; minimum improvement threshold; Product,
+// Domain, Privacy, and Trust approval; versioned rollout cohort; monitoring
+// and rollback threshold; and deletion/deidentification behavior."
+//
+// `status` is the release's own mechanical lifecycle only -- approval
+// readiness is always computed live from CalibrationGovernanceReview rows
+// (calibrationGovernanceReview.service.ts), never cached as a status, mirroring
+// capabilityGovernanceReview.service.ts's own established pattern. Dataset-
+// version fields live inline here rather than in a separate joined table:
+// nothing else in this schema needs a dataset version independent of one
+// release attempt. `datasetFingerprint` (not just `datasetVersion`) is what
+// actually proves "exact production version reproducible" -- a bare integer
+// doesn't prove the underlying observation set wasn't mutated between
+// proposal and activation.
+// ----------------------------------------------------------------------------
+
+enum CalibrationReleaseStatus {
+  PROPOSED // mechanically computed but not passing the bar -- see insufficiencyReasons
+  READY_FOR_REVIEW
+  ACTIVE
+  ROLLED_BACK
+  SUPERSEDED
+}
+
+model CalibrationRelease {
+  id               String @id @default(uuid())
+  // Code constant identifying the estimate family, e.g. 'HVAC_REPAIR_REPLACE'
+  // -- the only one that exists today. Not a DB-registered catalog, mirroring
+  // how recommendationDefinitionId elsewhere in this schema is a code
+  // constant, not a foreign key.
+  estimateFamilyId String
+  // hvacRepairReplaceEngine.service.ts's HVAC_ENGINE_VERSION at proposal time
+  // -- tracks the formula shape being calibrated, distinct from this row's
+  // own datasetVersion (which tracks the observation set).
+  baselineEngineVersion String
+  // Pins which exclusion/outlier/threshold/privacy policy config (e.g.
+  // HvacCalibrationPolicy) produced this proposal.
+  policyVersion String
+
+  datasetVersion           Int
+  datasetFingerprint       String
+  datasetGeneratedAt       DateTime
+  observationCount         Int
+  distinctPropertyCount    Int
+  trainingObservationCount Int
+  holdoutObservationCount  Int
+
+  // HvacEngineWeights shape (hvacRepairReplaceEngine.service.ts). Equal to
+  // the baseline weights whenever status is not READY_FOR_REVIEW or ACTIVE --
+  // never a wild/undefined weight set.
+  candidateWeights         Json
+  trainingMetrics          Json
+  holdoutMetrics           Json
+  segmentRegressionResults Json
+  exclusionSummary         Json
+
+  status               CalibrationReleaseStatus @default(PROPOSED)
+  insufficiencyReasons String[]                 @default([])
+
+  createdByUserId String
+  createdBy       User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  activatedAt        DateTime?
+  activatedByUserId  String?
+  rolledBackAt        DateTime?
+  rolledBackByUserId  String?
+  rollbackReason      String?
+
+  reviews   CalibrationGovernanceReview[]
+  snapshots RecommendationSnapshot[]
+
+  @@unique([estimateFamilyId, datasetVersion])
+  @@index([estimateFamilyId, status])
+  @@map("calibration_releases")
+}
+
+model CalibrationGovernanceReview {
+  id                   String                        @id @default(uuid())
+  calibrationReleaseId String
+  role                 RecommendationReviewRole
+  decision             RecommendationReviewDecision
+  reviewerUserId       String
+  notes                String?                       @db.Text
+  reviewedAt           DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+
+  calibrationRelease CalibrationRelease @relation(fields: [calibrationReleaseId], references: [id], onDelete: Cascade)
+  reviewer           User               @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  // Simpler than CapabilityGovernanceReview's unique key (no separate
+  // manifest/policy version folded in): each CalibrationRelease row is
+  // already an immutable version, so policy pinning lives on the release,
+  // not the review.
+  @@unique([calibrationReleaseId, role])
+  @@index([calibrationReleaseId, decision])
+  @@map("calibration_governance_reviews")
 }
 
 // ============================================================================
@@ -19744,6 +19866,10 @@ enum RecommendationReviewRole {
   TRUST
   LEGAL_COMPLIANCE
   COMMERCIAL_INTEGRITY
+  // Decision Platform Phase 10B (FRD §19.4): calibration releases require
+  // Product, Domain, Privacy, and Trust approval -- the only reviewer role
+  // this codebase's recommendation-governance system didn't already have.
+  PRIVACY
 }
 
 enum RecommendationReviewDecision {

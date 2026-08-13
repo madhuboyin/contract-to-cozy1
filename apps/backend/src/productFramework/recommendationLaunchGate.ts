@@ -11,6 +11,9 @@ export const RECOMMENDATION_REVIEW_ROLES = [
   'TRUST',
   'LEGAL_COMPLIANCE',
   'COMMERCIAL_INTEGRITY',
+  // Decision Platform Phase 10B (FRD §19.4): calibration releases require
+  // Product, Domain, Privacy, and Trust approval.
+  'PRIVACY',
 ] as const;
 
 export type RecommendationReviewRole = typeof RECOMMENDATION_REVIEW_ROLES[number];

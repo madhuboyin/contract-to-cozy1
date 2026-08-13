@@ -13,6 +13,7 @@
 // lineage mechanism, per docs/product/decision-platform/adr-0003).
 
 import { createHash } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import {
   computeContextStatus,
@@ -24,6 +25,11 @@ import {
   evaluateHvacRepairReplace,
   HvacDecisionContext,
 } from './hvacRepairReplaceEngine.service';
+// Decision Platform Phase 10B (FRD §19.4). Resolves whatever weight set is
+// currently activated for this estimate family -- DEFAULT_HVAC_ENGINE_WEIGHTS
+// whenever nothing is active, which is the guaranteed state until someone
+// approves and activates a real CalibrationRelease.
+import { getActiveHvacEngineWeights } from './calibrationActivation.service';
 import {
   compareRecommendationSnapshots,
   getActiveHvacPreferences,
@@ -135,7 +141,8 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
   if (!composed) throw new Error('The selected item is not a recorded HVAC system on this property.');
   const { context, compositionLimitationCodes } = composed;
 
-  const evaluation = evaluateHvacRepairReplace(context);
+  const { weights, calibrationReleaseId } = await getActiveHvacEngineWeights();
+  const evaluation = evaluateHvacRepairReplace(context, weights);
   const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
@@ -183,6 +190,9 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
         limitationCodes,
         confidenceBreakdown: evaluation.confidenceBreakdown,
         inputDigest: inputDigestFor(context),
+        score: evaluation.score,
+        engineInputSnapshot: context as unknown as Prisma.InputJsonValue,
+        calibrationReleaseId,
       },
     });
 
@@ -283,7 +293,8 @@ export async function recomputeStaleThread(threadId: string) {
   const composed = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
   if (!composed) throw new Error('The referenced HVAC item is no longer available on this property.');
   const { context, compositionLimitationCodes } = composed;
-  const evaluation = evaluateHvacRepairReplace(context);
+  const { weights, calibrationReleaseId } = await getActiveHvacEngineWeights();
+  const evaluation = evaluateHvacRepairReplace(context, weights);
   const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
@@ -318,6 +329,9 @@ export async function recomputeStaleThread(threadId: string) {
         confidenceBreakdown: evaluation.confidenceBreakdown,
         supersedesSnapshotId: current.currentRecommendationSnapshotId,
         inputDigest: inputDigestFor(context),
+        score: evaluation.score,
+        engineInputSnapshot: context as unknown as Prisma.InputJsonValue,
+        calibrationReleaseId,
       },
     });
 
@@ -428,7 +442,9 @@ export async function createHvacScenario(threadId: string, userId: string, input
   const composedBaseline = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
   if (!composedBaseline) throw new Error('The referenced HVAC item is no longer available on this property.');
   const { context: baselineContext, compositionLimitationCodes } = composedBaseline;
-  const scenarioEvaluation = evaluateHvacRepairReplace({ ...baselineContext, scenarioQuoteAmountCents: input.quoteAmountCents });
+  const { weights, calibrationReleaseId } = await getActiveHvacEngineWeights();
+  const scenarioContext = { ...baselineContext, scenarioQuoteAmountCents: input.quoteAmountCents };
+  const scenarioEvaluation = evaluateHvacRepairReplace(scenarioContext, weights);
   const scenarioLimitationCodes = Array.from(new Set([...scenarioEvaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
@@ -467,7 +483,10 @@ export async function createHvacScenario(threadId: string, userId: string, input
         reasonCodes: scenarioEvaluation.reasonCodes,
         limitationCodes: scenarioLimitationCodes,
         confidenceBreakdown: scenarioEvaluation.confidenceBreakdown,
-        inputDigest: inputDigestFor({ ...baselineContext, scenarioQuoteAmountCents: input.quoteAmountCents }),
+        inputDigest: inputDigestFor(scenarioContext),
+        score: scenarioEvaluation.score,
+        engineInputSnapshot: scenarioContext as unknown as Prisma.InputJsonValue,
+        calibrationReleaseId,
       },
     });
 

@@ -20,6 +20,12 @@ import { withEnhancerTimeout } from './decisionContextEnhancer';
 
 export const HVAC_ENGINE_VERSION = '1.0';
 
+// Decision Platform Phase 10B (FRD §19.4). The single estimate-family
+// identifier this engine registers under -- shared by
+// calibrationActivation.service.ts and calibrationReleaseService.ts so it's
+// declared in exactly one place.
+export const HVAC_ESTIMATE_FAMILY_ID = 'HVAC_REPAIR_REPLACE';
+
 // FRD §12.3: "canonical HVAC identity, age/range, condition inputs, and
 // repair history" (required) plus "registered current quote or scenario
 // quote", "warranty applicability", "confirmed ownership horizon",
@@ -75,7 +81,50 @@ const HVAC_LIFESPAN_YEARS = 15;
 // a registered cost figure itself.
 const HVAC_TYPICAL_REPLACEMENT_COST_CENTS = 900_000;
 
-export function evaluateHvacRepairReplace(context: HvacDecisionContext): HvacRepairReplaceResult {
+// Decision Platform Phase 10B (FRD §19.4). Every literal the scoring
+// function below used to hardcode, now named and overridable by an approved,
+// activated CalibrationRelease (see calibrationActivation.service.ts). The
+// weight *shape* (which factors exist, how they combine) is still fixed by
+// this file -- only their magnitudes are calibratable, keeping every
+// candidate weight set enumerable and auditable for governance review rather
+// than an opaque model swap.
+export interface HvacEngineWeights {
+  lifespanYears: number;
+  typicalReplacementCostCents: number;
+  ageWeight: number;
+  conditionWeight: number;
+  repairSpendWeight: number;
+  ownershipHorizonPenalty: number;
+  approachMaximizeReliabilityBonus: number;
+  approachMinimizeUpfrontCostPenalty: number;
+  activeWarrantyPenalty: number;
+  replaceThreshold: number;
+  repairThreshold: number;
+}
+
+// Matches every literal below exactly -- evaluateHvacRepairReplace(context)
+// with the second argument omitted is byte-identical to this engine's
+// pre-Phase-10B behavior, and stays that way until someone approves and
+// activates a real CalibrationRelease (getActiveHvacEngineWeights() returns
+// this exact object whenever none is active).
+export const DEFAULT_HVAC_ENGINE_WEIGHTS: HvacEngineWeights = {
+  lifespanYears: HVAC_LIFESPAN_YEARS,
+  typicalReplacementCostCents: HVAC_TYPICAL_REPLACEMENT_COST_CENTS,
+  ageWeight: 60,
+  conditionWeight: 100,
+  repairSpendWeight: 40,
+  ownershipHorizonPenalty: -15,
+  approachMaximizeReliabilityBonus: 10,
+  approachMinimizeUpfrontCostPenalty: -10,
+  activeWarrantyPenalty: -5,
+  replaceThreshold: 55,
+  repairThreshold: 25,
+};
+
+export function evaluateHvacRepairReplace(
+  context: HvacDecisionContext,
+  weights: HvacEngineWeights = DEFAULT_HVAC_ENGINE_WEIGHTS,
+): HvacRepairReplaceResult {
   const reasonCodes: string[] = [];
   // FRD §12.3: always disclosed for the first slice — no technician
   // assessment integration exists yet.
@@ -90,7 +139,7 @@ export function evaluateHvacRepairReplace(context: HvacDecisionContext): HvacRep
   } else {
     knownFactors.push('AGE');
   }
-  const effectiveAgeYears = ageYears ?? HVAC_LIFESPAN_YEARS * 0.6;
+  const effectiveAgeYears = ageYears ?? weights.lifespanYears * 0.6;
 
   if (context.condition === 'UNKNOWN') {
     limitationCodes.push('CONDITION_UNKNOWN');
@@ -109,20 +158,20 @@ export function evaluateHvacRepairReplace(context: HvacDecisionContext): HvacRep
   }
 
   // Score: 0 leans REPAIR, 100 leans REPLACE.
-  let score = (effectiveAgeYears / HVAC_LIFESPAN_YEARS) * 60;
-  if (effectiveAgeYears >= HVAC_LIFESPAN_YEARS) {
+  let score = (effectiveAgeYears / weights.lifespanYears) * weights.ageWeight;
+  if (effectiveAgeYears >= weights.lifespanYears) {
     reasonCodes.push('SYSTEM_AT_OR_BEYOND_TYPICAL_LIFESPAN');
-  } else if (effectiveAgeYears <= HVAC_LIFESPAN_YEARS * 0.25) {
+  } else if (effectiveAgeYears <= weights.lifespanYears * 0.25) {
     reasonCodes.push('SYSTEM_RELATIVELY_NEW');
   }
 
-  const conditionScore = conditionAdjustment(context.condition) * 100;
+  const conditionScore = conditionAdjustment(context.condition) * weights.conditionWeight;
   score += conditionScore;
   if (context.condition === 'POOR') reasonCodes.push('CONDITION_POOR');
 
-  const referenceReplacementCostCents = replacementCostCents ?? HVAC_TYPICAL_REPLACEMENT_COST_CENTS;
+  const referenceReplacementCostCents = replacementCostCents ?? weights.typicalReplacementCostCents;
   const repairSpendRatio = context.repairSpendCentsLast30Months / referenceReplacementCostCents;
-  const repairSpendContribution = Math.min(repairSpendRatio, 1) * 40;
+  const repairSpendContribution = Math.min(repairSpendRatio, 1) * weights.repairSpendWeight;
   score += repairSpendContribution;
   if (repairSpendRatio >= 0.35) {
     reasonCodes.push('ELEVATED_REPAIR_SPEND');
@@ -132,9 +181,9 @@ export function evaluateHvacRepairReplace(context: HvacDecisionContext): HvacRep
 
   if (context.ownershipHorizonMonths !== null) {
     knownFactors.push('OWNERSHIP_HORIZON');
-    const remainingLifeMonths = Math.max(0, HVAC_LIFESPAN_YEARS - effectiveAgeYears) * 12;
+    const remainingLifeMonths = Math.max(0, weights.lifespanYears - effectiveAgeYears) * 12;
     if (context.ownershipHorizonMonths < remainingLifeMonths * 0.5) {
-      score -= 15;
+      score += weights.ownershipHorizonPenalty;
       reasonCodes.push('OWNERSHIP_HORIZON_SHORTER_THAN_REMAINING_LIFE');
     }
   } else {
@@ -142,10 +191,10 @@ export function evaluateHvacRepairReplace(context: HvacDecisionContext): HvacRep
   }
 
   if (context.repairReplaceApproach === 'MAXIMIZE_RELIABILITY') {
-    score += 10;
+    score += weights.approachMaximizeReliabilityBonus;
     reasonCodes.push('APPROACH_MAXIMIZE_RELIABILITY');
   } else if (context.repairReplaceApproach === 'MINIMIZE_UPFRONT_COST') {
-    score -= 10;
+    score += weights.approachMinimizeUpfrontCostPenalty;
     reasonCodes.push('APPROACH_MINIMIZE_UPFRONT_COST');
   }
 
@@ -153,11 +202,11 @@ export function evaluateHvacRepairReplace(context: HvacDecisionContext): HvacRep
     reasonCodes.push('NO_ACTIVE_WARRANTY');
   } else {
     reasonCodes.push('ACTIVE_WARRANTY_REDUCES_REPAIR_RISK');
-    score -= 5;
+    score += weights.activeWarrantyPenalty;
   }
 
   score = Math.max(0, Math.min(100, score));
-  const verdict: HvacRepairReplaceVerdict = score >= 55 ? 'REPLACE' : score <= 25 ? 'REPAIR' : 'MONITOR';
+  const verdict: HvacRepairReplaceVerdict = score >= weights.replaceThreshold ? 'REPLACE' : score <= weights.repairThreshold ? 'REPAIR' : 'MONITOR';
 
   const knownCount = knownFactors.length;
   const confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' = knownCount >= 4 ? 'HIGH' : knownCount >= 2 ? 'MEDIUM' : 'LOW';
