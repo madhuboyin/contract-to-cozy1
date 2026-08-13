@@ -18,6 +18,7 @@ const {
 // required patterns inside askOrchestrator.service.ts without a live DB.
 
 const source = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionThreadService.ts'), 'utf8');
+const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
 
 test('decisionThreadService imports and uses every Phase 7A transition-contract function', () => {
   assert.match(source, /isLifecycleTransitionAllowed/);
@@ -85,4 +86,35 @@ test('a version-conflict (updateResult.count === 0) always throws DecisionThread
 test('the transition contract itself still passes its own governance suite (sanity check on the imported functions)', () => {
   assert.equal(isLifecycleTransitionAllowed('OPEN', 'READY_TO_COMPARE'), true);
   assert.equal(isContextTransitionAllowed('CURRENT', 'STALE'), true);
+});
+
+// DecisionThreadExecutionLink has @@unique([decisionThreadId, askExecutionId])
+// (schema.prisma) -- a bare .create() would throw P2002 on any retried Ask
+// turn that reuses the same executionId against the same thread. Both link
+// writes must be createMany + skipDuplicates instead, matching this file's
+// own linkPreferenceReferences precedent.
+test('every DecisionThreadExecutionLink write is createMany + skipDuplicates, never a bare create (retry must be idempotent, not throw P2002)', () => {
+  assert.doesNotMatch(source, /decisionThreadExecutionLink\.create\(/, 'a bare .create() on decisionThreadExecutionLink is not retry-safe given its @@unique([decisionThreadId, askExecutionId]) constraint');
+  const writes = [...source.matchAll(/decisionThreadExecutionLink\.createMany\(\{/g)];
+  assert.equal(writes.length, 2, 'expected exactly two DecisionThreadExecutionLink writes (CREATED in createHvacDecisionThread, CONTINUED in continueHvacDecisionThread)');
+  for (const match of writes) {
+    const windowEnd = source.indexOf('});', match.index);
+    const block = source.slice(match.index, windowEnd);
+    assert.match(block, /skipDuplicates:\s*true/, 'DecisionThreadExecutionLink createMany call is missing skipDuplicates: true');
+  }
+});
+
+// Ask Intelligence FRD §10 continuity audit trail: a normal (non-creation)
+// HVAC continuation must be able to attribute its DecisionThreadExecutionLink
+// back to the AskExecution that triggered it, not just the initial-creation
+// flow.
+test('executionId is threaded from executeOperationCore through both HVAC continuation call sites', () => {
+  assert.match(orchestratorSource, /async function executeOperationCore\(input: \{[^}]*executionId: string/, 'executeOperationCore\'s input type must carry executionId');
+  assert.match(orchestratorSource, /case 'HVAC_DECISION_START': return hvacDecisionStartResult\([^)]*input\.executionId\)/);
+  assert.match(orchestratorSource, /case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult\([^)]*input\.executionId\)/);
+  const continuationCalls = [...orchestratorSource.matchAll(/decisionThreadService\.continueHvacDecisionThread\(([^)]*)\)/g)];
+  assert.ok(continuationCalls.length >= 2, 'expected at least the two HVAC handler call sites');
+  for (const match of continuationCalls) {
+    assert.match(match[1], /executionId/, `continueHvacDecisionThread call does not pass executionId: ${match[0]}`);
+  }
 });

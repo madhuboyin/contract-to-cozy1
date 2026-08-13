@@ -213,8 +213,12 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
 
     await linkPreferenceReferences(tx, thread.id, preferenceValueIds);
 
-    await tx.decisionThreadExecutionLink.create({
-      data: { decisionThreadId: thread.id, askExecutionId: input.askExecutionId, linkRole: 'CREATED' },
+    // createMany + skipDuplicates, not a bare create: DecisionThreadExecutionLink
+    // has @@unique([decisionThreadId, askExecutionId]), so a retried request
+    // reusing the same executionId must be idempotent, not throw P2002.
+    await tx.decisionThreadExecutionLink.createMany({
+      data: [{ decisionThreadId: thread.id, askExecutionId: input.askExecutionId, linkRole: 'CREATED' }],
+      skipDuplicates: true,
     });
 
     return { thread: updatedThread, snapshot, preferencesUsed: preferences };
@@ -244,15 +248,15 @@ export async function loadHvacDecisionThreadDetail(threadId: string, propertyId:
   return thread;
 }
 
-// askExecutionId is optional: deterministic reads (HVAC_DECISION_CONTINUE)
-// run inside executeOperationCore, before the AskExecution row's id is
-// threaded into the shared operation-dispatch input type. The
+// askExecutionId is optional: the automatic, system-triggered recompute path
+// (see recomputeStaleThread's own doc comment) has no Ask turn to attribute
+// a link to, so it's the only legitimate caller that omits it. Every
+// user-driven Ask continuation (askOrchestrator.service.ts's
+// hvacDecisionStartResult/hvacDecisionContinueResult) does supply it. The
 // DecisionThreadExecutionLink audit row is supplementary lineage, not the
 // continuity mechanism itself -- the DecisionThread row's own identity
 // (found via selectHvacDecisionThread) is what makes cross-session
-// resumption work, so omitting the link here does not weaken FRD §10's
-// continuity guarantee. Material commands that DO have execution.id in
-// scope (see confirmAskExecution) still record it.
+// resumption work.
 //
 // Returns `change` (non-null only when a stale-triggered recompute actually
 // ran) so callers can render RECOMMENDATION_CHANGE.
@@ -269,8 +273,12 @@ export async function continueHvacDecisionThread(threadId: string, propertyId: s
   }
 
   if (askExecutionId) {
-    await prisma.decisionThreadExecutionLink.create({
-      data: { decisionThreadId: threadId, askExecutionId, linkRole: 'CONTINUED' },
+    // createMany + skipDuplicates, not a bare create: same idempotency
+    // requirement as createHvacDecisionThread's CREATED link above -- a
+    // retried continuation reusing the same executionId must not throw.
+    await prisma.decisionThreadExecutionLink.createMany({
+      data: [{ decisionThreadId: threadId, askExecutionId, linkRole: 'CONTINUED' }],
+      skipDuplicates: true,
     });
   }
 

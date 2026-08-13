@@ -1729,7 +1729,7 @@ function hvacDecisionThreadAmbiguousResult(operationId: AskOperationId, candidat
   };
 }
 
-async function hvacDecisionStartResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function hvacDecisionStartResult(userId: string, propertyId: string, message: string, executionId: string): Promise<AskOperationResult> {
   const { items, item } = await findHvacItemForMessage(propertyId, message);
   if (!items.length) {
     return {
@@ -1750,7 +1750,7 @@ async function hvacDecisionStartResult(userId: string, propertyId: string, messa
 
   const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
   if (selection.kind === 'UNIQUE') {
-    const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+    const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId, executionId);
     const blocks: AskPresentationBlock[] = [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])];
     if (change && thread.currentRecommendationSnapshot) {
       blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
@@ -1783,7 +1783,7 @@ async function hvacDecisionStartResult(userId: string, propertyId: string, messa
   };
 }
 
-async function hvacDecisionContinueResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function hvacDecisionContinueResult(userId: string, propertyId: string, message: string, executionId: string): Promise<AskOperationResult> {
   const { items, item } = await findHvacItemForMessage(propertyId, message);
   if (!item) {
     return {
@@ -1804,7 +1804,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
   if (selection.kind === 'AMBIGUOUS') {
     return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_CONTINUE', selection.candidates);
   }
-  const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+  const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId, executionId);
   const blocks: AskPresentationBlock[] = [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])];
   if (change && thread.currentRecommendationSnapshot) {
     blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
@@ -3960,7 +3960,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   };
 }
 
-async function executeOperationCore(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
+async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   if (!controls.askEnabled) return operationalUnavailableResult('ASK_DISABLED');
@@ -4015,8 +4015,8 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'MAJOR_EVENT_ENTRY': return majorEventEntryResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
-    case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message, input.executionId);
+    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message, input.executionId);
     case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
@@ -4070,7 +4070,7 @@ export const ASK_CAPABILITY_UNIQUE_OPERATION: Partial<Record<string, AskOperatio
   return unique;
 })();
 
-async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
+async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
   const coreResult = await executeOperationCore(input);
   const result: AskOperationResult = coreResult.status === 'NEEDS_ENTITY'
     ? {
@@ -4359,7 +4359,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const rawResult = await withAskTimeout(
       routingDecision.requiresClarification
         ? Promise.resolve(routingClarificationResult(routingDecision))
-        : executeOperation({ userId, sessionId: session.id, message: routingMessage, propertyId: input.propertyId, operation }),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: input.propertyId, operation }),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
@@ -4497,7 +4497,7 @@ export async function submitAskClarification(userId: string, executionId: string
   }
   try {
     const rawResult = await withAskTimeout(
-      executeOperation({ userId, sessionId: execution.sessionId, message: clarifiedMessage, propertyId: execution.propertyId, operation }),
+      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: execution.propertyId, operation }),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC'
@@ -4580,7 +4580,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
   const controls = readAskOperationalControls();
   try {
     const rawResult = await withAskTimeout(
-      executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: input.propertyId, operation }),
+      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: input.propertyId, operation }),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC'
@@ -4643,7 +4643,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       throw error;
     }
     const operation = resolveAskOperation(execution.message);
-    const replayed = await executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation });
+    const replayed = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
     const resumed = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {
@@ -4699,7 +4699,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = capture.captureId;
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
-    result = await executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation });
+    result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'SAVINGS_OPPORTUNITIES') {
     const capture = await captureFeatureContext(execution.propertyId, userId, {
@@ -4716,7 +4716,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'OWNERSHIP_COSTS') {
@@ -4734,7 +4734,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'INVENTORY_LOOKUP') {
@@ -4762,7 +4762,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'InventoryItem';
   } else if (execution.operationId === 'PROPERTY_SUMMARY') {
@@ -4780,7 +4780,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'HOME_ACTIONS') {
@@ -4798,7 +4798,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'COVERAGE_GAPS') {
@@ -4829,7 +4829,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'InventoryItem';
   } else if (execution.operationId === 'SELL_HOLD_RENT_ANALYSIS') {
@@ -4847,7 +4847,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'MAINTENANCE_TASK_COMPLETE') {
@@ -5021,7 +5021,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'InventoryItem';
   } else {
@@ -5103,7 +5103,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
-      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+      userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyFinancingProfile';
   }
@@ -5176,7 +5176,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   }
   await ensurePropertyAccess(userId, execution.propertyId);
   const operation = resolveAskOperation(execution.message);
-  const result = await executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation });
+  const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
   const saved = await prisma.askExecution.update({
     where: { id: execution.id },
     data: {
