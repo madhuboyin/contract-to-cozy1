@@ -59,17 +59,29 @@ export interface HomeActionProactiveEligibilityInput {
   hasConsent: boolean;
   channelEnabled: boolean;
   budget: HomeActionProactiveBudget;
+  /**
+   * True when this item's materiality just increased over its previously
+   * sent state (e.g. PLAN_SOON -> DO_NOW) since the last external send for
+   * this Home Action. FRD §18.2: "Safety and mandatory deadlines... do not
+   * silently bypass channel law, consent, or emergency boundaries" -- so an
+   * escalation only ever bypasses the *daily* budget, never consent,
+   * channel, suppression, completion, or the weekly budget.
+   */
+  isEscalation?: boolean;
 }
 
 export interface HomeActionProactiveEligibilityResult {
   eligible: boolean;
   reasonCodes: HomeActionProactiveReasonCode[];
+  escalationBudgetBypassed: boolean;
 }
 
 export function evaluateHomeActionProactiveEligibility(
   input: HomeActionProactiveEligibilityInput,
 ): HomeActionProactiveEligibilityResult {
   const reasonCodes: HomeActionProactiveReasonCode[] = [];
+  const dailyBudgetExceeded = input.budget.dailyCount >= input.budget.dailyLimit;
+  const escalationBudgetBypassed = Boolean(input.isEscalation) && dailyBudgetExceeded;
 
   if (!MATERIAL_CONSUMER_PRIORITIES.has(input.item.consumerPriority)) reasonCodes.push('NOT_MATERIAL');
   if (input.item.suppressed) reasonCodes.push('SUPPRESSED');
@@ -78,11 +90,39 @@ export function evaluateHomeActionProactiveEligibility(
   if (!input.item.cta) reasonCodes.push('NO_ACTIONABLE_CTA');
   if (!input.hasConsent) reasonCodes.push('CONSENT_MISSING');
   if (!input.channelEnabled) reasonCodes.push('CHANNEL_DISABLED');
-  if (input.budget.dailyCount >= input.budget.dailyLimit) reasonCodes.push('DAILY_BUDGET_EXCEEDED');
+  if (dailyBudgetExceeded && !escalationBudgetBypassed) reasonCodes.push('DAILY_BUDGET_EXCEEDED');
   if (input.budget.weeklyCount >= input.budget.weeklyLimit) reasonCodes.push('WEEKLY_BUDGET_EXCEEDED');
 
-  if (reasonCodes.length) return { eligible: false, reasonCodes };
-  return { eligible: true, reasonCodes: ['ELIGIBLE'] };
+  if (reasonCodes.length) return { eligible: false, reasonCodes, escalationBudgetBypassed: false };
+  return { eligible: true, reasonCodes: ['ELIGIBLE'], escalationBudgetBypassed };
+}
+
+/**
+ * Whether `next` represents a genuine materiality escalation over `previous`
+ * for external-delivery purposes -- the only transition within the two
+ * externally-eligible categories (FRD §17.3's DO_NOW/PLAN_SOON) that
+ * justifies bypassing the daily budget. A repeat at the same category, a
+ * downgrade, or no prior send at all is never an escalation.
+ */
+export function isHomeActionProactiveEscalation(
+  previous: ConsumerPriorityCategory | null,
+  next: ConsumerPriorityCategory,
+): boolean {
+  return previous === 'PLAN_SOON' && next === 'DO_NOW';
+}
+
+// FRD §18.3 "lock-screen redaction" applied conservatively to email as well
+// -- material-financial and regulated-coverage items should not put dollar
+// figures or percentages into a message that could be read by someone other
+// than the intended recipient (a shared inbox, a lock-screen preview a
+// forwarded copy). This never touches the in-product PRIORITY_LIST/
+// Concierge Home rendering, only the copy handed to an external channel.
+const CURRENCY_OR_PERCENT_PATTERN = /\$[\d,]+(?:\.\d+)?|\b\d+(?:\.\d+)?%/g;
+const REDACTED_SAFETY_TIERS = new Set(['MATERIAL_FINANCIAL', 'REGULATED_COVERAGE']);
+
+export function redactProactiveMessageBody(text: string, safetyTier: string): string {
+  if (!REDACTED_SAFETY_TIERS.has(safetyTier)) return text;
+  return text.replace(CURRENCY_OR_PERCENT_PATTERN, '[redacted]');
 }
 
 /**

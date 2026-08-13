@@ -115,6 +115,12 @@ export default function NotificationsPage() {
   const [savingsDeadlineLeadDays, setSavingsDeadlineLeadDays] = React.useState('14');
   const [savingPreference, setSavingPreference] = React.useState(false);
   const [pendingOutcomeById, setPendingOutcomeById] = React.useState<Record<string, string>>({});
+  // Ask Intelligence FRD §18.3/§22.2, Phase 9C: affirmative per-category
+  // consent, distinct from the cadence/quiet-hours preference above -- a
+  // user can have EMAIL cadence configured for a category and still never
+  // receive an external send until they explicitly grant consent here.
+  const [emailConsented, setEmailConsented] = React.useState(false);
+  const [savingConsent, setSavingConsent] = React.useState(false);
 
   React.useEffect(() => {
     void refresh();
@@ -143,7 +149,30 @@ export default function NotificationsPage() {
         setSavingsDeadlineLeadDays('14');
       }
     }).catch(() => undefined);
+    void api.listNotificationChannelConsents().then((result) => {
+      if (!result.success) return;
+      const consent = result.data.find((item) => item.category === selectedCategory && item.channel === 'EMAIL');
+      setEmailConsented(Boolean(consent?.consentedAt && !consent.revokedAt));
+    }).catch(() => undefined);
   }, [preferenceScopeKey, refresh, selectedCategory]);
+
+  const toggleEmailConsent = async (nextConsented: boolean) => {
+    setSavingConsent(true);
+    try {
+      if (nextConsented) {
+        await api.grantNotificationChannelConsent({ category: selectedCategory, channel: 'EMAIL' });
+        toast({ title: 'Email alerts allowed', description: `You can now receive external email alerts for ${selectedCategory === 'ALL' ? 'routine updates' : selectedCategory.toLowerCase().replace(/_/g, ' ')}.` });
+      } else {
+        await api.revokeNotificationChannelConsent({ category: selectedCategory, channel: 'EMAIL' });
+        toast({ title: 'Email alerts turned off', description: 'In-app alerts remain available.' });
+      }
+      setEmailConsented(nextConsented);
+    } catch (error: any) {
+      toast({ title: 'Could not update consent', description: error?.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      setSavingConsent(false);
+    }
+  };
 
   const savePreference = async () => {
     setSavingPreference(true);
@@ -328,6 +357,22 @@ export default function NotificationsPage() {
           <label className="text-xs font-medium text-slate-600">Quiet hours start<input type="time" value={quietStart} onChange={(event) => setQuietStart(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm" /></label>
           <label className="text-xs font-medium text-slate-600">Quiet hours end<input type="time" value={quietEnd} onChange={(event) => setQuietEnd(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm" /></label>
           <button type="button" disabled={savingPreference} onClick={savePreference} className="min-h-[40px] rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white disabled:opacity-60">{savingPreference ? 'Saving…' : 'Save preferences'}</button>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Allow email alerts for {PREFERENCE_CATEGORIES.find((category) => category.value === selectedCategory)?.label.toLowerCase() ?? 'this category'}</p>
+            <p className="text-xs text-slate-500">Separate from cadence above -- this is your explicit permission for us to email you at all for this category. Off by default; in-app alerts are unaffected either way.</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={emailConsented}
+            disabled={savingConsent}
+            onClick={() => void toggleEmailConsent(!emailConsented)}
+            className={`min-h-[32px] w-14 shrink-0 rounded-full transition-colors disabled:opacity-60 ${emailConsented ? 'bg-brand-primary' : 'bg-slate-300'}`}
+          >
+            <span className={`block h-6 w-6 translate-x-1 rounded-full bg-white shadow transition-transform ${emailConsented ? 'translate-x-7' : ''}`} />
+          </button>
         </div>
         {selectedCategory === 'SAVINGS_BENEFITS' ? (
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">

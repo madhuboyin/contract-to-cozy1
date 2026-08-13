@@ -4,16 +4,17 @@
 // hands off to the existing NotificationService.create() -- the app's one
 // notification/delivery pipeline (preferences, quiet hours, email/push
 // workers) -- rather than building a second send path. This module only
-// adds the two things that pipeline doesn't have yet: an affirmative
-// per-category/channel consent gate and a Home-Action-specific budget.
+// adds the things that pipeline doesn't have yet: an affirmative
+// per-category/channel consent gate, a Home-Action-specific budget,
+// escalation, and redaction.
 //
-// Gated behind HOME_ACTION_PROACTIVE_DELIVERY_ENABLED, default OFF, mirroring
-// WEB_PUSH_DELIVERY_ENABLED's env-flag kill switch (sendPushNotification.job
-// .ts) -- this "start of Phase 9C" ships the eligibility/consent/continuity
-// machinery inert by default; a DB-backed, no-deploy kill switch and a
-// release-gate/rollback dashboard entry (see personalizationKillSwitch
-// .service.ts and releaseGate.service.ts for the existing patterns) are
-// follow-up work before this flag is ever turned on in production.
+// Gated behind both HOME_ACTION_PROACTIVE_DELIVERY_ENABLED (env, deploy-time
+// default) and the DB-backed kill switch in
+// homeActionProactiveDeliveryKillSwitch.service.ts (instant, no-deploy) --
+// either one being off stops sends. Both are simple on/off flags, not an
+// approval workflow: this product has no real users yet, so there is no
+// rollout cohort or governance review to gate against, only a switch an
+// admin can flip.
 
 import { randomUUID } from 'node:crypto';
 import { NotificationChannel } from '@prisma/client';
@@ -21,12 +22,15 @@ import { prisma } from '../../lib/prisma';
 import { NotificationService } from '../notification.service';
 import { resolveNotificationPolicy } from '../notificationPreference.service';
 import { hasActiveNotificationChannelConsent } from './notificationChannelConsent.service';
+import { isHomeActionProactiveDeliveryPaused } from './homeActionProactiveDeliveryKillSwitch.service';
 import {
   categorizeHomeActionForNotification,
   evaluateHomeActionProactiveEligibility,
+  isHomeActionProactiveEscalation,
+  redactProactiveMessageBody,
   type HomeActionProactiveReasonCode,
 } from './homeActionProactiveEligibilityPolicy';
-import { buildPriorityListView, type PriorityListItemView } from './priorityListPolicy';
+import { buildPriorityListView, type ConsumerPriorityCategory, type PriorityListItemView } from './priorityListPolicy';
 import { getHomeActionFeed } from '../homeActions.service';
 import { getSuppressedHomeActionIds } from './homeActionUsefulnessFeedback.service';
 import { createAskExecution } from '../ask/askOrchestrator.service';
@@ -34,16 +38,23 @@ import type { NotificationCategory } from '../../productFramework/notificationPo
 
 export const HOME_ACTION_PROACTIVE_DAILY_BUDGET = 1;
 export const HOME_ACTION_PROACTIVE_WEEKLY_BUDGET = 3;
-const HOME_ACTION_PROACTIVE_NOTIFICATION_TYPE = 'HOME_ACTION_PROACTIVE';
+export const HOME_ACTION_PROACTIVE_NOTIFICATION_TYPE = 'HOME_ACTION_PROACTIVE';
 
-export function isHomeActionProactiveDeliveryEnabled(): boolean {
+export function isHomeActionProactiveDeliveryEnvEnabled(): boolean {
   return process.env.HOME_ACTION_PROACTIVE_DELIVERY_ENABLED === 'true';
+}
+
+/** The single point every caller should check: env flag AND kill switch both have to allow it. */
+export async function isHomeActionProactiveDeliveryActive(): Promise<boolean> {
+  if (!isHomeActionProactiveDeliveryEnvEnabled()) return false;
+  return !(await isHomeActionProactiveDeliveryPaused());
 }
 
 export interface HomeActionProactiveDeliveryOutcome {
   homeActionId: string;
   eligible: boolean;
   reasonCodes: HomeActionProactiveReasonCode[];
+  escalationBudgetBypassed: boolean;
   notificationId: string | null;
 }
 
@@ -61,6 +72,24 @@ async function getHomeActionProactiveBudgetUsage(userId: string) {
 }
 
 /**
+ * FRD §18.2 escalation: reads back the consumerPriority of the most recent
+ * external send for this Home Action (stored in its notification metadata)
+ * so a same-day PLAN_SOON -> DO_NOW jump can bypass the daily budget. No
+ * prior send, or a send whose metadata predates this field, is treated as
+ * "no escalation" rather than guessed at.
+ */
+async function getMostRecentProactiveConsumerPriority(userId: string, homeActionId: string): Promise<ConsumerPriorityCategory | null> {
+  const notification = await prisma.notification.findFirst({
+    where: { userId, type: HOME_ACTION_PROACTIVE_NOTIFICATION_TYPE, entityType: 'HOME_ACTION', entityId: homeActionId },
+    orderBy: { createdAt: 'desc' },
+    select: { metadata: true },
+  });
+  const metadata = notification?.metadata as Record<string, unknown> | null | undefined;
+  const consumerPriority = metadata?.consumerPriority;
+  return consumerPriority === 'DO_NOW' || consumerPriority === 'PLAN_SOON' ? consumerPriority : null;
+}
+
+/**
  * FRD §18.4/§21.2 "notification-to-Ask exact-execution continuity": rather
  * than inventing a deep-link mechanism, this runs the exact same Ask
  * operation a user would get by asking "What needs my attention?" --
@@ -75,6 +104,7 @@ async function createHomeActionProactiveNotification(params: {
   propertyId: string;
   item: PriorityListItemView;
   category: NotificationCategory;
+  safetyTier: string;
 }) {
   const execution = await createAskExecution(params.userId, {
     clientRequestId: `proactive:${randomUUID()}`,
@@ -92,27 +122,57 @@ async function createHomeActionProactiveNotification(params: {
   }).toString()}`;
 
   const isoDay = new Date().toISOString().slice(0, 10);
+  const rawMessage = params.item.watchState ?? `${params.item.title} is ready for your review.`;
   return NotificationService.create({
     userId: params.userId,
     type: HOME_ACTION_PROACTIVE_NOTIFICATION_TYPE,
     category: params.category,
     urgency: params.category === 'SAFETY' ? 'CRITICAL' : 'MATERIAL',
-    title: params.item.title,
-    message: params.item.watchState ?? `${params.item.title} is ready for your review.`,
+    title: redactProactiveMessageBody(params.item.title, params.safetyTier),
+    message: redactProactiveMessageBody(rawMessage, params.safetyTier),
     actionUrl,
     entityType: 'HOME_ACTION',
     entityId: params.item.homeActionId,
-    // Bounds this to at most one external send per item per day regardless
-    // of how many evaluation passes run that day (FRD §18.2 dedupe).
-    deduplicationKey: `home-action-proactive:${params.propertyId}:${params.item.homeActionId}:${isoDay}`,
+    // Includes consumerPriority so a same-day escalation (a new, higher
+    // materiality for the same item) produces a genuinely new notification
+    // instead of deduping against the earlier, lower-materiality one.
+    deduplicationKey: `home-action-proactive:${params.propertyId}:${params.item.homeActionId}:${isoDay}:${params.item.consumerPriority}`,
     requiredChannels: [NotificationChannel.EMAIL],
     metadata: {
       propertyId: params.propertyId,
       askSessionId: execution.sessionId,
       askExecutionId: execution.executionId,
       homeActionId: params.item.homeActionId,
+      consumerPriority: params.item.consumerPriority,
     },
   });
+}
+
+/**
+ * FRD §18.3 "rollback dashboard" deliverable, scoped to a monitoring log
+ * (no approval workflow -- see homeActionProactiveDeliveryKillSwitch
+ * .service.ts's header for why). Logs every evaluation outcome, eligible or
+ * not, so an admin can see why a send did or didn't happen -- best-effort:
+ * a logging failure must never block or fail the actual decision.
+ */
+async function logHomeActionProactiveDeliveryDecision(params: {
+  propertyId: string;
+  userId: string;
+  category: NotificationCategory;
+  outcome: HomeActionProactiveDeliveryOutcome;
+}): Promise<void> {
+  await prisma.homeActionProactiveDeliveryDecision.create({
+    data: {
+      propertyId: params.propertyId,
+      userId: params.userId,
+      homeActionId: params.outcome.homeActionId,
+      category: params.category,
+      eligible: params.outcome.eligible,
+      reasonCodes: params.outcome.reasonCodes,
+      escalationBudgetBypassed: params.outcome.escalationBudgetBypassed,
+      notificationId: params.outcome.notificationId,
+    },
+  }).catch(() => undefined);
 }
 
 /**
@@ -127,7 +187,7 @@ export async function evaluateHomeActionProactiveDeliveryForProperty(
   propertyId: string,
   userId: string,
 ): Promise<HomeActionProactiveDeliveryOutcome[]> {
-  if (!isHomeActionProactiveDeliveryEnabled()) return [];
+  if (!(await isHomeActionProactiveDeliveryActive())) return [];
 
   const feed = await getHomeActionFeed(propertyId, userId);
   if (!feed.actions.length) return [];
@@ -143,7 +203,7 @@ export async function evaluateHomeActionProactiveDeliveryForProperty(
   if (!action) return [];
 
   const category = categorizeHomeActionForNotification(action);
-  const [hasConsent, policy, budget] = await Promise.all([
+  const [hasConsent, policy, budget, previousConsumerPriority] = await Promise.all([
     hasActiveNotificationChannelConsent({ userId, category, channel: 'EMAIL' }),
     resolveNotificationPolicy({
       userId, propertyId, type: HOME_ACTION_PROACTIVE_NOTIFICATION_TYPE, category,
@@ -155,6 +215,7 @@ export async function evaluateHomeActionProactiveDeliveryForProperty(
       legacyEmailEnabled: false,
     }),
     getHomeActionProactiveBudgetUsage(userId),
+    getMostRecentProactiveConsumerPriority(userId, item.homeActionId),
   ]);
 
   const channelPolicy = policy.channels.find((candidate) => candidate.channel === 'EMAIL');
@@ -163,12 +224,24 @@ export async function evaluateHomeActionProactiveDeliveryForProperty(
     hasConsent,
     channelEnabled: Boolean(channelPolicy?.enabled),
     budget,
+    isEscalation: isHomeActionProactiveEscalation(previousConsumerPriority, item.consumerPriority),
   });
 
   if (!evaluation.eligible) {
-    return [{ homeActionId: item.homeActionId, eligible: false, reasonCodes: evaluation.reasonCodes, notificationId: null }];
+    const outcome: HomeActionProactiveDeliveryOutcome = {
+      homeActionId: item.homeActionId, eligible: false, reasonCodes: evaluation.reasonCodes, escalationBudgetBypassed: false, notificationId: null,
+    };
+    await logHomeActionProactiveDeliveryDecision({ propertyId, userId, category, outcome });
+    return [outcome];
   }
 
-  const notification = await createHomeActionProactiveNotification({ userId, propertyId, item, category });
-  return [{ homeActionId: item.homeActionId, eligible: true, reasonCodes: evaluation.reasonCodes, notificationId: notification?.id ?? null }];
+  const notification = await createHomeActionProactiveNotification({
+    userId, propertyId, item, category, safetyTier: action.governance.safetyTier,
+  });
+  const outcome: HomeActionProactiveDeliveryOutcome = {
+    homeActionId: item.homeActionId, eligible: true, reasonCodes: evaluation.reasonCodes,
+    escalationBudgetBypassed: evaluation.escalationBudgetBypassed, notificationId: notification?.id ?? null,
+  };
+  await logHomeActionProactiveDeliveryDecision({ propertyId, userId, category, outcome });
+  return [outcome];
 }

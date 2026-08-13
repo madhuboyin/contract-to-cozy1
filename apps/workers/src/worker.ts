@@ -10,6 +10,7 @@ import { Worker, Queue } from 'bullmq';
 
 import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest, runWeeklyHomeBriefDigest } from './jobs/sendEmailNotification.job';
+import { evaluateHomeActionProactiveDeliveryJob } from './jobs/evaluateHomeActionProactiveDelivery.job';
 import { sendFeedbackNotificationJob } from './jobs/sendFeedbackNotification.job';
 import { sendPropertyBriefInvitationJob } from './jobs/sendPropertyBriefInvitation.job';
 import { sendPropertyBriefUpdateNoticeJob } from './jobs/sendPropertyBriefUpdateNotice.job';
@@ -257,6 +258,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'maintenance-reminders':           async () => sendMaintenanceReminders(),
   'daily-email-digest':              async () => { await runDailyEmailDigest(); },
   'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
+  'home-action-proactive-delivery':  async () => evaluateHomeActionProactiveDeliveryJob(),
   'new-home-warranty-deadlines':     async (opts) => runNewHomeWarrantyDeadlineJob(opts),
   'seasonal-checklist-expiration':   async () => { await expireSeasonalChecklists(); },
   'seasonal-checklist-generation':   async (opts) => {

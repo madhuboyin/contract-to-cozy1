@@ -6763,6 +6763,29 @@ model NotificationChannelConsent {
   @@map("notification_channel_consents")
 }
 
+// Ask Intelligence FRD §18.3, Phase 9C "rollback dashboard" deliverable,
+// scoped down to a monitoring view (no launch-gate/approval workflow --
+// this product has no real users yet to gate a rollout against). Every
+// evaluateHomeActionProactiveDeliveryForProperty pass logs its outcome here,
+// eligible or not, so an admin can see *why* something did or didn't go out
+// -- not just the successful sends already visible in Notification.
+model HomeActionProactiveDeliveryDecision {
+  id                       String   @id @default(uuid())
+  propertyId               String
+  userId                   String
+  homeActionId             String
+  category                 String
+  eligible                 Boolean
+  reasonCodes              String[] @default([])
+  escalationBudgetBypassed Boolean  @default(false)
+  notificationId           String?
+  createdAt                DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([propertyId, createdAt])
+  @@map("home_action_proactive_delivery_decisions")
+}
+
 model PushSubscription {
   id        String   @id @default(uuid())
   userId    String

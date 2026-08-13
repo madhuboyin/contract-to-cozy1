@@ -22,6 +22,7 @@ import {
   Radar,
   Landmark,
   Receipt,
+  BellRing,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -246,6 +247,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/admin/personalization',
     icon: Sparkles,
     description: 'Review and activate personalization catalog versions',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-home-action-proactive-delivery',
+    name: 'Proactive Delivery',
+    href: '/dashboard/admin/home-action-proactive-delivery',
+    icon: BellRing,
+    description: 'Kill switch and decision monitoring for external Home Action alerts',
     engines: [],
     globalHref: true,
   },

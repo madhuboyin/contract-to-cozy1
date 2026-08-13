@@ -3479,6 +3479,18 @@ class APIClient {
     return this.request('/api/notifications/preferences', { method: 'PUT', body: input });
   }
 
+  async listNotificationChannelConsents(): Promise<APIResponse<Array<{ category: string; channel: string; consentedAt: string | null; revokedAt: string | null }>>> {
+    return this.request('/api/notifications/channel-consents');
+  }
+
+  async grantNotificationChannelConsent(input: { category: string; channel: 'EMAIL' }): Promise<APIResponse<any>> {
+    return this.request('/api/notifications/channel-consents', { method: 'POST', body: input });
+  }
+
+  async revokeNotificationChannelConsent(input: { category: string; channel: 'EMAIL' }): Promise<APIResponse<any>> {
+    return this.request('/api/notifications/channel-consents/revoke', { method: 'POST', body: input });
+  }
+
   async recordNotificationOutcome(notificationId: string, type: 'OPENED' | 'USEFUL' | 'NOT_USEFUL' | 'MUTE_TYPE' | 'NOT_RELEVANT' | 'ALREADY_HANDLED') {
     return this.request(`/api/notifications/${notificationId}/outcomes`, { method: 'POST', body: { type } });
   }

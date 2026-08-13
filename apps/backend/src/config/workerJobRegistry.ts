@@ -201,6 +201,30 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     supportsPropertyScope: false,
     humanApprovalClass: 'NONE',
   },
+  // Ask Intelligence FRD §18, Phase 9C. Evaluates at most one top-ranked
+  // PRIORITY_LIST item per property with an active Home Action email
+  // consent and, if every eligibility gate passes, sends it. Off by default
+  // (defaultEnabledInBeta: false) on top of its own two independent
+  // switches (HOME_ACTION_PROACTIVE_DELIVERY_ENABLED env flag + the DB-
+  // backed kill switch in homeActionProactiveDeliveryKillSwitch.service.ts)
+  // -- registering the cron entry is safe even while every one of those
+  // switches stays off.
+  {
+    key: 'home-action-proactive-delivery',
+    name: 'Home Action Proactive Delivery',
+    description: 'Evaluates governed Home Actions for consented external (email) delivery, one item per property per pass.',
+    category: 'NOTIFICATIONS',
+    schedule: 'Daily at 9:00 AM EST',
+    cronExpression: '0 9 * * *',
+    type: 'cron',
+    triggerSupported: true,
+    impact: 'OUTBOUND',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: false,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
+  },
   {
     key: 'weekly-home-brief-digest',
     name: 'Weekly Home Brief Digest',
