@@ -63,6 +63,13 @@ export const askSkillExecutionDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const askSkillRoutingDecisionsTotal = new Counter({
+  name: 'ask_skill_routing_decisions_total',
+  help: 'Hierarchical Skill routing decisions by bounded outcome and routing path',
+  labelNames: ['outcome', 'path'] as const,
+  registers: [register],
+});
+
 export const askRemoteGenerationTotal = new Counter({
   name: 'ask_remote_generation_total',
   help: 'Remote Ask generation attempts by bounded outcome',

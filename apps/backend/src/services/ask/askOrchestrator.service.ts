@@ -22,7 +22,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillExecutionDurationSeconds, askSkillExecutionsTotal } from '../../lib/metrics';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillRoutingDecisionsTotal } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
@@ -87,6 +87,7 @@ import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
+import { resolveHierarchicalSkillRouting } from '../skills/skillRouter';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -4365,11 +4366,39 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: input.propertyId, message: input.message });
   const routingMessage = followUp.effectiveMessage;
 
-  const routingDecision = resolveAskRoutingCascade(routingMessage, {
+  let routingDecision = resolveAskRoutingCascade(routingMessage, {
     localRoutingEnabled: controls.localRoutingEnabled,
     localMinimumConfidence: controls.localRoutingMinimumConfidence,
     ambiguityMargin: controls.routingAmbiguityMargin,
   });
+  const launchCapabilityOperationId = input.launchContext?.capabilityId
+    ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
+    : undefined;
+  const forcedOperationId = followUp.forcedOperationId ?? launchCapabilityOperationId ?? null;
+  const skillRoutingDecision = resolveHierarchicalSkillRouting(routingMessage, routingDecision, {
+    consumer: 'ASK',
+    skillEnabled: controls.skillEnabled,
+    minimumConfidence: controls.localRoutingMinimumConfidence,
+    ambiguityMargin: controls.routingAmbiguityMargin,
+  });
+  askSkillRoutingDecisionsTotal.inc({ outcome: skillRoutingDecision.outcome, path: skillRoutingDecision.path });
+  if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'RESOLVED' && skillRoutingDecision.selectedOperationId) {
+    const selectedOperation = getAskOperationDefinition(skillRoutingDecision.selectedOperationId);
+    const confidence = skillRoutingDecision.skillCandidates[0]?.confidence ?? selectedOperation.confidence;
+    routingDecision = {
+      operation: { ...selectedOperation, confidence },
+      stage: 'LOCAL_CLASSIFIER',
+      candidates: [{ operationId: selectedOperation.operationId, confidence }],
+      requiresClarification: false,
+    };
+  } else if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'AMBIGUOUS_OPERATION') {
+    routingDecision = {
+      operation: routingDecision.operation,
+      stage: 'CLARIFICATION',
+      candidates: skillRoutingDecision.operationCandidates,
+      requiresClarification: true,
+    };
+  }
   // The local classifier already had the concatenated prior+current message
   // to work with; only step in when it still found nothing confident
   // (REMOTE_FALLBACK) — a DETERMINISTIC/LOCAL_CLASSIFIER/CLARIFICATION
@@ -4381,10 +4410,6 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   // Same conservative guard as the follow-up bias: only steps in when the
   // cascade found nothing confident on its own, and only when the
   // capability unambiguously names one operation.
-  const launchCapabilityOperationId = input.launchContext?.capabilityId
-    ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
-    : undefined;
-  const forcedOperationId = followUp.forcedOperationId ?? launchCapabilityOperationId ?? null;
   const shouldForceOperation = Boolean(forcedOperationId)
     && routingDecision.stage === 'REMOTE_FALLBACK'
     && !routingDecision.requiresClarification
@@ -4409,6 +4434,10 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         operationVersion: routingDecision.requiresClarification ? null : operation.version,
         routingStage: routingDecision.stage,
         routingConfidence: operation.confidence,
+        skillRoutingOutcome: skillRoutingDecision.outcome,
+        skillRoutingPath: skillRoutingDecision.path,
+        semanticIndexVersion: skillRoutingDecision.semanticIndexVersion,
+        skillCandidateIds: skillRoutingDecision.skillCandidates.map((candidate) => candidate.skillId),
       }),
     },
   });

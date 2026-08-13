@@ -110,6 +110,7 @@ test('Skill execution telemetry uses bounded registry identity and includes ever
   assert.match(metrics, /name: 'ask_skill_executions_total'/);
   assert.match(metrics, /labelNames: \['skill', 'skill_version', 'operation', 'status'\]/);
   assert.match(metrics, /name: 'ask_skill_execution_duration_seconds'/);
+  assert.match(metrics, /name: 'ask_skill_routing_decisions_total'/);
   const executeStart = orchestrator.indexOf('async function executeOperation(');
   const executeEnd = orchestrator.indexOf('\nfunction captureFallbackHref(', executeStart);
   const executeFunction = orchestrator.slice(executeStart, executeEnd);
