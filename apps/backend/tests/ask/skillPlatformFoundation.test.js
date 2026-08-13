@@ -82,13 +82,48 @@ test('Skill feature and kill-switch controls are independent of operation contro
 test('disabling a Skill prevents a pending confirmation before its mutation claim', () => {
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
   const confirmStart = orchestrator.indexOf('export async function confirmAskExecution(');
-  const skillCheck = orchestrator.indexOf("? 'ASK_SKILL_DISABLED' as const", confirmStart);
+  const skillCheck = orchestrator.indexOf('skillRuntimeUnavailableReason(registeredOperationId, controls)', confirmStart);
   const claimRead = orchestrator.indexOf('const previous = await prisma.askConfirmationReceipt.findUnique', confirmStart);
   assert.ok(skillCheck > confirmStart, 'confirmation-time Skill control was not found');
   assert.ok(claimRead > skillCheck, 'Skill control must run before reading or creating the mutation claim');
   const confirmationPrefix = orchestrator.slice(confirmStart, claimRead);
   assert.match(confirmationPrefix, /status: unavailable\.status/);
   assert.match(confirmationPrefix, /confirmation: null/);
+});
+
+test('disabling a Skill prevents inline capture before any canonical write or capture receipt', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const captureStart = orchestrator.indexOf('export async function submitAskCapture(');
+  const skillCheck = orchestrator.indexOf('skillRuntimeUnavailableReason(registeredOperationId, controls)', captureStart);
+  const receiptRead = orchestrator.indexOf('const previousCapture = await prisma.askCaptureReceipt.findUnique', captureStart);
+  const firstCanonicalCapture = orchestrator.indexOf('await captureFeatureContext(', captureStart);
+  const firstMaintenanceWrite = orchestrator.indexOf('await PropertyMaintenanceTaskService.updateTask(', captureStart);
+  assert.ok(skillCheck > captureStart, 'capture-time Skill control was not found');
+  assert.ok(receiptRead > skillCheck, 'Skill control must run before capture receipt handling');
+  assert.ok(firstCanonicalCapture > skillCheck, 'Skill control must run before Property Context writes');
+  assert.ok(firstMaintenanceWrite > skillCheck, 'Skill control must run before Maintenance writes');
+});
+
+test('Skill execution telemetry uses bounded registry identity and includes every invocation result', () => {
+  const metrics = readFileSync(resolve(__dirname, '../../src/lib/metrics.ts'), 'utf8');
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(metrics, /name: 'ask_skill_executions_total'/);
+  assert.match(metrics, /labelNames: \['skill', 'skill_version', 'operation', 'status'\]/);
+  assert.match(metrics, /name: 'ask_skill_execution_duration_seconds'/);
+  const executeStart = orchestrator.indexOf('async function executeOperation(');
+  const executeEnd = orchestrator.indexOf('\nfunction captureFallbackHref(', executeStart);
+  const executeFunction = orchestrator.slice(executeStart, executeEnd);
+  assert.match(executeFunction, /getSkillForOperation\(input\.operation\.operationId\)/);
+  assert.match(executeFunction, /askSkillExecutionsTotal\.inc/);
+  assert.match(executeFunction, /askSkillExecutionDurationSeconds\.observe/);
+});
+
+test('routing lineage records Skill and operation versions without a database schema change', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(orchestrator, /eventType: 'CAPABILITY_RESOLVED'/);
+  assert.match(orchestrator, /skillId: routingDecision\.requiresClarification \? null : selectedSkill\?\.id \?\? null/);
+  assert.match(orchestrator, /skillVersion: routingDecision\.requiresClarification \? null : selectedSkill\?\.version \?\? null/);
+  assert.match(orchestrator, /operationVersion: routingDecision\.requiresClarification \? null : operation\.version/);
 });
 
 test('Ask responses expose optional Skill identity without breaking historical responses', () => {

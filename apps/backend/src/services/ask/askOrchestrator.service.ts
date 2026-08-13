@@ -22,7 +22,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal } from '../../lib/metrics';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillExecutionDurationSeconds, askSkillExecutionsTotal } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
@@ -3936,6 +3936,18 @@ function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresen
   return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')?.allowedResultBlocks ?? [];
 }
 
+type SkillRuntimeUnavailableReason = 'ASK_SKILL_DISABLED' | 'ASK_SKILL_POLICY_MISMATCH';
+
+function skillRuntimeUnavailableReason(
+  operationId: AskOperationId,
+  controls: ReturnType<typeof readAskOperationalControls>,
+): SkillRuntimeUnavailableReason | null {
+  const skill = getSkillForOperation(operationId);
+  if (!skill) return null;
+  if (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id)) return 'ASK_SKILL_DISABLED';
+  return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK') ? null : 'ASK_SKILL_POLICY_MISMATCH';
+}
+
 async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }): Promise<AskOperationResult> {
   let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
   try {
@@ -3980,10 +3992,10 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   const definition = getAskOperationDefinition(input.operation.operationId);
   const skill = getSkillForOperation(input.operation.operationId);
   if (!controls.askEnabled) return operationalUnavailableResult('ASK_DISABLED');
-  if (skill && (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id))) return operationalUnavailableResult('ASK_SKILL_DISABLED');
   if (!controls.operationEnabled(input.operation.operationId)) return operationalUnavailableResult('OPERATION_DISABLED');
+  const skillUnavailableReason = skillRuntimeUnavailableReason(input.operation.operationId, controls);
+  if (skillUnavailableReason) return operationalUnavailableResult(skillUnavailableReason);
   const effectivePolicy = skill ? resolveEffectiveSkillOperationPolicy(skill.id, input.operation.operationId, 'ASK') : null;
-  if (skill && !effectivePolicy) return operationalUnavailableResult('ASK_SKILL_POLICY_MISMATCH');
   if (definition.executionMode === 'REMOTE_GENERATION' && !controls.remoteGenerationEnabled) {
     askRemoteGenerationTotal.inc({ outcome: 'disabled' });
     return operationalUnavailableResult('REMOTE_GENERATION_DISABLED');
@@ -4091,7 +4103,28 @@ export const ASK_CAPABILITY_UNIQUE_OPERATION: Partial<Record<string, AskOperatio
 })();
 
 async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
-  const coreResult = await executeOperationCore(input);
+  const skill = getSkillForOperation(input.operation.operationId);
+  const skillStartedAt = skill ? Date.now() : null;
+  let coreResult: AskOperationResult;
+  try {
+    coreResult = await executeOperationCore(input);
+  } catch (error) {
+    if (skill && skillStartedAt != null) {
+      askSkillExecutionsTotal.inc({ skill: skill.id, skill_version: skill.version, operation: input.operation.operationId, status: 'THREW' });
+      askSkillExecutionDurationSeconds.observe(
+        { skill: skill.id, skill_version: skill.version, operation: input.operation.operationId },
+        (Date.now() - skillStartedAt) / 1000,
+      );
+    }
+    throw error;
+  }
+  if (skill && skillStartedAt != null) {
+    askSkillExecutionsTotal.inc({ skill: skill.id, skill_version: skill.version, operation: input.operation.operationId, status: coreResult.status });
+    askSkillExecutionDurationSeconds.observe(
+      { skill: skill.id, skill_version: skill.version, operation: input.operation.operationId },
+      (Date.now() - skillStartedAt) / 1000,
+    );
+  }
   const result: AskOperationResult = coreResult.status === 'NEEDS_ENTITY'
     ? {
       ...coreResult,
@@ -4360,10 +4393,25 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     ? { ...getAskOperationDefinition(forcedOperationId as AskOperationId), confidence: 1 }
     : routingDecision.operation;
   const operationDefinition = getAskOperationDefinition(operation.operationId);
+  const selectedSkill = getSkillForOperation(operation.operationId);
   const generationMode = routingDecision.requiresClarification
     ? 'deterministic'
     : operationDefinition.executionMode === 'REMOTE_GENERATION' ? 'remote' : 'deterministic';
   askRoutingDecisionsTotal.inc({ stage: routingDecision.stage.toLowerCase(), outcome: routingDecision.requiresClarification ? 'clarification' : operation.operationId.toLowerCase() });
+  await prisma.askExecutionEvent.create({
+    data: {
+      executionId: execution.id,
+      eventType: 'CAPABILITY_RESOLVED',
+      metadataJson: asInputJson({
+        skillId: routingDecision.requiresClarification ? null : selectedSkill?.id ?? null,
+        skillVersion: routingDecision.requiresClarification ? null : selectedSkill?.version ?? null,
+        operationId: routingDecision.requiresClarification ? null : operation.operationId,
+        operationVersion: routingDecision.requiresClarification ? null : operation.version,
+        routingStage: routingDecision.stage,
+        routingConfidence: operation.confidence,
+      }),
+    },
+  });
   if (followUp.sourceExecutionId) {
     await prisma.askExecutionEvent.create({
       data: { executionId: execution.id, eventType: 'FOLLOW_UP_RESOLVED', metadataJson: asInputJson({ sourceExecutionId: followUp.sourceExecutionId, forcedOperation: shouldForceOperation }) },
@@ -4407,7 +4455,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       },
     });
     if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
-    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ operationId: operation.operationId, blockTypes: result.blocks.map((block) => block.type) }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version, blockTypes: result.blocks.map((block) => block.type) }) } });
     askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
@@ -4428,7 +4476,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         }),
       },
     });
-    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: failureStatus, metadataJson: asInputJson({ operationId: operation.operationId }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: failureStatus, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version }) } });
     askExecutionsTotal.inc({ operation: operation.operationId, status: failureStatus, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
@@ -4661,6 +4709,37 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
   }
   await ensurePropertyAccess(userId, execution.propertyId);
   await enterAskPropertyTimezoneContext(execution.propertyId);
+  const registeredOperationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
+    ? execution.operationId as AskOperationId
+    : null;
+  if (registeredOperationId) {
+    const controls = readAskOperationalControls();
+    const unavailableReason = skillRuntimeUnavailableReason(registeredOperationId, controls);
+    if (unavailableReason) {
+      const unavailable = operationalUnavailableResult(unavailableReason);
+      const saved = await prisma.askExecution.update({
+        where: { id: execution.id },
+        data: {
+          status: unavailable.status,
+          reasonCode: unavailable.reasonCode,
+          resultJson: asInputJson({
+            schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+            blocks: unavailable.blocks,
+            captureRequests: [],
+            confirmation: null,
+            clarification: null,
+            suggestions: unavailable.suggestions,
+          }),
+          completedAt: new Date(),
+        },
+      });
+      const skill = getSkillForOperation(registeredOperationId);
+      await prisma.askExecutionEvent.create({
+        data: { executionId, eventType: unavailableReason, metadataJson: asInputJson({ skillId: skill?.id ?? null, stage: 'CAPTURE_SUBMISSION' }) },
+      });
+      return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+    }
+  }
   const answerHash = createHash('sha256').update(JSON.stringify({ captureKey: input.captureKey, answer: input.answer, sensitiveDataConfirmed: input.sensitiveDataConfirmed ?? false })).digest('hex');
   const previousCapture = await prisma.askCaptureReceipt.findUnique({
     where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
@@ -5233,13 +5312,9 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   const registeredOperationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
     ? execution.operationId as AskOperationId
     : null;
-  const skill = registeredOperationId ? getSkillForOperation(registeredOperationId) : undefined;
   const controls = readAskOperationalControls();
-  const skillUnavailableReason = skill && (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id))
-    ? 'ASK_SKILL_DISABLED' as const
-    : skill && registeredOperationId && !resolveEffectiveSkillOperationPolicy(skill.id, registeredOperationId, 'ASK')
-      ? 'ASK_SKILL_POLICY_MISMATCH' as const
-      : null;
+  const skill = registeredOperationId ? getSkillForOperation(registeredOperationId) : undefined;
+  const skillUnavailableReason = registeredOperationId ? skillRuntimeUnavailableReason(registeredOperationId, controls) : null;
   if (skillUnavailableReason && execution.status !== 'COMPLETED') {
     const unavailable = operationalUnavailableResult(skillUnavailableReason);
     const saved = await prisma.askExecution.update({

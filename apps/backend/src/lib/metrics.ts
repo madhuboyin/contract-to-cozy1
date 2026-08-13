@@ -48,6 +48,21 @@ export const askExecutionDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const askSkillExecutionsTotal = new Counter({
+  name: 'ask_skill_executions_total',
+  help: 'Skill-backed Ask operation invocations by immutable Skill version, operation, and result status',
+  labelNames: ['skill', 'skill_version', 'operation', 'status'] as const,
+  registers: [register],
+});
+
+export const askSkillExecutionDurationSeconds = new Histogram({
+  name: 'ask_skill_execution_duration_seconds',
+  help: 'Skill-backed Ask operation duration by immutable Skill version and operation',
+  labelNames: ['skill', 'skill_version', 'operation'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30],
+  registers: [register],
+});
+
 export const askRemoteGenerationTotal = new Counter({
   name: 'ask_remote_generation_total',
   help: 'Remote Ask generation attempts by bounded outcome',
