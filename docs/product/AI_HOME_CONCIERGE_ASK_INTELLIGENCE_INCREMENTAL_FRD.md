@@ -1158,6 +1158,15 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 
 ## 25. Prioritized implementation plan
 
+Each phase below now carries an **Implementation status** block reflecting what the repository
+actually contains, verified by reading the code (not inferred from these deliverables). Full
+operational detail — file paths, exact mechanics, known gaps — lives in
+[`docs/operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md`](../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md);
+Phase 7A–8C additionally has a dedicated ADR/policy set in
+[`docs/product/decision-platform/`](./decision-platform/README.md). These status blocks describe
+build state only — they are not a substitute for the exit-criteria sign-off this section still
+requires before a phase is considered done.
+
 ### Phase 7A — P0 contract closure
 
 **Objective:** Approve ownership, authorization, privacy, retention, schemas, and evaluation definitions before collecting new durable intelligence data.
@@ -1180,6 +1189,13 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 - all P0 negative tests designed; and
 - concrete retention durations approved.
 
+**Implementation status:** the typed registries, `DecisionThread` transition contract, Prisma
+schema, and the full ADR/policy document set are built. The named approvals were never recorded
+anywhere in the repository, and — contrary to this phase's "blocks production implementation"
+framing — no code-level gate exists that would have stopped Phase 8A onward from being built
+without them. Phase 8A–9C were built directly on top regardless. Treat this phase as
+code-complete but governance-unrecorded, not as a gate the later phases waited on.
+
 ### Phase 8A — P1 HVAC Decision Thread foundation
 
 **Objective:** Prove durable decision continuity without broad personalization or proactivity.
@@ -1199,6 +1215,16 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 - 100% snapshot replay where dependencies remain available;
 - concurrency, retry, deletion, authorization, and AI-disabled tests pass; and
 - desktop/mobile accessibility evidence retained.
+
+**Implementation status:** built and live as six Ask operations (`HVAC_DECISION_START`/
+`CONTINUE`/`SCENARIO`/`ABANDON`, `HVAC_PREFERENCE_SAVE`/`FORGET`). Thread selection is scoped to
+property+item and never resolved by recency (ambiguous results are surfaced, not guessed);
+concurrency is optimistic-locked with version conflicts throwing rather than overwriting;
+correction/invalidation appends a new superseding snapshot rather than editing in place;
+multi-session continuation needs no session/device identifier at all, since a thread is a durable
+row keyed on property+item. The quantitative exit criteria (≥99% continuation success, zero
+misattribution, 100% replay) have no measurement pipeline computing them against a defined
+sample — the mechanics are governance/unit-tested, the numeric targets are not yet measured.
 
 ### Phase 8B — P1 confirmed ownership-horizon personalization
 
@@ -1220,6 +1246,18 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 - revocation and deletion take effect as specified; and
 - no scenario-to-profile leakage.
 
+**Implementation status:** two of the three registered preference definitions
+(`OWNERSHIP_HORIZON`, `REPAIR_REPLACE_APPROACH`) are implemented end to end — save requires an
+explicit save/remember verb, revoke flips status synchronously and marks dependent threads stale,
+and the ACTIVE+non-expired read filter is the actual mechanism enforcing "zero unconfirmed
+material preference use." `DECISION_DETAIL_LEVEL` is registered and validated but has no
+implementation anywhere. "Confirmation and review/edit/delete UX" exists only through Ask
+(`HVAC_PREFERENCE_SAVE`/`FORGET` and the rendered `PREFERENCE_REFERENCE` block) — the registry's
+declared settings-page correction routes do not exist as real routes. **Expiry/reconfirmation is
+enforced passively only:** no job proactively expires a preference or marks a thread stale on
+natural expiry; only an explicit revoke or a fact correction triggers recompute, and there is no
+reconfirmation UX at all.
+
 ### Phase 8C — P1 bounded cross-domain composition and graph reads
 
 **Objective:** Add only the registered relationships and optional context justified by the HVAC slice.
@@ -1237,6 +1275,18 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 - no unrestricted domain read path;
 - latency budget met; and
 - every material input appears in snapshot lineage.
+
+**Implementation status:** one registered `DecisionContextContract` (`HVAC_REPAIR_REPLACE`,
+version `1.0`) with concrete, enforced latency budgets (300ms required facts / 200ms optional
+enhancers / 500ms overall) — a required-fact timeout degrades to a blocked result (fail closed), an
+optional-enhancer timeout is omitted and disclosed via a limitation code, never silently. The graph
+-read module (`homeIntelligenceGraph.ts`) registers four typed edges — three within the Decision
+Platform's own data, one crossing into Coverage/Home Capital Timeline via direct foreign key — with
+every read scoped by `propertyId` first (the property-access/sensitivity propagation behavior this
+phase's exit criteria call for). **This graph module is still not wired into any production read
+path**: it was built as standalone, tested infrastructure for Phase 9A+ to consume, and Phase
+9A/9B/9C's own work reads `PropertyChange`, the governed Home Actions feed, and `DecisionThread`
+directly — none of it through this module.
 
 ### Phase 9A — P1 read-only Change Intelligence
 
@@ -1257,6 +1307,13 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 - every change links to source lineage; and
 - no external delivery enabled.
 
+**Implementation status:** `HOME_CHANGE_SUMMARY` is built as a pure read projection over the
+existing `PropertyChange` ledger — it owns no source truth and materializes no second
+change-tracking system, matching this phase's own constraint that `HomeChangeView` stay a
+disposable, non-authoritative cache rather than a durable model. In-product only; no external
+delivery path exists for this operation. The defined precision/recall targets have no measurement
+pipeline computing them yet.
+
 ### Phase 9B — P1/P2 Priority Intelligence and Concierge Home
 
 **Objective:** Present what matters now using canonical Home Actions and authorized active decisions.
@@ -1276,6 +1333,17 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 - baseline usefulness established; and
 - empty/degraded states pass UX and truthfulness review.
 
+**Implementation status:** the versioned ranking policy (`priority-list-policy-v1`) is a pure
+annotation layer over the existing governed Home Actions feed — it never re-ranks or publishes a
+second feed, and `PRIORITY_LIST` is delivered as an additive block on the existing `HOME_ACTIONS`
+operation rather than a new one, which is the actual enforcement mechanism behind "no competing
+action source." Usefulness feedback (per-item `USEFUL`/`NOT_USEFUL`) and a 14-day suppression
+cooldown are built; Concierge Home composes three already-governed sources with each section
+reporting its own honest state (`AVAILABLE`/`NO_ACTION`/`NO_CHANGE`/`NO_DECISIONS`/`UNAVAILABLE`)
+so a failed or empty section is never presented as "nothing needs attention." "Baseline usefulness
+established" is not yet true: raw ratings are captured but nothing aggregates them into a measured
+baseline.
+
 ### Phase 9C — P2 external proactive delivery
 
 **Objective:** Earn permission for bounded push/email delivery.
@@ -1294,6 +1362,25 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 - usefulness threshold and fatigue rollback threshold approved from in-product evidence;
 - duplicate external delivery meets the approved target; and
 - lock-screen privacy and accessibility reviews pass.
+
+**Implementation status:** built and gated off by default end to end. Per-category/channel
+consent is a versioned, revocable, explicit grant distinct from delivery preference; eligibility
+(materiality floor, suppression/completion/unavailable, a real CTA required, consent, channel
+enabled, daily/weekly budget) is a pure, tested policy; a same-day materiality escalation bypasses
+only the daily budget, never consent/channel/weekly budget; material-financial and
+regulated-coverage copy is redacted of currency/percentage figures before external send.
+Notification-to-Ask continuity is real: eligibility creates an actual `AskExecution` so the sent
+link resumes the literal content it was generated from. Two independent kill switches (an env flag
+and a DB-backed instant switch) plus the existing worker outbound-notification flag all default
+off. Delivery evaluates and sends at most one item per property per pass — deliberately
+conservative, not the full feed. Channel is EMAIL only, per this codebase's pre-existing pilot
+policy restricting external channels (push has a working provider but is not user-configurable
+yet, by product decision predating this phase). "Rollback dashboards" is delivered as a monitoring
+view (a kill-switch toggle plus a log of every eligible/ineligible decision with reason codes), not
+the cohort/governance-review launch-gate framework other capabilities in this codebase use —
+deliberately, since this product has no real users yet to gate a rollout against. The usefulness
+and fatigue-rollback thresholds this phase's exit criteria require have no computed metric to
+approve against (see §22.1's "Proactive usefulness" and "External fatigue guardrail" rows).
 
 ### Phase 10A — P2 outcome observation
 
