@@ -1,7 +1,7 @@
 # AI Home Concierge — Ask Operations and Governance
 
 Status: repository implementation baseline
-Last updated: August 11, 2026
+Last updated: August 13, 2026
 
 ## Ownership
 
@@ -52,6 +52,29 @@ All commands show a typed review card, require explicit consent, expire after 30
 
 All nine Phase 5 families are property-authorized, deterministic, independently kill-switchable, and registered with material-decision safety. The Ask eval pack verifies homeowner-language routing, canonical service invocation, professional boundaries, emergency precedence, and out-of-scope precedence. Database-backed outcome accuracy, production-like latency, browser evidence, and domain-owner sign-off remain launch certification gates.
 
+## Phase 9A–9C — Change Intelligence, Priority Intelligence, and Proactive Delivery
+
+Implements the FRD's "What changed?", "What matters now," and bounded external-delivery phases. §16–§18 govern the requirements; this section is the operational reality.
+
+**Phase 9A — read-only Change Intelligence.** `HOME_CHANGE_SUMMARY` is a pure read projection over the existing `PropertyChange` ledger (`propertyChange.service.ts`) — it owns no source truth and materializes no second change-tracking system. `decisionPlatformChangeEmitter.ts` bridges Decision Platform lifecycle events (recommendation snapshots, preference saves/revocations) into that same ledger. In-product only; no external delivery path exists for this operation.
+
+**Phase 9B — Priority Intelligence and Concierge Home.** `priorityListPolicy.ts` is a versioned, pure ranking-annotation layer over the existing governed Home Actions feed (`homeActions.service.ts`'s `getHomeActionFeed`) — it never re-ranks or publishes a second feed, only maps each item to a consumer category (`DO_NOW`/`PLAN_SOON`/`WATCH`/`OPTIONAL`/`NO_ACTION`), attaches comparative reason codes, and truncates per channel (`PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS`: `ASK`=8, `CONCIERGE_HOME`=5, `EXTERNAL_PROACTIVE`=1). Current policy version: `priority-list-policy-v1`. The `PRIORITY_LIST` presentation block is additive on the existing `HOME_ACTIONS` operation, not a new operation — this is the enforcement mechanism behind the FRD's "no competing action source" exit criterion.
+
+Usefulness feedback (`POST /api/ask/executions/:executionId/priority-list/:homeActionId/feedback`, ratings `USEFUL`/`NOT_USEFUL`) reuses the existing generic `Feedback` model (`homeActionUsefulnessFeedback.service.ts`), keyed by a `home-action:{homeActionId}` page rather than a new table. A `NOT_USEFUL` rating suppresses that item's display (a `suppressed` flag only, never a removal, and never applied to a `SAFETY_EMERGENCY` item) for `HOME_ACTION_FEEDBACK_SUPPRESSION_COOLDOWN_DAYS` = 14 days.
+
+Concierge Home (`GET /api/ask/concierge-home?propertyId=`) composes three already-governed sources — the priority list above, `HOME_CHANGE_SUMMARY`'s `PropertyChange` read, and active `DecisionThread`s (`listActiveDecisionThreadsForProperty`) — into a single read for the Ask landing page. It creates no `AskExecution`. Each section reports its own state (`AVAILABLE`/`NO_ACTION`/`NO_CHANGE`/`NO_DECISIONS`/`UNAVAILABLE`) so a failed or empty section is never presented as "nothing needs attention."
+
+**Phase 9C — external proactive delivery.** Bounded, EMAIL-only (per the existing pilot policy, `PILOT_CONFIGURABLE_NOTIFICATION_CHANNELS`), and gated off by default end to end:
+
+- **Consent.** `NotificationChannelConsent` is a versioned, revocable, explicit per-(category, channel) grant (`GET`/`POST /api/notifications/channel-consents`, `POST /api/notifications/channel-consents/revoke`), distinct from `NotificationPreference` — a user can have EMAIL cadence configured for a category and still receive nothing externally until they grant consent. A toggle is exposed on `/dashboard/notifications`.
+- **Eligibility.** `homeActionProactiveEligibilityPolicy.ts` is a pure FRD §18.2 checklist: materiality floor (only `DO_NOW`/`PLAN_SOON`), suppression/completion/unavailable, a real CTA required (never a watch/no-action state), consent, channel enabled, and a daily/weekly budget (`HOME_ACTION_PROACTIVE_DAILY_BUDGET` = 1, `HOME_ACTION_PROACTIVE_WEEKLY_BUDGET` = 3). A same-day materiality escalation (`PLAN_SOON` → `DO_NOW` for the same Home Action) bypasses only the daily budget — never consent, channel, or the weekly budget. Material-financial and regulated-coverage items have currency/percentage figures redacted from the externally-sent copy.
+- **Delivery and continuity.** `homeActionProactiveDelivery.service.ts` evaluates at most the single top-ranked eligible item per property per pass. On eligibility it creates a real `AskExecution` (the same result a homeowner gets asking "What needs my attention?") and hands off to the existing `NotificationService.create()` pipeline — never a second send path — with `metadata.{propertyId,askSessionId,askExecutionId}` so the notification's link resumes the literal execution it was generated from (mirrors `apps/frontend/src/lib/notifications/destination.ts`'s existing continuity pattern). The notification `type` is `HOME_ACTION_PROACTIVE`; its `deduplicationKey` bounds it to one send per item per day per materiality level.
+- **Kill switches.** Two independent, both required: the env flag `HOME_ACTION_PROACTIVE_DELIVERY_ENABLED` (deploy-time default, unset/`false`) and a DB-backed switch (`homeActionProactiveDeliveryKillSwitch.service.ts`, `SystemSetting` key `homeActionProactiveDelivery.killSwitch`) that an admin can flip with no deploy. The worker cron additionally sits behind the existing `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED` flag (`impact: OUTBOUND` in the job registry) and its own `defaultEnabledInBeta: false`.
+- **Scheduling.** Registered in `JOB_REGISTRY` as `home-action-proactive-delivery` (daily 9:00 AM EST, `apps/workers/src/jobs/evaluateHomeActionProactiveDelivery.job.ts`). Scopes its property scan to users who already hold an active EMAIL consent for some category, so it never table-scans every property.
+- **Monitoring.** Every evaluation pass — eligible or not — is logged to `HomeActionProactiveDeliveryDecision` with its reason codes. `/dashboard/admin/home-action-proactive-delivery` (capabilities `ANALYTICS_VIEW`/`SYSTEM_SETTINGS_MANAGE`) shows the kill-switch toggle and the last 50 decisions. This is a monitoring view, not a launch-gate/approval workflow — the product has no real users yet to gate a rollout against, so `releaseGate.service.ts`'s cohort/governance-review machinery is deliberately not used here.
+
+Deliberately out of scope for the current implementation: push-channel proactive delivery (the pilot channel restriction is a pre-existing, deliberate product decision, not new to this phase), evaluating/sending more than one item per property per pass, and any external-fatigue-guardrail metric aggregation (the metric is defined in `docs/product/decision-platform/metrics-dictionary.md` but nothing computes it yet — see Retention and deletion below for the related consent/decision-log retention gap).
+
 ## Runtime controls
 
 | Environment variable | Default | Purpose |
@@ -66,6 +89,7 @@ All nine Phase 5 families are property-authorized, deterministic, independently 
 | `ASK_EXECUTION_TIMEOUT_MS` | `15000` | Bounded execution timeout; maximum accepted value is 120 seconds |
 | `ASK_RAW_CONVERSATION_RETENTION_DAYS` | `30` | Raw session, message, execution, event, and receipt retention |
 | `ASK_FEEDBACK_RETENTION_DAYS` | `365` | Ask-specific homeowner feedback retention |
+| `HOME_ACTION_PROACTIVE_DELIVERY_ENABLED` | `false` (unset) | Phase 9C external proactive delivery env-level kill switch. Also requires the DB-backed switch (see Phase 9A–9C) and `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED` to actually send. |
 
 When generation is disabled, `GROUNDED_GUIDANCE` returns a typed unavailable boundary and routes the homeowner toward deterministic record questions. It does not synthesize or invent a fallback answer.
 
@@ -84,6 +108,7 @@ Material refinance-rate and Maintenance deadline signals create deterministic As
 - Deleting an Ask session never deletes canonical domain artifacts such as maintenance tasks, invitations, monitors, property facts, or financing profiles. Their owning domain retention policy applies.
 - Prometheus metrics contain bounded registry labels only and never include prompts, user IDs, property IDs, addresses, execution IDs, session IDs, or captured values.
 - Conversation history reads (`GET /api/ask/sessions/:sessionId`, `GET /api/ask/executions/:executionId`) recheck current property access, not just row ownership. A revoked household member's session/execution rows are not deleted, but property-scoped answers inside them stop being returned to that user the moment access is revoked — retention/deletion remain the only mechanisms that remove the underlying rows.
+- **Gap:** `NotificationChannelConsent` and `HomeActionProactiveDeliveryDecision` (Phase 9C) have no defined retention/expiry policy yet. Consent rows are revocable (`revokedAt`) but not purged; the decision log grows unbounded. This needs a policy before Phase 9C delivery is turned on for real users.
 
 ## Measurement and cost baseline
 
@@ -123,5 +148,6 @@ The product launch target remains p95 ≤ 1.5 seconds for deterministic queries.
 6. Verify deterministic containment, latency, capture resume success, and repeated-prompt rate in the dashboard.
 7. For an incident, disable the affected `ASK_OPERATION_<ID>_ENABLED` flag. Disable `ASK_REMOTE_GENERATION_ENABLED` for model/provider incidents. Use `ASK_ENABLED=false` only when the entire surface must be paused.
 8. For routing regressions, set `ASK_LOCAL_ROUTING_ENABLED=false`. For formatting regressions, set `ASK_RESULT_SYNTHESIS_ENABLED=false`; both controls preserve canonical deterministic answers.
+9. Before enabling Phase 9C external delivery for the first time: run `npx prisma db push` (schema changes for `NotificationChannelConsent` and `HomeActionProactiveDeliveryDecision` ship with no migration file, per this repo's convention), resolve the retention gap noted above, then flip `HOME_ACTION_PROACTIVE_DELIVERY_ENABLED=true`, `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED=true`, and resume the DB-backed kill switch from `/dashboard/admin/home-action-proactive-delivery`. For an incident, pausing that kill switch (no deploy required) is faster than toggling the env flag.
 
 Production launch still requires recorded desktop/mobile E2E, accuracy/latency, restart, horizontal-scale, privacy, and domain-owner sign-off evidence. Repository implementation alone does not manufacture those attestations.

@@ -28,6 +28,18 @@ success** and **Recommendation reproducibility**, via `DecisionThread`/`Recommen
 versioning and lineage fields) — the rest are listed here for completeness and to fix their
 definitions before the phases that implement them begin.
 
+As of the Phase 9A–9C implementation (see the "Phase 9A–9C" section of
+[`AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md`](../../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md)):
+**Change deduplication precision** and **Change recall** have real data behind them (the
+`PropertyChange` ledger's dedupe key, supersession rule, and materiality fields), but no
+aggregation job computes either metric yet. **Proactive usefulness** has raw per-item
+`USEFUL`/`NOT_USEFUL` ratings captured (`homeActionUsefulnessFeedback.service.ts`, reusing the
+generic `Feedback` model), but nothing rolls them up into this metric's eligible-denominator/
+numerator shape. **External fatigue guardrail** has no data captured at all yet — Phase 9C's
+consent revocation and email cadence changes are adjacent signals, not this metric's numerator,
+and no "too many" response mechanism exists. None of the three is wired into
+`ProductAnalyticsEventType` or a dashboard.
+
 ## Zero-tolerance gates (FRD §22.2)
 
 The following targets are zero, at every phase from Phase 8A onward:
