@@ -10,6 +10,7 @@ import type {
   SkillDefinition,
 } from './skill.contract';
 import { MAINTENANCE_SKILL } from './maintenance';
+import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const ROLE_RANK: Record<Exclude<AskPropertyRoleFloor, null>, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
@@ -78,7 +79,7 @@ export function resolveEffectiveSkillOperationPolicy(
 
 export function validateSkillDefinitions(
   definitions: Readonly<Record<string, SkillDefinition>> = SKILL_DEFINITIONS,
-  registeredContextProviders: ReadonlySet<string> = new Set(),
+  registeredContextProviders: ReadonlySet<string> = REGISTERED_SKILL_CONTEXT_PROVIDER_REFS,
   registeredExternalConnectors: ReadonlySet<string> = new Set(),
 ): string[] {
   const issues: string[] = [];
@@ -113,6 +114,17 @@ export function validateSkillDefinitions(
       }
       if (skill.authorizationFloor && operation.propertyRoleFloor && ROLE_RANK[skill.authorizationFloor] > ROLE_RANK[operation.propertyRoleFloor]) {
         issues.push(`${key}: Skill authorization floor is stricter than operation ${operationReference.operationId}`);
+      }
+      const declaredProviders = new Set([
+        ...skill.requiredContextProviders,
+        ...skill.optionalContextProviders,
+      ].map((provider) => `${provider.id}@${provider.version}`));
+      for (const provider of [
+        ...(operationReference.requiredContextProviders ?? []),
+        ...(operationReference.optionalContextProviders ?? []),
+      ]) {
+        const providerRef = `${provider.id}@${provider.version}`;
+        if (!declaredProviders.has(providerRef)) issues.push(`${key}: operation ${operationReference.operationId} uses undeclared context provider ${providerRef}`);
       }
     }
 

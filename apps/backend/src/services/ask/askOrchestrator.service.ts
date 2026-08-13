@@ -25,6 +25,10 @@ import { readAskOperationalControls } from '../../config/askOperationalControls'
 import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillRoutingDecisionsTotal } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
+import { composeSkillContext } from '../skills/context/skillContextComposer';
+import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
+import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
+import { MAINTENANCE_TASK_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
 import { answerGroundedAsk } from '../groundedAsk.service';
 import {
@@ -590,7 +594,7 @@ function maintenanceScopeTerms(message: string): string[] {
   return aliases.find(([pattern]) => pattern.test(message))?.[1] ?? [];
 }
 
-function maintenanceTaskText(task: Awaited<ReturnType<typeof PropertyMaintenanceTaskService.getTasksForProperty>>[number]): string {
+function maintenanceTaskText(task: MaintenanceTaskContextTask): string {
   return [task.title, task.description, task.category, task.assetType, task.serviceCategory, task.inventoryItem?.name, task.room?.name, task.season]
     .filter(Boolean).join(' ').toLowerCase();
 }
@@ -1213,16 +1217,12 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
   };
 }
 
-async function maintenanceResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function maintenanceResult(userId: string, propertyId: string, message: string, context: MaintenanceTaskContext): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const now = new Date();
-  const [tasks, property, financing] = await Promise.all([
-    PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
-    prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }),
-    prisma.propertyFinancingProfile.findUnique({ where: { propertyId }, select: { purchaseDate: true } }),
-  ]);
-  const timeZone = safeTimezone(property?.timezone);
-  const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(message, now, timeZone, financing?.purchaseDate ?? null);
+  const { tasks } = context;
+  const timeZone = safeTimezone(context.propertyTimezone);
+  const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(message, now, timeZone, context.purchaseDate);
   const wantsCompleted = /\b(?:completed|finished|done|completion|service history|what did (?:i|we) complete)\b/i.test(message);
   const wantsOpen = /\b(?:pending|remaining|still|open|overdue|due|upcoming|coming up|needs review|in progress|high priority|highest priority|priority tasks?|before (?:winter|spring|summer|fall|autumn))\b/i.test(message);
   const includeCancelled = /\b(?:cancelled|canceled|archived|dismissed|all records|including cancelled|including canceled)\b/i.test(message);
@@ -4018,6 +4018,34 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       };
     }
   }
+  let composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null = null;
+  if (skill && input.propertyId) {
+    composedContext = await composeSkillContext({
+      skill,
+      operationId: input.operation.operationId,
+      userId: input.userId,
+      propertyId: input.propertyId,
+    });
+    if (composedContext.status === 'BLOCKED') {
+      const requiredFailure = composedContext.entries.find((entry) => entry.required && entry.status !== 'AVAILABLE');
+      const permissionFailure = requiredFailure?.status === 'UNAUTHORIZED';
+      return {
+        status: permissionFailure ? 'BLOCKED' : 'UNAVAILABLE',
+        reasonCode: permissionFailure ? 'ASK_PERMISSION_REQUIRED' : 'ASK_REQUIRED_CONTEXT_UNAVAILABLE',
+        blocks: [{
+          type: 'SUMMARY',
+          id: 'ask-required-context-unavailable',
+          title: permissionFailure ? 'Permission is required' : 'Required home context is temporarily unavailable',
+          body: permissionFailure
+            ? 'The required property context is unavailable for your current household role. No home record was changed.'
+            : 'Ask could not load a required, bounded source of home context. No home record was changed; try again shortly.',
+          tone: 'CAUTION',
+          actions: [],
+        }],
+        suggestions: ['Try again'],
+      };
+    }
+  }
   switch (input.operation.operationId) {
     case 'EMERGENCY_BOUNDARY': return emergencyResult();
     case 'UNSAFE_RESTRICTED_BOUNDARY': return unsafeRestrictedResult();
@@ -4025,7 +4053,12 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'MAINTENANCE_TASK_COMPLETE': return maintenanceTaskCompleteResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_TASK_UPDATE': return maintenanceTaskUpdateResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
+    case 'MAINTENANCE_STATUS': return maintenanceResult(
+      input.userId,
+      input.propertyId!,
+      input.message,
+      composedContext!.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
+    );
     case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
     case 'INCIDENT_CLAIM_STATUS': return incidentClaimStatusResult(input.userId, input.propertyId!, input.message);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);

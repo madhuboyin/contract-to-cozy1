@@ -34,6 +34,8 @@ export interface VersionedSkillReference {
 export interface SkillOperationReference {
   operationId: AskOperationId;
   version: string;
+  requiredContextProviders?: VersionedSkillReference[];
+  optionalContextProviders?: VersionedSkillReference[];
 }
 
 export interface SkillConsumerPolicy {

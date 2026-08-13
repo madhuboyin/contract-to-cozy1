@@ -188,6 +188,7 @@ import { APP_CONFIG_KEYS, isEmailVerificationDisabled } from './config/appConfig
 import { validateAskOperationDefinitions } from './services/ask/askOperationRegistry';
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
 import { validateSkillDefinitions } from './services/skills/skillRegistry';
+import { validateSkillContextProviderDefinitions } from './services/skills/context/skillContextProviderRegistry';
 import { detectSkillSemanticConflicts } from './services/skills/skillRouter';
 import { validateDecisionPreferenceRegistry } from './services/decisionPlatform/decisionPreferenceRegistry';
 import { validateDecisionContextContracts } from './services/decisionPlatform/decisionContextContracts';
@@ -200,6 +201,7 @@ const askRegistryIssues = [
   ...validateAskOperationDefinitions(),
   ...validateAskDomainCommandRegistry(),
   ...validateSkillDefinitions(),
+  ...validateSkillContextProviderDefinitions(),
   ...detectSkillSemanticConflicts(),
 ];
 if (askRegistryIssues.length) {

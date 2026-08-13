@@ -9,6 +9,11 @@ export const MAINTENANCE_SKILL_OPERATIONS: AskOperationId[] = [
   'HOME_DEADLINE_MONITOR',
 ];
 
+export const MAINTENANCE_TASK_CONTEXT_PROVIDER = Object.freeze({
+  id: 'maintenance.task-context',
+  version: '1.0.0',
+});
+
 export const MAINTENANCE_SKILL = Object.freeze({
   id: 'maintenance',
   version: '1.0.0',
@@ -24,8 +29,14 @@ export const MAINTENANCE_SKILL = Object.freeze({
     'monitor-home-deadline',
   ],
   aliases: ['maintenance', 'home upkeep', 'service schedule', 'maintenance reminders'],
-  operations: MAINTENANCE_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0' })),
-  requiredContextProviders: [],
+  operations: MAINTENANCE_SKILL_OPERATIONS.map((operationId) => ({
+    operationId,
+    version: '1.0',
+    ...(operationId === 'MAINTENANCE_STATUS'
+      ? { requiredContextProviders: [MAINTENANCE_TASK_CONTEXT_PROVIDER] }
+      : {}),
+  })),
+  requiredContextProviders: [MAINTENANCE_TASK_CONTEXT_PROVIDER],
   optionalContextProviders: [],
   allowedAdapters: [
     { id: 'maintenance.status', version: '1.0' },
@@ -44,10 +55,15 @@ export const MAINTENANCE_SKILL = Object.freeze({
   },
   authorizationFloor: 'VIEWER',
   allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST'],
-  dependencies: [],
+  dependencies: [{
+    type: 'CONTEXT_PROVIDER',
+    id: MAINTENANCE_TASK_CONTEXT_PROVIDER.id,
+    version: MAINTENANCE_TASK_CONTEXT_PROVIDER.version,
+    required: true,
+  }],
   contextBudget: {
-    maxFacts: 40,
-    maxEntities: 25,
+    maxFacts: 100,
+    maxEntities: 50,
     maxDocuments: 0,
     maxHistoryEvents: 100,
     maxSerializedBytes: 64_000,

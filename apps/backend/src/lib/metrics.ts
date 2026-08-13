@@ -70,6 +70,21 @@ export const askSkillRoutingDecisionsTotal = new Counter({
   registers: [register],
 });
 
+export const askSkillContextProviderTotal = new Counter({
+  name: 'ask_skill_context_provider_total',
+  help: 'Skill context provider invocations by immutable provider version and bounded result status',
+  labelNames: ['provider', 'provider_version', 'status'] as const,
+  registers: [register],
+});
+
+export const askSkillContextProviderDurationSeconds = new Histogram({
+  name: 'ask_skill_context_provider_duration_seconds',
+  help: 'Skill context provider duration by immutable provider version',
+  labelNames: ['provider', 'provider_version'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  registers: [register],
+});
+
 export const askRemoteGenerationTotal = new Counter({
   name: 'ask_remote_generation_total',
   help: 'Remote Ask generation attempts by bounded outcome',
