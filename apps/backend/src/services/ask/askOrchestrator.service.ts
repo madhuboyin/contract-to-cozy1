@@ -36,6 +36,7 @@ import {
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../toolDiscoveryAvailability.service';
 import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../capabilityRelated.service';
 import {
+  ASK_OPERATION_DEFINITIONS,
   getAskOperationDefinition,
   resolveAskOperation,
   type AskOperationId,
@@ -85,6 +86,7 @@ import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingC
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
+import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -3905,7 +3907,13 @@ async function maybeSynthesizeDeterministicResult(operationId: AskOperationResol
   }
 }
 
-function operationalUnavailableResult(reason: 'ASK_DISABLED' | 'OPERATION_DISABLED' | 'REMOTE_GENERATION_DISABLED'): AskOperationResult {
+function operationalUnavailableResult(reason:
+  | 'ASK_DISABLED'
+  | 'ASK_SKILL_DISABLED'
+  | 'ASK_SKILL_POLICY_MISMATCH'
+  | 'OPERATION_DISABLED'
+  | 'REMOTE_GENERATION_DISABLED'
+): AskOperationResult {
   const remoteOnly = reason === 'REMOTE_GENERATION_DISABLED';
   return {
     status: 'UNAVAILABLE',
@@ -3919,6 +3927,13 @@ function operationalUnavailableResult(reason: 'ASK_DISABLED' | 'OPERATION_DISABL
     }],
     suggestions: ['What maintenance is pending?', 'Summarize my home record', 'Which items are missing coverage?'],
   };
+}
+
+function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresentationBlock['type'][] {
+  const operation = getAskOperationDefinition(operationId);
+  const skill = getSkillForOperation(operationId);
+  if (!skill) return operation.allowedBlockTypes;
+  return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')?.allowedResultBlocks ?? [];
 }
 
 async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }): Promise<AskOperationResult> {
@@ -3963,21 +3978,26 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
 async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
+  const skill = getSkillForOperation(input.operation.operationId);
   if (!controls.askEnabled) return operationalUnavailableResult('ASK_DISABLED');
+  if (skill && (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id))) return operationalUnavailableResult('ASK_SKILL_DISABLED');
   if (!controls.operationEnabled(input.operation.operationId)) return operationalUnavailableResult('OPERATION_DISABLED');
+  const effectivePolicy = skill ? resolveEffectiveSkillOperationPolicy(skill.id, input.operation.operationId, 'ASK') : null;
+  if (skill && !effectivePolicy) return operationalUnavailableResult('ASK_SKILL_POLICY_MISMATCH');
   if (definition.executionMode === 'REMOTE_GENERATION' && !controls.remoteGenerationEnabled) {
     askRemoteGenerationTotal.inc({ outcome: 'disabled' });
     return operationalUnavailableResult('REMOTE_GENERATION_DISABLED');
   }
   if (input.operation.requiresProperty && !input.propertyId) return needsPropertyResult();
-  if (input.propertyId && definition.propertyRoleFloor) {
+  const authorizationFloor = effectivePolicy?.authorizationFloor ?? definition.propertyRoleFloor;
+  if (input.propertyId && authorizationFloor) {
     const access = await ensurePropertyAccess(input.userId, input.propertyId);
     const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
-    if (rank[access.role] < rank[definition.propertyRoleFloor]) {
+    if (rank[access.role] < rank[authorizationFloor]) {
       return {
         status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
         blocks: [{
-          type: 'SUMMARY', id: 'ask-operation-permission', title: `${definition.propertyRoleFloor.toLowerCase()} access is required`,
+          type: 'SUMMARY', id: 'ask-operation-permission', title: `${authorizationFloor.toLowerCase()} access is required`,
           body: 'This registered operation is unavailable for your current household role. No home record was changed.',
           tone: 'CAUTION', actions: [],
         }],
@@ -4173,6 +4193,10 @@ function mapPersistedExecution(execution: {
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
   createdAt: Date; updatedAt: Date;
 }, property: { id: string; label: string } | null): AskExecutionResponse {
+  const operationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
+    ? execution.operationId as AskOperationId
+    : null;
+  const skill = operationId ? getSkillForOperation(operationId) : undefined;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
     ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown }
     : {};
@@ -4184,6 +4208,7 @@ function mapPersistedExecution(execution: {
     question: execution.message,
     status: execution.status,
     property,
+    skill: skill ? { id: skill.id, version: skill.version, domain: skill.domain } : null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
@@ -4212,6 +4237,7 @@ function mapPersistedExecution(execution: {
     question: execution.message,
     status: 'UNAVAILABLE',
     property,
+    skill: skill ? { id: skill.id, version: skill.version, domain: skill.domain } : null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? 'unknown', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     contextVersion: execution.contextVersion,
     blocks: [{
@@ -4365,7 +4391,8 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !operationDefinition.allowedBlockTypes.includes(block.type));
+    const allowedResultBlocks = allowedResultBlocksForOperation(operation.operationId);
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
     if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
@@ -4503,7 +4530,8 @@ export async function submitAskClarification(userId: string, executionId: string
     const result = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !operationDefinition.allowedBlockTypes.includes(block.type));
+    const allowedResultBlocks = allowedResultBlocksForOperation(operation.operationId);
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
     if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
     const nextParameters = {
       ...(result.parameters ?? {}),
@@ -4586,7 +4614,8 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
     const result = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !operationDefinition.allowedBlockTypes.includes(block.type));
+    const allowedResultBlocks = allowedResultBlocksForOperation(operation.operationId);
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
     if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
@@ -5201,6 +5230,39 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     throw error;
   }
   await enterAskPropertyTimezoneContext(execution.propertyId);
+  const registeredOperationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
+    ? execution.operationId as AskOperationId
+    : null;
+  const skill = registeredOperationId ? getSkillForOperation(registeredOperationId) : undefined;
+  const controls = readAskOperationalControls();
+  const skillUnavailableReason = skill && (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id))
+    ? 'ASK_SKILL_DISABLED' as const
+    : skill && registeredOperationId && !resolveEffectiveSkillOperationPolicy(skill.id, registeredOperationId, 'ASK')
+      ? 'ASK_SKILL_POLICY_MISMATCH' as const
+      : null;
+  if (skillUnavailableReason && execution.status !== 'COMPLETED') {
+    const unavailable = operationalUnavailableResult(skillUnavailableReason);
+    const saved = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: unavailable.status,
+        reasonCode: unavailable.reasonCode,
+        resultJson: asInputJson({
+          schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+          blocks: unavailable.blocks,
+          captureRequests: [],
+          confirmation: null,
+          clarification: null,
+          suggestions: unavailable.suggestions,
+        }),
+        completedAt: new Date(),
+      },
+    });
+    await prisma.askExecutionEvent.create({
+      data: { executionId, eventType: skillUnavailableReason, metadataJson: asInputJson({ skillId: skill?.id ?? null }) },
+    });
+    return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+  }
   const inputHash = createHash('sha256').update(JSON.stringify({
     confirmationVersion: input.confirmationVersion,
     consentConfirmed: input.consentConfirmed,

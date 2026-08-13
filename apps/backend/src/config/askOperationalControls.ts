@@ -23,6 +23,7 @@ export interface AskOperationalControls {
   localRoutingMinimumConfidence: number;
   routingAmbiguityMargin: number;
   operationEnabled: (operationId: AskOperationId) => boolean;
+  skillEnabled: (skillId: string) => boolean;
   rawConversationRetentionDays: number;
   feedbackRetentionDays: number;
   executionTimeoutMs: number;
@@ -37,6 +38,11 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
     localRoutingMinimumConfidence: ratioEnv(env.ASK_LOCAL_ROUTING_MIN_CONFIDENCE, 0.42),
     routingAmbiguityMargin: ratioEnv(env.ASK_ROUTING_AMBIGUITY_MARGIN, 0.1),
     operationEnabled: (operationId) => booleanEnv(env[`ASK_OPERATION_${operationId}_ENABLED`], true),
+    skillEnabled: (skillId) => {
+      const envId = skillId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+      return booleanEnv(env[`ASK_SKILL_${envId}_ENABLED`], true)
+        && !booleanEnv(env[`ASK_SKILL_${envId}_KILL_SWITCH`], false);
+    },
     rawConversationRetentionDays: positiveIntegerEnv(env.ASK_RAW_CONVERSATION_RETENTION_DAYS, 30, 365),
     feedbackRetentionDays: positiveIntegerEnv(env.ASK_FEEDBACK_RETENTION_DAYS, 365, 1_095),
     executionTimeoutMs: positiveIntegerEnv(env.ASK_EXECUTION_TIMEOUT_MS, 15_000, 120_000),

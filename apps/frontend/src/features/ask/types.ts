@@ -45,6 +45,7 @@ export interface AskExecutionResponse {
   question: string;
   status: AskExecutionStatus;
   property: { id: string; label: string } | null;
+  skill?: { id: string; version: string; domain: string } | null;
   operation: { id: string; version: string; family: string } | null;
   contextVersion: string | null;
   blocks: AskPresentationBlock[];

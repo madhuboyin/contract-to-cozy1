@@ -187,6 +187,7 @@ import { requestIdMiddleware } from './middleware/requestId.middleware';
 import { APP_CONFIG_KEYS, isEmailVerificationDisabled } from './config/appConfig';
 import { validateAskOperationDefinitions } from './services/ask/askOperationRegistry';
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
+import { validateSkillDefinitions } from './services/skills/skillRegistry';
 import { validateDecisionPreferenceRegistry } from './services/decisionPlatform/decisionPreferenceRegistry';
 import { validateDecisionContextContracts } from './services/decisionPlatform/decisionContextContracts';
 import { validateDecisionDefinitionRegistry } from './services/decisionPlatform/decisionDefinitionRegistry';
@@ -194,7 +195,11 @@ import { validateDecisionThreadTransitionContract } from './services/decisionPla
 import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
 dotenv.config();
 
-const askRegistryIssues = [...validateAskOperationDefinitions(), ...validateAskDomainCommandRegistry()];
+const askRegistryIssues = [
+  ...validateAskOperationDefinitions(),
+  ...validateAskDomainCommandRegistry(),
+  ...validateSkillDefinitions(),
+];
 if (askRegistryIssues.length) {
   throw new Error(`FATAL: Ask registry validation failed: ${askRegistryIssues.join('; ')}`);
 }

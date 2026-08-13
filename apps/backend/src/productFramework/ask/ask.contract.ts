@@ -486,6 +486,7 @@ export const AskExecutionResponseSchema = z.object({
   question: z.string(),
   status: AskExecutionStatusSchema,
   property: z.object({ id: z.string(), label: z.string() }).nullable(),
+  skill: z.object({ id: z.string(), version: z.string(), domain: z.string() }).nullable().default(null),
   operation: z.object({ id: z.string(), version: z.string(), family: z.string() }).nullable(),
   contextVersion: z.string().nullable(),
   blocks: z.array(AskPresentationBlockSchema),
