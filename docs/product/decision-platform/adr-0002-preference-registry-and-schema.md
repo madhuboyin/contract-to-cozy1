@@ -2,7 +2,13 @@
 
 ## Status
 
-Proposed — pending approval alongside ADR-0001.
+Proposed — pending approval alongside ADR-0001. **Note (Phase 9C update):** the registry and
+schema below match what's implemented exactly, and Phase 8B built the read/write services against
+them — but two of the three registered definitions have a gap worth knowing: `DECISION_DETAIL_LEVEL`
+is registered and validated, yet has no save/read/parse path anywhere in the codebase, and none of
+the three definitions' `correctionRoute` values resolve to a real frontend route or backend
+endpoint. See the Phase 8B write-up in
+[`docs/operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md`](../../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md).
 
 ## Date
 
@@ -111,5 +117,9 @@ initial registry limited to exactly three keys (§11.2): `OWNERSHIP_HORIZON`,
 
 Preference values do not appear in URLs, logs, metrics, traces, or ordinary analytics (FRD §7.5)
 — this is an application-layer requirement for the services that read/write
-`DecisionPreferenceValue.valueJson`, to be enforced when those services are built in Phase 8B, not
-a Phase 7A schema concern.
+`DecisionPreferenceValue.valueJson`. Phase 8B built those services
+(`decisionPreferenceService.ts`); by inspection, the emitter functions that bridge preference
+saves/revocations into the change ledger (`decisionPlatformChangeEmitter.ts`) carry structural
+metadata only, never the value itself. This has not been independently governance-tested (no test
+asserts a preference value never appears in a log line), so treat it as true-by-inspection, not
+verified.

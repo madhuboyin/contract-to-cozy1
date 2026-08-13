@@ -52,6 +52,120 @@ All commands show a typed review card, require explicit consent, expire after 30
 
 All nine Phase 5 families are property-authorized, deterministic, independently kill-switchable, and registered with material-decision safety. The Ask eval pack verifies homeowner-language routing, canonical service invocation, professional boundaries, emergency precedence, and out-of-scope precedence. Database-backed outcome accuracy, production-like latency, browser evidence, and domain-owner sign-off remain launch certification gates.
 
+## Phase 7A–8C — Decision Platform (HVAC Decision Threads and preference reuse)
+
+Implements the FRD's contract-closure and Decision Thread phases (§7–§15). Full detail lives in
+[`docs/product/decision-platform/`](../product/decision-platform/README.md) (README + three ADRs +
+retention/privacy policy docs); this section is the operational summary.
+
+**Governance status — read before relying on the ADRs' own status lines.** The FRD/ADRs describe
+Phase 7A as a gate: "blocks production implementation... permits ADRs, fixtures, prototypes" until
+Product/Domain/Architecture/Privacy/Security/Trust/Operations approval is recorded (FRD §5.1,
+§25). **That gate was never implemented as a code-level control.** There is no feature flag,
+config value, or database marker anywhere that conditions Phase 8A–9C code on Phase 7A having been
+formally approved — `HVAC_DECISION_*`/`HVAC_PREFERENCE_*` are registered and dispatched in
+`askOperationRegistry.ts`/`askOrchestrator.service.ts` exactly like any other live operation. The
+decision-platform docs still self-report "Proposed — pending approval"; that framing was
+procedural, not enforced, and no record exists of the named approvals actually having been
+obtained. Treat the Decision Platform as **live in the codebase**, not as gated-pending-approval,
+when reasoning about what this repository actually does today.
+
+**Phase 7A — P0 contract closure.** Delivered as code-based typed registries in
+`apps/backend/src/services/decisionPlatform/`: `decisionPreferenceRegistry.ts`
+(`DecisionPreferenceDefinition`), `decisionContextContracts.ts` (`DecisionContextContract`), and
+the decision-family catalog, each with a `validate*()` consistency check run at backend startup
+(`src/index.ts`) and asserted empty in `tests/decisionPlatform/decisionPlatformGovernance.test.js`.
+`decisionThreadTransitions.ts` is the pure, DB-free lifecycle/context-status transition contract —
+`validateDecisionThreadTransitionContract()` confirms no duplicate/undocumented transition and that
+every non-`ARCHIVED` status has an outbound edge.
+
+**Phase 8A — HVAC Decision Thread foundation.** Six Ask operations: `HVAC_DECISION_START`,
+`HVAC_DECISION_CONTINUE`, `HVAC_DECISION_SCENARIO`, `HVAC_DECISION_ABANDON`,
+`HVAC_PREFERENCE_SAVE`, `HVAC_PREFERENCE_FORGET` (`decisionThreadService.ts`,
+`hvacRepairReplaceEngine.service.ts`). Key mechanics:
+
+- **Thread selection** (`selectHvacDecisionThread`) is scoped to `propertyId + inventoryItemId`,
+  restricted to active lifecycle statuses, and classified `NONE`/`UNIQUE`/`AMBIGUOUS`
+  (`classifyThreadSelection`) — an ambiguous result is surfaced back to the homeowner, never
+  resolved by recency guessing.
+- **Concurrency.** Every mutating write is an optimistic-concurrency `updateMany` gated on the
+  row's `version`; a zero-count update throws `DecisionThreadVersionConflictError`. A separate
+  Ask-layer context-version fingerprint additionally guards the propose→confirm window.
+- **Correction/invalidation.** `recomputeStaleThread` never edits a snapshot in place — it creates
+  a new `RecommendationSnapshot` with `supersedesSnapshotId` set to the prior one, diffs the two
+  (`compareRecommendationSnapshots`), and restores `contextStatus` via the same
+  `computeContextStatus` precedence rule (`CONFLICTED` > `STALE` > `CURRENT`) Phase 7A defined.
+  Triggered by an explicit preference "forget" or a canonical-fact correction on the item — see
+  the Phase 8B expiry note below for what does *not* trigger it.
+- **Multi-session continuation** needs no session/device identifier at all: a `DecisionThread` is a
+  durable row keyed on property + item, so any later authorized session simply re-resolves the same
+  thread via `selectHvacDecisionThread`.
+- **Scenario isolation.** `createHvacScenario` evaluates a hypothetical quote without ever mutating
+  the thread's `currentRecommendationSnapshotId` or saving a preference — both invariants are
+  governance-tested. `SCENARIO_COMPARISON`'s `comparisonDirection` is derived from an ordinal
+  verdict rank (`REPAIR` < `MONITOR` < `REPLACE`), not a raw equality check, so a
+  `REPLACE`→`MONITOR` shift reads correctly as "less urgent," not mislabeled.
+
+**Phase 8B — confirmed ownership-horizon personalization.** Three preference definitions are
+registered (`OWNERSHIP_HORIZON`, `REPAIR_REPLACE_APPROACH`, `DECISION_DETAIL_LEVEL`), but **only
+the first two are implemented end to end** — `DECISION_DETAIL_LEVEL` is registered and validated
+but has no save/read/parse path anywhere in the codebase. The registry's declared
+`correctionRoute` values (`/dashboard/settings/decision-preferences/...`) **do not exist as real
+frontend routes or backend endpoints** — review/edit/delete of a saved preference happens
+exclusively through Ask (`HVAC_PREFERENCE_SAVE`/`HVAC_PREFERENCE_FORGET`) and the rendered
+`PREFERENCE_REFERENCE` block; there is no standalone settings UI.
+
+A preference save requires an explicit save/remember verb in the message (never silently
+inferred); a household-scoped `OWNERSHIP_HORIZON` save requires the household OWNER role, while
+`REPAIR_REPLACE_APPROACH` is user-scoped to any authorized member. `getActiveHvacPreferences` —
+the sole read path the HVAC engine composer uses — filters to `status: 'ACTIVE'` and
+non-expired, which is the actual enforcement mechanism behind the "zero unconfirmed material
+preference use" exit criterion. Revoke ("forget") flips `status` to `REVOKED` synchronously inside
+the same transaction and marks every affected thread stale.
+
+**Expiry is enforced passively only.** No cron/worker proactively transitions an expired
+`DecisionPreferenceValue` to a terminal status or marks a dependent thread stale purely because
+`expiresAt` passed — `getActiveHvacPreferences`'s read-time filter simply stops returning that row
+for *future* compositions. There is no reconfirmation UX. Only an explicit "forget" or a canonical
+fact correction triggers recompute — natural expiry does not. (`policy-retention-erasure-export.md`
+previously stated expiry sets `status = 'EXPIRED'`; that write does not exist in the codebase and
+the policy doc has been corrected to describe the actual read-time-filter behavior.)
+
+**Phase 8C — bounded cross-domain composition and graph reads.** One registered
+`DecisionContextContract` (`HVAC_REPAIR_REPLACE`, version `1.0`, `decisionContextContracts.ts`)
+declares required/optional fact definitions, allowed preference/scenario-input definitions, and
+concrete latency budgets: 300ms for required facts, 200ms for optional enhancers, 500ms overall
+(`requiredFactLatencyMs`/`maximumEnhancerLatencyMs`/`overallLatencyMs`). `decisionContextEnhancer
+.ts`'s `withEnhancerTimeout` enforces those budgets: a required-fact timeout degrades to a blocked
+result (fail closed); an optional-enhancer timeout is omitted and disclosed via a limitation code
+(degrade with disclosure, never silently). `homeIntelligenceGraph.ts` registers four typed read
+edges (not a graph database) — three within the Decision Platform's own data and one,
+`INVENTORY_ITEM_WARRANTY_AND_FUTURE_EXPENSE`, crossing into Coverage and Home Capital Timeline via
+a direct foreign key. Every read function scopes its query by `propertyId` first, defense-in-depth
+even though callers are already authorized upstream — this is the property-access/sensitivity
+propagation behavior the FRD's exit criterion calls for, governance-tested in
+`homeIntelligenceGraphGovernance.test.js`.
+
+**This graph module is still not wired into any production read path.** It was built as standalone,
+tested infrastructure explicitly for Phase 9A+ to consume; as of Phase 9C it is imported only for
+its startup registry-validation call (`validateHomeIntelligenceGraphEdges` in `src/index.ts`) — the
+Phase 9A/9B/9C work in the section below reads `PropertyChange`, the governed Home Actions feed,
+and `DecisionThread` directly, none of it through `homeIntelligenceGraph.ts`.
+
+**Tests.** `tests/decisionPlatform/`: `decisionPlatformGovernance.test.js` (7A registries),
+`decisionThreadServiceGovernance.test.js` (8A transition-contract enforcement),
+`hvacDecisionRouting.test.js` (8A/8B Ask routing), `decisionPreferenceServiceGovernance.test.js`
+(8B read-gate/authorization/isolation invariants), `homeIntelligenceGraphGovernance.test.js` (8C
+edge registry and property scoping). `tests/unit/decisionPlatform/`:
+`decisionThreadTransitions.test.js`, `decisionThreadSelection.test.js`,
+`hvacRepairReplaceEngine.test.js`, `decisionPreferenceParsing.test.js`,
+`recommendationChangeDiff.test.js`, `decisionContextEnhancer.test.js`.
+
+Deliberately not built through Phase 8C, still outstanding: a `DecisionPreferenceValue`/
+`DecisionThread` export API (FRD §8.3), the `decision-platform-retention-cleanup` job and
+`ABANDONED`→`ARCHIVED` auto-archival, and any independent test asserting preference values never
+reach logs/metrics (true by inspection of the two emitter functions today, not governance-tested).
+
 ## Phase 9A–9C — Change Intelligence, Priority Intelligence, and Proactive Delivery
 
 Implements the FRD's "What changed?", "What matters now," and bounded external-delivery phases. §16–§18 govern the requirements; this section is the operational reality.

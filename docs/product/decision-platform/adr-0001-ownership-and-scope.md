@@ -3,7 +3,12 @@
 ## Status
 
 Proposed — pending Product, Domain, Architecture, Privacy, Security, Trust, and Operations
-approval per FRD §8.4 and §25 Phase 7A exit criteria.
+approval per FRD §8.4 and §25 Phase 7A exit criteria. **Note (Phase 9C update):** no record of
+that approval being obtained exists in this repository, and the decisions below were built on
+directly by Phase 8A–9C regardless — see the "Governance status" note at the top of
+[`docs/operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md`](../../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md)'s
+Phase 7A–8C section. This ADR's ownership decisions remain an accurate description of the
+implemented schema and registries; only the "pending approval, blocking" framing is stale.
 
 ## Date
 

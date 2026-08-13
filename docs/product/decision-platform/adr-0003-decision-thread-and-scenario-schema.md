@@ -5,7 +5,11 @@
 Proposed — pending approval alongside ADR-0001. FRD §25 Phase 7A explicitly lists "Decision
 Thread transition contract" as a P0 deliverable even though the `DecisionThread` *feature*
 (routing, orchestration, actual continuation logic) is P1/Phase 8A — this ADR closes the schema
-and transition contract only.
+and transition contract only. **Note (Phase 9C update):** Phase 8A built that feature on top of
+this schema exactly as designed (thread selection, optimistic-concurrency versioning,
+supersedes-not-edits snapshot lineage); the schema described below has not drifted. See
+[`docs/operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md`](../../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md)
+for the Phase 8A operational detail.
 
 ## Date
 

@@ -1,7 +1,12 @@
 # Decision Platform — Retention, Erasure, and Export Policy
 
 **Status:** Proposed — concrete durations below require Privacy, Security, and Domain approval
-per FRD §8.4 before any real-user data is collected against them.
+per FRD §8.4 before any real-user data is collected against them. **Note (Phase 9C update):**
+Phase 8A/8B/8C are built and live despite that approval not being on record (see
+[`docs/operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md`](../../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md)).
+Several items this policy described as "deferred to Phase 8A+" are, as of Phase 8C, confirmed
+still not built — see the corrections below rather than assuming they shipped alongside those
+phases.
 
 This policy implements
 [`AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md`](../AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md)
@@ -18,12 +23,12 @@ Ask sessions/executions expire after 30 days, feedback after 365, enforced by th
 | Artifact | Active retention | Terminal retention | Deletion trigger |
 | --- | --- | --- | --- |
 | `DecisionThread` (`OPEN`…`ACTION_IN_PROGRESS`, `DECIDED`) | Indefinite while non-terminal | — | N/A while active |
-| `DecisionThread` (`ABANDONED`) | — | 180 days, then eligible for `ARCHIVED` | Auto-archival job (not built this phase) |
-| `DecisionThread` (`ARCHIVED`) | — | 24 months from `archivedAt`, then hard-delete unless separately confirmed as a durable artifact (FRD §8.1) | `decision-platform-retention-cleanup` (future job, see below) |
+| `DecisionThread` (`ABANDONED`) | — | 180 days, then eligible for `ARCHIVED` | Auto-archival job (still not built as of Phase 8C) |
+| `DecisionThread` (`ARCHIVED`) | — | 24 months from `archivedAt`, then hard-delete unless separately confirmed as a durable artifact (FRD §8.1) | `decision-platform-retention-cleanup` (future job, still not built, see below) |
 | `Scenario` | Same as owning thread | Same as owning thread | Cascades with `DecisionThread` deletion (`onDelete: Cascade` in schema) |
-| `RecommendationSnapshot` | 24 months from `generatedAt` | Indefinite, minimized, if the owning decision reached `DECIDED`/`COMPLETED` (FRD §8.1: "may retain minimized immutable lineage if durable decision was confirmed") | `decision-platform-retention-cleanup`, minimization pass on confirmation |
-| `DecisionPreferenceValue` | Per its definition's `defaultValidityMonths` (FRD §11.2: 12 months for `OWNERSHIP_HORIZON`/`REPAIR_REPLACE_APPROACH`; until changed for `DECISION_DETAIL_LEVEL`) | — | Expiry sets `status = EXPIRED`; explicit revoke sets `status = REVOKED` synchronously, before the API returns success (FRD §7.5) |
-| `HomeChangeView` cache | Not modeled this phase (FRD §16.1: disposable, non-authoritative — no durable retention applies) | — | N/A — deferred to Phase 9A |
+| `RecommendationSnapshot` | 24 months from `generatedAt` | Indefinite, minimized, if the owning decision reached `DECIDED`/`COMPLETED` (FRD §8.1: "may retain minimized immutable lineage if durable decision was confirmed") | `decision-platform-retention-cleanup`, minimization pass on confirmation (job still not built) |
+| `DecisionPreferenceValue` | Per its definition's `defaultValidityMonths` (FRD §11.2: 12 months for `OWNERSHIP_HORIZON`/`REPAIR_REPLACE_APPROACH`; until changed for `DECISION_DETAIL_LEVEL`) | — | **As implemented (Phase 8B), expiry does *not* set `status = EXPIRED`** — no code path writes that status anywhere. Expiry is enforced passively: `getActiveHvacPreferences`'s read-time filter (`status: 'ACTIVE'` and `expiresAt` in the future) simply stops returning an expired row for future use. An explicit revoke ("forget") does synchronously set `status = 'REVOKED'`, before the API returns success (FRD §7.5), as designed. |
+| `HomeChangeView` cache | Not a durable model, as designed (FRD §16.1: disposable, non-authoritative). Phase 9A implemented `HOME_CHANGE_SUMMARY` as a pure read projection over the existing `PropertyChange` ledger, exactly per this constraint — no new cache/durable model was added | — | N/A by design, confirmed as built |
 | `OutcomeObservation` / `RecommendationAttribution` | Not modeled this phase | — | N/A — deferred to Phase 10A, per its own approved policy |
 
 ## Deletion cascades already enforced by schema
@@ -52,18 +57,21 @@ retain the erased value merely to reproduce a historic answer.
 
 `DecisionPreferenceValue` export (FRD §8.3: "active reusable preference values and their source,
 scope, confirmation date, expiry, and affected operation families") and `DecisionThread` export
-("omit data the requester is not authorized to see") are Phase 8A/8B API surface, not a Phase 7A
-schema concern — this policy records the retained fields (`consentPolicyVersion`, `consentedAt`,
-`purposeCode`, `eligibleDecisionDefinitionIds` via the registry) needed to satisfy that export
-requirement once built.
+("omit data the requester is not authorized to see") were Phase 8A/8B API surface, not a Phase 7A
+schema concern. **As of Phase 8C, this API still does not exist** — no export route or service
+function for either model was found anywhere in the codebase. This policy records the retained
+fields (`consentPolicyVersion`, `consentedAt`, `purposeCode`, `eligibleDecisionDefinitionIds` via
+the registry) needed to satisfy that export requirement whenever it is built.
 
-## Future operational job (not built this phase)
+## Future operational job (still not built)
 
 A `decision-platform-retention-cleanup` job, mirroring the production `ask-retention-cleanup`
-CronJob, is the intended enforcement mechanism for the durations above. It is explicitly deferred
-to Phase 8A+, since there is no real-user data yet for it to act on and Phase 7A's own gate (FRD
-§5.1) does not require production enforcement infrastructure before real-user collection is
-itself approved.
+CronJob, is the intended enforcement mechanism for the durations above. It was deferred to Phase
+8A+ on the reasoning that there was no real-user data yet for it to act on. **As of Phase 8C, it
+remains unbuilt** — no cron/worker sets `DecisionPreferenceValue.status = 'EXPIRED'`, auto-archives
+an `ABANDONED` thread to `ARCHIVED`, or hard-deletes an `ARCHIVED` thread past its terminal
+retention window. This should be built before the durations in this policy can be treated as
+actually enforced rather than merely documented.
 
 ## Approval gate
 
