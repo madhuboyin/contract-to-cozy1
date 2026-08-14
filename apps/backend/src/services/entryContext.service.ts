@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { Prisma, type PropertyOnboarding } from '@prisma/client';
+import { Prisma, type OnboardingOwnershipState, type PropertyOnboarding } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import {
   ACTIVE_TRIGGER_TYPES,
@@ -61,6 +61,93 @@ export const EntryContextCaptureSchema = z.object({
 });
 
 export type EntryContextCaptureInput = z.infer<typeof EntryContextCaptureSchema>;
+
+const CONFIRMED_OWNERSHIP_STATES = [
+  'SHOPPING',
+  'UNDER_CONTRACT',
+  'RECENT_OWNER',
+  'ESTABLISHED_OWNER',
+  'PREPARING_TRANSFER',
+] as const satisfies readonly OnboardingOwnershipState[];
+
+export const JourneyOwnershipStateUpdateSchema = z.object({
+  ownershipState: z.enum(CONFIRMED_OWNERSHIP_STATES),
+}).strict();
+
+export interface JourneyOwnershipStateSnapshot {
+  propertyId: string;
+  ownershipState: OnboardingOwnershipState | null;
+  householdRole: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER';
+  updatedAt: string | null;
+}
+
+function entryContextError(message: string, code: string): Error & { code: string } {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+}
+
+async function requireJourneyContextAccess(propertyId: string, userId: string, write: boolean) {
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access) throw entryContextError('Property not found or access denied.', 'PROPERTY_ACCESS_DENIED');
+  if (write && access.role === 'VIEWER') {
+    throw entryContextError('Contributor or owner access is required to update the home journey.', 'PROPERTY_WRITE_PERMISSION_REQUIRED');
+  }
+  return access;
+}
+
+export async function getJourneyOwnershipState(
+  propertyId: string,
+  userId: string,
+): Promise<JourneyOwnershipStateSnapshot> {
+  const access = await requireJourneyContextAccess(propertyId, userId, false);
+  const onboarding = await prisma.propertyOnboarding.findUnique({
+    where: { propertyId },
+    select: { ownershipState: true, updatedAt: true },
+  });
+  return {
+    propertyId,
+    ownershipState: onboarding?.ownershipState ?? null,
+    householdRole: access.role,
+    updatedAt: onboarding?.updatedAt.toISOString() ?? null,
+  };
+}
+
+export async function updateJourneyOwnershipState(
+  propertyId: string,
+  userId: string,
+  rawInput: unknown,
+): Promise<JourneyOwnershipStateSnapshot> {
+  const access = await requireJourneyContextAccess(propertyId, userId, true);
+  const input = JourneyOwnershipStateUpdateSchema.parse(rawInput);
+  const now = new Date();
+  const onboarding = await prisma.propertyOnboarding.upsert({
+    where: { propertyId },
+    create: {
+      propertyId,
+      userId,
+      status: 'IN_PROGRESS',
+      currentStep: 1,
+      completedJson: {},
+      setupScore: 0,
+      ownershipState: input.ownershipState,
+      entryContextVersion: 'phase1-v1',
+      entryContextCapturedAt: now,
+    },
+    update: {
+      ownershipState: input.ownershipState,
+      entryContextVersion: 'phase1-v1',
+      entryContextCapturedAt: now,
+    },
+    select: { ownershipState: true, updatedAt: true },
+  });
+  return {
+    propertyId,
+    ownershipState: onboarding.ownershipState,
+    householdRole: access.role,
+    updatedAt: onboarding.updatedAt.toISOString(),
+  };
+}
 
 const TRIGGER_EVIDENCE_KINDS = [
   'FREE_TEXT', 'CONVERSATION', 'DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF',

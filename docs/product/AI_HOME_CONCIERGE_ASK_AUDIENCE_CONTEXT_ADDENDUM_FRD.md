@@ -831,6 +831,16 @@ It shall not require a new branch in the core Ask router.
 
 **Exit:** A fail-closed account-eligibility control produces a coherent, recoverable Ask workspace instead of a partially interactive landing page.
 
+### Slice 8 — Canonical journey correction
+
+1. Add a narrow canonical read/update contract for the selected property's ownership journey.
+2. Require contributor or owner access for updates while retaining viewer read access.
+3. Preserve active triggers, evidence, onboarding progress, property ownership, and household permissions.
+4. Provide a compact journey selector on the existing property setup route.
+5. Offer the correction route from unknown-context Ask summaries and context-required boundaries only when the current role can update it.
+
+**Exit:** Unknown journey context remains non-blocking for safe guidance and has an honest, permission-aware correction path that does not trust client-supplied persona state.
+
 ---
 
 ## 25. Test matrix
@@ -959,6 +969,7 @@ The document shall be updated as each slice is delivered:
 | Persona-aware focused responses | Implemented | Successful governed Skill results pass through a bounded post-canonical presentation layer that adds lifecycle framing, discloses general guidance when journey context is unknown, removes mutation actions/command suggestions the current household role cannot use, and retains read-only navigation; canonical blocks, facts, calculations, evidence, rankings, authorization, and confirmation ownership remain unchanged |
 | Telemetry, controls, and authoring closure | Implemented | Every initial Skill execution event carries bounded account role, household role, operating mode, property relationship, eligibility/applicability outcome, policy version/evaluation mode, and journey-provider status alongside existing Skill lineage; independent account-role, policy, discovery, presentation, and provider controls degrade fail-closed; the Skill authoring guide documents the mandatory audience-policy and journey-provider steps. Full-suite regression verification remains intentionally separate. |
 | Operational degradation experience | Implemented | The Ask workspace recognizes the stable eligibility-control pause across landing composition, session history, pending work, question submission, and resume flows; it suppresses misleading prompts/composers, preserves the current draft and durable data, renders one calm temporary-unavailable state, and retries all initial reads in place without creating an execution. |
+| Canonical journey correction | Implemented | The existing property setup route now reads and updates the canonical ownership journey through a narrow backend contract; viewers retain read-only visibility while contributors/owners may select one confirmed stage. Ask offers the route only when lifecycle context is unknown and the active household role can update it. The update changes only `ownershipState` and context capture lineage, preserving active triggers, evidence, setup progress, property ownership, and household permissions. |
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, or `Verified`. A slice shall not be marked `Verified` until its automated acceptance evidence passes.
 
@@ -975,6 +986,8 @@ Slice 5 is implemented. After a governed canonical operation returns, Ask applie
 Slice 6 functionality is implemented. Existing `SKILL_EXECUTION_TELEMETRY` event metadata now persists a bounded audience snapshot for each initial Skill execution without new columns or raw persona data. The snapshot records canonical account/household context, canonical operating mode, property relationship, eligibility and applicability outcomes, immutable policy version, policy evaluation mode, and journey-provider status next to Skill/operation lineage and stable result/error fields. Four independently deployable control families govern account eligibility, applicability, discovery, and lifecycle framing; all disabled paths either pause Ask or degrade to safe unknown-context behavior, and presentation controls never weaken household authorization filtering. The Skill authoring guide now requires an immutable policy for every governed operation and the registered journey provider for audience-aware property operations. Backend type validation is the proportionate validation for this functionality-first slice; comprehensive regression certification remains pending and no database migration was introduced.
 
 Slice 7 is implemented. When the account-eligibility runtime control pauses Ask, the API returns one stable typed service-unavailable contract and the workspace recognizes it during every initial surface read plus question submission and pending-work continuation. The landing page no longer displays generic discovery prompts or an enabled composer against a known-paused backend. It instead shows one compact temporary-unavailable state, explains that home records and saved conversations are unchanged, retains any unsent draft, and provides an in-place retry that reloads session, pending-work, and Concierge state without creating an Ask execution. Other network and composition failures retain their existing scoped degraded behavior.
+
+Slice 8 is implemented. A dedicated journey-context endpoint reads the canonical selected-property lifecycle for any authorized household member and permits updates only at the contributor role floor or above. The update validates one confirmed ownership state and changes only the onboarding `ownershipState`, context version, and capture timestamp; it does not regenerate the active trigger, discard evidence, reset first-value history, alter onboarding completion, or change household/property authority. The existing property setup page exposes a compact five-state selector, renders viewers read-only, and refreshes property context after a save. Unknown-context Ask results add a typed navigation action to that selector for contributors/owners, including context-required applicability boundaries; viewers continue to receive safe general guidance without an unusable write CTA. No database schema or migration change was required.
 
 ---
 

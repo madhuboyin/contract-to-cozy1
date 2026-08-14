@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Home, Loader2 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { PageHeader, PageHeaderDescription, PageHeaderHeading } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -20,9 +20,12 @@ import type { OnboardingStep, OnboardingStatusDTO } from '@/lib/api/onboardingAp
 import {
   completeOnboardingStep,
   finishOnboarding,
+  getJourneyOwnershipState,
   getOnboardingStatus,
   setOnboardingStep,
   skipOnboarding,
+  updateJourneyOwnershipState,
+  type JourneyOwnershipState,
 } from '@/lib/api/onboardingApi';
 import { isOnboardingComplete } from '@/lib/property/onboardingStatus';
 import Step1PropertyDetails from './steps/Step1PropertyDetails';
@@ -45,6 +48,81 @@ const stepComponentMap: Record<OnboardingStep, (props: StepComponentProps) => JS
   4: Step4Protection,
   5: Step5Insights,
 };
+
+const JOURNEY_OPTIONS: ReadonlyArray<{ value: JourneyOwnershipState; label: string; detail: string }> = [
+  { value: 'SHOPPING', label: 'Exploring or shopping', detail: 'I am evaluating a possible future home.' },
+  { value: 'UNDER_CONTRACT', label: 'Buying this home', detail: 'I am under contract or preparing to close.' },
+  { value: 'RECENT_OWNER', label: 'Recently became owner', detail: 'I am in the first months of setting up this home.' },
+  { value: 'ESTABLISHED_OWNER', label: 'Own this home', detail: 'I am maintaining and planning for this home.' },
+  { value: 'PREPARING_TRANSFER', label: 'Preparing to sell or transfer', detail: 'I am getting records and work ready for a transition.' },
+];
+
+function JourneyContextCard({ propertyId }: { propertyId: string }) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (window.location.hash !== '#home-journey') return;
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById('home-journey');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target?.focus({ preventScroll: true });
+    });
+  }, []);
+  const journeyQuery = useQuery({
+    queryKey: ['property-journey-context', propertyId],
+    queryFn: () => getJourneyOwnershipState(propertyId),
+    enabled: Boolean(propertyId),
+  });
+  const updateJourney = useMutation({
+    mutationFn: (ownershipState: JourneyOwnershipState) => updateJourneyOwnershipState(propertyId, ownershipState),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['property-journey-context', propertyId], data);
+      queryClient.invalidateQueries({ queryKey: ['property-bootstrap', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['property-onboarding', propertyId] });
+    },
+  });
+  const selected = journeyQuery.data?.ownershipState ?? null;
+  const canUpdate = journeyQuery.data?.householdRole !== 'VIEWER';
+
+  return (
+    <section id="home-journey" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-teal-200 bg-teal-50/60 p-4 outline-none focus:ring-2 focus:ring-teal-300 sm:p-5" aria-labelledby="home-journey-title">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-teal-700 shadow-sm"><Home className="h-5 w-5" /></span>
+        <div>
+          <h2 id="home-journey-title" className="font-semibold text-slate-950">How are you using this home right now?</h2>
+          <p className="mt-1 text-sm leading-5 text-slate-600">Ask Cozy uses this to show relevant guidance. It does not change property ownership or household permissions.</p>
+          {!journeyQuery.isLoading && !canUpdate ? <p className="mt-1 text-xs text-slate-500">A contributor or owner can update this household setting.</p> : null}
+        </div>
+      </div>
+      {journeyQuery.isLoading ? (
+        <p className="mt-4 flex items-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading home journey…</p>
+      ) : journeyQuery.isError ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-red-700"><span>Home journey could not be loaded.</span><Button type="button" variant="outline" size="sm" onClick={() => journeyQuery.refetch()}>Try again</Button></div>
+      ) : (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {JOURNEY_OPTIONS.map((option) => {
+            const active = selected === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={active}
+                disabled={updateJourney.isPending || !canUpdate}
+                onClick={() => updateJourney.mutate(option.value)}
+                className={`min-h-20 rounded-xl border p-3 text-left transition disabled:cursor-wait disabled:opacity-60 ${active ? 'border-teal-600 bg-white ring-2 ring-teal-100' : 'border-teal-100 bg-white/70 hover:border-teal-400 hover:bg-white'}`}
+              >
+                <span className="flex items-center justify-between gap-2 text-sm font-semibold text-slate-950">{option.label}{active ? <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-700" /> : null}</span>
+                <span className="mt-1 block text-xs leading-4 text-slate-600">{option.detail}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {updateJourney.isPending ? <p className="mt-3 text-xs text-teal-800" role="status">Saving home journey…</p> : null}
+      {updateJourney.isSuccess ? <p className="mt-3 text-xs font-medium text-emerald-700" role="status">Saved. Ask Cozy will use this context the next time you ask.</p> : null}
+      {updateJourney.isError ? <p className="mt-3 text-xs text-red-700" role="alert">{updateJourney.error instanceof Error ? updateJourney.error.message : 'Home journey could not be updated.'}</p> : null}
+    </section>
+  );
+}
 
 export default function OnboardingClient() {
   const params = useParams<{ id: string }>();
@@ -167,6 +245,7 @@ export default function OnboardingClient() {
             <p className="text-sm text-gray-600">
               Your property setup is complete. You can revisit this checklist anytime.
             </p>
+            <JourneyContextCard propertyId={propertyId} />
             <Link href={`/dashboard/properties/${propertyId}`}>
               <Button>Go to property dashboard</Button>
             </Link>
@@ -242,6 +321,8 @@ export default function OnboardingClient() {
             </div>
           </CardContent>
         </Card>
+
+        <JourneyContextCard propertyId={propertyId} />
 
         <div className="grid gap-4 md:grid-cols-[280px_1fr]">
           <DesktopOnboardingTimeline

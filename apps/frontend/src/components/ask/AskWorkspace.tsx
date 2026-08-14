@@ -438,6 +438,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
       <section className={cn('rounded-2xl border p-4', block.severity === 'EMERGENCY' ? 'border-red-300 bg-red-50 text-red-950' : 'border-amber-200 bg-amber-50/70 text-slate-900')}>
         <div className="flex gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" /><div><h3 className="font-semibold">{block.title}</h3><p className="mt-2 text-sm leading-6">{block.body}</p></div></div>
         {block.suggestions.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-9 text-sm">{block.suggestions.map((item) => <li key={item}>{item}</li>)}</ul>}
+        {block.actions?.length ? <div className="mt-4 flex flex-wrap gap-2 pl-8">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div> : null}
       </section>
     );
   }

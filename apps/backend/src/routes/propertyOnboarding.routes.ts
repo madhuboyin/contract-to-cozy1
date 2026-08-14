@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { CustomRequest } from '../types';
@@ -15,6 +15,7 @@ import {
 import { logger } from '../lib/logger';
 import {
   EntryContextCaptureSchema,
+  JourneyOwnershipStateUpdateSchema,
   FirstValueFeedbackSchema,
   FirstActionResolutionSchema,
   TriggerEvidenceInputSchema,
@@ -22,8 +23,10 @@ import {
   captureEntryContext,
   getActivationFirstValue,
   getEntryContext,
+  getJourneyOwnershipState,
   recordFirstValueFeedback,
   recordFirstActionResolution,
+  updateJourneyOwnershipState,
 } from '../services/entryContext.service';
 
 const router = Router();
@@ -38,6 +41,42 @@ const completeStepBodySchema = z.object({
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+router.get(
+  '/properties/:propertyId/onboarding/journey-context',
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const context = await getJourneyOwnershipState(req.params.propertyId, userId);
+      return res.json({ success: true, data: context });
+    } catch (error: any) {
+      const status = error?.code === 'PROPERTY_ACCESS_DENIED' ? 403 : 500;
+      logger.error({ err: error }, 'Error fetching property journey context');
+      return res.status(status).json({ success: false, error: { code: error?.code ?? 'JOURNEY_CONTEXT_READ_FAILED', message: error?.message || 'Failed to fetch home journey.' } });
+    }
+  },
+);
+
+router.patch(
+  '/properties/:propertyId/onboarding/journey-context',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(JourneyOwnershipStateUpdateSchema),
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const context = await updateJourneyOwnershipState(req.params.propertyId, userId, req.body);
+      return res.json({ success: true, data: context, message: 'Home journey updated.' });
+    } catch (error: any) {
+      const status = ['PROPERTY_ACCESS_DENIED', 'PROPERTY_WRITE_PERMISSION_REQUIRED'].includes(error?.code) ? 403 : 500;
+      logger.error({ err: error }, 'Error updating property journey context');
+      return res.status(status).json({ success: false, error: { code: error?.code ?? 'JOURNEY_CONTEXT_UPDATE_FAILED', message: error?.message || 'Failed to update home journey.' } });
+    }
+  },
+);
 
 router.get(
   '/properties/:propertyId/onboarding/entry-context',

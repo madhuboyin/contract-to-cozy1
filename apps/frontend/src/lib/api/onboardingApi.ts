@@ -2,6 +2,15 @@ import { api } from '@/lib/api/client';
 
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5;
 
+export type JourneyOwnershipState = 'SHOPPING' | 'UNDER_CONTRACT' | 'RECENT_OWNER' | 'ESTABLISHED_OWNER' | 'PREPARING_TRANSFER';
+
+export type JourneyOwnershipStateDTO = {
+  propertyId: string;
+  ownershipState: JourneyOwnershipState | 'UNKNOWN' | null;
+  householdRole: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER';
+  updatedAt: string | null;
+};
+
 export type OnboardingStatusDTO = {
   propertyId: string;
   status: 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED';
@@ -58,6 +67,24 @@ export async function skipOnboarding(propertyId: string): Promise<OnboardingStat
 export async function finishOnboarding(propertyId: string): Promise<OnboardingStatusDTO> {
   const response = await api.post<OnboardingStatusDTO>(
     `/api/properties/${propertyId}/onboarding/finish`
+  );
+  return response.data;
+}
+
+export async function getJourneyOwnershipState(propertyId: string): Promise<JourneyOwnershipStateDTO> {
+  const response = await api.get<JourneyOwnershipStateDTO>(
+    `/api/properties/${propertyId}/onboarding/journey-context`
+  );
+  return response.data;
+}
+
+export async function updateJourneyOwnershipState(
+  propertyId: string,
+  ownershipState: JourneyOwnershipState,
+): Promise<JourneyOwnershipStateDTO> {
+  const response = await api.patch<JourneyOwnershipStateDTO>(
+    `/api/properties/${propertyId}/onboarding/journey-context`,
+    { ownershipState },
   );
   return response.data;
 }

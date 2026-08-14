@@ -118,6 +118,7 @@ const BoundaryBlockSchema = z.object({
   body: z.string(),
   severity: z.enum(['INFO', 'CAUTION', 'EMERGENCY']),
   suggestions: z.array(z.string()).max(5).default([]),
+  actions: z.array(AskActionSchema).max(2).optional(),
 });
 
 const MonitorBlockSchema = z.object({

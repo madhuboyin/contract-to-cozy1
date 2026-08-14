@@ -33,6 +33,8 @@ function filterBlockActions(block: AskPresentationBlock, householdRole: Househol
     case 'EMPTY_STATE':
     case 'ERROR_STATE':
       return { ...block, actions: filterActions(block.actions, householdRole) } as AskPresentationBlock;
+    case 'BOUNDARY':
+      return { ...block, actions: filterActions(block.actions ?? [], householdRole) } as AskPresentationBlock;
     case 'PRIORITY_LIST':
       return {
         ...block,
@@ -72,6 +74,7 @@ export function applyAskAudiencePresentation(input: {
   result: AskOperationResult;
   householdRole: HouseholdRole;
   journeyContext: PropertyJourneyContext | null;
+  propertyId?: string | null;
   lifecycleFramingEnabled?: boolean;
 }): AskOperationResult {
   const ownershipState = input.journeyContext?.ownershipState ?? null;
@@ -99,9 +102,26 @@ export function applyAskAudiencePresentation(input: {
   const framingText = `${framing}${permissionNotice}`.trim();
   const summaryIndex = filteredBlocks.findIndex((block) => block.type === 'SUMMARY');
   const blocks = [...filteredBlocks];
+  const journeyCorrectionAction: AskAction | null = !ownershipState
+    && input.propertyId
+    && input.householdRole !== 'VIEWER'
+    && input.lifecycleFramingEnabled !== false
+    ? {
+      id: 'review-home-journey',
+      label: 'Confirm home journey',
+      href: `/dashboard/properties/${encodeURIComponent(input.propertyId)}/onboarding#home-journey`,
+      style: 'SECONDARY',
+    }
+    : null;
   if (summaryIndex >= 0 && framingText) {
     const summary = blocks[summaryIndex] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
-    blocks[summaryIndex] = { ...summary, body: `${framingText} ${summary.body}` };
+    blocks[summaryIndex] = {
+      ...summary,
+      body: `${framingText} ${summary.body}`,
+      actions: journeyCorrectionAction && summary.actions.length < 3
+        ? [...summary.actions, journeyCorrectionAction]
+        : summary.actions,
+    };
   } else if (framingText && ((input.lifecycleFramingEnabled !== false && !ownershipState) || permissionNotice)) {
     blocks.push({
       type: 'BOUNDARY',
@@ -110,6 +130,7 @@ export function applyAskAudiencePresentation(input: {
       body: framingText,
       severity: 'INFO',
       suggestions: [],
+      actions: journeyCorrectionAction ? [journeyCorrectionAction] : [],
     });
   }
 
@@ -127,6 +148,7 @@ export function applyAskAudiencePresentation(input: {
         householdRole: input.householdRole,
         permissionFiltered,
         lifecycleFramingEnabled: input.lifecycleFramingEnabled !== false,
+        journeyCorrectionOffered: Boolean(journeyCorrectionAction),
         framingText,
       },
     },

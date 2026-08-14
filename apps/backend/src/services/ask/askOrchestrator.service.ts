@@ -175,9 +175,21 @@ function attachJourneyContext(
   };
 }
 
-function audienceApplicabilityResult(decision: AskAudienceApplicabilityDecision): AskOperationResult {
+function audienceApplicabilityResult(
+  decision: AskAudienceApplicabilityDecision,
+  propertyId?: string | null,
+  householdRole?: HouseholdRole | null,
+): AskOperationResult {
   const contextRequired = decision.outcome === 'CONTEXT_REQUIRED';
   const blocked = decision.outcome === 'INAPPLICABLE_BLOCK';
+  const correctionAction = contextRequired && propertyId && householdRole !== 'VIEWER'
+    ? [{
+      id: 'review-home-journey',
+      label: 'Confirm home journey',
+      href: `/dashboard/properties/${encodeURIComponent(propertyId)}/onboarding#home-journey`,
+      style: 'SECONDARY' as const,
+    }]
+    : [];
   return {
     status: contextRequired ? 'NEEDS_CONTEXT' : blocked ? 'BLOCKED' : 'NOT_APPLICABLE',
     reasonCode: decision.reasonCode ?? 'ASK_AUDIENCE_INAPPLICABLE',
@@ -190,6 +202,7 @@ function audienceApplicabilityResult(decision: AskAudienceApplicabilityDecision)
         ? 'Ask can still help with general home-record questions, but this request needs a confirmed buying, owning, or selling stage before it can give reliable guidance.'
         : `This request is not applicable to the selected home’s ${decision.operatingMode.toLowerCase()} stage. No home record was changed.`,
       suggestions: ['Summarize my home record', 'What maintenance is pending?', 'What should I plan for next?'],
+      actions: correctionAction,
     }],
     suggestions: ['Summarize my home record', 'What maintenance is pending?', 'What should I plan for next?'],
     parameters: {
@@ -4405,7 +4418,13 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       trace.audience.audienceApplicabilityOutcome = audienceDecision.outcome;
       trace.audience.audiencePolicyVersion = audienceDecision.policyVersion;
     }
-    if (!audienceDecision.allowed) return audienceApplicabilityResult(audienceDecision);
+    if (!audienceDecision.allowed) {
+      return audienceApplicabilityResult(
+        audienceDecision,
+        controls.audiencePolicyEnabled ? input.propertyId : null,
+        householdRole,
+      );
+    }
   }
   if (!skill) return dispatchOperationAdapter(input, composedContext, trace);
   const adapterResolutionStartedAt = process.hrtime.bigint();
@@ -4426,6 +4445,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
         result: canonicalResult,
         householdRole,
         journeyContext: journeyContextFrom(composedContext),
+        propertyId: input.propertyId,
         lifecycleFramingEnabled: controls.audiencePresentationEnabled,
       })
       : canonicalResult;
@@ -6006,7 +6026,11 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     }) : null;
     if (!decision?.allowed) {
       const inapplicable = decision
-        ? audienceApplicabilityResult(decision)
+        ? audienceApplicabilityResult(
+          decision,
+          controls.audiencePolicyEnabled ? execution.propertyId : null,
+          access.role,
+        )
         : operationalUnavailableResult('ASK_SKILL_POLICY_MISMATCH');
       const saved = await prisma.askExecution.update({
         where: { id: execution.id },
