@@ -1,5 +1,6 @@
 import type { SkillEvaluationPackage } from '../skillEvaluationRegistry';
 import { deepFreezeSkillPackage } from '../skillPackageFreeze';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const RENOVATION_SKILL_EVALUATION = deepFreezeSkillPackage({
   "id": "skill-renovation-golden",
@@ -127,7 +128,7 @@ export const RENOVATION_SKILL_EVALUATION = deepFreezeSkillPackage({
   "prohibitedAdapters": [
     "refinance.analysis"
   ],
-  "expectedContextProviders": [],
+  "expectedContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   "prohibitedContextProviders": [
     "undeclared-permit-authority"
   ],

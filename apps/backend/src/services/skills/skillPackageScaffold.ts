@@ -17,6 +17,7 @@ import type {
 } from './skill.contract';
 import { getSkillAdapterForOperation } from './adapters/skillAdapterRegistry';
 import { getSkillContextProvider } from './context/skillContextProviderRegistry';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from './context/propertyIdentityContext.contract';
 import { getSkillDefinition, getSkillForOperation } from './skillRegistry';
 import { resolveSkillDependencyContract } from './skillDependencyRegistry';
 import { isSupportedSkillDependencyVersionSpec } from './skillDependencyVersion';
@@ -110,11 +111,29 @@ function defaultDependencies(): Required<SkillPackageScaffoldDependencies> {
   };
 }
 
+function operationsWithRequiredPropertyContext(
+  operations: SkillPackageScaffoldSpec['operations'],
+  resolveOperation: Required<SkillPackageScaffoldDependencies>['resolveOperation'],
+): SkillPackageScaffoldSpec['operations'] {
+  const baseKey = `${PROPERTY_IDENTITY_CONTEXT_PROVIDER.id}@${PROPERTY_IDENTITY_CONTEXT_PROVIDER.version}`;
+  return operations.map((operation) => {
+    if (!resolveOperation(operation.operationId)?.requiresProperty) return operation;
+    const required = [...(operation.requiredContextProviders ?? [])];
+    if (!required.some((provider) => `${provider.id}@${provider.version}` === baseKey)) required.unshift(PROPERTY_IDENTITY_CONTEXT_PROVIDER);
+    return {
+      ...operation,
+      requiredContextProviders: required,
+      optionalContextProviders: operation.optionalContextProviders?.filter((provider) => `${provider.id}@${provider.version}` !== baseKey),
+    };
+  });
+}
+
 export function validateSkillPackageScaffoldSpec(
   spec: SkillPackageScaffoldSpec,
   dependencies: SkillPackageScaffoldDependencies = {},
 ): string[] {
   const deps = { ...defaultDependencies(), ...dependencies };
+  const operations = operationsWithRequiredPropertyContext(spec.operations ?? [], deps.resolveOperation);
   const issues: string[] = [];
   const version = spec.version ?? '1.0.0';
   if (!ID.test(spec.id)) issues.push('id must be lowercase kebab-case');
@@ -131,7 +150,7 @@ export function validateSkillPackageScaffoldSpec(
 
   const operationIds = new Set<AskOperationId>();
   const providerRefs = new Map<string, VersionedSkillReference>();
-  for (const operation of spec.operations ?? []) {
+  for (const operation of operations) {
     if (operationIds.has(operation.operationId)) issues.push(`duplicate operation ${operation.operationId}`);
     operationIds.add(operation.operationId);
     const definition = deps.resolveOperation(operation.operationId);
@@ -185,21 +204,22 @@ export function buildSkillPackageScaffold(
   const issues = validateSkillPackageScaffoldSpec(spec, dependencies);
   if (issues.length) throw new Error(`Invalid Skill package spec: ${issues.join('; ')}`);
   const deps = { ...defaultDependencies(), ...dependencies };
+  const operations = operationsWithRequiredPropertyContext(spec.operations, deps.resolveOperation);
   const version = spec.version ?? '1.0.0';
   const prefix = constantName(spec.id);
   const envId = prefix;
-  const operationIds = spec.operations.map((operation) => operation.operationId);
-  const adapters = [...new Map(spec.operations.map((operation) => {
+  const operationIds = operations.map((operation) => operation.operationId);
+  const adapters = [...new Map(operations.map((operation) => {
     const resolved = deps.resolveAdapter(operation.operationId)!;
     const adapter: VersionedSkillReference = { id: resolved.id, version: resolved.version };
     return [`${adapter.id}@${adapter.version}`, adapter] as const;
   })).values()];
-  const adapterByOperation = new Map(spec.operations.map((operation) => {
+  const adapterByOperation = new Map(operations.map((operation) => {
     const resolved = deps.resolveAdapter(operation.operationId)!;
     return [operation.operationId, { id: resolved.id, version: resolved.version }] as const;
   }));
   const providerRequirements = new Map<string, boolean>();
-  for (const operation of spec.operations) {
+  for (const operation of operations) {
     for (const provider of operation.requiredContextProviders ?? []) providerRequirements.set(`${provider.id}@${provider.version}`, true);
     for (const provider of operation.optionalContextProviders ?? []) {
       const key = `${provider.id}@${provider.version}`;
@@ -212,7 +232,7 @@ export function buildSkillPackageScaffold(
   });
   const allowedBlocks = unique(operationIds.flatMap((operationId) => deps.resolveOperation(operationId)!.allowedBlockTypes));
   const dependencyCandidates: SkillDependency[] = [
-    ...spec.operations.map((operation) => ({ type: 'OPERATION_CONTRACT' as const, id: operation.operationId, version: deps.resolveOperation(operation.operationId)!.version, required: true })),
+    ...operations.map((operation) => ({ type: 'OPERATION_CONTRACT' as const, id: operation.operationId, version: deps.resolveOperation(operation.operationId)!.version, required: true })),
     ...providers.map((provider) => ({ type: 'CONTEXT_PROVIDER' as const, ...provider, required: providerRequirements.get(`${provider.id}@${provider.version}`) ?? false })),
     ...(spec.dependencies ?? []),
   ];
@@ -233,7 +253,7 @@ export function buildSkillPackageScaffold(
     homeownerJobs: spec.homeownerJobs,
     supportedGoals: spec.supportedGoals,
     aliases: spec.aliases,
-    operations: spec.operations.map((operation) => ({ operationId: operation.operationId, version: deps.resolveOperation(operation.operationId)!.version, ...(operation.requiredContextProviders?.length ? { requiredContextProviders: operation.requiredContextProviders } : {}), ...(operation.optionalContextProviders?.length ? { optionalContextProviders: operation.optionalContextProviders } : {}) })),
+    operations: operations.map((operation) => ({ operationId: operation.operationId, version: deps.resolveOperation(operation.operationId)!.version, ...(operation.requiredContextProviders?.length ? { requiredContextProviders: operation.requiredContextProviders } : {}), ...(operation.optionalContextProviders?.length ? { optionalContextProviders: operation.optionalContextProviders } : {}) })),
     requiredContextProviders: providers.filter((provider) => requiredProviderKeys.has(`${provider.id}@${provider.version}`)),
     optionalContextProviders: providers.filter((provider) => !requiredProviderKeys.has(`${provider.id}@${provider.version}`)),
     allowedAdapters: adapters,

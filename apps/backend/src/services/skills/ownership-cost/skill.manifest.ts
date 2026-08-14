@@ -1,4 +1,5 @@
 import type { SkillDefinition } from '../skill.contract';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const OWNERSHIP_COST_SKILL = Object.freeze({
   "id": "ownership-cost",
@@ -22,10 +23,11 @@ export const OWNERSHIP_COST_SKILL = Object.freeze({
   "operations": [
     {
       "operationId": "OWNERSHIP_COSTS",
-      "version": "1.0"
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER]
     }
   ],
-  "requiredContextProviders": [],
+  "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   "optionalContextProviders": [],
   "allowedAdapters": [
     {
@@ -62,6 +64,7 @@ export const OWNERSHIP_COST_SKILL = Object.freeze({
     "CAPABILITY_LIST"
   ],
   "dependencies": [
+    { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
     {
       "type": "OPERATION_CONTRACT",
       "id": "OWNERSHIP_COSTS",

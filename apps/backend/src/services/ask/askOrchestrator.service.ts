@@ -95,6 +95,11 @@ import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperatio
 import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../skills/skillRouter';
 import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
 import { buildSkillExecutionBinding, validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
+import {
+  buildSkillExecutionTelemetry,
+  createSkillExecutionTimingTrace,
+  type SkillExecutionTimingTrace,
+} from '../skills/skillExecutionTelemetry';
 import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
 import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
 import { SKILL_DEPENDENCY_ACTIVATIONS } from '../skills/skillDependencyRegistry';
@@ -3911,8 +3916,10 @@ function routingClarificationResult(
   };
 }
 
-async function maybeSynthesizeDeterministicResult(operationId: AskOperationResolution['operationId'], result: AskOperationResult, enabled: boolean): Promise<AskOperationResult> {
+async function maybeSynthesizeDeterministicResult(operationId: AskOperationResolution['operationId'], result: AskOperationResult, enabled: boolean, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   if (!enabled) return result;
+  const startedAt = process.hrtime.bigint();
+  if (trace) trace.modelUsage = 'NARRATIVE_SYNTHESIS';
   try {
     const synthesized = await synthesizeAskResult(operationId, result);
     askResultSynthesisTotal.inc({ outcome: synthesized === result ? 'ineligible' : 'success' });
@@ -3920,6 +3927,8 @@ async function maybeSynthesizeDeterministicResult(operationId: AskOperationResol
   } catch {
     askResultSynthesisTotal.inc({ outcome: 'failure_fallback' });
     return result;
+  } finally {
+    if (trace) trace.modelLatencyMs = (trace.modelLatencyMs ?? 0) + Number(process.hrtime.bigint() - startedAt) / 1_000_000;
   }
 }
 
@@ -3953,7 +3962,7 @@ function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresen
   return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')?.allowedResultBlocks ?? [];
 }
 
-function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: AskOperationResult): void {
+function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: AskOperationResult, trace?: SkillExecutionTimingTrace): void {
   const skill = getSkillForOperation(operationId);
   const startedAt = process.hrtime.bigint();
   let status: string = result.status;
@@ -3965,6 +3974,7 @@ function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: Ask
       throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
     }
   } finally {
+    if (trace) trace.presentationLatencyMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     if (skill) {
       askSkillPresentationDurationSeconds.observe(
         { skill: skill.id, operation: operationId, status },
@@ -3994,9 +4004,13 @@ function skillRuntimeUnavailableReason(
   return null;
 }
 
-async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }): Promise<AskOperationResult> {
+async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
   const modelStartedAt = process.hrtime.bigint();
+  if (trace) {
+    trace.modelUsage = 'OPERATION_GENERATION';
+    trace.modelCharacters = input.message.length;
+  }
   let modelOutcome = 'failure';
   try {
     askRemoteGenerationCharactersTotal.inc({ direction: 'input' }, input.message.length);
@@ -4017,6 +4031,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
       { stage: 'grounded_guidance', outcome: modelOutcome },
       Number(process.hrtime.bigint() - modelStartedAt) / 1_000_000_000,
     );
+    if (trace) trace.modelLatencyMs = Number(process.hrtime.bigint() - modelStartedAt) / 1_000_000;
   }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'grounded-guidance', title: answer.groundingMode === 'PROPERTY' ? 'Guidance for this home' : 'General home guidance',
@@ -4044,6 +4059,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
 async function dispatchOperationAdapter(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
+  trace?: SkillExecutionTimingTrace,
 ): Promise<AskOperationResult> {
   switch (input.operation.operationId) {
     case 'EMERGENCY_BOUNDARY': return emergencyResult();
@@ -4079,7 +4095,7 @@ async function dispatchOperationAdapter(
     case 'RENOVATION_PERMIT_READINESS': return renovationPermitReadinessResult(input.propertyId!, input.message);
     case 'MAJOR_EVENT_ENTRY': return majorEventEntryResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
-    case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
+    case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input, trace);
     case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message, input.executionId);
     case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message, input.executionId);
     case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
@@ -4093,7 +4109,7 @@ async function dispatchOperationAdapter(
   }
 }
 
-async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
+async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   const skill = getSkillForOperation(input.operation.operationId);
@@ -4125,12 +4141,17 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   }
   let composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null = null;
   if (skill && input.propertyId) {
+    const contextStartedAt = process.hrtime.bigint();
     composedContext = await composeSkillContext({
       skill,
       operationId: input.operation.operationId,
       userId: input.userId,
       propertyId: input.propertyId,
     }, { providerEnabled: controls.contextProviderEnabled });
+    if (trace) {
+      trace.contextCompositionLatencyMs = Number(process.hrtime.bigint() - contextStartedAt) / 1_000_000;
+      trace.context = composedContext;
+    }
     if (composedContext.status === 'BLOCKED') {
       const requiredFailure = composedContext.entries.find((entry) => entry.required && entry.status !== 'AVAILABLE');
       const permissionFailure = requiredFailure?.status === 'UNAUTHORIZED';
@@ -4154,10 +4175,11 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       };
     }
   }
-  if (!skill) return dispatchOperationAdapter(input, composedContext);
+  if (!skill) return dispatchOperationAdapter(input, composedContext, trace);
   const adapterResolutionStartedAt = process.hrtime.bigint();
   const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === definition.adapterKey)!;
   const adapter = getSkillAdapter(adapterReference.id, adapterReference.version)!;
+  if (trace) trace.adapterResolutionLatencyMs = Number(process.hrtime.bigint() - adapterResolutionStartedAt) / 1_000_000;
   askSkillAdapterResolutionDurationSeconds.observe(
     { skill: skill.id, operation: input.operation.operationId, status: adapter ? 'resolved' : 'unavailable' },
     Number(process.hrtime.bigint() - adapterResolutionStartedAt) / 1_000_000_000,
@@ -4166,7 +4188,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   const canonicalStartedAt = process.hrtime.bigint();
   let canonicalStatus = 'threw';
   try {
-    const result = await dispatchOperationAdapter(input, composedContext);
+    const result = await dispatchOperationAdapter(input, composedContext, trace);
     canonicalStatus = result.status;
     askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: result.status });
     return result;
@@ -4174,6 +4196,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: 'THREW' });
     throw error;
   } finally {
+    if (trace) trace.canonicalOperationLatencyMs = Number(process.hrtime.bigint() - canonicalStartedAt) / 1_000_000;
     askSkillCanonicalOperationDurationSeconds.observe(
       { skill: skill.id, operation: input.operation.operationId, status: canonicalStatus },
       Number(process.hrtime.bigint() - canonicalStartedAt) / 1_000_000_000,
@@ -4227,12 +4250,12 @@ export const ASK_CAPABILITY_UNIQUE_OPERATION: Partial<Record<string, AskOperatio
   return unique;
 })();
 
-async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
+async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const skill = getSkillForOperation(input.operation.operationId);
   const skillStartedAt = skill ? Date.now() : null;
   let coreResult: AskOperationResult;
   try {
-    coreResult = await executeOperationCore(input);
+    coreResult = await executeOperationCore(input, trace);
   } catch (error) {
     if (skill && skillStartedAt != null) {
       askSkillExecutionsTotal.inc({ skill: skill.id, skill_version: skill.version, operation: input.operation.operationId, status: 'THREW' });
@@ -4587,10 +4610,12 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     ambiguityMargin: controls.routingAmbiguityMargin,
   });
   askSkillRoutingDecisionsTotal.inc({ outcome: skillRoutingDecision.outcome, path: skillRoutingDecision.path });
+  const skillRoutingLatencyMs = Number(process.hrtime.bigint() - skillRoutingStartedAt) / 1_000_000;
   askSkillRoutingDurationSeconds.observe(
     { outcome: skillRoutingDecision.outcome, path: skillRoutingDecision.path },
-    Number(process.hrtime.bigint() - skillRoutingStartedAt) / 1_000_000_000,
+    skillRoutingLatencyMs / 1_000,
   );
+  const skillTelemetryTrace = createSkillExecutionTimingTrace(skillRoutingLatencyMs);
   if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'RESOLVED' && skillRoutingDecision.selectedOperationId) {
     const selectedOperation = getAskOperationDefinition(skillRoutingDecision.selectedOperationId);
     const confidence = skillRoutingDecision.skillCandidates[0]?.confidence ?? selectedOperation.confidence;
@@ -4707,13 +4732,13 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
         ))
-        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: input.propertyId, operation }),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: input.propertyId, operation }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
-      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
+      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled, skillTelemetryTrace)
       : rawResult;
-    assertSkillResultBlocksAllowed(operation.operationId, result);
+    assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
@@ -4728,17 +4753,36 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     });
     if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version, blockTypes: result.blocks.map((block) => block.type) }) } });
+    await prisma.askExecutionEvent.create({
+      data: {
+        executionId: execution.id,
+        eventType: 'SKILL_EXECUTION_TELEMETRY',
+        metadataJson: asInputJson(buildSkillExecutionTelemetry({
+          routing: skillRoutingDecision,
+          binding: selectedSkillBinding,
+          operationId: routingDecision.requiresClarification ? null : operation.operationId,
+          operationVersion: routingDecision.requiresClarification ? null : operation.version,
+          executionMode: routingDecision.requiresClarification ? 'CLARIFICATION' : operationDefinition.executionMode,
+          effectiveRiskPolicy: routingDecision.requiresClarification ? null : selectedSkill?.riskPolicy ?? null,
+          resultStatus: result.status,
+          errorCode: null,
+          totalLatencyMs: Date.now() - startedAt,
+          trace: skillTelemetryTrace,
+        })),
+      },
+    });
     askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';
+    const errorCode = caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED';
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {
         status: failureStatus,
-        errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED',
+        errorCode,
         completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null,
         resultJson: asInputJson({
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
@@ -4749,6 +4793,24 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: failureStatus, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version }) } });
+    await prisma.askExecutionEvent.create({
+      data: {
+        executionId: execution.id,
+        eventType: 'SKILL_EXECUTION_TELEMETRY',
+        metadataJson: asInputJson(buildSkillExecutionTelemetry({
+          routing: skillRoutingDecision,
+          binding: selectedSkillBinding,
+          operationId: routingDecision.requiresClarification ? null : operation.operationId,
+          operationVersion: routingDecision.requiresClarification ? null : operation.version,
+          executionMode: routingDecision.requiresClarification ? 'CLARIFICATION' : operationDefinition.executionMode,
+          effectiveRiskPolicy: routingDecision.requiresClarification ? null : selectedSkill?.riskPolicy ?? null,
+          resultStatus: failureStatus,
+          errorCode,
+          totalLatencyMs: Date.now() - startedAt,
+          trace: skillTelemetryTrace,
+        })),
+      },
+    });
     askExecutionsTotal.inc({ operation: operation.operationId, status: failureStatus, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));

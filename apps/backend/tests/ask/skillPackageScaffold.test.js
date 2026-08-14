@@ -49,6 +49,7 @@ test('scaffolder generates the complete standard Skill package from one validate
   assert.deepEqual(Object.keys(scaffold.files).sort(), ['SKILL.md', 'index.ts', 'skill.evaluation.ts', 'skill.manifest.ts']);
   assert.match(scaffold.files['skill.manifest.ts'], /HOME_READINESS_SKILL/);
   assert.match(scaffold.files['skill.manifest.ts'], /"property\.summary"/);
+  assert.match(scaffold.files['skill.manifest.ts'], /"property\.identity-context"/);
   assert.match(scaffold.files['skill.evaluation.ts'], /"MODEL_DISABLED"|"modelDisabledCase"/);
   assert.match(scaffold.files['skill.evaluation.ts'], /"candidateSkillIds"/);
   assert.match(scaffold.files['SKILL.md'], /Peer Skill execution is prohibited/);
@@ -91,7 +92,7 @@ test('optional providers remain optional in generated declarations and dependenc
   optional.operations = [{ operationId: 'PROPERTY_SUMMARY', optionalContextProviders: [{ id: 'fixture.context', version: '1.0.0' }] }];
   const scaffold = buildSkillPackageScaffold(optional, { operationOwner: () => undefined, resolveProvider: () => ({}) });
   const manifest = scaffold.files['skill.manifest.ts'];
-  assert.match(manifest, /"requiredContextProviders": \[\]/);
+  assert.match(manifest, /"requiredContextProviders": \[[\s\S]*"property\.identity-context"/);
   assert.match(manifest, /"optionalContextProviders": \[[\s\S]*"fixture\.context"/);
   assert.match(manifest, /"type": "CONTEXT_PROVIDER"[\s\S]*"fixture\.context"[\s\S]*"required": false/);
 });

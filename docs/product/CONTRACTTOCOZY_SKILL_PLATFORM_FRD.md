@@ -73,12 +73,13 @@ Implementation snapshot as of August 14, 2026:
 | Skill catalog | 14 immutable registered Skill packages covering the initial representative taxonomy |
 | Governed adapters | 30 versioned adapters bound to existing canonical operations and domain owners |
 | Active consumers | Ask, Concierge Home, and Home Actions; Concierge Home and Home Actions invoke Property Record reads through the consumer-governed Skill runtime |
-| Routing | Deterministic operation ownership, versioned local semantic index, bounded candidate ranking, and fail-closed clarification; no LLM or embedding routing call |
-| Context | Registered provider contracts, bounded composition, authorization propagation, deduplication, provenance, freshness/conflict handling, timeout, and degraded-mode behavior |
+| Routing | Deterministic operation ownership, versioned local semantic index, bounded candidate ranking, complete §11.2 result summaries, and fail-closed clarification; no LLM or embedding routing call |
+| Context | Every registered property-scoped Skill requires the versioned Living Home Record identity provider; Maintenance additionally consumes its task provider. Composition enforces authorization, deduplication, provenance, freshness/conflict handling, timeout, budgets, and degraded behavior. |
+| Observability | Every initial Ask execution emits one bounded `SKILL_EXECUTION_TELEMETRY` event with versioned identity, consumer, routing confidence/reasons, provider and dependency status, effective risk, execution/model mode, per-stage latency bands, result status, and error code. Phase histograms remain separate. |
 | Runtime controls | Global Ask, Consumer, Domain, Skill, Operation, Context Provider, Adapter, and Narrative Synthesis controls are live; manifest feature-flag and kill-switch names are validated runtime bindings |
 | Evaluation | Every registered Skill has immutable routing, operation, ambiguity, policy, context, negative, degraded-mode, model-disabled, handoff, and performance fixtures |
-| Package scaffolding | Generated manifests retain only versioned adapter references; generated evaluation packages are deeply immutable |
-| Verification | 168 Ask tests passing, TypeScript validation passing, and taxonomy expansion verified without Skill-specific core-router branches |
+| Package scaffolding | Generated manifests retain only versioned references, automatically require Living Home Record identity context for property operations, and produce deeply immutable evaluation packages |
+| Verification | 170 Ask tests passing, TypeScript validation passing, and taxonomy expansion verified without Skill-specific core-router branches |
 | Database impact | No database schema change or migration script required by the completed Skill Platform slices |
 | Deferred boundaries | External connectors and model-assisted routing remain unimplemented until a concrete requirement introduces their governed runtimes |
 
@@ -559,6 +560,8 @@ routingReasonCodes[]
 clarificationReason nullable
 ```
 
+**Implementation status:** Complete. The router exposes top-level nullable Skill and operation confidence, selected operation version, normalized routing reason codes, and a typed clarification reason on every terminal path. Candidate detail remains available without requiring callers to reconstruct the routing summary.
+
 Allowed terminal routing outcomes include:
 
 - `RESOLVED`
@@ -1001,6 +1004,8 @@ resultStatus
 errorCode
 ```
 
+**Implementation status:** Complete for the Version 1 Ask execution path. A bounded `SKILL_EXECUTION_TELEMETRY` execution event carries the unified dimensions without adding database columns. Prometheus metrics retain low-cardinality phase aggregates; detailed per-execution lineage remains in `AskExecutionEvent.metadataJson`.
+
 Telemetry shall not contain raw questions, addresses, account values, rates, premiums, policy numbers, emails, preference values, scenario values, document contents, or unrestricted context.
 
 Track:
@@ -1039,6 +1044,8 @@ The following values are design objectives and smoke-test reference points, not 
 | Semantic fallback | Bounded timeout; deterministic fallback and clarification remain available |
 
 Performance tests shall report Skill-layer overhead separately from canonical operation execution.
+
+The Version 1 smoke suite reports component sample counts and measured p95 for registry lookup, deterministic candidate generation/filtering, and context composition against the objectives above. Canonical-operation timing is explicitly identified as separately instrumented and excluded from the context-composition fixture.
 
 A missed objective shall be recorded with the affected component and measured result. It blocks the affected Version 1 slice only when it causes an unusable journey, violates an existing parent Ask timeout, or demonstrates unbounded routing, payload, provider fan-out, or model use.
 
@@ -1209,7 +1216,7 @@ Because there are no real users, obsolete Maintenance-specific central routing c
 
 ### Phase SP2 — Hierarchical routing
 
-**Status: Complete.** Operation ownership and the deterministic semantic index resolve registered Skills without model assistance; ambiguity, negative routing, semantic conflicts, lineage, candidate ceilings, and model-disabled behavior are covered by automated evaluations.
+**Status: Complete.** Operation ownership and the deterministic semantic index resolve registered Skills without model assistance; every result carries the complete §11.2 summary contract. Ambiguity, negative routing, semantic conflicts, lineage, candidate ceilings, and model-disabled behavior are covered by automated evaluations.
 
 Deliver:
 
@@ -1227,7 +1234,7 @@ Maintenance plus fixture Skills shall prove ambiguous and negative routing befor
 
 ### Phase SP3 — Context composition
 
-**Status: Complete.** Provider registration, authorization rechecks, declared-access enforcement, budgets, deduplication, provenance, freshness/conflict handling, timeout, and required/optional degraded behavior are operational.
+**Status: Complete.** Provider registration, authorization rechecks, declared-access enforcement, budgets, deduplication, provenance, freshness/conflict handling, timeout, and required/optional degraded behavior are operational. All fourteen property-scoped Skills declare the required Living Home Record identity provider at Skill and operation scope; Maintenance also declares and consumes its canonical task provider.
 
 Deliver:
 

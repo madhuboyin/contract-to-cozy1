@@ -40,7 +40,12 @@ test('deterministic operation routing resolves its registered owning Skill witho
   assert.equal(result.outcome, 'RESOLVED');
   assert.equal(result.path, 'OPERATION_OWNERSHIP');
   assert.equal(result.selectedSkill.id, 'maintenance');
+  assert.equal(result.skillConfidence, operationDecision.operation.confidence);
   assert.equal(result.selectedOperationId, 'MAINTENANCE_STATUS');
+  assert.equal(result.selectedOperationVersion, operationDecision.operation.version);
+  assert.equal(result.operationConfidence, operationDecision.operation.confidence);
+  assert.deepEqual(result.routingReasonCodes, ['OPERATION_OWNER']);
+  assert.equal(result.clarificationReason, null);
 });
 
 test('semantic routing is generated only from registered Skill metadata', () => {
@@ -53,6 +58,9 @@ test('semantic routing is generated only from registered Skill metadata', () => 
   assert.equal(result.path, 'SEMANTIC_INDEX');
   assert.equal(result.selectedSkill.id, 'fixture');
   assert.equal(result.selectedOperationId, 'PROPERTY_SUMMARY');
+  assert.equal(result.selectedOperationVersion, '1.0');
+  assert.equal(result.skillConfidence, result.skillCandidates[0].confidence);
+  assert.equal(result.operationConfidence, result.operationCandidates[0].confidence);
   assert.match(result.semanticIndexVersion, /^[a-f0-9]{16}$/);
 });
 
@@ -64,6 +72,9 @@ test('a semantically selected multi-operation Skill requires operation clarifica
   assert.equal(result.outcome, 'AMBIGUOUS_OPERATION');
   assert.equal(result.selectedSkill.id, 'maintenance');
   assert.equal(result.selectedOperationId, null);
+  assert.equal(result.selectedOperationVersion, null);
+  assert.equal(result.clarificationReason, 'OPERATION_AMBIGUITY');
+  assert.ok(result.routingReasonCodes.includes('MULTIPLE_ELIGIBLE_OPERATIONS'));
   assert.ok(result.operationCandidates.length > 1);
   assert.ok(result.operationCandidates.length <= 3);
 });
@@ -91,6 +102,8 @@ test('close Skill candidates fail closed as ambiguous instead of silently choosi
   assert.equal(result.outcome, 'AMBIGUOUS_SKILL');
   assert.equal(result.selectedSkill, null);
   assert.equal(result.selectedOperationId, null);
+  assert.equal(result.clarificationReason, 'SKILL_AMBIGUITY');
+  assert.ok(result.routingReasonCodes.includes('SKILL_CONFIDENCE_MARGIN_AMBIGUOUS'));
 });
 
 test('Ask normalizes unsupported and ambiguous Skill routing with stable codes', () => {

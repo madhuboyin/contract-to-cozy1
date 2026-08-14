@@ -1,5 +1,6 @@
 import type { SkillEvaluationPackage } from '../skillEvaluationRegistry';
 import { deepFreezeSkillPackage } from '../skillPackageFreeze';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const PROPERTY_TAX_SKILL_EVALUATION = deepFreezeSkillPackage({
   "id": "skill-property-tax-golden",
@@ -127,7 +128,7 @@ export const PROPERTY_TAX_SKILL_EVALUATION = deepFreezeSkillPackage({
   "prohibitedAdapters": [
     "inventory.lookup"
   ],
-  "expectedContextProviders": [],
+  "expectedContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   "prohibitedContextProviders": [
     "undeclared-tax-authority"
   ],

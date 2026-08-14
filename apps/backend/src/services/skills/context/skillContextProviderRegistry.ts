@@ -1,5 +1,6 @@
 import type { SkillContextProviderDefinition } from './skillContext.contract';
 import { maintenanceTaskContextProvider } from './maintenanceTaskContext.provider';
+import { propertyIdentityContextProvider } from './propertyIdentityContext.provider';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 
@@ -9,6 +10,7 @@ export function skillContextProviderKey(provider: { id: string; version: string 
 
 export const SKILL_CONTEXT_PROVIDERS = Object.freeze({
   [skillContextProviderKey(maintenanceTaskContextProvider)]: maintenanceTaskContextProvider,
+  [skillContextProviderKey(propertyIdentityContextProvider)]: propertyIdentityContextProvider,
 } satisfies Readonly<Record<string, SkillContextProviderDefinition>>);
 
 export const REGISTERED_SKILL_CONTEXT_PROVIDER_REFS: ReadonlySet<string> = new Set(Object.keys(SKILL_CONTEXT_PROVIDERS));

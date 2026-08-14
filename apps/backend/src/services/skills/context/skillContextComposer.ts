@@ -56,6 +56,7 @@ function emptyEntry(
       observedAt: null,
       sourceVersion: null,
     } : null,
+    latencyMs: 0,
     serializedBytes: 0,
     entityCount: 0,
     factCount: 0,
@@ -104,6 +105,7 @@ export async function composeSkillContext(
     const cached = invocationCache.get(key);
     if (cached) return cached.then((entry) => ({ ...entry, required: entry.required || isRequired }));
 
+    const invocationStartedAt = process.hrtime.bigint();
     const promise = (async (): Promise<ComposedSkillContextEntry> => {
       const providerStartedAt = process.hrtime.bigint();
       const provider = resolveProvider(reference.id, reference.version);
@@ -158,6 +160,7 @@ export async function composeSkillContext(
             observedAt: value.observedAt ?? null,
             sourceVersion: value.sourceVersion ?? null,
           },
+          latencyMs: 0,
           serializedBytes: bytes,
           entityCount,
           factCount,
@@ -176,7 +179,10 @@ export async function composeSkillContext(
           Number(process.hrtime.bigint() - providerStartedAt) / 1_000_000_000,
         );
       }
-    })();
+    })().then((entry) => ({
+      ...entry,
+      latencyMs: Number(process.hrtime.bigint() - invocationStartedAt) / 1_000_000,
+    }));
     invocationCache.set(key, promise);
     return promise;
   };

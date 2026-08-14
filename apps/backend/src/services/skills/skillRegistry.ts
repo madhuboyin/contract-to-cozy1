@@ -24,6 +24,7 @@ import { SAVINGS_SKILL } from './savings';
 import { SELL_HOLD_RENT_SKILL } from './sell-hold-rent';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from './context/propertyIdentityContext.contract';
 import { REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
 import { selectSkillDependencyVersion } from './skillDependencyVersion';
 
@@ -158,10 +159,17 @@ export function validateSkillDefinitions(
         ...skill.requiredContextProviders,
         ...skill.optionalContextProviders,
       ].map((provider) => `${provider.id}@${provider.version}`));
-      for (const provider of [
+      const operationProviders = [
         ...(operationReference.requiredContextProviders ?? []),
         ...(operationReference.optionalContextProviders ?? []),
-      ]) {
+      ];
+      if (operation.requiresProperty && !(operationReference.requiredContextProviders ?? []).some((provider) => (
+        provider.id === PROPERTY_IDENTITY_CONTEXT_PROVIDER.id
+        && provider.version === PROPERTY_IDENTITY_CONTEXT_PROVIDER.version
+      ))) {
+        issues.push(`${key}: property-scoped operation ${operationReference.operationId} lacks required property identity context`);
+      }
+      for (const provider of operationProviders) {
         const providerRef = `${provider.id}@${provider.version}`;
         if (!declaredProviders.has(providerRef)) issues.push(`${key}: operation ${operationReference.operationId} uses undeclared context provider ${providerRef}`);
       }

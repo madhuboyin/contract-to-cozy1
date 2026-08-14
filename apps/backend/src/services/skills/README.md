@@ -32,8 +32,18 @@ Skill-specific branches to the core router or move domain logic into the Skill l
 Version 1 performance visibility uses bounded registry dimensions only. Routing, context
 composition, provider fan-out and payload, adapter resolution, canonical execution,
 presentation validation, and optional model work are timed separately. The smoke suite is
-designed to detect unbounded behavior without turning aspirational production percentiles
-into beta development gates.
+designed to report component p95 values and detect unbounded behavior without turning
+aspirational production percentiles into beta development gates. Each initial Ask execution
+also writes one bounded `SKILL_EXECUTION_TELEMETRY` event that joins routing, provider,
+dependency, risk, execution/model, latency-band, result, and error dimensions without using
+high-cardinality Prometheus labels.
+
+Every registered property-scoped Skill declares the shared `property.identity-context`
+provider at Skill and operation scope. It establishes the selected Living Home Record identity
+and version before canonical execution; domain-specific providers are added only when an
+operation needs additional composed cross-domain inputs. Maintenance additionally consumes
+its task-context provider. The package scaffolder inserts the identity provider automatically
+for property-required operations, and registry validation rejects manual manifests that omit it.
 
 Handoffs are persisted with the source execution and rendered as a draftable next question.
 Selecting one does not execute anything: the new question returns through normal Ask routing,

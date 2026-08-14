@@ -1,4 +1,5 @@
 import type { SkillDefinition } from '../skill.contract';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const CAPITAL_PLANNING_SKILL = Object.freeze({
   "id": "capital-planning",
@@ -22,10 +23,11 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
   "operations": [
     {
       "operationId": "CAPITAL_RESERVE_PLAN",
-      "version": "1.0"
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER]
     }
   ],
-  "requiredContextProviders": [],
+  "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   "optionalContextProviders": [],
   "allowedAdapters": [
     {
@@ -63,6 +65,7 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     "CAPABILITY_LIST"
   ],
   "dependencies": [
+    { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
     {
       "type": "OPERATION_CONTRACT",
       "id": "CAPITAL_RESERVE_PLAN",

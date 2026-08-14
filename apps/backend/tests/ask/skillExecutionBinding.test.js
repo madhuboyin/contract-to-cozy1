@@ -29,11 +29,19 @@ test('execution binding pins every executable contract before context compositio
   assert.deepEqual(binding.skill, { id: 'maintenance', version: '1.0.0', domain: 'HOME_CARE' });
   assert.deepEqual(binding.operation, { id: 'MAINTENANCE_STATUS', version: '1.0' });
   assert.deepEqual(binding.adapter, { id: 'maintenance.status', version: '1.0' });
-  assert.deepEqual(binding.contextProviders, [{ id: 'maintenance.task-context', version: '1.0.0', required: true }]);
+  assert.deepEqual(binding.contextProviders, [
+    { id: 'maintenance.task-context', version: '1.0.0', required: true },
+    { id: 'property.identity-context', version: '1.0.0', required: true },
+  ]);
   assert.equal(binding.dependencyActivation.status, 'RESOLVED');
-  assert.deepEqual(binding.dependencyActivation.dependencies, [{
-    type: 'CONTEXT_PROVIDER', id: 'maintenance.task-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: true, owner: 'PropertyMaintenanceTaskService',
-  }]);
+  assert.deepEqual(binding.dependencyActivation.dependencies, [
+    {
+      type: 'CONTEXT_PROVIDER', id: 'maintenance.task-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: true, owner: 'PropertyMaintenanceTaskService',
+    },
+    {
+      type: 'CONTEXT_PROVIDER', id: 'property.identity-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: true, owner: 'Living Home Record / Property',
+    },
+  ]);
   assert.deepEqual(binding.dependencyActivation.missing, []);
   assert.deepEqual(binding.routing.reasonCodes, ['ALIAS_MATCH', 'GOAL_MATCH']);
   assert.match(binding.effectivePolicyVersion, /^[a-f0-9]{64}$/);

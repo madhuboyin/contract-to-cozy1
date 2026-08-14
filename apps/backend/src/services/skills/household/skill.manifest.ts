@@ -1,4 +1,5 @@
 import type { SkillDefinition } from '../skill.contract';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const HOUSEHOLD_SKILL = Object.freeze({
   "id": "household",
@@ -22,10 +23,11 @@ export const HOUSEHOLD_SKILL = Object.freeze({
   "operations": [
     {
       "operationId": "HOUSEHOLD_INVITATION",
-      "version": "1.0"
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER]
     }
   ],
-  "requiredContextProviders": [],
+  "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   "optionalContextProviders": [],
   "allowedAdapters": [
     {
@@ -59,6 +61,7 @@ export const HOUSEHOLD_SKILL = Object.freeze({
     "WORKFLOW_PROGRESS"
   ],
   "dependencies": [
+    { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
     {
       "type": "OPERATION_CONTRACT",
       "id": "HOUSEHOLD_INVITATION",

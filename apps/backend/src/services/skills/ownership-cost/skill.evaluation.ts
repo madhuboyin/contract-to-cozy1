@@ -1,5 +1,6 @@
 import type { SkillEvaluationPackage } from '../skillEvaluationRegistry';
 import { deepFreezeSkillPackage } from '../skillPackageFreeze';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const OWNERSHIP_COST_SKILL_EVALUATION = deepFreezeSkillPackage({
   "id": "skill-ownership-cost-golden",
@@ -127,7 +128,7 @@ export const OWNERSHIP_COST_SKILL_EVALUATION = deepFreezeSkillPackage({
   "prohibitedAdapters": [
     "maintenance.create"
   ],
-  "expectedContextProviders": [],
+  "expectedContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   "prohibitedContextProviders": [
     "undeclared.bank-account"
   ],

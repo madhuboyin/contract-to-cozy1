@@ -1,5 +1,6 @@
 import type { AskOperationId } from '../../ask/askOperationRegistry';
 import type { SkillDefinition } from '../skill.contract';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const REFINANCE_SKILL_OPERATIONS: AskOperationId[] = [
   'REFINANCE_ANALYSIS',
@@ -15,8 +16,8 @@ export const REFINANCE_SKILL = Object.freeze({
   homeownerJobs: ['DECIDE_WITH_CONFIDENCE', 'STAY_AHEAD'],
   supportedGoals: ['analyze-refinance-opportunity', 'monitor-refinance-rate-threshold'],
   aliases: ['mortgage refinance', 'refinance analysis', 'mortgage rate monitor', 'refinance rate alert'],
-  operations: REFINANCE_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0' })),
-  requiredContextProviders: [],
+  operations: REFINANCE_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0', requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER] })),
+  requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [],
   allowedAdapters: [
     { id: 'refinance.analysis', version: '1.0' },
@@ -33,6 +34,7 @@ export const REFINANCE_SKILL = Object.freeze({
   authorizationFloor: 'VIEWER',
   allowedResultBlocks: ['SUMMARY', 'TABLE', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'MONITOR', 'CAPABILITY_LIST'],
   dependencies: [
+    { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     ...REFINANCE_SKILL_OPERATIONS.map((operationId) => ({
       type: 'OPERATION_CONTRACT' as const,
       id: operationId,

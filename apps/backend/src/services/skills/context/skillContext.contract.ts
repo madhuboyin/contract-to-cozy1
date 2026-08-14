@@ -59,6 +59,7 @@ export interface ComposedSkillContextEntry<T = unknown> {
   status: SkillContextProviderStatus;
   data?: T;
   provenance: SkillContextProvenance | null;
+  latencyMs: number;
   serializedBytes: number;
   entityCount: number;
   factCount: number;

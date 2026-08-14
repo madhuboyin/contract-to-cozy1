@@ -114,7 +114,7 @@ test('runtime checks adapter availability before context composition or dispatch
   const coreStart = orchestrator.indexOf('async function executeOperationCore(');
   const coreRuntimeCheck = orchestrator.indexOf('skillRuntimeUnavailableReason(input.operation.operationId, controls)', coreStart);
   const compose = orchestrator.indexOf('composedContext = await composeSkillContext', coreStart);
-  const dispatch = orchestrator.indexOf('dispatchOperationAdapter(input, composedContext)', coreStart);
+  const dispatch = orchestrator.indexOf('dispatchOperationAdapter(input, composedContext, trace)', coreStart);
   assert.ok(adapterCheck > runtimeCheck);
   assert.ok(coreRuntimeCheck > coreStart && coreRuntimeCheck < compose);
   assert.ok(compose < dispatch);

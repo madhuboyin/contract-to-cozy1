@@ -14,6 +14,7 @@ export type SkillRoutingOutcome =
   | 'UNAVAILABLE';
 
 export type SkillRoutingPath = 'SAFETY' | 'OPERATION_OWNERSHIP' | 'SEMANTIC_INDEX' | 'NONE';
+export type SkillClarificationReason = 'SKILL_AMBIGUITY' | 'OPERATION_AMBIGUITY';
 
 export interface SkillRoutingCandidate {
   skillId: string;
@@ -26,10 +27,44 @@ export interface HierarchicalSkillRoutingDecision {
   outcome: SkillRoutingOutcome;
   path: SkillRoutingPath;
   selectedSkill: { id: string; version: string; domain: string } | null;
+  skillConfidence: number | null;
   selectedOperationId: AskOperationId | null;
+  selectedOperationVersion: string | null;
+  operationConfidence: number | null;
   skillCandidates: SkillRoutingCandidate[];
   operationCandidates: Array<{ operationId: AskOperationId; confidence: number }>;
+  routingReasonCodes: string[];
+  clarificationReason: SkillClarificationReason | null;
   semanticIndexVersion: string;
+}
+
+type SkillRoutingDecisionInput = Pick<
+  HierarchicalSkillRoutingDecision,
+  'outcome' | 'path' | 'selectedSkill' | 'selectedOperationId' | 'skillCandidates' | 'operationCandidates' | 'semanticIndexVersion'
+> & {
+  selectedOperationVersion?: string | null;
+  routingReasonCodes?: string[];
+};
+
+function routingDecision(input: SkillRoutingDecisionInput): HierarchicalSkillRoutingDecision {
+  const selectedSkillCandidate = input.selectedSkill
+    ? input.skillCandidates.find((candidate) => candidate.skillId === input.selectedSkill?.id)
+    : input.skillCandidates[0];
+  const selectedOperationCandidate = input.selectedOperationId
+    ? input.operationCandidates.find((candidate) => candidate.operationId === input.selectedOperationId)
+    : input.operationCandidates[0];
+  const candidateReasonCodes = input.skillCandidates.flatMap((candidate) => candidate.reasonCodes);
+  const clarificationReason = input.outcome === 'AMBIGUOUS_SKILL'
+    ? 'SKILL_AMBIGUITY'
+    : input.outcome === 'AMBIGUOUS_OPERATION' ? 'OPERATION_AMBIGUITY' : null;
+  return {
+    ...input,
+    skillConfidence: selectedSkillCandidate?.confidence ?? null,
+    selectedOperationVersion: input.selectedOperationVersion ?? null,
+    operationConfidence: selectedOperationCandidate?.confidence ?? null,
+    routingReasonCodes: [...new Set(input.routingReasonCodes ?? selectedSkillCandidate?.reasonCodes ?? candidateReasonCodes)].sort(),
+    clarificationReason,
+  };
 }
 
 export interface SkillSemanticIndexEntry {
@@ -172,39 +207,46 @@ export function resolveHierarchicalSkillRouting(
   const ambiguityMargin = options.ambiguityMargin ?? 0.1;
 
   if (operationDecision.stage === 'SAFETY') {
-    return {
+    return routingDecision({
       outcome: 'BLOCKED', path: 'SAFETY', selectedSkill: null,
       selectedOperationId: operationDecision.operation.operationId,
+      selectedOperationVersion: operationDecision.operation.version,
       skillCandidates: [], operationCandidates: operationDecision.candidates,
+      routingReasonCodes: ['SAFETY_INTERCEPT'],
       semanticIndexVersion: index.version,
-    };
+    });
   }
 
   if (!operationDecision.requiresClarification && operationDecision.stage !== 'REMOTE_FALLBACK') {
     const skill = operationOwner(operationDecision.operation.operationId, definitions);
     if (!skill) {
-      return {
+      return routingDecision({
         outcome: 'UNSUPPORTED', path: 'NONE', selectedSkill: null,
         selectedOperationId: operationDecision.operation.operationId,
+        selectedOperationVersion: operationDecision.operation.version,
         skillCandidates: [], operationCandidates: operationDecision.candidates,
+        routingReasonCodes: ['UNREGISTERED_OPERATION_OWNER'],
         semanticIndexVersion: index.version,
-      };
+      });
     }
     if (!eligibleSkillOperation(skill, operationDecision.operation.operationId, consumer, runtimeControls)) {
-      return {
+      return routingDecision({
         outcome: 'UNAVAILABLE', path: 'OPERATION_OWNERSHIP', selectedSkill: null,
         selectedOperationId: operationDecision.operation.operationId,
+        selectedOperationVersion: operationDecision.operation.version,
         skillCandidates: [{ skillId: skill.id, skillVersion: skill.version, confidence: operationDecision.operation.confidence, reasonCodes: ['OPERATION_OWNER'] }],
+        routingReasonCodes: ['OPERATION_OWNER', 'SKILL_OPERATION_UNAVAILABLE'],
         operationCandidates: operationDecision.candidates, semanticIndexVersion: index.version,
-      };
+      });
     }
-    return {
+    return routingDecision({
       outcome: 'RESOLVED', path: 'OPERATION_OWNERSHIP',
       selectedSkill: { id: skill.id, version: skill.version, domain: skill.domain },
       selectedOperationId: operationDecision.operation.operationId,
+      selectedOperationVersion: operationDecision.operation.version,
       skillCandidates: [{ skillId: skill.id, skillVersion: skill.version, confidence: operationDecision.operation.confidence, reasonCodes: ['OPERATION_OWNER'] }],
       operationCandidates: operationDecision.candidates, semanticIndexVersion: index.version,
-    };
+    });
   }
 
   const candidates = index.entries
@@ -219,18 +261,20 @@ export function resolveHierarchicalSkillRouting(
   const strongest = candidates[0];
   const runnerUp = candidates[1];
   if (!strongest || strongest.confidence < minimum) {
-    return {
+    return routingDecision({
       outcome: 'UNSUPPORTED', path: 'NONE', selectedSkill: null, selectedOperationId: null,
       skillCandidates: candidates, operationCandidates: operationDecision.candidates,
+      routingReasonCodes: ['INSUFFICIENT_SKILL_CONFIDENCE'],
       semanticIndexVersion: index.version,
-    };
+    });
   }
   if (runnerUp && runnerUp.confidence >= minimum && strongest.confidence - runnerUp.confidence < ambiguityMargin) {
-    return {
+    return routingDecision({
       outcome: 'AMBIGUOUS_SKILL', path: 'SEMANTIC_INDEX', selectedSkill: null, selectedOperationId: null,
       skillCandidates: candidates.slice(0, 3), operationCandidates: operationDecision.candidates,
+      routingReasonCodes: ['SKILL_CONFIDENCE_MARGIN_AMBIGUOUS', ...candidates.slice(0, 3).flatMap((candidate) => candidate.reasonCodes)],
       semanticIndexVersion: index.version,
-    };
+    });
   }
 
   const skill = definitions[strongest.skillId];
@@ -239,18 +283,21 @@ export function resolveHierarchicalSkillRouting(
     .filter((operation) => skillHealth.operations.some((health) => health.operationId === operation.operationId && health.status !== 'UNAVAILABLE'))
     .map((operation) => ({ operationId: operation.operationId, confidence: strongest.confidence }));
   if (candidateOperations.length !== 1) {
-    return {
+    return routingDecision({
       outcome: 'AMBIGUOUS_OPERATION', path: 'SEMANTIC_INDEX',
       selectedSkill: { id: skill.id, version: skill.version, domain: skill.domain }, selectedOperationId: null,
       skillCandidates: candidates.slice(0, 3), operationCandidates: candidateOperations.slice(0, 3),
+      routingReasonCodes: [...strongest.reasonCodes, 'MULTIPLE_ELIGIBLE_OPERATIONS'],
       semanticIndexVersion: index.version,
-    };
+    });
   }
-  return {
+  const selectedOperation = skill.operations.find((operation) => operation.operationId === candidateOperations[0].operationId)!;
+  return routingDecision({
     outcome: 'RESOLVED', path: 'SEMANTIC_INDEX',
     selectedSkill: { id: skill.id, version: skill.version, domain: skill.domain },
     selectedOperationId: candidateOperations[0].operationId,
+    selectedOperationVersion: selectedOperation.version,
     skillCandidates: candidates.slice(0, 3), operationCandidates: candidateOperations,
     semanticIndexVersion: index.version,
-  };
+  });
 }

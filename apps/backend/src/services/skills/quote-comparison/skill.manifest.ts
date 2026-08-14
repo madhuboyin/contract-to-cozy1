@@ -1,4 +1,5 @@
 import type { SkillDefinition } from '../skill.contract';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const QUOTE_COMPARISON_SKILL = Object.freeze({
   "id": "quote-comparison",
@@ -22,14 +23,16 @@ export const QUOTE_COMPARISON_SKILL = Object.freeze({
   "operations": [
     {
       "operationId": "QUOTE_COMPARISON_CREATE",
-      "version": "1.0"
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER]
     },
     {
       "operationId": "QUOTE_COMPARISON_REVIEW",
-      "version": "1.0"
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER]
     }
   ],
-  "requiredContextProviders": [],
+  "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   "optionalContextProviders": [],
   "allowedAdapters": [
     {
@@ -74,6 +77,7 @@ export const QUOTE_COMPARISON_SKILL = Object.freeze({
     "BOUNDARY"
   ],
   "dependencies": [
+    { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
     {
       "type": "OPERATION_CONTRACT",
       "id": "QUOTE_COMPARISON_CREATE",

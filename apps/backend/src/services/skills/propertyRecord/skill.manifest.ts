@@ -1,5 +1,6 @@
 import type { AskOperationId } from '../../ask/askOperationRegistry';
 import type { SkillDefinition } from '../skill.contract';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const PROPERTY_RECORD_SKILL_OPERATIONS: AskOperationId[] = [
   'PROPERTY_SUMMARY',
@@ -15,8 +16,8 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
   homeownerJobs: ['STAY_AHEAD', 'DECIDE_WITH_CONFIDENCE'],
   supportedGoals: ['summarize-property-record', 'find-recorded-home-item'],
   aliases: ['property record', 'home record summary', 'living home record', 'home inventory lookup'],
-  operations: PROPERTY_RECORD_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0' })),
-  requiredContextProviders: [],
+  operations: PROPERTY_RECORD_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0', requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER] })),
+  requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [],
   allowedAdapters: [
     { id: 'property.summary', version: '1.0' },
@@ -37,6 +38,7 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
   authorizationFloor: 'VIEWER',
   allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'CAPABILITY_LIST'],
   dependencies: [
+    { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     ...PROPERTY_RECORD_SKILL_OPERATIONS.map((operationId) => ({
       type: 'OPERATION_CONTRACT' as const,
       id: operationId,

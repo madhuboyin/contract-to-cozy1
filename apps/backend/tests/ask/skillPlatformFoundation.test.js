@@ -61,6 +61,7 @@ test('Skill validation rejects incompatible and over-broad manifests', () => {
   const issues = validateSkillDefinitions(invalid);
   assert.ok(issues.some((issue) => issue.includes('invalid Skill semantic version')));
   assert.ok(issues.some((issue) => issue.includes('incompatible operation version')));
+  assert.ok(issues.some((issue) => issue.includes('lacks required property identity context')));
   assert.ok(issues.some((issue) => issue.includes('undeclared adapter')));
   assert.ok(issues.some((issue) => issue.includes('undeclared result block')));
   assert.ok(issues.some((issue) => issue.includes('invalid context budget maxSerializedBytes')));

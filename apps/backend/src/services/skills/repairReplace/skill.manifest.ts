@@ -1,5 +1,6 @@
 import type { AskOperationId } from '../../ask/askOperationRegistry';
 import type { SkillDefinition } from '../skill.contract';
+import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
 
 export const REPAIR_REPLACE_SKILL_OPERATIONS: AskOperationId[] = [
   'REPLACEMENT_GUIDANCE',
@@ -42,8 +43,8 @@ export const REPAIR_REPLACE_SKILL = Object.freeze({
     'record-repair-replace-outcome',
   ],
   aliases: ['repair or replace', 'fix or replace', 'replacement decision', 'system replacement decision'],
-  operations: REPAIR_REPLACE_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0' })),
-  requiredContextProviders: [],
+  operations: REPAIR_REPLACE_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0', requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER] })),
+  requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [],
   allowedAdapters: REPAIR_REPLACE_ADAPTERS,
   allowedExternalConnectors: [],
@@ -74,6 +75,7 @@ export const REPAIR_REPLACE_SKILL = Object.freeze({
     'OUTCOME_SUMMARY',
   ],
   dependencies: [
+    { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     ...REPAIR_REPLACE_SKILL_OPERATIONS.map((operationId) => ({
       type: 'OPERATION_CONTRACT' as const,
       id: operationId,
