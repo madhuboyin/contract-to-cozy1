@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "NODE_ENV=production node src/index.ts",
     "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
+    "skill:create": "ts-node src/scripts/createSkillPackage.ts",
     "seed": "npx prisma db seed",
     "seed:radar-tax-pilots": "ts-node src/scripts/seedReviewedTaxPilots.ts",
     "seed:savings-benefits-pilot": "ts-node src/scripts/seedSavingsBenefitsPilot.ts",

@@ -20,3 +20,32 @@ composition, provider fan-out and payload, adapter resolution, canonical executi
 presentation validation, and optional model work are timed separately. The smoke suite is
 designed to detect unbounded behavior without turning aspirational production percentiles
 into beta development gates.
+
+## Create a Skill package
+
+First register the canonical Ask operation, its direct adapter, and any context providers.
+The operation must not already belong to another Skill. Then create a JSON spec matching
+`SkillPackageScaffoldSpec` and run:
+
+```bash
+npm run skill:create -- --spec ./path/to/new-skill.json
+```
+
+Use `--output-root <directory>` to render into a review directory before placing the package
+under `src/services/skills`. The command validates semantic metadata, operation ownership,
+adapter/provider registration, consumers, risk policy, ambiguity coverage, negative cases,
+and the governed handoff target. It creates the directory atomically and never overwrites an
+existing Skill package.
+
+The generated package contains:
+
+- `SKILL.md` with selection, exclusion, consumer, ownership, and boundary guidance;
+- `skill.manifest.ts` with operation, adapter, provider, policy, dependency, budget, and
+  runtime-control declarations;
+- `skill.evaluation.ts` with routing, operation, ambiguity, policy, context, negative,
+  degraded-mode, model-disabled, handoff, and performance fixtures; and
+- `index.ts` exports.
+
+The command prints the two explicit registration imports and a completion checklist. Add the
+manifest to `SKILL_DEFINITIONS` and the evaluation package to
+`SKILL_EVALUATION_PACKAGES`; no capability-specific Ask orchestration change is required.

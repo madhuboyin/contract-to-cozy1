@@ -12,7 +12,12 @@ export interface SkillEvaluationPackage {
   skillVersion: string;
   routingCases: readonly { mode: SkillRoutingFixtureMode; message: string; expectedOperationId: AskOperationId }[];
   operationCases: readonly { operationId: AskOperationId; expectedAdapter: VersionedSkillReference }[];
-  ambiguityCases: readonly { message: string; candidateOperationIds: readonly AskOperationId[]; expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }[];
+  ambiguityCases: readonly {
+    message: string;
+    candidateOperationIds?: readonly AskOperationId[];
+    candidateSkillIds?: readonly string[];
+    expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK';
+  }[];
   policyCases: readonly { consumer: SkillConsumer; operationId: AskOperationId; allowed: boolean }[];
   contextCases: readonly { state: SkillContextFixtureState; expectedBehavior: 'READY' | 'CAPTURE_OR_BLOCK' | 'DISCLOSE_OR_BLOCK' | 'BLOCK' | 'DEGRADED_OR_BLOCK' }[];
   negativeCases: readonly { message: string; expectedBehavior: 'DO_NOT_SELECT_SKILL' }[];
@@ -186,7 +191,12 @@ export function validateSkillEvaluationPackages(
     for (const state of contextStates) if (!observedContext.has(state)) issues.push(`${skill.id}: missing ${state.toLowerCase()} context case`);
     if (!suite.ambiguityCases.length || !suite.negativeCases.length || !suite.policyCases.length || !suite.degradedModeCases.length) issues.push(`${skill.id}: incomplete ambiguity, negative, policy, or degraded evaluation coverage`);
     for (const fixture of suite.ambiguityCases) {
-      if (fixture.candidateOperationIds.length < 2 || fixture.candidateOperationIds.some((operationId) => !skillOperations.has(operationId))) issues.push(`${skill.id}: invalid ambiguity operation candidates`);
+      const validOperations = (fixture.candidateOperationIds?.length ?? 0) >= 2
+        && fixture.candidateOperationIds!.every((operationId) => skillOperations.has(operationId));
+      const validSkills = (fixture.candidateSkillIds?.length ?? 0) >= 2
+        && fixture.candidateSkillIds!.includes(skill.id)
+        && fixture.candidateSkillIds!.every((skillId) => Boolean(definitions[skillId]));
+      if (!validOperations && !validSkills) issues.push(`${skill.id}: invalid ambiguity candidates`);
     }
     for (const fixture of suite.policyCases) {
       const declared = skill.consumerPolicy.find((policy) => policy.consumer === fixture.consumer)?.operations.includes(fixture.operationId) ?? false;
