@@ -6876,6 +6876,10 @@ model AskExecution {
   clientRequestId  String
   message          String
   launchContextJson Json?
+  skillId          String?
+  skillVersion     String?
+  skillDomain      String?
+  skillBindingJson Json?
   operationId      String?
   operationVersion String?
   intentFamily     String?
@@ -6905,6 +6909,7 @@ model AskExecution {
   @@unique([userId, clientRequestId])
   @@index([sessionId, createdAt])
   @@index([propertyId, status, createdAt])
+  @@index([skillId, skillVersion, createdAt])
   @@map("ask_executions")
 }
 
@@ -6943,6 +6948,13 @@ model AskConfirmationReceipt {
   executionId         String
   idempotencyKey      String
   confirmationVersion Int
+  skillId             String?
+  skillVersion        String?
+  operationId         String?
+  operationVersion    String?
+  effectivePolicyVersion String?
+  contextVersion      String?
+  propertyId          String?
   status              String   @default("CLAIMED")
   artifactType        String?
   artifactId          String?

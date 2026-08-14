@@ -93,6 +93,7 @@ import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
 import { resolveHierarchicalSkillRouting } from '../skills/skillRouter';
 import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
+import { buildSkillExecutionBinding, validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -4287,12 +4288,18 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
 function mapPersistedExecution(execution: {
   id: string; sessionId: string; message: string; status: AskExecutionStatus; propertyId: string | null; operationId: string | null;
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
+  skillId?: string | null; skillVersion?: string | null; skillDomain?: string | null;
   createdAt: Date; updatedAt: Date;
 }, property: { id: string; label: string } | null): AskExecutionResponse {
   const operationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
     ? execution.operationId as AskOperationId
     : null;
-  const skill = operationId ? getSkillForOperation(operationId) : undefined;
+  const currentSkill = operationId ? getSkillForOperation(operationId) : undefined;
+  const skill = execution.skillId && execution.skillVersion && execution.skillDomain
+    ? { id: execution.skillId, version: execution.skillVersion, domain: execution.skillDomain }
+    : currentSkill
+      ? { id: currentSkill.id, version: currentSkill.version, domain: currentSkill.domain }
+      : null;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
     ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown }
     : {};
@@ -4304,7 +4311,7 @@ function mapPersistedExecution(execution: {
     question: execution.message,
     status: execution.status,
     property,
-    skill: skill ? { id: skill.id, version: skill.version, domain: skill.domain } : null,
+    skill,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
@@ -4333,7 +4340,7 @@ function mapPersistedExecution(execution: {
     question: execution.message,
     status: 'UNAVAILABLE',
     property,
-    skill: skill ? { id: skill.id, version: skill.version, domain: skill.domain } : null,
+    skill,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? 'unknown', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     contextVersion: execution.contextVersion,
     blocks: [{
@@ -4366,6 +4373,48 @@ async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number): Promis
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+async function expireIfSkillBindingChanged(execution: AskExecution): Promise<AskExecutionResponse | null> {
+  if (!execution.skillId || terminalStatus(execution.status)) return null;
+  const validation = validateSkillExecutionBinding(execution.skillBindingJson);
+  if (validation.valid) return null;
+  const policyMismatch = validation.reasonCode === 'ASK_SKILL_POLICY_MISMATCH';
+  const expired = await prisma.askExecution.update({
+    where: { id: execution.id },
+    data: {
+      status: 'EXPIRED',
+      reasonCode: validation.reasonCode,
+      completedAt: new Date(),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+        blocks: [{
+          type: 'SUMMARY',
+          id: 'ask-skill-binding-expired',
+          title: policyMismatch ? 'This request needs a new permission check' : 'This request uses an unavailable capability version',
+          body: policyMismatch
+            ? 'The effective Skill policy changed while this request was open. No action was performed; ask again to review the current policy and home context.'
+            : 'The Skill or operation version bound to this request is no longer executable. No action was performed; ask again to use the current registered version.',
+          tone: 'CAUTION',
+          actions: [],
+        }],
+        captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+      }),
+    },
+  });
+  await prisma.askExecutionEvent.create({
+    data: {
+      executionId: execution.id,
+      eventType: validation.reasonCode,
+      metadataJson: asInputJson({
+        skillId: execution.skillId,
+        skillVersion: execution.skillVersion,
+        operationId: execution.operationId,
+        operationVersion: execution.operationVersion,
+      }),
+    },
+  });
+  return mapPersistedExecution(expired, await propertySummary(execution.propertyId));
 }
 
 export async function createAskExecution(userId: string, input: CreateAskExecutionRequest): Promise<AskExecutionResponse> {
@@ -4484,6 +4533,17 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     : routingDecision.operation;
   const operationDefinition = getAskOperationDefinition(operation.operationId);
   const selectedSkill = getSkillForOperation(operation.operationId);
+  const selectedSkillBinding = selectedSkill && !routingDecision.requiresClarification
+    ? buildSkillExecutionBinding({
+      skill: selectedSkill,
+      operationId: operation.operationId,
+      consumer: 'ASK',
+      routingPath: skillRoutingDecision.path,
+      routingReasonCodes: skillRoutingDecision.skillCandidates
+        .find((candidate) => candidate.skillId === selectedSkill.id)?.reasonCodes ?? [],
+      semanticIndexVersion: skillRoutingDecision.semanticIndexVersion,
+    })
+    : null;
   const generationMode = routingDecision.requiresClarification
     ? 'deterministic'
     : operationDefinition.executionMode === 'REMOTE_GENERATION' ? 'remote' : 'deterministic';
@@ -4521,7 +4581,17 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const storedIntentFamily = routingDecision.requiresClarification ? 'CLARIFICATION' : operation.family;
   await prisma.askExecution.update({
     where: { id: execution.id },
-    data: { operationId: operation.operationId, operationVersion: operation.version, intentFamily: storedIntentFamily, intentConfidence: operation.confidence, status: 'RUNNING' },
+    data: {
+      skillId: selectedSkillBinding?.skill.id ?? null,
+      skillVersion: selectedSkillBinding?.skill.version ?? null,
+      skillDomain: selectedSkillBinding?.skill.domain ?? null,
+      skillBindingJson: selectedSkillBinding ? asInputJson(selectedSkillBinding) : undefined,
+      operationId: operation.operationId,
+      operationVersion: operation.version,
+      intentFamily: storedIntentFamily,
+      intentConfidence: operation.confidence,
+      status: 'RUNNING',
+    },
   });
   try {
     const rawResult = await withAskTimeout(
@@ -4585,6 +4655,8 @@ export async function submitAskClarification(userId: string, executionId: string
     throw error;
   }
   await enterAskPropertyTimezoneContext(execution.propertyId);
+  const bindingExpiry = await expireIfSkillBindingChanged(execution);
+  if (bindingExpiry) return bindingExpiry;
   const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
     ? execution.parametersJson as Record<string, unknown>
     : {};
@@ -4650,9 +4722,24 @@ export async function submitAskClarification(userId: string, executionId: string
     operation = safetyDecision.operation;
   }
   const operationDefinition = getAskOperationDefinition(operation.operationId);
+  const clarifiedSkill = getSkillForOperation(operation.operationId);
+  const clarifiedSkillBinding = clarifiedSkill
+    ? buildSkillExecutionBinding({
+      skill: clarifiedSkill,
+      operationId: operation.operationId,
+      consumer: 'ASK',
+      routingPath: 'CLARIFICATION',
+      routingReasonCodes: ['HOMEOWNER_CLARIFIED'],
+      semanticIndexVersion: null,
+    })
+    : null;
   const claimed = await prisma.askExecution.updateMany({
     where: { id: execution.id, userId, status: { in: ['NEEDS_CLARIFICATION', 'NEEDS_ENTITY'] } },
     data: {
+      skillId: clarifiedSkillBinding?.skill.id ?? null,
+      skillVersion: clarifiedSkillBinding?.skill.version ?? null,
+      skillDomain: clarifiedSkillBinding?.skill.domain ?? null,
+      skillBindingJson: clarifiedSkillBinding ? asInputJson(clarifiedSkillBinding) : undefined,
       operationId: operation.operationId, operationVersion: operation.version, intentFamily: operation.family, intentConfidence: operation.confidence, status: 'RUNNING',
       parametersJson: asInputJson({ ...parameters, clarificationReceipt: { idempotencyKey: input.idempotencyKey, clarificationVersion: input.clarificationVersion } }),
     },
@@ -4725,6 +4812,8 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  const bindingExpiry = await expireIfSkillBindingChanged(execution);
+  if (bindingExpiry) return bindingExpiry;
   if (execution.status !== 'NEEDS_PROPERTY' || !execution.operationId) {
     const error = new Error('This request no longer needs a home selection.');
     (error as Error & { code?: string }).code = 'ASK_PROPERTY_SELECTION_NOT_ACTIVE';
@@ -4803,6 +4892,8 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
   }
   await ensurePropertyAccess(userId, execution.propertyId);
   await enterAskPropertyTimezoneContext(execution.propertyId);
+  const bindingExpiry = await expireIfSkillBindingChanged(execution);
+  if (bindingExpiry) return bindingExpiry;
   const registeredOperationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
     ? execution.operationId as AskOperationId
     : null;
@@ -5377,7 +5468,14 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
     throw error;
   }
   await ensurePropertyAccess(userId, execution.propertyId);
-  const operation = resolveAskOperation(execution.message);
+  const bindingExpiry = await expireIfSkillBindingChanged(execution);
+  if (bindingExpiry) return bindingExpiry;
+  if (!execution.operationId || !(execution.operationId in ASK_OPERATION_DEFINITIONS)) {
+    const error = new Error('The bound operation version is no longer available.');
+    (error as Error & { code?: string }).code = 'ASK_SKILL_VERSION_UNAVAILABLE';
+    throw error;
+  }
+  const operation = { ...getAskOperationDefinition(execution.operationId as AskOperationId), confidence: execution.intentConfidence ?? 1 };
   const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
   const saved = await prisma.askExecution.update({
     where: { id: execution.id },
@@ -5403,6 +5501,8 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     throw error;
   }
   await enterAskPropertyTimezoneContext(execution.propertyId);
+  const bindingExpiry = await expireIfSkillBindingChanged(execution);
+  if (bindingExpiry) return bindingExpiry;
   const registeredOperationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
     ? execution.operationId as AskOperationId
     : null;
@@ -5432,9 +5532,19 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     });
     return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
   }
+  const validatedBinding = execution.skillBindingJson
+    ? validateSkillExecutionBinding(execution.skillBindingJson)
+    : null;
+  const pinnedBinding = validatedBinding?.valid ? validatedBinding.binding : null;
   const inputHash = createHash('sha256').update(JSON.stringify({
     confirmationVersion: input.confirmationVersion,
     consentConfirmed: input.consentConfirmed,
+    skillBinding: execution.skillBindingJson,
+    operationId: execution.operationId,
+    operationVersion: execution.operationVersion,
+    propertyId: execution.propertyId,
+    contextVersion: execution.contextVersion,
+    actionParameters: execution.parametersJson,
   })).digest('hex');
   const previous = await prisma.askConfirmationReceipt.findUnique({ where: { executionId } });
   if (previous) {
@@ -5519,6 +5629,13 @@ export async function confirmAskExecution(userId: string, executionId: string, i
             executionId,
             idempotencyKey: input.idempotencyKey,
             confirmationVersion: input.confirmationVersion,
+            skillId: pinnedBinding?.skill.id ?? null,
+            skillVersion: pinnedBinding?.skill.version ?? null,
+            operationId: execution.operationId,
+            operationVersion: execution.operationVersion,
+            effectivePolicyVersion: pinnedBinding?.effectivePolicyVersion ?? null,
+            contextVersion: execution.contextVersion,
+            propertyId: execution.propertyId,
             inputHash,
             status: 'CLAIMED',
             leaseExpiresAt: new Date(Date.now() + 60_000),
@@ -6395,6 +6512,8 @@ export async function continueAskExecution(userId: string, executionId: string, 
     throw error;
   }
   if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
+  const bindingExpiry = await expireIfSkillBindingChanged(execution);
+  if (bindingExpiry) return bindingExpiry;
   const current = CONTINUABLE_ASK_STATUSES.includes(execution.status) ? await expirePendingInteraction(execution) : execution;
   if (CONTINUABLE_ASK_STATUSES.includes(current.status)) {
     await prisma.askExecutionEvent.create({
