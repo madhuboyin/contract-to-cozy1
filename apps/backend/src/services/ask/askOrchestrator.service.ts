@@ -95,6 +95,7 @@ import { resolveHierarchicalSkillRouting } from '../skills/skillRouter';
 import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
 import { buildSkillExecutionBinding, validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
 import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
+import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -4355,8 +4356,13 @@ function mapPersistedExecution(execution: {
     ? execution.operationId as AskOperationId
     : null;
   const currentSkill = operationId ? getSkillForOperation(operationId) : undefined;
+  const historicalSkill = execution.skillId && execution.skillVersion
+    ? getSkillLineageMetadata(execution.skillId, execution.skillVersion)
+    : undefined;
   const skill = execution.skillId && execution.skillVersion && execution.skillDomain
     ? { id: execution.skillId, version: execution.skillVersion, domain: execution.skillDomain }
+    : execution.skillId && execution.skillVersion
+      ? { id: execution.skillId, version: execution.skillVersion, domain: historicalSkill?.domain ?? 'UNKNOWN' }
     : currentSkill
       ? { id: currentSkill.id, version: currentSkill.version, domain: currentSkill.domain }
       : null;

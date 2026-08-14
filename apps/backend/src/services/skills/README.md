@@ -13,6 +13,9 @@ This package implements the static Version 1 Skill contracts described in
 - `skillHandoff.ts` registers optional cross-Skill follow-up suggestions. It emits typed
   metadata only after Ask rechecks target ownership, goal registration, consumer policy,
   runtime controls, and dependency health; it has no adapter or peer-execution path.
+- `skillLineageRegistry.ts` retains minimized immutable identity for current and retired
+  Skill versions. Historical entries contain no executable policy, adapter, provider, or
+  dependency data and therefore cannot re-enter routing or execution.
 
 The registered Skills reference existing Ask operations and canonical adapters. New Ask
 executions persist a versioned Skill binding after the additive `AskExecution` schema
@@ -27,6 +30,11 @@ into beta development gates.
 Handoffs are persisted with the source execution and rendered as a draftable next question.
 Selecting one does not execute anything: the new question returns through normal Ask routing,
 property authorization, ambiguity handling, and current runtime-health checks.
+
+Before replacing or removing a registered Skill version, copy its minimized identity into
+`HISTORICAL_SKILL_LINEAGE` and point `supersededByVersion` to another registered version of
+the same Skill. Startup rejects duplicate or orphaned lineage. Historical metadata can label
+saved responses, but cannot satisfy routing, policy, binding, adapter, or provider lookup.
 
 ## Create a Skill package
 
