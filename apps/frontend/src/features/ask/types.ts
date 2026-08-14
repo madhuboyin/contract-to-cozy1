@@ -164,6 +164,7 @@ export interface ConciergeHomeView {
       askQuestion: string;
       askCategoryId: 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'PLAN_MONITOR';
       askCategoryLabel: 'Maintain' | 'Protect' | 'Save' | 'Plan';
+      subject?: AskConciergeSubject | null;
       consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH' | 'OPTIONAL' | 'NO_ACTION';
       comparativeReasonCodes: string[];
       confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -186,9 +187,10 @@ export interface ConciergeHomeView {
   };
   decisions: {
     state: 'AVAILABLE' | 'NO_DECISIONS' | 'UNAVAILABLE';
-    items: Array<{ decisionThreadId: string; title: string; lifecycleStatus: string; contextStatus: string; verdict: string | null; confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null; updatedAt: string }>;
+    items: Array<{ decisionThreadId: string; title: string; lifecycleStatus: string; contextStatus: string; verdict: string | null; confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null; subject?: AskConciergeSubject | null; updatedAt: string }>;
     href: string;
   };
+  landingSpotlight?: { kind: 'ATTENTION' | 'DECISION'; entityId: string } | null;
   capabilityGroups: AskCapabilityGroup[];
   featuredPrompts: AskFeaturedPrompt[];
   suggestedQuestions: string[];
@@ -196,11 +198,18 @@ export interface ConciergeHomeView {
 
 export type AskCapabilityCategoryId = 'UNDERSTAND' | 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'DECIDE' | 'PLAN_MONITOR';
 
+export interface AskConciergeSubject {
+  kind: 'INVENTORY_ITEM' | 'CHECKLIST' | 'PROPERTY' | 'EVENT' | 'SALE_READINESS_ITEM' | 'GUIDANCE_JOURNEY' | 'WORK_ITEM';
+  id: string;
+  label: string;
+}
+
 export interface AskCapabilityPrompt {
   id: string;
   categoryId: AskCapabilityCategoryId;
   categoryLabel: string;
   question: string;
+  subject?: AskConciergeSubject;
   context?: {
     entityType: 'HOME_ACTION' | 'DECISION_THREAD' | 'INVENTORY_ITEM';
     entityId: string;

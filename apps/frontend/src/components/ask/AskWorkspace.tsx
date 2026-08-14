@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { track } from '@/lib/analytics/events';
 import { addAskReturnContext, buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
+import { resolveConciergeLandingSpotlight, visibleConciergeFeaturedPrompts } from '@/features/ask/conciergeLandingPolicy';
 
 const fallbackPrompts: AskFeaturedPrompt[] = [
   { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?', source: 'DISCOVERY' },
@@ -309,14 +310,12 @@ function ConciergeHome({ propertyId, view, loading, failed, onAsk }: {
     );
   }
 
-  const attentionItem = view.priorityList.items
-    .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')[0];
-  const decision = view.decisions.state === 'AVAILABLE' ? view.decisions.items[0] : undefined;
-  const attentionPrompt = attentionItem
-    ? view.featuredPrompts.find((prompt) => prompt.id === `attention-${attentionItem.homeActionId}`)
+  const spotlight = resolveConciergeLandingSpotlight(view);
+  const attentionItem = spotlight?.kind === 'ATTENTION'
+    ? view.priorityList.items.find((item) => item.homeActionId === spotlight.entityId)
     : undefined;
-  const decisionPrompt = decision
-    ? view.featuredPrompts.find((prompt) => prompt.id === `decision-${decision.decisionThreadId}`)
+  const decision = spotlight?.kind === 'DECISION'
+    ? view.decisions.items.find((item) => item.decisionThreadId === spotlight.entityId)
     : undefined;
   if (!attentionItem && !decision) return null;
 
@@ -324,14 +323,14 @@ function ConciergeHome({ propertyId, view, loading, failed, onAsk }: {
     <div className="mt-10 text-left">
       {decision ? <section aria-labelledby="ask-decisions-title">
         <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Pick up a thread</p><h2 id="ask-decisions-title" className="mt-1 text-lg font-semibold text-slate-950">Continue where you left off</h2></div>
-        <button type="button" onClick={() => onAsk(decisionPrompt ?? { id: `decision-${decision.decisionThreadId}`, categoryId: 'DECIDE', categoryLabel: 'Decide', question: `Help me continue this decision: ${decision.title}`, context: { entityType: 'DECISION_THREAD', entityId: decision.decisionThreadId } }, 'DECISION')} className="group mt-3 w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-300 hover:shadow-md">
+        <button type="button" onClick={() => onAsk({ id: `decision-${decision.decisionThreadId}`, categoryId: 'DECIDE', categoryLabel: 'Decide', question: `Help me continue this decision: ${decision.title}`, subject: decision.subject ?? undefined, context: { entityType: 'DECISION_THREAD', entityId: decision.decisionThreadId } }, 'DECISION')} className="group mt-3 w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-300 hover:shadow-md">
           <span className="font-semibold text-slate-950 group-hover:text-teal-800">{decision.title}</span>
           <span className="mt-1 block text-sm text-slate-600">Updated {new Date(decision.updatedAt).toLocaleDateString()} · {decision.lifecycleStatus.toLowerCase().replace(/_/g, ' ')}</span>
           <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-teal-700">Continue with Ask Cozy <ArrowRight className="h-4 w-4" /></span>
         </button>
       </section> : attentionItem ? <section aria-labelledby="ask-attention-title">
         <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Based on your home record</p><h2 id="ask-attention-title" className="mt-1 text-lg font-semibold text-slate-950">For your attention</h2></div>
-        <button type="button" onClick={() => onAsk(attentionPrompt ?? { id: `attention-${attentionItem.homeActionId}`, categoryId: attentionItem.askCategoryId, categoryLabel: attentionItem.askCategoryLabel, question: `What should I do next for “${attentionItem.title.replace(/\s+preparation$/i, '')}”?`, context: { entityType: 'HOME_ACTION', entityId: attentionItem.homeActionId, actionId: attentionItem.homeActionId, capabilityId: 'home-operations' } }, 'ATTENTION')} className="group mt-3 w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-300 hover:shadow-md">
+        <button type="button" onClick={() => onAsk({ id: `attention-${attentionItem.homeActionId}`, categoryId: attentionItem.askCategoryId, categoryLabel: attentionItem.askCategoryLabel, question: attentionItem.askQuestion, subject: attentionItem.subject ?? undefined, context: { entityType: 'HOME_ACTION', entityId: attentionItem.homeActionId, actionId: attentionItem.homeActionId, capabilityId: 'home-operations' } }, 'ATTENTION')} className="group mt-3 w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-300 hover:shadow-md">
           <span className="flex flex-wrap items-start justify-between gap-2"><span><span className="block font-semibold text-slate-950 group-hover:text-teal-800">{attentionItem.title}</span><span className="mt-1 block text-sm text-slate-600">{attentionItem.comparativeReasonCodes[0] ? humanizeReason(attentionItem.comparativeReasonCodes[0]) : 'Recommended from your current home record'}{attentionItem.deadlineAt ? ` · Due ${new Date(attentionItem.deadlineAt).toLocaleDateString()}` : ''}</span></span><span className={cn('rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide', attentionItem.consumerPriority === 'DO_NOW' ? 'bg-rose-100 text-rose-800' : attentionItem.consumerPriority === 'PLAN_SOON' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700')}>{attentionItem.consumerPriority.replace(/_/g, ' ')}</span></span>
           <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-teal-700">Ask Cozy about this <ArrowRight className="h-4 w-4" /></span>
         </button>
@@ -1419,7 +1418,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
-  const featuredPrompts = concierge.view?.featuredPrompts?.length ? concierge.view.featuredPrompts.slice(0, 4) : fallbackPrompts;
+  const personalizedFeaturedPrompts = concierge.view ? visibleConciergeFeaturedPrompts(concierge.view) : [];
+  const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
+  const featuredPrompts = usingFallbackPrompts ? fallbackPrompts : personalizedFeaturedPrompts;
   const latestExecutionId = executions.at(-1)?.executionId ?? '';
   const fullWorkspaceHref = buildAskWorkspaceHref({
     propertyId: selectedPropertyId,
@@ -1487,7 +1488,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {renderComposer('hero')}
             <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, concierge.view?.featuredPrompts?.length ? prompt.source : 'FALLBACK')} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, usingFallbackPrompts ? 'FALLBACK' : prompt.source)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
               <CapabilityExplorer
                 groups={concierge.view?.capabilityGroups ?? []}
                 onOpen={() => track('ask_capability_explorer_opened', { propertyId: selectedPropertyId ?? null, groupCount: concierge.view?.capabilityGroups.length ?? 0, capabilityCount: concierge.view?.capabilityGroups.reduce((count, group) => count + group.capabilityIds.length, 0) ?? 0 })}

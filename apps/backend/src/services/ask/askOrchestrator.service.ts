@@ -104,7 +104,7 @@ import { getSuppressedHomeActionIds, recordHomeActionUsefulnessFeedback } from '
 import type { ConciergeHomeView } from '../../productFramework/conciergeHome.contract';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
-import { inventoryDecisionQuestion, selectInventoryDecisionCandidate } from './askConciergePromptPolicy';
+import { conciergeLandingSubjectKey, inventoryDecisionQuestion, selectConciergeLandingSpotlight, selectInventoryDecisionCandidate } from './askConciergePromptPolicy';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
@@ -7228,6 +7228,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
             askQuestion: sourceAction ? focusedHomeActionQuestion(sourceAction) : `What should I do next for “${item.title}”?`,
             askCategoryId: category.categoryId,
             askCategoryLabel: category.categoryLabel,
+            subject: sourceAction?.presentation?.subject ?? null,
             consumerPriority: item.consumerPriority,
             comparativeReasonCodes: item.comparativeReasonCodes,
             confidenceLabel: item.confidenceLabel,
@@ -7293,6 +7294,9 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
           contextStatus: thread.contextStatus,
           verdict: thread.currentRecommendationSnapshot?.verdictCode ?? null,
           confidenceLabel: (thread.currentRecommendationSnapshot?.confidenceBreakdown as { label?: 'HIGH' | 'MEDIUM' | 'LOW' } | null)?.label ?? null,
+          subject: thread.primaryEntityType?.replace(/[^a-z]/gi, '').toUpperCase() === 'INVENTORYITEM' && thread.primaryEntityId
+            ? { kind: 'INVENTORY_ITEM' as const, id: thread.primaryEntityId, label: thread.title.slice(0, 180) }
+            : null,
           updatedAt: thread.updatedAt.toISOString(),
         })),
         href: askHref,
@@ -7411,36 +7415,53 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
   const audienceCapabilityGroups: ConciergeHomeView['capabilityGroups'] = capabilityGroups
     .map((group) => ({ ...group, prompts: group.prompts.filter(promptIsDiscoverable) }))
     .filter((group) => group.prompts.length > 0);
+  const eligiblePriorityItems = priorityList.items
+    .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION');
+  const topPriority = eligiblePriorityItems[0];
+  const topDecision = decisions.state === 'AVAILABLE' ? decisions.items[0] : undefined;
+  const landingSpotlight = selectConciergeLandingSpotlight({ attention: topPriority, decision: topDecision });
+  const spotlightSubject = landingSpotlight?.kind === 'ATTENTION'
+    ? eligiblePriorityItems.find((item) => item.homeActionId === landingSpotlight.entityId)?.subject
+    : landingSpotlight?.kind === 'DECISION'
+      ? decisions.items.find((item) => item.decisionThreadId === landingSpotlight.entityId)?.subject
+      : null;
+  const reservedSubjectKeys = new Set<string>();
+  const spotlightSubjectKey = conciergeLandingSubjectKey(spotlightSubject);
+  if (spotlightSubjectKey) reservedSubjectKeys.add(spotlightSubjectKey);
   const featuredPrompts: ConciergeHomeView['featuredPrompts'] = [];
   const representedOperations = new Set<AskOperationId>();
+  const representedSubjectKeys = new Set<string>();
   const addPrompt = (prompt: ConciergeHomeView['featuredPrompts'][number], boundOperationId?: AskOperationId): boolean => {
     const operationId = boundOperationId ?? promptOperationId(prompt);
+    const subjectKey = conciergeLandingSubjectKey(prompt.subject);
     if (!operationIsDiscoverable(operationId)
       || representedOperations.has(operationId)
       || featuredPrompts.length >= 4
+      || (subjectKey !== null && (reservedSubjectKeys.has(subjectKey) || representedSubjectKeys.has(subjectKey)))
       || featuredPrompts.some((existing) => existing.question.toLowerCase() === prompt.question.toLowerCase())) return false;
     featuredPrompts.push(prompt);
     representedOperations.add(operationId);
+    if (subjectKey) representedSubjectKeys.add(subjectKey);
     return true;
   };
-  if (decisions.state === 'AVAILABLE' && decisions.items[0]) {
+  if (topDecision && !(landingSpotlight?.kind === 'DECISION' && landingSpotlight.entityId === topDecision.decisionThreadId)) {
     addPrompt({
-      id: `decision-${decisions.items[0].decisionThreadId}`,
+      id: `decision-${topDecision.decisionThreadId}`,
       categoryId: 'DECIDE',
       categoryLabel: 'Decide',
-      question: `Help me continue this decision: ${decisions.items[0].title}`,
-      context: { entityType: 'DECISION_THREAD', entityId: decisions.items[0].decisionThreadId },
+      question: `Help me continue this decision: ${topDecision.title}`,
+      subject: topDecision.subject ?? undefined,
+      context: { entityType: 'DECISION_THREAD', entityId: topDecision.decisionThreadId },
       source: 'PERSONALIZED',
     });
   }
-  const topPriority = priorityList.items
-    .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')[0];
-  if (topPriority) {
+  if (topPriority && !(landingSpotlight?.kind === 'ATTENTION' && landingSpotlight.entityId === topPriority.homeActionId)) {
     addPrompt({
       id: `attention-${topPriority.homeActionId}`,
       categoryId: topPriority.askCategoryId,
       categoryLabel: topPriority.askCategoryLabel,
       question: topPriority.askQuestion,
+      subject: topPriority.subject ?? undefined,
       context: { entityType: 'HOME_ACTION', entityId: topPriority.homeActionId, actionId: topPriority.homeActionId, capabilityId: 'home-operations' },
       source: 'PERSONALIZED',
     });
@@ -7451,6 +7472,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
       categoryId: 'DECIDE',
       categoryLabel: 'Decide',
       question: inventoryDecisionQuestion(inventoryDecisionCandidate.name),
+      subject: { kind: 'INVENTORY_ITEM', id: inventoryDecisionCandidate.id, label: inventoryDecisionCandidate.name.slice(0, 180) },
       context: { entityType: 'INVENTORY_ITEM', entityId: inventoryDecisionCandidate.id, capabilityId: 'replace-repair' },
       source: 'PERSONALIZED',
     });
@@ -7485,6 +7507,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     priorityList,
     changes,
     decisions,
+    landingSpotlight,
     capabilityGroups: audienceCapabilityGroups,
     featuredPrompts,
     suggestedQuestions: featuredPrompts.map((prompt) => prompt.question),

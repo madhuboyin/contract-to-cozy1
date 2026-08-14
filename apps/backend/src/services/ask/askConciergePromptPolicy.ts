@@ -6,6 +6,50 @@ type InventoryDecisionCandidate = {
   updatedAt: Date;
 };
 
+export type ConciergeLandingSubject = {
+  kind: string;
+  id: string;
+};
+
+export type ConciergeLandingSpotlight =
+  | { kind: 'ATTENTION'; entityId: string }
+  | { kind: 'DECISION'; entityId: string }
+  | null;
+
+type AttentionCandidate = {
+  homeActionId: string;
+  consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH' | 'OPTIONAL' | 'NO_ACTION';
+};
+
+type DecisionCandidate = { decisionThreadId: string };
+
+/** Stable cross-source identity used to prevent one asset dominating the landing page. */
+export function conciergeLandingSubjectKey(subject?: ConciergeLandingSubject | null): string | null {
+  const kind = subject?.kind.trim().toUpperCase();
+  const id = subject?.id.trim();
+  return kind && id ? `${kind}:${id}` : null;
+}
+
+/**
+ * Landing precedence: actionable attention first, then an active decision,
+ * then lower-urgency personalized attention. Generic prompts never become
+ * the spotlight; they fill the discovery grid after the spotlight is known.
+ */
+export function selectConciergeLandingSpotlight(input: {
+  attention?: AttentionCandidate | null;
+  decision?: DecisionCandidate | null;
+}): ConciergeLandingSpotlight {
+  const attention = input.attention && input.attention.consumerPriority !== 'NO_ACTION'
+    ? input.attention
+    : null;
+  const attentionIsActionable = attention
+    && (attention.consumerPriority === 'DO_NOW' || attention.consumerPriority === 'PLAN_SOON');
+  if (attentionIsActionable) return { kind: 'ATTENTION', entityId: attention.homeActionId };
+  if (input.decision) return { kind: 'DECISION', entityId: input.decision.decisionThreadId };
+  if (attention) return { kind: 'ATTENTION', entityId: attention.homeActionId };
+  return null;
+}
+
 const DECISION_HORIZON_MS = 2 * 365.25 * 24 * 60 * 60 * 1000;
 
 function candidateScore(item: InventoryDecisionCandidate, now: Date): number {

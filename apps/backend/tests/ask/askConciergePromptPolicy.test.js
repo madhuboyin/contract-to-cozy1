@@ -5,7 +5,9 @@ require('ts-node/register');
 
 const {
   inventoryDecisionQuestion,
+  conciergeLandingSubjectKey,
   selectInventoryDecisionCandidate,
+  selectConciergeLandingSpotlight,
 } = require('../../src/services/ask/askConciergePromptPolicy.ts');
 
 const now = new Date('2026-08-14T12:00:00.000Z');
@@ -42,4 +44,24 @@ test('uses property-safe wording when no usable entity label is available', () =
     inventoryDecisionQuestion('   '),
     'Help me compare repair and replacement options for a home system or appliance.',
   );
+});
+
+test('uses stable subject identity across Home Action, decision, and inventory prompt sources', () => {
+  assert.equal(conciergeLandingSubjectKey({ kind: 'inventory_item', id: 'fridge-1' }), 'INVENTORY_ITEM:fridge-1');
+  assert.equal(conciergeLandingSubjectKey(null), null);
+});
+
+test('selects the landing spotlight by actionable attention then decision then lower-urgency attention', () => {
+  const decision = { decisionThreadId: 'decision-1' };
+  assert.deepEqual(selectConciergeLandingSpotlight({
+    attention: { homeActionId: 'action-1', consumerPriority: 'PLAN_SOON' },
+    decision,
+  }), { kind: 'ATTENTION', entityId: 'action-1' });
+  assert.deepEqual(selectConciergeLandingSpotlight({
+    attention: { homeActionId: 'action-1', consumerPriority: 'WATCH' },
+    decision,
+  }), { kind: 'DECISION', entityId: 'decision-1' });
+  assert.deepEqual(selectConciergeLandingSpotlight({
+    attention: { homeActionId: 'action-1', consumerPriority: 'WATCH' },
+  }), { kind: 'ATTENTION', entityId: 'action-1' });
 });

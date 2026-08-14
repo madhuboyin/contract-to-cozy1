@@ -15,12 +15,19 @@
 
 import { z } from 'zod';
 
+export const ConciergeHomeSubjectSchema = z.object({
+  kind: z.enum(['INVENTORY_ITEM', 'CHECKLIST', 'PROPERTY', 'EVENT', 'SALE_READINESS_ITEM', 'GUIDANCE_JOURNEY', 'WORK_ITEM']),
+  id: z.string().trim().min(1).max(160),
+  label: z.string().trim().min(1).max(180),
+});
+
 export const ConciergeHomePriorityItemSchema = z.object({
   homeActionId: z.string(),
   title: z.string(),
   askQuestion: z.string(),
   askCategoryId: z.enum(['MAINTAIN', 'PROTECT', 'SAVE', 'PLAN_MONITOR']),
   askCategoryLabel: z.enum(['Maintain', 'Protect', 'Save', 'Plan']),
+  subject: ConciergeHomeSubjectSchema.nullable(),
   consumerPriority: z.enum(['DO_NOW', 'PLAN_SOON', 'WATCH', 'OPTIONAL', 'NO_ACTION']),
   comparativeReasonCodes: z.array(z.string()),
   confidenceLabel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
@@ -65,6 +72,7 @@ export const ConciergeHomeDecisionItemSchema = z.object({
   contextStatus: z.string(),
   verdict: z.string().nullable(),
   confidenceLabel: z.enum(['HIGH', 'MEDIUM', 'LOW']).nullable(),
+  subject: ConciergeHomeSubjectSchema.nullable(),
   updatedAt: z.string(),
 });
 
@@ -79,6 +87,7 @@ export const ConciergeHomeCapabilityPromptSchema = z.object({
   categoryId: z.enum(['UNDERSTAND', 'MAINTAIN', 'PROTECT', 'SAVE', 'DECIDE', 'PLAN_MONITOR']),
   categoryLabel: z.string(),
   question: z.string(),
+  subject: ConciergeHomeSubjectSchema.optional(),
   context: z.object({
     entityType: z.enum(['HOME_ACTION', 'DECISION_THREAD', 'INVENTORY_ITEM']),
     entityId: z.string().trim().min(1).max(160),
@@ -116,6 +125,10 @@ export const ConciergeHomeViewSchema = z.object({
   priorityList: ConciergeHomePriorityListSchema,
   changes: ConciergeHomeChangesSchema,
   decisions: ConciergeHomeDecisionsSchema,
+  landingSpotlight: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('ATTENTION'), entityId: z.string().trim().min(1).max(160) }),
+    z.object({ kind: z.literal('DECISION'), entityId: z.string().trim().min(1).max(160) }),
+  ]).nullable(),
   capabilityGroups: z.array(ConciergeHomeCapabilityGroupSchema),
   featuredPrompts: z.array(ConciergeHomeFeaturedPromptSchema),
   suggestedQuestions: z.array(z.string()),

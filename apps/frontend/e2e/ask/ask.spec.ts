@@ -13,11 +13,11 @@ test('starting surface teaches capability breadth without competing CTAs', async
   await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
   await expect(page.getByText('Decide', { exact: true })).toBeVisible();
-  await expect(page.getByText('Maintain', { exact: true })).toBeVisible();
   await expect(page.getByText('Protect', { exact: true })).toBeVisible();
   await expect(page.getByText('Save', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Continue where you left off' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'For your attention' })).toHaveCount(0);
+  await expect(page.getByText('Understand', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'For your attention' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Continue where you left off' })).toHaveCount(0);
   await expect(page.getByText('View all', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Ask why', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: /Help me continue this decision: Repair or replace the refrigerator/ }).first().click();
@@ -25,6 +25,21 @@ test('starting surface teaches capability breadth without competing CTAs', async
   expect(api.executionBodies[0]).toMatchObject({
     launchContext: { entityType: 'DECISION_THREAD', entityId: 'decision-1' },
   });
+});
+
+test('one home subject appears only once across discovery and attention', async ({ page }) => {
+  await installAskApi(page, { duplicateRefrigerator: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+
+  const attention = page.getByRole('button', { name: /Plan ahead for Refrigerator.*Ask Cozy about this/ });
+  await expect(attention).toBeVisible();
+  await expect(page.getByRole('button', { name: /Help me continue this decision: Repair or replace the refrigerator/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /What should I do next for.*Plan ahead for Refrigerator/ })).toHaveCount(0);
+  await expect(page.getByText('Decide', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Maintain', { exact: true })).toBeVisible();
+  await expect(page.getByText('Understand', { exact: true })).toBeVisible();
+  await expect(page.getByText('Protect', { exact: true })).toBeVisible();
+  await expect(page.getByText('Save', { exact: true })).toBeVisible();
 });
 
 test('degraded personalization falls back to property-safe capability examples', async ({ page }) => {
