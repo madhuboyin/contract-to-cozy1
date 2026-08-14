@@ -122,6 +122,16 @@ function eligibleSkill(
     && skill.consumerPolicy.some((policy) => policy.consumer === consumer && policy.operations.length > 0);
 }
 
+function eligibleSkillOperation(
+  skill: SkillDefinition,
+  operationId: AskOperationId,
+  consumer: SkillConsumer,
+  skillEnabled: (skillId: string) => boolean,
+): boolean {
+  return eligibleSkill(skill, consumer, skillEnabled)
+    && skill.consumerPolicy.some((policy) => policy.consumer === consumer && policy.operations.includes(operationId));
+}
+
 function operationOwner(
   operationId: AskOperationId,
   definitions: Readonly<Record<string, SkillDefinition>>,
@@ -168,7 +178,7 @@ export function resolveHierarchicalSkillRouting(
         semanticIndexVersion: index.version,
       };
     }
-    if (!eligibleSkill(skill, consumer, skillEnabled)) {
+    if (!eligibleSkillOperation(skill, operationDecision.operation.operationId, consumer, skillEnabled)) {
       return {
         outcome: 'UNAVAILABLE', path: 'OPERATION_OWNERSHIP', selectedSkill: null,
         selectedOperationId: operationDecision.operation.operationId,

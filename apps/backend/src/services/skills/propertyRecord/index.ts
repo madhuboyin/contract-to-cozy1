@@ -1,0 +1,1 @@
+export { PROPERTY_RECORD_SKILL, PROPERTY_RECORD_SKILL_OPERATIONS } from './skill.manifest';

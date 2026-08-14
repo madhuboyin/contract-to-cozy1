@@ -12,10 +12,12 @@ import type {
 import { MAINTENANCE_SKILL } from './maintenance';
 import { REPAIR_REPLACE_SKILL } from './repairReplace';
 import { REFINANCE_SKILL } from './refinance';
+import { PROPERTY_RECORD_SKILL } from './propertyRecord';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const ROLE_RANK: Record<Exclude<AskPropertyRoleFloor, null>, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
+const SKILL_CONSUMERS: ReadonlySet<SkillConsumer> = new Set(['ASK', 'HOME_ACTIONS', 'CONCIERGE_HOME', 'PROACTIVE', 'NOTIFICATION_CONTINUATION']);
 const PLATFORM_CONTEXT_BUDGET_MAXIMUMS = Object.freeze({
   maxFacts: 100,
   maxEntities: 50,
@@ -30,6 +32,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   maintenance: MAINTENANCE_SKILL,
   'repair-replace': REPAIR_REPLACE_SKILL,
   refinance: REFINANCE_SKILL,
+  'property-record': PROPERTY_RECORD_SKILL,
 } satisfies Readonly<Record<string, SkillDefinition>>);
 
 export type SkillId = keyof typeof SKILL_DEFINITIONS;
@@ -133,8 +136,16 @@ export function validateSkillDefinitions(
       }
     }
 
+    const declaredConsumers = new Set<SkillConsumer>();
     for (const consumer of skill.consumerPolicy) {
+      if (!SKILL_CONSUMERS.has(consumer.consumer)) issues.push(`${key}: unknown consumer ${consumer.consumer}`);
+      if (declaredConsumers.has(consumer.consumer)) issues.push(`${key}: duplicate consumer policy ${consumer.consumer}`);
+      declaredConsumers.add(consumer.consumer);
+      if (!consumer.operations.length) issues.push(`${key}: consumer ${consumer.consumer} has no operations`);
+      const consumerOperations = new Set<AskOperationId>();
       for (const operationId of consumer.operations) {
+        if (consumerOperations.has(operationId)) issues.push(`${key}: consumer ${consumer.consumer} duplicates operation ${operationId}`);
+        consumerOperations.add(operationId);
         if (!skill.operations.some((operation) => operation.operationId === operationId)) issues.push(`${key}: consumer ${consumer.consumer} references undeclared operation ${operationId}`);
       }
     }
