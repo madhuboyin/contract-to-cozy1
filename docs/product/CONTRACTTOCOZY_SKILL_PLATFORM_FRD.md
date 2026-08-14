@@ -2,9 +2,9 @@
 title: "ContractToCozy Skill Platform"
 subtitle: "Governed capability architecture for AI Home Concierge and Home Intelligence"
 document_type: "Functional Requirements Document"
-status: "Proposed for implementation"
-version: "1.0"
-date: "August 13, 2026"
+status: "Implemented beta baseline"
+version: "1.1"
+date: "August 14, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence / AI Home Concierge"
 parent_documents:
   - "AI_HOME_CONCIERGE_ASK_REDO_FRD.md v1.6"
@@ -17,12 +17,12 @@ parent_documents:
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed for implementation |
-| Version | 1.0 |
-| Date | August 13, 2026 |
+| Status | Implemented beta baseline |
+| Version | 1.1 |
+| Date | August 14, 2026 |
 | Product area | Homeowner Product / Home Intelligence / AI Home Concierge |
-| Primary consumer | Cozy AI Home Concierge / Ask |
-| Future consumers | Home Actions, Concierge Home, proactive intelligence, notification continuations, mobile experiences, major-event journeys, approved external interfaces |
+| Active consumers | Ask, Home Actions, Concierge Home |
+| Future consumers | Proactive intelligence, notification continuations, mobile experiences, major-event journeys, approved external interfaces |
 | Parent Ask contract | [AI Home Concierge — Ask Redo v1.6](./AI_HOME_CONCIERGE_ASK_REDO_FRD.md) |
 | Parent intelligence contract | [AI Home Concierge — Intelligence, Personalization, and Proactive Concierge v1.3](./AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md) |
 | Development posture | Beta architectural refactor; no real-user migration or launch-gate program |
@@ -60,6 +60,27 @@ Living Home Record
 The architectural objective is to allow ContractToCozy to add and evolve homeowner capabilities without continually adding capability-specific behavior to the central Concierge.
 
 The platform is not an autonomous-agent framework, open plugin runtime, generic tool-execution environment, or replacement for domain ownership.
+
+### 1.1 Current implementation status
+
+The Version 1 beta engineering baseline is implemented. This is an implementation-completeness statement for the no-real-user beta posture; it is not a production-readiness, launch, privacy, security, or external-delivery approval.
+
+Implementation snapshot as of August 14, 2026:
+
+| Area | Implemented evidence |
+| --- | --- |
+| Delivery phases | SP0 through SP5 complete |
+| Skill catalog | 14 immutable registered Skill packages covering the initial representative taxonomy |
+| Governed adapters | 30 versioned adapters bound to existing canonical operations and domain owners |
+| Active consumers | Ask, Concierge Home, and Home Actions; Concierge Home and Home Actions invoke Property Record reads through the consumer-governed Skill runtime |
+| Routing | Deterministic operation ownership, versioned local semantic index, bounded candidate ranking, and fail-closed clarification; no LLM or embedding routing call |
+| Context | Registered provider contracts, bounded composition, authorization propagation, deduplication, provenance, freshness/conflict handling, timeout, and degraded-mode behavior |
+| Runtime controls | Global Ask, Consumer, Domain, Skill, Operation, Context Provider, Adapter, and Narrative Synthesis controls are live; manifest feature-flag and kill-switch names are validated runtime bindings |
+| Evaluation | Every registered Skill has immutable routing, operation, ambiguity, policy, context, negative, degraded-mode, model-disabled, handoff, and performance fixtures |
+| Package scaffolding | Generated manifests retain only versioned adapter references; generated evaluation packages are deeply immutable |
+| Verification | 168 Ask tests passing, TypeScript validation passing, and taxonomy expansion verified without Skill-specific core-router branches |
+| Database impact | No database schema change or migration script required by the completed Skill Platform slices |
+| Deferred boundaries | External connectors and model-assisted routing remain unimplemented until a concrete requirement introduces their governed runtimes |
 
 ---
 
@@ -1151,6 +1172,8 @@ The phases are dependency-ordered development slices, not migration or launch st
 
 ### Phase SP0 — Contracts and static registry
 
+**Status: Complete.** Implemented evidence includes the typed contracts, static registry, deterministic version resolution, startup validation, package scaffolder, effective-policy resolver, execution telemetry identity, and registered read operations.
+
 Deliver:
 
 - Skill types, lifecycle, risk, consumer, dependency, and context-budget contracts;
@@ -1170,6 +1193,8 @@ Completion evidence:
 
 ### Phase SP1 — Maintenance vertical slice
 
+**Status: Complete.** Maintenance status, create, complete, update, and monitor operations retain their canonical implementations while using Skill policy, authorization, confirmation, context, telemetry, and runtime controls.
+
 Represent Maintenance as the first full Skill using existing operation behavior:
 
 - status;
@@ -1183,6 +1208,8 @@ This slice shall prove reads, writes, entity clarification, inline capture, auth
 Because there are no real users, obsolete Maintenance-specific central routing code may be consolidated or removed after equivalent behavior is covered by automated tests.
 
 ### Phase SP2 — Hierarchical routing
+
+**Status: Complete.** Operation ownership and the deterministic semantic index resolve registered Skills without model assistance; ambiguity, negative routing, semantic conflicts, lineage, candidate ceilings, and model-disabled behavior are covered by automated evaluations.
 
 Deliver:
 
@@ -1200,6 +1227,8 @@ Maintenance plus fixture Skills shall prove ambiguous and negative routing befor
 
 ### Phase SP3 — Context composition
 
+**Status: Complete.** Provider registration, authorization rechecks, declared-access enforcement, budgets, deduplication, provenance, freshness/conflict handling, timeout, and required/optional degraded behavior are operational.
+
 Deliver:
 
 - Context Provider Registry;
@@ -1211,6 +1240,8 @@ Deliver:
 
 ### Phase SP4 — Decision and financial Skills
 
+**Status: Complete.** Repair or Replace and Refinance use existing Decision Platform, inventory, refinance analysis, preference, scenario, outcome, and monitoring contracts with versioned Skill lineage and fail-closed policy checks.
+
 Represent:
 
 - Repair or Replace; and
@@ -1219,6 +1250,8 @@ Represent:
 Reuse the existing canonical operations and intelligence contracts for Decision Threads, Scenarios, preferences, Recommendation Snapshots, and monitors. This slice proves material decision lineage, financial boundaries, optional external context, scenario isolation, and recommendation-change explanation.
 
 ### Phase SP5 — Catalog expansion and multi-surface access
+
+**Status: Complete.** All fourteen representative Skills are registered with 30 governed adapters. The expansion added no Skill-specific core-router branches, and production Concierge Home and Home Actions paths invoke Property Record through explicit consumer policy.
 
 Add Skills selected from the initial taxonomy and enable explicit consumers beyond Ask.
 
@@ -1360,6 +1393,8 @@ The initial Skill Platform implementation is complete when:
 - representative performance smoke tests demonstrate bounded execution without requiring production-scale optimization;
 - a subsequent Skill can be added without modifying central Ask orchestration; and
 - relevant contract, unit, integration, negative, authorization, concurrency, degraded-mode, and end-to-end tests pass.
+
+**Implementation determination: Satisfied as of August 14, 2026.** SP0 through SP5 are complete, all fourteen representative Skills and 30 governed adapters are registered, non-Ask production invocation is operational, all registered Skills have evaluation packages, 168 Ask tests pass, and backend TypeScript validation passes.
 
 This Definition of Done establishes the beta engineering architecture. It does not assert production readiness or authorize real-user data collection, proactive external delivery, partner Skills, or public launch.
 
