@@ -378,24 +378,6 @@ export const geminiRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-/** Ask includes deterministic reads, capture, clarification, and confirmation calls;
- * keep it out of the Gemini-only bucket while retaining a shared abuse ceiling. */
-export const askRateLimiter = rateLimit({
-  windowMs: geminiWindowMs,
-  max: 120,
-  keyGenerator: rateLimitKey,
-  store: new RedisRateLimitStore('ask', geminiWindowMs),
-  message: {
-    success: false,
-    error: {
-      message: 'Too many Ask requests. Try again after the current rate-limit window.',
-      code: 'ASK_RATE_LIMITED',
-    },
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 const expensiveAiWindowMs = 24 * 60 * 60 * 1000; // 24 hours
 
 /**

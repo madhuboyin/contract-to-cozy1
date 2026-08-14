@@ -22,6 +22,22 @@ test('starting surface teaches capability breadth without competing CTAs', async
   await expect(page.getByText('Ask why', { exact: true })).toHaveCount(0);
 });
 
+test('degraded personalization falls back to property-safe capability examples', async ({ page }) => {
+  await installAskApi(page);
+  await page.unroute('http://localhost:8080/api/ask/concierge-home*');
+  await page.route('http://localhost:8080/api/ask/concierge-home*', (route) => route.fulfill({
+    status: 503,
+    contentType: 'application/json',
+    body: JSON.stringify({ success: false, error: { message: 'Concierge unavailable', code: 'UNAVAILABLE' } }),
+  }));
+
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+
+  await expect(page.getByText('Your personalized home overview is temporarily unavailable. You can still ask any question above.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Help me compare repair and replacement options for a home system or appliance/ })).toBeVisible();
+  await expect(page.getByText('Should I repair or replace my refrigerator?', { exact: true })).toHaveCount(0);
+});
+
 test('capability explorer progressively reveals registry-backed examples', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

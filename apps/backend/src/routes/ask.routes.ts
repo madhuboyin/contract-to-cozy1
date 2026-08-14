@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { askRateLimiter } from '../middleware/rateLimiter.middleware';
 import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskFeedback, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
 router.use(authenticate);
-router.use(askRateLimiter);
 router.get('/ask/concierge-home', getAskConciergeHome);
 router.post('/ask/executions', postAskExecution);
 router.post('/ask/executions/:executionId/captures', postAskCapture);

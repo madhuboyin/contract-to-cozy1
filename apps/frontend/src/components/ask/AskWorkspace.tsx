@@ -15,7 +15,7 @@ const fallbackPrompts: AskFeaturedPrompt[] = [
   { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?', source: 'DISCOVERY' },
   { id: 'protect-coverage', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage?', source: 'DISCOVERY' },
   { id: 'save-opportunities', categoryId: 'SAVE', categoryLabel: 'Save', question: 'Where could I save money on this home?', source: 'DISCOVERY' },
-  { id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Should I repair or replace my refrigerator?', source: 'DISCOVERY' },
+  { id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me compare repair and replacement options for a home system or appliance.', source: 'DISCOVERY' },
 ];
 
 type AskPromptSource = 'PERSONALIZED' | 'DISCOVERY' | 'FALLBACK' | 'EXPLORER' | 'ATTENTION' | 'DECISION';

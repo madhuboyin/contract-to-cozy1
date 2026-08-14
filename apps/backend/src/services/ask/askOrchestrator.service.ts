@@ -88,6 +88,7 @@ import { getSuppressedHomeActionIds, recordHomeActionUsefulnessFeedback } from '
 import type { ConciergeHomeView } from '../../productFramework/conciergeHome.contract';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
+import { inventoryDecisionQuestion, selectInventoryDecisionCandidate } from './askConciergePromptPolicy';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
@@ -6718,7 +6719,7 @@ const CONCIERGE_CAPABILITY_GROUPS: readonly ConciergeCapabilityGroupDefinition[]
     id: 'DECIDE', label: 'Compare and decide', outcomeCategory: 'DECIDE_COMPARE',
     description: 'Compare options with the relevant home context.',
     prompts: [
-      { id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Should I repair or replace my refrigerator?' },
+      { id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me compare repair and replacement options for a home system or appliance.' },
       { id: 'decide-quotes', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me compare contractor quotes.' },
     ],
   },
@@ -6856,7 +6857,38 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
     }
   })();
 
-  const [priorityList, changes, decisions] = await Promise.all([priorityListPromise, changesPromise, decisionsPromise]);
+  const inventoryDecisionCandidatePromise = (async () => {
+    try {
+      const select = { id: true, name: true, condition: true, expectedExpiryDate: true, updatedAt: true } as const;
+      const [conditionItems, lifecycleItems] = await Promise.all([
+        prisma.inventoryItem.findMany({
+          where: { propertyId, condition: { in: ['FAIR', 'POOR'] } },
+          select,
+          orderBy: [{ condition: 'desc' }, { updatedAt: 'desc' }],
+          take: 25,
+        }),
+        prisma.inventoryItem.findMany({
+          where: { propertyId, expectedExpiryDate: { lte: new Date(Date.now() + 2 * 365.25 * 24 * 60 * 60 * 1000) } },
+          select,
+          orderBy: [{ expectedExpiryDate: 'asc' }, { updatedAt: 'desc' }],
+          take: 25,
+        }),
+      ]);
+      return selectInventoryDecisionCandidate([
+        ...new Map([...conditionItems, ...lifecycleItems].map((item) => [item.id, item])).values(),
+      ]);
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home inventory-aware prompt selection failed closed');
+      return null;
+    }
+  })();
+
+  const [priorityList, changes, decisions, inventoryDecisionCandidate] = await Promise.all([
+    priorityListPromise,
+    changesPromise,
+    decisionsPromise,
+    inventoryDecisionCandidatePromise,
+  ]);
   const featuredPrompts: ConciergeHomeView['featuredPrompts'] = [];
   const addPrompt = (prompt: ConciergeHomeView['featuredPrompts'][number]) => {
     if (featuredPrompts.length >= 4 || featuredPrompts.some((existing) => existing.question.toLowerCase() === prompt.question.toLowerCase())) return;
@@ -6869,6 +6901,15 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
     .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')[0];
   if (topPriority) {
     addPrompt({ id: `attention-${topPriority.homeActionId}`, categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: `What should I do next about ${topPriority.title}?`, source: 'PERSONALIZED' });
+  }
+  if (inventoryDecisionCandidate && !featuredPrompts.some((prompt) => prompt.categoryId === 'DECIDE')) {
+    addPrompt({
+      id: `inventory-decision-${inventoryDecisionCandidate.id}`,
+      categoryId: 'DECIDE',
+      categoryLabel: 'Decide',
+      question: inventoryDecisionQuestion(inventoryDecisionCandidate.name),
+      source: 'PERSONALIZED',
+    });
   }
   const representedCategories = new Set(featuredPrompts.map((prompt) => prompt.categoryId));
   for (const group of capabilityGroups) {
