@@ -115,6 +115,7 @@ import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
 import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
 import { SKILL_DEPENDENCY_ACTIVATIONS } from '../skills/skillDependencyRegistry';
 import { buildFocusedHomeActionGuidance, focusedHomeActionCategory, focusedHomeActionQuestion, focusedOperationForLaunchContext } from './askFocusedGuidance';
+import { lifecyclePromptsFor } from './askLifecyclePromptPolicy';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -7061,6 +7062,7 @@ const CONCIERGE_CAPABILITY_GROUPS: readonly ConciergeCapabilityGroupDefinition[]
 export async function getConciergeHome(userId: string, propertyId: string, accountRole?: AskAccountRole): Promise<ConciergeHomeView> {
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const conciergeAccess = await ensurePropertyAccess(userId, propertyId);
+  const controls = readAskOperationalControls();
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const askHref = `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}`;
   const capabilityGroups: ConciergeHomeView['capabilityGroups'] = (() => {
@@ -7221,7 +7223,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
         operationId: 'PROPERTY_SUMMARY',
         userId,
         propertyId,
-      }, { providerEnabled: readAskOperationalControls().contextProviderEnabled });
+      }, { providerEnabled: controls.contextProviderEnabled });
       const entry = composed.entries.find((candidate) => candidate.key === skillContextProviderKey(PROPERTY_JOURNEY_CONTEXT_PROVIDER));
       const context = journeyContextFrom(composed);
       if (entry?.status === 'UNKNOWN' || (entry?.status === 'AVAILABLE' && !context)) {
@@ -7262,13 +7264,19 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     journeyContextPromise,
   ]);
   const discoveryOperatingMode = journeyContext.state === 'AVAILABLE' ? journeyContext.operatingMode : 'UNKNOWN';
-  const promptIsDiscoverable = (prompt: ConciergeHomeView['featuredPrompts'][number] | ConciergeHomeView['capabilityGroups'][number]['prompts'][number]): boolean => {
-    const contextualOperation = prompt.context?.entityType === 'DECISION_THREAD'
+  const promptOperationId = (prompt: ConciergeHomeView['featuredPrompts'][number] | ConciergeHomeView['capabilityGroups'][number]['prompts'][number]): AskOperationId => {
+    const contextualOperation: AskOperationId | null = prompt.context?.entityType === 'DECISION_THREAD'
       ? 'HVAC_DECISION_CONTINUE'
       : prompt.context?.entityType === 'INVENTORY_ITEM'
         ? 'REPLACEMENT_GUIDANCE'
+        : prompt.context?.entityType === 'HOME_ACTION'
+          ? 'HOME_ACTIONS'
         : null;
-    const operationId = contextualOperation ?? resolveAskOperation(prompt.question).operationId;
+    return contextualOperation ?? resolveAskOperation(prompt.question).operationId;
+  };
+  const operationIsDiscoverable = (operationId: AskOperationId): boolean => {
+    if (!controls.operationEnabled(operationId)) return false;
+    if (skillRuntimeUnavailableReason(operationId, controls)) return false;
     const policy = getAskAudiencePolicy(operationId, getAskOperationDefinition(operationId).version);
     if (!policy) return true;
     return evaluateAskAudienceApplicability({
@@ -7279,13 +7287,23 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
       purpose: 'DISCOVERY',
     }).discoverable;
   };
+  const promptIsDiscoverable = (prompt: ConciergeHomeView['featuredPrompts'][number] | ConciergeHomeView['capabilityGroups'][number]['prompts'][number]): boolean => (
+    operationIsDiscoverable(promptOperationId(prompt))
+  );
   const audienceCapabilityGroups: ConciergeHomeView['capabilityGroups'] = capabilityGroups
     .map((group) => ({ ...group, prompts: group.prompts.filter(promptIsDiscoverable) }))
     .filter((group) => group.prompts.length > 0);
   const featuredPrompts: ConciergeHomeView['featuredPrompts'] = [];
-  const addPrompt = (prompt: ConciergeHomeView['featuredPrompts'][number]) => {
-    if (!promptIsDiscoverable(prompt) || featuredPrompts.length >= 4 || featuredPrompts.some((existing) => existing.question.toLowerCase() === prompt.question.toLowerCase())) return;
+  const representedOperations = new Set<AskOperationId>();
+  const addPrompt = (prompt: ConciergeHomeView['featuredPrompts'][number], boundOperationId?: AskOperationId): boolean => {
+    const operationId = boundOperationId ?? promptOperationId(prompt);
+    if (!operationIsDiscoverable(operationId)
+      || representedOperations.has(operationId)
+      || featuredPrompts.length >= 4
+      || featuredPrompts.some((existing) => existing.question.toLowerCase() === prompt.question.toLowerCase())) return false;
     featuredPrompts.push(prompt);
+    representedOperations.add(operationId);
+    return true;
   };
   if (decisions.state === 'AVAILABLE' && decisions.items[0]) {
     addPrompt({
@@ -7320,10 +7338,21 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     });
   }
   const representedCategories = new Set(featuredPrompts.map((prompt) => prompt.categoryId));
+  const lifecyclePrompts = lifecyclePromptsFor(journeyContext.state === 'AVAILABLE' ? journeyContext.ownershipState : null);
+  for (const prompt of lifecyclePrompts) {
+    if (representedCategories.has(prompt.categoryId)) continue;
+    const added = addPrompt({
+      id: prompt.id,
+      categoryId: prompt.categoryId,
+      categoryLabel: prompt.categoryLabel,
+      question: prompt.question,
+      source: 'PERSONALIZED',
+    }, prompt.operationId);
+    if (added) representedCategories.add(prompt.categoryId);
+  }
   for (const group of audienceCapabilityGroups) {
     if (representedCategories.has(group.id) || !group.prompts[0]) continue;
-    addPrompt({ ...group.prompts[0], source: 'DISCOVERY' });
-    representedCategories.add(group.id);
+    if (addPrompt({ ...group.prompts[0], source: 'DISCOVERY' })) representedCategories.add(group.id);
   }
   for (const group of audienceCapabilityGroups) {
     for (const prompt of group.prompts) addPrompt({ ...prompt, source: 'DISCOVERY' });
