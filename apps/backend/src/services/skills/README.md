@@ -6,6 +6,10 @@ This package implements the static Version 1 Skill contracts described in
 - `skill.contract.ts` contains machine-enforced Skill types.
 - `skillRegistry.ts` contains immutable Skill definitions, validation, operation lookup,
   and effective consumer/Skill/operation policy resolution.
+- `skillEvaluationRegistry.ts` binds every manifest's `evaluationSuite` to immutable
+  routing, operation, ambiguity, policy, context, negative, degraded-mode,
+  model-disabled, handoff, and performance fixtures. Startup rejects missing, stale,
+  incomplete, cross-Skill, or unbounded packages.
 
 The registered Skills reference existing Ask operations and canonical adapters. New Ask
 executions persist a versioned Skill binding after the additive `AskExecution` schema

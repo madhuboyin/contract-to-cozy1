@@ -191,6 +191,7 @@ import { validateSkillDefinitions } from './services/skills/skillRegistry';
 import { validateSkillContextProviderDefinitions } from './services/skills/context/skillContextProviderRegistry';
 import { validateSkillAdapterDefinitions } from './services/skills/adapters/skillAdapterRegistry';
 import { detectSkillSemanticConflicts } from './services/skills/skillRouter';
+import { validateSkillEvaluationPackages } from './services/skills/skillEvaluationRegistry';
 import { validateDecisionPreferenceRegistry } from './services/decisionPlatform/decisionPreferenceRegistry';
 import { validateDecisionContextContracts } from './services/decisionPlatform/decisionContextContracts';
 import { validateDecisionDefinitionRegistry } from './services/decisionPlatform/decisionDefinitionRegistry';
@@ -205,6 +206,7 @@ const askRegistryIssues = [
   ...validateSkillContextProviderDefinitions(),
   ...validateSkillAdapterDefinitions(),
   ...detectSkillSemanticConflicts(),
+  ...validateSkillEvaluationPackages(),
 ];
 if (askRegistryIssues.length) {
   throw new Error(`FATAL: Ask registry validation failed: ${askRegistryIssues.join('; ')}`);
