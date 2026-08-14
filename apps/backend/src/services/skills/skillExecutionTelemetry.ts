@@ -1,5 +1,5 @@
 import type { AskExecutionMode, AskOperationId } from '../ask/askOperationRegistry';
-import type { ComposedSkillContext } from './context/skillContext.contract';
+import type { ComposedSkillContext, SkillContextProviderStatus } from './context/skillContext.contract';
 import type { SkillRiskPolicy } from './skill.contract';
 import type { SkillExecutionBinding } from './skillExecutionBinding';
 import type { HierarchicalSkillRoutingDecision } from './skillRouter';
@@ -17,6 +17,26 @@ export type SkillConfidenceBand = 'NOT_AVAILABLE' | 'LOW' | 'MEDIUM' | 'HIGH';
 export type SkillModelUsage = 'NONE' | 'ROUTING' | 'NARRATIVE_SYNTHESIS' | 'OPERATION_GENERATION';
 export type SkillModelCostBand = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
 
+export interface SkillAudienceTelemetrySnapshot {
+  accountRole: 'HOMEOWNER' | 'PROVIDER' | 'ADMIN' | 'UNKNOWN';
+  householdRole: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER' | 'UNKNOWN';
+  operatingMode: 'BUYING' | 'OWNING' | 'SELLING' | 'UNKNOWN';
+  propertyRelationship: 'AUTHORIZED_HOUSEHOLD' | 'NOT_APPLICABLE' | 'UNKNOWN';
+  audienceEligibilityOutcome: 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN';
+  audienceApplicabilityOutcome:
+    | 'APPLICABLE'
+    | 'APPLICABLE_GENERAL'
+    | 'CONTEXT_REQUIRED'
+    | 'INAPPLICABLE_EXPLAIN'
+    | 'INAPPLICABLE_BLOCK'
+    | 'HIDDEN'
+    | 'NOT_EVALUATED'
+    | 'UNKNOWN';
+  audiencePolicyVersion: string | null;
+  audiencePolicyEvaluationMode: 'ENABLED' | 'SAFE_FALLBACK' | 'NOT_APPLICABLE';
+  journeyContextStatus: SkillContextProviderStatus | 'NOT_EVALUATED';
+}
+
 export interface SkillExecutionTimingTrace {
   routingLatencyMs: number | null;
   contextCompositionLatencyMs: number | null;
@@ -27,6 +47,7 @@ export interface SkillExecutionTimingTrace {
   modelUsage: SkillModelUsage;
   modelCharacters: number | null;
   context: ComposedSkillContext | null;
+  audience: SkillAudienceTelemetrySnapshot | null;
 }
 
 export function createSkillExecutionTimingTrace(routingLatencyMs: number | null = null): SkillExecutionTimingTrace {
@@ -40,6 +61,7 @@ export function createSkillExecutionTimingTrace(routingLatencyMs: number | null 
     modelUsage: 'NONE',
     modelCharacters: null,
     context: null,
+    audience: null,
   };
 }
 
@@ -86,6 +108,7 @@ export function buildSkillExecutionTelemetry(input: {
     status: entry.status,
     latencyBand: skillLatencyBand(entry.latencyMs),
   })) ?? [];
+  const audience = input.trace.audience;
   return {
     schemaVersion: '1.0.0',
     skillId: input.binding?.skill.id ?? input.routing.selectedSkill?.id ?? null,
@@ -112,6 +135,15 @@ export function buildSkillExecutionTelemetry(input: {
     modelUsage: input.trace.modelUsage,
     modelLatencyBand: skillLatencyBand(input.trace.modelLatencyMs),
     modelCostBand: modelCostBand(input.trace.modelUsage, input.trace.modelCharacters),
+    accountRole: audience?.accountRole ?? 'UNKNOWN',
+    householdRole: audience?.householdRole ?? 'UNKNOWN',
+    operatingMode: audience?.operatingMode ?? 'UNKNOWN',
+    propertyRelationship: audience?.propertyRelationship ?? 'NOT_APPLICABLE',
+    audienceEligibilityOutcome: audience?.audienceEligibilityOutcome ?? 'UNKNOWN',
+    audienceApplicabilityOutcome: audience?.audienceApplicabilityOutcome ?? 'NOT_EVALUATED',
+    audiencePolicyVersion: audience?.audiencePolicyVersion ?? null,
+    audiencePolicyEvaluationMode: audience?.audiencePolicyEvaluationMode ?? 'NOT_APPLICABLE',
+    journeyContextStatus: audience?.journeyContextStatus ?? 'NOT_APPLICABLE',
     resultStatus: input.resultStatus,
     errorCode: input.errorCode,
   };

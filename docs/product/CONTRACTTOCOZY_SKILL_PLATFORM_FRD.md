@@ -77,8 +77,8 @@ Implementation snapshot as of August 14, 2026:
 | Context | Every registered property-scoped Skill requires the versioned Living Home Record identity provider and optionally consumes `property.journey-context@1.0.0`; Maintenance additionally consumes its task provider. Composition enforces authorization, deduplication, provenance, freshness/conflict handling, timeout, budgets, and degraded behavior. Successful Ask executions retain the bounded journey snapshot, and Concierge Home exposes an explicit journey-context state. |
 | Audience applicability | 30 immutable operation policies cover every operation owned by the 14 property Skills. Deterministic evaluation runs after context composition and before adapter dispatch, is rechecked before material confirmation, returns stable inapplicability/context-required outcomes, and filters Concierge discovery prompts without client role guesses. An operation-bound lifecycle catalog fills featured prompts only after exact contextual prompts while preserving the four-card ceiling, role/runtime filtering, operation deduplication, and safe unknown-context fallbacks. |
 | Audience presentation | Canonical Skill results pass through a bounded post-execution presentation policy that adds lifecycle framing and filters unusable mutation CTAs by live household role. It preserves canonical facts, calculations, evidence, rankings, result status, authorization, and confirmation requirements. |
-| Observability | Every initial Ask execution emits one bounded `SKILL_EXECUTION_TELEMETRY` event with versioned identity, consumer, routing confidence/reasons, provider and dependency status, effective risk, execution/model mode, per-stage latency bands, result status, and error code. Phase histograms remain separate. |
-| Runtime controls | Global Ask, Consumer, Domain, Skill, Operation, Context Provider, Adapter, and Narrative Synthesis controls are live; manifest feature-flag and kill-switch names are validated runtime bindings |
+| Observability | Every initial Ask execution emits one bounded `SKILL_EXECUTION_TELEMETRY` event with versioned identity, consumer, routing confidence/reasons, provider and dependency status, effective risk, execution/model mode, per-stage latency bands, account/household roles, operating mode, property relationship, audience eligibility/applicability, audience policy lineage, journey-provider status, result status, and error code. Phase histograms remain separate. |
+| Runtime controls | Global Ask, Consumer, Domain, Skill, Operation, Context Provider, Adapter, Narrative Synthesis, Account Eligibility, Audience Policy, Audience Discovery, and Audience Presentation controls are live; manifest feature-flag and kill-switch names are validated runtime bindings and audience controls fail closed or degrade to safe unknown-context behavior |
 | Evaluation | Every registered Skill has immutable routing, operation, ambiguity, policy, context, negative, degraded-mode, model-disabled, handoff, and performance fixtures |
 | Package scaffolding | Generated manifests retain only versioned references, automatically require Living Home Record identity context for property operations, and produce deeply immutable evaluation packages |
 | Verification | 174 Ask tests passing, TypeScript validation passing, and taxonomy expansion verified without Skill-specific core-router branches |
@@ -1125,6 +1125,13 @@ registry bindings, defines read versus mutation-preparation policies, explains r
 controls and fail-closed health behavior, and provides focused validation commands and a
 completion checklist. The `skill:create` scaffolder validates and atomically generates the
 standard Skill package without overwriting an existing package.
+
+The authoring workflow also requires every governed property operation to register an
+immutable audience policy and declare the versioned Property Journey context provider. Startup
+validation rejects missing policies, weak household-role floors, unsupported modes, policy/
+operation version drift, or an audience-governed operation without the provider. Independent
+runtime controls can pause account eligibility or safely degrade applicability, discovery, and
+lifecycle framing without weakening canonical property authorization.
 
 ---
 

@@ -83,6 +83,50 @@ The command prints the two explicit registration imports and a completion checkl
 manifest to `SKILL_DEFINITIONS` and the evaluation package to
 `SKILL_EVALUATION_PACKAGES`; no capability-specific Ask orchestration change is required.
 
+## Add audience applicability
+
+Every governed property operation must have an immutable audience policy keyed by the exact
+operation ID and version. This is applicability and presentation policy, not authentication or
+property authorization; those controls remain authoritative and are never replaced by persona
+logic.
+
+1. Declare the shared `property.journey-context@1.0.0` provider at Skill and operation scope.
+   Keep `property.identity-context` required; the journey provider is additional bounded
+   lifecycle context and must not become a replacement authorization source.
+2. Add the operation to `askAudiencePolicy.ts` with eligible operating modes, the existing
+   operation role floor, unknown-context behavior, typed-request behavior, and discovery
+   behavior. Never infer account role or lifecycle from question text or the client.
+3. Use `ALLOW_GENERAL` only when the canonical operation can provide correct, useful guidance
+   without lifecycle context. Material or lifecycle-specific operations should explain or block
+   when the mode is unknown.
+4. Add operation-bound landing prompts to `askLifecyclePromptPolicy.ts` only when the displayed
+   question deterministically routes to the same operation evaluated for discovery. Preserve
+   exact-context prompt precedence, four-card maximum, deduplication, and safe general fallback.
+5. Keep canonical facts and calculations in the adapter/domain service. Audience presentation
+   may add bounded lifecycle framing and remove unusable CTAs, but must not rewrite evidence,
+   amounts, rankings, status, or authorization decisions.
+6. Extend policy validation and the evaluation package with eligible, ineligible, unknown-mode,
+   owner/contributor/viewer, discovery, and confirmation-recheck fixtures.
+
+Startup validation fails closed when a registered operation lacks a policy, the policy version
+does not match the immutable operation version, its role floor is weaker, its modes are invalid,
+or the journey provider is absent. Initial execution telemetry persists only bounded audience
+enums and policy/provider lineage; do not add raw questions, preferences, financial detail,
+addresses, names, or unbounded entity identifiers.
+
+Audience behavior has independent controls:
+
+- `ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED` / `ASK_ACCOUNT_ROLE_ELIGIBILITY_KILL_SWITCH` pauses
+  Ask fail-closed; it must never be used to bypass the homeowner account guard.
+- `ASK_AUDIENCE_POLICY_ENABLED` / `ASK_AUDIENCE_POLICY_KILL_SWITCH` evaluates through safe
+  `UNKNOWN` context when disabled.
+- `ASK_AUDIENCE_DISCOVERY_ENABLED` / `ASK_AUDIENCE_DISCOVERY_KILL_SWITCH` falls back to general
+  unknown-context prompts when disabled.
+- `ASK_AUDIENCE_PRESENTATION_ENABLED` / `ASK_AUDIENCE_PRESENTATION_KILL_SWITCH` removes only
+  lifecycle framing; household-role CTA filtering remains enforced.
+- Existing context-provider controls independently disable the journey provider and retain its
+  required/optional degraded behavior.
+
 ## Add a governed adapter
 
 An adapter is a versioned policy boundary around an existing canonical Ask operation. It

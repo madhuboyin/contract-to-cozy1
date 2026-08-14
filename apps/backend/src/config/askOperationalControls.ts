@@ -22,6 +22,10 @@ export interface AskOperationalControls {
   remoteGenerationEnabled: boolean;
   localRoutingEnabled: boolean;
   resultSynthesisEnabled: boolean;
+  accountRoleEligibilityEnabled: boolean;
+  audiencePolicyEnabled: boolean;
+  audienceDiscoveryEnabled: boolean;
+  audiencePresentationEnabled: boolean;
   localRoutingMinimumConfidence: number;
   routingAmbiguityMargin: number;
   operationEnabled: (operationId: AskOperationId) => boolean;
@@ -43,6 +47,14 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
     localRoutingEnabled: booleanEnv(env.ASK_LOCAL_ROUTING_ENABLED, true),
     resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
       && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),
+    accountRoleEligibilityEnabled: booleanEnv(env.ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED, true)
+      && !booleanEnv(env.ASK_ACCOUNT_ROLE_ELIGIBILITY_KILL_SWITCH, false),
+    audiencePolicyEnabled: booleanEnv(env.ASK_AUDIENCE_POLICY_ENABLED, true)
+      && !booleanEnv(env.ASK_AUDIENCE_POLICY_KILL_SWITCH, false),
+    audienceDiscoveryEnabled: booleanEnv(env.ASK_AUDIENCE_DISCOVERY_ENABLED, true)
+      && !booleanEnv(env.ASK_AUDIENCE_DISCOVERY_KILL_SWITCH, false),
+    audiencePresentationEnabled: booleanEnv(env.ASK_AUDIENCE_PRESENTATION_ENABLED, true)
+      && !booleanEnv(env.ASK_AUDIENCE_PRESENTATION_KILL_SWITCH, false),
     localRoutingMinimumConfidence: ratioEnv(env.ASK_LOCAL_ROUTING_MIN_CONFIDENCE, 0.42),
     routingAmbiguityMargin: ratioEnv(env.ASK_ROUTING_AMBIGUITY_MARGIN, 0.1),
     operationEnabled: (operationId) => booleanEnv(env[`ASK_OPERATION_${operationId}_ENABLED`], true)

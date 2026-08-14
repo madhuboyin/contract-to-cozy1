@@ -721,6 +721,16 @@ Version 1 shall include independent controls for:
 
 Disabling presentation personalization shall not disable authorization or account-role eligibility. Disabling journey-aware discovery shall fall back to safe general prompts. Disabling the journey provider shall never permit an otherwise inapplicable material operation.
 
+The implemented environment controls are:
+
+| Capability | Enable flag | Kill switch | Safe disabled behavior |
+| --- | --- | --- | --- |
+| Account-role eligibility | `ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED` | `ASK_ACCOUNT_ROLE_ELIGIBILITY_KILL_SWITCH` | Ask fails closed for every account; provider/admin access is never enabled by disabling the guard |
+| Audience policy | `ASK_AUDIENCE_POLICY_ENABLED` | `ASK_AUDIENCE_POLICY_KILL_SWITCH` | Policy evaluation uses `UNKNOWN`; safe general operations remain available and lifecycle-dependent operations return context-required guidance |
+| Audience-aware discovery | `ASK_AUDIENCE_DISCOVERY_ENABLED` | `ASK_AUDIENCE_DISCOVERY_KILL_SWITCH` | Concierge uses safe unknown-context prompts and does not personalize from lifecycle state |
+| Audience presentation | `ASK_AUDIENCE_PRESENTATION_ENABLED` | `ASK_AUDIENCE_PRESENTATION_KILL_SWITCH` | Lifecycle framing is omitted; household-role action, suggestion, capture, and confirmation filtering remains active |
+| Journey context provider | Existing provider-level control | Existing provider-level kill switch | Required lifecycle-dependent operations fail closed; safe general guidance may degrade to unknown context |
+
 ---
 
 ## 23. Performance and sustainability
@@ -810,6 +820,16 @@ It shall not require a new branch in the core Ask router.
 5. Update the Skill authoring guide with audience-policy requirements.
 
 **Exit:** Implementation and documentation agree, and all required regression suites pass.
+
+### Slice 7 — Operational degradation experience
+
+1. Preserve the stable account-eligibility control error through the API client.
+2. Detect a paused Ask service during history, pending-work, Concierge, initial-question, and resume requests.
+3. Replace misleading fallback prompts and generic errors with one calm unavailable state.
+4. Preserve drafts, saved conversations, and home records while the service is paused.
+5. Provide an in-place retry that rechecks the active property and conversation without creating an execution.
+
+**Exit:** A fail-closed account-eligibility control produces a coherent, recoverable Ask workspace instead of a partially interactive landing page.
 
 ---
 
@@ -937,7 +957,8 @@ The document shall be updated as each slice is delivered:
 | Audience applicability registry | Implemented | 30 immutable Skill-operation policies cover the registered property Skill catalog; startup validation rejects missing, conflicting, weak-role, unsupported-version, and journey-provider-invalid policies; execution evaluates policy after context composition and before adapter dispatch, material confirmation rechecks live applicability, and Concierge Home removes inapplicable discovery prompts server-side; backend TypeScript, registry validation, and 24 focused tests pass |
 | Persona-aware landing prompts | Implemented | A declarative operation-bound catalog supplies buyer, recent-owner, established-owner, preparing-transfer, and safe-unknown prompts; Concierge preserves Decision Thread → Home Action → inventory → lifecycle → general precedence, caps output at four, deduplicates operations, prefers category diversity, and filters by household role, audience applicability, and runtime availability; every lifecycle question resolves to its bound operation |
 | Persona-aware focused responses | Implemented | Successful governed Skill results pass through a bounded post-canonical presentation layer that adds lifecycle framing, discloses general guidance when journey context is unknown, removes mutation actions/command suggestions the current household role cannot use, and retains read-only navigation; canonical blocks, facts, calculations, evidence, rankings, authorization, and confirmation ownership remain unchanged |
-| Telemetry and regression closure | Not started | Pending |
+| Telemetry, controls, and authoring closure | Implemented | Every initial Skill execution event carries bounded account role, household role, operating mode, property relationship, eligibility/applicability outcome, policy version/evaluation mode, and journey-provider status alongside existing Skill lineage; independent account-role, policy, discovery, presentation, and provider controls degrade fail-closed; the Skill authoring guide documents the mandatory audience-policy and journey-provider steps. Full-suite regression verification remains intentionally separate. |
+| Operational degradation experience | Implemented | The Ask workspace recognizes the stable eligibility-control pause across landing composition, session history, pending work, question submission, and resume flows; it suppresses misleading prompts/composers, preserves the current draft and durable data, renders one calm temporary-unavailable state, and retries all initial reads in place without creating an execution. |
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, or `Verified`. A slice shall not be marked `Verified` until its automated acceptance evidence passes.
 
@@ -950,6 +971,10 @@ Slice 3 is implemented. A versioned `AskAudiencePolicy` registry defines account
 Slice 4 is implemented. Concierge Home now selects featured prompts from a declarative lifecycle catalog keyed by canonical ownership state. Exact active Decision Threads, actionable Home Actions, and supported inventory decisions retain precedence; lifecycle prompts fill only the remaining positions before general discovery fallbacks. Selection enforces the four-card maximum, operation deduplication, category diversity, household permission, audience applicability, and live operation/Skill/adapter controls. The displayed question for every lifecycle prompt is deliberately compatible with deterministic Ask routing, so clicking a card reaches the same operation used during eligibility filtering. Unknown or unavailable journey context falls back to safe general prompts without creating an onboarding wall. No frontend persona inference or database change was introduced.
 
 Slice 5 is implemented. After a governed canonical operation returns, Ask applies a bounded audience-presentation policy before response validation and persistence. The policy prepends one concise buying, recent-owner, established-owner, preparing-transfer, or unknown-context framing sentence to an existing summary; it does not rewrite canonical facts, amounts, evidence, rankings, or result status. Viewer responses retain read-only navigation while mutation actions, mutation command suggestions, capture requests, and confirmations are removed; contributor responses suppress owner-only household-administration actions. When no summary exists, a disclosure block is added only for unknown context or when permission filtering needs explanation. The bounded presentation snapshot is retained in existing execution parameters. No database schema or migration change was required.
+
+Slice 6 functionality is implemented. Existing `SKILL_EXECUTION_TELEMETRY` event metadata now persists a bounded audience snapshot for each initial Skill execution without new columns or raw persona data. The snapshot records canonical account/household context, canonical operating mode, property relationship, eligibility and applicability outcomes, immutable policy version, policy evaluation mode, and journey-provider status next to Skill/operation lineage and stable result/error fields. Four independently deployable control families govern account eligibility, applicability, discovery, and lifecycle framing; all disabled paths either pause Ask or degrade to safe unknown-context behavior, and presentation controls never weaken household authorization filtering. The Skill authoring guide now requires an immutable policy for every governed operation and the registered journey provider for audience-aware property operations. Backend type validation is the proportionate validation for this functionality-first slice; comprehensive regression certification remains pending and no database migration was introduced.
+
+Slice 7 is implemented. When the account-eligibility runtime control pauses Ask, the API returns one stable typed service-unavailable contract and the workspace recognizes it during every initial surface read plus question submission and pending-work continuation. The landing page no longer displays generic discovery prompts or an enabled composer against a known-paused backend. It instead shows one compact temporary-unavailable state, explains that home records and saved conversations are unchanged, retains any unsent draft, and provides an in-place retry that reloads session, pending-work, and Concierge state without creating an Ask execution. Other network and composition failures retain their existing scoped degraded behavior.
 
 ---
 

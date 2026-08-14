@@ -232,6 +232,10 @@ test('Ask operational controls support global, routing, synthesis, remote, per-o
     ASK_REMOTE_GENERATION_ENABLED: '0',
     ASK_LOCAL_ROUTING_ENABLED: 'false',
     ASK_RESULT_SYNTHESIS_ENABLED: 'true',
+    ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED: 'false',
+    ASK_AUDIENCE_POLICY_KILL_SWITCH: 'true',
+    ASK_AUDIENCE_DISCOVERY_ENABLED: 'false',
+    ASK_AUDIENCE_PRESENTATION_KILL_SWITCH: 'true',
     ASK_LOCAL_ROUTING_MIN_CONFIDENCE: '0.61',
     ASK_ROUTING_AMBIGUITY_MARGIN: '0.14',
     ASK_OPERATION_MAINTENANCE_STATUS_ENABLED: 'off',
@@ -243,6 +247,10 @@ test('Ask operational controls support global, routing, synthesis, remote, per-o
   assert.equal(controls.remoteGenerationEnabled, false);
   assert.equal(controls.localRoutingEnabled, false);
   assert.equal(controls.resultSynthesisEnabled, true);
+  assert.equal(controls.accountRoleEligibilityEnabled, false);
+  assert.equal(controls.audiencePolicyEnabled, false);
+  assert.equal(controls.audienceDiscoveryEnabled, false);
+  assert.equal(controls.audiencePresentationEnabled, false);
   assert.equal(controls.localRoutingMinimumConfidence, 0.61);
   assert.equal(controls.routingAmbiguityMargin, 0.14);
   assert.equal(controls.operationEnabled('MAINTENANCE_STATUS'), false);

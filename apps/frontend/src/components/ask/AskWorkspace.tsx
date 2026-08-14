@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, Ref, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
@@ -44,6 +44,22 @@ function useAutoFocusFirstControl<T extends HTMLElement>(autoFocus: boolean) {
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+const ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED = 'ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED';
+
+function askFailureCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const payload = (error as { payload?: unknown }).payload;
+  if (!payload || typeof payload !== 'object') return null;
+  const apiError = (payload as { error?: unknown }).error;
+  if (!apiError || typeof apiError !== 'object') return null;
+  const code = (apiError as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
+function askServiceIsPaused(error: unknown): boolean {
+  return askFailureCode(error) === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
 }
 
 function sessionStorageKey(propertyId?: string): string {
@@ -166,26 +182,32 @@ function CapabilityCard({ capability }: {
     : <Link href={capability.href} className={className}>{content}</Link>;
 }
 
-function useConciergeHome(propertyId?: string) {
+function useConciergeHome(propertyId?: string, retryKey = 0) {
   const [view, setView] = useState<ConciergeHomeView | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [failureCode, setFailureCode] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!propertyId) { setView(null); setLoading(false); setFailed(false); return; }
+    if (!propertyId) { setView(null); setLoading(false); setFailed(false); setFailureCode(null); return; }
     const controller = new AbortController();
-    setLoading(true); setFailed(false);
+    setLoading(true); setFailed(false); setFailureCode(null);
     api.getConciergeHome(propertyId, { signal: controller.signal })
       .then((response) => {
         if (response.success && response.data) setView(response.data);
         else setFailed(true);
       })
-      .catch((caught) => { if (caught?.name !== 'AbortError') setFailed(true); })
+      .catch((caught) => {
+        if (caught?.name !== 'AbortError') {
+          setFailed(true);
+          setFailureCode(askFailureCode(caught));
+        }
+      })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [propertyId]);
+  }, [propertyId, retryKey]);
 
-  return { view, loading, failed };
+  return { view, loading, failed, failureCode };
 }
 
 function humanizeReason(reason: string): string {
@@ -1178,6 +1200,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [pendingWork, setPendingWork] = useState<AskPendingWorkItem[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [continuingId, setContinuingId] = useState<string | null>(null);
+  const [serviceUnavailable, setServiceUnavailable] = useState(false);
+  const [availabilityEpoch, setAvailabilityEpoch] = useState(0);
   // Marks the execution whose pending card should receive focus: set right
   // after a turn this session actually produced (a new question answered,
   // or an existing execution advancing after a capture/clarification/
@@ -1189,7 +1213,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Concierge composition is only useful on the empty starting surface.
   // Avoid the extra multi-source read when restoring an existing conversation.
-  const concierge = useConciergeHome(!historyLoading && executions.length === 0 && !propertyMismatch ? selectedPropertyId : undefined);
+  const concierge = useConciergeHome(
+    !historyLoading && executions.length === 0 && !propertyMismatch ? selectedPropertyId : undefined,
+    availabilityEpoch,
+  );
+  const askUnavailable = serviceUnavailable
+    || concierge.failureCode === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
@@ -1200,10 +1229,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setPendingLoading(true);
     api.getAskPendingWork(selectedPropertyId, { signal: controller.signal })
       .then((response) => setPendingWork(response.success && response.data ? response.data.items : []))
-      .catch((caught) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) setPendingWork([]); })
+      .catch((caught) => {
+        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+          setPendingWork([]);
+          if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+        }
+      })
       .finally(() => { if (!controller.signal.aborted) setPendingLoading(false); });
     return () => controller.abort();
-  }, [selectedPropertyId, propertyMismatch]);
+  }, [selectedPropertyId, propertyMismatch, availabilityEpoch]);
 
   useEffect(() => {
     if (propertyMismatch) return;
@@ -1226,10 +1260,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           window.setTimeout(() => document.getElementById(`ask-execution-${initialExecutionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
         }
       })
-      .catch((caught) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) setExecutions([]); })
+      .catch((caught) => {
+        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+          setExecutions([]);
+          if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+        }
+      })
       .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
     return () => controller.abort();
-  }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch]);
+  }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch, availabilityEpoch]);
 
   useEffect(() => {
     if (!initialQuestion) return;
@@ -1279,7 +1318,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } catch (caught) {
       setInput(message);
       window.localStorage.setItem(draftStorageKey(selectedPropertyId), message);
-      setError(caught instanceof Error ? caught.message : 'Ask is temporarily unavailable.');
+      if (askServiceIsPaused(caught)) {
+        setServiceUnavailable(true);
+        setError(null);
+      } else {
+        setError(caught instanceof Error ? caught.message : 'Ask is temporarily unavailable.');
+      }
       if (attribution) track('ask_prompt_outcome', { propertyId: selectedPropertyId ?? null, ...attribution, status: 'REQUEST_FAILED', succeeded: false });
     } finally {
       setLoading(false);
@@ -1339,7 +1383,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       setJustUpdatedExecutionId(resumed.executionId);
       setPendingWork((current) => current.filter((pending) => pending.execution.sessionId !== resumed.sessionId));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not resume this request.');
+      if (askServiceIsPaused(caught)) {
+        setServiceUnavailable(true);
+        setError(null);
+      } else {
+        setError(caught instanceof Error ? caught.message : 'Could not resume this request.');
+      }
     } finally { setHistoryLoading(false); setContinuingId(null); }
   };
 
@@ -1373,17 +1422,26 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <header className={cn('flex items-center justify-between', mode === 'page' ? 'px-1 pb-5 pt-1 sm:pb-7 sm:pt-3' : 'border-b border-slate-200 bg-white px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
         <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-11 w-11 rounded-2xl' : 'h-9 w-9 rounded-xl')}><Sparkles className={mode === 'page' ? 'h-5 w-5' : 'h-4 w-4'} /></span><div>{mode === 'page' ? <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className={cn('truncate text-slate-500', mode === 'page' ? 'mt-1 text-sm' : 'text-xs')}>{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
-          {mode === 'page' && executions.length > 0 && <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />Clear history</button>}
+          {mode === 'page' && executions.length > 0 && !askUnavailable && <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />Clear history</button>}
           {mode === 'panel' && <Link href="/dashboard/ask" onClick={onClose} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
           {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
         </div>
       </header>
 
-      {confirmClear && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Clear this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Clear conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
+      {confirmClear && !askUnavailable && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Clear this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Clear conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
 
-      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{askUnavailable ? 'Ask Cozy is temporarily unavailable. Your saved data is unchanged.' : loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
       <main className={cn('min-h-0 flex-1 overflow-y-auto', mode === 'page' ? 'px-1 pb-8' : 'px-4 py-5 sm:px-5')}>
-        {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : executions.length === 0 ? (
+        {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (
+          <section className="mx-auto mt-6 max-w-2xl rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-8 text-center sm:px-8" role="status" aria-labelledby="ask-paused-title">
+            <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-amber-700 shadow-sm"><AlertTriangle className="h-5 w-5" /></span>
+            <h2 id="ask-paused-title" className="mt-4 text-xl font-semibold text-slate-950">Ask Cozy is taking a short pause</h2>
+            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">Your home records and saved conversations are unchanged. Please try again shortly.</p>
+            <button type="button" onClick={() => { setServiceUnavailable(false); setAvailabilityEpoch((current) => current + 1); }} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
+              <RefreshCw className="h-4 w-4" />Try again
+            </button>
+          </section>
+        ) : executions.length === 0 ? (
           <div className="mx-auto max-w-3xl">
             <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>
             {renderComposer('hero')}
@@ -1430,7 +1488,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      {executions.length > 0 && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
+      {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
     </div>
   );
 }

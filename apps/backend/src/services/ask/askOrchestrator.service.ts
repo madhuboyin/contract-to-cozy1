@@ -34,7 +34,12 @@ import {
 } from '../skills/context/propertyJourneyContext.contract';
 import type { ComposedSkillContext } from '../skills/context/skillContext.contract';
 import { MAINTENANCE_TASK_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
-import { assertAskAccountRoleEligible, type AskAccountRole } from './askAccountEligibility';
+import {
+  ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED,
+  ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED_MESSAGE,
+  assertAskAccountRoleEligible,
+  type AskAccountRole,
+} from './askAccountEligibility';
 import {
   evaluateAskAudienceApplicability,
   getAskAudiencePolicy,
@@ -4309,6 +4314,19 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   if (input.propertyId && authorizationFloor) {
     const access = await ensurePropertyAccess(input.userId, input.propertyId);
     householdRole = access.role;
+    if (trace) {
+      trace.audience = {
+        accountRole: 'HOMEOWNER',
+        householdRole,
+        operatingMode: 'UNKNOWN',
+        propertyRelationship: 'AUTHORIZED_HOUSEHOLD',
+        audienceEligibilityOutcome: 'ELIGIBLE',
+        audienceApplicabilityOutcome: 'NOT_EVALUATED',
+        audiencePolicyVersion: null,
+        audiencePolicyEvaluationMode: controls.audiencePolicyEnabled ? 'ENABLED' : 'SAFE_FALLBACK',
+        journeyContextStatus: 'NOT_EVALUATED',
+      };
+    }
     const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
     if (rank[access.role] < rank[authorizationFloor]) {
       return {
@@ -4335,6 +4353,20 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     if (trace) {
       trace.contextCompositionLatencyMs = Number(process.hrtime.bigint() - contextStartedAt) / 1_000_000;
       trace.context = composedContext;
+      const journeyEntry = composedContext.entries.find(
+        (entry) => entry.key === skillContextProviderKey(PROPERTY_JOURNEY_CONTEXT_PROVIDER),
+      );
+      trace.audience = {
+        accountRole: 'HOMEOWNER',
+        householdRole: householdRole ?? 'UNKNOWN',
+        operatingMode: journeyContextFrom(composedContext)?.operatingMode ?? 'UNKNOWN',
+        propertyRelationship: householdRole ? 'AUTHORIZED_HOUSEHOLD' : 'UNKNOWN',
+        audienceEligibilityOutcome: 'ELIGIBLE',
+        audienceApplicabilityOutcome: 'NOT_EVALUATED',
+        audiencePolicyVersion: null,
+        audiencePolicyEvaluationMode: controls.audiencePolicyEnabled ? 'ENABLED' : 'SAFE_FALLBACK',
+        journeyContextStatus: journeyEntry?.status ?? 'NOT_APPLICABLE',
+      };
     }
     if (composedContext.status === 'BLOCKED') {
       const requiredFailure = composedContext.entries.find((entry) => entry.required && entry.status !== 'AVAILABLE');
@@ -4364,9 +4396,15 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       policy: audiencePolicy,
       accountRole: 'HOMEOWNER',
       householdRole,
-      operatingMode: journeyContextFrom(composedContext)?.operatingMode ?? 'UNKNOWN',
+      operatingMode: controls.audiencePolicyEnabled
+        ? journeyContextFrom(composedContext)?.operatingMode ?? 'UNKNOWN'
+        : 'UNKNOWN',
       purpose: 'EXECUTION',
     });
+    if (trace?.audience) {
+      trace.audience.audienceApplicabilityOutcome = audienceDecision.outcome;
+      trace.audience.audiencePolicyVersion = audienceDecision.policyVersion;
+    }
     if (!audienceDecision.allowed) return audienceApplicabilityResult(audienceDecision);
   }
   if (!skill) return dispatchOperationAdapter(input, composedContext, trace);
@@ -4388,6 +4426,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
         result: canonicalResult,
         householdRole,
         journeyContext: journeyContextFrom(composedContext),
+        lifecycleFramingEnabled: controls.audiencePresentationEnabled,
       })
       : canonicalResult;
     const result = attachJourneyContext(
@@ -4735,6 +4774,11 @@ async function expireIfSkillBindingChanged(execution: AskExecution): Promise<Ask
 }
 
 async function ensureAskServiceAccountEligibility(userId: string, knownRole?: AskAccountRole): Promise<void> {
+  if (!readAskOperationalControls().accountRoleEligibilityEnabled) {
+    const error = new Error(ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED_MESSAGE);
+    (error as Error & { code?: string }).code = ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
+    throw error;
+  }
   const role = knownRole ?? (await prisma.user.findUnique({ where: { id: userId }, select: { role: true } }))?.role;
   assertAskAccountRoleEligible(role);
 }
@@ -5955,7 +5999,9 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       policy,
       accountRole: 'HOMEOWNER',
       householdRole: access.role,
-      operatingMode: journeyContextFrom(audienceContext)?.operatingMode ?? 'UNKNOWN',
+      operatingMode: controls.audiencePolicyEnabled
+        ? journeyContextFrom(audienceContext)?.operatingMode ?? 'UNKNOWN'
+        : 'UNKNOWN',
       purpose: 'EXECUTION',
     }) : null;
     if (!decision?.allowed) {
@@ -7272,7 +7318,10 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     inventoryDecisionCandidatePromise,
     journeyContextPromise,
   ]);
-  const discoveryOperatingMode = journeyContext.state === 'AVAILABLE' ? journeyContext.operatingMode : 'UNKNOWN';
+  const audienceDiscoveryActive = controls.audienceDiscoveryEnabled && controls.audiencePolicyEnabled;
+  const discoveryOperatingMode = audienceDiscoveryActive && journeyContext.state === 'AVAILABLE'
+    ? journeyContext.operatingMode
+    : 'UNKNOWN';
   const promptOperationId = (prompt: ConciergeHomeView['featuredPrompts'][number] | ConciergeHomeView['capabilityGroups'][number]['prompts'][number]): AskOperationId => {
     const contextualOperation: AskOperationId | null = prompt.context?.entityType === 'DECISION_THREAD'
       ? 'HVAC_DECISION_CONTINUE'
@@ -7347,7 +7396,9 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     });
   }
   const representedCategories = new Set(featuredPrompts.map((prompt) => prompt.categoryId));
-  const lifecyclePrompts = lifecyclePromptsFor(journeyContext.state === 'AVAILABLE' ? journeyContext.ownershipState : null);
+  const lifecyclePrompts = lifecyclePromptsFor(
+    audienceDiscoveryActive && journeyContext.state === 'AVAILABLE' ? journeyContext.ownershipState : null,
+  );
   for (const prompt of lifecyclePrompts) {
     if (representedCategories.has(prompt.categoryId)) continue;
     const added = addPrompt({

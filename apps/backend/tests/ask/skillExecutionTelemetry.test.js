@@ -22,6 +22,12 @@ test('bounded telemetry records the complete Skill execution dimension set', () 
   trace.adapterResolutionLatencyMs = 2;
   trace.canonicalOperationLatencyMs = 140;
   trace.presentationLatencyMs = 3;
+  trace.audience = {
+    accountRole: 'HOMEOWNER', householdRole: 'OWNER', operatingMode: 'OWNING',
+    propertyRelationship: 'AUTHORIZED_HOUSEHOLD', audienceEligibilityOutcome: 'ELIGIBLE',
+    audienceApplicabilityOutcome: 'APPLICABLE', audiencePolicyVersion: '1.0',
+    audiencePolicyEvaluationMode: 'ENABLED', journeyContextStatus: 'AVAILABLE',
+  };
   trace.context = {
     status: 'READY',
     entries: [{
@@ -54,6 +60,15 @@ test('bounded telemetry records the complete Skill execution dimension set', () 
   assert.equal(telemetry.modelCostBand, 'NONE');
   assert.deepEqual(telemetry.contextProviders, [{ id: 'maintenance.tasks', version: '1.0.0', status: 'AVAILABLE', latencyBand: 'LT_100_MS' }]);
   assert.deepEqual(telemetry.routingReasonCodes, ['OPERATION_OWNER']);
+  assert.equal(telemetry.accountRole, 'HOMEOWNER');
+  assert.equal(telemetry.householdRole, 'OWNER');
+  assert.equal(telemetry.operatingMode, 'OWNING');
+  assert.equal(telemetry.propertyRelationship, 'AUTHORIZED_HOUSEHOLD');
+  assert.equal(telemetry.audienceEligibilityOutcome, 'ELIGIBLE');
+  assert.equal(telemetry.audienceApplicabilityOutcome, 'APPLICABLE');
+  assert.equal(telemetry.audiencePolicyVersion, '1.0');
+  assert.equal(telemetry.audiencePolicyEvaluationMode, 'ENABLED');
+  assert.equal(telemetry.journeyContextStatus, 'AVAILABLE');
 });
 
 test('telemetry bands remain bounded at edge values', () => {

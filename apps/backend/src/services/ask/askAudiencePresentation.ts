@@ -72,9 +72,10 @@ export function applyAskAudiencePresentation(input: {
   result: AskOperationResult;
   householdRole: HouseholdRole;
   journeyContext: PropertyJourneyContext | null;
+  lifecycleFramingEnabled?: boolean;
 }): AskOperationResult {
   const ownershipState = input.journeyContext?.ownershipState ?? null;
-  const framing = lifecycleFraming(ownershipState);
+  const framing = input.lifecycleFramingEnabled === false ? '' : lifecycleFraming(ownershipState);
   const filteredBlocks = input.result.blocks.map((block) => filterBlockActions(block, input.householdRole));
   const actionsBefore = input.result.blocks.reduce((count, block) => {
     if ('actions' in block && Array.isArray(block.actions)) return count + block.actions.length;
@@ -95,13 +96,13 @@ export function applyAskAudiencePresentation(input: {
       ? ' You can review this information, but a contributor or owner is required to make changes.'
       : ' An owner is required for household-administration changes.'
     : '';
-  const framingText = `${framing}${permissionNotice}`;
+  const framingText = `${framing}${permissionNotice}`.trim();
   const summaryIndex = filteredBlocks.findIndex((block) => block.type === 'SUMMARY');
   const blocks = [...filteredBlocks];
-  if (summaryIndex >= 0) {
+  if (summaryIndex >= 0 && framingText) {
     const summary = blocks[summaryIndex] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
     blocks[summaryIndex] = { ...summary, body: `${framingText} ${summary.body}` };
-  } else if (!ownershipState || permissionNotice) {
+  } else if (framingText && ((input.lifecycleFramingEnabled !== false && !ownershipState) || permissionNotice)) {
     blocks.push({
       type: 'BOUNDARY',
       id: 'ask-audience-presentation',
@@ -125,6 +126,7 @@ export function applyAskAudiencePresentation(input: {
         operatingMode: input.journeyContext?.operatingMode ?? 'UNKNOWN',
         householdRole: input.householdRole,
         permissionFiltered,
+        lifecycleFramingEnabled: input.lifecycleFramingEnabled !== false,
         framingText,
       },
     },
