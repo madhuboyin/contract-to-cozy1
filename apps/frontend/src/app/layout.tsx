@@ -1,34 +1,19 @@
 // apps/frontend/src/app/layout.tsx
 
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Inter, Poppins } from 'next/font/google';
 import { headers } from 'next/headers';
 import { Providers } from './providers';
+import '@fontsource/inter/latin-300.css';
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/poppins/latin-400.css';
+import '@fontsource/poppins/latin-500.css';
+import '@fontsource/poppins/latin-600.css';
+import '@fontsource/poppins/latin-700.css';
+import '@fontsource/fraunces/latin-600.css';
+import '@fontsource/fraunces/latin-700.css';
 import './globals.css';
-
-// Inter for body text
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-// Poppins for headings
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-poppins',
-  display: 'swap',
-});
-
-// Fraunces for score displays and premium numeric emphasis
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-  variable: '--font-display',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: 'ContractToCozy - Homeowner Intelligence',
@@ -86,8 +71,8 @@ export default async function RootLayout({
   const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${poppins.variable}`}>
-      <body className={inter.className}>
+    <html lang="en">
+      <body>
         <Providers nonce={nonce}>
           {children}
         </Providers>
