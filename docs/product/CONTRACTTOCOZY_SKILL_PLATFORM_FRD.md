@@ -79,7 +79,7 @@ Implementation snapshot as of August 14, 2026:
 | Runtime controls | Global Ask, Consumer, Domain, Skill, Operation, Context Provider, Adapter, and Narrative Synthesis controls are live; manifest feature-flag and kill-switch names are validated runtime bindings |
 | Evaluation | Every registered Skill has immutable routing, operation, ambiguity, policy, context, negative, degraded-mode, model-disabled, handoff, and performance fixtures |
 | Package scaffolding | Generated manifests retain only versioned references, automatically require Living Home Record identity context for property operations, and produce deeply immutable evaluation packages |
-| Verification | 171 Ask tests passing, TypeScript validation passing, and taxonomy expansion verified without Skill-specific core-router branches |
+| Verification | 174 Ask tests passing, TypeScript validation passing, and taxonomy expansion verified without Skill-specific core-router branches |
 | Database impact | No database schema change or migration script required by the completed Skill Platform slices |
 | Deferred boundaries | External connectors and model-assisted routing remain unimplemented until a concrete requirement introduces their governed runtimes |
 
@@ -1410,7 +1410,7 @@ The initial Skill Platform implementation is complete when:
 - a subsequent Skill can be added without modifying central Ask orchestration; and
 - relevant contract, unit, integration, negative, authorization, concurrency, degraded-mode, and end-to-end tests pass.
 
-**Implementation determination: Satisfied as of August 14, 2026.** SP0 through SP5 are complete, all fourteen representative Skills and 30 governed adapters are registered, non-Ask production invocation is operational, all registered Skills have evaluation packages, 171 Ask tests pass, and backend TypeScript validation passes.
+**Implementation determination: Satisfied as of August 14, 2026.** SP0 through SP5 are complete, all fourteen representative Skills and 30 governed adapters are registered, non-Ask production invocation is operational, all registered Skills have evaluation packages, 174 Ask tests pass, and backend TypeScript validation passes.
 
 This Definition of Done establishes the beta engineering architecture. It does not assert production readiness or authorize real-user data collection, proactive external delivery, partner Skills, or public launch.
 

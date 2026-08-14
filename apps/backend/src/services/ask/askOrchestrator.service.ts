@@ -29,6 +29,7 @@ import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
 import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
 import { MAINTENANCE_TASK_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
+import { assertAskAccountRoleEligible, type AskAccountRole } from './askAccountEligibility';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
 import { answerGroundedAsk } from '../groundedAsk.service';
 import {
@@ -4628,7 +4629,13 @@ async function expireIfSkillBindingChanged(execution: AskExecution): Promise<Ask
   return mapPersistedExecution(expired, await propertySummary(execution.propertyId));
 }
 
-export async function createAskExecution(userId: string, input: CreateAskExecutionRequest): Promise<AskExecutionResponse> {
+async function ensureAskServiceAccountEligibility(userId: string, knownRole?: AskAccountRole): Promise<void> {
+  const role = knownRole ?? (await prisma.user.findUnique({ where: { id: userId }, select: { role: true } }))?.role;
+  assertAskAccountRoleEligible(role);
+}
+
+export async function createAskExecution(userId: string, input: CreateAskExecutionRequest, accountRole?: AskAccountRole): Promise<AskExecutionResponse> {
+  await ensureAskServiceAccountEligibility(userId, accountRole);
   if (input.propertyId) await ensurePropertyAccess(userId, input.propertyId);
   await enterAskPropertyTimezoneContext(input.propertyId);
   const duplicate = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
@@ -6907,7 +6914,8 @@ const CONCIERGE_CAPABILITY_GROUPS: readonly ConciergeCapabilityGroupDefinition[]
 // "no second feed" discipline from §17.1). Each section fails independently
 // and reports its own honest state rather than one section's outage taking
 // down the whole panel or silently reading as "all clear".
-export async function getConciergeHome(userId: string, propertyId: string): Promise<ConciergeHomeView> {
+export async function getConciergeHome(userId: string, propertyId: string, accountRole?: AskAccountRole): Promise<ConciergeHomeView> {
+  await ensureAskServiceAccountEligibility(userId, accountRole);
   await ensurePropertyAccess(userId, propertyId);
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const askHref = `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}`;

@@ -21,11 +21,11 @@ function sendAskDependencyError(res: Response, error: unknown): Response | null 
 
 export async function postAskExecution(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const parsed = CreateAskExecutionRequestSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The Ask request is invalid.', details: parsed.error.flatten() } });
-    const execution = await createAskExecution(userId, parsed.data);
+    const execution = await createAskExecution(user.userId, parsed.data, user.role);
     return res.status(201).json({ success: true, data: execution });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
@@ -93,11 +93,11 @@ export async function postAskExecutionProperty(req: AuthRequest, res: Response, 
 
 export async function getAskConciergeHome(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const propertyId = z.string().trim().min(1).max(120).safeParse(req.query.propertyId);
     if (!propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required.' } });
-    return res.json({ success: true, data: await getConciergeHome(userId, propertyId.data) });
+    return res.json({ success: true, data: await getConciergeHome(user.userId, propertyId.data, user.role) });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(403).json({ success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'That home is not available for your account.' } });

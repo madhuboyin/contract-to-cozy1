@@ -50,6 +50,7 @@ import { CtcTopCommandBar } from '@/components/layout/CtcTopCommandBar';
 import { FeedbackWidget } from '@/components/feedback/FeedbackWidget';
 import { ToolLaunchContextBoundary } from '@/features/tools/ToolLaunchContextBoundary';
 import { isAskWorkspacePath } from '@/lib/routes/isAskWorkspacePath';
+import { askIneligibleDestination, isAskAccountRoleEligible } from '@/features/ask/accountEligibility';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -619,8 +620,13 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && user?.role === 'PROVIDER') {
       router.replace('/providers/dashboard');
+      return;
     }
-  }, [loading, user, router]);
+    if (!loading && user && isAskWorkspace && !isAskAccountRoleEligible(user.role)) {
+      const destination = askIneligibleDestination(user.role);
+      if (destination) router.replace(destination);
+    }
+  }, [isAskWorkspace, loading, user, router]);
 
   // Session/retention tracking — fires once per browser tab session, the
   // first time an authenticated user lands in the dashboard.
@@ -688,6 +694,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (user?.role === 'PROVIDER') return null;
+  if (isAskWorkspace && user && !isAskAccountRoleEligible(user.role)) return null;
 
   return (
     <PostLoginTransitionProvider

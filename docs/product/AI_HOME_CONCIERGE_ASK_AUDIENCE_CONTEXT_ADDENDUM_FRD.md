@@ -932,7 +932,7 @@ The document shall be updated as each slice is delivered:
 
 | Slice | Status | Evidence |
 | --- | --- | --- |
-| Account-role eligibility | Not started | Pending |
+| Account-role eligibility | Verified | All `/ask/*` routes use the homeowner account guard after fresh authentication; initial execution and Concierge Home also recheck the service boundary; provider/admin direct Ask routes are redirected before rendering; backend policy tests, frontend policy tests, backend TypeScript, frontend production build, and all 174 Ask tests pass |
 | Journey context provider | Not started | Pending |
 | Audience applicability registry | Not started | Pending |
 | Persona-aware landing prompts | Not started | Pending |
@@ -940,6 +940,8 @@ The document shall be updated as each slice is delivered:
 | Telemetry and regression closure | Not started | Pending |
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, or `Verified`. A slice shall not be marked `Verified` until its automated acceptance evidence passes.
+
+**Implementation update — August 14, 2026:** Slice 1 is verified. `HOMEOWNER` is the only eligible account role for homeowner Ask Cozy. A centralized router guard returns `ASK_ACCOUNT_ROLE_NOT_ELIGIBLE` for `PROVIDER` and `ADMIN`, and the two internally callable initial-composition services recheck the same policy when no trusted controller role is supplied. The dashboard prevents excluded roles from rendering the direct Ask workspace and redirects them to their dedicated destination. Property access and household-role authorization remain separate downstream controls. No database or migration change was required.
 
 ---
 
