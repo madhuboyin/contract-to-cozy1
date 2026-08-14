@@ -1115,6 +1115,15 @@ A developer shall be able to answer from the package alone:
 
 Generated catalog documentation should combine manifest, operation metadata, evaluation metadata, and `SKILL.md` while clearly marking machine-authoritative fields.
 
+**Implementation status:** Complete. The executable package workflow and the governed-adapter
+extension procedure are documented in
+`apps/backend/src/services/skills/README.md`. The guide distinguishes reuse of an existing
+canonical operation from creation of a net-new capability, lists the adapter contract and
+registry bindings, defines read versus mutation-preparation policies, explains runtime
+controls and fail-closed health behavior, and provides focused validation commands and a
+completion checklist. The `skill:create` scaffolder validates and atomically generates the
+standard Skill package without overwriting an existing package.
+
 ---
 
 ## 24. Testing and evaluation
@@ -1401,7 +1410,7 @@ The initial Skill Platform implementation is complete when:
 - a subsequent Skill can be added without modifying central Ask orchestration; and
 - relevant contract, unit, integration, negative, authorization, concurrency, degraded-mode, and end-to-end tests pass.
 
-**Implementation determination: Satisfied as of August 14, 2026.** SP0 through SP5 are complete, all fourteen representative Skills and 30 governed adapters are registered, non-Ask production invocation is operational, all registered Skills have evaluation packages, 168 Ask tests pass, and backend TypeScript validation passes.
+**Implementation determination: Satisfied as of August 14, 2026.** SP0 through SP5 are complete, all fourteen representative Skills and 30 governed adapters are registered, non-Ask production invocation is operational, all registered Skills have evaluation packages, 170 Ask tests pass, and backend TypeScript validation passes.
 
 This Definition of Done establishes the beta engineering architecture. It does not assert production readiness or authorize real-user data collection, proactive external delivery, partner Skills, or public launch.
 

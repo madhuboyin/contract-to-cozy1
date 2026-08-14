@@ -82,3 +82,73 @@ The generated package contains:
 The command prints the two explicit registration imports and a completion checklist. Add the
 manifest to `SKILL_DEFINITIONS` and the evaluation package to
 `SKILL_EVALUATION_PACKAGES`; no capability-specific Ask orchestration change is required.
+
+## Add a governed adapter
+
+An adapter is a versioned policy boundary around an existing canonical Ask operation. It
+does not own business logic and is not a second implementation of the canonical service.
+Prefer reusing an existing registered adapter. Add one only when a registered operation has
+a new canonical-service boundary that the Skill Platform must govern.
+
+If the product capability does not yet have a canonical Ask operation, implement and test
+that operation first. A new Skill package may reuse registered operations without changing
+core Ask orchestration; creating a net-new operation is separate domain and Ask work.
+
+1. Define the canonical operation in `src/services/ask/askOperationRegistry.ts` and set its
+   `adapterKey` to the stable adapter ID. Preserve the operation's property requirement,
+   execution mode, risk class, role floor, allowed result blocks, and typed result contract.
+2. Add the adapter definition to
+   `src/services/skills/adapters/skillAdapterRegistry.ts`. Its ID must exactly match the
+   operation's `adapterKey`, and its version must use `major.minor` format.
+3. Declare all fields required by `SkillAdapterDefinition`:
+   - stable `id` and `version`;
+   - `canonicalOwner` and `allowedOperations`;
+   - versioned `inputContract` and `outputContract`;
+   - `effect`, authorization behavior, timeout, retry safety, idempotency policy, typed
+     error contract, and health contract.
+4. Use `READ`, `SAFE`, and `NOT_APPLICABLE` for a side-effect-free canonical read. Use
+   `MUTATION_PREPARATION`, `CLAIM_GUARDED`, and `CONFIRMATION_RECEIPT` for a material
+   mutation path. The adapter may prepare a mutation, but existing Ask confirmation,
+   freshness recheck, execution claim, authorization, and idempotency controls remain
+   authoritative.
+5. Reference the exact `{ id, version }` in the owning Skill's `allowedAdapters`. Reference
+   the operation from that Skill and include the same adapter in its expected/prohibited
+   evaluation coverage. One operation may have only one registered adapter owner.
+6. Keep canonical execution in the existing domain service and Ask operation dispatch. Do
+   not place domain rules in the adapter registry, call another Skill, broaden the role
+   floor, or bypass typed Ask results.
+
+Adapter availability is controlled independently with the normalized environment key
+`ASK_ADAPTER_<ADAPTER_ID>_ENABLED` or
+`ASK_ADAPTER_<ADAPTER_ID>_KILL_SWITCH`; punctuation in the adapter ID becomes `_` and the
+key is uppercased. A disabled or missing required adapter removes the affected operation
+from routing without disabling unrelated Skills.
+
+Add or update tests that prove:
+
+- type checking and registry validation accept the adapter and reject invalid identity,
+  version, operation-key, duplicate ownership, timeout, effect, retry-policy, or
+  idempotency declarations;
+- the owning Skill declares the exact adapter version;
+- consumer policy and the authorization floor are enforced before canonical execution;
+- disabled or unavailable adapter state fails closed with the typed degraded/unavailable
+  behavior;
+- reads call only the expected canonical service; and
+- mutation preparation retains confirmation, claim, and retry protections.
+
+Run the focused checks from `apps/backend`:
+
+```bash
+node --test tests/ask/skillAdapterRegistry.test.js \
+  tests/ask/skillPlatformFoundation.test.js \
+  tests/ask/skillExecutionBinding.test.js \
+  tests/ask/skillRuntimeHealth.test.js \
+  tests/ask/skillPackageScaffold.test.js
+npx tsc --noEmit
+npm run test:ask
+```
+
+Before considering the extension complete, confirm that startup validation passes, the
+Skill evaluation package covers every declared operation/adapter, no capability-specific
+branch was added to the Skill router, and documentation names the canonical owner and
+failure behavior.
