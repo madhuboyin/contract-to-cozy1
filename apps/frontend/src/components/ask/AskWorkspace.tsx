@@ -227,18 +227,18 @@ function CapabilityExplorer({ groups, onSelect, onOpen }: {
           Explore everything Ask Cozy can do <ArrowRight className="h-4 w-4" />
         </button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-3xl overflow-y-auto p-5 sm:p-7">
-        <DialogHeader className="pr-10">
-          <DialogTitle className="text-2xl text-slate-950">What Ask Cozy can help with</DialogTitle>
-          <DialogDescription className="mt-2 text-sm leading-6 text-slate-600">Choose an example to start a conversation grounded in your selected home record. Availability and required information are checked before any action.</DialogDescription>
+      <DialogContent className="flex max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[85dvh] sm:max-w-4xl">
+        <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 pr-14 sm:px-5 sm:py-4 sm:pr-16">
+          <DialogTitle className="text-xl leading-7 text-slate-950">What Ask Cozy can help with</DialogTitle>
+          <DialogDescription className="mt-1 max-w-3xl text-sm leading-5 text-slate-600">Choose an example to start a conversation grounded in your selected home record.</DialogDescription>
         </DialogHeader>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <div className="grid min-h-0 items-start gap-3 overflow-y-auto p-3 sm:grid-cols-2 sm:p-4">
           {groups.map((group) => (
-            <section key={group.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4" aria-labelledby={`ask-capability-${group.id}`}>
-              <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-teal-700 shadow-sm"><CapabilityCategoryIcon categoryId={group.id} /></span><div><h3 id={`ask-capability-${group.id}`} className="font-semibold text-slate-950">{group.label}</h3><p className="mt-1 text-xs leading-5 text-slate-600">{group.description}</p></div></div>
-              <div className="mt-3 space-y-1">
+            <section key={group.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3" aria-labelledby={`ask-capability-${group.id}`}>
+              <div className="flex items-start gap-2.5"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-teal-700 shadow-sm"><CapabilityCategoryIcon categoryId={group.id} /></span><div><h3 id={`ask-capability-${group.id}`} className="text-sm font-semibold leading-5 text-slate-950">{group.label}</h3><p className="mt-0.5 text-xs leading-4 text-slate-600">{group.description}</p></div></div>
+              <div className="mt-2 space-y-0.5">
                 {group.prompts.map((prompt) => (
-                  <button key={prompt.id} type="button" onClick={() => { setOpen(false); onSelect(prompt); }} className="group flex min-h-10 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-white hover:text-teal-800">
+                  <button key={prompt.id} type="button" onClick={() => { setOpen(false); onSelect(prompt); }} className="group flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-slate-700 hover:bg-white hover:text-teal-800">
                     <span>{prompt.question}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
                   </button>
                 ))}

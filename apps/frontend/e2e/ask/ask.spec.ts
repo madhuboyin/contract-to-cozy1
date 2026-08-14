@@ -42,7 +42,11 @@ test('capability explorer progressively reveals registry-backed examples', async
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await page.getByRole('button', { name: /Explore everything Ask Cozy can do/ }).click();
-  await expect(page.getByRole('dialog', { name: 'What Ask Cozy can help with' })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'What Ask Cozy can help with' });
+  await expect(dialog).toBeVisible();
+  const dialogBox = await dialog.boundingBox();
+  expect(dialogBox?.width).toBeGreaterThanOrEqual(800);
+  expect(dialogBox?.height).toBeLessThanOrEqual(620);
   await expect(page.getByRole('heading', { name: 'What Ask Cozy can help with' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Understand your home' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Maintain and prevent' })).toBeVisible();
@@ -50,6 +54,9 @@ test('capability explorer progressively reveals registry-backed examples', async
   await expect(page.getByRole('heading', { name: 'Reduce costs' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Compare and decide' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Plan and monitor' })).toBeVisible();
+  for (const card of await dialog.locator('section').all()) {
+    expect((await card.boundingBox())?.height).toBeLessThan(200);
+  }
   await page.getByRole('button', { name: 'Give me a summary of my home record.' }).click();
   await expect(page.getByRole('dialog', { name: 'What Ask Cozy can help with' })).toHaveCount(0);
   await expect.poll(() => api.executionQuestions).toContain('Give me a summary of my home record.');
