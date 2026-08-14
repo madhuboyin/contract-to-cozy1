@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, KeyboardEvent, Ref, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
+import { ComponentProps, createContext, FormEvent, KeyboardEvent, Ref, useContext, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,8 @@ import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabil
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { track } from '@/lib/analytics/events';
+import { addAskReturnContext, buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
+import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 
 const fallbackPrompts: AskFeaturedPrompt[] = [
   { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?', source: 'DISCOVERY' },
@@ -88,10 +90,18 @@ const capturePolicy = {
   WORKFLOW_INPUT: { eyebrow: 'Complete this workflow', note: null, border: 'border-sky-200 bg-sky-50/80' },
 } satisfies Record<AskCaptureRequest['classification'], { eyebrow: string; note: string | null; border: string }>;
 
+const AskActionReturnContext = createContext('');
+
+function AskContextLink({ href, ...props }: Omit<ComponentProps<typeof Link>, 'href'> & { href: string }) {
+  const askReturnHref = useContext(AskActionReturnContext);
+  const contextualHref = askReturnHref ? addAskReturnContext(href, askReturnHref) : href;
+  return <Link href={contextualHref} {...props} />;
+}
+
 function ActionLink({ action }: { action: AskAction }) {
   if (!action.href) return null;
   return (
-    <Link
+    <AskContextLink
       href={action.href}
       className={cn(
         'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors',
@@ -99,7 +109,7 @@ function ActionLink({ action }: { action: AskAction }) {
       )}
     >
       {action.label}<ArrowRight className="h-4 w-4" />
-    </Link>
+    </AskContextLink>
   );
 }
 
@@ -179,7 +189,7 @@ function CapabilityCard({ capability }: {
   );
   return unavailable
     ? <div className={className} aria-label={`${capability.label} unavailable`}>{content}</div>
-    : <Link href={capability.href} className={className}>{content}</Link>;
+    : <AskContextLink href={capability.href} className={className}>{content}</AskContextLink>;
 }
 
 function useConciergeHome(propertyId?: string, retryKey = 0) {
@@ -391,7 +401,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
                     <li key={item.id} className="rounded-xl bg-slate-50 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          {item.href ? <Link className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</Link> : <p className="font-medium text-slate-950">{item.title}</p>}
+                          {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}
                           {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
                           {item.meta.length > 0 && <p className="mt-2 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
                         </div>
@@ -403,7 +413,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
               )}
               {section.count > section.items.length && (
                 block.actions[0]?.href
-                  ? <Link href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{section.count - section.items.length} more · {block.actions[0].label}</Link>
+                  ? <AskContextLink href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{section.count - section.items.length} more · {block.actions[0].label}</AskContextLink>
                   : <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more not shown here.</p>
               )}
             </div>
@@ -467,7 +477,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
 
   if (block.type === 'METRIC_ROW') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{block.metrics.map((metric) => <div key={metric.label} className={cn('rounded-xl border p-3', metric.tone === 'POSITIVE' ? 'border-emerald-200 bg-emerald-50' : metric.tone === 'CAUTION' ? 'border-amber-200 bg-amber-50' : metric.tone === 'CRITICAL' ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-slate-50')}><dt className="text-xs text-slate-500">{metric.label}</dt><dd className="mt-1 text-lg font-semibold text-slate-950">{metric.value}</dd>{metric.detail && <p className="mt-1 text-xs text-slate-600">{metric.detail}</p>}</div>)}</dl></section>;
 
-  if (block.type === 'TIMELINE') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<ol className="mt-4 border-l-2 border-teal-200 pl-4">{block.items.map((item) => <li key={item.id} className="relative pb-4 before:absolute before:-left-[1.34rem] before:top-1 before:h-2.5 before:w-2.5 before:rounded-full before:bg-teal-700"><div className="flex flex-wrap items-center gap-2">{item.href ? <Link href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</Link> : <span className="font-semibold text-slate-900">{item.label}</span>}{item.date && <span className="text-xs text-slate-500">{item.date}</span>}{item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{item.status}</span>}</div>{item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}</li>)}</ol></section>;
+  if (block.type === 'TIMELINE') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<ol className="mt-4 border-l-2 border-teal-200 pl-4">{block.items.map((item) => <li key={item.id} className="relative pb-4 before:absolute before:-left-[1.34rem] before:top-1 before:h-2.5 before:w-2.5 before:rounded-full before:bg-teal-700"><div className="flex flex-wrap items-center gap-2">{item.href ? <AskContextLink href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</AskContextLink> : <span className="font-semibold text-slate-900">{item.label}</span>}{item.date && <span className="text-xs text-slate-500">{item.date}</span>}{item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{item.status}</span>}</div>{item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}</li>)}</ol></section>;
 
   if (block.type === 'COMPARISON') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<div className="mt-4 grid gap-3 sm:grid-cols-2">{block.options.map((option) => <div key={option.id} className="rounded-xl border border-slate-200 p-3"><h4 className="font-semibold text-slate-900">{option.label}</h4>{option.summary && <p className="mt-1 text-sm text-slate-600">{option.summary}</p>}<dl className="mt-3 space-y-2">{option.attributes.map((attribute) => <div key={attribute.label} className="flex justify-between gap-3 text-sm"><dt className="text-slate-500">{attribute.label}</dt><dd className="text-right font-medium text-slate-800">{attribute.value}</dd></div>)}</dl></div>)}</div>{block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}</section>;
 
@@ -744,7 +754,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
       </div>
       {block.totalCount != null && block.totalCount > block.rows.length && (
         block.actions[0]?.href
-          ? <Link href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{block.totalCount - block.rows.length} more · {block.actions[0].label}</Link>
+          ? <AskContextLink href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{block.totalCount - block.rows.length} more · {block.actions[0].label}</AskContextLink>
           : <p className="mt-3 text-sm text-slate-500">+{block.totalCount - block.rows.length} more not shown here.</p>
       )}
     </section>
@@ -1029,7 +1039,7 @@ function InlineCaptureCard({
           <button type="button" disabled={saving || missingCreateRequired} onClick={() => void submitRelational({ mode: 'CREATE', values })} className="mt-4 min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : schema.createLabel}</button>
         </div>
         {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
-        {request.fallbackHref && <Link href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-teal-800 hover:underline">Open full form instead <ExternalLink className="h-4 w-4" /></Link>}
+        {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-teal-800 hover:underline">Open full form instead <ExternalLink className="h-4 w-4" /></AskContextLink>}
       </section>
     );
   }
@@ -1112,7 +1122,7 @@ function InlineCaptureCard({
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
-        {request.fallbackHref && <Link href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></Link>}
+        {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}
       </div>
     </form>
   );
@@ -1183,7 +1193,7 @@ function PendingWorkInbox({ items, loadingId, onResume }: { items: AskPendingWor
   );
 }
 
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; launchSurface?: string; launchCapabilityId?: string }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; launchSurface?: string; launchCapabilityId?: string }) {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link (e.g. a monitor-fired reminder) carries the
   // property the answer is scoped to, but the globally-selected property
@@ -1226,6 +1236,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const askUnavailable = serviceUnavailable
     || concierge.failureCode === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
+  const safeBackTo = resolveDashboardBackHref(initialBackTo, '');
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 
@@ -1316,7 +1327,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           entityType: promptContext?.entityType,
           entityId: promptContext?.entityId,
           actionId: promptContext?.actionId,
-          returnTo: window.location.pathname,
+          returnTo: safeBackTo || null,
         },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
@@ -1409,6 +1420,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const featuredPrompts = concierge.view?.featuredPrompts?.length ? concierge.view.featuredPrompts.slice(0, 4) : fallbackPrompts;
+  const latestExecutionId = executions.at(-1)?.executionId ?? '';
+  const fullWorkspaceHref = buildAskWorkspaceHref({
+    propertyId: selectedPropertyId,
+    sessionId,
+    executionId: latestExecutionId,
+    backTo: safeBackTo,
+    launchSurface,
+    launchCapabilityId,
+  });
   const runPrompt = (prompt: AskCapabilityPrompt, source: AskPromptSource) => {
     if (!sessionId || loading) return;
     const attribution = { promptId: prompt.id, categoryId: prompt.categoryId, source } satisfies AskPromptAttribution;
@@ -1428,6 +1448,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <div className={cn('flex min-h-0 flex-col', mode === 'page' ? 'min-h-[calc(100dvh-9rem)] bg-transparent' : 'h-full bg-slate-50')}>
+      {mode === 'page' && safeBackTo && (
+        <Link href={safeBackTo} className="mb-2 inline-flex w-fit min-h-10 items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          <ArrowLeft className="h-4 w-4" />{initialBackLabel}
+        </Link>
+      )}
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
           flush against the device's actual top edge/notch); env() resolves
@@ -1438,7 +1463,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-11 w-11 rounded-2xl' : 'h-9 w-9 rounded-xl')}><Sparkles className={mode === 'page' ? 'h-5 w-5' : 'h-4 w-4'} /></span><div>{mode === 'page' ? <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className={cn('truncate text-slate-500', mode === 'page' ? 'mt-1 text-sm' : 'text-xs')}>{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
           {mode === 'page' && executions.length > 0 && !askUnavailable && <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />Clear history</button>}
-          {mode === 'panel' && <Link href="/dashboard/ask" onClick={onClose} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
+          {mode === 'panel' && <Link href={fullWorkspaceHref} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
           {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
         </div>
       </header>
@@ -1477,8 +1502,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           <div className="mx-auto max-w-3xl space-y-7">
             <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} onResume={(item) => void resumePendingWork(item)} />
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
-            {executions.map((execution) => (
-              <article id={`ask-execution-${execution.executionId}`} key={execution.executionId} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
+            {executions.map((execution) => {
+              const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
+              return <AskActionReturnContext.Provider key={execution.executionId} value={askReturnHref}>
+              <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
                 <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
                   <h2 className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</h2>
@@ -1496,7 +1523,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} />
                 </div>
               </article>
-            ))}
+              </AskActionReturnContext.Provider>;
+            })}
             {loading && <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin text-teal-700" />Checking your home record…</div>}
             <div ref={endRef} />
           </div>

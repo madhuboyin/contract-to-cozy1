@@ -20,7 +20,9 @@ test('mobile inline capture retains a full-form escape path', async ({ page }) =
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await page.getByPlaceholder('Ask anything about your home…').fill('When should I replace my refrigerator?');
   await page.getByRole('button', { name: 'Send question' }).click();
-  await expect(page.getByRole('link', { name: /Open full form/ })).toHaveAttribute('href', /\/inventory$/);
+  const fullFormHref = await page.getByRole('link', { name: /Open full form/ }).getAttribute('href');
+  expect(fullFormHref).toMatch(/\/inventory\?/);
+  expect(new URL(fullFormHref!, 'http://localhost').searchParams.get('backTo')).toContain('/dashboard/ask?');
   await expect(page.getByRole('button', { name: 'Save and update answer' })).toBeVisible();
 });
 

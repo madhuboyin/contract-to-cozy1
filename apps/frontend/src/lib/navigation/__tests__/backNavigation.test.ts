@@ -19,5 +19,6 @@ describe('property tool return navigation', () => {
   it('rejects external and protocol-relative return paths', () => {
     expect(resolveDashboardBackHref('https://example.com', fallback)).toBe(fallback);
     expect(resolveDashboardBackHref('//example.com/dashboard', fallback)).toBe(fallback);
+    expect(resolveDashboardBackHref('/dashboard-impersonator', fallback)).toBe(fallback);
   });
 });

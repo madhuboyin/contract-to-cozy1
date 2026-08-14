@@ -11,7 +11,7 @@ export function resolveDashboardBackHref(
 
   const normalized = rawBackTo.trim();
   if (!normalized) return fallbackHref;
-  if (!normalized.startsWith(DASHBOARD_PREFIX)) return fallbackHref;
+  if (normalized !== DASHBOARD_PREFIX && !normalized.startsWith(`${DASHBOARD_PREFIX}/`)) return fallbackHref;
   if (normalized.startsWith('//')) return fallbackHref;
 
   return normalized;

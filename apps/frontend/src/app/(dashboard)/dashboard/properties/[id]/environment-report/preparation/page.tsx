@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import type { WeatherPreparationItemStatus, WeatherPreparationPlan } from '@/types';
+import { resolveToolReturnHref } from '@/lib/navigation/backNavigation';
 
 export default function WeatherPreparationPage() {
   const params = useParams<{ id: string }>();
@@ -19,6 +20,9 @@ export default function WeatherPreparationPage() {
   const propertyId = params.id;
   const insightId = searchParams.get('insightId') ?? '';
   const reportHref = `/dashboard/properties/${propertyId}/environment-report`;
+  const fromAsk = searchParams.get('from') === 'ask';
+  const backHref = resolveToolReturnHref(searchParams, reportHref);
+  const backLabel = fromAsk ? 'Back to Ask Cozy' : 'Back to Environment Report';
 
   const planQuery = useQuery({
     queryKey: ['weather-preparation', propertyId, insightId],
@@ -53,7 +57,7 @@ export default function WeatherPreparationPage() {
       <DashboardShell>
         <Card><CardContent className="p-8 text-center">
           <p className="font-semibold">No active weather preparation was selected.</p>
-          <Button asChild className="mt-4"><Link href={reportHref}>Return to Environment Report</Link></Button>
+          <Button asChild className="mt-4"><Link href={backHref}>{fromAsk ? 'Return to Ask Cozy' : 'Return to Environment Report'}</Link></Button>
         </CardContent></Card>
       </DashboardShell>
     );
@@ -78,7 +82,7 @@ export default function WeatherPreparationPage() {
           <p className="mt-2 text-sm text-slate-600">Return to the report for the latest forecast and recommendations.</p>
           <div className="mt-5 flex justify-center gap-2">
             <Button variant="outline" onClick={() => planQuery.refetch()}><RotateCcw className="mr-2 h-4 w-4" />Try again</Button>
-            <Button asChild><Link href={reportHref}>View latest outlook</Link></Button>
+            <Button asChild><Link href={backHref}>{fromAsk ? 'Back to Ask Cozy' : 'View latest outlook'}</Link></Button>
           </div>
         </CardContent></Card>
       </DashboardShell>
@@ -93,7 +97,7 @@ export default function WeatherPreparationPage() {
     <DashboardShell>
       <div className="mx-auto max-w-3xl space-y-5">
         <Button asChild variant="ghost" className="-ml-3 text-slate-600">
-          <Link href={reportHref}><ArrowLeft className="mr-2 h-4 w-4" />Back to Environment Report</Link>
+          <Link href={backHref}><ArrowLeft className="mr-2 h-4 w-4" />{backLabel}</Link>
         </Button>
 
         <div className="overflow-hidden rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 shadow-sm">

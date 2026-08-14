@@ -107,7 +107,12 @@ test('weather attention answers inline with the complete preparation checklist b
   await expect(response.getByText('Use shades and avoid peak-hour heat-generating activities.')).toBeVisible();
   await expect(response.getByText('Confirm the incident response and preserve the evidence needed for follow-up.')).toHaveCount(0);
   await expect(response.getByRole('link', { name: 'View in Home Actions' })).toHaveCount(0);
-  await expect(response.getByRole('link', { name: 'Open preparation checklist' })).toHaveCount(1);
+  const checklistLink = response.getByRole('link', { name: 'Open preparation checklist' });
+  await expect(checklistLink).toHaveCount(1);
+  const checklistHref = await checklistLink.getAttribute('href');
+  const checklistUrl = new URL(checklistHref!, 'http://localhost');
+  expect(checklistUrl.searchParams.get('from')).toBe('ask');
+  expect(checklistUrl.searchParams.get('backTo')).toContain('executionId=execution-heat-preparation');
   await expect.poll(async () => (await response.boundingBox())?.y ?? 0).toBeGreaterThan(80);
 });
 
@@ -176,7 +181,9 @@ test('capability discovery shows readiness and related-tool continuity', async (
   await expect(page.getByText('More home details will improve the result')).toBeVisible();
   await expect(page.getByText('Add current mortgage facts before running a comparison.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Related tools for what comes next' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Break-Even/ })).toHaveAttribute('href', new RegExp(`/properties/${propertyId}/tools/break-even$`));
+  const relatedToolHref = await page.getByRole('link', { name: /Break-Even/ }).getAttribute('href');
+  expect(relatedToolHref).toMatch(new RegExp(`/properties/${propertyId}/tools/break-even\\?`));
+  expect(new URL(relatedToolHref!, 'http://localhost').searchParams.get('backTo')).toContain('/dashboard/ask?');
 });
 
 test('unavailable capability fails honestly without a launch link', async ({ page }) => {
