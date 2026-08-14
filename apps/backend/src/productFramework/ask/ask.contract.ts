@@ -487,6 +487,12 @@ export const AskExecutionResponseSchema = z.object({
   status: AskExecutionStatusSchema,
   property: z.object({ id: z.string(), label: z.string() }).nullable(),
   skill: z.object({ id: z.string(), version: z.string(), domain: z.string() }).nullable().default(null),
+  skillHandoff: z.object({
+    suggestedNextSkillId: z.string().trim().min(1).max(100),
+    suggestedGoal: z.string().trim().min(1).max(160),
+    reasonCodes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/)).min(1).max(8),
+    contextReferenceIds: z.array(z.string().trim().min(1).max(128)).max(8),
+  }).nullable().default(null),
   operation: z.object({ id: z.string(), version: z.string(), family: z.string() }).nullable(),
   contextVersion: z.string().nullable(),
   blocks: z.array(AskPresentationBlockSchema),

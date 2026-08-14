@@ -78,6 +78,13 @@ export const askSkillRoutingDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const askSkillHandoffsTotal = new Counter({
+  name: 'ask_skill_handoffs_total',
+  help: 'Governed Skill handoff suggestions by bounded registered source, target, and outcome',
+  labelNames: ['source_skill', 'target_skill', 'outcome'] as const,
+  registers: [register],
+});
+
 export const askSkillContextProviderTotal = new Counter({
   name: 'ask_skill_context_provider_total',
   help: 'Skill context provider invocations by immutable provider version and bounded result status',

@@ -22,7 +22,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
@@ -94,6 +94,7 @@ import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../s
 import { resolveHierarchicalSkillRouting } from '../skills/skillRouter';
 import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
 import { buildSkillExecutionBinding, validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
+import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -4243,6 +4244,24 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
         parameters: { ...(coreResult.parameters ?? {}), requirementReasonCode: coreResult.reasonCode ?? null },
       }
       : coreResult;
+  const finalize = (): AskOperationResult => {
+    const controls = readAskOperationalControls();
+    const skillHandoff = resolveSkillHandoffSuggestion({
+      sourceOperationId: input.operation.operationId,
+      result,
+      consumer: 'ASK',
+      controls: {
+        skillEnabled: controls.skillEnabled,
+        operationEnabled: controls.operationEnabled,
+        adapterEnabled: controls.adapterEnabled,
+        contextProviderEnabled: controls.contextProviderEnabled,
+      },
+    });
+    if (skill && skillHandoff) {
+      askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
+    }
+    return { ...result, skillHandoff };
+  };
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operation.operationId];
   if (
     !input.propertyId
@@ -4251,7 +4270,7 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
     || (result.captureRequests?.length ?? 0) > 0
     || result.confirmation
     || result.blocks.some((block) => block.type === 'CAPABILITY_LIST')
-  ) return result;
+  ) return finalize();
 
   try {
     const [related, catalog] = await Promise.all([
@@ -4299,7 +4318,7 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
   } catch {
     // Optional continuity must never turn a successful primary answer into a failure.
   }
-  return result;
+  return finalize();
 }
 
 function captureFallbackHref(operationId: string | null, propertyId: string | null): string | null {
@@ -4342,7 +4361,7 @@ function mapPersistedExecution(execution: {
       ? { id: currentSkill.id, version: currentSkill.version, domain: currentSkill.domain }
       : null;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown }
     : {};
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
   const candidate = {
@@ -4353,6 +4372,7 @@ function mapPersistedExecution(execution: {
     status: execution.status,
     property,
     skill,
+    skillHandoff: stored.skillHandoff ?? null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
@@ -4382,6 +4402,7 @@ function mapPersistedExecution(execution: {
     status: 'UNAVAILABLE',
     property,
     skill,
+    skillHandoff: null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? 'unknown', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     contextVersion: execution.contextVersion,
     blocks: [{
@@ -4658,7 +4679,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
         completedAt,
       },
     });
@@ -4815,7 +4836,7 @@ export async function submitAskClarification(userId: string, executionId: string
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: asInputJson(nextParameters),
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -4895,7 +4916,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -4984,7 +5005,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: replayed.reasonCode,
         contextVersion: replayed.contextVersion ?? previousCapture.contextVersion,
         parametersJson: replayed.parameters ? asInputJson(replayed.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions, skillHandoff: replayed.skillHandoff ?? null }),
         completedAt: terminalStatus(replayed.status) ? new Date() : null,
       },
     });
@@ -5448,7 +5469,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion ?? capturedContextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -5524,7 +5545,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       reasonCode: result.reasonCode,
       contextVersion: result.contextVersion,
       parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
+      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });
@@ -6324,7 +6345,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }), completedAt: new Date() },
       });
       await tx.askConfirmationReceipt.update({
         where: { executionId },

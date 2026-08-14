@@ -10,6 +10,9 @@ This package implements the static Version 1 Skill contracts described in
   routing, operation, ambiguity, policy, context, negative, degraded-mode,
   model-disabled, handoff, and performance fixtures. Startup rejects missing, stale,
   incomplete, cross-Skill, or unbounded packages.
+- `skillHandoff.ts` registers optional cross-Skill follow-up suggestions. It emits typed
+  metadata only after Ask rechecks target ownership, goal registration, consumer policy,
+  runtime controls, and dependency health; it has no adapter or peer-execution path.
 
 The registered Skills reference existing Ask operations and canonical adapters. New Ask
 executions persist a versioned Skill binding after the additive `AskExecution` schema
@@ -20,6 +23,10 @@ composition, provider fan-out and payload, adapter resolution, canonical executi
 presentation validation, and optional model work are timed separately. The smoke suite is
 designed to detect unbounded behavior without turning aspirational production percentiles
 into beta development gates.
+
+Handoffs are persisted with the source execution and rendered as a draftable next question.
+Selecting one does not execute anything: the new question returns through normal Ask routing,
+property authorization, ambiguity handling, and current runtime-health checks.
 
 ## Create a Skill package
 

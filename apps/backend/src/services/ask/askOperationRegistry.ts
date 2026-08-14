@@ -1,4 +1,5 @@
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
+import type { SkillHandoffSuggestion } from '../skills/skillHandoff';
 
 export type AskIntentFamily =
   | 'RECORD_QUERY'
@@ -84,6 +85,7 @@ export interface AskOperationResult {
   clarification?: AskClarification | null;
   confirmation?: AskConfirmation | null;
   suggestions: string[];
+  skillHandoff?: SkillHandoffSuggestion | null;
   parameters?: Record<string, unknown>;
 }
 
