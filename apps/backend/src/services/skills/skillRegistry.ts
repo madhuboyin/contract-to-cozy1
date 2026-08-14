@@ -10,6 +10,8 @@ import type {
   SkillDefinition,
 } from './skill.contract';
 import { MAINTENANCE_SKILL } from './maintenance';
+import { REPAIR_REPLACE_SKILL } from './repairReplace';
+import { REFINANCE_SKILL } from './refinance';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
@@ -26,6 +28,8 @@ const PLATFORM_CONTEXT_BUDGET_MAXIMUMS = Object.freeze({
 
 export const SKILL_DEFINITIONS = Object.freeze({
   maintenance: MAINTENANCE_SKILL,
+  'repair-replace': REPAIR_REPLACE_SKILL,
+  refinance: REFINANCE_SKILL,
 } satisfies Readonly<Record<string, SkillDefinition>>);
 
 export type SkillId = keyof typeof SKILL_DEFINITIONS;
@@ -85,6 +89,7 @@ export function validateSkillDefinitions(
   const issues: string[] = [];
   const ids = new Set<string>();
   const operationOwners = new Map<AskOperationId, string>();
+  const registeredSkillIds = new Set(Object.values(definitions).map((skill) => skill.id));
 
   for (const [key, skill] of Object.entries(definitions)) {
     if (key !== skill.id) issues.push(`${key}: Skill id mismatch`);
@@ -144,9 +149,20 @@ export function validateSkillDefinitions(
       if (!Number.isInteger(value) || value < 0 || value > maximum) issues.push(`${key}: invalid context budget ${budgetName}`);
     }
     if (skill.contextBudget.maxOverallLatencyMs < skill.contextBudget.maxProviderLatencyMs) issues.push(`${key}: overall latency budget is below provider latency budget`);
+    const dependencyRefs = new Set<string>();
     for (const dependency of skill.dependencies) {
-      if (dependency.type === 'OPERATION_CONTRACT' && !ASK_OPERATION_DEFINITIONS[dependency.id as AskOperationId]) issues.push(`${key}: unknown operation dependency ${dependency.id}`);
-      if (dependency.id === skill.id) issues.push(`${key}: self dependency is prohibited`);
+      const dependencyRef = `${dependency.type}:${dependency.id}@${dependency.version}`;
+      if (dependencyRefs.has(dependencyRef)) issues.push(`${key}: duplicate dependency ${dependencyRef}`);
+      dependencyRefs.add(dependencyRef);
+      if (registeredSkillIds.has(dependency.id)) issues.push(`${key}: executable Skill dependency ${dependency.id} is prohibited`);
+      if (dependency.type === 'OPERATION_CONTRACT') {
+        const operation = ASK_OPERATION_DEFINITIONS[dependency.id as AskOperationId];
+        if (!operation) issues.push(`${key}: unknown operation dependency ${dependency.id}`);
+        else if (operation.version !== dependency.version) issues.push(`${key}: incompatible operation dependency ${dependency.id}@${dependency.version}`);
+      }
+      if (dependency.type === 'CONTEXT_PROVIDER' && !registeredContextProviders.has(`${dependency.id}@${dependency.version}`)) {
+        issues.push(`${key}: unknown context provider dependency ${dependency.id}@${dependency.version}`);
+      }
     }
   }
   return issues;

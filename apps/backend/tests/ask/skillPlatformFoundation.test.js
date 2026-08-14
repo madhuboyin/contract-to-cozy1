@@ -30,7 +30,7 @@ test('the static Skill registry validates and groups the existing Maintenance op
     ],
   );
   assert.equal(getSkillForOperation('MAINTENANCE_STATUS').id, 'maintenance');
-  assert.equal(getSkillForOperation('REFINANCE_ANALYSIS'), undefined);
+  assert.equal(getSkillForOperation('REFINANCE_ANALYSIS').id, 'refinance');
 });
 
 test('effective policy is the restrictive intersection of Skill, consumer, and operation policy', () => {
