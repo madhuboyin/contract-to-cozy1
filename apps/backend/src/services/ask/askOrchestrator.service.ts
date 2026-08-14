@@ -116,6 +116,7 @@ import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
 import { SKILL_DEPENDENCY_ACTIVATIONS } from '../skills/skillDependencyRegistry';
 import { buildFocusedHomeActionGuidance, focusedHomeActionCategory, focusedHomeActionQuestion, focusedOperationForLaunchContext } from './askFocusedGuidance';
 import { lifecyclePromptsFor } from './askLifecyclePromptPolicy';
+import { applyAskAudiencePresentation } from './askAudiencePresentation';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -4381,8 +4382,16 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   const canonicalStartedAt = process.hrtime.bigint();
   let canonicalStatus = 'threw';
   try {
+    const canonicalResult = await dispatchOperationAdapter(input, composedContext, trace);
+    const presentedResult = householdRole
+      ? applyAskAudiencePresentation({
+        result: canonicalResult,
+        householdRole,
+        journeyContext: journeyContextFrom(composedContext),
+      })
+      : canonicalResult;
     const result = attachJourneyContext(
-      await dispatchOperationAdapter(input, composedContext, trace),
+      presentedResult,
       composedContext,
       audienceDecision,
     );

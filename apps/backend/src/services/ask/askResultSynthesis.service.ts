@@ -40,7 +40,17 @@ function numericalClaims(value: string): string[] {
 
 export async function synthesizeAskResult(operationId: AskOperationId, result: AskOperationResult): Promise<AskOperationResult> {
   if (result.status !== 'ANSWERED' && result.status !== 'READY_WITH_LIMITATIONS') return result;
-  const payload = buildAskResultSynthesisPayload(operationId, result.blocks);
+  const audiencePresentation = result.parameters?.audiencePresentation;
+  const framingText = audiencePresentation && typeof audiencePresentation === 'object'
+    && 'framingText' in audiencePresentation && typeof audiencePresentation.framingText === 'string'
+    ? audiencePresentation.framingText
+    : null;
+  const synthesisBlocks = framingText
+    ? result.blocks.map((block) => block.type === 'SUMMARY' && block.body.startsWith(`${framingText} `)
+      ? { ...block, body: block.body.slice(framingText.length + 1) }
+      : block)
+    : result.blocks;
+  const payload = buildAskResultSynthesisPayload(operationId, synthesisBlocks);
   if (!payload) return result;
   askRemoteGenerationCharactersTotal.inc({ direction: 'input' }, payload.length);
   let output: z.infer<typeof SynthesisOutputSchema>;
@@ -65,9 +75,12 @@ export async function synthesizeAskResult(operationId: AskOperationId, result: A
   const blocks = [...result.blocks];
   if (summaryIndex >= 0) {
     const current = blocks[summaryIndex];
-    if (current.type === 'SUMMARY') blocks[summaryIndex] = AskPresentationBlockSchema.parse({ ...current, body: output.summary });
+    if (current.type === 'SUMMARY') blocks[summaryIndex] = AskPresentationBlockSchema.parse({
+      ...current,
+      body: framingText ? `${framingText} ${output.summary}` : output.summary,
+    });
   } else {
-    blocks.unshift(AskPresentationBlockSchema.parse({ type: 'SUMMARY', id: 'result-synthesis', title: 'At a glance', body: output.summary, tone: 'DEFAULT', actions: [] }));
+    blocks.unshift(AskPresentationBlockSchema.parse({ type: 'SUMMARY', id: 'result-synthesis', title: 'At a glance', body: framingText ? `${framingText} ${output.summary}` : output.summary, tone: 'DEFAULT', actions: [] }));
   }
   return { ...result, blocks };
 }
