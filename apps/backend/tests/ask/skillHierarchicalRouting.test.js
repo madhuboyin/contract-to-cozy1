@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 
 require('ts-node/register');
 
@@ -89,6 +91,13 @@ test('close Skill candidates fail closed as ambiguous instead of silently choosi
   assert.equal(result.outcome, 'AMBIGUOUS_SKILL');
   assert.equal(result.selectedSkill, null);
   assert.equal(result.selectedOperationId, null);
+});
+
+test('Ask normalizes unsupported and ambiguous Skill routing with stable codes', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(orchestrator, /outcome === 'UNSUPPORTED'\) return 'ASK_SKILL_UNSUPPORTED'/);
+  assert.match(orchestrator, /'ASK_SKILL_AMBIGUOUS'/);
+  assert.match(orchestrator, /skillRoutingReasonCode: stableSkillRoutingReasonCode/);
 });
 
 test('disabled and consumer-ineligible Skills are filtered before selection', () => {

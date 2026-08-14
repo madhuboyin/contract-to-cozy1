@@ -2,9 +2,15 @@ import { createHash } from 'node:crypto';
 import type { AskOperationId } from '../ask/askOperationRegistry';
 import type { SkillConsumer, SkillDefinition, VersionedSkillReference } from './skill.contract';
 import { getSkillAdapter } from './adapters/skillAdapterRegistry';
+import {
+  SKILL_DEPENDENCY_ACTIVATIONS,
+  SKILL_DEPENDENCY_CONTRACTS,
+  skillDependencyContractKey,
+  type ResolvedSkillDependency,
+} from './skillDependencyRegistry';
 import { getSkillDefinition, resolveEffectiveSkillOperationPolicy } from './skillRegistry';
 
-export const SKILL_EXECUTION_BINDING_SCHEMA_VERSION = '1.0.0';
+export const SKILL_EXECUTION_BINDING_SCHEMA_VERSION = '1.1.0';
 
 export interface SkillExecutionBinding {
   schemaVersion: typeof SKILL_EXECUTION_BINDING_SCHEMA_VERSION;
@@ -14,6 +20,11 @@ export interface SkillExecutionBinding {
   effectivePolicyVersion: string;
   adapter: VersionedSkillReference;
   contextProviders: readonly (VersionedSkillReference & { required: boolean })[];
+  dependencyActivation: {
+    status: 'RESOLVED' | 'DEGRADED';
+    dependencies: readonly ResolvedSkillDependency[];
+    missing: readonly SkillDefinition['dependencies'][number][];
+  };
   routing: {
     path: string;
     reasonCodes: readonly string[];
@@ -23,7 +34,7 @@ export interface SkillExecutionBinding {
 
 export type SkillExecutionBindingValidation =
   | { valid: true; binding: SkillExecutionBinding }
-  | { valid: false; reasonCode: 'ASK_SKILL_VERSION_UNAVAILABLE' | 'ASK_SKILL_POLICY_MISMATCH' };
+  | { valid: false; reasonCode: 'ASK_SKILL_VERSION_UNAVAILABLE' | 'ASK_SKILL_POLICY_MISMATCH' | 'ASK_SKILL_DEPENDENCY_UNAVAILABLE' };
 
 function stableValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stableValue);
@@ -74,6 +85,12 @@ export function buildSkillExecutionBinding(input: {
   const adapterReference = input.skill.allowedAdapters.find((candidate) => candidate.id === adapterId);
   const adapter = adapterReference && getSkillAdapter(adapterReference.id, adapterReference.version);
   if (!adapterReference || !adapter) throw new Error(`Skill adapter is unavailable for ${input.skill.id}/${input.operationId}.`);
+  const dependencyActivation = SKILL_DEPENDENCY_ACTIVATIONS[input.skill.id];
+  if (!dependencyActivation || dependencyActivation.skillVersion !== input.skill.version || dependencyActivation.status === 'UNAVAILABLE') {
+    throw Object.assign(new Error(`Skill dependencies are unavailable for ${input.skill.id}@${input.skill.version}.`), {
+      code: 'ASK_SKILL_DEPENDENCY_UNAVAILABLE',
+    });
+  }
 
   return Object.freeze({
     schemaVersion: SKILL_EXECUTION_BINDING_SCHEMA_VERSION,
@@ -83,6 +100,11 @@ export function buildSkillExecutionBinding(input: {
     effectivePolicyVersion: policyVersion,
     adapter: Object.freeze({ id: adapter.id, version: adapter.version }),
     contextProviders: Object.freeze(operationProviders(input.skill, input.operationId).map((provider) => Object.freeze(provider))),
+    dependencyActivation: Object.freeze({
+      status: dependencyActivation.status,
+      dependencies: Object.freeze(dependencyActivation.dependencies.map((dependency) => Object.freeze({ ...dependency }))),
+      missing: Object.freeze(dependencyActivation.missing.map((dependency) => Object.freeze({ ...dependency }))),
+    }),
     routing: Object.freeze({
       path: input.routingPath,
       reasonCodes: Object.freeze([...new Set(input.routingReasonCodes)].sort()),
@@ -99,6 +121,10 @@ function isBinding(value: unknown): value is SkillExecutionBinding {
     && Boolean(binding.operation && typeof binding.operation.id === 'string' && typeof binding.operation.version === 'string')
     && Boolean(binding.adapter && typeof binding.adapter.id === 'string' && typeof binding.adapter.version === 'string')
     && Array.isArray(binding.contextProviders)
+    && Boolean(binding.dependencyActivation
+      && (binding.dependencyActivation.status === 'RESOLVED' || binding.dependencyActivation.status === 'DEGRADED')
+      && Array.isArray(binding.dependencyActivation.dependencies)
+      && Array.isArray(binding.dependencyActivation.missing))
     && typeof binding.effectivePolicyVersion === 'string'
     && typeof binding.consumer === 'string';
 }
@@ -123,6 +149,27 @@ export function validateSkillExecutionBinding(value: unknown): SkillExecutionBin
   }
   if (digest(value.contextProviders) !== digest(operationProviders(skill, value.operation.id))) {
     return { valid: false, reasonCode: 'ASK_SKILL_VERSION_UNAVAILABLE' };
+  }
+  const pinnedDeclarations = [
+    ...value.dependencyActivation.dependencies.map(({ type, id, requestedVersion: version, required }) => ({ type, id, version, required })),
+    ...value.dependencyActivation.missing.map(({ type, id, version, required }) => ({ type, id, version, required })),
+  ].sort((left, right) => left.type.localeCompare(right.type) || left.id.localeCompare(right.id));
+  const currentDeclarations = [...skill.dependencies]
+    .map(({ type, id, version, required }) => ({ type, id, version, required }))
+    .sort((left, right) => left.type.localeCompare(right.type) || left.id.localeCompare(right.id));
+  const expectedDependencyStatus = value.dependencyActivation.missing.length ? 'DEGRADED' : 'RESOLVED';
+  const pinnedContractsAvailable = value.dependencyActivation.dependencies.every((dependency) => Boolean(
+    SKILL_DEPENDENCY_CONTRACTS[skillDependencyContractKey({
+      type: dependency.type,
+      id: dependency.id,
+      version: dependency.resolvedVersion,
+    })],
+  ));
+  if (digest(pinnedDeclarations) !== digest(currentDeclarations)
+    || value.dependencyActivation.status !== expectedDependencyStatus
+    || value.dependencyActivation.missing.some((dependency) => dependency.required)
+    || !pinnedContractsAvailable) {
+    return { valid: false, reasonCode: 'ASK_SKILL_DEPENDENCY_UNAVAILABLE' };
   }
   return { valid: true, binding: value };
 }

@@ -26,6 +26,7 @@ function spec() {
       { mode: 'EXACT', message: 'Summarize my home readiness', operationId: 'PROPERTY_SUMMARY' },
       { mode: 'PARAPHRASED', message: 'What is known about this home?', operationId: 'PROPERTY_SUMMARY' },
       { mode: 'COLLOQUIAL', message: 'How ready is my place?', operationId: 'PROPERTY_SUMMARY' },
+      { mode: 'MISSPELLED', message: 'Summarize my home readyness', operationId: 'PROPERTY_SUMMARY' },
     ],
     exclusions: ['Do not infer safety or missing facts from absent records.'],
     operations: [{ operationId: 'PROPERTY_SUMMARY' }],

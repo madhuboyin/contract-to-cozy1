@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 
 require('ts-node/register');
 
@@ -56,6 +58,12 @@ test('the context provider registry and provider-backed Skill manifests validate
   assert.deepEqual(validateSkillContextProviderDefinitions(), []);
   assert.ok(REGISTERED_SKILL_CONTEXT_PROVIDER_REFS.has('maintenance.task-context@1.0.0'));
   assert.deepEqual(validateSkillDefinitions(), []);
+});
+
+test('Ask exposes stable provider and budget error codes for blocked required context', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(orchestrator, /budgetFailure \? 'ASK_CONTEXT_BUDGET_EXCEEDED' : 'ASK_CONTEXT_PROVIDER_UNAVAILABLE'/);
+  assert.doesNotMatch(orchestrator, /ASK_REQUIRED_CONTEXT_UNAVAILABLE/);
 });
 
 test('composer invokes only declared operation providers and records provenance', async () => {

@@ -90,12 +90,13 @@ import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingC
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
-import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
-import { resolveHierarchicalSkillRouting } from '../skills/skillRouter';
+import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
+import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../skills/skillRouter';
 import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
 import { buildSkillExecutionBinding, validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
 import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
 import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
+import { SKILL_DEPENDENCY_ACTIVATIONS } from '../skills/skillDependencyRegistry';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -108,6 +109,12 @@ const inventoryService = new InventoryService();
 const replaceRepairService = new ReplaceRepairService();
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
 const permitTrackerService = new PermitTrackerService();
+
+function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
+  if (outcome === 'UNSUPPORTED') return 'ASK_SKILL_UNSUPPORTED';
+  if (outcome === 'AMBIGUOUS_SKILL' || outcome === 'AMBIGUOUS_OPERATION') return 'ASK_SKILL_AMBIGUOUS';
+  return null;
+}
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -3862,13 +3869,16 @@ function unsafeRestrictedResult(): AskOperationResult {
   };
 }
 
-function routingClarificationResult(decision: AskRoutingDecision): AskOperationResult {
+function routingClarificationResult(
+  decision: AskRoutingDecision,
+  reasonCode: 'ASK_ROUTING_AMBIGUOUS' | 'ASK_SKILL_AMBIGUOUS' = 'ASK_ROUTING_AMBIGUOUS',
+): AskOperationResult {
   const candidates = decision.candidates.slice(0, 3);
   const choices = candidates.map((candidate) => candidate.operationId.toLowerCase().replace(/_/g, ' '));
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return {
     status: 'NEEDS_CLARIFICATION',
-    reasonCode: 'ASK_ROUTING_AMBIGUOUS',
+    reasonCode,
     blocks: [{
       type: 'SUMMARY',
       id: 'routing-clarification',
@@ -3916,7 +3926,7 @@ function operationalUnavailableResult(reason:
   | 'ASK_DISABLED'
   | 'ASK_SKILL_DISABLED'
   | 'ASK_SKILL_POLICY_MISMATCH'
-  | 'ASK_SKILL_ADAPTER_UNAVAILABLE'
+  | 'ASK_SKILL_DEPENDENCY_UNAVAILABLE'
   | 'OPERATION_DISABLED'
   | 'REMOTE_GENERATION_DISABLED'
 ): AskOperationResult {
@@ -3963,7 +3973,7 @@ function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: Ask
   }
 }
 
-type SkillRuntimeUnavailableReason = 'ASK_SKILL_DISABLED' | 'ASK_SKILL_POLICY_MISMATCH' | 'ASK_SKILL_ADAPTER_UNAVAILABLE';
+type SkillRuntimeUnavailableReason = 'ASK_SKILL_DISABLED' | 'ASK_SKILL_POLICY_MISMATCH' | 'ASK_SKILL_DEPENDENCY_UNAVAILABLE';
 
 function skillRuntimeUnavailableReason(
   operationId: AskOperationId,
@@ -3972,10 +3982,14 @@ function skillRuntimeUnavailableReason(
   const skill = getSkillForOperation(operationId);
   if (!skill) return null;
   if (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id)) return 'ASK_SKILL_DISABLED';
+  const dependencyActivation = SKILL_DEPENDENCY_ACTIVATIONS[skill.id];
+  if (!dependencyActivation || dependencyActivation.skillVersion !== skill.version || dependencyActivation.status === 'UNAVAILABLE') {
+    return 'ASK_SKILL_DEPENDENCY_UNAVAILABLE';
+  }
   if (!resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')) return 'ASK_SKILL_POLICY_MISMATCH';
   const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === getAskOperationDefinition(operationId).adapterKey);
   const adapter = adapterReference ? getSkillAdapter(adapterReference.id, adapterReference.version) : undefined;
-  if (!adapter || !adapter.allowedOperations.includes(operationId) || !controls.adapterEnabled(adapter.id)) return 'ASK_SKILL_ADAPTER_UNAVAILABLE';
+  if (!adapter || !adapter.allowedOperations.includes(operationId) || !controls.adapterEnabled(adapter.id)) return 'ASK_SKILL_DEPENDENCY_UNAVAILABLE';
   return null;
 }
 
@@ -4119,9 +4133,12 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     if (composedContext.status === 'BLOCKED') {
       const requiredFailure = composedContext.entries.find((entry) => entry.required && entry.status !== 'AVAILABLE');
       const permissionFailure = requiredFailure?.status === 'UNAUTHORIZED';
+      const budgetFailure = requiredFailure?.status === 'BUDGET_EXCEEDED';
       return {
         status: permissionFailure ? 'BLOCKED' : 'UNAVAILABLE',
-        reasonCode: permissionFailure ? 'ASK_PERMISSION_REQUIRED' : 'ASK_REQUIRED_CONTEXT_UNAVAILABLE',
+        reasonCode: permissionFailure
+          ? 'ASK_PERMISSION_REQUIRED'
+          : budgetFailure ? 'ASK_CONTEXT_BUDGET_EXCEEDED' : 'ASK_CONTEXT_PROVIDER_UNAVAILABLE',
         blocks: [{
           type: 'SUMMARY',
           id: 'ask-required-context-unavailable',
@@ -4578,11 +4595,20 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       candidates: [{ operationId: selectedOperation.operationId, confidence }],
       requiresClarification: false,
     };
-  } else if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'AMBIGUOUS_OPERATION') {
+  } else if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK'
+    && (skillRoutingDecision.outcome === 'AMBIGUOUS_OPERATION' || skillRoutingDecision.outcome === 'AMBIGUOUS_SKILL')) {
+    const skillAmbiguityOperations = skillRoutingDecision.outcome === 'AMBIGUOUS_SKILL'
+      ? skillRoutingDecision.skillCandidates.flatMap((candidate) => {
+        const candidateSkill = getSkillDefinition(candidate.skillId);
+        return candidateSkill?.operations
+          .filter((operationReference) => Boolean(resolveEffectiveSkillOperationPolicy(candidateSkill.id, operationReference.operationId, 'ASK')))
+          .map((operationReference) => ({ operationId: operationReference.operationId, confidence: candidate.confidence })) ?? [];
+      })
+      : skillRoutingDecision.operationCandidates;
     routingDecision = {
       operation: routingDecision.operation,
       stage: 'CLARIFICATION',
-      candidates: skillRoutingDecision.operationCandidates,
+      candidates: [...new Map(skillAmbiguityOperations.map((candidate) => [candidate.operationId, candidate])).values()].slice(0, 3),
       requiresClarification: true,
     };
   }
@@ -4633,6 +4659,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         routingStage: routingDecision.stage,
         routingConfidence: operation.confidence,
         skillRoutingOutcome: skillRoutingDecision.outcome,
+        skillRoutingReasonCode: stableSkillRoutingReasonCode(skillRoutingDecision.outcome),
         skillRoutingPath: skillRoutingDecision.path,
         semanticIndexVersion: skillRoutingDecision.semanticIndexVersion,
         skillCandidateIds: skillRoutingDecision.skillCandidates.map((candidate) => candidate.skillId),
@@ -4669,7 +4696,12 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   try {
     const rawResult = await withAskTimeout(
       routingDecision.requiresClarification
-        ? Promise.resolve(routingClarificationResult(routingDecision))
+        ? Promise.resolve(routingClarificationResult(
+          routingDecision,
+          skillRoutingDecision.outcome === 'AMBIGUOUS_SKILL' || skillRoutingDecision.outcome === 'AMBIGUOUS_OPERATION'
+            ? 'ASK_SKILL_AMBIGUOUS'
+            : 'ASK_ROUTING_AMBIGUOUS',
+        ))
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: input.propertyId, operation }),
       controls.executionTimeoutMs,
     );
@@ -6007,7 +6039,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       throw error;
     }
     const { scenario, scenarioSnapshot } = await decisionThreadService.createHvacScenario(scenarioThread.id, userId, {
-      quoteAmountCents: candidate.data.quoteAmountCents, vendorLabel: candidate.data.vendorLabel,
+      quoteAmountCents: candidate.data.quoteAmountCents, vendorLabel: candidate.data.vendorLabel, askExecutionId: execution.id,
     });
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_DECISION_SCENARIO_CREATED',

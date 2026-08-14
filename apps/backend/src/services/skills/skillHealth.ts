@@ -2,6 +2,7 @@ import { getAskOperationDefinition, type AskOperationId } from '../ask/askOperat
 import { getSkillAdapter } from './adapters/skillAdapterRegistry';
 import { getSkillContextProvider } from './context/skillContextProviderRegistry';
 import type { SkillConsumer, SkillDefinition } from './skill.contract';
+import { resolveSkillDependencies, SKILL_DEPENDENCY_ACTIVATIONS } from './skillDependencyRegistry';
 import { getSkillDefinition } from './skillRegistry';
 
 export type SkillHealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE' | 'DISABLED';
@@ -12,6 +13,8 @@ export type SkillHealthReasonCode =
   | 'CONSUMER_NOT_ALLOWED'
   | 'OPERATION_DISABLED'
   | 'ADAPTER_UNAVAILABLE'
+  | 'REQUIRED_DEPENDENCY_UNAVAILABLE'
+  | 'OPTIONAL_DEPENDENCY_UNAVAILABLE'
   | 'REQUIRED_CONTEXT_PROVIDER_UNAVAILABLE'
   | 'OPTIONAL_CONTEXT_PROVIDER_UNAVAILABLE';
 
@@ -77,9 +80,17 @@ export function deriveSkillHealthForDefinition(
   if (!policy?.operations.length) {
     return terminalHealth(skill.id, skill.version, consumer, 'UNAVAILABLE', 'CONSUMER_NOT_ALLOWED');
   }
+  const registeredActivation = SKILL_DEPENDENCY_ACTIVATIONS[skill.id];
+  const activation = registeredActivation?.skillVersion === skill.version
+    ? registeredActivation
+    : resolveSkillDependencies(skill);
+  if (!activation || activation.skillVersion !== skill.version || activation.status === 'UNAVAILABLE') {
+    return terminalHealth(skill.id, skill.version, consumer, 'UNAVAILABLE', 'REQUIRED_DEPENDENCY_UNAVAILABLE');
+  }
 
   const operations = policy.operations.map((operationId): SkillOperationHealth => {
     const reasons: SkillHealthReasonCode[] = [];
+    if (activation.status === 'DEGRADED') reasons.push('OPTIONAL_DEPENDENCY_UNAVAILABLE');
     const operationReference = skill.operations.find((candidate) => candidate.operationId === operationId)!;
     const operation = getAskOperationDefinition(operationId);
     if (!operationEnabled(operationId)) reasons.push('OPERATION_DISABLED');
@@ -94,7 +105,7 @@ export function deriveSkillHealthForDefinition(
     if (optionalProviders.some((reference) => !getSkillContextProvider(reference.id, reference.version) || !contextProviderEnabled(reference.id))) {
       reasons.push('OPTIONAL_CONTEXT_PROVIDER_UNAVAILABLE');
     }
-    const unavailable = reasons.some((reason) => reason !== 'OPTIONAL_CONTEXT_PROVIDER_UNAVAILABLE');
+    const unavailable = reasons.some((reason) => reason !== 'OPTIONAL_CONTEXT_PROVIDER_UNAVAILABLE' && reason !== 'OPTIONAL_DEPENDENCY_UNAVAILABLE');
     return Object.freeze({
       operationId,
       status: unavailable ? 'UNAVAILABLE' : reasons.length ? 'DEGRADED' : 'HEALTHY',

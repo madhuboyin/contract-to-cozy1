@@ -7351,6 +7351,8 @@ model RecommendationSnapshot {
   recommendationDefinitionVersion  String
   operationId                      String
   operationVersion                 String
+  skillId                          String?
+  skillVersion                     String?
   engineVersion                    String
   contextContractVersion           String
   canonicalFactReferences          Json
@@ -7393,6 +7395,7 @@ model RecommendationSnapshot {
   calibrationRelease   CalibrationRelease? @relation(fields: [calibrationReleaseId], references: [id])
 
   @@index([propertyId, recommendationDefinitionId, generatedAt])
+  @@index([skillId, skillVersion, generatedAt])
   @@index([decisionThreadId, generatedAt])
   @@map("recommendation_snapshots")
 }

@@ -24,9 +24,16 @@ test('every registered Skill resolves a complete immutable evaluation package', 
     assert.equal(Object.isFrozen(suite), true);
     assert.equal(Object.isFrozen(suite.routingCases), true);
     assert.equal(Object.isFrozen(suite.routingCases[0]), true);
-    assert.deepEqual(new Set(suite.routingCases.map(({ mode }) => mode)), new Set(['EXACT', 'PARAPHRASED', 'COLLOQUIAL']));
+    assert.deepEqual(new Set(suite.routingCases.map(({ mode }) => mode)), new Set(['EXACT', 'PARAPHRASED', 'COLLOQUIAL', 'MISSPELLED']));
     assert.deepEqual(new Set(suite.contextCases.map(({ state }) => state)), new Set(['KNOWN', 'MISSING', 'STALE', 'CONFLICTING', 'UNAUTHORIZED', 'UNAVAILABLE']));
     assert.deepEqual(new Set(suite.operationCases.map(({ operationId }) => operationId)), new Set(skill.operations.map(({ operationId }) => operationId)));
+    assert.deepEqual(new Set(suite.resolutionAmbiguityCases.map(({ kind }) => kind)), new Set(['ENTITY', 'PROPERTY', 'DECISION_THREAD']));
+    assert.ok(suite.exclusionCases.length);
+    assert.ok(suite.expectedStatuses.length);
+    assert.deepEqual(new Set(suite.expectedBlockTypes), new Set(skill.allowedResultBlocks));
+    assert.deepEqual(suite.expectedCanonicalCalls, suite.expectedAdapters);
+    assert.deepEqual(suite.prohibitedCanonicalCalls, suite.prohibitedAdapters);
+    assert.ok(suite.continuationCase.message);
   }
 });
 
@@ -68,6 +75,8 @@ test('validation rejects missing, stale, incomplete, and unbounded evaluation pa
       ...maintenance,
       skillVersion: '9.0.0',
       contextCases: maintenance.contextCases.filter(({ state }) => state !== 'UNAUTHORIZED'),
+      resolutionAmbiguityCases: maintenance.resolutionAmbiguityCases.filter(({ kind }) => kind !== 'PROPERTY'),
+      exclusionCases: [],
       expectedAdapters: [],
       handoffCase: { ...maintenance.handoffCase, suggestedNextSkillId: 'missing-skill' },
       performanceCase: { ...maintenance.performanceCase, maxSkillCandidates: 100 },
@@ -76,6 +85,8 @@ test('validation rejects missing, stale, incomplete, and unbounded evaluation pa
   const issues = validateSkillEvaluationPackages(SKILL_DEFINITIONS, invalid);
   assert.ok(issues.some((issue) => issue.includes('identity mismatch')));
   assert.ok(issues.some((issue) => issue.includes('missing unauthorized context case')));
+  assert.ok(issues.some((issue) => issue.includes('missing property ambiguity case')));
+  assert.ok(issues.some((issue) => issue.includes('incomplete ambiguity, negative, exclusion')));
   assert.ok(issues.some((issue) => issue.includes('expected adapter coverage differs')));
   assert.ok(issues.some((issue) => issue.includes('handoff target missing-skill')));
   assert.ok(issues.some((issue) => issue.includes('unbounded performance fixture')));

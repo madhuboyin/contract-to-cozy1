@@ -132,6 +132,25 @@ interface CreateThreadInput {
   askExecutionId: string;
 }
 
+interface RecommendationSkillLineage {
+  skillId: string;
+  skillVersion: string;
+}
+
+async function skillLineageForExecution(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  askExecutionId?: string,
+): Promise<RecommendationSkillLineage | null> {
+  if (!askExecutionId) return null;
+  const execution = await tx.askExecution.findUnique({
+    where: { id: askExecutionId },
+    select: { skillId: true, skillVersion: true },
+  });
+  return execution?.skillId && execution.skillVersion
+    ? { skillId: execution.skillId, skillVersion: execution.skillVersion }
+    : null;
+}
+
 export async function createHvacDecisionThread(input: CreateThreadInput) {
   const preferences = await getActiveHvacPreferences(input.propertyId, input.userId);
   const composed = await composeHvacDecisionContext(input.propertyId, input.inventoryItemId, {
@@ -147,6 +166,7 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   const result = await prisma.$transaction(async (tx) => {
+    const skillLineage = await skillLineageForExecution(tx, input.askExecutionId);
     const thread = await tx.decisionThread.create({
       data: {
         propertyId: input.propertyId,
@@ -175,6 +195,8 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
         recommendationDefinitionVersion: '1.0',
         operationId: 'HVAC_DECISION_START',
         operationVersion: '1.0',
+        skillId: skillLineage?.skillId,
+        skillVersion: skillLineage?.skillVersion,
         engineVersion: evaluation.engineVersion,
         contextContractVersion: evaluation.contextContractVersion,
         canonicalFactReferences: [
@@ -266,7 +288,7 @@ export async function continueHvacDecisionThread(threadId: string, propertyId: s
   let triggerReasonCodes: string[] = [];
 
   if (thread.contextStatus === 'STALE') {
-    const recomputed = await recomputeStaleThread(threadId);
+    const recomputed = await recomputeStaleThread(threadId, askExecutionId);
     change = recomputed.change;
     triggerReasonCodes = recomputed.triggerReasonCodes;
     thread = await loadHvacDecisionThreadDetail(threadId, propertyId);
@@ -290,7 +312,7 @@ export async function continueHvacDecisionThread(threadId: string, propertyId: s
 // the previous snapshot (FRD §14.3), and restore contextStatus to CURRENT
 // only when no stale reason remains (delegated to computeContextStatus,
 // matching FRD §10.3's coexistence precedence rule).
-export async function recomputeStaleThread(threadId: string) {
+export async function recomputeStaleThread(threadId: string, askExecutionId?: string) {
   const thread = await prisma.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
   if (!thread.primaryEntityId) throw new Error(`Decision thread ${threadId} has no primary entity to recompute against.`);
 
@@ -311,6 +333,10 @@ export async function recomputeStaleThread(threadId: string) {
     const previousSnapshot = current.currentRecommendationSnapshotId
       ? await tx.recommendationSnapshot.findUnique({ where: { id: current.currentRecommendationSnapshotId } })
       : null;
+    const executionSkillLineage = await skillLineageForExecution(tx, askExecutionId);
+    const skillLineage = executionSkillLineage ?? (previousSnapshot?.skillId && previousSnapshot.skillVersion
+      ? { skillId: previousSnapshot.skillId, skillVersion: previousSnapshot.skillVersion }
+      : null);
 
     const newSnapshot = await tx.recommendationSnapshot.create({
       data: {
@@ -321,6 +347,8 @@ export async function recomputeStaleThread(threadId: string) {
         recommendationDefinitionVersion: '1.0',
         operationId: 'HVAC_DECISION_CONTINUE',
         operationVersion: '1.0',
+        skillId: skillLineage?.skillId,
+        skillVersion: skillLineage?.skillVersion,
         engineVersion: evaluation.engineVersion,
         contextContractVersion: evaluation.contextContractVersion,
         canonicalFactReferences: [
@@ -442,7 +470,7 @@ export async function markThreadsStaleByIds(threadIds: string[], reasonCode: str
 // calls a decisionPreferenceService save function (no scenario-to-profile
 // leakage, FRD §13.3 / Phase 8B exit criterion) — it only *reads* active
 // preferences to establish the baseline it compares the scenario against.
-export async function createHvacScenario(threadId: string, userId: string, input: { quoteAmountCents: number; vendorLabel: string }) {
+export async function createHvacScenario(threadId: string, userId: string, input: { quoteAmountCents: number; vendorLabel: string; askExecutionId?: string }) {
   const thread = await prisma.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
   if (!thread.primaryEntityId) throw new Error(`Decision thread ${threadId} has no primary entity.`);
 
@@ -457,6 +485,13 @@ export async function createHvacScenario(threadId: string, userId: string, input
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   return prisma.$transaction(async (tx) => {
+    const executionSkillLineage = await skillLineageForExecution(tx, input.askExecutionId);
+    const currentSnapshot = thread.currentRecommendationSnapshotId
+      ? await tx.recommendationSnapshot.findUnique({ where: { id: thread.currentRecommendationSnapshotId }, select: { skillId: true, skillVersion: true } })
+      : null;
+    const skillLineage = executionSkillLineage ?? (currentSnapshot?.skillId && currentSnapshot.skillVersion
+      ? { skillId: currentSnapshot.skillId, skillVersion: currentSnapshot.skillVersion }
+      : null);
     const scenario = await tx.scenario.create({
       data: {
         decisionThreadId: threadId,
@@ -479,6 +514,8 @@ export async function createHvacScenario(threadId: string, userId: string, input
         recommendationDefinitionVersion: '1.0',
         operationId: 'HVAC_DECISION_SCENARIO',
         operationVersion: '1.0',
+        skillId: skillLineage?.skillId,
+        skillVersion: skillLineage?.skillVersion,
         engineVersion: scenarioEvaluation.engineVersion,
         contextContractVersion: scenarioEvaluation.contextContractVersion,
         canonicalFactReferences: [{ entityType: 'InventoryItem', entityId: thread.primaryEntityId, fieldPath: 'condition' }],

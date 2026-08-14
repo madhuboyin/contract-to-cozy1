@@ -1,10 +1,12 @@
 import type { AskOperationId } from '../ask/askOperationRegistry';
+import { ASK_EXECUTION_STATUSES, type AskExecutionStatus, type AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import type { SkillConsumer, SkillDefinition, VersionedSkillReference } from './skill.contract';
 import { getAskOperationDefinition } from '../ask/askOperationRegistry';
 import { SKILL_DEFINITIONS } from './skillRegistry';
 
-export type SkillRoutingFixtureMode = 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL';
+export type SkillRoutingFixtureMode = 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL' | 'MISSPELLED';
 export type SkillContextFixtureState = 'KNOWN' | 'MISSING' | 'STALE' | 'CONFLICTING' | 'UNAUTHORIZED' | 'UNAVAILABLE';
+export type SkillResolutionAmbiguityKind = 'ENTITY' | 'PROPERTY' | 'DECISION_THREAD';
 
 export interface SkillEvaluationPackage {
   id: string;
@@ -21,12 +23,23 @@ export interface SkillEvaluationPackage {
   policyCases: readonly { consumer: SkillConsumer; operationId: AskOperationId; allowed: boolean }[];
   contextCases: readonly { state: SkillContextFixtureState; expectedBehavior: 'READY' | 'CAPTURE_OR_BLOCK' | 'DISCLOSE_OR_BLOCK' | 'BLOCK' | 'DEGRADED_OR_BLOCK' }[];
   negativeCases: readonly { message: string; expectedBehavior: 'DO_NOT_SELECT_SKILL' }[];
+  exclusionCases: readonly { message: string; expectedBehavior: 'DO_NOT_EXECUTE_SKILL' }[];
+  resolutionAmbiguityCases: readonly {
+    kind: SkillResolutionAmbiguityKind;
+    message: string;
+    expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK';
+  }[];
   degradedModeCases: readonly { dependencyType: 'ADAPTER' | 'CONTEXT_PROVIDER'; dependency: VersionedSkillReference; expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' }[];
   expectedAdapters: readonly VersionedSkillReference[];
   prohibitedAdapters: readonly string[];
   expectedContextProviders: readonly VersionedSkillReference[];
   prohibitedContextProviders: readonly string[];
+  expectedStatuses: readonly AskExecutionStatus[];
+  expectedBlockTypes: readonly AskPresentationBlock['type'][];
+  expectedCanonicalCalls: readonly VersionedSkillReference[];
+  prohibitedCanonicalCalls: readonly string[];
   modelDisabledCase: { message: string; expectedOperationId: AskOperationId };
+  continuationCase: { message: string; sourceOperationId: AskOperationId; expectedOperationId: AskOperationId };
   handoffCase: { suggestedNextSkillId: string; suggestedGoal: string; reasonCodes: readonly string[] };
   performanceCase: { message: string; maxSkillCandidates: number; maxOperationCandidates: number; smokeCeilingMs: number };
 }
@@ -48,6 +61,12 @@ const CONTEXT_CASES: SkillEvaluationPackage['contextCases'] = deepFreeze([
   { state: 'UNAVAILABLE', expectedBehavior: 'DEGRADED_OR_BLOCK' },
 ]);
 
+const RESOLUTION_AMBIGUITY_CASES: SkillEvaluationPackage['resolutionAmbiguityCases'] = deepFreeze([
+  { kind: 'ENTITY', message: 'Continue this request for the matching item', expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
+  { kind: 'PROPERTY', message: 'Run this request for my home', expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
+  { kind: 'DECISION_THREAD', message: 'Continue my current home decision', expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
+]);
+
 function operationCases(skill: SkillDefinition): SkillEvaluationPackage['operationCases'] {
   return Object.freeze(skill.operations.map((operation) => Object.freeze({
     operationId: operation.operationId,
@@ -60,7 +79,7 @@ function operationCases(skill: SkillDefinition): SkillEvaluationPackage['operati
 
 function evaluationPackage(
   skill: SkillDefinition,
-  input: Omit<SkillEvaluationPackage, 'id' | 'skillId' | 'skillVersion' | 'operationCases' | 'contextCases' | 'expectedAdapters' | 'expectedContextProviders'>,
+  input: Omit<SkillEvaluationPackage, 'id' | 'skillId' | 'skillVersion' | 'operationCases' | 'contextCases' | 'resolutionAmbiguityCases' | 'expectedAdapters' | 'expectedContextProviders' | 'expectedBlockTypes' | 'expectedCanonicalCalls' | 'prohibitedCanonicalCalls'>,
 ): SkillEvaluationPackage {
   return deepFreeze({
     ...input,
@@ -69,8 +88,12 @@ function evaluationPackage(
     skillVersion: skill.version,
     operationCases: operationCases(skill),
     contextCases: CONTEXT_CASES,
+    resolutionAmbiguityCases: RESOLUTION_AMBIGUITY_CASES,
     expectedAdapters: Object.freeze(skill.allowedAdapters.map((adapter) => Object.freeze({ ...adapter }))),
     expectedContextProviders: Object.freeze([...skill.requiredContextProviders, ...skill.optionalContextProviders].map((provider) => Object.freeze({ ...provider }))),
+    expectedBlockTypes: Object.freeze([...new Set(skill.allowedResultBlocks)].sort()),
+    expectedCanonicalCalls: Object.freeze(skill.allowedAdapters.map((adapter) => Object.freeze({ ...adapter }))),
+    prohibitedCanonicalCalls: Object.freeze([...input.prohibitedAdapters]),
   });
 }
 
@@ -85,6 +108,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'EXACT', message: 'What maintenance is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },
       { mode: 'PARAPHRASED', message: 'Create a maintenance task to clean gutters', expectedOperationId: 'MAINTENANCE_TASK_CREATE' },
       { mode: 'COLLOQUIAL', message: 'Mark the gutter cleaning task complete', expectedOperationId: 'MAINTENANCE_TASK_COMPLETE' },
+      { mode: 'MISSPELLED', message: 'What maintenence is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },
     ],
     ambiguityCases: [{ message: 'Help with my maintenance reminders and service schedule', candidateOperationIds: ['MAINTENANCE_STATUS', 'HOME_DEADLINE_MONITOR'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [
@@ -92,10 +116,13 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { consumer: 'PROACTIVE', operationId: 'MAINTENANCE_STATUS', allowed: false },
     ],
     negativeCases: [{ message: 'Should I refinance my mortgage?', expectedBehavior: 'DO_NOT_SELECT_SKILL' }],
+    exclusionCases: [{ message: 'Diagnose whether my furnace is legally safe to operate', expectedBehavior: 'DO_NOT_EXECUTE_SKILL' }],
     degradedModeCases: [{ dependencyType: 'CONTEXT_PROVIDER', dependency: maintenance.requiredContextProviders[0], expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' }],
     prohibitedAdapters: ['refinance.analysis'],
     prohibitedContextProviders: ['undeclared.financial-context'],
+    expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED'],
     modelDisabledCase: { message: 'What maintenance is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },
+    continuationCase: { message: 'Now complete it', sourceOperationId: 'MAINTENANCE_STATUS', expectedOperationId: 'MAINTENANCE_TASK_COMPLETE' },
     handoffCase: { suggestedNextSkillId: 'repair-replace', suggestedGoal: 'analyze-repair-or-replace', reasonCodes: ['AGING_ITEM_NEEDS_DECISION'] },
     performanceCase: { message: 'What maintenance is overdue?', maxSkillCandidates: 10, maxOperationCandidates: 3, smokeCeilingMs: 100 },
   }),
@@ -104,6 +131,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'EXACT', message: 'Should I repair or replace my furnace?', expectedOperationId: 'HVAC_DECISION_START' },
       { mode: 'PARAPHRASED', message: 'Should I repair or replace my refrigerator?', expectedOperationId: 'REPLACEMENT_GUIDANCE' },
       { mode: 'COLLOQUIAL', message: 'Should I fix or replace my refrigerator?', expectedOperationId: 'REPLACEMENT_GUIDANCE' },
+      { mode: 'MISSPELLED', message: 'Should I repair or replce my aging appliance?', expectedOperationId: 'REPLACEMENT_GUIDANCE' },
     ],
     ambiguityCases: [{ message: 'Help with my repair or replace decision', candidateOperationIds: ['REPLACEMENT_GUIDANCE', 'HVAC_DECISION_START'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [
@@ -111,10 +139,13 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { consumer: 'HOME_ACTIONS', operationId: 'REPLACEMENT_GUIDANCE', allowed: false },
     ],
     negativeCases: [{ message: 'Show my appliance inventory without analyzing it', expectedBehavior: 'DO_NOT_SELECT_SKILL' }],
+    exclusionCases: [{ message: 'Guarantee that repairing this system is structurally safe', expectedBehavior: 'DO_NOT_EXECUTE_SKILL' }],
     degradedModeCases: [{ dependencyType: 'ADAPTER', dependency: repairReplace.allowedAdapters[0], expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' }],
     prohibitedAdapters: ['refinance.analysis'],
     prohibitedContextProviders: ['undeclared.mortgage-context'],
+    expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CLARIFICATION'],
     modelDisabledCase: { message: 'Should I repair or replace my furnace?', expectedOperationId: 'HVAC_DECISION_START' },
+    continuationCase: { message: 'Continue that decision', sourceOperationId: 'HVAC_DECISION_START', expectedOperationId: 'HVAC_DECISION_CONTINUE' },
     handoffCase: { suggestedNextSkillId: 'maintenance', suggestedGoal: 'create-maintenance-task', reasonCodes: ['DECISION_REQUIRES_FOLLOW_UP_WORK'] },
     performanceCase: { message: 'Should I repair or replace my refrigerator?', maxSkillCandidates: 10, maxOperationCandidates: 3, smokeCeilingMs: 100 },
   }),
@@ -123,6 +154,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'EXACT', message: 'Should I refinance now?', expectedOperationId: 'REFINANCE_ANALYSIS' },
       { mode: 'PARAPHRASED', message: 'Alert me when mortgage rates drop below 5 percent', expectedOperationId: 'REFINANCE_RATE_MONITOR' },
       { mode: 'COLLOQUIAL', message: 'Is refinancing worth it now?', expectedOperationId: 'REFINANCE_ANALYSIS' },
+      { mode: 'MISSPELLED', message: 'Should I refinance my morgage?', expectedOperationId: 'REFINANCE_ANALYSIS' },
     ],
     ambiguityCases: [{ message: 'Help with refinancing and mortgage rate alerts', candidateOperationIds: ['REFINANCE_ANALYSIS', 'REFINANCE_RATE_MONITOR'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [
@@ -130,10 +162,13 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { consumer: 'PROACTIVE', operationId: 'REFINANCE_ANALYSIS', allowed: false },
     ],
     negativeCases: [{ message: 'Tell me which lender will approve me', expectedBehavior: 'DO_NOT_SELECT_SKILL' }],
+    exclusionCases: [{ message: 'Submit a refinance application to a lender for me', expectedBehavior: 'DO_NOT_EXECUTE_SKILL' }],
     degradedModeCases: [{ dependencyType: 'ADAPTER', dependency: refinance.allowedAdapters[0], expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' }],
     prohibitedAdapters: ['maintenance.create'],
     prohibitedContextProviders: ['undeclared.credit-report'],
+    expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED'],
     modelDisabledCase: { message: 'Should I refinance now?', expectedOperationId: 'REFINANCE_ANALYSIS' },
+    continuationCase: { message: 'Use that rate for the monitor', sourceOperationId: 'REFINANCE_ANALYSIS', expectedOperationId: 'REFINANCE_RATE_MONITOR' },
     handoffCase: { suggestedNextSkillId: 'property-record', suggestedGoal: 'summarize-property-record', reasonCodes: ['VERIFY_RECORDED_HOME_CONTEXT'] },
     performanceCase: { message: 'Should I refinance now?', maxSkillCandidates: 10, maxOperationCandidates: 3, smokeCeilingMs: 100 },
   }),
@@ -142,6 +177,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'EXACT', message: 'Summarize my home record', expectedOperationId: 'PROPERTY_SUMMARY' },
       { mode: 'PARAPHRASED', message: 'Show my appliance inventory', expectedOperationId: 'INVENTORY_LOOKUP' },
       { mode: 'COLLOQUIAL', message: 'What do you know about my home?', expectedOperationId: 'PROPERTY_SUMMARY' },
+      { mode: 'MISSPELLED', message: 'Summarize my property recrod', expectedOperationId: 'PROPERTY_SUMMARY' },
     ],
     ambiguityCases: [{ message: 'Show my home record and item details', candidateOperationIds: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [
@@ -149,10 +185,13 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { consumer: 'HOME_ACTIONS', operationId: 'INVENTORY_LOOKUP', allowed: false },
     ],
     negativeCases: [{ message: 'Prove this house has no electrical hazards', expectedBehavior: 'DO_NOT_SELECT_SKILL' }],
+    exclusionCases: [{ message: 'Infer restricted facts that are missing from my property record', expectedBehavior: 'DO_NOT_EXECUTE_SKILL' }],
     degradedModeCases: [{ dependencyType: 'ADAPTER', dependency: propertyRecord.allowedAdapters[0], expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' }],
     prohibitedAdapters: ['maintenance.create'],
     prohibitedContextProviders: ['undeclared.document-corpus'],
+    expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_ENTITY'],
     modelDisabledCase: { message: 'Summarize my home record', expectedOperationId: 'PROPERTY_SUMMARY' },
+    continuationCase: { message: 'Show the items from that record', sourceOperationId: 'PROPERTY_SUMMARY', expectedOperationId: 'INVENTORY_LOOKUP' },
     handoffCase: { suggestedNextSkillId: 'maintenance', suggestedGoal: 'understand-maintenance-status', reasonCodes: ['HOME_RECORD_REVIEWED'] },
     performanceCase: { message: 'Summarize my home record', maxSkillCandidates: 10, maxOperationCandidates: 3, smokeCeilingMs: 100 },
   }),
@@ -168,7 +207,9 @@ export function validateSkillEvaluationPackages(
 ): string[] {
   const issues: string[] = [];
   const contextStates = new Set<SkillContextFixtureState>(['KNOWN', 'MISSING', 'STALE', 'CONFLICTING', 'UNAUTHORIZED', 'UNAVAILABLE']);
-  const routingModes = new Set<SkillRoutingFixtureMode>(['EXACT', 'PARAPHRASED', 'COLLOQUIAL']);
+  const routingModes = new Set<SkillRoutingFixtureMode>(['EXACT', 'PARAPHRASED', 'COLLOQUIAL', 'MISSPELLED']);
+  const ambiguityKinds = new Set<SkillResolutionAmbiguityKind>(['ENTITY', 'PROPERTY', 'DECISION_THREAD']);
+  const validStatuses = new Set<AskExecutionStatus>(ASK_EXECUTION_STATUSES);
   for (const skill of Object.values(definitions)) {
     const suite = packages[skill.evaluationSuite];
     if (!suite) {
@@ -189,7 +230,9 @@ export function validateSkillEvaluationPackages(
     for (const mode of routingModes) if (!observedModes.has(mode)) issues.push(`${skill.id}: missing ${mode.toLowerCase()} routing case`);
     const observedContext = new Set(suite.contextCases.map((fixture) => fixture.state));
     for (const state of contextStates) if (!observedContext.has(state)) issues.push(`${skill.id}: missing ${state.toLowerCase()} context case`);
-    if (!suite.ambiguityCases.length || !suite.negativeCases.length || !suite.policyCases.length || !suite.degradedModeCases.length) issues.push(`${skill.id}: incomplete ambiguity, negative, policy, or degraded evaluation coverage`);
+    if (!suite.ambiguityCases.length || !suite.negativeCases.length || !suite.exclusionCases.length || !suite.policyCases.length || !suite.degradedModeCases.length) issues.push(`${skill.id}: incomplete ambiguity, negative, exclusion, policy, or degraded evaluation coverage`);
+    const observedAmbiguityKinds = new Set(suite.resolutionAmbiguityCases.map((fixture) => fixture.kind));
+    for (const kind of ambiguityKinds) if (!observedAmbiguityKinds.has(kind)) issues.push(`${skill.id}: missing ${kind.toLowerCase()} ambiguity case`);
     for (const fixture of suite.ambiguityCases) {
       const validOperations = (fixture.candidateOperationIds?.length ?? 0) >= 2
         && fixture.candidateOperationIds!.every((operationId) => skillOperations.has(operationId));
@@ -203,10 +246,15 @@ export function validateSkillEvaluationPackages(
       if (!skillOperations.has(fixture.operationId) || declared !== fixture.allowed) issues.push(`${skill.id}: policy evaluation mismatch for ${fixture.consumer}/${fixture.operationId}`);
     }
     if (JSON.stringify(refs(suite.expectedAdapters)) !== JSON.stringify(refs(skill.allowedAdapters))) issues.push(`${skill.id}: expected adapter coverage differs from manifest`);
+    if (JSON.stringify(refs(suite.expectedCanonicalCalls)) !== JSON.stringify(refs(skill.allowedAdapters))) issues.push(`${skill.id}: expected canonical call coverage differs from manifest`);
     const providers = [...skill.requiredContextProviders, ...skill.optionalContextProviders];
     if (JSON.stringify(refs(suite.expectedContextProviders)) !== JSON.stringify(refs(providers))) issues.push(`${skill.id}: expected provider coverage differs from manifest`);
     if (suite.prohibitedAdapters.some((id) => skill.allowedAdapters.some((adapter) => adapter.id === id))) issues.push(`${skill.id}: prohibited adapter is allowed by manifest`);
+    if (suite.prohibitedCanonicalCalls.some((id) => skill.allowedAdapters.some((adapter) => adapter.id === id))) issues.push(`${skill.id}: prohibited canonical call is allowed by manifest`);
     if (suite.prohibitedContextProviders.some((id) => providers.some((provider) => provider.id === id))) issues.push(`${skill.id}: prohibited provider is allowed by manifest`);
+    if (!suite.expectedStatuses.length || suite.expectedStatuses.some((status) => !validStatuses.has(status))) issues.push(`${skill.id}: invalid expected status coverage`);
+    if (JSON.stringify([...suite.expectedBlockTypes].sort()) !== JSON.stringify([...skill.allowedResultBlocks].sort())) issues.push(`${skill.id}: expected block coverage differs from manifest`);
+    if (!skillOperations.has(suite.continuationCase.sourceOperationId) || !skillOperations.has(suite.continuationCase.expectedOperationId) || !suite.continuationCase.message.trim()) issues.push(`${skill.id}: invalid continuation evaluation`);
     const handoffTarget = definitions[suite.handoffCase.suggestedNextSkillId];
     if (!handoffTarget) issues.push(`${skill.id}: handoff target ${suite.handoffCase.suggestedNextSkillId} is not registered`);
     else if (!handoffTarget.supportedGoals.includes(suite.handoffCase.suggestedGoal) || !suite.handoffCase.reasonCodes.length) issues.push(`${skill.id}: handoff evaluation is not supported by the target Skill`);

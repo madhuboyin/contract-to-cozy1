@@ -94,6 +94,15 @@ test('SP4 manifests preserve canonical service and Decision Platform boundaries'
   assert.match(orchestrator, /createOrUpdateRefinanceRateMonitor/);
 });
 
+test('Decision Platform recommendation snapshots persist direct Skill lineage without a migration script', () => {
+  const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
+  const service = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionThreadService.ts'), 'utf8');
+  assert.match(schema, /model RecommendationSnapshot[\s\S]*skillId\s+String\?[\s\S]*skillVersion\s+String\?/);
+  assert.match(service, /skillLineageForExecution/);
+  assert.equal((service.match(/skillId: skillLineage\?\.skillId/g) ?? []).length, 3);
+  assert.equal((service.match(/skillVersion: skillLineage\?\.skillVersion/g) ?? []).length, 3);
+});
+
 test('machine validation rejects executable peer-Skill and incompatible operation dependencies', () => {
   const invalid = {
     ...SKILL_DEFINITIONS,

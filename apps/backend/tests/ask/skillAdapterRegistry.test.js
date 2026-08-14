@@ -110,7 +110,7 @@ test('adapter registry validation rejects mismatched ownership, duplicate operat
 test('runtime checks adapter availability before context composition or dispatch and rechecks pending writes', () => {
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
   const runtimeCheck = orchestrator.indexOf('function skillRuntimeUnavailableReason(');
-  const adapterCheck = orchestrator.indexOf("return 'ASK_SKILL_ADAPTER_UNAVAILABLE'", runtimeCheck);
+  const adapterCheck = orchestrator.indexOf("return 'ASK_SKILL_DEPENDENCY_UNAVAILABLE'", runtimeCheck);
   const coreStart = orchestrator.indexOf('async function executeOperationCore(');
   const coreRuntimeCheck = orchestrator.indexOf('skillRuntimeUnavailableReason(input.operation.operationId, controls)', coreStart);
   const compose = orchestrator.indexOf('composedContext = await composeSkillContext', coreStart);

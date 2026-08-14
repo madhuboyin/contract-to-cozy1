@@ -31,7 +31,7 @@ export interface SkillPackageScaffoldSpec {
   homeownerJobs: HomeownerJob[];
   supportedGoals: string[];
   aliases: string[];
-  selectionExamples: { mode: 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL'; message: string; operationId: AskOperationId }[];
+  selectionExamples: { mode: 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL' | 'MISSPELLED'; message: string; operationId: AskOperationId }[];
   exclusions: string[];
   operations: {
     operationId: AskOperationId;
@@ -127,7 +127,7 @@ export function validateSkillPackageScaffoldSpec(
   if (!spec.consumerPolicy?.length) issues.push('at least one consumer policy is required');
   if (!spec.selectionExamples?.length || !spec.exclusions?.length || !spec.negativeExamples?.length || !spec.ambiguityExamples?.length) issues.push('routing, exclusions, negative, and ambiguity examples are required');
   const modes = new Set(spec.selectionExamples?.map((example) => example.mode));
-  for (const mode of ['EXACT', 'PARAPHRASED', 'COLLOQUIAL']) if (!modes.has(mode as typeof spec.selectionExamples[number]['mode'])) issues.push(`missing ${mode.toLowerCase()} selection example`);
+  for (const mode of ['EXACT', 'PARAPHRASED', 'COLLOQUIAL', 'MISSPELLED']) if (!modes.has(mode as typeof spec.selectionExamples[number]['mode'])) issues.push(`missing ${mode.toLowerCase()} selection example`);
 
   const operationIds = new Set<AskOperationId>();
   const providerRefs = new Map<string, VersionedSkillReference>();
@@ -263,12 +263,25 @@ export function buildSkillPackageScaffold(
       { state: 'UNAUTHORIZED', expectedBehavior: 'BLOCK' }, { state: 'UNAVAILABLE', expectedBehavior: 'DEGRADED_OR_BLOCK' },
     ],
     negativeCases: spec.negativeExamples.map((message) => ({ message, expectedBehavior: 'DO_NOT_SELECT_SKILL' })),
+    exclusionCases: spec.exclusions.map((message) => ({ message, expectedBehavior: 'DO_NOT_EXECUTE_SKILL' })),
+    resolutionAmbiguityCases: [
+      { kind: 'ENTITY', message: 'Continue this request for the matching item', expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
+      { kind: 'PROPERTY', message: 'Run this request for my home', expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
+      { kind: 'DECISION_THREAD', message: 'Continue my current home decision', expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
+    ],
     degradedModeCases: [degraded],
     expectedAdapters: adapters,
     prohibitedAdapters: spec.prohibitedAdapters,
     expectedContextProviders: providers,
     prohibitedContextProviders: spec.prohibitedContextProviders,
+    expectedStatuses: spec.riskPolicy.effects.includes('WRITE')
+      ? ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED']
+      : ['ANSWERED', 'READY_WITH_LIMITATIONS'],
+    expectedBlockTypes: allowedBlocks,
+    expectedCanonicalCalls: adapters,
+    prohibitedCanonicalCalls: spec.prohibitedAdapters,
     modelDisabledCase: { message: spec.selectionExamples[0].message, expectedOperationId: spec.selectionExamples[0].operationId },
+    continuationCase: { message: 'Continue that request', sourceOperationId: spec.operations[0].operationId, expectedOperationId: spec.operations[0].operationId },
     handoffCase: spec.handoff,
     performanceCase: { message: spec.selectionExamples[0].message, maxSkillCandidates: 10, maxOperationCandidates: 3, smokeCeilingMs: 100 },
   };

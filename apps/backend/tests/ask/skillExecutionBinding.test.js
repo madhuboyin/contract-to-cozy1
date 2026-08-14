@@ -30,6 +30,11 @@ test('execution binding pins every executable contract before context compositio
   assert.deepEqual(binding.operation, { id: 'MAINTENANCE_STATUS', version: '1.0' });
   assert.deepEqual(binding.adapter, { id: 'maintenance.status', version: '1.0' });
   assert.deepEqual(binding.contextProviders, [{ id: 'maintenance.task-context', version: '1.0.0', required: true }]);
+  assert.equal(binding.dependencyActivation.status, 'RESOLVED');
+  assert.deepEqual(binding.dependencyActivation.dependencies, [{
+    type: 'CONTEXT_PROVIDER', id: 'maintenance.task-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: true, owner: 'PropertyMaintenanceTaskService',
+  }]);
+  assert.deepEqual(binding.dependencyActivation.missing, []);
   assert.deepEqual(binding.routing.reasonCodes, ['ALIAS_MATCH', 'GOAL_MATCH']);
   assert.match(binding.effectivePolicyVersion, /^[a-f0-9]{64}$/);
   assert.equal(Object.isFrozen(binding), true);
@@ -58,6 +63,10 @@ test('Skill and operation version drift fail closed', () => {
   assert.deepEqual(
     validateSkillExecutionBinding({ ...binding, contextProviders: [] }),
     { valid: false, reasonCode: 'ASK_SKILL_VERSION_UNAVAILABLE' },
+  );
+  assert.deepEqual(
+    validateSkillExecutionBinding({ ...binding, dependencyActivation: { ...binding.dependencyActivation, dependencies: [] } }),
+    { valid: false, reasonCode: 'ASK_SKILL_DEPENDENCY_UNAVAILABLE' },
   );
 });
 
