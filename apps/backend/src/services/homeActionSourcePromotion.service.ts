@@ -540,9 +540,19 @@ export function adaptEnvironmentInsightsToHomeActions(
             { label: 'Source freshness', value: `Current as of ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(evaluatedAt)}` },
             { label: 'Preparation', value: (insight.recommendedActions[0] ?? primary?.label ?? 'Review the environment outlook').slice(0, 240) },
           ],
-          factGroups: [],
-          subject: { kind: 'EVENT', id: insight.id, label: `${insight.title} at ${propertyLabel}`.slice(0, 180) },
-          detailLabel: 'Why prepare now?',
+          factGroups: insight.recommendedActions.length ? [{
+            label: 'Preparation checklist',
+            facts: insight.recommendedActions.slice(0, 8).map((step, index) => ({
+              key: `step-${index + 1}`,
+              label: `Step ${index + 1}`,
+              value: step.slice(0, 240),
+              kind: 'DERIVED' as const,
+              source: insight.source.slice(0, 160),
+              observedAt: evaluatedAtIso,
+            })),
+          }] : [],
+          subject: { kind: 'CHECKLIST', id: insight.id, label: `${insight.title} at ${propertyLabel}`.slice(0, 180) },
+          detailLabel: 'Preparation steps',
           group: null,
         },
         timing: {
@@ -567,7 +577,7 @@ export function adaptEnvironmentInsightsToHomeActions(
         governance: lowConsequenceGovernance('environment-v1'),
         primaryCta: {
           kind: primaryKind,
-          label: primary?.label ?? 'Review environment report',
+          label: primaryKind === 'START' ? 'Open preparation checklist' : primary?.label ?? 'Review environment report',
           href: primaryHref,
         },
         secondaryCtas: primaryHref === reportHref ? [] : [{
@@ -884,19 +894,46 @@ async function loadIncidentActions(
     },
     orderBy: [{ severityScore: 'desc' }, { updatedAt: 'desc' }],
     take: 20,
-    include: { actions: { where: { status: { in: ['PROPOSED', 'CREATED', 'IN_PROGRESS'] } }, orderBy: { createdAt: 'asc' }, take: 1 } },
+    // Weather preparation incidents own a small ordered checklist. Keep the
+    // bounded set so contextual Ask can answer with the actual steps instead
+    // of collapsing the plan to the first IncidentAction.
+    include: { actions: { where: { status: { in: ['PROPOSED', 'CREATED', 'IN_PROGRESS'] } }, orderBy: { createdAt: 'asc' }, take: 12 } },
   });
 
   return incidents.flatMap((incident) => {
-    const proposed = incident.actions[0];
+    const isWeatherPreparation = incident.typeKey === 'WEATHER_PREPARATION';
+    const isOfficialWeatherAlert = incident.typeKey === 'SEVERE_WEATHER_ALERT';
+    const preparationSteps = isWeatherPreparation
+      ? incident.actions
+        .flatMap((action) => {
+          const payload = action.payload && typeof action.payload === 'object' && !Array.isArray(action.payload)
+            ? action.payload as Record<string, unknown>
+            : {};
+          const label = typeof payload.label === 'string' && payload.label.trim()
+            ? payload.label.trim()
+            : action.ctaLabel?.trim() ?? '';
+          const sortOrder = typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+            ? payload.sortOrder
+            : Number.MAX_SAFE_INTEGER;
+          return label ? [{ id: action.id, label: label.slice(0, 240), sortOrder }] : [];
+        })
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+      : [];
+    const proposed = incident.actions.find((action) => action.type !== 'CHECKLIST_ITEM') ?? incident.actions[0];
     const critical = incident.severity === 'CRITICAL';
     const isWeather = incident.sourceType === 'WEATHER';
     const details = incident.details && typeof incident.details === 'object' && !Array.isArray(incident.details)
       ? incident.details as Record<string, unknown>
       : {};
+    const preparationExpiry = isWeatherPreparation && typeof details.effectiveTo === 'string'
+      ? environmentBoundary(details.effectiveTo, true)?.toISOString() ?? null
+      : null;
+    const preparationStart = isWeatherPreparation && typeof details.effectiveFrom === 'string'
+      ? environmentBoundary(details.effectiveFrom)?.toISOString() ?? null
+      : null;
     const weatherExpiry = typeof details.expires === 'string' && !Number.isNaN(new Date(details.expires).getTime())
       ? new Date(details.expires).toISOString()
-      : incident.expiredAt?.toISOString() ?? null;
+      : preparationExpiry ?? incident.expiredAt?.toISOString() ?? null;
     // The worker normally resolves alerts after a successful NWS refresh, but
     // Home must not depend on that asynchronous sweep to remove an alert whose
     // authoritative expiry has already passed.
@@ -904,11 +941,18 @@ async function loadIncidentActions(
     const weatherInstruction = typeof details.instruction === 'string' && details.instruction.trim()
       ? details.instruction.trim().slice(0, 1000)
       : null;
-    const weatherSource = typeof details.senderName === 'string' && details.senderName.trim()
-      ? `National Weather Service — ${details.senderName.trim()}`
-      : 'National Weather Service';
+    const recordedWeatherSource = typeof details.source === 'string' && details.source.trim()
+      ? details.source.trim().slice(0, 160)
+      : null;
+    const weatherSource = recordedWeatherSource
+      ?? (typeof details.senderName === 'string' && details.senderName.trim()
+        ? `National Weather Service — ${details.senderName.trim()}`
+        : isOfficialWeatherAlert ? 'National Weather Service' : 'Current weather forecast');
     const confidence = incident.confidence == null ? null : Math.max(0, Math.min(1, incident.confidence / 100));
-    const href = proposed?.ctaUrl ?? `/dashboard/properties/${propertyId}/incidents/${incident.id}`;
+    const preparationHref = isWeatherPreparation && typeof details.insightId === 'string' && details.insightId.trim()
+      ? `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=${encodeURIComponent(details.insightId.trim())}`
+      : null;
+    const href = preparationHref ?? proposed?.ctaUrl ?? `/dashboard/properties/${propertyId}/incidents/${incident.id}`;
     const governance = lowConsequenceGovernance();
     if (critical) {
       governance.safetyTier = 'SAFETY_EMERGENCY';
@@ -926,39 +970,59 @@ async function loadIncidentActions(
       priority: critical ? 'NOW' : incident.severity === 'WARNING' ? 'SOON' : 'PLAN',
       signal: incident.title,
       whyItMatters: incident.summary ?? 'An active property incident may affect safety, damage exposure, or timely response.',
-      recommendedAction: isWeather
+      recommendedAction: isWeatherPreparation
+        ? preparationSteps[0]?.label ?? `Prepare this home for ${incident.title.replace(/\s+preparation$/i, '')}`
+        : isOfficialWeatherAlert
         ? `Review ${incident.title} safety guidance`
+        : isWeather
+        ? `Review ${incident.title} guidance`
         : proposed?.ctaLabel ?? (critical ? 'Review safety response now' : 'Review incident'),
-      expectedOutcome: weatherInstruction ?? 'Confirm the incident response and preserve the evidence needed for follow-up.',
+      expectedOutcome: isWeatherPreparation
+        ? preparationSteps.length
+          ? `Complete these ${preparationSteps.length} preparation steps before the forecast window.`
+          : 'Review the forecast and prepare this home before the weather window.'
+        : weatherInstruction ?? 'Confirm the incident response and preserve the evidence needed for follow-up.',
       ...(isWeather ? {
         presentation: {
-          variant: 'WEATHER_ALERT' as const,
-          eyebrow: 'Official weather alert',
+          variant: isWeatherPreparation ? 'ENVIRONMENT_PREPARATION' as const : 'WEATHER_ALERT' as const,
+          eyebrow: isOfficialWeatherAlert ? 'Official weather alert' : 'Local forecast',
           headline: incident.title.slice(0, 180),
-          summary: (incident.summary ?? 'An official weather alert is active for this property.').slice(0, 320),
+          summary: (incident.summary ?? (isOfficialWeatherAlert ? 'An official weather alert is active for this property.' : 'A current weather forecast may affect this property.')).slice(0, 320),
           whyNow: (weatherExpiry
-            ? `This alert is active until ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}.`
-            : 'This alert remains active until the official source clears it.').slice(0, 500),
+            ? `${isOfficialWeatherAlert ? 'This alert' : 'This preparation window'} runs through ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}.`
+            : isOfficialWeatherAlert ? 'This alert remains active until the official source clears it.' : 'Use the current forecast window to prepare this home.').slice(0, 500),
           keyFacts: [
             { label: 'Hazard', value: incident.title.slice(0, 240) },
             { label: 'Location', value: propertyLabel.slice(0, 240) },
-            { label: 'Forecast window', value: weatherExpiry ? `Through ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}` : 'Until the alert is cleared' },
+            { label: 'Forecast window', value: weatherExpiry ? `Through ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}` : isOfficialWeatherAlert ? 'Until the alert is cleared' : 'Current forecast window' },
             { label: 'Severity', value: String(incident.severity).toLowerCase() },
             { label: 'Source freshness', value: `Observed ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(incident.openedAt)}` },
-            { label: 'Preparation', value: (weatherInstruction ?? `Review ${incident.title} safety guidance`).slice(0, 240) },
+            { label: 'Preparation', value: (preparationSteps[0]?.label ?? weatherInstruction ?? `Review ${incident.title} guidance`).slice(0, 240) },
           ],
-          factGroups: [],
-          subject: { kind: 'EVENT' as const, id: incident.id, label: `${incident.title} at ${propertyLabel}`.slice(0, 180) },
-          detailLabel: 'Official guidance',
+          factGroups: preparationSteps.length ? [{
+            label: 'Preparation checklist',
+            facts: preparationSteps.slice(0, 8).map((step, index) => ({
+              key: `step-${index + 1}`,
+              label: `Step ${index + 1}`,
+              value: step.label,
+              kind: 'RECORDED' as const,
+              source: weatherSource,
+              observedAt: incident.updatedAt.toISOString(),
+            })),
+          }] : [],
+          subject: { kind: isWeatherPreparation ? 'CHECKLIST' as const : 'EVENT' as const, id: incident.id, label: `${incident.title} at ${propertyLabel}`.slice(0, 180) },
+          detailLabel: isWeatherPreparation ? 'Preparation steps' : 'Official guidance',
           group: null,
         },
       } : {}),
       timing: {
-        dueAt: isWeather ? weatherExpiry : null,
-        windowStart: incident.openedAt.toISOString(),
+        dueAt: isWeatherPreparation ? preparationStart : isWeather ? weatherExpiry : null,
+        windowStart: preparationStart ?? incident.openedAt.toISOString(),
         windowEnd: isWeather ? weatherExpiry : incident.expiredAt?.toISOString() ?? null,
         rationale: isWeather
-          ? weatherExpiry ? 'This official weather alert remains active until the recorded expiration time.' : 'This official weather alert remains active until the source clears it.'
+          ? weatherExpiry
+            ? `${isOfficialWeatherAlert ? 'This official weather alert' : 'This forecast-based preparation plan'} is active through the recorded weather window.`
+            : isOfficialWeatherAlert ? 'This official weather alert remains active until the source clears it.' : 'This preparation plan follows the current forecast window.'
           : critical ? 'Critical incidents require prompt review.' : 'The incident remains active and unresolved.',
       },
       evidence: [{
@@ -973,7 +1037,11 @@ async function loadIncidentActions(
       assumptions: [], options: [], tradeoffs: [],
       confidence: { score: confidence, label: confidenceLabel(confidence), missing: confidence == null ? ['Incident confidence'] : [] },
       governance,
-      primaryCta: { kind: critical ? 'ESCALATE' : 'REVIEW', label: isWeather ? 'Review weather alert' : proposed?.ctaLabel ?? 'Review incident', href },
+      primaryCta: {
+        kind: critical ? 'ESCALATE' : 'REVIEW',
+        label: isWeatherPreparation ? 'Open preparation checklist' : isOfficialWeatherAlert ? 'View official alert' : isWeather ? 'View forecast details' : proposed?.ctaLabel ?? 'Review incident',
+        href,
+      },
       secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct incident context', href: `/dashboard/properties/${propertyId}/incidents/${incident.id}` }],
       feedbackControls: critical ? ['ACKNOWLEDGE', 'CORRECT_FACT'] : RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,

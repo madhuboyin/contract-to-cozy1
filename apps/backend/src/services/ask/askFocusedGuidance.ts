@@ -27,7 +27,10 @@ function focusedTitle(action: RankedHomeAction): string {
 
 export function focusedHomeActionQuestion(action: RankedHomeAction): string {
   const title = focusedTitle(action);
-  if (action.presentation?.variant === 'WEATHER_ALERT' && /multi-day heat risk/i.test(title)) {
+  if (
+    (action.presentation?.variant === 'WEATHER_ALERT' || action.presentation?.variant === 'ENVIRONMENT_PREPARATION')
+    && /multi-day heat risk/i.test(title)
+  ) {
     return 'How should I prepare for the multi-day heat risk at this home?';
   }
   if (action.presentation?.variant === 'WEATHER_ALERT' || action.presentation?.variant === 'ENVIRONMENT_PREPARATION') {
@@ -48,30 +51,44 @@ export function focusedHomeActionCategory(action: RankedHomeAction): {
 
 export function buildFocusedHomeActionGuidance(
   action: RankedHomeAction,
-  homeHref: string,
   contextVersion: string | null,
 ): AskOperationResult {
   const title = focusedTitle(action);
   const primaryHref = action.primaryCta.href;
-  const summaryActions: Array<{ id: string; label: string; href: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' }> = [{
+  const primaryAction = {
     id: `home-action-primary-${action.id}`,
     label: action.primaryCta.label,
     href: primaryHref,
     style: 'PRIMARY' as const,
-  }];
-  if (primaryHref !== homeHref) {
-    summaryActions.push({
-      id: `home-action-view-${action.id}`,
-      label: 'View in Home Actions',
-      href: homeHref,
-      style: 'SECONDARY' as const,
-    });
-  }
+  };
 
   const timing = action.timing.dueAt
     ? `Due ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(action.timing.dueAt))}`
     : action.timing.rationale;
   const keyFacts = action.presentation?.keyFacts ?? [];
+  const isPreparation = action.presentation?.variant === 'ENVIRONMENT_PREPARATION';
+  const preparationFacts = isPreparation
+    ? action.presentation?.factGroups
+      .find((group) => /preparation|checklist/i.test(group.label))
+      ?.facts ?? []
+    : [];
+  const preparationItems = preparationFacts.length
+    ? preparationFacts.map((fact, index) => ({
+      id: `${action.id}-preparation-${index + 1}`,
+      title: fact.value,
+      description: null,
+      meta: [fact.label],
+      status: null,
+      href: null,
+    }))
+    : [{
+      id: action.id,
+      title: action.recommendedAction,
+      description: action.expectedOutcome,
+      meta: [timing, `${action.confidence.label.toLowerCase()} confidence`],
+      status: action.state,
+      href: null,
+    }];
   const boundaryParts = [
     action.governance.emergencyEscalation,
     action.governance.conservativeFallback,
@@ -85,27 +102,22 @@ export function buildFocusedHomeActionGuidance(
     title,
     body: sentence(action.presentation?.summary ?? action.whyItMatters),
     tone: action.governance.safetyTier === 'SAFETY_EMERGENCY' ? 'CRITICAL' : action.priority === 'NOW' ? 'CAUTION' : 'DEFAULT',
-    actions: summaryActions,
+    actions: [],
   }, {
     type: 'GROUPED_LIST',
     id: 'focused-home-action-guidance',
-    title: 'Focused guidance',
-    description: 'This response is scoped to the Home Action you selected.',
+    title: isPreparation ? 'Prepare this home' : 'What to do next',
+    description: isPreparation
+      ? `${timing}. These steps come from the preparation plan for this home.`
+      : 'Guidance for the Home Action you selected.',
     sections: [{
       id: 'next-step',
-      title: 'What to do next',
-      count: 1,
-      items: [{
-        id: action.id,
-        title: action.recommendedAction,
-        description: action.expectedOutcome,
-        meta: [timing, `${action.confidence.label.toLowerCase()} confidence`],
-        status: action.state,
-        href: primaryHref,
-      }],
+      title: isPreparation ? 'Preparation checklist' : 'Recommended next step',
+      count: preparationItems.length,
+      items: preparationItems,
     }, {
       id: 'why-it-matters',
-      title: 'Why this matters',
+      title: isPreparation ? 'Why this matters for this home' : 'Why this matters',
       count: 1,
       items: [{
         id: `${action.id}-why`,
@@ -117,9 +129,9 @@ export function buildFocusedHomeActionGuidance(
       }],
     }, ...(keyFacts.length ? [{
       id: 'known-details',
-      title: 'Known details',
-      count: keyFacts.length,
-      items: keyFacts.map((fact, index) => ({
+      title: isPreparation ? 'Forecast and home details' : 'Known details',
+      count: keyFacts.filter((fact) => !isPreparation || fact.label !== 'Preparation').length,
+      items: keyFacts.filter((fact) => !isPreparation || fact.label !== 'Preparation').map((fact, index) => ({
         id: `${action.id}-fact-${index}`,
         title: fact.label,
         description: fact.value,
@@ -128,7 +140,7 @@ export function buildFocusedHomeActionGuidance(
         href: null,
       })),
     }] : [])],
-    actions: [],
+    actions: [primaryAction],
   }, {
     type: 'EVIDENCE',
     id: 'focused-home-action-evidence',
@@ -158,6 +170,6 @@ export function buildFocusedHomeActionGuidance(
     contextVersion,
     parameters: { focusedHomeActionId: action.id },
     blocks,
-    suggestions: ['What else needs my attention?'],
+    suggestions: isPreparation ? [] : ['What else needs my attention?'],
   };
 }

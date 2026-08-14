@@ -46,6 +46,10 @@ test('promotes only current action-severity environment insights and caps the Ho
   assert.equal(actions[0].source.kind, 'MAINTENANCE');
   assert.equal(actions[0].priority, 'SOON');
   assert.equal(actions[0].primaryCta.kind, 'START');
+  assert.equal(actions[0].primaryCta.label, 'Open preparation checklist');
+  assert.deepEqual(actions[0].presentation.factGroups[0].facts.map((fact) => fact.value), [
+    'Inspect the HVAC filter before the heat arrives.',
+  ]);
   assert.equal(actions[0].timing.windowEnd, '2026-07-21T23:59:59.999Z');
 });
 
@@ -146,7 +150,7 @@ function stubSources({
     guidanceJourney: { findMany: async () => guidanceJourneys },
     incident: { findMany: async () => [{
     id: 'incident-1', propertyId: 'property-1', fingerprint: 'freeze-1', severity: 'CRITICAL', confidence: 90,
-    title: 'Freeze risk', summary: 'Pipes may freeze.', sourceType: 'WEATHER', status: 'ACTIVE',
+    title: 'Freeze risk', summary: 'Pipes may freeze.', sourceType: 'WEATHER', typeKey: 'SEVERE_WEATHER_ALERT', status: 'ACTIVE',
     openedAt: NOW, expiredAt: LATER, createdAt: NOW, updatedAt: NOW, lastEvaluatedAt: NOW,
     details: { senderName: 'NWS Mount Holly NJ', expires: LATER.toISOString(), instruction: 'Protect exposed pipes before temperatures fall.' },
     actions: [{ status: 'PROPOSED', ctaLabel: 'Review freeze response', ctaUrl: '/dashboard/properties/property-1/incidents/incident-1' }],
@@ -295,6 +299,43 @@ test('keeps the active weather incident and suppresses its duplicate guidance jo
   assert.equal(weather.evidence[0].source, 'National Weather Service — NWS Mount Holly NJ');
   assert.equal(weather.timing.windowEnd, LATER.toISOString());
   assert.equal(result.actions.some((action) => action.id === 'guidance:journey-weather'), false);
+});
+
+test('preserves forecast preparation provenance and every bounded checklist step', async () => {
+  const db = stubSources();
+  db.incident.findMany = async () => [{
+    id: 'preparation-1', propertyId: 'property-1', fingerprint: 'weather-preparation:property-1:heat-2026-07-20',
+    typeKey: 'WEATHER_PREPARATION', severity: 'WARNING', confidence: 100,
+    title: 'Multi-day heat risk ahead preparation', summary: 'A short, property-aware checklist for Monday through Tuesday.',
+    sourceType: 'WEATHER', status: 'ACTIONED', openedAt: NOW, expiredAt: null,
+    createdAt: NOW, updatedAt: NOW, lastEvaluatedAt: NOW,
+    details: {
+      insightId: 'heat-2026-08-20', effectiveFrom: '2026-08-20', effectiveTo: '2026-08-21',
+      source: 'Open-Meteo forecast and property profile',
+    },
+    actions: [
+      { id: 'step-2', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Clear the outdoor condenser.', ctaUrl: null, payload: { label: 'Clear the outdoor condenser.', sortOrder: 1 } },
+      { id: 'step-1', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Inspect the HVAC filter.', ctaUrl: null, payload: { label: 'Inspect the HVAC filter.', sortOrder: 0 } },
+      { id: 'step-3', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Close shades during peak heat.', ctaUrl: null, payload: { label: 'Close shades during peak heat.', sortOrder: 2 } },
+    ],
+  }];
+
+  const result = await getPromotedHomeActions('property-1', db, { propertyLabel: '4203 Quailbridge' });
+  const action = result.actions.find((candidate) => candidate.id === 'incident:preparation-1');
+
+  assert.ok(action);
+  assert.equal(action.presentation.variant, 'ENVIRONMENT_PREPARATION');
+  assert.equal(action.presentation.eyebrow, 'Local forecast');
+  assert.equal(action.evidence[0].source, 'Open-Meteo forecast and property profile');
+  assert.equal(action.primaryCta.label, 'Open preparation checklist');
+  assert.match(action.primaryCta.href, /environment-report\/preparation\?insightId=heat-2026-08-20/);
+  assert.equal(action.timing.dueAt, '2026-08-20T00:00:00.000Z');
+  assert.equal(action.timing.windowEnd, '2026-08-21T23:59:59.999Z');
+  assert.deepEqual(
+    action.presentation.factGroups[0].facts.map((fact) => fact.value),
+    ['Inspect the HVAC filter.', 'Clear the outdoor condenser.', 'Close shades during peak heat.'],
+  );
+  assert.doesNotMatch(JSON.stringify(action), /official weather alert|National Weather Service/i);
 });
 
 function groundedWeatherJourney(overrides = {}) {

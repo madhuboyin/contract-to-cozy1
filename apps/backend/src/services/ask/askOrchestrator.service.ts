@@ -3488,7 +3488,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         suggestions: ['What else needs my attention?'],
       };
     }
-    return buildFocusedHomeActionGuidance(focusedAction, homeHref, evaluation.contextVersion);
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion);
   }
 
   const urgentFocus = /\b(?:urgent|right now|immediately|priority now)\b/i.test(message);

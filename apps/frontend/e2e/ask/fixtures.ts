@@ -27,6 +27,34 @@ function capabilityExecution(unavailable = false) {
   };
 }
 
+function heatPreparationExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-heat-preparation', sessionId: 'ask-acceptance-session',
+    question: 'How should I prepare for the multi-day heat risk at this home?',
+    status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'HOME_ACTIONS', version: '1.0', family: 'STATUS_SUMMARY' },
+    contextVersion: 'heat-context-v1',
+    blocks: [
+      { type: 'SUMMARY', id: 'focused-home-action-summary', title: 'Multi-day heat risk ahead', body: 'Three days may reach 95°F or higher. This home uses central cooling.', tone: 'CAUTION', actions: [] },
+      {
+        type: 'GROUPED_LIST', id: 'focused-home-action-guidance', title: 'Prepare this home',
+        description: 'Due Aug 20, 2026. These steps come from the preparation plan for this home.',
+        sections: [
+          { id: 'next-step', title: 'Preparation checklist', count: 3, items: [
+            { id: 'heat-step-1', title: 'Inspect the HVAC filter before the heat arrives.', description: null, meta: ['Step 1'], status: null, href: null },
+            { id: 'heat-step-2', title: 'Keep the outdoor condenser area clear.', description: null, meta: ['Step 2'], status: null, href: null },
+            { id: 'heat-step-3', title: 'Use shades and avoid peak-hour heat-generating activities.', description: null, meta: ['Step 3'], status: null, href: null },
+          ] },
+          { id: 'why-it-matters', title: 'Why this matters for this home', count: 1, items: [{ id: 'heat-why', title: 'Sustained heat increases cooling demand.', description: 'The recorded cooling system will run longer during the forecast window.', meta: [], status: null, href: null }] },
+        ],
+        actions: [{ id: 'open-heat-checklist', label: 'Open preparation checklist', href: `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=heat-1`, style: 'PRIMARY' }],
+      },
+      { type: 'EVIDENCE', id: 'heat-evidence', title: 'Evidence for this guidance', items: [{ label: 'Local heat forecast', source: 'Open-Meteo forecast and property profile', observedAt: '2026-08-14T12:00:00.000Z' }] },
+    ],
+    captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
 function execution(kind: 'refrigerator' | 'refinance', captured = false) {
   const capture = kind === 'refrigerator' ? {
     requirementId: 'repair-replace:refrigerator:lifecycle', captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE', classification: 'ENHANCEMENT_ACCURACY', state: 'UNKNOWN',
@@ -58,7 +86,7 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
@@ -70,7 +98,9 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     propertyId, generatedAt: new Date().toISOString(),
     priorityList: {
       state: 'AVAILABLE', rankingPolicyVersion: 'acceptance-v1', generatedAt: new Date().toISOString(), truncated: false, href: `/dashboard?propertyId=${propertyId}`,
-      items: [{ homeActionId: 'action-1', title: 'Schedule HVAC service', askQuestion: 'What should I do next for “Schedule HVAC service”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }],
+      items: [options.heatAttention
+        ? { homeActionId: 'heat-action-1', title: 'Multi-day heat risk ahead preparation', askQuestion: 'How should I prepare for the multi-day heat risk at this home?', askCategoryId: 'PROTECT', askCategoryLabel: 'Protect', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['SAFETY_IMPACT'], confidenceLabel: 'HIGH', deadlineAt: '2026-08-20T12:00:00.000Z', cta: { label: 'Open preparation checklist', href: `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=heat-1` }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }
+        : { homeActionId: 'action-1', title: 'Schedule HVAC service', askQuestion: 'What should I do next for “Schedule HVAC service”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }],
     },
     changes: { state: 'AVAILABLE', windowDays: 30, items: [{ id: 'change-1', source: 'Home action', summary: 'Home action updated.', materiality: 'MEANINGFUL', detectedAt: new Date().toISOString(), effectiveAt: null }], href: `/dashboard/ask?propertyId=${propertyId}` },
     decisions: options.noDecision
@@ -86,7 +116,9 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     ],
     featuredPrompts: [
       { id: 'decision-decision-1', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me continue this decision: Repair or replace the refrigerator', context: { entityType: 'DECISION_THREAD', entityId: 'decision-1' }, source: 'PERSONALIZED' },
-      { id: 'attention-action-1', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What should I do next for “Schedule HVAC service”?', context: { entityType: 'HOME_ACTION', entityId: 'action-1', actionId: 'action-1', capabilityId: 'home-operations' }, source: 'PERSONALIZED' },
+      options.heatAttention
+        ? { id: 'attention-heat-action-1', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'How should I prepare for the multi-day heat risk at this home?', context: { entityType: 'HOME_ACTION', entityId: 'heat-action-1', actionId: 'heat-action-1', capabilityId: 'home-operations' }, source: 'PERSONALIZED' }
+        : { id: 'attention-action-1', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What should I do next for “Schedule HVAC service”?', context: { entityType: 'HOME_ACTION', entityId: 'action-1', actionId: 'action-1', capabilityId: 'home-operations' }, source: 'PERSONALIZED' },
       { id: 'protect-coverage', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage?', source: 'DISCOVERY' },
       { id: 'save-opportunities', categoryId: 'SAVE', categoryLabel: 'Save', question: 'Where could I save money on this home?', source: 'DISCOVERY' },
     ],
@@ -104,6 +136,10 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/tool to help with refinancing/i.test(body.message)) {
       await fulfill(route, { success: true, data: capabilityExecution(false) }, 201);
+      return;
+    }
+    if (/multi-day heat risk/i.test(body.message)) {
+      await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
       return;
     }
     await fulfill(route, { success: true, data: execution(/refinanc/i.test(body.message) ? 'refinance' : 'refrigerator') }, 201);

@@ -88,6 +88,29 @@ test('personalized attention exposes one conversational action', async ({ page }
   });
 });
 
+test('weather attention answers inline with the complete preparation checklist before navigation', async ({ page }) => {
+  const api = await installAskApi(page, { noDecision: true, heatAttention: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+
+  await page.getByRole('button', { name: /Multi-day heat risk ahead preparation.*Ask Cozy about this/ }).click();
+
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  expect(api.executionBodies[0]).toMatchObject({
+    message: 'How should I prepare for the multi-day heat risk at this home?',
+    launchContext: { entityType: 'HOME_ACTION', entityId: 'heat-action-1', actionId: 'heat-action-1' },
+  });
+  await expect(page).toHaveURL(new RegExp(`/acceptance/ask\\?propertyId=${propertyId}$`));
+  const response = page.locator('#ask-execution-execution-heat-preparation');
+  await expect(response.getByRole('heading', { name: 'Prepare this home' })).toBeVisible();
+  await expect(response.getByText('Inspect the HVAC filter before the heat arrives.')).toBeVisible();
+  await expect(response.getByText('Keep the outdoor condenser area clear.')).toBeVisible();
+  await expect(response.getByText('Use shades and avoid peak-hour heat-generating activities.')).toBeVisible();
+  await expect(response.getByText('Confirm the incident response and preserve the evidence needed for follow-up.')).toHaveCount(0);
+  await expect(response.getByRole('link', { name: 'View in Home Actions' })).toHaveCount(0);
+  await expect(response.getByRole('link', { name: 'Open preparation checklist' })).toHaveCount(1);
+  await expect.poll(async () => (await response.boundingBox())?.y ?? 0).toBeGreaterThan(80);
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

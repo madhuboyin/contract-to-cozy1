@@ -409,6 +409,11 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
             </div>
           ))}
         </div>
+        {block.id === 'focused-home-action-guidance' && block.actions.length > 0 && (
+          <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+            {block.actions.map((action) => <ActionLink key={action.id} action={action} />)}
+          </div>
+        )}
       </section>
     );
   }
@@ -1277,7 +1282,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     window.localStorage.setItem(draftStorageKey(selectedPropertyId), initialQuestion);
   }, [initialQuestion, selectedPropertyId]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [executions, loading]);
+  useEffect(() => {
+    if (loading) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [loading]);
+  useEffect(() => {
+    if (!justUpdatedExecutionId || loading) return;
+    const timeout = window.setTimeout(() => {
+      document.getElementById(`ask-execution-${justUpdatedExecutionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    return () => window.clearTimeout(timeout);
+  }, [justUpdatedExecutionId, loading]);
   useEffect(() => { if (mode === 'panel') window.setTimeout(() => textareaRef.current?.focus(), 80); }, [mode]);
 
   const scopeLabel = selectedPropertyId ? 'Answers use your selected home record' : 'General home guidance';
@@ -1464,7 +1478,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} onResume={(item) => void resumePendingWork(item)} />
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
             {executions.map((execution) => (
-              <article id={`ask-execution-${execution.executionId}`} key={execution.executionId} className="scroll-mt-6 space-y-3">
+              <article id={`ask-execution-${execution.executionId}`} key={execution.executionId} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
                 <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
                   <h2 className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</h2>

@@ -32,3 +32,15 @@ test('mobile capability discovery keeps readiness and related tools readable', a
   await expect(page.getByText('More home details will improve the result')).toBeVisible();
   await expect(page.getByRole('link', { name: /Break-Even/ })).toBeVisible();
 });
+
+test('mobile weather attention keeps the direct checklist in Ask', async ({ page }) => {
+  await installAskApi(page, { noDecision: true, heatAttention: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByRole('button', { name: /Multi-day heat risk ahead preparation.*Ask Cozy about this/ }).click();
+
+  const response = page.locator('#ask-execution-execution-heat-preparation');
+  await expect(response.getByRole('heading', { name: 'Prepare this home' })).toBeVisible();
+  await expect(response.getByText('Inspect the HVAC filter before the heat arrives.')).toBeVisible();
+  await expect(response.getByRole('link', { name: 'Open preparation checklist' })).toHaveCount(1);
+  await expect(response.getByRole('link', { name: 'View in Home Actions' })).toHaveCount(0);
+});
