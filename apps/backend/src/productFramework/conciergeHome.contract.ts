@@ -71,12 +71,33 @@ export const ConciergeHomeDecisionsSchema = z.object({
   href: z.string(),
 });
 
+export const ConciergeHomeCapabilityPromptSchema = z.object({
+  id: z.string(),
+  categoryId: z.enum(['UNDERSTAND', 'MAINTAIN', 'PROTECT', 'SAVE', 'DECIDE', 'PLAN_MONITOR']),
+  categoryLabel: z.string(),
+  question: z.string(),
+});
+
+export const ConciergeHomeFeaturedPromptSchema = ConciergeHomeCapabilityPromptSchema.extend({
+  source: z.enum(['PERSONALIZED', 'DISCOVERY']),
+});
+
+export const ConciergeHomeCapabilityGroupSchema = z.object({
+  id: ConciergeHomeCapabilityPromptSchema.shape.categoryId,
+  label: z.string(),
+  description: z.string(),
+  capabilityIds: z.array(z.string()),
+  prompts: z.array(ConciergeHomeCapabilityPromptSchema),
+});
+
 export const ConciergeHomeViewSchema = z.object({
   propertyId: z.string(),
   generatedAt: z.string(),
   priorityList: ConciergeHomePriorityListSchema,
   changes: ConciergeHomeChangesSchema,
   decisions: ConciergeHomeDecisionsSchema,
+  capabilityGroups: z.array(ConciergeHomeCapabilityGroupSchema),
+  featuredPrompts: z.array(ConciergeHomeFeaturedPromptSchema),
   suggestedQuestions: z.array(z.string()),
 });
 

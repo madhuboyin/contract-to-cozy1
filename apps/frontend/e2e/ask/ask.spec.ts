@@ -3,7 +3,7 @@ import { installAskApi, installAskContext, propertyId } from './fixtures';
 
 test.beforeEach(async ({ context }) => installAskContext(context));
 
-test('starting surface has one identity, an above-the-fold composer, and actionable context', async ({ page }) => {
+test('starting surface teaches capability breadth without competing CTAs', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
@@ -11,9 +11,42 @@ test('starting surface has one identity, an above-the-fold composer, and actiona
   await expect(page.getByRole('heading', { name: 'What can I help with?' })).toHaveCount(0);
   await expect(page.getByText('Changed recently', { exact: true })).toHaveCount(0);
   await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
-  await expect(page.getByRole('heading', { name: 'Decisions in progress' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
+  await expect(page.getByText('Decide', { exact: true })).toBeVisible();
+  await expect(page.getByText('Maintain', { exact: true })).toBeVisible();
+  await expect(page.getByText('Protect', { exact: true })).toBeVisible();
+  await expect(page.getByText('Save', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Continue where you left off' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'For your attention' })).toHaveCount(0);
+  await expect(page.getByText('View all', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Ask why', { exact: true })).toHaveCount(0);
+});
+
+test('capability explorer progressively reveals registry-backed examples', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByRole('button', { name: /Explore everything Ask Cozy can do/ }).click();
+  await expect(page.getByRole('dialog', { name: 'What Ask Cozy can help with' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What Ask Cozy can help with' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Understand your home' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Maintain and prevent' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Protect your home' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Reduce costs' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compare and decide' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Plan and monitor' })).toBeVisible();
+  await page.getByRole('button', { name: 'Give me a summary of my home record.' }).click();
+  await expect(page.getByRole('dialog', { name: 'What Ask Cozy can help with' })).toHaveCount(0);
+  await expect.poll(() => api.executionQuestions).toContain('Give me a summary of my home record.');
+});
+
+test('personalized attention exposes one conversational action', async ({ page }) => {
+  await installAskApi(page, { noDecision: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.getByRole('heading', { name: 'For your attention' })).toBeVisible();
-  await expect(page.getByText(/May prevent a larger cost/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Schedule HVAC service.*Ask Cozy about this/ })).toBeVisible();
+  await expect(page.getByText('View all', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Review action', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Ask why', { exact: true })).toHaveCount(0);
 });
 
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {

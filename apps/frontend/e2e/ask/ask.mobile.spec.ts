@@ -9,6 +9,10 @@ test('mobile starting surface keeps the composer visible without duplicate headi
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
+  await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
+  await page.getByRole('button', { name: /Explore everything Ask Cozy can do/ }).click();
+  await expect(page.getByRole('dialog', { name: 'What Ask Cozy can help with' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Plan and monitor' })).toBeVisible();
 });
 
 test('mobile inline capture retains a full-form escape path', async ({ page }) => {

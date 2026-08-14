@@ -6677,6 +6677,61 @@ export async function submitHomeActionUsefulnessFeedback(
   });
 }
 
+type ConciergeCapabilityGroupDefinition = Omit<ConciergeHomeView['capabilityGroups'][number], 'capabilityIds'> & {
+  outcomeCategory: CapabilityCatalogItem['outcomeCategory'];
+};
+
+const CONCIERGE_CAPABILITY_GROUPS: readonly ConciergeCapabilityGroupDefinition[] = [
+  {
+    id: 'UNDERSTAND', label: 'Understand your home', outcomeCategory: 'UNDERSTAND_HOME',
+    description: 'Turn home records into a clear, useful picture.',
+    prompts: [
+      { id: 'understand-summary', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Give me a summary of my home record.' },
+      { id: 'understand-completeness', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'How complete is my home record?' },
+    ],
+  },
+  {
+    id: 'MAINTAIN', label: 'Maintain and prevent', outcomeCategory: 'MAINTAIN_PREVENT',
+    description: 'Stay ahead of maintenance and prevent avoidable problems.',
+    prompts: [
+      { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?' },
+      { id: 'maintain-create', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'Create a maintenance task for changing my HVAC filter.' },
+    ],
+  },
+  {
+    id: 'PROTECT', label: 'Protect your home', outcomeCategory: 'PROTECT_MONITOR',
+    description: 'Find coverage gaps, risks, and important changes.',
+    prompts: [
+      { id: 'protect-coverage', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage?' },
+      { id: 'protect-changes', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'What changed recently for this home?' },
+    ],
+  },
+  {
+    id: 'SAVE', label: 'Reduce costs', outcomeCategory: 'SAVE_OPTIMIZE',
+    description: 'Understand spending and uncover relevant savings.',
+    prompts: [
+      { id: 'save-opportunities', categoryId: 'SAVE', categoryLabel: 'Save', question: 'Where could I save money on this home?' },
+      { id: 'save-costs', categoryId: 'SAVE', categoryLabel: 'Save', question: 'What are my biggest ownership costs?' },
+    ],
+  },
+  {
+    id: 'DECIDE', label: 'Compare and decide', outcomeCategory: 'DECIDE_COMPARE',
+    description: 'Compare options with the relevant home context.',
+    prompts: [
+      { id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Should I repair or replace my refrigerator?' },
+      { id: 'decide-quotes', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me compare contractor quotes.' },
+    ],
+  },
+  {
+    id: 'PLAN_MONITOR', label: 'Plan and monitor', outcomeCategory: 'PLAN_BUDGET',
+    description: 'Build plans and keep watch on important deadlines.',
+    prompts: [
+      { id: 'plan-reserve', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'Create a capital reserve plan for future replacements.' },
+      { id: 'plan-deadlines', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'Monitor my important home deadlines.' },
+    ],
+  },
+] as const;
+
 // Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" deliverable. A
 // read-only composition of three already-governed sources -- never a
 // fourth ranking/change/decision system of its own (mirrors PRIORITY_LIST's
@@ -6687,6 +6742,32 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
   await ensurePropertyAccess(userId, propertyId);
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const askHref = `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}`;
+  const capabilityGroups: ConciergeHomeView['capabilityGroups'] = (() => {
+    try {
+      const capabilityCatalog = buildCapabilityCatalog({
+        registry: canonicalCapabilityRegistry,
+        availability: createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry),
+        userId,
+        propertyId,
+        includeWorkflowContext: false,
+      });
+      return CONCIERGE_CAPABILITY_GROUPS.flatMap((group) => {
+        const capabilityIds = capabilityCatalog.capabilities
+          .filter((capability) => capability.outcomeCategory === group.outcomeCategory)
+          .map((capability) => capability.id);
+        return capabilityIds.length ? [{
+          id: group.id,
+          label: group.label,
+          description: group.description,
+          capabilityIds,
+          prompts: [...group.prompts],
+        }] : [];
+      });
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home capability discovery failed closed');
+      return [];
+    }
+  })();
 
   const priorityListPromise = (async (): Promise<ConciergeHomeView['priorityList']> => {
     try {
@@ -6776,25 +6857,28 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
   })();
 
   const [priorityList, changes, decisions] = await Promise.all([priorityListPromise, changesPromise, decisionsPromise]);
-  const suggestedQuestions: string[] = [];
-  const addQuestion = (question: string) => {
-    if (suggestedQuestions.length >= 4 || suggestedQuestions.some((existing) => existing.toLowerCase() === question.toLowerCase())) return;
-    suggestedQuestions.push(question);
+  const featuredPrompts: ConciergeHomeView['featuredPrompts'] = [];
+  const addPrompt = (prompt: ConciergeHomeView['featuredPrompts'][number]) => {
+    if (featuredPrompts.length >= 4 || featuredPrompts.some((existing) => existing.question.toLowerCase() === prompt.question.toLowerCase())) return;
+    featuredPrompts.push(prompt);
   };
   if (decisions.state === 'AVAILABLE' && decisions.items[0]) {
-    addQuestion(`Help me continue this decision: ${decisions.items[0].title}`);
+    addPrompt({ id: `decision-${decisions.items[0].decisionThreadId}`, categoryId: 'DECIDE', categoryLabel: 'Decide', question: `Help me continue this decision: ${decisions.items[0].title}`, source: 'PERSONALIZED' });
   }
-  priorityList.items
-    .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')
-    .slice(0, 2)
-    .forEach((item) => addQuestion(`Why should I prioritize ${item.title}?`));
-  if (changes.state === 'AVAILABLE') addQuestion('What changed recently for this home?');
-  [
-    'What maintenance tasks are pending?',
-    'Which items are missing coverage?',
-    'Is there a tool to help me refinance?',
-    'Where could I save money on this home?',
-  ].forEach(addQuestion);
+  const topPriority = priorityList.items
+    .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')[0];
+  if (topPriority) {
+    addPrompt({ id: `attention-${topPriority.homeActionId}`, categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: `What should I do next about ${topPriority.title}?`, source: 'PERSONALIZED' });
+  }
+  const representedCategories = new Set(featuredPrompts.map((prompt) => prompt.categoryId));
+  for (const group of capabilityGroups) {
+    if (representedCategories.has(group.id) || !group.prompts[0]) continue;
+    addPrompt({ ...group.prompts[0], source: 'DISCOVERY' });
+    representedCategories.add(group.id);
+  }
+  for (const group of capabilityGroups) {
+    for (const prompt of group.prompts) addPrompt({ ...prompt, source: 'DISCOVERY' });
+  }
 
   return {
     propertyId,
@@ -6802,6 +6886,8 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
     priorityList,
     changes,
     decisions,
-    suggestedQuestions,
+    capabilityGroups,
+    featuredPrompts,
+    suggestedQuestions: featuredPrompts.map((prompt) => prompt.question),
   };
 }

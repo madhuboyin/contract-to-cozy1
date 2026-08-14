@@ -58,8 +58,9 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
+  const executionQuestions: string[] = [];
   let captureAttempts = 0;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
   await page.route(`${apiOrigin}/api/properties*`, (route) => fulfill(route, { success: true, data: { properties: [{ id: propertyId, name: 'Acceptance Home', addressLine1: '1 Cozy Way', city: 'Boston', state: 'MA', zipCode: '02108' }] } }));
@@ -71,13 +72,30 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       items: [{ homeActionId: 'action-1', title: 'Schedule HVAC service', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: ['COST_AVOIDANCE'], confidenceLabel: 'HIGH', deadlineAt: '2026-09-01T12:00:00.000Z', cta: { label: 'Review action', href: '/dashboard/actions/action-1' }, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false }],
     },
     changes: { state: 'AVAILABLE', windowDays: 30, items: [{ id: 'change-1', source: 'Home action', summary: 'Home action updated.', materiality: 'MEANINGFUL', detectedAt: new Date().toISOString(), effectiveAt: null }], href: `/dashboard/ask?propertyId=${propertyId}` },
-    decisions: { state: 'AVAILABLE', items: [{ decisionThreadId: 'decision-1', title: 'Repair or replace the refrigerator', lifecycleStatus: 'IN_PROGRESS', contextStatus: 'CURRENT', verdict: null, confidenceLabel: 'MEDIUM', updatedAt: '2026-08-12T12:00:00.000Z' }], href: `/dashboard/ask?propertyId=${propertyId}` },
-    suggestedQuestions: ['Help me continue this decision: Repair or replace the refrigerator', 'Why should I prioritize Schedule HVAC service?', 'What changed recently for this home?'],
+    decisions: options.noDecision
+      ? { state: 'NO_DECISIONS', items: [], href: `/dashboard/ask?propertyId=${propertyId}` }
+      : { state: 'AVAILABLE', items: [{ decisionThreadId: 'decision-1', title: 'Repair or replace the refrigerator', lifecycleStatus: 'IN_PROGRESS', contextStatus: 'CURRENT', verdict: null, confidenceLabel: 'MEDIUM', updatedAt: '2026-08-12T12:00:00.000Z' }], href: `/dashboard/ask?propertyId=${propertyId}` },
+    capabilityGroups: [
+      { id: 'UNDERSTAND', label: 'Understand your home', description: 'Turn home records into a clear, useful picture.', capabilityIds: ['property-brief'], prompts: [{ id: 'understand-summary', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Give me a summary of my home record.' }] },
+      { id: 'MAINTAIN', label: 'Maintain and prevent', description: 'Stay ahead of maintenance and prevent avoidable problems.', capabilityIds: ['maintenance'], prompts: [{ id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?' }] },
+      { id: 'PROTECT', label: 'Protect your home', description: 'Find coverage gaps, risks, and important changes.', capabilityIds: ['coverage-intelligence'], prompts: [{ id: 'protect-coverage', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage?' }] },
+      { id: 'SAVE', label: 'Reduce costs', description: 'Understand spending and uncover relevant savings.', capabilityIds: ['savings-benefits'], prompts: [{ id: 'save-opportunities', categoryId: 'SAVE', categoryLabel: 'Save', question: 'Where could I save money on this home?' }] },
+      { id: 'DECIDE', label: 'Compare and decide', description: 'Compare options with the relevant home context.', capabilityIds: ['replace-repair'], prompts: [{ id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Should I repair or replace my refrigerator?' }] },
+      { id: 'PLAN_MONITOR', label: 'Plan and monitor', description: 'Build plans and keep watch on important deadlines.', capabilityIds: ['capital-timeline'], prompts: [{ id: 'plan-reserve', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'Create a capital reserve plan for future replacements.' }] },
+    ],
+    featuredPrompts: [
+      { id: 'decision-decision-1', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me continue this decision: Repair or replace the refrigerator', source: 'PERSONALIZED' },
+      { id: 'attention-action-1', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What should I do next about Schedule HVAC service?', source: 'PERSONALIZED' },
+      { id: 'protect-coverage', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage?', source: 'DISCOVERY' },
+      { id: 'save-opportunities', categoryId: 'SAVE', categoryLabel: 'Save', question: 'Where could I save money on this home?', source: 'DISCOVERY' },
+    ],
+    suggestedQuestions: ['Help me continue this decision: Repair or replace the refrigerator', 'What should I do next about Schedule HVAC service?', 'Which items are missing coverage?', 'Where could I save money on this home?'],
   } }));
   await page.route(`${apiOrigin}/api/ask/sessions/*`, (route) => fulfill(route, { success: true, data: { executions: [] } }));
   await page.route(`${apiOrigin}/api/ask/executions`, async (route) => {
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as { message: string };
+    executionQuestions.push(body.message);
     if (/disabled refinance tool/i.test(body.message)) {
       await fulfill(route, { success: true, data: capabilityExecution(true) }, 201);
       return;
@@ -108,7 +126,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     await fulfill(route, { success: true, data: execution(body.captureKey === 'FINANCING_PROFILE_REFINANCE_INPUTS' ? 'refinance' : 'refrigerator', true) });
   });
-  return { captureBodies, captureAttempts: () => captureAttempts };
+  return { captureBodies, executionQuestions, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

@@ -177,7 +177,30 @@ export interface ConciergeHomeView {
     items: Array<{ decisionThreadId: string; title: string; lifecycleStatus: string; contextStatus: string; verdict: string | null; confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null; updatedAt: string }>;
     href: string;
   };
+  capabilityGroups: AskCapabilityGroup[];
+  featuredPrompts: AskFeaturedPrompt[];
   suggestedQuestions: string[];
+}
+
+export type AskCapabilityCategoryId = 'UNDERSTAND' | 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'DECIDE' | 'PLAN_MONITOR';
+
+export interface AskCapabilityPrompt {
+  id: string;
+  categoryId: AskCapabilityCategoryId;
+  categoryLabel: string;
+  question: string;
+}
+
+export interface AskFeaturedPrompt extends AskCapabilityPrompt {
+  source: 'PERSONALIZED' | 'DISCOVERY';
+}
+
+export interface AskCapabilityGroup {
+  id: AskCapabilityCategoryId;
+  label: string;
+  description: string;
+  capabilityIds: string[];
+  prompts: AskCapabilityPrompt[];
 }
 
 import type { CaptureInputSchema } from '@/components/property-context/featureContextTypes';

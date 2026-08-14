@@ -67,6 +67,9 @@ export type CtcEventName =
   | 'tool_discovery_clicked'
   | 'tool_discovery_catalog_searched'
   | 'tool_discovery_outcome'
+  | 'ask_prompt_selected'
+  | 'ask_prompt_outcome'
+  | 'ask_capability_explorer_opened'
   // Property record
   | 'property_record_viewed'
   | 'property_record_section_opened'
@@ -335,6 +338,27 @@ export interface CtcEventProperties {
     recommendationReason?: string | null;
     recommendationVersion?: string | null;
     outcome: 'workflow_completed';
+  };
+  ask_prompt_selected: {
+    propertyId?: string | null;
+    promptId: string;
+    categoryId: string;
+    source: 'PERSONALIZED' | 'DISCOVERY' | 'FALLBACK' | 'EXPLORER' | 'ATTENTION' | 'DECISION';
+  };
+  ask_prompt_outcome: {
+    propertyId?: string | null;
+    promptId: string;
+    categoryId: string;
+    source: 'PERSONALIZED' | 'DISCOVERY' | 'FALLBACK' | 'EXPLORER' | 'ATTENTION' | 'DECISION';
+    executionId?: string;
+    operationId?: string;
+    status: string;
+    succeeded: boolean;
+  };
+  ask_capability_explorer_opened: {
+    propertyId?: string | null;
+    groupCount: number;
+    capabilityCount: number;
   };
   property_record_viewed: {
     propertyId: string;
