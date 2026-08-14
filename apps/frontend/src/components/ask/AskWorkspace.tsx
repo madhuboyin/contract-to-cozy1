@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ComponentProps, createContext, FormEvent, KeyboardEvent, Ref, useContext, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, House, Loader2, Maximize2, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ import { track } from '@/lib/analytics/events';
 import { addAskReturnContext, buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import { resolveConciergeLandingSpotlight, visibleConciergeFeaturedPrompts } from '@/features/ask/conciergeLandingPolicy';
+import { formatLegacyAskCurrency, formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 
 const fallbackPrompts: AskFeaturedPrompt[] = [
   { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?', source: 'DISCOVERY' },
@@ -396,8 +397,9 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
               </div>
               {section.items.length === 0 ? <p className="text-sm text-slate-500">None recorded.</p> : (
                 <ul className="space-y-3">
-                  {section.items.map((item) => (
-                    <li key={item.id} className="rounded-xl bg-slate-50 p-3">
+                  {section.items.map((sourceItem) => {
+                    const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
+                    return <li key={item.id} className="rounded-xl bg-slate-50 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}
@@ -406,8 +408,8 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
                         </div>
                         {item.status && <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.status.replace(/_/g, ' ')}</span>}
                       </div>
-                    </li>
-                  ))}
+                    </li>;
+                  })}
                 </ul>
               )}
               {section.count > section.items.length && (
@@ -480,7 +482,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
 
   if (block.type === 'COMPARISON') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<div className="mt-4 grid gap-3 sm:grid-cols-2">{block.options.map((option) => <div key={option.id} className="rounded-xl border border-slate-200 p-3"><h4 className="font-semibold text-slate-900">{option.label}</h4>{option.summary && <p className="mt-1 text-sm text-slate-600">{option.summary}</p>}<dl className="mt-3 space-y-2">{option.attributes.map((attribute) => <div key={attribute.label} className="flex justify-between gap-3 text-sm"><dt className="text-slate-500">{attribute.label}</dt><dd className="text-right font-medium text-slate-800">{attribute.value}</dd></div>)}</dl></div>)}</div>{block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}</section>;
 
-  if (block.type === 'DECISION_TRACE') return <details className="rounded-2xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer font-semibold text-slate-900">{block.title}</summary><ol className="mt-3 space-y-3">{block.steps.map((step, index) => <li key={`${step.label}-${index}`} className="text-sm"><p className="font-medium text-slate-800">{index + 1}. {step.label}</p><p className="mt-1 text-slate-600">{step.detail}</p>{step.outcome && <p className="mt-1 text-xs font-semibold text-teal-700">{step.outcome}</p>}</li>)}</ol></details>;
+  if (block.type === 'DECISION_TRACE') return <details className="rounded-2xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer font-semibold text-slate-900">{block.title}</summary><ol className="mt-3 space-y-3">{block.steps.map((step, index) => <li key={`${step.label}-${index}`} className="text-sm"><p className="font-medium text-slate-800">{index + 1}. {step.label}</p><p className="mt-1 text-slate-600">{formatLegacyAskCurrency(step.detail)}</p>{step.outcome && <p className="mt-1 text-xs font-semibold text-teal-700">{step.outcome}</p>}</li>)}</ol></details>;
 
   if (block.type === 'DECISION_PROGRESS') {
     // FRD §21.4: lifecycleStatus and contextStatus are independent and both
@@ -1212,6 +1214,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [showLanding, setShowLanding] = useState(false);
   const [pendingWork, setPendingWork] = useState<AskPendingWorkItem[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [continuingId, setContinuingId] = useState<string | null>(null);
@@ -1226,10 +1229,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [justUpdatedExecutionId, setJustUpdatedExecutionId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const landingVisible = showLanding || executions.length === 0;
   // Concierge composition is only useful on the empty starting surface.
-  // Avoid the extra multi-source read when restoring an existing conversation.
+  // It is also loaded when a user explicitly returns home without deleting
+  // their conversation, which keeps discovery independent from retention.
   const concierge = useConciergeHome(
-    !historyLoading && executions.length === 0 && !propertyMismatch ? selectedPropertyId : undefined,
+    !historyLoading && landingVisible && !propertyMismatch ? selectedPropertyId : undefined,
     availabilityEpoch,
   );
   const askUnavailable = serviceUnavailable
@@ -1266,6 +1271,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     window.localStorage.setItem(key, nextSession);
     setSessionId(nextSession);
     setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
+    setShowLanding(false);
     setExecutions([]);
     setHistoryLoading(true);
     api.getAskSession(nextSession, { signal: controller.signal })
@@ -1309,6 +1315,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => {
     const message = question.trim();
     if (!message || !sessionId || loading) return;
+    setShowLanding(false);
     setInput('');
     window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
     setError(null);
@@ -1378,7 +1385,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       if (!response.success) throw new Error(response.message || 'Could not clear Ask history.');
       const nextSession = newId();
       window.localStorage.setItem(sessionStorageKey(selectedPropertyId), nextSession);
-      setSessionId(nextSession); setExecutions([]); setConfirmClear(false);
+      setSessionId(nextSession); setExecutions([]); setShowLanding(false); setConfirmClear(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not clear Ask history.');
     } finally { setLoading(false); }
@@ -1401,7 +1408,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       const resumed = response.data;
       if ((resumed.property?.id ?? undefined) !== selectedPropertyId) throw new Error('Select the matching home before resuming this request.');
       window.localStorage.setItem(sessionStorageKey(selectedPropertyId), resumed.sessionId);
-      setSessionId(resumed.sessionId); setHistoryLoading(true);
+      setSessionId(resumed.sessionId); setShowLanding(false); setHistoryLoading(true);
       const history = await api.getAskSession(resumed.sessionId);
       if (!history.success || !history.data) throw new Error(history.message || 'Could not load the pending conversation.');
       setExecutions(history.data.executions);
@@ -1463,7 +1470,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <header className={cn('flex items-center justify-between', mode === 'page' ? 'px-1 pb-5 pt-1 sm:pb-7 sm:pt-3' : 'border-b border-slate-200 bg-white px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
         <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-11 w-11 rounded-2xl' : 'h-9 w-9 rounded-xl')}><Sparkles className={mode === 'page' ? 'h-5 w-5' : 'h-4 w-4'} /></span><div>{mode === 'page' ? <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className={cn('truncate text-slate-500', mode === 'page' ? 'mt-1 text-sm' : 'text-xs')}>{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
-          {mode === 'page' && executions.length > 0 && !askUnavailable && <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />Clear history</button>}
+          {mode === 'page' && executions.length > 0 && !askUnavailable && (showLanding
+            ? <button type="button" aria-label="Back to conversation" onClick={() => { setShowLanding(false); window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50); }} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><MessageCircle className="h-4 w-4" /><span className="hidden sm:inline">Back to conversation</span></button>
+            : <><button type="button" aria-label="Ask home" onClick={() => { setShowLanding(true); setConfirmClear(false); }} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><House className="h-4 w-4" /><span className="hidden sm:inline">Ask home</span></button><button type="button" aria-label="Clear history" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" /><span className="hidden md:inline">Clear history</span></button></>)}
           {mode === 'panel' && <Link href={fullWorkspaceHref} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
           {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
         </div>
@@ -1482,7 +1491,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <RefreshCw className="h-4 w-4" />Try again
             </button>
           </section>
-        ) : executions.length === 0 ? (
+        ) : landingVisible ? (
           <div className="mx-auto max-w-3xl">
             <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>
             {renderComposer('hero')}
@@ -1532,7 +1541,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
+      {executions.length > 0 && !showLanding && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
     </div>
   );
 }

@@ -116,6 +116,13 @@ function toInt(value?: number | null): number | undefined {
   return Math.max(0, Math.round(value));
 }
 
+export function formatUsdFromCents(cents: number): string {
+  const fractionDigits = Math.abs(cents) % 100 === 0 ? 0 : 2;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: 'USD', minimumFractionDigits: fractionDigits, maximumFractionDigits: 2,
+  }).format(cents / 100);
+}
+
 function safeArray<T>(value: Prisma.JsonValue | null | undefined): T[] {
   if (!Array.isArray(value)) return [];
   return value as T[];
@@ -536,7 +543,7 @@ export class ReplaceRepairService {
       },
       {
         label: 'Repair spend pressure',
-        detail: `Recent repair spend: ${repairSpendLast24mCents} cents (${(repairSpendRatio * 100).toFixed(0)}% of replacement).`,
+        detail: `Recent repair spend: ${formatUsdFromCents(repairSpendLast24mCents)} (${(repairSpendRatio * 100).toFixed(0)}% of replacement).`,
         impact: repairSpendRatio >= 0.25 ? 'NEGATIVE' : repairSpendRatio <= 0.1 ? 'POSITIVE' : 'NEUTRAL',
       },
       {
@@ -546,17 +553,17 @@ export class ReplaceRepairService {
       },
       {
         label: 'Next repair estimate',
-        detail: `Estimated next repair cost: ${estimatedNextRepairCostCents} cents.`,
+        detail: `Estimated next repair cost: ${formatUsdFromCents(estimatedNextRepairCostCents)}.`,
         impact: repairToReplaceRatio >= 0.3 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
         label: 'Replacement estimate',
-        detail: `Estimated replacement cost: ${estimatedReplacementCostCents} cents.`,
+        detail: `Estimated replacement cost: ${formatUsdFromCents(estimatedReplacementCostCents)}.`,
         impact: estimatedReplacementCostCents <= 90000 ? 'POSITIVE' : 'NEUTRAL',
       },
       {
         label: 'Expected annual repair risk',
-        detail: `Expected annual repair risk: ${expectedAnnualRepairRiskCents} cents.`,
+        detail: `Expected annual repair risk: ${formatUsdFromCents(expectedAnnualRepairRiskCents)}.`,
         impact: expectedAnnualRepairRiskCents >= Math.round(estimatedReplacementCostCents * 0.3) ? 'NEGATIVE' : 'NEUTRAL',
       },
       {

@@ -105,6 +105,7 @@ import type { ConciergeHomeView } from '../../productFramework/conciergeHome.con
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { conciergeLandingSubjectKey, inventoryDecisionQuestion, selectConciergeLandingSpotlight, selectInventoryDecisionCandidate } from './askConciergePromptPolicy';
+import { formatAskMaintenanceDescription, formatAskMaintenanceScope, formatAskMaintenanceTitle } from './askMaintenancePresentation';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
@@ -1409,11 +1410,11 @@ async function maintenanceResult(userId: string, propertyId: string, message: st
     const cost = kind === 'COMPLETED' ? maintenanceMoney(task.actualCost) : maintenanceMoney(task.estimatedCost);
     return {
       id: task.id,
-      title: task.title,
-      description: task.description ?? null,
+      title: formatAskMaintenanceTitle(task.title),
+      description: formatAskMaintenanceDescription(task),
       status: overdue ? 'OVERDUE' : task.status,
       meta: [
-        task.inventoryItem?.name ?? task.room?.name ?? task.category ?? task.assetType ?? 'Whole home',
+        formatAskMaintenanceScope({ inventoryItemName: task.inventoryItem?.name, roomName: task.room?.name, category: task.category, assetType: task.assetType }),
         kind === 'COMPLETED'
           ? task.lastCompletedDate ? `Completed ${maintenanceDate(task.lastCompletedDate, timeZone)}` : 'Completion date not recorded'
           : kind === 'CANCELLED' ? `Cancelled · updated ${maintenanceDate(task.updatedAt, timeZone)}`
@@ -1467,7 +1468,7 @@ async function maintenanceResult(userId: string, propertyId: string, message: st
   if (evidenceTasks.length) blocks.push({
     type: 'EVIDENCE', id: 'maintenance-evidence', title: 'Task sources and freshness',
     items: evidenceTasks.slice(0, 30).map((task) => ({
-      label: task.title, source: `Maintenance · ${task.source.toLowerCase().replace(/_/g, ' ')}`, observedAt: task.updatedAt.toISOString(),
+      label: formatAskMaintenanceTitle(task.title), source: `Maintenance · ${task.source.toLowerCase().replace(/_/g, ' ')}`, observedAt: task.updatedAt.toISOString(),
     })),
   });
   if (missingPurchaseDate) blocks.push({

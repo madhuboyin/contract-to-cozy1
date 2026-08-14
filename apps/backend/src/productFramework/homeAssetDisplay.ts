@@ -8,6 +8,8 @@ const ASSET_DISPLAY_LABELS: Record<string, string> = {
   ROOF_TILE_METAL: 'Roof',
   WATER_HEATER_TANK: 'Water Heater',
   WATER_HEATER_TANKLESS: 'Tankless Water Heater',
+  SAFETY_SMOKE_CO_DETECTOR: 'Smoke & CO Detector Check',
+  SAFETY_SMOKE_CO_DETECTORS: 'Smoke & CO Detector Check',
 };
 
 const ACRONYMS = new Set(['CO', 'GFCI', 'HOA', 'HVAC']);

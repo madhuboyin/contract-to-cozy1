@@ -42,6 +42,23 @@ test('one home subject appears only once across discovery and attention', async 
   await expect(page.getByText('Save', { exact: true })).toBeVisible();
 });
 
+test('Ask home returns to discovery without deleting conversation history', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('When should I replace my refrigerator?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Ask home' }).click();
+  await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Back to conversation' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Back to conversation' }).click();
+  await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ask home' })).toBeVisible();
+});
+
 test('degraded personalization falls back to property-safe capability examples', async ({ page }) => {
   await installAskApi(page);
   await page.unroute('http://localhost:8080/api/ask/concierge-home*');
