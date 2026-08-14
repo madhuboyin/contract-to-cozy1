@@ -15,6 +15,7 @@ import { REFINANCE_SKILL } from './refinance';
 import { PROPERTY_RECORD_SKILL } from './propertyRecord';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 import { REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
+import { selectSkillDependencyVersion } from './skillDependencyVersion';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const ROLE_RANK: Record<Exclude<AskPropertyRoleFloor, null>, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
@@ -174,16 +175,19 @@ export function validateSkillDefinitions(
     if (skill.contextBudget.maxOverallLatencyMs < skill.contextBudget.maxProviderLatencyMs) issues.push(`${key}: overall latency budget is below provider latency budget`);
     const dependencyRefs = new Set<string>();
     for (const dependency of skill.dependencies) {
-      const dependencyRef = `${dependency.type}:${dependency.id}@${dependency.version}`;
+      const dependencyRef = `${dependency.type}:${dependency.id}`;
       if (dependencyRefs.has(dependencyRef)) issues.push(`${key}: duplicate dependency ${dependencyRef}`);
       dependencyRefs.add(dependencyRef);
       if (registeredSkillIds.has(dependency.id)) issues.push(`${key}: executable Skill dependency ${dependency.id} is prohibited`);
       if (dependency.type === 'OPERATION_CONTRACT') {
         const operation = ASK_OPERATION_DEFINITIONS[dependency.id as AskOperationId];
         if (!operation) issues.push(`${key}: unknown operation dependency ${dependency.id}`);
-        else if (operation.version !== dependency.version) issues.push(`${key}: incompatible operation dependency ${dependency.id}@${dependency.version}`);
+        else if (!selectSkillDependencyVersion(dependency.version, [operation.version])) issues.push(`${key}: incompatible operation dependency ${dependency.id}@${dependency.version}`);
       }
-      if (dependency.type === 'CONTEXT_PROVIDER' && !registeredContextProviders.has(`${dependency.id}@${dependency.version}`)) {
+      const contextProviderVersions = [...registeredContextProviders]
+        .filter((reference) => reference.startsWith(`${dependency.id}@`))
+        .map((reference) => reference.slice(reference.lastIndexOf('@') + 1));
+      if (dependency.type === 'CONTEXT_PROVIDER' && !selectSkillDependencyVersion(dependency.version, contextProviderVersions)) {
         issues.push(`${key}: unknown context provider dependency ${dependency.id}@${dependency.version}`);
       }
     }

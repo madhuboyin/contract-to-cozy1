@@ -18,6 +18,8 @@ import type {
 import { getSkillAdapterForOperation } from './adapters/skillAdapterRegistry';
 import { getSkillContextProvider } from './context/skillContextProviderRegistry';
 import { getSkillDefinition, getSkillForOperation } from './skillRegistry';
+import { resolveSkillDependencyContract } from './skillDependencyRegistry';
+import { isSupportedSkillDependencyVersionSpec } from './skillDependencyVersion';
 
 export interface SkillPackageScaffoldSpec {
   id: string;
@@ -57,6 +59,7 @@ export interface SkillPackageScaffoldDependencies {
   resolveProvider?: (id: string, version: string) => unknown;
   operationOwner?: (operationId: AskOperationId) => { id: string } | undefined;
   resolveSkill?: (skillId: string) => { id: string; supportedGoals: string[] } | undefined;
+  resolveDependency?: (dependency: SkillDependency) => unknown;
 }
 
 export interface SkillPackageScaffold {
@@ -103,6 +106,7 @@ function defaultDependencies(): Required<SkillPackageScaffoldDependencies> {
     resolveProvider: (id, version) => getSkillContextProvider(id, version),
     operationOwner: (operationId) => getSkillForOperation(operationId),
     resolveSkill: (skillId) => getSkillDefinition(skillId),
+    resolveDependency: (dependency) => resolveSkillDependencyContract(dependency),
   };
 }
 
@@ -160,6 +164,17 @@ export function validateSkillPackageScaffoldSpec(
   if (spec.authorizationFloor === undefined) issues.push('authorizationFloor is required');
   if ((spec.prohibitedAdapters ?? []).some((id) => [...operationIds].some((operationId) => deps.resolveAdapter(operationId)?.id === id))) issues.push('a prohibited adapter is required by an operation');
   if ((spec.prohibitedContextProviders ?? []).some((id) => [...providerRefs.values()].some((provider) => provider.id === id))) issues.push('a prohibited provider is declared by an operation');
+  const dependencyIdentities = new Set<string>([
+    ...[...operationIds].map((operationId) => `OPERATION_CONTRACT:${operationId}`),
+    ...[...providerRefs.values()].map((provider) => `CONTEXT_PROVIDER:${provider.id}`),
+  ]);
+  for (const dependency of spec.dependencies ?? []) {
+    const identity = `${dependency.type}:${dependency.id}`;
+    if (dependencyIdentities.has(identity)) issues.push(`duplicate dependency ${identity}`);
+    dependencyIdentities.add(identity);
+    if (!isSupportedSkillDependencyVersionSpec(dependency.version)) issues.push(`unsupported dependency version ${identity}@${dependency.version}`);
+    else if (dependency.required && !deps.resolveDependency(dependency)) issues.push(`unresolved required dependency ${identity}@${dependency.version}`);
+  }
   return unique(issues).sort();
 }
 

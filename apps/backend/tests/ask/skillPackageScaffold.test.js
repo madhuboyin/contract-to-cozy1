@@ -72,6 +72,19 @@ test('validation rejects incomplete semantics, unknown providers, and unsafe amb
   assert.ok(issues.some((issue) => issue.includes('ambiguity examples require')));
 });
 
+test('scaffolder rejects unresolved required dependencies before writing files', () => {
+  const invalid = spec();
+  invalid.dependencies = [{ type: 'CANONICAL_SERVICE_CAPABILITY', id: 'missing-service', version: '^1.0', required: true }];
+  const issues = validateSkillPackageScaffoldSpec(invalid, unownedOperation);
+  assert.ok(issues.some((issue) => issue.includes('unresolved required dependency CANONICAL_SERVICE_CAPABILITY:missing-service@^1.0')));
+
+  const valid = validateSkillPackageScaffoldSpec(invalid, {
+    ...unownedOperation,
+    resolveDependency: () => ({ version: '1.4' }),
+  });
+  assert.equal(valid.some((issue) => issue.includes('dependency')), false);
+});
+
 test('optional providers remain optional in generated declarations and dependencies', () => {
   const optional = spec();
   optional.operations = [{ operationId: 'PROPERTY_SUMMARY', optionalContextProviders: [{ id: 'fixture.context', version: '1.0.0' }] }];

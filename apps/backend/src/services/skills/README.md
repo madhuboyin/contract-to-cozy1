@@ -16,6 +16,10 @@ This package implements the static Version 1 Skill contracts described in
 - `skillLineageRegistry.ts` retains minimized immutable identity for current and retired
   Skill versions. Historical entries contain no executable policy, adapter, provider, or
   dependency data and therefore cannot re-enter routing or execution.
+- `skillDependencyRegistry.ts` is the startup-resolved catalog for explicit operation,
+  provider, canonical-service, platform, workflow, and presentation contracts. Manifests
+  may request an exact version or a supported caret-compatible range; resolution always
+  selects one deterministic highest compatible version.
 
 The registered Skills reference existing Ask operations and canonical adapters. New Ask
 executions persist a versioned Skill binding after the additive `AskExecution` schema
