@@ -22,7 +22,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillRoutingDecisionsTotal } from '../../lib/metrics';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillRoutingDecisionsTotal } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
@@ -92,6 +92,7 @@ import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecution
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
 import { resolveHierarchicalSkillRouting } from '../skills/skillRouter';
+import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -3912,6 +3913,7 @@ function operationalUnavailableResult(reason:
   | 'ASK_DISABLED'
   | 'ASK_SKILL_DISABLED'
   | 'ASK_SKILL_POLICY_MISMATCH'
+  | 'ASK_SKILL_ADAPTER_UNAVAILABLE'
   | 'OPERATION_DISABLED'
   | 'REMOTE_GENERATION_DISABLED'
 ): AskOperationResult {
@@ -3937,7 +3939,7 @@ function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresen
   return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')?.allowedResultBlocks ?? [];
 }
 
-type SkillRuntimeUnavailableReason = 'ASK_SKILL_DISABLED' | 'ASK_SKILL_POLICY_MISMATCH';
+type SkillRuntimeUnavailableReason = 'ASK_SKILL_DISABLED' | 'ASK_SKILL_POLICY_MISMATCH' | 'ASK_SKILL_ADAPTER_UNAVAILABLE';
 
 function skillRuntimeUnavailableReason(
   operationId: AskOperationId,
@@ -3946,7 +3948,11 @@ function skillRuntimeUnavailableReason(
   const skill = getSkillForOperation(operationId);
   if (!skill) return null;
   if (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id)) return 'ASK_SKILL_DISABLED';
-  return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK') ? null : 'ASK_SKILL_POLICY_MISMATCH';
+  if (!resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')) return 'ASK_SKILL_POLICY_MISMATCH';
+  const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === getAskOperationDefinition(operationId).adapterKey);
+  const adapter = adapterReference ? getSkillAdapter(adapterReference.id, adapterReference.version) : undefined;
+  if (!adapter || !adapter.allowedOperations.includes(operationId) || !controls.adapterEnabled(adapter.id)) return 'ASK_SKILL_ADAPTER_UNAVAILABLE';
+  return null;
 }
 
 async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }): Promise<AskOperationResult> {
@@ -3986,6 +3992,58 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     blocks,
     suggestions: [answer.nextAction].filter(Boolean),
   };
+}
+
+async function dispatchOperationAdapter(
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution },
+  composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
+): Promise<AskOperationResult> {
+  switch (input.operation.operationId) {
+    case 'EMERGENCY_BOUNDARY': return emergencyResult();
+    case 'UNSAFE_RESTRICTED_BOUNDARY': return unsafeRestrictedResult();
+    case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
+    case 'MAINTENANCE_TASK_COMPLETE': return maintenanceTaskCompleteResult(input.userId, input.propertyId!, input.message);
+    case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
+    case 'MAINTENANCE_TASK_UPDATE': return maintenanceTaskUpdateResult(input.userId, input.propertyId!, input.message);
+    case 'MAINTENANCE_STATUS': return maintenanceResult(
+      input.userId,
+      input.propertyId!,
+      input.message,
+      composedContext!.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
+    );
+    case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
+    case 'INCIDENT_CLAIM_STATUS': return incidentClaimStatusResult(input.userId, input.propertyId!, input.message);
+    case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
+    case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
+    case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
+    case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
+    case 'HOME_ACTIONS': return homeActionsResult(input.userId, input.propertyId!, input.message);
+    case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!, input.message);
+    case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
+    case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
+    case 'SELL_HOLD_RENT_ANALYSIS': return sellHoldRentAnalysisResult(input.userId, input.propertyId!);
+    case 'HOUSEHOLD_INVITATION': return householdInvitationResult(input.userId, input.propertyId!, input.message);
+    case 'GUIDANCE_JOURNEY_CREATE': return guidanceJourneyCreateResult(input.userId, input.propertyId!, input.message);
+    case 'QUOTE_COMPARISON_CREATE': return quoteComparisonCreateResult(input.propertyId!, input.message);
+    case 'QUOTE_COMPARISON_REVIEW': return quoteComparisonReviewResult(input.propertyId!);
+    case 'HOME_DEADLINE_MONITOR': return homeDeadlineMonitorResult(input.userId, input.propertyId!, input.message);
+    case 'CAPITAL_RESERVE_PLAN': return capitalReservePlanResult(input.userId, input.propertyId!);
+    case 'PROPERTY_TAX_APPEAL_READINESS': return propertyTaxAppealReadinessResult(input.userId, input.propertyId!, input.message);
+    case 'RENOVATION_PERMIT_READINESS': return renovationPermitReadinessResult(input.propertyId!, input.message);
+    case 'MAJOR_EVENT_ENTRY': return majorEventEntryResult(input.userId, input.propertyId!, input.message);
+    case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
+    case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
+    case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message, input.executionId);
+    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message, input.executionId);
+    case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_PREFERENCE_FORGET': return hvacPreferenceForgetResult(input.userId, input.propertyId!, input.message);
+    case 'HOME_CHANGE_SUMMARY': return homeChangeSummaryResult(input.userId, input.propertyId!);
+    case 'HVAC_DECISION_OUTCOME_REPORT': return hvacDecisionOutcomeReportResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_OUTCOME_VIEW': return hvacDecisionOutcomeViewResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_OUTCOME_UNLINK': return hvacDecisionOutcomeUnlinkResult(input.userId, input.propertyId!, input.message);
+  }
 }
 
 async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
@@ -4046,51 +4104,22 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       };
     }
   }
-  switch (input.operation.operationId) {
-    case 'EMERGENCY_BOUNDARY': return emergencyResult();
-    case 'UNSAFE_RESTRICTED_BOUNDARY': return unsafeRestrictedResult();
-    case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
-    case 'MAINTENANCE_TASK_COMPLETE': return maintenanceTaskCompleteResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_TASK_UPDATE': return maintenanceTaskUpdateResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_STATUS': return maintenanceResult(
-      input.userId,
-      input.propertyId!,
-      input.message,
-      composedContext!.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
+  if (!skill) return dispatchOperationAdapter(input, composedContext);
+  const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === definition.adapterKey)!;
+  const adapter = getSkillAdapter(adapterReference.id, adapterReference.version)!;
+  const adapterStartedAt = process.hrtime.bigint();
+  try {
+    const result = await dispatchOperationAdapter(input, composedContext);
+    askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: result.status });
+    return result;
+  } catch (error) {
+    askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: 'THREW' });
+    throw error;
+  } finally {
+    askSkillAdapterExecutionDurationSeconds.observe(
+      { adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId },
+      Number(process.hrtime.bigint() - adapterStartedAt) / 1_000_000_000,
     );
-    case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
-    case 'INCIDENT_CLAIM_STATUS': return incidentClaimStatusResult(input.userId, input.propertyId!, input.message);
-    case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
-    case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
-    case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
-    case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
-    case 'HOME_ACTIONS': return homeActionsResult(input.userId, input.propertyId!, input.message);
-    case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!, input.message);
-    case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
-    case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
-    case 'SELL_HOLD_RENT_ANALYSIS': return sellHoldRentAnalysisResult(input.userId, input.propertyId!);
-    case 'HOUSEHOLD_INVITATION': return householdInvitationResult(input.userId, input.propertyId!, input.message);
-    case 'GUIDANCE_JOURNEY_CREATE': return guidanceJourneyCreateResult(input.userId, input.propertyId!, input.message);
-    case 'QUOTE_COMPARISON_CREATE': return quoteComparisonCreateResult(input.propertyId!, input.message);
-    case 'QUOTE_COMPARISON_REVIEW': return quoteComparisonReviewResult(input.propertyId!);
-    case 'HOME_DEADLINE_MONITOR': return homeDeadlineMonitorResult(input.userId, input.propertyId!, input.message);
-    case 'CAPITAL_RESERVE_PLAN': return capitalReservePlanResult(input.userId, input.propertyId!);
-    case 'PROPERTY_TAX_APPEAL_READINESS': return propertyTaxAppealReadinessResult(input.userId, input.propertyId!, input.message);
-    case 'RENOVATION_PERMIT_READINESS': return renovationPermitReadinessResult(input.propertyId!, input.message);
-    case 'MAJOR_EVENT_ENTRY': return majorEventEntryResult(input.userId, input.propertyId!, input.message);
-    case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
-    case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
-    case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message, input.executionId);
-    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message, input.executionId);
-    case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_PREFERENCE_FORGET': return hvacPreferenceForgetResult(input.userId, input.propertyId!, input.message);
-    case 'HOME_CHANGE_SUMMARY': return homeChangeSummaryResult(input.userId, input.propertyId!);
-    case 'HVAC_DECISION_OUTCOME_REPORT': return hvacDecisionOutcomeReportResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_DECISION_OUTCOME_VIEW': return hvacDecisionOutcomeViewResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_DECISION_OUTCOME_UNLINK': return hvacDecisionOutcomeUnlinkResult(input.userId, input.propertyId!, input.message);
   }
 }
 

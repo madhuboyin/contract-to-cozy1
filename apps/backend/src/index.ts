@@ -189,6 +189,7 @@ import { validateAskOperationDefinitions } from './services/ask/askOperationRegi
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
 import { validateSkillDefinitions } from './services/skills/skillRegistry';
 import { validateSkillContextProviderDefinitions } from './services/skills/context/skillContextProviderRegistry';
+import { validateSkillAdapterDefinitions } from './services/skills/adapters/skillAdapterRegistry';
 import { detectSkillSemanticConflicts } from './services/skills/skillRouter';
 import { validateDecisionPreferenceRegistry } from './services/decisionPlatform/decisionPreferenceRegistry';
 import { validateDecisionContextContracts } from './services/decisionPlatform/decisionContextContracts';
@@ -202,6 +203,7 @@ const askRegistryIssues = [
   ...validateAskDomainCommandRegistry(),
   ...validateSkillDefinitions(),
   ...validateSkillContextProviderDefinitions(),
+  ...validateSkillAdapterDefinitions(),
   ...detectSkillSemanticConflicts(),
 ];
 if (askRegistryIssues.length) {

@@ -85,6 +85,21 @@ export const askSkillContextProviderDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const askSkillAdapterExecutionsTotal = new Counter({
+  name: 'ask_skill_adapter_executions_total',
+  help: 'Registered Skill adapter executions by immutable adapter version, operation, and result status',
+  labelNames: ['adapter', 'adapter_version', 'operation', 'status'] as const,
+  registers: [register],
+});
+
+export const askSkillAdapterExecutionDurationSeconds = new Histogram({
+  name: 'ask_skill_adapter_execution_duration_seconds',
+  help: 'Registered Skill adapter execution duration by immutable adapter version and operation',
+  labelNames: ['adapter', 'adapter_version', 'operation'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30],
+  registers: [register],
+});
+
 export const askRemoteGenerationTotal = new Counter({
   name: 'ask_remote_generation_total',
   help: 'Remote Ask generation attempts by bounded outcome',

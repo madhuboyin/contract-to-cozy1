@@ -14,6 +14,7 @@ import { REPAIR_REPLACE_SKILL } from './repairReplace';
 import { REFINANCE_SKILL } from './refinance';
 import { PROPERTY_RECORD_SKILL } from './propertyRecord';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
+import { REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const ROLE_RANK: Record<Exclude<AskPropertyRoleFloor, null>, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
@@ -88,6 +89,7 @@ export function validateSkillDefinitions(
   definitions: Readonly<Record<string, SkillDefinition>> = SKILL_DEFINITIONS,
   registeredContextProviders: ReadonlySet<string> = REGISTERED_SKILL_CONTEXT_PROVIDER_REFS,
   registeredExternalConnectors: ReadonlySet<string> = new Set(),
+  registeredAdapters: ReadonlySet<string> = REGISTERED_SKILL_ADAPTER_REFS,
 ): string[] {
   const issues: string[] = [];
   const ids = new Set<string>();
@@ -154,6 +156,16 @@ export function validateSkillDefinitions(
     }
     for (const connector of skill.allowedExternalConnectors) {
       if (!registeredExternalConnectors.has(`${connector.id}@${connector.version}`)) issues.push(`${key}: unknown external connector ${connector.id}@${connector.version}`);
+    }
+    const adapterRefs = new Set<string>();
+    for (const adapter of skill.allowedAdapters) {
+      const adapterRef = `${adapter.id}@${adapter.version}`;
+      if (adapterRefs.has(adapterRef)) issues.push(`${key}: duplicate allowed adapter ${adapterRef}`);
+      adapterRefs.add(adapterRef);
+      if (!registeredAdapters.has(`${adapter.id}@${adapter.version}`)) issues.push(`${key}: unknown adapter ${adapter.id}@${adapter.version}`);
+      if (!skill.operations.some((operation) => ASK_OPERATION_DEFINITIONS[operation.operationId]?.adapterKey === adapter.id)) {
+        issues.push(`${key}: adapter ${adapter.id} is not used by a declared operation`);
+      }
     }
     for (const [budgetName, maximum] of Object.entries(PLATFORM_CONTEXT_BUDGET_MAXIMUMS)) {
       const value = skill.contextBudget[budgetName as keyof typeof skill.contextBudget];
