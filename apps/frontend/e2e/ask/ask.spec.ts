@@ -4,7 +4,7 @@ import { installAskApi, installAskContext, propertyId } from './fixtures';
 test.beforeEach(async ({ context }) => installAskContext(context));
 
 test('starting surface teaches capability breadth without competing CTAs', async ({ page }) => {
-  await installAskApi(page);
+  const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toBeVisible();
@@ -20,6 +20,11 @@ test('starting surface teaches capability breadth without competing CTAs', async
   await expect(page.getByRole('heading', { name: 'For your attention' })).toHaveCount(0);
   await expect(page.getByText('View all', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Ask why', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Help me continue this decision: Repair or replace the refrigerator/ }).first().click();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  expect(api.executionBodies[0]).toMatchObject({
+    launchContext: { entityType: 'DECISION_THREAD', entityId: 'decision-1' },
+  });
 });
 
 test('degraded personalization falls back to property-safe capability examples', async ({ page }) => {
@@ -63,13 +68,24 @@ test('capability explorer progressively reveals registry-backed examples', async
 });
 
 test('personalized attention exposes one conversational action', async ({ page }) => {
-  await installAskApi(page, { noDecision: true });
+  const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.getByRole('heading', { name: 'For your attention' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Schedule HVAC service.*Ask Cozy about this/ })).toBeVisible();
   await expect(page.getByText('View all', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Review action', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Ask why', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Schedule HVAC service.*Ask Cozy about this/ }).click();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  expect(api.executionBodies[0]).toMatchObject({
+    message: 'What should I do next for “Schedule HVAC service”?',
+    launchContext: {
+      capabilityId: 'home-operations',
+      entityType: 'HOME_ACTION',
+      entityId: 'action-1',
+      actionId: 'action-1',
+    },
+  });
 });
 
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {

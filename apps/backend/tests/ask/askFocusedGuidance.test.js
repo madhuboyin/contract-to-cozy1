@@ -1,0 +1,70 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+require('ts-node/register');
+
+const {
+  buildFocusedHomeActionGuidance,
+  focusedHomeActionCategory,
+  focusedHomeActionQuestion,
+  focusedOperationForLaunchContext,
+} = require('../../src/services/ask/askFocusedGuidance.ts');
+
+function weatherAction() {
+  return {
+    id: 'incident:heat-1',
+    source: { kind: 'INCIDENT' },
+    priority: 'PLAN',
+    state: 'OPEN',
+    signal: 'An official multi-day heat alert is active.',
+    whyItMatters: 'Extended heat can increase household health and cooling-system risk.',
+    recommendedAction: 'Review the alert and prepare the home before the hottest period.',
+    expectedOutcome: 'The household has a clear heat-safety and cooling plan.',
+    presentation: {
+      variant: 'WEATHER_ALERT',
+      headline: 'Multi-day heat risk ahead preparation',
+      summary: 'Several high-heat days are expected for this property.',
+      keyFacts: [
+        { label: 'Forecast window', value: 'Through Friday' },
+        { label: 'Preparation', value: 'Check cooling and hydration plans' },
+      ],
+    },
+    timing: { dueAt: '2026-08-16T12:00:00.000Z', rationale: 'Prepare before the alert begins.' },
+    evidence: [{ id: 'weather-1', label: 'Official heat alert', source: 'Weather service', observedAt: '2026-08-14T12:00:00.000Z' }],
+    confidence: { label: 'HIGH' },
+    recommendationResponse: { status: 'AVAILABLE', reasonCode: 'RECOMMENDATION_AVAILABLE', safeNextAction: 'Review official guidance.' },
+    governance: {
+      safetyTier: 'LOW_CONSEQUENCE',
+      emergencyEscalation: null,
+      conservativeFallback: 'Follow official heat guidance if conditions worsen.',
+      professionalBoundary: null,
+    },
+    primaryCta: { label: 'Review weather alert', href: '/weather/heat-1' },
+    ranking: { explanation: 'Higher household relevance.' },
+  };
+}
+
+test('contextual Ask prompts resolve exact subjects and produce focused Home Action guidance', () => {
+  const action = weatherAction();
+  assert.equal(focusedHomeActionQuestion(action), 'How should I prepare for the multi-day heat risk at this home?');
+  assert.deepEqual(focusedHomeActionCategory(action), { categoryId: 'PROTECT', categoryLabel: 'Protect' });
+  assert.equal(focusedOperationForLaunchContext({ entityType: 'HOME_ACTION', entityId: action.id, actionId: action.id }), 'HOME_ACTIONS');
+  assert.equal(focusedOperationForLaunchContext({ entityType: 'DECISION_THREAD', entityId: 'decision-1' }), 'HVAC_DECISION_CONTINUE');
+  assert.equal(focusedOperationForLaunchContext({ entityType: 'INVENTORY_ITEM', entityId: 'item-1' }), 'REPLACEMENT_GUIDANCE');
+  assert.equal(focusedOperationForLaunchContext({ entityType: 'HOME_ACTION' }), null);
+
+  const result = buildFocusedHomeActionGuidance(action, '/dashboard?propertyId=property-1', 'context-v1');
+  assert.equal(result.status, 'ANSWERED');
+  assert.equal(result.reasonCode, 'HOME_ACTION_FOCUSED_GUIDANCE');
+  assert.deepEqual(result.parameters, { focusedHomeActionId: action.id });
+  assert.equal(result.blocks.some((block) => block.type === 'PRIORITY_LIST'), false);
+  assert.equal(result.blocks.find((block) => block.type === 'SUMMARY').title, 'Multi-day heat risk ahead');
+  assert.deepEqual(
+    result.blocks.find((block) => block.type === 'SUMMARY').actions.map((candidate) => candidate.label),
+    ['Review weather alert', 'View in Home Actions'],
+  );
+  const focused = result.blocks.find((block) => block.id === 'focused-home-action-guidance');
+  assert.equal(focused.description, 'This response is scoped to the Home Action you selected.');
+  assert.equal(focused.sections[0].items[0].id, action.id);
+  assert.equal(result.blocks.find((block) => block.type === 'EVIDENCE').items.length, 1);
+});

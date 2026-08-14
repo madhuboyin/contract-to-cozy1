@@ -103,6 +103,7 @@ import {
 import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
 import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
 import { SKILL_DEPENDENCY_ACTIVATIONS } from '../skills/skillDependencyRegistry';
+import { buildFocusedHomeActionGuidance, focusedHomeActionCategory, focusedHomeActionQuestion, focusedOperationForLaunchContext } from './askFocusedGuidance';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -1508,7 +1509,7 @@ function yearsSince(value: Date | null): number | null {
   return Math.max(0, Math.floor((Date.now() - value.getTime()) / (365.25 * 24 * 60 * 60 * 1000)));
 }
 
-async function replacementGuidanceResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const allItems = await prisma.inventoryItem.findMany({
     where: { propertyId }, orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }], take: 200,
@@ -1523,7 +1524,9 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
             : /\bdryer\b/i.test(message) ? ['dryer']
               : /\bdishwasher\b/i.test(message) ? ['dishwasher'] : query ? [query] : [];
   const itemText = (item: typeof allItems[number]) => [item.name, item.category, item.assetType, item.brand, item.model].filter(Boolean).join(' ').toLowerCase();
-  const items = aliases.length ? allItems.filter((item) => aliases.some((alias) => itemText(item).includes(alias) || alias.includes(item.name.toLowerCase()))) : [];
+  const items = focusedInventoryItemId
+    ? allItems.filter((item) => item.id === focusedInventoryItemId)
+    : aliases.length ? allItems.filter((item) => aliases.some((alias) => itemText(item).includes(alias) || alias.includes(item.name.toLowerCase()))) : [];
   if (!items.length) {
     return {
       status: 'READY_WITH_LIMITATIONS',
@@ -1803,7 +1806,65 @@ async function hvacDecisionStartResult(userId: string, propertyId: string, messa
   };
 }
 
-async function hvacDecisionContinueResult(userId: string, propertyId: string, message: string, executionId: string): Promise<AskOperationResult> {
+async function hvacDecisionContinueResult(userId: string, propertyId: string, message: string, executionId: string, focusedDecisionThreadId?: string | null): Promise<AskOperationResult> {
+  if (focusedDecisionThreadId) {
+    const focusedThread = await prisma.decisionThread.findFirst({
+      where: {
+        id: focusedDecisionThreadId,
+        propertyId,
+        decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+        primaryEntityType: 'InventoryItem',
+        lifecycleStatus: { in: [...decisionThreadService.ACTIVE_LIFECYCLE_STATUSES] },
+      },
+      select: { id: true, primaryEntityId: true },
+    });
+    if (!focusedThread?.primaryEntityId) {
+      return {
+        status: 'NOT_APPLICABLE',
+        reasonCode: 'HVAC_DECISION_SUBJECT_NOT_ACTIVE',
+        blocks: [{
+          type: 'EMPTY_STATE',
+          id: 'hvac-decision-subject-not-active',
+          title: 'This decision is no longer active',
+          body: 'The selected decision thread is not active for this home. Ask will not substitute a different decision based on title or recency.',
+          actions: [],
+        }],
+        suggestions: ['Show my active home decisions'],
+      };
+    }
+    const focusedItem = await prisma.inventoryItem.findFirst({
+      where: { id: focusedThread.primaryEntityId, propertyId, category: 'HVAC' },
+      select: { id: true, name: true },
+    });
+    if (!focusedItem) {
+      return {
+        status: 'READY_WITH_LIMITATIONS',
+        reasonCode: 'HVAC_DECISION_ITEM_UNAVAILABLE',
+        blocks: [{
+          type: 'EMPTY_STATE',
+          id: 'hvac-decision-item-unavailable',
+          title: 'The decision’s HVAC record is unavailable',
+          body: 'Ask found the selected decision but could not resolve its recorded HVAC system. It will not continue against a different item.',
+          actions: [],
+        }],
+        suggestions: [],
+      };
+    }
+    const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(focusedThread.id, propertyId, executionId);
+    const blocks: AskPresentationBlock[] = [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${focusedItem.name}`, thread, thread.currentRecommendationSnapshot, [])];
+    if (change && thread.currentRecommendationSnapshot) {
+      blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
+      blocks.push(recommendationChangeBlock('hvac-decision-change', thread.id, change));
+    }
+    blocks.push(...await preferenceReferenceBlocksForSnapshot('hvac-decision', thread.currentRecommendationSnapshot?.preferenceReferenceIds ?? []));
+    return {
+      status: 'ANSWERED',
+      reasonCode: 'HVAC_DECISION_RESUMED',
+      parameters: { focusedDecisionThreadId: focusedThread.id },
+      blocks,
+      suggestions: ['Compare a new quote for this decision', 'Abandon this decision'],
+    };
+  }
   const { items, item } = await findHvacItemForMessage(propertyId, message);
   if (!item) {
     return {
@@ -3240,7 +3301,7 @@ function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title
   }
 }
 
-async function homeActionsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const [access, evaluation] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
@@ -3283,6 +3344,27 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       }],
       suggestions: ['Summarize my home record', 'What maintenance is pending?'],
     };
+  }
+
+  if (focusedActionId) {
+    const focusedAction = feed.actions.find((action) => action.id === focusedActionId);
+    if (!focusedAction) {
+      return {
+        status: 'NOT_APPLICABLE',
+        reasonCode: 'HOME_ACTION_SUBJECT_NOT_ACTIVE',
+        contextVersion: evaluation.contextVersion,
+        blocks: [{
+          type: 'SUMMARY',
+          id: 'focused-home-action-not-active',
+          title: 'This Home Action is no longer active',
+          body: 'The selected action is no longer present in the current governed feed. Ask will not substitute another action or use a stale title match.',
+          tone: 'DEFAULT',
+          actions: [{ id: 'open-home-actions', label: 'View current Home Actions', href: homeHref, style: 'PRIMARY' }],
+        }],
+        suggestions: ['What else needs my attention?'],
+      };
+    }
+    return buildFocusedHomeActionGuidance(focusedAction, homeHref, evaluation.contextVersion);
   }
 
   const urgentFocus = /\b(?:urgent|right now|immediately|priority now)\b/i.test(message);
@@ -4057,7 +4139,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
 }
 
 async function dispatchOperationAdapter(
-  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution },
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
   trace?: SkillExecutionTimingTrace,
 ): Promise<AskOperationResult> {
@@ -4080,8 +4162,20 @@ async function dispatchOperationAdapter(
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
     case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
-    case 'HOME_ACTIONS': return homeActionsResult(input.userId, input.propertyId!, input.message);
-    case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!, input.message);
+    case 'HOME_ACTIONS': return homeActionsResult(
+      input.userId,
+      input.propertyId!,
+      input.message,
+      input.launchContext?.entityType === 'HOME_ACTION'
+        ? input.launchContext.actionId ?? input.launchContext.entityId
+        : null,
+    );
+    case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(
+      input.userId,
+      input.propertyId!,
+      input.message,
+      input.launchContext?.entityType === 'INVENTORY_ITEM' ? input.launchContext.entityId : null,
+    );
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
     case 'SELL_HOLD_RENT_ANALYSIS': return sellHoldRentAnalysisResult(input.userId, input.propertyId!);
@@ -4097,7 +4191,13 @@ async function dispatchOperationAdapter(
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input, trace);
     case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message, input.executionId);
-    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message, input.executionId);
+    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(
+      input.userId,
+      input.propertyId!,
+      input.message,
+      input.executionId,
+      input.launchContext?.entityType === 'DECISION_THREAD' ? input.launchContext.entityId : null,
+    );
     case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
@@ -4109,7 +4209,7 @@ async function dispatchOperationAdapter(
   }
 }
 
-async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   const skill = getSkillForOperation(input.operation.operationId);
@@ -4250,7 +4350,7 @@ export const ASK_CAPABILITY_UNIQUE_OPERATION: Partial<Record<string, AskOperatio
   return unique;
 })();
 
-async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const skill = getSkillForOperation(input.operation.operationId);
   const skillStartedAt = skill ? Date.now() : null;
   let coreResult: AskOperationResult;
@@ -4597,7 +4697,8 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
     : undefined;
-  const forcedOperationId = followUp.forcedOperationId ?? launchCapabilityOperationId ?? null;
+  const contextualOperationId = focusedOperationForLaunchContext(input.launchContext);
+  const forcedOperationId = followUp.forcedOperationId ?? contextualOperationId ?? launchCapabilityOperationId ?? null;
   const skillRoutingDecision = resolveHierarchicalSkillRouting(routingMessage, routingDecision, {
     consumer: 'ASK',
     consumerEnabled: controls.consumerEnabled,
@@ -4654,9 +4755,10 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   // cascade found nothing confident on its own, and only when the
   // capability unambiguously names one operation.
   const shouldForceOperation = Boolean(forcedOperationId)
-    && routingDecision.stage === 'REMOTE_FALLBACK'
+    && routingDecision.stage !== 'SAFETY'
     && !routingDecision.requiresClarification
-    && routingDecision.operation.operationId !== forcedOperationId;
+    && routingDecision.operation.operationId !== forcedOperationId
+    && (Boolean(contextualOperationId) || routingDecision.stage === 'REMOTE_FALLBACK');
   const operation = shouldForceOperation
     ? { ...getAskOperationDefinition(forcedOperationId as AskOperationId), confidence: 1 }
     : routingDecision.operation;
@@ -4732,7 +4834,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
         ))
-        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: input.propertyId, operation }, skillTelemetryTrace),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: input.propertyId, operation, launchContext: input.launchContext }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
@@ -6843,24 +6945,32 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
         userId, propertyId, homeActionIds: feed.actions.map((action) => action.id),
       }).catch(() => new Set<string>());
       const view = buildPriorityListView(feed, 'CONCIERGE_HOME', { suppressedHomeActionIds });
+      const sourceActions = new Map(feed.actions.map((action) => [action.id, action]));
       return {
         state: view.items.length ? 'AVAILABLE' : 'NO_ACTION',
         rankingPolicyVersion: view.rankingPolicyVersion,
         generatedAt: view.generatedAt,
-        items: view.items.map((item) => ({
-          homeActionId: item.homeActionId,
-          title: item.title,
-          consumerPriority: item.consumerPriority,
-          comparativeReasonCodes: item.comparativeReasonCodes,
-          confidenceLabel: item.confidenceLabel,
-          deadlineAt: item.deadlineAt,
-          cta: item.cta ? { label: item.cta.label, href: item.cta.href } : null,
-          watchState: item.watchState,
-          suppressed: item.suppressed,
-          completed: item.completed,
-          unavailable: item.unavailable,
-          stale: item.stale,
-        })),
+        items: view.items.map((item) => {
+          const sourceAction = sourceActions.get(item.homeActionId);
+          const category = sourceAction ? focusedHomeActionCategory(sourceAction) : { categoryId: 'MAINTAIN' as const, categoryLabel: 'Maintain' as const };
+          return {
+            homeActionId: item.homeActionId,
+            title: item.title,
+            askQuestion: sourceAction ? focusedHomeActionQuestion(sourceAction) : `What should I do next for “${item.title}”?`,
+            askCategoryId: category.categoryId,
+            askCategoryLabel: category.categoryLabel,
+            consumerPriority: item.consumerPriority,
+            comparativeReasonCodes: item.comparativeReasonCodes,
+            confidenceLabel: item.confidenceLabel,
+            deadlineAt: item.deadlineAt,
+            cta: item.cta ? { label: item.cta.label, href: item.cta.href } : null,
+            watchState: item.watchState,
+            suppressed: item.suppressed,
+            completed: item.completed,
+            unavailable: item.unavailable,
+            stale: item.stale,
+          };
+        }),
         truncated: view.truncated,
         href: homeHref,
       };
@@ -6904,9 +7014,10 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
   const decisionsPromise = (async (): Promise<ConciergeHomeView['decisions']> => {
     try {
       const threads = await decisionThreadService.listActiveDecisionThreadsForProperty(propertyId);
+      const supportedThreads = threads.filter((thread) => thread.decisionDefinitionId === 'HVAC_REPAIR_REPLACE');
       return {
-        state: threads.length ? 'AVAILABLE' : 'NO_DECISIONS',
-        items: threads.map((thread) => ({
+        state: supportedThreads.length ? 'AVAILABLE' : 'NO_DECISIONS',
+        items: supportedThreads.map((thread) => ({
           decisionThreadId: thread.id,
           title: thread.title,
           lifecycleStatus: thread.lifecycleStatus,
@@ -6961,12 +7072,26 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
     featuredPrompts.push(prompt);
   };
   if (decisions.state === 'AVAILABLE' && decisions.items[0]) {
-    addPrompt({ id: `decision-${decisions.items[0].decisionThreadId}`, categoryId: 'DECIDE', categoryLabel: 'Decide', question: `Help me continue this decision: ${decisions.items[0].title}`, source: 'PERSONALIZED' });
+    addPrompt({
+      id: `decision-${decisions.items[0].decisionThreadId}`,
+      categoryId: 'DECIDE',
+      categoryLabel: 'Decide',
+      question: `Help me continue this decision: ${decisions.items[0].title}`,
+      context: { entityType: 'DECISION_THREAD', entityId: decisions.items[0].decisionThreadId },
+      source: 'PERSONALIZED',
+    });
   }
   const topPriority = priorityList.items
     .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')[0];
   if (topPriority) {
-    addPrompt({ id: `attention-${topPriority.homeActionId}`, categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: `What should I do next about ${topPriority.title}?`, source: 'PERSONALIZED' });
+    addPrompt({
+      id: `attention-${topPriority.homeActionId}`,
+      categoryId: topPriority.askCategoryId,
+      categoryLabel: topPriority.askCategoryLabel,
+      question: topPriority.askQuestion,
+      context: { entityType: 'HOME_ACTION', entityId: topPriority.homeActionId, actionId: topPriority.homeActionId, capabilityId: 'home-operations' },
+      source: 'PERSONALIZED',
+    });
   }
   if (inventoryDecisionCandidate && !featuredPrompts.some((prompt) => prompt.categoryId === 'DECIDE')) {
     addPrompt({
@@ -6974,6 +7099,7 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
       categoryId: 'DECIDE',
       categoryLabel: 'Decide',
       question: inventoryDecisionQuestion(inventoryDecisionCandidate.name),
+      context: { entityType: 'INVENTORY_ITEM', entityId: inventoryDecisionCandidate.id, capabilityId: 'replace-repair' },
       source: 'PERSONALIZED',
     });
   }

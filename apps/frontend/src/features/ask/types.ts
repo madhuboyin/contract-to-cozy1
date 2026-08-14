@@ -152,6 +152,9 @@ export interface ConciergeHomeView {
     items: Array<{
       homeActionId: string;
       title: string;
+      askQuestion: string;
+      askCategoryId: 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'PLAN_MONITOR';
+      askCategoryLabel: 'Maintain' | 'Protect' | 'Save' | 'Plan';
       consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH' | 'OPTIONAL' | 'NO_ACTION';
       comparativeReasonCodes: string[];
       confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -189,6 +192,12 @@ export interface AskCapabilityPrompt {
   categoryId: AskCapabilityCategoryId;
   categoryLabel: string;
   question: string;
+  context?: {
+    entityType: 'HOME_ACTION' | 'DECISION_THREAD' | 'INVENTORY_ITEM';
+    entityId: string;
+    actionId?: string;
+    capabilityId?: string;
+  };
 }
 
 export interface AskFeaturedPrompt extends AskCapabilityPrompt {

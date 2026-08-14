@@ -18,6 +18,9 @@ import { z } from 'zod';
 export const ConciergeHomePriorityItemSchema = z.object({
   homeActionId: z.string(),
   title: z.string(),
+  askQuestion: z.string(),
+  askCategoryId: z.enum(['MAINTAIN', 'PROTECT', 'SAVE', 'PLAN_MONITOR']),
+  askCategoryLabel: z.enum(['Maintain', 'Protect', 'Save', 'Plan']),
   consumerPriority: z.enum(['DO_NOW', 'PLAN_SOON', 'WATCH', 'OPTIONAL', 'NO_ACTION']),
   comparativeReasonCodes: z.array(z.string()),
   confidenceLabel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
@@ -76,6 +79,12 @@ export const ConciergeHomeCapabilityPromptSchema = z.object({
   categoryId: z.enum(['UNDERSTAND', 'MAINTAIN', 'PROTECT', 'SAVE', 'DECIDE', 'PLAN_MONITOR']),
   categoryLabel: z.string(),
   question: z.string(),
+  context: z.object({
+    entityType: z.enum(['HOME_ACTION', 'DECISION_THREAD', 'INVENTORY_ITEM']),
+    entityId: z.string().trim().min(1).max(160),
+    actionId: z.string().trim().min(1).max(160).optional(),
+    capabilityId: z.string().trim().min(1).max(120).optional(),
+  }).optional(),
 });
 
 export const ConciergeHomeFeaturedPromptSchema = ConciergeHomeCapabilityPromptSchema.extend({
