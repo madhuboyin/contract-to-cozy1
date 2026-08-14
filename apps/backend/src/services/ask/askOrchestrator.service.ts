@@ -22,7 +22,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillRoutingDecisionsTotal } from '../../lib/metrics';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
@@ -3940,6 +3940,27 @@ function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresen
   return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')?.allowedResultBlocks ?? [];
 }
 
+function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: AskOperationResult): void {
+  const skill = getSkillForOperation(operationId);
+  const startedAt = process.hrtime.bigint();
+  let status: string = result.status;
+  try {
+    const allowedResultBlocks = allowedResultBlocksForOperation(operationId);
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
+    if (disallowedBlock) {
+      status = 'unsupported_block';
+      throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
+    }
+  } finally {
+    if (skill) {
+      askSkillPresentationDurationSeconds.observe(
+        { skill: skill.id, operation: operationId, status },
+        Number(process.hrtime.bigint() - startedAt) / 1_000_000_000,
+      );
+    }
+  }
+}
+
 type SkillRuntimeUnavailableReason = 'ASK_SKILL_DISABLED' | 'ASK_SKILL_POLICY_MISMATCH' | 'ASK_SKILL_ADAPTER_UNAVAILABLE';
 
 function skillRuntimeUnavailableReason(
@@ -3958,6 +3979,8 @@ function skillRuntimeUnavailableReason(
 
 async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }): Promise<AskOperationResult> {
   let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
+  const modelStartedAt = process.hrtime.bigint();
+  let modelOutcome = 'failure';
   try {
     askRemoteGenerationCharactersTotal.inc({ direction: 'input' }, input.message.length);
     answer = await answerGroundedAsk({
@@ -3968,9 +3991,15 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     });
     askRemoteGenerationCharactersTotal.inc({ direction: 'output' }, answer.text.length);
     askRemoteGenerationTotal.inc({ outcome: 'success' });
+    modelOutcome = 'success';
   } catch (error) {
     askRemoteGenerationTotal.inc({ outcome: 'failure' });
     throw error;
+  } finally {
+    askModelDurationSeconds.observe(
+      { stage: 'grounded_guidance', outcome: modelOutcome },
+      Number(process.hrtime.bigint() - modelStartedAt) / 1_000_000_000,
+    );
   }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'grounded-guidance', title: answer.groundingMode === 'PROPERTY' ? 'Guidance for this home' : 'General home guidance',
@@ -4106,17 +4135,29 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     }
   }
   if (!skill) return dispatchOperationAdapter(input, composedContext);
+  const adapterResolutionStartedAt = process.hrtime.bigint();
   const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === definition.adapterKey)!;
   const adapter = getSkillAdapter(adapterReference.id, adapterReference.version)!;
+  askSkillAdapterResolutionDurationSeconds.observe(
+    { skill: skill.id, operation: input.operation.operationId, status: adapter ? 'resolved' : 'unavailable' },
+    Number(process.hrtime.bigint() - adapterResolutionStartedAt) / 1_000_000_000,
+  );
   const adapterStartedAt = process.hrtime.bigint();
+  const canonicalStartedAt = process.hrtime.bigint();
+  let canonicalStatus = 'threw';
   try {
     const result = await dispatchOperationAdapter(input, composedContext);
+    canonicalStatus = result.status;
     askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: result.status });
     return result;
   } catch (error) {
     askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: 'THREW' });
     throw error;
   } finally {
+    askSkillCanonicalOperationDurationSeconds.observe(
+      { skill: skill.id, operation: input.operation.operationId, status: canonicalStatus },
+      Number(process.hrtime.bigint() - canonicalStartedAt) / 1_000_000_000,
+    );
     askSkillAdapterExecutionDurationSeconds.observe(
       { adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId },
       Number(process.hrtime.bigint() - adapterStartedAt) / 1_000_000_000,
@@ -4477,6 +4518,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: input.propertyId, message: input.message });
   const routingMessage = followUp.effectiveMessage;
 
+  const skillRoutingStartedAt = process.hrtime.bigint();
   let routingDecision = resolveAskRoutingCascade(routingMessage, {
     localRoutingEnabled: controls.localRoutingEnabled,
     localMinimumConfidence: controls.localRoutingMinimumConfidence,
@@ -4496,6 +4538,10 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     ambiguityMargin: controls.routingAmbiguityMargin,
   });
   askSkillRoutingDecisionsTotal.inc({ outcome: skillRoutingDecision.outcome, path: skillRoutingDecision.path });
+  askSkillRoutingDurationSeconds.observe(
+    { outcome: skillRoutingDecision.outcome, path: skillRoutingDecision.path },
+    Number(process.hrtime.bigint() - skillRoutingStartedAt) / 1_000_000_000,
+  );
   if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'RESOLVED' && skillRoutingDecision.selectedOperationId) {
     const selectedOperation = getAskOperationDefinition(skillRoutingDecision.selectedOperationId);
     const confidence = skillRoutingDecision.skillCandidates[0]?.confidence ?? selectedOperation.confidence;
@@ -4603,9 +4649,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const allowedResultBlocks = allowedResultBlocksForOperation(operation.operationId);
-    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
-    if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
+    assertSkillResultBlocksAllowed(operation.operationId, result);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
@@ -4759,9 +4803,7 @@ export async function submitAskClarification(userId: string, executionId: string
     const result = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const allowedResultBlocks = allowedResultBlocksForOperation(operation.operationId);
-    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
-    if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
+    assertSkillResultBlocksAllowed(operation.operationId, result);
     const nextParameters = {
       ...(result.parameters ?? {}),
       clarificationReceipt: { idempotencyKey: input.idempotencyKey, clarificationVersion: input.clarificationVersion },
@@ -4845,9 +4887,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
     const result = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const allowedResultBlocks = allowedResultBlocksForOperation(operation.operationId);
-    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
-    if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
+    assertSkillResultBlocksAllowed(operation.operationId, result);
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {

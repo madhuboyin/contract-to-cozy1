@@ -3,7 +3,7 @@ import { AskPresentationBlockSchema, type AskPresentationBlock } from '../../pro
 import { geminiService } from '../gemini.service';
 import type { AskOperationId, AskOperationResult } from './askOperationRegistry';
 import { minimizeAskQuestion } from './askPromptMinimization';
-import { askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../lib/metrics';
+import { askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../lib/metrics';
 
 const SynthesisOutputSchema = z.object({ summary: z.string().trim().min(1).max(600) }).strict();
 
@@ -44,13 +44,21 @@ export async function synthesizeAskResult(operationId: AskOperationId, result: A
   if (!payload) return result;
   askRemoteGenerationCharactersTotal.inc({ direction: 'input' }, payload.length);
   let output: z.infer<typeof SynthesisOutputSchema>;
+  const modelStartedAt = process.hrtime.bigint();
+  let modelOutcome = 'failure';
   try {
     output = SynthesisOutputSchema.parse(await geminiService.synthesizeAskResult(payload));
     askRemoteGenerationCharactersTotal.inc({ direction: 'output' }, output.summary.length);
     askRemoteGenerationTotal.inc({ outcome: 'result_synthesis_success' });
+    modelOutcome = 'success';
   } catch (error) {
     askRemoteGenerationTotal.inc({ outcome: 'result_synthesis_failure' });
     throw error;
+  } finally {
+    askModelDurationSeconds.observe(
+      { stage: 'result_synthesis', outcome: modelOutcome },
+      Number(process.hrtime.bigint() - modelStartedAt) / 1_000_000_000,
+    );
   }
   if (numericalClaims(output.summary).some((claim) => !payload.includes(claim))) throw new Error('Ask synthesis introduced an unsupported numerical claim.');
   const summaryIndex = result.blocks.findIndex((block) => block.type === 'SUMMARY');

@@ -70,6 +70,14 @@ export const askSkillRoutingDecisionsTotal = new Counter({
   registers: [register],
 });
 
+export const askSkillRoutingDurationSeconds = new Histogram({
+  name: 'ask_skill_routing_duration_seconds',
+  help: 'Deterministic hierarchical Skill routing duration by bounded outcome and path',
+  labelNames: ['outcome', 'path'] as const,
+  buckets: [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+  registers: [register],
+});
+
 export const askSkillContextProviderTotal = new Counter({
   name: 'ask_skill_context_provider_total',
   help: 'Skill context provider invocations by immutable provider version and bounded result status',
@@ -85,6 +93,30 @@ export const askSkillContextProviderDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const askSkillContextCompositionDurationSeconds = new Histogram({
+  name: 'ask_skill_context_composition_duration_seconds',
+  help: 'Bounded Skill context composition duration, including declared provider waits',
+  labelNames: ['skill', 'operation', 'status'] as const,
+  buckets: [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  registers: [register],
+});
+
+export const askSkillContextPayloadBytes = new Histogram({
+  name: 'ask_skill_context_payload_bytes',
+  help: 'Serialized bytes retained by bounded Skill context composition',
+  labelNames: ['skill', 'operation', 'status'] as const,
+  buckets: [0, 256, 1024, 4096, 16_384, 65_536, 131_072, 256_000],
+  registers: [register],
+});
+
+export const askSkillContextProviderFanout = new Histogram({
+  name: 'ask_skill_context_provider_fanout',
+  help: 'Distinct declared context providers invoked per Skill operation',
+  labelNames: ['skill', 'operation', 'status'] as const,
+  buckets: [0, 1, 2, 3, 5, 10],
+  registers: [register],
+});
+
 export const askSkillAdapterExecutionsTotal = new Counter({
   name: 'ask_skill_adapter_executions_total',
   help: 'Registered Skill adapter executions by immutable adapter version, operation, and result status',
@@ -97,6 +129,38 @@ export const askSkillAdapterExecutionDurationSeconds = new Histogram({
   help: 'Registered Skill adapter execution duration by immutable adapter version and operation',
   labelNames: ['adapter', 'adapter_version', 'operation'] as const,
   buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30],
+  registers: [register],
+});
+
+export const askSkillAdapterResolutionDurationSeconds = new Histogram({
+  name: 'ask_skill_adapter_resolution_duration_seconds',
+  help: 'Registered in-process Skill adapter lookup and policy resolution overhead',
+  labelNames: ['skill', 'operation', 'status'] as const,
+  buckets: [0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05],
+  registers: [register],
+});
+
+export const askSkillCanonicalOperationDurationSeconds = new Histogram({
+  name: 'ask_skill_canonical_operation_duration_seconds',
+  help: 'Canonical domain operation duration reached through a registered Skill adapter',
+  labelNames: ['skill', 'operation', 'status'] as const,
+  buckets: [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30],
+  registers: [register],
+});
+
+export const askSkillPresentationDurationSeconds = new Histogram({
+  name: 'ask_skill_presentation_duration_seconds',
+  help: 'Skill result-block policy and presentation validation duration',
+  labelNames: ['skill', 'operation', 'status'] as const,
+  buckets: [0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1],
+  registers: [register],
+});
+
+export const askModelDurationSeconds = new Histogram({
+  name: 'ask_model_duration_seconds',
+  help: 'Optional Ask model duration by bounded stage and outcome',
+  labelNames: ['stage', 'outcome'] as const,
+  buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30],
   registers: [register],
 });
 

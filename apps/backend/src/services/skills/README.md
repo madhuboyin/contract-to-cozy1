@@ -7,6 +7,12 @@ This package implements the static Version 1 Skill contracts described in
 - `skillRegistry.ts` contains immutable Skill definitions, validation, operation lookup,
   and effective consumer/Skill/operation policy resolution.
 
-The initial Maintenance Skill references existing Ask operations and canonical adapters.
-It does not introduce database tables or migrations. Skill identity is derived from the
-registered operation until the user applies any future persistence schema changes.
+The registered Skills reference existing Ask operations and canonical adapters. New Ask
+executions persist a versioned Skill binding after the additive `AskExecution` schema
+changes are applied by the database owner; this package does not ship migration scripts.
+
+Version 1 performance visibility uses bounded registry dimensions only. Routing, context
+composition, provider fan-out and payload, adapter resolution, canonical execution,
+presentation validation, and optional model work are timed separately. The smoke suite is
+designed to detect unbounded behavior without turning aspirational production percentiles
+into beta development gates.

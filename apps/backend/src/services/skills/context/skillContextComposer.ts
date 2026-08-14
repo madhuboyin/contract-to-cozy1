@@ -4,7 +4,13 @@ import {
   getSkillContextProvider,
   skillContextProviderKey,
 } from './skillContextProviderRegistry';
-import { askSkillContextProviderDurationSeconds, askSkillContextProviderTotal } from '../../../lib/metrics';
+import {
+  askSkillContextCompositionDurationSeconds,
+  askSkillContextPayloadBytes,
+  askSkillContextProviderDurationSeconds,
+  askSkillContextProviderFanout,
+  askSkillContextProviderTotal,
+} from '../../../lib/metrics';
 import type {
   ComposedSkillContext,
   ComposedSkillContextEntry,
@@ -65,8 +71,16 @@ export async function composeSkillContext(
   input: ComposeSkillContextInput,
   dependencies: SkillContextComposerDependencies = {},
 ): Promise<ComposedSkillContext> {
+  const compositionStartedAt = process.hrtime.bigint();
+  const complete = (result: ComposedSkillContext): ComposedSkillContext => {
+    const labels = { skill: input.skill.id, operation: input.operationId, status: result.status };
+    askSkillContextCompositionDurationSeconds.observe(labels, Number(process.hrtime.bigint() - compositionStartedAt) / 1_000_000_000);
+    askSkillContextPayloadBytes.observe(labels, result.totalSerializedBytes);
+    askSkillContextProviderFanout.observe(labels, result.entries.length);
+    return result;
+  };
   const operation = input.skill.operations.find((candidate) => candidate.operationId === input.operationId);
-  if (!operation) return { status: 'BLOCKED', entries: [], values: {}, totalSerializedBytes: 0, totalEntities: 0, totalFacts: 0 };
+  if (!operation) return complete({ status: 'BLOCKED', entries: [], values: {}, totalSerializedBytes: 0, totalEntities: 0, totalFacts: 0 });
 
   const required = operation.requiredContextProviders ?? [];
   const optional = operation.optionalContextProviders ?? [];
@@ -75,7 +89,7 @@ export async function composeSkillContext(
     ...input.skill.optionalContextProviders,
   ].map(skillContextProviderKey));
   const requested = [...required.map((reference) => ({ reference, required: true })), ...optional.map((reference) => ({ reference, required: false }))];
-  if (!requested.length) return { status: 'READY', entries: [], values: {}, totalSerializedBytes: 0, totalEntities: 0, totalFacts: 0 };
+  if (!requested.length) return complete({ status: 'READY', entries: [], values: {}, totalSerializedBytes: 0, totalEntities: 0, totalFacts: 0 });
 
   const resolveProvider = dependencies.resolveProvider ?? getSkillContextProvider;
   const authorizeProperty = dependencies.authorizeProperty ?? resolvePropertyAccess;
@@ -193,12 +207,12 @@ export async function composeSkillContext(
 
   const unavailableRequired = deduplicatedEntries.some((entry) => entry.required && entry.status !== 'AVAILABLE');
   const degraded = deduplicatedEntries.some((entry) => entry.status !== 'AVAILABLE' && entry.status !== 'NOT_APPLICABLE');
-  return {
+  return complete({
     status: unavailableRequired ? 'BLOCKED' : degraded ? 'DEGRADED' : 'READY',
     entries: deduplicatedEntries,
     values,
     totalSerializedBytes,
     totalEntities,
     totalFacts,
-  };
+  });
 }
