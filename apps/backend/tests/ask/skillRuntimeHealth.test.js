@@ -67,6 +67,26 @@ test('disabled, retired, and consumer-ineligible states remain distinct', () => 
   assert.deepEqual(retired.reasonCodes, ['SKILL_RETIRED']);
 });
 
+test('consumer and domain controls independently remove otherwise healthy Skills', () => {
+  const consumerDisabled = deriveSkillHealth(
+    'property-record',
+    'HOME_ACTIONS',
+    readAskOperationalControls({ ASK_CONSUMER_HOME_ACTIONS_ENABLED: 'false' }),
+  );
+  assert.equal(consumerDisabled.status, 'DISABLED');
+  assert.deepEqual(consumerDisabled.reasonCodes, ['CONSUMER_DISABLED']);
+
+  const domainDisabled = deriveSkillHealth(
+    'property-record',
+    'HOME_ACTIONS',
+    readAskOperationalControls({ ASK_DOMAIN_HOME_INTELLIGENCE_KILL_SWITCH: 'true' }),
+  );
+  assert.equal(domainDisabled.status, 'DISABLED');
+  assert.deepEqual(domainDisabled.reasonCodes, ['DOMAIN_DISABLED']);
+
+  assert.equal(deriveSkillHealth('maintenance', 'ASK', readAskOperationalControls({})).status, 'HEALTHY');
+});
+
 test('optional provider failure produces degraded behavior without removing the operation', () => {
   const optionalRef = { id: 'optional.fixture', version: '1.0.0' };
   const fixture = {
@@ -88,6 +108,8 @@ test('routing filters operation, adapter, and provider failures before selection
   const inventoryControls = readAskOperationalControls({ ASK_ADAPTER_INVENTORY_LOOKUP_KILL_SWITCH: 'true' });
   const inventory = resolveHierarchicalSkillRouting(inventoryMessage, resolveAskRoutingCascade(inventoryMessage), {
     consumer: 'ASK',
+    consumerEnabled: inventoryControls.consumerEnabled,
+    domainEnabled: inventoryControls.domainEnabled,
     skillEnabled: inventoryControls.skillEnabled,
     operationEnabled: inventoryControls.operationEnabled,
     adapterEnabled: inventoryControls.adapterEnabled,
@@ -99,6 +121,8 @@ test('routing filters operation, adapter, and provider failures before selection
   const maintenanceControls = readAskOperationalControls({ ASK_CONTEXT_PROVIDER_MAINTENANCE_TASK_CONTEXT_ENABLED: 'false' });
   const maintenance = resolveHierarchicalSkillRouting(maintenanceMessage, resolveAskRoutingCascade(maintenanceMessage), {
     consumer: 'ASK',
+    consumerEnabled: maintenanceControls.consumerEnabled,
+    domainEnabled: maintenanceControls.domainEnabled,
     skillEnabled: maintenanceControls.skillEnabled,
     operationEnabled: maintenanceControls.operationEnabled,
     adapterEnabled: maintenanceControls.adapterEnabled,

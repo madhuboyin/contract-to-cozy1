@@ -8,6 +8,8 @@ import { getSkillDefinition } from './skillRegistry';
 export type SkillHealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE' | 'DISABLED';
 export type SkillOperationHealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
 export type SkillHealthReasonCode =
+  | 'CONSUMER_DISABLED'
+  | 'DOMAIN_DISABLED'
   | 'SKILL_DISABLED'
   | 'SKILL_RETIRED'
   | 'CONSUMER_NOT_ALLOWED'
@@ -19,6 +21,8 @@ export type SkillHealthReasonCode =
   | 'OPTIONAL_CONTEXT_PROVIDER_UNAVAILABLE';
 
 export interface SkillHealthControls {
+  consumerEnabled?: (consumer: SkillConsumer) => boolean;
+  domainEnabled?: (domain: SkillDefinition['domain']) => boolean;
   skillEnabled?: (skillId: string) => boolean;
   operationEnabled?: (operationId: AskOperationId) => boolean;
   adapterEnabled?: (adapterId: string) => boolean;
@@ -67,9 +71,17 @@ export function deriveSkillHealthForDefinition(
   controls: SkillHealthControls = {},
 ): SkillHealth {
   const skillEnabled = controls.skillEnabled ?? (() => true);
+  const consumerEnabled = controls.consumerEnabled ?? (() => true);
+  const domainEnabled = controls.domainEnabled ?? (() => true);
   const operationEnabled = controls.operationEnabled ?? (() => true);
   const adapterEnabled = controls.adapterEnabled ?? (() => true);
   const contextProviderEnabled = controls.contextProviderEnabled ?? (() => true);
+  if (!consumerEnabled(consumer)) {
+    return terminalHealth(skill.id, skill.version, consumer, 'DISABLED', 'CONSUMER_DISABLED');
+  }
+  if (!domainEnabled(skill.domain)) {
+    return terminalHealth(skill.id, skill.version, consumer, 'DISABLED', 'DOMAIN_DISABLED');
+  }
   if (skill.operationalStatus !== 'ENABLED' || !skillEnabled(skill.id)) {
     return terminalHealth(skill.id, skill.version, consumer, 'DISABLED', 'SKILL_DISABLED');
   }

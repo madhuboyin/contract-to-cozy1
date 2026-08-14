@@ -335,6 +335,8 @@ Monitoring infrastructure, context retrieval, priority ranking, notification del
 
 ### 8.4 Initial representative Skills
 
+This table is the directional product taxonomy, not a requirement to implement every row in Version 1. Version 1 shall implement the Skills named in §29 plus any additional Skills needed to prove catalog extensibility and multi-surface access. Remaining rows are admitted incrementally when their canonical capability is ready and they satisfy the Skill admission rubric; absence of an unadmitted row is not a platform-completeness defect.
+
 | Domain | Skill | Representative operations |
 | --- | --- | --- |
 | `HOME_CARE` | Maintenance | status, create, complete, update, monitor |
@@ -511,7 +513,7 @@ The routing cascade shall be:
 2. existing high-confidence deterministic operation rules;
 3. deterministic Skill candidate generation from registered goals, aliases, entities, launch context, and Decision Thread context;
 4. policy, consumer, authorization, dependency, and availability filtering;
-5. bounded language classification when deterministic confidence is insufficient;
+5. bounded classification from versioned, reviewed Skill metadata when deterministic confidence is insufficient;
 6. Skill selection;
 7. operation selection within the Skill; and
 8. concise clarification when material ambiguity remains.
@@ -552,6 +554,8 @@ Material ambiguity shall fail closed. Recency, raw chat, or a model guess alone 
 A semantic index may be generated only from registered Skill metadata and reviewed examples. It is a routing aid, not a capability source.
 
 The index shall record its build version and Skill-definition versions. A stale or unavailable index shall degrade to deterministic routing and clarification.
+
+Version 1 classification shall remain deterministic and locally executable; material ambiguity shall go to clarification. Model- or embedding-assisted classification is optional and deferred until measured routing quality demonstrates a concrete need, with a separately reviewed evaluation, cost, privacy, and kill-switch design. The platform Definition of Done does not require an LLM call.
 
 ### 11.5 Capability discovery
 
@@ -848,6 +852,8 @@ Narrative Synthesis
 ```
 
 The most restrictive active switch wins.
+
+Version 1 shall make Global Ask, Consumer, Domain, Skill, Operation, Context Provider, Adapter, and Narrative Synthesis controls live where the corresponding runtime exists. A Skill's manifest-declared feature-flag and kill-switch names are authoritative runtime bindings and shall be unique and validated. External Connector and LLM Routing controls become mandatory only when those optional runtimes are introduced; their absence before then shall not create inert placeholder behavior.
 
 Disabling a Skill shall:
 
@@ -1182,9 +1188,11 @@ Deliver:
 - deterministic Skill filtering;
 - Skill → operation routing;
 - durable Skill ambiguity clarification;
-- semantic index and bounded model fallback;
+- versioned deterministic semantic index and bounded clarification fallback;
 - semantic conflict suite; and
 - routing lineage.
+
+Model-assisted routing remains an optional later enhancement under §11.4 and is not required for SP2 completion.
 
 Maintenance plus fixture Skills shall prove ambiguous and negative routing before broader catalog registration.
 
@@ -1216,6 +1224,7 @@ This phase shall prove that:
 
 - new Skills do not require core router implementation changes;
 - consumer-specific operation allowlists work;
+- at least one production execution path outside Ask invokes a canonical operation through the consumer-governed Skill runtime;
 - shared context is composed without peer Skill execution; and
 - Capability Registry destinations and Skill execution identities remain separate.
 

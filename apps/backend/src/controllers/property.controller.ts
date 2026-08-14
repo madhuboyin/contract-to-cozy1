@@ -169,7 +169,7 @@ export const getPropertyDashboardBootstrap = async (req: AuthRequest, res: Respo
     const [onboarding, narrativeRun, recordOverview] = await Promise.all([
       computeSetupStatus(id, userId),
       getOrCreateActiveNarrativeRun({ propertyId: id, userId }),
-      getPropertyRecordOverview(id, userId),
+      getPropertyRecordOverview(id, userId, 'CONCIERGE_HOME'),
     ]);
 
     res.json({

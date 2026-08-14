@@ -63,6 +63,21 @@ export const askSkillExecutionDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const skillConsumerInvocationsTotal = new Counter({
+  name: 'skill_consumer_invocations_total',
+  help: 'Governed Skill operation invocations by registered consumer and bounded result status',
+  labelNames: ['consumer', 'skill', 'skill_version', 'operation', 'status'] as const,
+  registers: [register],
+});
+
+export const skillConsumerInvocationDurationSeconds = new Histogram({
+  name: 'skill_consumer_invocation_duration_seconds',
+  help: 'Governed Skill operation duration by registered consumer and immutable Skill identity',
+  labelNames: ['consumer', 'skill', 'skill_version', 'operation'] as const,
+  buckets: [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30],
+  registers: [register],
+});
+
 export const askSkillRoutingDecisionsTotal = new Counter({
   name: 'ask_skill_routing_decisions_total',
   help: 'Hierarchical Skill routing decisions by bounded outcome and routing path',

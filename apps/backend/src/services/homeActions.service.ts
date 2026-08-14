@@ -49,6 +49,8 @@ import {
 } from './capabilityRecommendation.service';
 import { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 import { ownershipCostDecisionService } from './ownershipCosts/ownershipCostDecision.service';
+import { resolvePropertyAccess } from './propertyAccess.service';
+import { invokeReadSkillOperationForConsumer } from './skills/skillConsumerRuntime';
 import {
   applyCoverageActionLifecyclePolicy,
   coverageActionRuntimePolicy,
@@ -1001,29 +1003,38 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
 }
 
 export async function getUnifiedHome(propertyId: string, userId: string) {
-  const feed = await getHomeActionFeed(propertyId, userId);
-  const [property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourneyCandidates, propertyContextSnapshot] =
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access) throw new Error('Property not found or access denied.');
+  const propertyRead = invokeReadSkillOperationForConsumer({
+    consumer: 'HOME_ACTIONS',
+    operationId: 'PROPERTY_SUMMARY',
+    role: access.role,
+    execute: () => prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        dwellingType: true,
+        yearBuilt: true,
+        propertySize: true,
+        bedrooms: true,
+        bathrooms: true,
+        heatingType: true,
+        coolingType: true,
+        roofType: true,
+        updatedAt: true,
+      },
+    }),
+  });
+  const feedRead = getHomeActionFeed(propertyId, userId);
+  const [feed, property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourneyCandidates, propertyContextSnapshot] =
     await Promise.all([
-      prisma.property.findUnique({
-        where: { id: propertyId },
-        select: {
-          id: true,
-          name: true,
-          address: true,
-          city: true,
-          state: true,
-          zipCode: true,
-          dwellingType: true,
-          yearBuilt: true,
-          propertySize: true,
-          bedrooms: true,
-          bathrooms: true,
-          heatingType: true,
-          coolingType: true,
-          roofType: true,
-          updatedAt: true,
-        },
-      }),
+      feedRead,
+      propertyRead,
       prisma.inventoryItem.findMany({
         where: { propertyId, ...visibleInventoryItemWhere() },
         select: {

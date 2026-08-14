@@ -1,4 +1,6 @@
 import type { AskOperationId } from '../services/ask/askOperationRegistry';
+import { getSkillDefinition } from '../services/skills/skillRegistry';
+import type { SkillConsumer, SkillDomain } from '../services/skills/skill.contract';
 
 function booleanEnv(value: string | undefined, fallback: boolean): boolean {
   if (value == null || value.trim() === '') return fallback;
@@ -23,6 +25,8 @@ export interface AskOperationalControls {
   localRoutingMinimumConfidence: number;
   routingAmbiguityMargin: number;
   operationEnabled: (operationId: AskOperationId) => boolean;
+  consumerEnabled: (consumer: SkillConsumer) => boolean;
+  domainEnabled: (domain: SkillDomain) => boolean;
   skillEnabled: (skillId: string) => boolean;
   adapterEnabled: (adapterId: string) => boolean;
   contextProviderEnabled: (providerId: string) => boolean;
@@ -33,17 +37,25 @@ export interface AskOperationalControls {
 
 export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env): AskOperationalControls {
   return {
-    askEnabled: booleanEnv(env.ASK_ENABLED, true),
+    askEnabled: booleanEnv(env.ASK_ENABLED, true)
+      && !booleanEnv(env.ASK_KILL_SWITCH, false),
     remoteGenerationEnabled: booleanEnv(env.ASK_REMOTE_GENERATION_ENABLED, true),
     localRoutingEnabled: booleanEnv(env.ASK_LOCAL_ROUTING_ENABLED, true),
-    resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false),
+    resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
+      && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),
     localRoutingMinimumConfidence: ratioEnv(env.ASK_LOCAL_ROUTING_MIN_CONFIDENCE, 0.42),
     routingAmbiguityMargin: ratioEnv(env.ASK_ROUTING_AMBIGUITY_MARGIN, 0.1),
-    operationEnabled: (operationId) => booleanEnv(env[`ASK_OPERATION_${operationId}_ENABLED`], true),
+    operationEnabled: (operationId) => booleanEnv(env[`ASK_OPERATION_${operationId}_ENABLED`], true)
+      && !booleanEnv(env[`ASK_OPERATION_${operationId}_KILL_SWITCH`], false),
+    consumerEnabled: (consumer) => booleanEnv(env[`ASK_CONSUMER_${consumer}_ENABLED`], true)
+      && !booleanEnv(env[`ASK_CONSUMER_${consumer}_KILL_SWITCH`], false),
+    domainEnabled: (domain) => booleanEnv(env[`ASK_DOMAIN_${domain}_ENABLED`], true)
+      && !booleanEnv(env[`ASK_DOMAIN_${domain}_KILL_SWITCH`], false),
     skillEnabled: (skillId) => {
-      const envId = skillId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
-      return booleanEnv(env[`ASK_SKILL_${envId}_ENABLED`], true)
-        && !booleanEnv(env[`ASK_SKILL_${envId}_KILL_SWITCH`], false);
+      const skill = getSkillDefinition(skillId);
+      if (!skill) return false;
+      return booleanEnv(env[skill.featureFlag], true)
+        && !booleanEnv(env[skill.killSwitch], false);
     },
     adapterEnabled: (adapterId) => {
       const envId = adapterId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');

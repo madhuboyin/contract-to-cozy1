@@ -3,8 +3,10 @@ import { getContextCompleteness } from '../modules/propertyContext/application/g
 import { getPropertyContext } from '../modules/propertyContext/application/getPropertyContext';
 import type { PropertyContextScope } from '../modules/propertyContext/domain/contracts';
 import { canonicalCapabilityRegistry } from '../productFramework/capabilities/canonicalCapabilityRegistry';
-import { resolvePropertyAccess } from './propertyAccess.service';
+import { resolvePropertyAccess, type PropertyAccess } from './propertyAccess.service';
 import { getToolDiscoveryAvailability } from './toolDiscoveryAvailability.service';
+import type { SkillConsumer } from './skills/skill.contract';
+import { invokeReadSkillOperationForConsumer } from './skills/skillConsumerRuntime';
 
 export const PROPERTY_RECORD_CONTEXT_SCOPES: PropertyContextScope[] = [
   'CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY',
@@ -38,10 +40,7 @@ async function settled<T>(work: Promise<T>): Promise<LoadState<T>> {
   }
 }
 
-export async function getPropertyRecordOverview(propertyId: string, userId: string) {
-  const access = await resolvePropertyAccess(userId, propertyId);
-  if (!access) throw new Error('PROPERTY_NOT_FOUND');
-
+async function loadPropertyRecordOverview(propertyId: string, userId: string, access: PropertyAccess) {
   const [context, rooms, inventory, documents, household, capitalTimeline, continuityPlan, plantState, latestBrief, confirmedEvents] = await Promise.all([
     settled(getPropertyContext(propertyId, { userId }, { scopes: PROPERTY_RECORD_CONTEXT_SCOPES })),
     settled(prisma.inventoryRoom.findMany({
@@ -212,4 +211,19 @@ export async function getPropertyRecordOverview(propertyId: string, userId: stri
     },
     generatedAt: new Date().toISOString(),
   };
+}
+
+export async function getPropertyRecordOverview(
+  propertyId: string,
+  userId: string,
+  consumer: Extract<SkillConsumer, 'ASK' | 'CONCIERGE_HOME'>,
+) {
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access) throw new Error('PROPERTY_NOT_FOUND');
+  return invokeReadSkillOperationForConsumer({
+    consumer,
+    operationId: 'PROPERTY_SUMMARY',
+    role: access.role,
+    execute: () => loadPropertyRecordOverview(propertyId, userId, access),
+  });
 }

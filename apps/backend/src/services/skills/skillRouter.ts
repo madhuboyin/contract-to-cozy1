@@ -146,6 +146,8 @@ export function resolveHierarchicalSkillRouting(
     definitions?: Readonly<Record<string, SkillDefinition>>;
     index?: SkillSemanticIndex;
     consumer?: SkillConsumer;
+    consumerEnabled?: SkillHealthControls['consumerEnabled'];
+    domainEnabled?: SkillHealthControls['domainEnabled'];
     skillEnabled?: (skillId: string) => boolean;
     operationEnabled?: (operationId: AskOperationId) => boolean;
     adapterEnabled?: (adapterId: string) => boolean;
@@ -159,6 +161,8 @@ export function resolveHierarchicalSkillRouting(
   const consumer = options.consumer ?? 'ASK';
   const skillEnabled = options.skillEnabled ?? (() => true);
   const runtimeControls: SkillHealthControls = {
+    consumerEnabled: options.consumerEnabled,
+    domainEnabled: options.domainEnabled,
     skillEnabled,
     operationEnabled: options.operationEnabled,
     adapterEnabled: options.adapterEnabled,

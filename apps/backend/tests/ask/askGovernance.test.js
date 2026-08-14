@@ -250,6 +250,17 @@ test('Ask operational controls support global, routing, synthesis, remote, per-o
   assert.equal(controls.rawConversationRetentionDays, 45);
   assert.equal(controls.feedbackRetentionDays, 400);
   assert.equal(controls.executionTimeoutMs, 9000);
+
+  const killed = readAskOperationalControls({
+    ASK_KILL_SWITCH: 'true',
+    ASK_RESULT_SYNTHESIS_ENABLED: 'true',
+    ASK_RESULT_SYNTHESIS_KILL_SWITCH: 'true',
+    ASK_OPERATION_PROPERTY_SUMMARY_KILL_SWITCH: 'true',
+  });
+  assert.equal(killed.askEnabled, false);
+  assert.equal(killed.resultSynthesisEnabled, false);
+  assert.equal(killed.operationEnabled('PROPERTY_SUMMARY'), false);
+  assert.equal(killed.operationEnabled('MAINTENANCE_STATUS'), true);
 });
 
 test('Ask responses require the current durable presentation schema version', () => {

@@ -18,6 +18,7 @@ import { REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
 import { selectSkillDependencyVersion } from './skillDependencyVersion';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
+const RUNTIME_CONTROL_PATTERN = /^ASK_SKILL_[A-Z0-9_]+_(?:ENABLED|KILL_SWITCH)$/;
 const ROLE_RANK: Record<Exclude<AskPropertyRoleFloor, null>, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
 const SKILL_CONSUMERS: ReadonlySet<SkillConsumer> = new Set(['ASK', 'HOME_ACTIONS', 'CONCIERGE_HOME', 'PROACTIVE', 'NOTIFICATION_CONTINUATION']);
 const PLATFORM_CONTEXT_BUDGET_MAXIMUMS = Object.freeze({
@@ -95,6 +96,7 @@ export function validateSkillDefinitions(
   const issues: string[] = [];
   const ids = new Set<string>();
   const operationOwners = new Map<AskOperationId, string>();
+  const runtimeControls = new Map<string, string>();
   const registeredSkillIds = new Set(Object.values(definitions).map((skill) => skill.id));
 
   for (const [key, skill] of Object.entries(definitions)) {
@@ -103,7 +105,13 @@ export function validateSkillDefinitions(
     ids.add(skill.id);
     if (!SEMVER_PATTERN.test(skill.version)) issues.push(`${key}: invalid Skill semantic version`);
     if (!skill.displayName || !skill.description || !skill.owner || !skill.evaluationSuite) issues.push(`${key}: missing required metadata`);
-    if (!skill.featureFlag || !skill.killSwitch) issues.push(`${key}: missing runtime controls`);
+    if (!RUNTIME_CONTROL_PATTERN.test(skill.featureFlag) || !skill.featureFlag.endsWith('_ENABLED')) issues.push(`${key}: invalid feature flag ${skill.featureFlag || '(missing)'}`);
+    if (!RUNTIME_CONTROL_PATTERN.test(skill.killSwitch) || !skill.killSwitch.endsWith('_KILL_SWITCH')) issues.push(`${key}: invalid kill switch ${skill.killSwitch || '(missing)'}`);
+    for (const control of [skill.featureFlag, skill.killSwitch]) {
+      const owner = runtimeControls.get(control);
+      if (owner && owner !== key) issues.push(`${key}: runtime control ${control} already belongs to ${owner}`);
+      else runtimeControls.set(control, key);
+    }
     if (!skill.homeownerJobs.length || !skill.supportedGoals.length || !skill.aliases.length) issues.push(`${key}: missing semantic routing metadata`);
     if (!skill.operations.length) issues.push(`${key}: no registered operations`);
     if (!skill.allowedResultBlocks.length) issues.push(`${key}: no allowed result blocks`);

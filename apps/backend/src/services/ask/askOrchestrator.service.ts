@@ -3068,7 +3068,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   const completenessFocus = /\b(?:complete|completeness|missing from|profile quality)\b/i.test(message);
   const [access, overview, evaluation, property] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
-    getPropertyRecordOverview(propertyId, userId),
+    getPropertyRecordOverview(propertyId, userId, 'ASK'),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'PROPERTY_RECORD_SUMMARY', operationKey: 'VIEW_SUMMARY' }),
     prisma.property.findUnique({
       where: { id: propertyId },
@@ -4270,6 +4270,8 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
       result,
       consumer: 'ASK',
       controls: {
+        consumerEnabled: controls.consumerEnabled,
+        domainEnabled: controls.domainEnabled,
         skillEnabled: controls.skillEnabled,
         operationEnabled: controls.operationEnabled,
         adapterEnabled: controls.adapterEnabled,
@@ -4575,6 +4577,8 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const forcedOperationId = followUp.forcedOperationId ?? launchCapabilityOperationId ?? null;
   const skillRoutingDecision = resolveHierarchicalSkillRouting(routingMessage, routingDecision, {
     consumer: 'ASK',
+    consumerEnabled: controls.consumerEnabled,
+    domainEnabled: controls.domainEnabled,
     skillEnabled: controls.skillEnabled,
     operationEnabled: controls.operationEnabled,
     adapterEnabled: controls.adapterEnabled,
