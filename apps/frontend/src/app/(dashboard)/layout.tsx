@@ -49,6 +49,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { CtcTopCommandBar } from '@/components/layout/CtcTopCommandBar';
 import { FeedbackWidget } from '@/components/feedback/FeedbackWidget';
 import { ToolLaunchContextBoundary } from '@/features/tools/ToolLaunchContextBoundary';
+import { isAskWorkspacePath } from '@/lib/routes/isAskWorkspacePath';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -533,6 +534,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isPropertyRecordOverview = /^\/dashboard\/properties\/[0-9a-f-]{36}\/?$/i.test(pathname || '');
+  const isAskWorkspace = isAskWorkspacePath(pathname);
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const { showWarning: showIdleWarning, secondsRemaining: idleSecondsRemaining, stayActive: stayIdleActive } = useIdleTimeout();
@@ -794,7 +796,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Global overlays */}
         <DashboardCommandPalette />
         {/* Cozy is a homeowner maintenance/expense concierge — not relevant to admin */}
-        {user?.role !== 'ADMIN' && <AIChat />}
+        {user?.role !== 'ADMIN' && !isAskWorkspace && <AIChat />}
         <FeedbackWidget />
         <IdleTimeoutWarningDialog
           open={showIdleWarning}

@@ -3,6 +3,19 @@ import { installAskApi, installAskContext, propertyId } from './fixtures';
 
 test.beforeEach(async ({ context }) => installAskContext(context));
 
+test('starting surface has one identity, an above-the-fold composer, and actionable context', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What can I help with?' })).toHaveCount(0);
+  await expect(page.getByText('Changed recently', { exact: true })).toHaveCount(0);
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
+  await expect(page.getByRole('heading', { name: 'Decisions in progress' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'For your attention' })).toBeVisible();
+  await expect(page.getByText(/May prevent a larger cost/)).toBeVisible();
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

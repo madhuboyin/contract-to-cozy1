@@ -1,15 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, KeyboardEvent, Ref, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, Clock3, ExternalLink, Home, Loader2, Maximize2, Send, Sparkles, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { FormEvent, KeyboardEvent, Ref, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, Clock3, ExternalLink, Loader2, Maximize2, Send, Sparkles, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskPendingWorkItem, AskPresentationBlock, ConciergeHomeView } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 
-const starterQuestions = [
+const fallbackQuestions = [
   'What maintenance tasks are pending?',
   'Which items are missing coverage?',
   'Is there a tool to help me refinance?',
@@ -161,19 +161,13 @@ function CapabilityCard({ capability }: {
     : <Link href={capability.href} className={className}>{content}</Link>;
 }
 
-// Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" deliverable — the
-// Ask starting surface's "What matters now" / "Changed recently" /
-// "Decisions in progress" panel, shown only while no conversation has
-// started yet. Distinguishes loading, unavailable, no-change, and
-// no-action per FRD §18.4: an empty/failed section must never read as "the
-// home needs no attention" -- each state gets its own honest copy.
-function ConciergeHome({ propertyId }: { propertyId?: string }) {
+function useConciergeHome(propertyId?: string) {
   const [view, setView] = useState<ConciergeHomeView | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!propertyId) { setView(null); setFailed(false); return; }
+    if (!propertyId) { setView(null); setLoading(false); setFailed(false); return; }
     const controller = new AbortController();
     setLoading(true); setFailed(false);
     api.getConciergeHome(propertyId, { signal: controller.signal })
@@ -186,11 +180,34 @@ function ConciergeHome({ propertyId }: { propertyId?: string }) {
     return () => controller.abort();
   }, [propertyId]);
 
+  return { view, loading, failed };
+}
+
+function humanizeReason(reason: string): string {
+  const copy: Record<string, string> = {
+    URGENT_OR_OVERDUE: 'Time-sensitive or overdue',
+    DEADLINE_SOONER: 'A deadline is approaching',
+    SAFETY_IMPACT: 'May affect safety',
+    COST_AVOIDANCE: 'May prevent a larger cost',
+    HIGHER_CONFIDENCE: 'Supported by stronger home data',
+    WATCH_THRESHOLD_REACHED: 'A monitored threshold was reached',
+  };
+  return copy[reason] ?? reason.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function ConciergeHome({ propertyId, view, loading, failed, onAsk }: {
+  propertyId?: string;
+  view: ConciergeHomeView | null;
+  loading: boolean;
+  failed: boolean;
+  onAsk: (question: string) => void;
+}) {
+
   if (!propertyId) return null;
 
   if (loading) {
     return (
-      <div className="mx-auto mb-6 max-w-xl rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500" role="status">
+      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500" role="status">
         <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading your home overview…
       </div>
     );
@@ -198,67 +215,50 @@ function ConciergeHome({ propertyId }: { propertyId?: string }) {
 
   if (failed || !view) {
     return (
-      <div className="mx-auto mb-6 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        Your home overview is temporarily unavailable. This does not mean your home needs no attention — try a question below, or open Home Actions directly.
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <span>Your home overview is temporarily unavailable. You can still ask a question.</span>
+        <Link href={`/dashboard?propertyId=${encodeURIComponent(propertyId)}`} className="font-semibold text-amber-950 underline">Open Home Actions</Link>
       </div>
     );
   }
 
+  const attentionItems = view.priorityList.items
+    .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')
+    .slice(0, 3);
+  const decisions = view.decisions.state === 'AVAILABLE' ? view.decisions.items.slice(0, 2) : [];
+  if (!attentionItems.length && !decisions.length) return null;
+
   return (
-    <div className="mx-auto mb-6 max-w-xl space-y-3 text-left">
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-900">What matters now</h2>
-          <Link href={view.priorityList.href} className="text-xs font-semibold text-teal-700 hover:underline">Open Home Actions</Link>
+    <div className="mt-10 space-y-8 text-left">
+      {decisions.length > 0 && <section aria-labelledby="ask-decisions-title">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Pick up a thread</p><h2 id="ask-decisions-title" className="mt-1 text-lg font-semibold text-slate-950">Decisions in progress</h2></div>
         </div>
-        {view.priorityList.state === 'UNAVAILABLE' ? (
-          <p className="mt-2 text-xs text-slate-500">This is temporarily unavailable — that does not mean your home needs no attention.</p>
-        ) : view.priorityList.state === 'NO_ACTION' ? (
-          <p className="mt-2 text-xs text-slate-500">Nothing is currently surfaced from your governed action feed.</p>
-        ) : (
-          <ul className="mt-2 space-y-1.5">
-            {view.priorityList.items.slice(0, 3).map((item) => (
-              <li key={item.homeActionId} className="text-sm text-slate-700">
-                <span className="font-medium text-slate-900">{item.title}</span>
-                {item.suppressed && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">suppressed</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {decisions.map((decision) => (
+            <button key={decision.decisionThreadId} type="button" onClick={() => onAsk(`Help me continue this decision: ${decision.title}`)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-300 hover:shadow-md">
+              <span className="font-semibold text-slate-950 group-hover:text-teal-800">{decision.title}</span>
+              <span className="mt-2 block text-xs text-slate-500">Updated {new Date(decision.updatedAt).toLocaleDateString()} · {decision.lifecycleStatus.toLowerCase().replace(/_/g, ' ')}</span>
+              <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-teal-700">Continue decision <ArrowRight className="h-4 w-4" /></span>
+            </button>
+          ))}
+        </div>
+      </section>}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Changed recently</h2>
-        {view.changes.state === 'UNAVAILABLE' ? (
-          <p className="mt-2 text-xs text-slate-500">Change history is temporarily unavailable.</p>
-        ) : view.changes.state === 'NO_CHANGE' ? (
-          <p className="mt-2 text-xs text-slate-500">No material change in the last {view.changes.windowDays} days across covered sources.</p>
-        ) : (
-          <ul className="mt-2 space-y-1.5">
-            {view.changes.items.map((change) => (
-              <li key={change.id} className="text-sm text-slate-700"><span className="font-medium text-slate-900">{change.source}:</span> {change.summary}</li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {view.decisions.state !== 'NO_DECISIONS' && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900">Decisions in progress</h2>
-          {view.decisions.state === 'UNAVAILABLE' ? (
-            <p className="mt-2 text-xs text-slate-500">Decisions in progress are temporarily unavailable.</p>
-          ) : (
-            <ul className="mt-2 space-y-1.5">
-              {view.decisions.items.map((decision) => (
-                <li key={decision.decisionThreadId} className="text-sm text-slate-700">
-                  <span className="font-medium text-slate-900">{decision.title}</span>
-                  <span className="ml-1.5 text-xs text-slate-500">{decision.lifecycleStatus.toLowerCase().replace(/_/g, ' ')}{decision.verdict ? ` · ${decision.verdict.toLowerCase().replace(/_/g, ' ')}` : ''}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+      {attentionItems.length > 0 && <section aria-labelledby="ask-attention-title">
+        <div className="flex items-center justify-between gap-2">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Based on your home record</p><h2 id="ask-attention-title" className="mt-1 text-lg font-semibold text-slate-950">For your attention</h2></div>
+          <Link href={view.priorityList.href} className="text-sm font-semibold text-teal-700 hover:underline">View all</Link>
+        </div>
+        <ul className="mt-3 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          {attentionItems.map((item) => (
+            <li key={item.homeActionId} className="py-4">
+              <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-slate-950">{item.title}</p><p className="mt-1 text-sm text-slate-600">{item.comparativeReasonCodes[0] ? humanizeReason(item.comparativeReasonCodes[0]) : 'Recommended from your current home record'}{item.deadlineAt ? ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}` : ''}</p></div><span className={cn('rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide', item.consumerPriority === 'DO_NOW' ? 'bg-rose-100 text-rose-800' : item.consumerPriority === 'PLAN_SOON' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700')}>{item.consumerPriority.replace(/_/g, ' ')}</span></div>
+              <div className="mt-3 flex flex-wrap gap-3">{item.cta && <Link href={item.cta.href} className="text-sm font-semibold text-teal-700 hover:underline">{item.cta.label}</Link>}<button type="button" onClick={() => onAsk(`Why should I prioritize ${item.title}?`)} className="text-sm font-semibold text-slate-600 hover:text-teal-800">Ask why</button></div>
+            </li>
+          ))}
+        </ul>
+      </section>}
     </div>
   );
 }
@@ -1142,6 +1142,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [justUpdatedExecutionId, setJustUpdatedExecutionId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Concierge composition is only useful on the empty starting surface.
+  // Avoid the extra multi-source read when restoring an existing conversation.
+  const concierge = useConciergeHome(!historyLoading && executions.length === 0 && !propertyMismatch ? selectedPropertyId : undefined);
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
@@ -1192,7 +1195,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [executions, loading]);
   useEffect(() => { if (mode === 'panel') window.setTimeout(() => textareaRef.current?.focus(), 80); }, [mode]);
 
-  const scopeLabel = useMemo(() => selectedPropertyId ? 'Using the selected home record' : 'General home guidance', [selectedPropertyId]);
+  const scopeLabel = selectedPropertyId ? 'Answers use your selected home record' : 'General home guidance';
 
   const ask = async (question: string) => {
     const message = question.trim();
@@ -1284,17 +1287,31 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
+  const suggestedQuestions = Array.from(new Set([
+    ...(concierge.view?.suggestedQuestions ?? []),
+    ...fallbackQuestions,
+  ])).slice(0, 4);
+  const renderComposer = (placement: 'hero' | 'footer') => (
+    <form onSubmit={submit} className="mx-auto w-full max-w-3xl" aria-label="Ask Cozy question">
+      {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4" />{error}</div>}
+      <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100', placement === 'hero' ? 'rounded-3xl p-3 shadow-[0_12px_40px_-20px_rgba(15,118,110,0.45)]' : 'rounded-2xl')}>
+        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); window.localStorage.setItem(draftStorageKey(selectedPropertyId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? 2 : 1} maxLength={4000} placeholder="Ask anything about your home…" className={cn('max-h-32 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? 'min-h-14 py-3 text-base' : 'min-h-10 py-2 text-sm')} />
+        <button type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid shrink-0 place-items-center rounded-2xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' ? 'h-12 w-12' : 'h-10 w-10 rounded-xl')}><Send className="h-4 w-4" /></button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>
+    </form>
+  );
 
   return (
-    <div className={cn('flex min-h-0 flex-col bg-slate-50', mode === 'page' ? 'min-h-[calc(100vh-11rem)] rounded-[28px] border border-slate-200 shadow-sm' : 'h-full')}>
+    <div className={cn('flex min-h-0 flex-col', mode === 'page' ? 'min-h-[calc(100dvh-9rem)] bg-transparent' : 'h-full bg-slate-50')}>
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
           flush against the device's actual top edge/notch); env() resolves
           to 0 on the desktop floating panel and the dashboard-embedded page
           view, so it's harmless to apply unconditionally rather than
           threading a separate "is this the mobile sheet" signal through. */}
-      <header className={cn('flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-5', mode === 'panel' && 'pt-[calc(env(safe-area-inset-top)+0.75rem)]')}>
-        <div className="min-w-0"><div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" /></span><div><h2 className="font-semibold text-slate-950">Ask Cozy</h2><p className="truncate text-xs text-slate-500">{scopeLabel}</p></div></div></div>
+      <header className={cn('flex items-center justify-between', mode === 'page' ? 'px-1 pb-5 pt-1 sm:pb-7 sm:pt-3' : 'border-b border-slate-200 bg-white px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
+        <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-11 w-11 rounded-2xl' : 'h-9 w-9 rounded-xl')}><Sparkles className={mode === 'page' ? 'h-5 w-5' : 'h-4 w-4'} /></span><div>{mode === 'page' ? <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className={cn('truncate text-slate-500', mode === 'page' ? 'mt-1 text-sm' : 'text-xs')}>{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
           {mode === 'page' && executions.length > 0 && <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />Clear history</button>}
           {mode === 'panel' && <Link href="/dashboard/ask" onClick={onClose} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
@@ -1305,24 +1322,28 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       {confirmClear && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Clear this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Clear conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
 
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
-        {!historyLoading && <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} onResume={(item) => void resumePendingWork(item)} />}
-        {pendingLoading && !historyLoading && <p className="mx-auto mb-3 max-w-3xl text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
+      <main className={cn('min-h-0 flex-1 overflow-y-auto', mode === 'page' ? 'px-1 pb-8' : 'px-4 py-5 sm:px-5')}>
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : executions.length === 0 ? (
-          <div className="mx-auto max-w-xl py-8 text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-teal-100 text-teal-800"><Home className="h-6 w-6" /></div>
-            <h1 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">What can I help with?</h1>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">Ask about records, maintenance, protection, costs, decisions, projects, or tools available for your home.</p>
-            <div className="mt-6"><ConciergeHome propertyId={selectedPropertyId} /></div>
-            <div className="mt-6 grid gap-2 sm:grid-cols-2">{starterQuestions.map((question) => <button key={question} onClick={() => void ask(question)} className="rounded-2xl border border-slate-200 bg-white p-3 text-left text-sm font-medium text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-800">{question}</button>)}</div>
+          <div className="mx-auto max-w-3xl">
+            <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Get a clear answer from your home records, compare options, or find the right next step.</p>
+            {renderComposer('hero')}
+            <section className="mt-7" aria-labelledby="ask-suggestions-title">
+              <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Try asking</h2>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">{suggestedQuestions.map((question) => <button type="button" key={question} onClick={() => void ask(question)} className="rounded-2xl border border-slate-200 bg-white p-3.5 text-left text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:text-teal-800 hover:shadow-md">{question}</button>)}</div>
+            </section>
+            <div className="mt-8"><PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} onResume={(item) => void resumePendingWork(item)} /></div>
+            {pendingLoading && <p className="mt-4 text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
+            <ConciergeHome propertyId={selectedPropertyId} view={concierge.view} loading={concierge.loading} failed={concierge.failed} onAsk={(question) => void ask(question)} />
           </div>
         ) : (
           <div className="mx-auto max-w-3xl space-y-7">
+            <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} onResume={(item) => void resumePendingWork(item)} />
+            {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
             {executions.map((execution) => (
               <article id={`ask-execution-${execution.executionId}`} key={execution.executionId} className="scroll-mt-6 space-y-3">
                 <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>
+                  <h2 className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</h2>
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} />)}
                   {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
                   {execution.status === 'FAILED_RETRYABLE' && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again</button></div>}
@@ -1344,16 +1365,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      <footer className={cn('border-t border-slate-200 bg-white p-3 sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>
-        <form onSubmit={submit} className="mx-auto max-w-3xl">
-          {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700"><AlertTriangle className="h-4 w-4" />{error}</div>}
-          <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100">
-            <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); window.localStorage.setItem(draftStorageKey(selectedPropertyId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={1} maxLength={4000} placeholder="Ask anything about your home…" className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400" />
-            <button type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40"><Send className="h-4 w-4" /></button>
-          </div>
-          <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>
-        </form>
-      </footer>
+      {executions.length > 0 && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
     </div>
   );
 }

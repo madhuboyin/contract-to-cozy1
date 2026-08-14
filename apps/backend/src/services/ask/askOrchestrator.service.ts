@@ -6726,7 +6726,14 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
     try {
       const since = new Date(Date.now() - HOME_CHANGE_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       const changes = await listPropertyChanges({ propertyId, userId, since });
-      const material = changes.filter((change) => change.materiality !== 'INFORMATIONAL').slice(0, 5);
+      const seenSummaries = new Set<string>();
+      const material = changes.filter((change) => {
+        if (change.materiality === 'INFORMATIONAL') return false;
+        const summaryKey = `${change.sourceType}:${change.changeType}`;
+        if (seenSummaries.has(summaryKey)) return false;
+        seenSummaries.add(summaryKey);
+        return true;
+      }).slice(0, 3);
       return {
         state: material.length ? 'AVAILABLE' : 'NO_CHANGE',
         windowDays: HOME_CHANGE_SUMMARY_WINDOW_DAYS,
@@ -6769,6 +6776,25 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
   })();
 
   const [priorityList, changes, decisions] = await Promise.all([priorityListPromise, changesPromise, decisionsPromise]);
+  const suggestedQuestions: string[] = [];
+  const addQuestion = (question: string) => {
+    if (suggestedQuestions.length >= 4 || suggestedQuestions.some((existing) => existing.toLowerCase() === question.toLowerCase())) return;
+    suggestedQuestions.push(question);
+  };
+  if (decisions.state === 'AVAILABLE' && decisions.items[0]) {
+    addQuestion(`Help me continue this decision: ${decisions.items[0].title}`);
+  }
+  priorityList.items
+    .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION')
+    .slice(0, 2)
+    .forEach((item) => addQuestion(`Why should I prioritize ${item.title}?`));
+  if (changes.state === 'AVAILABLE') addQuestion('What changed recently for this home?');
+  [
+    'What maintenance tasks are pending?',
+    'Which items are missing coverage?',
+    'Is there a tool to help me refinance?',
+    'Where could I save money on this home?',
+  ].forEach(addQuestion);
 
   return {
     propertyId,
@@ -6776,11 +6802,6 @@ export async function getConciergeHome(userId: string, propertyId: string): Prom
     priorityList,
     changes,
     decisions,
-    suggestedQuestions: [
-      'What maintenance tasks are pending?',
-      'Which items are missing coverage?',
-      'Is there a tool to help me refinance?',
-      'Where could I save money on this home?',
-    ],
+    suggestedQuestions,
   };
 }

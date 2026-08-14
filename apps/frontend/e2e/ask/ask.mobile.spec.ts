@@ -3,6 +3,14 @@ import { installAskApi, installAskContext, propertyId } from './fixtures';
 
 test.beforeEach(async ({ context }) => installAskContext(context));
 
+test('mobile starting surface keeps the composer visible without duplicate headings', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
+});
+
 test('mobile inline capture retains a full-form escape path', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

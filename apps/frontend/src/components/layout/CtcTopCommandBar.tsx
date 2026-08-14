@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ import { CtcPropertySelector } from './CtcPropertySelector';
 import { SetupGuideButton } from './SetupGuideButton';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 import { getOnboardingStatus } from '@/lib/api/onboardingApi';
+import { isAskWorkspacePath } from '@/lib/routes/isAskWorkspacePath';
 
 interface CtcTopCommandBarProps {
   className?: string;
@@ -112,6 +113,7 @@ function NotificationsButton() {
 
 export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const isAdminNav = user?.role === 'ADMIN';
   const { setSelectedPropertyId } = usePropertyContext();
@@ -157,7 +159,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
             {/* Center-Left: Command Search (bigger) */}
             <CtcCommandSearch
               className="flex-1 max-w-[600px]"
-              placeholder={isAdminNav ? 'Search admin console…' : undefined}
+              placeholder={isAdminNav ? 'Search admin console…' : isAskWorkspacePath(pathname) ? 'Search pages, actions, and tools…' : undefined}
             />
 
             {/* Center: Property Selector (bigger) — admin isn't property-scoped */}
