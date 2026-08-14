@@ -35,6 +35,11 @@ import {
 import type { ComposedSkillContext } from '../skills/context/skillContext.contract';
 import { MAINTENANCE_TASK_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
 import { assertAskAccountRoleEligible, type AskAccountRole } from './askAccountEligibility';
+import {
+  evaluateAskAudienceApplicability,
+  getAskAudiencePolicy,
+  type AskAudienceApplicabilityDecision,
+} from './askAudiencePolicy';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
 import { answerGroundedAsk } from '../groundedAsk.service';
 import {
@@ -133,20 +138,59 @@ function journeyContextFrom(composedContext: ComposedSkillContext | null): Prope
 function attachJourneyContext(
   result: AskOperationResult,
   composedContext: ComposedSkillContext | null,
+  audienceDecision?: AskAudienceApplicabilityDecision | null,
 ): AskOperationResult {
   const journeyContext = journeyContextFrom(composedContext);
-  if (!journeyContext) return result;
+  if (!journeyContext && !audienceDecision) return result;
   return {
     ...result,
     parameters: {
       ...(result.parameters ?? {}),
-      journeyContext: {
-        ownershipState: journeyContext.ownershipState,
-        operatingMode: journeyContext.operatingMode,
-        entryPath: journeyContext.entryPath,
-        propertyOrigin: journeyContext.propertyOrigin,
-        contextVersion: journeyContext.contextVersion,
-        capturedAt: journeyContext.capturedAt,
+      ...(journeyContext ? {
+        journeyContext: {
+          ownershipState: journeyContext.ownershipState,
+          operatingMode: journeyContext.operatingMode,
+          entryPath: journeyContext.entryPath,
+          propertyOrigin: journeyContext.propertyOrigin,
+          contextVersion: journeyContext.contextVersion,
+          capturedAt: journeyContext.capturedAt,
+        },
+      } : {}),
+      ...(audienceDecision ? {
+        audienceApplicability: {
+          outcome: audienceDecision.outcome,
+          reasonCode: audienceDecision.reasonCode,
+          policyVersion: audienceDecision.policyVersion,
+          operatingMode: audienceDecision.operatingMode,
+        },
+      } : {}),
+    },
+  };
+}
+
+function audienceApplicabilityResult(decision: AskAudienceApplicabilityDecision): AskOperationResult {
+  const contextRequired = decision.outcome === 'CONTEXT_REQUIRED';
+  const blocked = decision.outcome === 'INAPPLICABLE_BLOCK';
+  return {
+    status: contextRequired ? 'NEEDS_CONTEXT' : blocked ? 'BLOCKED' : 'NOT_APPLICABLE',
+    reasonCode: decision.reasonCode ?? 'ASK_AUDIENCE_INAPPLICABLE',
+    blocks: [{
+      type: 'BOUNDARY',
+      id: 'ask-audience-applicability',
+      title: contextRequired ? 'A little home context is needed' : 'This capability does not fit the home’s current stage',
+      severity: 'INFO',
+      body: contextRequired
+        ? 'Ask can still help with general home-record questions, but this request needs a confirmed buying, owning, or selling stage before it can give reliable guidance.'
+        : `This request is not applicable to the selected home’s ${decision.operatingMode.toLowerCase()} stage. No home record was changed.`,
+      suggestions: ['Summarize my home record', 'What maintenance is pending?', 'What should I plan for next?'],
+    }],
+    suggestions: ['Summarize my home record', 'What maintenance is pending?', 'What should I plan for next?'],
+    parameters: {
+      audienceApplicability: {
+        outcome: decision.outcome,
+        reasonCode: decision.reasonCode,
+        policyVersion: decision.policyVersion,
+        operatingMode: decision.operatingMode,
       },
     },
   };
@@ -4259,8 +4303,10 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   }
   if (input.operation.requiresProperty && !input.propertyId) return needsPropertyResult();
   const authorizationFloor = effectivePolicy?.authorizationFloor ?? definition.propertyRoleFloor;
+  let householdRole: HouseholdRole | null = null;
   if (input.propertyId && authorizationFloor) {
     const access = await ensurePropertyAccess(input.userId, input.propertyId);
+    householdRole = access.role;
     const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
     if (rank[access.role] < rank[authorizationFloor]) {
       return {
@@ -4275,6 +4321,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     }
   }
   let composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null = null;
+  let audienceDecision: AskAudienceApplicabilityDecision | null = null;
   if (skill && input.propertyId) {
     const contextStartedAt = process.hrtime.bigint();
     composedContext = await composeSkillContext({
@@ -4309,6 +4356,16 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
         suggestions: ['Try again'],
       };
     }
+    const audiencePolicy = getAskAudiencePolicy(input.operation.operationId, definition.version);
+    if (!audiencePolicy || !householdRole) return operationalUnavailableResult('ASK_SKILL_POLICY_MISMATCH');
+    audienceDecision = evaluateAskAudienceApplicability({
+      policy: audiencePolicy,
+      accountRole: 'HOMEOWNER',
+      householdRole,
+      operatingMode: journeyContextFrom(composedContext)?.operatingMode ?? 'UNKNOWN',
+      purpose: 'EXECUTION',
+    });
+    if (!audienceDecision.allowed) return audienceApplicabilityResult(audienceDecision);
   }
   if (!skill) return dispatchOperationAdapter(input, composedContext, trace);
   const adapterResolutionStartedAt = process.hrtime.bigint();
@@ -4326,6 +4383,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     const result = attachJourneyContext(
       await dispatchOperationAdapter(input, composedContext, trace),
       composedContext,
+      audienceDecision,
     );
     canonicalStatus = result.status;
     askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: result.status });
@@ -5875,6 +5933,55 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
     throw error;
   }
+  if (skill && registeredOperationId && !recoveringClaim) {
+    const audienceContext = await composeSkillContext({
+      skill,
+      operationId: registeredOperationId,
+      userId,
+      propertyId: execution.propertyId,
+    }, { providerEnabled: controls.contextProviderEnabled });
+    const policy = getAskAudiencePolicy(registeredOperationId, getAskOperationDefinition(registeredOperationId).version);
+    const decision = policy ? evaluateAskAudienceApplicability({
+      policy,
+      accountRole: 'HOMEOWNER',
+      householdRole: access.role,
+      operatingMode: journeyContextFrom(audienceContext)?.operatingMode ?? 'UNKNOWN',
+      purpose: 'EXECUTION',
+    }) : null;
+    if (!decision?.allowed) {
+      const inapplicable = decision
+        ? audienceApplicabilityResult(decision)
+        : operationalUnavailableResult('ASK_SKILL_POLICY_MISMATCH');
+      const saved = await prisma.askExecution.update({
+        where: { id: execution.id },
+        data: {
+          status: inapplicable.status,
+          reasonCode: inapplicable.reasonCode,
+          parametersJson: inapplicable.parameters ? asInputJson(inapplicable.parameters) : execution.parametersJson ?? undefined,
+          resultJson: asInputJson({
+            schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+            blocks: inapplicable.blocks,
+            captureRequests: [], confirmation: null, clarification: null,
+            suggestions: inapplicable.suggestions,
+          }),
+          completedAt: terminalStatus(inapplicable.status) ? new Date() : null,
+        },
+      });
+      await prisma.askExecutionEvent.create({
+        data: {
+          executionId,
+          eventType: inapplicable.reasonCode ?? 'ASK_AUDIENCE_INAPPLICABLE',
+          metadataJson: asInputJson({
+            stage: 'CONFIRMATION_RECHECK',
+            audiencePolicyVersion: decision?.policyVersion ?? null,
+            audienceApplicabilityOutcome: decision?.outcome ?? null,
+            operatingMode: decision?.operatingMode ?? null,
+          }),
+        },
+      });
+      return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+    }
+  }
   const roleRank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
   if (roleRank[access.role] < roleRank[command.roleFloor]) {
     const error = new Error(`${command.roleFloor.toLowerCase()} access is required for this command.`);
@@ -6953,7 +7060,7 @@ const CONCIERGE_CAPABILITY_GROUPS: readonly ConciergeCapabilityGroupDefinition[]
 // down the whole panel or silently reading as "all clear".
 export async function getConciergeHome(userId: string, propertyId: string, accountRole?: AskAccountRole): Promise<ConciergeHomeView> {
   await ensureAskServiceAccountEligibility(userId, accountRole);
-  await ensurePropertyAccess(userId, propertyId);
+  const conciergeAccess = await ensurePropertyAccess(userId, propertyId);
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const askHref = `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}`;
   const capabilityGroups: ConciergeHomeView['capabilityGroups'] = (() => {
@@ -7154,9 +7261,30 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     inventoryDecisionCandidatePromise,
     journeyContextPromise,
   ]);
+  const discoveryOperatingMode = journeyContext.state === 'AVAILABLE' ? journeyContext.operatingMode : 'UNKNOWN';
+  const promptIsDiscoverable = (prompt: ConciergeHomeView['featuredPrompts'][number] | ConciergeHomeView['capabilityGroups'][number]['prompts'][number]): boolean => {
+    const contextualOperation = prompt.context?.entityType === 'DECISION_THREAD'
+      ? 'HVAC_DECISION_CONTINUE'
+      : prompt.context?.entityType === 'INVENTORY_ITEM'
+        ? 'REPLACEMENT_GUIDANCE'
+        : null;
+    const operationId = contextualOperation ?? resolveAskOperation(prompt.question).operationId;
+    const policy = getAskAudiencePolicy(operationId, getAskOperationDefinition(operationId).version);
+    if (!policy) return true;
+    return evaluateAskAudienceApplicability({
+      policy,
+      accountRole: 'HOMEOWNER',
+      householdRole: conciergeAccess.role,
+      operatingMode: discoveryOperatingMode,
+      purpose: 'DISCOVERY',
+    }).discoverable;
+  };
+  const audienceCapabilityGroups: ConciergeHomeView['capabilityGroups'] = capabilityGroups
+    .map((group) => ({ ...group, prompts: group.prompts.filter(promptIsDiscoverable) }))
+    .filter((group) => group.prompts.length > 0);
   const featuredPrompts: ConciergeHomeView['featuredPrompts'] = [];
   const addPrompt = (prompt: ConciergeHomeView['featuredPrompts'][number]) => {
-    if (featuredPrompts.length >= 4 || featuredPrompts.some((existing) => existing.question.toLowerCase() === prompt.question.toLowerCase())) return;
+    if (!promptIsDiscoverable(prompt) || featuredPrompts.length >= 4 || featuredPrompts.some((existing) => existing.question.toLowerCase() === prompt.question.toLowerCase())) return;
     featuredPrompts.push(prompt);
   };
   if (decisions.state === 'AVAILABLE' && decisions.items[0]) {
@@ -7192,12 +7320,12 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     });
   }
   const representedCategories = new Set(featuredPrompts.map((prompt) => prompt.categoryId));
-  for (const group of capabilityGroups) {
+  for (const group of audienceCapabilityGroups) {
     if (representedCategories.has(group.id) || !group.prompts[0]) continue;
     addPrompt({ ...group.prompts[0], source: 'DISCOVERY' });
     representedCategories.add(group.id);
   }
-  for (const group of capabilityGroups) {
+  for (const group of audienceCapabilityGroups) {
     for (const prompt of group.prompts) addPrompt({ ...prompt, source: 'DISCOVERY' });
   }
 
@@ -7208,7 +7336,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     priorityList,
     changes,
     decisions,
-    capabilityGroups,
+    capabilityGroups: audienceCapabilityGroups,
     featuredPrompts,
     suggestedQuestions: featuredPrompts.map((prompt) => prompt.question),
   };

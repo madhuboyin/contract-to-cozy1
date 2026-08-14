@@ -186,6 +186,7 @@ import { metricsMiddleware } from './middleware/metrics.middleware';
 import { requestIdMiddleware } from './middleware/requestId.middleware';
 import { APP_CONFIG_KEYS, isEmailVerificationDisabled } from './config/appConfig';
 import { validateAskOperationDefinitions } from './services/ask/askOperationRegistry';
+import { validateAskAudiencePolicies } from './services/ask/askAudiencePolicy';
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
 import { validateSkillDefinitions } from './services/skills/skillRegistry';
 import { validateSkillContextProviderDefinitions } from './services/skills/context/skillContextProviderRegistry';
@@ -204,6 +205,7 @@ dotenv.config();
 
 const askRegistryIssues = [
   ...validateAskOperationDefinitions(),
+  ...validateAskAudiencePolicies(),
   ...validateAskDomainCommandRegistry(),
   ...validateSkillDefinitions(),
   ...validateSkillContextProviderDefinitions(),
