@@ -74,7 +74,7 @@ Implementation snapshot as of August 14, 2026:
 | Governed adapters | 30 versioned adapters bound to existing canonical operations and domain owners |
 | Active consumers | Ask, Concierge Home, and Home Actions; Concierge Home and Home Actions invoke Property Record reads through the consumer-governed Skill runtime |
 | Routing | Deterministic operation ownership, versioned local semantic index, bounded candidate ranking, complete §11.2 result summaries, and fail-closed clarification; no LLM or embedding routing call |
-| Context | Every registered property-scoped Skill requires the versioned Living Home Record identity provider; Maintenance additionally consumes its task provider. Composition enforces authorization, deduplication, provenance, freshness/conflict handling, timeout, budgets, and degraded behavior. |
+| Context | Every registered property-scoped Skill requires the versioned Living Home Record identity provider and optionally consumes `property.journey-context@1.0.0`; Maintenance additionally consumes its task provider. Composition enforces authorization, deduplication, provenance, freshness/conflict handling, timeout, budgets, and degraded behavior. Successful Ask executions retain the bounded journey snapshot, and Concierge Home exposes an explicit journey-context state. |
 | Observability | Every initial Ask execution emits one bounded `SKILL_EXECUTION_TELEMETRY` event with versioned identity, consumer, routing confidence/reasons, provider and dependency status, effective risk, execution/model mode, per-stage latency bands, result status, and error code. Phase histograms remain separate. |
 | Runtime controls | Global Ask, Consumer, Domain, Skill, Operation, Context Provider, Adapter, and Narrative Synthesis controls are live; manifest feature-flag and kill-switch names are validated runtime bindings |
 | Evaluation | Every registered Skill has immutable routing, operation, ambiguity, policy, context, negative, degraded-mode, model-disabled, handoff, and performance fixtures |
@@ -1243,7 +1243,7 @@ Maintenance plus fixture Skills shall prove ambiguous and negative routing befor
 
 ### Phase SP3 — Context composition
 
-**Status: Complete.** Provider registration, authorization rechecks, declared-access enforcement, budgets, deduplication, provenance, freshness/conflict handling, timeout, and required/optional degraded behavior are operational. All fourteen property-scoped Skills declare the required Living Home Record identity provider at Skill and operation scope; Maintenance also declares and consumes its canonical task provider.
+**Status: Complete.** Provider registration, authorization rechecks, declared-access enforcement, budgets, deduplication, provenance, freshness/conflict handling, timeout, and required/optional degraded behavior are operational. All fourteen property-scoped Skills declare the required Living Home Record identity provider and optional versioned Property Journey provider at Skill and operation scope; Maintenance also declares and consumes its canonical task provider. The journey provider derives a bounded operating mode from canonical onboarding state and is available to execution and Concierge composition without adapter-owned onboarding queries.
 
 Deliver:
 

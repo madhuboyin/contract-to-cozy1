@@ -1,6 +1,7 @@
 import type { AskOperationId } from '../../ask/askOperationRegistry';
 import type { SkillDefinition } from '../skill.contract';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
+import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyContext.contract';
 
 export const MAINTENANCE_SKILL_OPERATIONS: AskOperationId[] = [
   'MAINTENANCE_STATUS',
@@ -37,9 +38,10 @@ export const MAINTENANCE_SKILL = Object.freeze({
       PROPERTY_IDENTITY_CONTEXT_PROVIDER,
       ...(operationId === 'MAINTENANCE_STATUS' ? [MAINTENANCE_TASK_CONTEXT_PROVIDER] : []),
     ],
+    optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   })),
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, MAINTENANCE_TASK_CONTEXT_PROVIDER],
-  optionalContextProviders: [],
+  optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   allowedAdapters: [
     { id: 'maintenance.status', version: '1.0' },
     { id: 'maintenance.create', version: '1.0' },
@@ -57,12 +59,15 @@ export const MAINTENANCE_SKILL = Object.freeze({
   },
   authorizationFloor: 'VIEWER',
   allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST'],
-  dependencies: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, MAINTENANCE_TASK_CONTEXT_PROVIDER].map((provider) => ({
-    type: 'CONTEXT_PROVIDER' as const,
-    id: provider.id,
-    version: provider.version,
-    required: true,
-  })),
+  dependencies: [
+    ...[PROPERTY_IDENTITY_CONTEXT_PROVIDER, MAINTENANCE_TASK_CONTEXT_PROVIDER].map((provider) => ({
+      type: 'CONTEXT_PROVIDER' as const,
+      id: provider.id,
+      version: provider.version,
+      required: true,
+    })),
+    { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
+  ],
   contextBudget: {
     maxFacts: 100,
     maxEntities: 50,

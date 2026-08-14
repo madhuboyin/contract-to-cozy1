@@ -933,7 +933,7 @@ The document shall be updated as each slice is delivered:
 | Slice | Status | Evidence |
 | --- | --- | --- |
 | Account-role eligibility | Verified | All `/ask/*` routes use the homeowner account guard after fresh authentication; initial execution and Concierge Home also recheck the service boundary; provider/admin direct Ask routes are redirected before rendering; backend policy tests, frontend policy tests, backend TypeScript, frontend production build, and all 174 Ask tests pass |
-| Journey context provider | Not started | Pending |
+| Journey context provider | Implemented | `property.journey-context@1.0.0` performs one bounded canonical onboarding read, derives `BUYING` / `OWNING` / `SELLING` / `UNKNOWN`, is registered as optional context on all 14 property Skills, is retained in successful execution parameters, and is exposed by Concierge Home with explicit `AVAILABLE` / `UNKNOWN` / `UNAVAILABLE` state; backend TypeScript and 21 focused Skill Platform tests pass |
 | Audience applicability registry | Not started | Pending |
 | Persona-aware landing prompts | Not started | Pending |
 | Persona-aware focused responses | Not started | Pending |
@@ -941,7 +941,9 @@ The document shall be updated as each slice is delivered:
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, or `Verified`. A slice shall not be marked `Verified` until its automated acceptance evidence passes.
 
-**Implementation update — August 14, 2026:** Slice 1 is verified. `HOMEOWNER` is the only eligible account role for homeowner Ask Cozy. A centralized router guard returns `ASK_ACCOUNT_ROLE_NOT_ELIGIBLE` for `PROVIDER` and `ADMIN`, and the two internally callable initial-composition services recheck the same policy when no trusted controller role is supplied. The dashboard prevents excluded roles from rendering the direct Ask workspace and redirects them to their dedicated destination. Property access and household-role authorization remain separate downstream controls. No database or migration change was required.
+**Implementation update — August 14, 2026:** Slice 1 is verified. `HOMEOWNER` is the only eligible account role for homeowner Ask Cozy. A centralized router guard returns `ASK_ACCOUNT_ROLE_NOT_ELIGIBLE` for `PROVIDER` and `ADMIN`, and the two internally callable initial-composition services recheck the same policy when no trusted controller role is supplied. The dashboard prevents excluded roles from rendering the direct Ask workspace and redirects them to their dedicated destination. Property access and household-role authorization remain separate downstream controls.
+
+Slice 2 is implemented. The registered `property.journey-context@1.0.0` provider reads the canonical `PropertyOnboarding` entry context once per composition, applies deterministic lifecycle derivation, and degrades to explicit unknown/unavailable states. All 14 property Skills declare the provider at Skill and operation scope while retaining Living Home Record identity as the required authorization-bearing provider. Ask executions preserve the bounded journey snapshot in their existing parameters lineage, and Concierge Home exposes the same governed context for later prompt applicability. No database schema or migration change was required. Backend TypeScript and 21 focused context, registry, and taxonomy tests pass; full verification remains part of Slice 6.
 
 ---
 

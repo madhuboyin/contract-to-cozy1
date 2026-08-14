@@ -99,9 +99,20 @@ export const ConciergeHomeCapabilityGroupSchema = z.object({
   prompts: z.array(ConciergeHomeCapabilityPromptSchema),
 });
 
+export const ConciergeHomeJourneyContextSchema = z.object({
+  state: z.enum(['AVAILABLE', 'UNKNOWN', 'UNAVAILABLE']),
+  ownershipState: z.enum(['SHOPPING', 'UNDER_CONTRACT', 'RECENT_OWNER', 'ESTABLISHED_OWNER', 'PREPARING_TRANSFER', 'UNKNOWN']).nullable(),
+  operatingMode: z.enum(['BUYING', 'OWNING', 'SELLING', 'UNKNOWN']),
+  entryPath: z.enum(['EXISTING_OWNER_TRIGGER', 'EXISTING_HOME_PURCHASE', 'NEW_HOME_SETUP', 'MAJOR_MOMENT', 'EXPLORATION']).nullable(),
+  propertyOrigin: z.enum(['EXISTING_HOME', 'NEW_CONSTRUCTION', 'UNKNOWN']).nullable(),
+  contextVersion: z.string().nullable(),
+  capturedAt: z.string().nullable(),
+});
+
 export const ConciergeHomeViewSchema = z.object({
   propertyId: z.string(),
   generatedAt: z.string(),
+  journeyContext: ConciergeHomeJourneyContextSchema,
   priorityList: ConciergeHomePriorityListSchema,
   changes: ConciergeHomeChangesSchema,
   decisions: ConciergeHomeDecisionsSchema,

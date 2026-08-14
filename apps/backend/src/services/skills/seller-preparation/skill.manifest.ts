@@ -1,5 +1,6 @@
 import type { SkillDefinition } from '../skill.contract';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
+import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyContext.contract';
 
 export const SELLER_PREPARATION_SKILL = Object.freeze({
   "id": "seller-preparation",
@@ -24,11 +25,12 @@ export const SELLER_PREPARATION_SKILL = Object.freeze({
     {
       "operationId": "MAJOR_EVENT_ENTRY",
       "version": "1.0",
-      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER]
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+      "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
     }
   ],
   "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
-  "optionalContextProviders": [],
+  "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   "allowedAdapters": [
     {
       "id": "major-event.entry",
@@ -64,6 +66,7 @@ export const SELLER_PREPARATION_SKILL = Object.freeze({
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
+    { "type": "CONTEXT_PROVIDER", "id": PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, "version": PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, "required": false },
     {
       "type": "OPERATION_CONTRACT",
       "id": "MAJOR_EVENT_ENTRY",

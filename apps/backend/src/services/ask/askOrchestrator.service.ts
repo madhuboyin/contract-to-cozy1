@@ -28,6 +28,11 @@ import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.servi
 import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
 import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
+import {
+  PROPERTY_JOURNEY_CONTEXT_PROVIDER,
+  type PropertyJourneyContext,
+} from '../skills/context/propertyJourneyContext.contract';
+import type { ComposedSkillContext } from '../skills/context/skillContext.contract';
 import { MAINTENANCE_TASK_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
 import { assertAskAccountRoleEligible, type AskAccountRole } from './askAccountEligibility';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
@@ -117,6 +122,35 @@ const inventoryService = new InventoryService();
 const replaceRepairService = new ReplaceRepairService();
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
 const permitTrackerService = new PermitTrackerService();
+
+function journeyContextFrom(composedContext: ComposedSkillContext | null): PropertyJourneyContext | null {
+  if (!composedContext) return null;
+  const value = composedContext.values[skillContextProviderKey(PROPERTY_JOURNEY_CONTEXT_PROVIDER)];
+  if (!value || typeof value !== 'object') return null;
+  return value as PropertyJourneyContext;
+}
+
+function attachJourneyContext(
+  result: AskOperationResult,
+  composedContext: ComposedSkillContext | null,
+): AskOperationResult {
+  const journeyContext = journeyContextFrom(composedContext);
+  if (!journeyContext) return result;
+  return {
+    ...result,
+    parameters: {
+      ...(result.parameters ?? {}),
+      journeyContext: {
+        ownershipState: journeyContext.ownershipState,
+        operatingMode: journeyContext.operatingMode,
+        entryPath: journeyContext.entryPath,
+        propertyOrigin: journeyContext.propertyOrigin,
+        contextVersion: journeyContext.contextVersion,
+        capturedAt: journeyContext.capturedAt,
+      },
+    },
+  };
+}
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
   if (outcome === 'UNSUPPORTED') return 'ASK_SKILL_UNSUPPORTED';
@@ -4289,7 +4323,10 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   const canonicalStartedAt = process.hrtime.bigint();
   let canonicalStatus = 'threw';
   try {
-    const result = await dispatchOperationAdapter(input, composedContext, trace);
+    const result = attachJourneyContext(
+      await dispatchOperationAdapter(input, composedContext, trace),
+      composedContext,
+    );
     canonicalStatus = result.status;
     askSkillAdapterExecutionsTotal.inc({ adapter: adapter.id, adapter_version: adapter.version, operation: input.operation.operationId, status: result.status });
     return result;
@@ -7068,11 +7105,54 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     }
   })();
 
-  const [priorityList, changes, decisions, inventoryDecisionCandidate] = await Promise.all([
+  const journeyContextPromise = (async (): Promise<ConciergeHomeView['journeyContext']> => {
+    try {
+      const skill = getSkillDefinition('property-record');
+      if (!skill) throw new Error('Property Record Skill is not registered.');
+      const composed = await composeSkillContext({
+        skill,
+        operationId: 'PROPERTY_SUMMARY',
+        userId,
+        propertyId,
+      }, { providerEnabled: readAskOperationalControls().contextProviderEnabled });
+      const entry = composed.entries.find((candidate) => candidate.key === skillContextProviderKey(PROPERTY_JOURNEY_CONTEXT_PROVIDER));
+      const context = journeyContextFrom(composed);
+      if (entry?.status === 'UNKNOWN' || (entry?.status === 'AVAILABLE' && !context)) {
+        return {
+          state: 'UNKNOWN', ownershipState: null, operatingMode: 'UNKNOWN', entryPath: null,
+          propertyOrigin: null, contextVersion: null, capturedAt: null,
+        };
+      }
+      if (!context || entry?.status !== 'AVAILABLE') {
+        return {
+          state: 'UNAVAILABLE', ownershipState: null, operatingMode: 'UNKNOWN', entryPath: null,
+          propertyOrigin: null, contextVersion: null, capturedAt: null,
+        };
+      }
+      return {
+        state: 'AVAILABLE',
+        ownershipState: context.ownershipState,
+        operatingMode: context.operatingMode,
+        entryPath: context.entryPath,
+        propertyOrigin: context.propertyOrigin,
+        contextVersion: context.contextVersion,
+        capturedAt: context.capturedAt,
+      };
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home journey context failed closed');
+      return {
+        state: 'UNAVAILABLE', ownershipState: null, operatingMode: 'UNKNOWN', entryPath: null,
+        propertyOrigin: null, contextVersion: null, capturedAt: null,
+      };
+    }
+  })();
+
+  const [priorityList, changes, decisions, inventoryDecisionCandidate, journeyContext] = await Promise.all([
     priorityListPromise,
     changesPromise,
     decisionsPromise,
     inventoryDecisionCandidatePromise,
+    journeyContextPromise,
   ]);
   const featuredPrompts: ConciergeHomeView['featuredPrompts'] = [];
   const addPrompt = (prompt: ConciergeHomeView['featuredPrompts'][number]) => {
@@ -7124,6 +7204,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
   return {
     propertyId,
     generatedAt: new Date().toISOString(),
+    journeyContext,
     priorityList,
     changes,
     decisions,

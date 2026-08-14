@@ -1,6 +1,7 @@
 import type { AskOperationId } from '../../ask/askOperationRegistry';
 import type { SkillDefinition } from '../skill.contract';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
+import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyContext.contract';
 
 export const REPAIR_REPLACE_SKILL_OPERATIONS: AskOperationId[] = [
   'REPLACEMENT_GUIDANCE',
@@ -43,9 +44,9 @@ export const REPAIR_REPLACE_SKILL = Object.freeze({
     'record-repair-replace-outcome',
   ],
   aliases: ['repair or replace', 'fix or replace', 'replacement decision', 'system replacement decision'],
-  operations: REPAIR_REPLACE_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0', requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER] })),
+  operations: REPAIR_REPLACE_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0', requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER], optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER] })),
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
-  optionalContextProviders: [],
+  optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   allowedAdapters: REPAIR_REPLACE_ADAPTERS,
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: REPAIR_REPLACE_SKILL_OPERATIONS }],
@@ -76,6 +77,7 @@ export const REPAIR_REPLACE_SKILL = Object.freeze({
   ],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
+    { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
     ...REPAIR_REPLACE_SKILL_OPERATIONS.map((operationId) => ({
       type: 'OPERATION_CONTRACT' as const,
       id: operationId,

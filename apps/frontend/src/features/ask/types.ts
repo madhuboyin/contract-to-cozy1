@@ -145,6 +145,15 @@ export interface CreateAskExecutionPayload {
 export interface ConciergeHomeView {
   propertyId: string;
   generatedAt: string;
+  journeyContext: {
+    state: 'AVAILABLE' | 'UNKNOWN' | 'UNAVAILABLE';
+    ownershipState: 'SHOPPING' | 'UNDER_CONTRACT' | 'RECENT_OWNER' | 'ESTABLISHED_OWNER' | 'PREPARING_TRANSFER' | 'UNKNOWN' | null;
+    operatingMode: 'BUYING' | 'OWNING' | 'SELLING' | 'UNKNOWN';
+    entryPath: 'EXISTING_OWNER_TRIGGER' | 'EXISTING_HOME_PURCHASE' | 'NEW_HOME_SETUP' | 'MAJOR_MOMENT' | 'EXPLORATION' | null;
+    propertyOrigin: 'EXISTING_HOME' | 'NEW_CONSTRUCTION' | 'UNKNOWN' | null;
+    contextVersion: string | null;
+    capturedAt: string | null;
+  };
   priorityList: {
     state: 'AVAILABLE' | 'NO_ACTION' | 'UNAVAILABLE';
     rankingPolicyVersion: string | null;

@@ -1,5 +1,6 @@
 import type { SkillDefinition } from '../skill.contract';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
+import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyContext.contract';
 
 export const CAPITAL_PLANNING_SKILL = Object.freeze({
   "id": "capital-planning",
@@ -24,11 +25,12 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     {
       "operationId": "CAPITAL_RESERVE_PLAN",
       "version": "1.0",
-      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER]
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+      "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
     }
   ],
   "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
-  "optionalContextProviders": [],
+  "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   "allowedAdapters": [
     {
       "id": "capital-reserve.plan",
@@ -66,6 +68,7 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
+    { "type": "CONTEXT_PROVIDER", "id": PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, "version": PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, "required": false },
     {
       "type": "OPERATION_CONTRACT",
       "id": "CAPITAL_RESERVE_PLAN",
