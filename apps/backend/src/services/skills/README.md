@@ -25,6 +25,10 @@ The registered Skills reference existing Ask operations and canonical adapters. 
 executions persist a versioned Skill binding after the additive `AskExecution` schema
 changes are applied by the database owner; this package does not ship migration scripts.
 
+The Version 1 registry represents all fourteen Skills in the FRD's initial taxonomy. Each
+entry reuses an existing canonical operation and adapter; catalog expansion does not add
+Skill-specific branches to the core router or move domain logic into the Skill layer.
+
 Version 1 performance visibility uses bounded registry dimensions only. Routing, context
 composition, provider fan-out and payload, adapter resolution, canonical execution,
 presentation validation, and optional model work are timed separately. The smoke suite is

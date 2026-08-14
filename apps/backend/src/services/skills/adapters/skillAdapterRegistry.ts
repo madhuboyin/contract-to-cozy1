@@ -46,6 +46,17 @@ const DEFINITIONS = [
   adapter('refinance.monitor', 'Refinance Rate Monitor', 'REFINANCE_RATE_MONITOR', 'MUTATION_PREPARATION'),
   adapter('property.summary', 'Property Record Overview', 'PROPERTY_SUMMARY'),
   adapter('inventory.lookup', 'InventoryService', 'INVENTORY_LOOKUP'),
+  adapter('coverage.review', 'Coverage Intelligence', 'COVERAGE_GAPS'),
+  adapter('savings.opportunities', 'Savings and Benefits Intelligence', 'SAVINGS_OPPORTUNITIES'),
+  adapter('ownership.costs', 'Ownership Cost Intelligence', 'OWNERSHIP_COSTS'),
+  adapter('sale-case.analysis', 'Seller Preparation Decision Service', 'SELL_HOLD_RENT_ANALYSIS'),
+  adapter('household.invitation', 'Household Membership Service', 'HOUSEHOLD_INVITATION', 'MUTATION_PREPARATION'),
+  adapter('quote-comparison.create', 'Quote Comparison Workspace', 'QUOTE_COMPARISON_CREATE', 'MUTATION_PREPARATION'),
+  adapter('quote-comparison.review', 'Quote Comparison Workspace', 'QUOTE_COMPARISON_REVIEW'),
+  adapter('capital-reserve.plan', 'Capital Planning Intelligence', 'CAPITAL_RESERVE_PLAN'),
+  adapter('property-tax.appeal-readiness', 'Property Tax Intelligence', 'PROPERTY_TAX_APPEAL_READINESS'),
+  adapter('renovation-permit.readiness', 'Renovation Readiness Service', 'RENOVATION_PERMIT_READINESS'),
+  adapter('major-event.entry', 'Major Event Navigation', 'MAJOR_EVENT_ENTRY'),
 ] as const;
 
 export function skillAdapterKey(adapterReference: { id: string; version: string }): string {

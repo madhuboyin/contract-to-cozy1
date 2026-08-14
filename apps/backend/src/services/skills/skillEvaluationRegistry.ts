@@ -3,6 +3,16 @@ import { ASK_EXECUTION_STATUSES, type AskExecutionStatus, type AskPresentationBl
 import type { SkillConsumer, SkillDefinition, VersionedSkillReference } from './skill.contract';
 import { getAskOperationDefinition } from '../ask/askOperationRegistry';
 import { SKILL_DEFINITIONS } from './skillRegistry';
+import { CAPITAL_PLANNING_SKILL_EVALUATION } from './capital-planning';
+import { COVERAGE_SKILL_EVALUATION } from './coverage';
+import { HOUSEHOLD_SKILL_EVALUATION } from './household';
+import { OWNERSHIP_COST_SKILL_EVALUATION } from './ownership-cost';
+import { PROPERTY_TAX_SKILL_EVALUATION } from './property-tax';
+import { QUOTE_COMPARISON_SKILL_EVALUATION } from './quote-comparison';
+import { RENOVATION_SKILL_EVALUATION } from './renovation';
+import { SAVINGS_SKILL_EVALUATION } from './savings';
+import { SELL_HOLD_RENT_SKILL_EVALUATION } from './sell-hold-rent';
+import { SELLER_PREPARATION_SKILL_EVALUATION } from './seller-preparation';
 
 export type SkillRoutingFixtureMode = 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL' | 'MISSPELLED';
 export type SkillContextFixtureState = 'KNOWN' | 'MISSING' | 'STALE' | 'CONFLICTING' | 'UNAUTHORIZED' | 'UNAVAILABLE';
@@ -103,6 +113,16 @@ const refinance = SKILL_DEFINITIONS.refinance;
 const propertyRecord = SKILL_DEFINITIONS['property-record'];
 
 export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationPackage>> = Object.freeze({
+  [CAPITAL_PLANNING_SKILL_EVALUATION.id]: CAPITAL_PLANNING_SKILL_EVALUATION,
+  [COVERAGE_SKILL_EVALUATION.id]: COVERAGE_SKILL_EVALUATION,
+  [HOUSEHOLD_SKILL_EVALUATION.id]: HOUSEHOLD_SKILL_EVALUATION,
+  [OWNERSHIP_COST_SKILL_EVALUATION.id]: OWNERSHIP_COST_SKILL_EVALUATION,
+  [PROPERTY_TAX_SKILL_EVALUATION.id]: PROPERTY_TAX_SKILL_EVALUATION,
+  [QUOTE_COMPARISON_SKILL_EVALUATION.id]: QUOTE_COMPARISON_SKILL_EVALUATION,
+  [RENOVATION_SKILL_EVALUATION.id]: RENOVATION_SKILL_EVALUATION,
+  [SAVINGS_SKILL_EVALUATION.id]: SAVINGS_SKILL_EVALUATION,
+  [SELL_HOLD_RENT_SKILL_EVALUATION.id]: SELL_HOLD_RENT_SKILL_EVALUATION,
+  [SELLER_PREPARATION_SKILL_EVALUATION.id]: SELLER_PREPARATION_SKILL_EVALUATION,
   [maintenance.evaluationSuite]: evaluationPackage(maintenance, {
     routingCases: [
       { mode: 'EXACT', message: 'What maintenance is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },

@@ -190,9 +190,14 @@ export function buildSkillPackageScaffold(
   const envId = prefix;
   const operationIds = spec.operations.map((operation) => operation.operationId);
   const adapters = [...new Map(spec.operations.map((operation) => {
-    const adapter = deps.resolveAdapter(operation.operationId)!;
+    const resolved = deps.resolveAdapter(operation.operationId)!;
+    const adapter: VersionedSkillReference = { id: resolved.id, version: resolved.version };
     return [`${adapter.id}@${adapter.version}`, adapter] as const;
   })).values()];
+  const adapterByOperation = new Map(spec.operations.map((operation) => {
+    const resolved = deps.resolveAdapter(operation.operationId)!;
+    return [operation.operationId, { id: resolved.id, version: resolved.version }] as const;
+  }));
   const providerRequirements = new Map<string, boolean>();
   for (const operation of spec.operations) {
     for (const provider of operation.requiredContextProviders ?? []) providerRequirements.set(`${provider.id}@${provider.version}`, true);
@@ -254,7 +259,7 @@ export function buildSkillPackageScaffold(
     skillId: spec.id,
     skillVersion: version,
     routingCases: spec.selectionExamples.map((example) => ({ mode: example.mode, message: example.message, expectedOperationId: example.operationId })),
-    operationCases: spec.operations.map((operation) => ({ operationId: operation.operationId, expectedAdapter: deps.resolveAdapter(operation.operationId) })),
+    operationCases: spec.operations.map((operation) => ({ operationId: operation.operationId, expectedAdapter: adapterByOperation.get(operation.operationId) })),
     ambiguityCases: spec.ambiguityExamples.map((example) => ({ ...example, expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' })),
     policyCases: spec.consumerPolicy.flatMap((policy) => policy.operations.map((operationId) => ({ consumer: policy.consumer, operationId, allowed: true }))),
     contextCases: [
@@ -288,7 +293,7 @@ export function buildSkillPackageScaffold(
 
   const skillDoc = `# ${spec.displayName} Skill\n\n## Purpose\n\n${spec.description}\n\n## Select this Skill when\n\n${spec.selectionExamples.map((example) => `- ${example.message}`).join('\n')}\n\n## Do not select this Skill when\n\n${spec.exclusions.map((exclusion) => `- ${exclusion}`).join('\n')}\n\n## Operations\n\n${operationIds.map((operationId) => `- \`${operationId}\``).join('\n')}\n\n## Consumers\n\n${spec.consumerPolicy.map((policy) => `- ${policy.consumer}: ${policy.operations.join(', ')}`).join('\n')}\n\n## Canonical ownership and boundaries\n\nOperations remain owned by their registered canonical services and may be reached only through the adapters declared in the machine manifest. Context access is limited to declared providers. Peer Skill execution is prohibited; handoffs return to Ask for normal routing and authorization.\n\nThis document provides semantic guidance only. The machine manifest, operation registry, consumer policy, adapters, providers, and canonical services control execution.\n`;
   const manifestSource = `import type { SkillDefinition } from '../skill.contract';\n\nexport const ${prefix}_SKILL = Object.freeze(${json(manifest)} satisfies SkillDefinition);\n`;
-  const evaluationSource = `import type { SkillEvaluationPackage } from '../skillEvaluationRegistry';\n\nexport const ${prefix}_SKILL_EVALUATION = Object.freeze(${json(evaluation)} satisfies SkillEvaluationPackage);\n`;
+  const evaluationSource = `import type { SkillEvaluationPackage } from '../skillEvaluationRegistry';\nimport { deepFreezeSkillPackage } from '../skillPackageFreeze';\n\nexport const ${prefix}_SKILL_EVALUATION = deepFreezeSkillPackage(${json(evaluation)} satisfies SkillEvaluationPackage);\n`;
   const indexSource = `export { ${prefix}_SKILL } from './skill.manifest';\nexport { ${prefix}_SKILL_EVALUATION } from './skill.evaluation';\n`;
 
   return Object.freeze({

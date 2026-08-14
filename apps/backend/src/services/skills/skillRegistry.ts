@@ -13,6 +13,16 @@ import { MAINTENANCE_SKILL } from './maintenance';
 import { REPAIR_REPLACE_SKILL } from './repairReplace';
 import { REFINANCE_SKILL } from './refinance';
 import { PROPERTY_RECORD_SKILL } from './propertyRecord';
+import { CAPITAL_PLANNING_SKILL } from './capital-planning';
+import { COVERAGE_SKILL } from './coverage';
+import { HOUSEHOLD_SKILL } from './household';
+import { OWNERSHIP_COST_SKILL } from './ownership-cost';
+import { PROPERTY_TAX_SKILL } from './property-tax';
+import { QUOTE_COMPARISON_SKILL } from './quote-comparison';
+import { RENOVATION_SKILL } from './renovation';
+import { SAVINGS_SKILL } from './savings';
+import { SELL_HOLD_RENT_SKILL } from './sell-hold-rent';
+import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 import { REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
 import { selectSkillDependencyVersion } from './skillDependencyVersion';
@@ -36,6 +46,16 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'repair-replace': REPAIR_REPLACE_SKILL,
   refinance: REFINANCE_SKILL,
   'property-record': PROPERTY_RECORD_SKILL,
+  'capital-planning': CAPITAL_PLANNING_SKILL,
+  coverage: COVERAGE_SKILL,
+  household: HOUSEHOLD_SKILL,
+  'ownership-cost': OWNERSHIP_COST_SKILL,
+  'property-tax': PROPERTY_TAX_SKILL,
+  'quote-comparison': QUOTE_COMPARISON_SKILL,
+  renovation: RENOVATION_SKILL,
+  savings: SAVINGS_SKILL,
+  'sell-hold-rent': SELL_HOLD_RENT_SKILL,
+  'seller-preparation': SELLER_PREPARATION_SKILL,
 } satisfies Readonly<Record<string, SkillDefinition>>);
 
 export type SkillId = keyof typeof SKILL_DEFINITIONS;

@@ -337,6 +337,8 @@ Monitoring infrastructure, context retrieval, priority ranking, notification del
 
 This table is the directional product taxonomy, not a requirement to implement every row in Version 1. Version 1 shall implement the Skills named in §29 plus any additional Skills needed to prove catalog extensibility and multi-surface access. Remaining rows are admitted incrementally when their canonical capability is ready and they satisfy the Skill admission rubric; absence of an unadmitted row is not a platform-completeness defect.
 
+Current implementation evidence: all fourteen representative rows are registered as immutable Skill packages backed by existing canonical operations and governed adapters. This implementation status does not change the admission rule or require future taxonomy rows to be created before their canonical capability exists.
+
 | Domain | Skill | Representative operations |
 | --- | --- | --- |
 | `HOME_CARE` | Maintenance | status, create, complete, update, monitor |
