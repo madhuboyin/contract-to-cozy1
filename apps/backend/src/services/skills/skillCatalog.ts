@@ -1,6 +1,7 @@
-import { getAskOperationDefinition, type AskOperationId, type AskPropertyRoleFloor } from '../ask/askOperationRegistry';
+import { getAskOperationDefinition, type AskPropertyRoleFloor } from '../ask/askOperationRegistry';
 import type { SkillConsumer, SkillDefinition, SkillDomain, SkillLifecycleStatus } from './skill.contract';
 import { resolveEffectiveSkillOperationPolicy, SKILL_DEFINITIONS } from './skillRegistry';
+import { deriveSkillHealthForDefinition, type SkillHealthControls, type SkillHealthReasonCode, type SkillHealthStatus } from './skillHealth';
 
 export interface DiscoverableSkillOperation {
   id: string;
@@ -16,19 +17,12 @@ export interface DiscoverableSkill {
   displayName: string;
   description: string;
   lifecycleStatus: SkillLifecycleStatus;
+  health: Exclude<SkillHealthStatus, 'UNAVAILABLE' | 'DISABLED'>;
+  healthReasonCodes: readonly SkillHealthReasonCode[];
   operations: readonly DiscoverableSkillOperation[];
 }
 
-export interface SkillCatalogControls {
-  skillEnabled?: (skillId: string) => boolean;
-  operationEnabled?: (operationId: AskOperationId) => boolean;
-}
-
-function isRuntimeDiscoverable(skill: SkillDefinition, skillEnabled: (skillId: string) => boolean): boolean {
-  return skill.lifecycleStatus !== 'RETIRED'
-    && skill.operationalStatus === 'ENABLED'
-    && skillEnabled(skill.id);
-}
+export interface SkillCatalogControls extends SkillHealthControls {}
 
 /**
  * Returns executable Skill identity and operation policy for one consumer.
@@ -39,13 +33,13 @@ export function listDiscoverableSkills(
   consumer: SkillConsumer,
   controls: SkillCatalogControls = {},
 ): readonly DiscoverableSkill[] {
-  const skillEnabled = controls.skillEnabled ?? (() => true);
-  const operationEnabled = controls.operationEnabled ?? (() => true);
   return (Object.values(SKILL_DEFINITIONS) as SkillDefinition[])
-    .filter((skill) => isRuntimeDiscoverable(skill, skillEnabled))
     .flatMap((skill) => {
+      const health = deriveSkillHealthForDefinition(skill, consumer, controls);
+      if (health.status === 'UNAVAILABLE' || health.status === 'DISABLED') return [];
+      const operationHealth = new Map(health.operations.map((operation) => [operation.operationId, operation]));
       const operations = skill.operations.flatMap((reference) => {
-        if (!operationEnabled(reference.operationId)) return [];
+        if (operationHealth.get(reference.operationId)?.status === 'UNAVAILABLE') return [];
         const policy = resolveEffectiveSkillOperationPolicy(skill.id, reference.operationId, consumer);
         if (!policy) return [];
         const operation = getAskOperationDefinition(reference.operationId);
@@ -64,6 +58,8 @@ export function listDiscoverableSkills(
         displayName: skill.displayName,
         description: skill.description,
         lifecycleStatus: skill.lifecycleStatus,
+        health: health.status,
+        healthReasonCodes: health.reasonCodes,
         operations: Object.freeze(operations),
       })];
     })

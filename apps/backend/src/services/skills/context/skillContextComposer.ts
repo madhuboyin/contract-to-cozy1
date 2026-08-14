@@ -28,6 +28,7 @@ export interface ComposeSkillContextInput {
 export interface SkillContextComposerDependencies {
   resolveProvider?: ProviderResolver;
   authorizeProperty?: AuthorizeProperty;
+  providerEnabled?: (providerId: string) => boolean;
 }
 
 function emptyEntry(
@@ -78,7 +79,9 @@ export async function composeSkillContext(
 
   const resolveProvider = dependencies.resolveProvider ?? getSkillContextProvider;
   const authorizeProperty = dependencies.authorizeProperty ?? resolvePropertyAccess;
-  const authorization = await authorizeProperty(input.userId, input.propertyId);
+  const providerEnabled = dependencies.providerEnabled ?? (() => true);
+  let authorizationPromise: Promise<SkillContextAuthorization | null> | null = null;
+  const getAuthorization = () => authorizationPromise ??= authorizeProperty(input.userId, input.propertyId);
   const invocationCache = new Map<string, Promise<ComposedSkillContextEntry>>();
   const startedAt = Date.now();
 
@@ -92,7 +95,9 @@ export async function composeSkillContext(
       const provider = resolveProvider(reference.id, reference.version);
       if (!declarations.has(key)) return emptyEntry(provider, reference, isRequired, 'UNAVAILABLE', 'Provider is not declared by this Skill.');
       if (!provider) return emptyEntry(undefined, reference, isRequired, 'UNAVAILABLE', 'Provider is not registered.');
+      if (!providerEnabled(provider.id)) return emptyEntry(provider, reference, isRequired, 'UNAVAILABLE', 'Provider is disabled by an operational control.');
       if (!provider.supportedOperations.includes(input.operationId)) return emptyEntry(provider, reference, isRequired, 'NOT_APPLICABLE');
+      const authorization = await getAuthorization();
       if (!authorization || (provider.minimumRole && ROLE_RANK[authorization.role] < ROLE_RANK[provider.minimumRole])) {
         return emptyEntry(provider, reference, isRequired, 'UNAUTHORIZED');
       }

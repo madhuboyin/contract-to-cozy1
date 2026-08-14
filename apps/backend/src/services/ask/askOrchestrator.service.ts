@@ -4083,7 +4083,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       operationId: input.operation.operationId,
       userId: input.userId,
       propertyId: input.propertyId,
-    });
+    }, { providerEnabled: controls.contextProviderEnabled });
     if (composedContext.status === 'BLOCKED') {
       const requiredFailure = composedContext.entries.find((entry) => entry.required && entry.status !== 'AVAILABLE');
       const permissionFailure = requiredFailure?.status === 'UNAUTHORIZED';
@@ -4440,6 +4440,9 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const skillRoutingDecision = resolveHierarchicalSkillRouting(routingMessage, routingDecision, {
     consumer: 'ASK',
     skillEnabled: controls.skillEnabled,
+    operationEnabled: controls.operationEnabled,
+    adapterEnabled: controls.adapterEnabled,
+    contextProviderEnabled: controls.contextProviderEnabled,
     minimumConfidence: controls.localRoutingMinimumConfidence,
     ambiguityMargin: controls.routingAmbiguityMargin,
   });

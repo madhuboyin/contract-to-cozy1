@@ -3,6 +3,7 @@ import type { AskRoutingDecision } from '../ask/askRoutingCascade';
 import type { AskOperationId } from '../ask/askOperationRegistry';
 import { getSkillForOperation, SKILL_DEFINITIONS } from './skillRegistry';
 import type { SkillConsumer, SkillDefinition } from './skill.contract';
+import { deriveSkillHealthForDefinition, type SkillHealthControls } from './skillHealth';
 
 export type SkillRoutingOutcome =
   | 'RESOLVED'
@@ -114,22 +115,20 @@ export function detectSkillSemanticConflicts(
 function eligibleSkill(
   skill: SkillDefinition,
   consumer: SkillConsumer,
-  skillEnabled: (skillId: string) => boolean,
+  controls: SkillHealthControls,
 ): boolean {
-  return skill.lifecycleStatus !== 'RETIRED'
-    && skill.operationalStatus === 'ENABLED'
-    && skillEnabled(skill.id)
-    && skill.consumerPolicy.some((policy) => policy.consumer === consumer && policy.operations.length > 0);
+  const health = deriveSkillHealthForDefinition(skill, consumer, controls);
+  return health.status === 'HEALTHY' || health.status === 'DEGRADED';
 }
 
 function eligibleSkillOperation(
   skill: SkillDefinition,
   operationId: AskOperationId,
   consumer: SkillConsumer,
-  skillEnabled: (skillId: string) => boolean,
+  controls: SkillHealthControls,
 ): boolean {
-  return eligibleSkill(skill, consumer, skillEnabled)
-    && skill.consumerPolicy.some((policy) => policy.consumer === consumer && policy.operations.includes(operationId));
+  const health = deriveSkillHealthForDefinition(skill, consumer, controls);
+  return health.operations.some((operation) => operation.operationId === operationId && operation.status !== 'UNAVAILABLE');
 }
 
 function operationOwner(
@@ -148,6 +147,9 @@ export function resolveHierarchicalSkillRouting(
     index?: SkillSemanticIndex;
     consumer?: SkillConsumer;
     skillEnabled?: (skillId: string) => boolean;
+    operationEnabled?: (operationId: AskOperationId) => boolean;
+    adapterEnabled?: (adapterId: string) => boolean;
+    contextProviderEnabled?: (providerId: string) => boolean;
     minimumConfidence?: number;
     ambiguityMargin?: number;
   } = {},
@@ -156,6 +158,12 @@ export function resolveHierarchicalSkillRouting(
   const index = options.index ?? (definitions === SKILL_DEFINITIONS ? SKILL_SEMANTIC_INDEX : buildSkillSemanticIndex(definitions));
   const consumer = options.consumer ?? 'ASK';
   const skillEnabled = options.skillEnabled ?? (() => true);
+  const runtimeControls: SkillHealthControls = {
+    skillEnabled,
+    operationEnabled: options.operationEnabled,
+    adapterEnabled: options.adapterEnabled,
+    contextProviderEnabled: options.contextProviderEnabled,
+  };
   const minimum = options.minimumConfidence ?? 0.42;
   const ambiguityMargin = options.ambiguityMargin ?? 0.1;
 
@@ -178,7 +186,7 @@ export function resolveHierarchicalSkillRouting(
         semanticIndexVersion: index.version,
       };
     }
-    if (!eligibleSkillOperation(skill, operationDecision.operation.operationId, consumer, skillEnabled)) {
+    if (!eligibleSkillOperation(skill, operationDecision.operation.operationId, consumer, runtimeControls)) {
       return {
         outcome: 'UNAVAILABLE', path: 'OPERATION_OWNERSHIP', selectedSkill: null,
         selectedOperationId: operationDecision.operation.operationId,
@@ -198,7 +206,7 @@ export function resolveHierarchicalSkillRouting(
   const candidates = index.entries
     .flatMap((entry) => {
       const skill = definitions[entry.skillId];
-      if (!skill || !eligibleSkill(skill, consumer, skillEnabled)) return [];
+      if (!skill || !eligibleSkill(skill, consumer, runtimeControls)) return [];
       const candidate = scoreSkill(message, entry);
       return candidate ? [candidate] : [];
     })
@@ -222,8 +230,9 @@ export function resolveHierarchicalSkillRouting(
   }
 
   const skill = definitions[strongest.skillId];
+  const skillHealth = deriveSkillHealthForDefinition(skill, consumer, runtimeControls);
   const candidateOperations = skill.operations
-    .filter((operation) => skill.consumerPolicy.some((policy) => policy.consumer === consumer && policy.operations.includes(operation.operationId)))
+    .filter((operation) => skillHealth.operations.some((health) => health.operationId === operation.operationId && health.status !== 'UNAVAILABLE'))
     .map((operation) => ({ operationId: operation.operationId, confidence: strongest.confidence }));
   if (candidateOperations.length !== 1) {
     return {
