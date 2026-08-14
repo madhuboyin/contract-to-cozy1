@@ -48,6 +48,13 @@ function filterBlockActions(block: AskPresentationBlock, householdRole: Househol
   }
 }
 
+function blockAllowed(block: AskPresentationBlock, householdRole: HouseholdRole): boolean {
+  if (block.type !== 'PREFERENCE_REFERENCE') return true;
+  if (block.visibility === 'PRIVATE') return false;
+  if (block.visibility === 'OWNER_ONLY') return householdRole === 'OWNER';
+  return true;
+}
+
 function lifecycleFraming(ownershipState: OnboardingOwnershipState | null): string {
   if (ownershipState === 'SHOPPING' || ownershipState === 'UNDER_CONTRACT') {
     return 'For a home you are buying, prioritize verified records, unresolved conditions, and costs that could matter before or shortly after closing.';
@@ -79,7 +86,9 @@ export function applyAskAudiencePresentation(input: {
 }): AskOperationResult {
   const ownershipState = input.journeyContext?.ownershipState ?? null;
   const framing = input.lifecycleFramingEnabled === false ? '' : lifecycleFraming(ownershipState);
-  const filteredBlocks = input.result.blocks.map((block) => filterBlockActions(block, input.householdRole));
+  const filteredBlocks = input.result.blocks
+    .filter((block) => blockAllowed(block, input.householdRole))
+    .map((block) => filterBlockActions(block, input.householdRole));
   const actionsBefore = input.result.blocks.reduce((count, block) => {
     if ('actions' in block && Array.isArray(block.actions)) return count + block.actions.length;
     if (block.type === 'PRIORITY_LIST') return count + block.items.filter((item) => item.cta).length;
@@ -91,7 +100,8 @@ export function applyAskAudiencePresentation(input: {
     return count;
   }, 0);
   const filteredSuggestions = input.result.suggestions.filter((suggestion) => suggestionAllowed(suggestion, input.householdRole));
-  const permissionFiltered = actionsAfter < actionsBefore
+  const protectedBlocksFiltered = filteredBlocks.length < input.result.blocks.length;
+  const permissionFiltered = protectedBlocksFiltered || actionsAfter < actionsBefore
     || filteredSuggestions.length < input.result.suggestions.length
     || (input.householdRole === 'VIEWER' && Boolean(input.result.captureRequests?.length || input.result.confirmation));
   const permissionNotice = permissionFiltered

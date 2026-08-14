@@ -23,7 +23,7 @@ import {
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
 import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
-import { resolvePropertyAccess } from '../propertyAccess.service';
+import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
@@ -102,7 +102,7 @@ import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/hom
 import { buildPriorityListView } from '../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds, recordHomeActionUsefulnessFeedback } from '../decisionPlatform/homeActionUsefulnessFeedback.service';
 import type { ConciergeHomeView } from '../../productFramework/conciergeHome.contract';
-import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
+import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { inventoryDecisionQuestion, selectInventoryDecisionCandidate } from './askConciergePromptPolicy';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
@@ -122,6 +122,7 @@ import { SKILL_DEPENDENCY_ACTIVATIONS } from '../skills/skillDependencyRegistry'
 import { buildFocusedHomeActionGuidance, focusedHomeActionCategory, focusedHomeActionQuestion, focusedOperationForLaunchContext } from './askFocusedGuidance';
 import { lifecyclePromptsFor } from './askLifecyclePromptPolicy';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
+import { resolveAskAudienceContext } from './askAudienceContext';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -453,6 +454,30 @@ async function ensurePropertyAccess(userId: string, propertyId: string) {
     throw error;
   }
   return access;
+}
+
+function audienceTelemetryFor(input: {
+  propertyAccess?: PropertyAccess | null;
+  journeyContext?: PropertyJourneyContext | null;
+  audiencePolicyEnabled: boolean;
+  journeyContextStatus?: NonNullable<SkillExecutionTimingTrace['audience']>['journeyContextStatus'];
+}): NonNullable<SkillExecutionTimingTrace['audience']> {
+  const audience = resolveAskAudienceContext({
+    accountRole: 'HOMEOWNER',
+    propertyAccess: input.propertyAccess,
+    journeyContext: input.journeyContext,
+  });
+  return {
+    accountRole: audience.accountRole,
+    householdRole: audience.householdRole ?? 'UNKNOWN',
+    operatingMode: audience.operatingMode,
+    propertyRelationship: audience.propertyRelationship,
+    audienceEligibilityOutcome: 'ELIGIBLE' as const,
+    audienceApplicabilityOutcome: 'NOT_EVALUATED' as const,
+    audiencePolicyVersion: null,
+    audiencePolicyEvaluationMode: input.audiencePolicyEnabled ? 'ENABLED' as const : 'SAFE_FALLBACK' as const,
+    journeyContextStatus: (input.journeyContextStatus ?? 'NOT_EVALUATED') as NonNullable<SkillExecutionTimingTrace['audience']>['journeyContextStatus'],
+  };
 }
 
 async function propertySummary(propertyId: string | null | undefined) {
@@ -4324,21 +4349,16 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   if (input.operation.requiresProperty && !input.propertyId) return needsPropertyResult();
   const authorizationFloor = effectivePolicy?.authorizationFloor ?? definition.propertyRoleFloor;
   let householdRole: HouseholdRole | null = null;
+  let propertyAccess: PropertyAccess | null = null;
   if (input.propertyId && authorizationFloor) {
     const access = await ensurePropertyAccess(input.userId, input.propertyId);
+    propertyAccess = access;
     householdRole = access.role;
     if (trace) {
-      trace.audience = {
-        accountRole: 'HOMEOWNER',
-        householdRole,
-        operatingMode: 'UNKNOWN',
-        propertyRelationship: 'AUTHORIZED_HOUSEHOLD',
-        audienceEligibilityOutcome: 'ELIGIBLE',
-        audienceApplicabilityOutcome: 'NOT_EVALUATED',
-        audiencePolicyVersion: null,
-        audiencePolicyEvaluationMode: controls.audiencePolicyEnabled ? 'ENABLED' : 'SAFE_FALLBACK',
-        journeyContextStatus: 'NOT_EVALUATED',
-      };
+      trace.audience = audienceTelemetryFor({
+        propertyAccess: access,
+        audiencePolicyEnabled: controls.audiencePolicyEnabled,
+      });
     }
     const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
     if (rank[access.role] < rank[authorizationFloor]) {
@@ -4369,17 +4389,12 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       const journeyEntry = composedContext.entries.find(
         (entry) => entry.key === skillContextProviderKey(PROPERTY_JOURNEY_CONTEXT_PROVIDER),
       );
-      trace.audience = {
-        accountRole: 'HOMEOWNER',
-        householdRole: householdRole ?? 'UNKNOWN',
-        operatingMode: journeyContextFrom(composedContext)?.operatingMode ?? 'UNKNOWN',
-        propertyRelationship: householdRole ? 'AUTHORIZED_HOUSEHOLD' : 'UNKNOWN',
-        audienceEligibilityOutcome: 'ELIGIBLE',
-        audienceApplicabilityOutcome: 'NOT_EVALUATED',
-        audiencePolicyVersion: null,
-        audiencePolicyEvaluationMode: controls.audiencePolicyEnabled ? 'ENABLED' : 'SAFE_FALLBACK',
+      trace.audience = audienceTelemetryFor({
+        propertyAccess,
+        journeyContext: journeyContextFrom(composedContext),
+        audiencePolicyEnabled: controls.audiencePolicyEnabled,
         journeyContextStatus: journeyEntry?.status ?? 'NOT_APPLICABLE',
-      };
+      });
     }
     if (composedContext.status === 'BLOCKED') {
       const requiredFailure = composedContext.entries.find((entry) => entry.required && entry.status !== 'AVAILABLE');
@@ -4805,8 +4820,17 @@ async function ensureAskServiceAccountEligibility(userId: string, knownRole?: As
 
 export async function createAskExecution(userId: string, input: CreateAskExecutionRequest, accountRole?: AskAccountRole): Promise<AskExecutionResponse> {
   await ensureAskServiceAccountEligibility(userId, accountRole);
-  if (input.propertyId) await ensurePropertyAccess(userId, input.propertyId);
-  await enterAskPropertyTimezoneContext(input.propertyId);
+  const controls = readAskOperationalControls();
+  const safetyFirstDecision = resolveAskRoutingCascade(input.message, {
+    localRoutingEnabled: controls.localRoutingEnabled,
+    localMinimumConfidence: controls.localRoutingMinimumConfidence,
+    ambiguityMargin: controls.routingAmbiguityMargin,
+  });
+  const executionPropertyId = propertyScopeForAskRouting(safetyFirstDecision, input.propertyId);
+  const initialPropertyAccess = executionPropertyId
+    ? await ensurePropertyAccess(userId, executionPropertyId)
+    : null;
+  await enterAskPropertyTimezoneContext(executionPropertyId);
   const duplicate = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
   if (duplicate) {
     // Without this, a retry that reuses the same clientRequestId (the
@@ -4815,10 +4839,12 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     // with no path forward. Reclaim it first so the retry actually observes
     // a terminal, retryable state instead.
     const current = await reclaimOrphanedRunningExecution(duplicate);
-    return mapPersistedExecution(current, await propertySummary(current.propertyId));
+    return mapPersistedExecution(
+      current,
+      await propertySummary(safetyFirstDecision.stage === 'SAFETY' ? null : current.propertyId),
+    );
   }
 
-  const controls = readAskOperationalControls();
   const expiresAt = new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000);
   const existingSession = await prisma.askSession.findUnique({ where: { id: input.sessionId } });
   if (existingSession && existingSession.userId !== userId) {
@@ -4829,19 +4855,21 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const session = existingSession
     ? await prisma.askSession.update({
       where: { id: existingSession.id },
-      data: { propertyId: input.propertyId ?? undefined, lastActiveAt: new Date(), expiresAt },
+      data: { propertyId: executionPropertyId ?? undefined, lastActiveAt: new Date(), expiresAt },
     })
     : await prisma.askSession.create({
-      data: { id: input.sessionId, userId, propertyId: input.propertyId ?? null, title: input.message.slice(0, 120), expiresAt },
+      data: { id: input.sessionId, userId, propertyId: executionPropertyId ?? null, title: input.message.slice(0, 120), expiresAt },
     });
   const execution = await prisma.askExecution.create({
     data: {
       sessionId: session.id,
       userId,
-      propertyId: input.propertyId ?? null,
+      propertyId: executionPropertyId ?? null,
       clientRequestId: input.clientRequestId,
       message: input.message,
-      launchContextJson: input.launchContext ? asInputJson(input.launchContext) : undefined,
+      launchContextJson: safetyFirstDecision.stage !== 'SAFETY' && input.launchContext
+        ? asInputJson(input.launchContext)
+        : undefined,
       // The row's true first persisted state: the request has been
       // accepted but routing hasn't run yet. Previously this was created
       // directly as 'ROUTING', so RECEIVED was declared in
@@ -4861,15 +4889,17 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   // deterministic routing/entity-matching regexes see enough context to
   // resolve correctly. The homeowner-visible/persisted question stays the
   // original input.message.
-  const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: input.propertyId, message: input.message });
+  const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: executionPropertyId, message: input.message });
   const routingMessage = followUp.effectiveMessage;
 
   const skillRoutingStartedAt = process.hrtime.bigint();
-  let routingDecision = resolveAskRoutingCascade(routingMessage, {
-    localRoutingEnabled: controls.localRoutingEnabled,
-    localMinimumConfidence: controls.localRoutingMinimumConfidence,
-    ambiguityMargin: controls.routingAmbiguityMargin,
-  });
+  let routingDecision = safetyFirstDecision.stage === 'SAFETY'
+    ? safetyFirstDecision
+    : resolveAskRoutingCascade(routingMessage, {
+      localRoutingEnabled: controls.localRoutingEnabled,
+      localMinimumConfidence: controls.localRoutingMinimumConfidence,
+      ambiguityMargin: controls.routingAmbiguityMargin,
+    });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
     : undefined;
@@ -4893,6 +4923,10 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     skillRoutingLatencyMs / 1_000,
   );
   const skillTelemetryTrace = createSkillExecutionTimingTrace(skillRoutingLatencyMs);
+  skillTelemetryTrace.audience = audienceTelemetryFor({
+    propertyAccess: initialPropertyAccess,
+    audiencePolicyEnabled: controls.audiencePolicyEnabled,
+  });
   if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK' && skillRoutingDecision.outcome === 'RESOLVED' && skillRoutingDecision.selectedOperationId) {
     const selectedOperation = getAskOperationDefinition(skillRoutingDecision.selectedOperationId);
     const confidence = skillRoutingDecision.skillCandidates[0]?.confidence ?? selectedOperation.confidence;
@@ -5010,7 +5044,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
         ))
-        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: input.propertyId, operation, launchContext: input.launchContext }, skillTelemetryTrace),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
@@ -5051,7 +5085,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     });
     askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
-    return mapPersistedExecution(saved, await propertySummary(input.propertyId));
+    return mapPersistedExecution(saved, await propertySummary(executionPropertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';
@@ -5091,7 +5125,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     });
     askExecutionsTotal.inc({ operation: operation.operationId, status: failureStatus, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
-    return mapPersistedExecution(saved, await propertySummary(input.propertyId));
+    return mapPersistedExecution(saved, await propertySummary(executionPropertyId));
   }
 }
 
@@ -5146,7 +5180,6 @@ export async function submitAskClarification(userId: string, executionId: string
     (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_INVALID_OPTION';
     throw error;
   }
-  if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
   const controls = readAskOperationalControls();
   const clarifiedMessage = input.answer ? `${execution.message}\nClarification: ${input.answer}` : execution.message;
   const safetyDecision = resolveAskRoutingCascade(clarifiedMessage, {
@@ -5154,6 +5187,8 @@ export async function submitAskClarification(userId: string, executionId: string
     localMinimumConfidence: controls.localRoutingMinimumConfidence,
     ambiguityMargin: controls.routingAmbiguityMargin,
   });
+  const clarifiedPropertyId = propertyScopeForAskRouting(safetyDecision, execution.propertyId);
+  if (clarifiedPropertyId) await ensurePropertyAccess(userId, clarifiedPropertyId);
   let operation: AskOperationResolution;
   if (safetyDecision.stage === 'SAFETY') {
     operation = safetyDecision.operation;
@@ -5188,6 +5223,7 @@ export async function submitAskClarification(userId: string, executionId: string
       skillVersion: clarifiedSkillBinding?.skill.version ?? null,
       skillDomain: clarifiedSkillBinding?.skill.domain ?? null,
       skillBindingJson: clarifiedSkillBinding ? asInputJson(clarifiedSkillBinding) : undefined,
+      propertyId: clarifiedPropertyId,
       operationId: operation.operationId, operationVersion: operation.version, intentFamily: operation.family, intentConfidence: operation.confidence, status: 'RUNNING',
       parametersJson: asInputJson({ ...parameters, clarificationReceipt: { idempotencyKey: input.idempotencyKey, clarificationVersion: input.clarificationVersion } }),
     },
@@ -5201,7 +5237,7 @@ export async function submitAskClarification(userId: string, executionId: string
   }
   try {
     const rawResult = await withAskTimeout(
-      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: execution.propertyId, operation }),
+      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: clarifiedPropertyId, operation }),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC'
@@ -5224,7 +5260,7 @@ export async function submitAskClarification(userId: string, executionId: string
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CLARIFICATION_SUBMITTED', metadataJson: asInputJson({ operationId: operation.operationId }) } });
-    return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+    return mapPersistedExecution(saved, await propertySummary(clarifiedPropertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';
@@ -5243,7 +5279,7 @@ export async function submitAskClarification(userId: string, executionId: string
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: failureStatus, metadataJson: asInputJson({ stage: 'CLARIFICATION_RESUME' }) } });
-    return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+    return mapPersistedExecution(saved, await propertySummary(clarifiedPropertyId));
   }
 }
 

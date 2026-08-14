@@ -3,6 +3,7 @@ import type { ComposedSkillContext, SkillContextProviderStatus } from './context
 import type { SkillRiskPolicy } from './skill.contract';
 import type { SkillExecutionBinding } from './skillExecutionBinding';
 import type { HierarchicalSkillRoutingDecision } from './skillRouter';
+import type { AskPropertyRelationship } from '../ask/askAudienceContext';
 
 export type SkillLatencyBand =
   | 'NOT_MEASURED'
@@ -21,7 +22,7 @@ export interface SkillAudienceTelemetrySnapshot {
   accountRole: 'HOMEOWNER' | 'PROVIDER' | 'ADMIN' | 'UNKNOWN';
   householdRole: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER' | 'UNKNOWN';
   operatingMode: 'BUYING' | 'OWNING' | 'SELLING' | 'UNKNOWN';
-  propertyRelationship: 'AUTHORIZED_HOUSEHOLD' | 'NOT_APPLICABLE' | 'UNKNOWN';
+  propertyRelationship: AskPropertyRelationship;
   audienceEligibilityOutcome: 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN';
   audienceApplicabilityOutcome:
     | 'APPLICABLE'
@@ -138,7 +139,7 @@ export function buildSkillExecutionTelemetry(input: {
     accountRole: audience?.accountRole ?? 'UNKNOWN',
     householdRole: audience?.householdRole ?? 'UNKNOWN',
     operatingMode: audience?.operatingMode ?? 'UNKNOWN',
-    propertyRelationship: audience?.propertyRelationship ?? 'NOT_APPLICABLE',
+    propertyRelationship: audience?.propertyRelationship ?? 'NONE',
     audienceEligibilityOutcome: audience?.audienceEligibilityOutcome ?? 'UNKNOWN',
     audienceApplicabilityOutcome: audience?.audienceApplicabilityOutcome ?? 'NOT_EVALUATED',
     audiencePolicyVersion: audience?.audiencePolicyVersion ?? null,

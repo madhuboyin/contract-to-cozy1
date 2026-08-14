@@ -1,6 +1,7 @@
 import type { SkillEvaluationPackage } from '../skillEvaluationRegistry';
 import { deepFreezeSkillPackage } from '../skillPackageFreeze';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
+import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyContext.contract';
 
 export const QUOTE_COMPARISON_SKILL_EVALUATION = deepFreezeSkillPackage({
   "id": "skill-quote-comparison-golden",
@@ -144,7 +145,7 @@ export const QUOTE_COMPARISON_SKILL_EVALUATION = deepFreezeSkillPackage({
   "prohibitedAdapters": [
     "property-tax.appeal-readiness"
   ],
-  "expectedContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+  "expectedContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   "prohibitedContextProviders": [
     "undeclared-contractor-marketplace"
   ],

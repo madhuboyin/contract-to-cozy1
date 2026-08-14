@@ -19,6 +19,13 @@ export interface AskRoutingDecision {
   requiresClarification: boolean;
 }
 
+export function propertyScopeForAskRouting(
+  decision: AskRoutingDecision,
+  propertyId: string | null | undefined,
+): string | null {
+  return decision.stage === 'SAFETY' ? null : propertyId ?? null;
+}
+
 const STOP_WORDS = new Set(['a', 'about', 'all', 'am', 'an', 'and', 'are', 'can', 'do', 'for', 'from', 'help', 'how', 'i', 'in', 'is', 'it', 'me', 'my', 'of', 'on', 'the', 'to', 'what', 'when', 'which', 'with']);
 
 const ROUTING_EXEMPLARS: Partial<Record<AskOperationId, string[]>> = {

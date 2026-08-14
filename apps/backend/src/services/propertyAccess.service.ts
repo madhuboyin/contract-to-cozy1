@@ -18,6 +18,7 @@ export const ROLE_RANK: Record<HouseholdRole, number> = {
 export interface PropertyAccess {
   propertyId: string;
   role: HouseholdRole;
+  isPrimaryOwner?: boolean;
 }
 
 /**
@@ -35,11 +36,15 @@ export async function resolvePropertyAccess(
   // Check household membership first (covers owners who have a member row + contributors/viewers)
   const member = await prisma.householdMember.findUnique({
     where: { propertyId_userId: { propertyId, userId } },
-    select: { role: true },
+    select: { role: true, isPrimaryOwner: true },
   });
 
   if (member) {
-    return { propertyId, role: member.role };
+    return {
+      propertyId,
+      role: member.role,
+      ...(typeof member.isPrimaryOwner === 'boolean' ? { isPrimaryOwner: member.isPrimaryOwner } : {}),
+    };
   }
 
   // Fall back: property ownership check for users who pre-date the household feature
@@ -65,7 +70,7 @@ export async function resolvePropertyAccess(
       update: {},
       select: { id: true },
     });
-    return { propertyId, role: 'OWNER' };
+    return { propertyId, role: 'OWNER', isPrimaryOwner: true };
   }
 
   return null;

@@ -32,6 +32,7 @@ test('execution binding pins every executable contract before context compositio
   assert.deepEqual(binding.contextProviders, [
     { id: 'maintenance.task-context', version: '1.0.0', required: true },
     { id: 'property.identity-context', version: '1.0.0', required: true },
+    { id: 'property.journey-context', version: '1.0.0', required: false },
   ]);
   assert.equal(binding.dependencyActivation.status, 'RESOLVED');
   assert.deepEqual(binding.dependencyActivation.dependencies, [
@@ -40,6 +41,9 @@ test('execution binding pins every executable contract before context compositio
     },
     {
       type: 'CONTEXT_PROVIDER', id: 'property.identity-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: true, owner: 'Living Home Record / Property',
+    },
+    {
+      type: 'CONTEXT_PROVIDER', id: 'property.journey-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: false, owner: 'PropertyOnboarding / Entry Context',
     },
   ]);
   assert.deepEqual(binding.dependencyActivation.missing, []);
