@@ -58,6 +58,7 @@ import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../capa
 import {
   ASK_OPERATION_DEFINITIONS,
   getAskOperationDefinition,
+  isPropertyCompletenessRequest,
   resolveAskOperation,
   type AskOperationId,
   type AskOperationResolution,
@@ -3256,7 +3257,7 @@ const PROPERTY_SCOPE_LABELS: Record<string, string> = {
 
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const propertyHref = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
-  const completenessFocus = /\b(?:complete|completeness|missing from|profile quality)\b/i.test(message);
+  const completenessFocus = isPropertyCompletenessRequest(message);
   const [access, overview, evaluation, property] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     getPropertyRecordOverview(propertyId, userId, 'ASK'),
@@ -3304,51 +3305,71 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   const household = overview.sections.household.status === 'AVAILABLE' ? overview.sections.household.data : null;
   const timeline = overview.tools.homeTimeline.status === 'AVAILABLE' ? overview.tools.homeTimeline.data : null;
   const incompleteScopes = (completeness?.scopes ?? [])
-    .filter((scope) => scope.completenessPercent < 100)
+    .filter((scope) => scope.completenessPercent < 100
+      || scope.missingFactKeys.length > 0
+      || scope.conflictedFactKeys.length > 0
+      || scope.staleFactKeys.length > 0)
     .sort((left, right) => left.completenessPercent - right.completenessPercent || left.scope.localeCompare(right.scope));
+  const completenessCounts = (completeness?.scopes ?? []).reduce((counts, scope) => ({
+    missing: counts.missing + scope.missingFactKeys.length,
+    conflicted: counts.conflicted + scope.conflictedFactKeys.length,
+    stale: counts.stale + scope.staleFactKeys.length,
+  }), { missing: 0, conflicted: 0, stale: 0 });
+  const pendingDetailCount = completenessCounts.missing + completenessCounts.conflicted + completenessCounts.stale;
   const degradedSections = [
     rooms ? null : 'Rooms', inventory ? null : 'Inventory', documents ? null : 'Documents', household ? null : 'Household', context ? null : 'Property Context',
   ].filter((value): value is string => Boolean(value));
   const propertyName = property.name?.trim() || `${property.address}, ${property.city}`;
 
+  const completenessBody = context
+    ? percent === 100 && pendingDetailCount === 0
+      ? 'No pending governed property details were identified. The available Property Context is complete and current.'
+      : `${completenessCounts.missing} missing, ${completenessCounts.conflicted} conflicted, and ${completenessCounts.stale} stale detail${pendingDetailCount === 1 ? '' : 's'} were found across ${incompleteScopes.length} area${incompleteScopes.length === 1 ? '' : 's'}. ${captureRequests.length ? 'The highest-priority detail is ready to answer below.' : 'Open the property record to review the affected areas.'}`
+    : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'property-summary',
     title: completenessFocus && percent != null
       ? `${propertyName}’s Property Context is ${percent}% complete`
       : `Here is the current Living Home Record for ${propertyName}`,
-    body: `${context ? `${context.knownFactCount} governed property facts are currently known.` : 'Property Context details are temporarily unavailable.'} The record contains ${rooms?.count ?? 'an unknown number of'} room${rooms?.count === 1 ? '' : 's'}, ${inventory?.totalCount ?? 'an unknown number of'} inventory item${inventory?.totalCount === 1 ? '' : 's'}, and ${documents?.totalCount ?? 'an unknown number of'} document${documents?.totalCount === 1 ? '' : 's'}. ${degradedSections.length ? `${degradedSections.join(', ')} could not be fully loaded, so this is a partial summary.` : 'All summary sections loaded successfully.'}`,
-    tone: degradedSections.length || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-property-record', label: 'Open property record', href: propertyHref, style: 'PRIMARY' }],
-  }, {
-    type: 'TABLE', id: 'property-core-facts', title: 'Core property facts',
-    description: 'Values come from the canonical property record. “Not recorded” is not inferred from other fields.',
-    columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }],
-    rows: [
-      { id: 'address', values: { fact: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` } },
-      { id: 'dwelling', values: { fact: 'Dwelling type', value: readablePropertyValue(property.dwellingType) } },
-      { id: 'use', values: { fact: 'Property use', value: readablePropertyValue(property.propertyUse) } },
-      { id: 'occupancy', values: { fact: 'Occupancy', value: readablePropertyValue(property.occupancyStatus) } },
-      { id: 'year-built', values: { fact: 'Year built', value: readablePropertyValue(property.yearBuilt) } },
-      { id: 'size', values: { fact: 'Living area', value: property.propertySize == null ? 'Not recorded' : `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` } },
-      { id: 'beds-baths', values: { fact: 'Bedrooms / bathrooms', value: `${property.bedrooms == null ? 'Not recorded' : property.bedrooms} / ${property.bathrooms == null ? 'Not recorded' : property.bathrooms}` } },
-      { id: 'heating-cooling', values: { fact: 'Heating / cooling', value: `${readablePropertyValue(property.heatingType)} / ${readablePropertyValue(property.coolingType)}` } },
-      { id: 'roof', values: { fact: 'Roof type', value: readablePropertyValue(property.roofType) } },
-    ],
-    actions: [],
-  }, {
-    type: 'GROUPED_LIST', id: 'property-record-sections', title: 'What the record contains',
-    description: 'Counts describe canonical records available to this household member.',
-    sections: [{
-      id: 'record-sections', title: 'Living Home Record', count: 4,
-      items: [
-        { id: 'rooms', title: 'Rooms', description: rooms ? `${rooms.count} room record${rooms.count === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: [], status: rooms ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/rooms` },
-        { id: 'inventory', title: 'Systems and inventory', description: inventory ? `${inventory.totalCount} items · ${inventory.majorSystemCount} major systems · ${inventory.verifiedCount} verified` : 'Temporarily unavailable', meta: inventory ? [`${inventory.withDocumentCount} with documents`] : [], status: inventory ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/inventory` },
-        { id: 'documents', title: 'Documents', description: documents ? `${documents.totalCount} documents · ${documents.verifiedCount} verified · ${documents.needsReviewCount} need review` : 'Temporarily unavailable', meta: documents ? [`${documents.linkedCount} linked to the home or an item`] : [], status: documents ? 'AVAILABLE' : 'UNAVAILABLE', href: `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}` },
-        { id: 'household', title: 'Household access', description: household ? `${household.totalCount} household member${household.totalCount === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: household?.roles.map((role) => `${role.count} ${role.role.toLowerCase()}`) ?? [], status: household ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/household` },
-      ],
-    }],
-    actions: [],
+    body: completenessFocus
+      ? completenessBody
+      : `${context ? `${context.knownFactCount} governed property facts are currently known.` : 'Property Context details are temporarily unavailable.'} The record contains ${rooms?.count ?? 'an unknown number of'} room${rooms?.count === 1 ? '' : 's'}, ${inventory?.totalCount ?? 'an unknown number of'} inventory item${inventory?.totalCount === 1 ? '' : 's'}, and ${documents?.totalCount ?? 'an unknown number of'} document${documents?.totalCount === 1 ? '' : 's'}. ${degradedSections.length ? `${degradedSections.join(', ')} could not be fully loaded, so this is a partial summary.` : 'All summary sections loaded successfully.'}`,
+    tone: degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-property-record', label: completenessFocus ? 'Review all home details' : 'Open property record', href: propertyHref, style: 'PRIMARY' }],
   }];
+
+  if (!completenessFocus) {
+    blocks.push({
+      type: 'TABLE', id: 'property-core-facts', title: 'Core property facts',
+      description: 'Values come from the canonical property record. “Not recorded” is not inferred from other fields.',
+      columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }],
+      rows: [
+        { id: 'address', values: { fact: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` } },
+        { id: 'dwelling', values: { fact: 'Dwelling type', value: readablePropertyValue(property.dwellingType) } },
+        { id: 'use', values: { fact: 'Property use', value: readablePropertyValue(property.propertyUse) } },
+        { id: 'occupancy', values: { fact: 'Occupancy', value: readablePropertyValue(property.occupancyStatus) } },
+        { id: 'year-built', values: { fact: 'Year built', value: readablePropertyValue(property.yearBuilt) } },
+        { id: 'size', values: { fact: 'Living area', value: property.propertySize == null ? 'Not recorded' : `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` } },
+        { id: 'beds-baths', values: { fact: 'Bedrooms / bathrooms', value: `${property.bedrooms == null ? 'Not recorded' : property.bedrooms} / ${property.bathrooms == null ? 'Not recorded' : property.bathrooms}` } },
+        { id: 'heating-cooling', values: { fact: 'Heating / cooling', value: `${readablePropertyValue(property.heatingType)} / ${readablePropertyValue(property.coolingType)}` } },
+        { id: 'roof', values: { fact: 'Roof type', value: readablePropertyValue(property.roofType) } },
+      ],
+      actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'property-record-sections', title: 'What the record contains',
+      description: 'Counts describe canonical records available to this household member.',
+      sections: [{
+        id: 'record-sections', title: 'Living Home Record', count: 4,
+        items: [
+          { id: 'rooms', title: 'Rooms', description: rooms ? `${rooms.count} room record${rooms.count === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: [], status: rooms ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/rooms` },
+          { id: 'inventory', title: 'Systems and inventory', description: inventory ? `${inventory.totalCount} items · ${inventory.majorSystemCount} major systems · ${inventory.verifiedCount} verified` : 'Temporarily unavailable', meta: inventory ? [`${inventory.withDocumentCount} with documents`] : [], status: inventory ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/inventory` },
+          { id: 'documents', title: 'Documents', description: documents ? `${documents.totalCount} documents · ${documents.verifiedCount} verified · ${documents.needsReviewCount} need review` : 'Temporarily unavailable', meta: documents ? [`${documents.linkedCount} linked to the home or an item`] : [], status: documents ? 'AVAILABLE' : 'UNAVAILABLE', href: `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}` },
+          { id: 'household', title: 'Household access', description: household ? `${household.totalCount} household member${household.totalCount === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: household?.roles.map((role) => `${role.count} ${role.role.toLowerCase()}`) ?? [], status: household ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/household` },
+        ],
+      }],
+      actions: [],
+    });
+  }
 
   if (incompleteScopes.length) {
     blocks.push({
@@ -3367,7 +3388,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     });
   }
 
-  if (timeline?.recent.length) {
+  if (!completenessFocus && timeline?.recent.length) {
     blocks.push({
       type: 'GROUPED_LIST', id: 'property-recent-events', title: 'Recent verified home activity',
       description: `${timeline.confirmedCount} current confirmed or evidence-verified event${timeline.confirmedCount === 1 ? '' : 's'} are visible to you. Showing the most recent records.`,
@@ -3393,7 +3414,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   blocks.push({ type: 'EVIDENCE', id: 'property-summary-evidence', title: 'Record freshness', items: freshness });
 
   const permissionLimited = Boolean(activeRequirement && !canImproveContext);
-  const limited = captureRequests.length > 0 || degradedSections.length > 0 || permissionLimited || (percent != null && percent < 100);
+  const limited = captureRequests.length > 0 || degradedSections.length > 0 || permissionLimited || pendingDetailCount > 0 || (percent != null && percent < 100);
   return {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length
@@ -3402,7 +3423,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         ? 'PROPERTY_SUMMARY_CONTEXT_WRITE_PERMISSION_REQUIRED'
         : degradedSections.length
           ? 'PROPERTY_SUMMARY_PARTIAL'
-          : percent != null && percent < 100
+          : pendingDetailCount > 0 || (percent != null && percent < 100)
             ? 'PROPERTY_SUMMARY_INCOMPLETE'
             : undefined,
     contextVersion: evaluation.contextVersion,

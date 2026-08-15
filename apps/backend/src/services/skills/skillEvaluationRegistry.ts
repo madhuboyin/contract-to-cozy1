@@ -196,7 +196,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
     routingCases: [
       { mode: 'EXACT', message: 'Summarize my home record', expectedOperationId: 'PROPERTY_SUMMARY' },
       { mode: 'PARAPHRASED', message: 'Show my appliance inventory', expectedOperationId: 'INVENTORY_LOOKUP' },
-      { mode: 'COLLOQUIAL', message: 'What do you know about my home?', expectedOperationId: 'PROPERTY_SUMMARY' },
+      { mode: 'COLLOQUIAL', message: 'Are there any pending details to be filled for the home?', expectedOperationId: 'PROPERTY_SUMMARY' },
       { mode: 'MISSPELLED', message: 'Summarize my property recrod', expectedOperationId: 'PROPERTY_SUMMARY' },
     ],
     ambiguityCases: [{ message: 'Show my home record and item details', candidateOperationIds: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],

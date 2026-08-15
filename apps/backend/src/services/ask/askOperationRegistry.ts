@@ -241,6 +241,20 @@ const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}
 const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of owning\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
 const inventoryLookupPattern = /\b(?:what do you know about|tell me about|show|find|list|which|do i have)\b.{0,65}\b(?:inventory|appliances?|systems?|equipment|hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b|\b(?:inventory|appliance|system|equipment)\s+(?:record|records|details|items|list)\b|\b(?:incomplete|missing)\b.{0,35}\b(?:inventory|appliance|system)\s+(?:record|records|details|information)\b|\b(?:my|the|this)\s+(?:hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b.{0,45}\b(?:history|record|details|information|know)\b|\b(?:systems?|equipment|appliances?)\b.{0,45}\b(?:end of life|expiry|expire|incomplete)\b/i;
 const propertySummaryPattern = /\b(?:summarize|summary of|overview of|what do you know about|tell me about|show me)\b.{0,60}\b(?:my|this|the)?\s*(?:home|house|property|home record|living home record)\b|\b(?:home|property|living home)\s+(?:record )?(?:summary|overview|profile)\b|\bhow complete\b.{0,45}\b(?:home record|property profile|home profile|living home record)\b/i;
+const PROPERTY_COMPLETENESS_PATTERNS = [
+  /\b(?:pending|missing|incomplete|unfilled|outstanding|remaining)\b.{0,50}\b(?:details|information|info|facts|fields|records?)\b.{0,60}\b(?:home|house|property|profile|record)\b/i,
+  /\b(?:details|information|info|facts|fields|records?)\b.{0,45}\b(?:missing|incomplete|unfilled|outstanding|remaining|need(?:s|ed)? (?:to be )?(?:added|filled|completed|verified))\b.{0,60}\b(?:home|house|property|profile|record)\b/i,
+  /\b(?:what|which|anything|are there any|do i have)\b.{0,45}\b(?:need to|needs to|should i|still need to)\s+(?:add|fill(?: in| out)?|complete|verify|update)\b.{0,65}\b(?:home|house|property|profile|record)\b/i,
+  /\b(?:is|are)\b.{0,25}\b(?:home|house|property)(?:\s+(?:record|profile|details|information))?\b.{0,30}\b(?:complete|incomplete|missing details|missing information)\b/i,
+  /\b(?:is|are)\b.{0,20}\b(?:all )?(?:details|information|info|facts|fields)\b.{0,20}\bcomplete\b.{0,45}\b(?:home|house|property|profile|record)\b/i,
+  /\b(?:home|house|property)(?:\s+(?:record|profile))?\b.{0,45}\b(?:missing|pending|incomplete|unfilled|outstanding|remaining)\b.{0,30}\b(?:details|information|info|facts|fields)\b/i,
+  /\b(?:home|house|property)(?:\s+(?:record|profile))?\s+(?:details|information|info|facts|fields)\b.{0,40}\b(?:left|missing|pending|need(?:s)? (?:to be )?(?:added|filled|completed|verified))\b/i,
+  /\bhow complete\b.{0,45}\b(?:home record|property profile|home profile|living home record)\b/i,
+] as const;
+
+export function isPropertyCompletenessRequest(message: string): boolean {
+  return PROPERTY_COMPLETENESS_PATTERNS.some((pattern) => pattern.test(message));
+}
 const homeActionsPattern = /\b(?:what should i do next|what needs (?:my |our )?attention|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
 // Ask Intelligence FRD Phase 9A ("What changed?", §16). Deliberately excludes
 // any message mentioning "decision" (checked at the call site) -- a phrase
@@ -388,7 +402,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);
   }
-  if (propertySummaryPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if ((propertySummaryPattern.test(message) || isPropertyCompletenessRequest(message)) && !explicitCapabilityPattern.test(message)) {
     return resolved('PROPERTY_SUMMARY', 0.96);
   }
   if (homeActionsPattern.test(message) && !explicitCapabilityPattern.test(message) && !maintenancePattern.test(message)) {
