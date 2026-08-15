@@ -62,7 +62,8 @@ export const COVERAGE_SKILL = Object.freeze({
     "SUMMARY",
     "GROUPED_LIST",
     "EVIDENCE",
-    "CAPABILITY_LIST"
+    "CAPABILITY_LIST",
+    "BOUNDARY"
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },

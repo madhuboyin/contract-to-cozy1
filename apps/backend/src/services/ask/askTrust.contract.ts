@@ -61,6 +61,20 @@ export interface AskAnswerTrustResult {
   validatorVersion: string;
 }
 
+export interface AskAuthoritativeSourceEvidence {
+  sourceId: string;
+  operationId: AskOperationId;
+  status: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE';
+  scope: 'FULL' | 'LIMITED';
+  freshness: 'CURRENT' | 'STALE' | 'UNKNOWN';
+  observedAt: string;
+}
+
+export interface AskAnswerTrustEvidence {
+  schemaVersion: '1.0';
+  sources: AskAuthoritativeSourceEvidence[];
+}
+
 const HUMAN_LABELS: Partial<Record<AskOperationId, string>> = {
   MAINTENANCE_STATUS: 'review pending and completed maintenance',
   MAINTENANCE_TASK_CREATE: 'create a maintenance task',

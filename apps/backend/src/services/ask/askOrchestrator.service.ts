@@ -128,7 +128,8 @@ import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import { resolveAskAudienceContext } from './askAudienceContext';
 import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
-import { validateAskAnswerTrustPipeline } from './askAnswerTrustValidator';
+import { validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } from './askAnswerTrustValidator';
+import { attachAskAuthoritativeSourceEvidence } from './askAnswerTrustPolicy';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 
 const MAX_RESULT_ITEMS = 50;
@@ -4601,6 +4602,7 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
   let coreResult: AskOperationResult;
   try {
     coreResult = await executeOperationCore(input, trace);
+    coreResult = attachAskAuthoritativeSourceEvidence(coreResult, input.operation.operationId);
   } catch (error) {
     if (skill && skillStartedAt != null) {
       askSkillExecutionsTotal.inc({ skill: skill.id, skill_version: skill.version, operation: input.operation.operationId, status: 'THREW' });
@@ -6930,17 +6932,29 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     return mapPersistedExecution(reverted, await propertySummary(execution.propertyId));
   }
   let saved: typeof execution;
+  const confirmedOperationId = execution.operationId as AskOperationId;
+  const confirmedValidation = validateAskConfirmedCompletion({
+    question: execution.message,
+    operationId: confirmedOperationId,
+    propertyId: execution.propertyId,
+    householdRole: access.role,
+    result,
+  });
+  result = confirmedValidation.result;
+  recordAskAnswerTrustMetrics(confirmedOperationId, confirmedValidation);
+  assertSkillResultBlocksAllowed(confirmedOperationId, result);
   try {
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(result.parameters) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }), completedAt: new Date() },
       });
       await tx.askConfirmationReceipt.update({
         where: { executionId },
         data: { status: 'COMPLETED', artifactType, artifactId, completedAt: new Date(), lastErrorCode: null },
       });
       await tx.askExecutionEvent.create({ data: { executionId, eventType: 'CONFIRMED', metadataJson: asInputJson({ artifactType, artifactId }) } });
+      await tx.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...confirmedValidation.trust, semantic: null, repaired: confirmedValidation.repaired, stage: 'CONFIRMATION_COMPLETION' }) } });
       return updated;
     });
   } catch (error) {

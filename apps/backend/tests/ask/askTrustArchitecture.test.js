@@ -6,7 +6,8 @@ require('ts-node/register');
 const { ASK_OPERATION_DEFINITIONS, validateAskOperationDefinitions } = require('../../src/services/ask/askOperationRegistry.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { normalizeAskMessage, retrieveAskOperationCandidates } = require('../../src/services/ask/askSemanticRouter.ts');
-const { validateAskAnswerTrust, validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+const { validateAskAnswerTrust, validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+const { attachAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 
@@ -62,17 +63,113 @@ test('answer trust validator blocks unsupported all-clear claims and repairs dir
 
   const repaired = validateAskAnswerTrust({
     question: 'Is anything pending?', operationId: 'PROPERTY_SUMMARY', propertyId: 'home-1',
-    result: {
+    result: attachAskAuthoritativeSourceEvidence({
       status: 'ANSWERED',
       blocks: [
         { type: 'EVIDENCE', id: 'evidence', title: 'Sources', items: [] },
         { type: 'SUMMARY', id: 'answer', title: 'Two details are pending', body: 'The completed property check found two missing details.', tone: 'CAUTION', actions: [] },
       ],
       suggestions: [],
-    },
+    }, 'PROPERTY_SUMMARY'),
   });
   assert.equal(repaired.result.blocks[0].type, 'SUMMARY');
   assert.equal(repaired.trust.outcome, 'REPAIRABLE');
+});
+
+test('absence claims require explicit complete, current, full-scope authoritative evidence', () => {
+  const unproven = validateAskAnswerTrust({
+    question: 'Do I need a permit?', operationId: 'RENOVATION_PERMIT_READINESS', propertyId: 'home-1',
+    result: {
+      status: 'ANSWERED',
+      blocks: [{ type: 'SUMMARY', id: 'unsafe-all-clear', title: 'No permit is required', body: 'Everything is clear.', tone: 'POSITIVE', actions: [] }],
+      suggestions: [],
+    },
+  });
+  assert.equal(unproven.trust.checks.sourceIntegrity, 'FAIL');
+  assert.equal(unproven.trust.checks.absenceClaimSupport, 'FAIL');
+  assert.equal(unproven.result.status, 'UNAVAILABLE');
+
+  const proven = validateAskAnswerTrust({
+    question: 'Is my home profile complete?', operationId: 'PROPERTY_SUMMARY', propertyId: 'home-1',
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [{ type: 'SUMMARY', id: 'verified', title: 'Everything is complete', body: 'No details are missing.', tone: 'POSITIVE', actions: [] }],
+      suggestions: [],
+    }, 'PROPERTY_SUMMARY'),
+  });
+  assert.equal(proven.trust.checks.sourceIntegrity, 'PASS');
+  assert.equal(proven.trust.checks.absenceClaimSupport, 'PASS');
+  assert.equal(proven.trust.outcome, 'PASS');
+});
+
+test('CTA validation enforces audience permissions and checks priority-list CTAs', () => {
+  const checked = validateAskAnswerTrust({
+    question: 'Summarize my home', operationId: 'PROPERTY_SUMMARY', propertyId: 'home-1',
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [{
+        type: 'SUMMARY', id: 'summary', title: 'Home summary', body: 'Here is the recorded home profile.', tone: 'DEFAULT',
+        actions: [{ id: 'edit-property', label: 'Edit property', href: '/dashboard/properties/home-1/edit', style: 'PRIMARY' }],
+      }],
+      suggestions: [],
+      parameters: { audiencePresentation: { householdRole: 'VIEWER' } },
+    }, 'PROPERTY_SUMMARY'),
+  });
+  assert.equal(checked.trust.checks.actionApplicability, 'FAIL');
+  assert.equal(checked.trust.checks.audienceSafety, 'FAIL');
+  assert.deepEqual(checked.result.blocks[0].actions, []);
+
+  const wrongOperation = validateAskAnswerTrust({
+    question: 'Should I repair or replace this?', operationId: 'REPLACEMENT_GUIDANCE', propertyId: 'home-1',
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [{
+        type: 'SUMMARY', id: 'summary', title: 'Repair is currently favored', body: 'The recorded inputs favor repair.', tone: 'DEFAULT',
+        actions: [{ id: 'open-property-tax', label: 'Open property tax', href: '/dashboard/properties/home-1/tools/property-tax', style: 'PRIMARY' }],
+      }],
+      suggestions: [], parameters: { audiencePresentation: { householdRole: 'OWNER' } },
+    }, 'REPLACEMENT_GUIDANCE'),
+  });
+  assert.equal(wrongOperation.trust.checks.actionApplicability, 'FAIL');
+  assert.deepEqual(wrongOperation.result.blocks[0].actions, []);
+});
+
+test('boundary validation is operation-specific and removes a plausible but irrelevant disclaimer', () => {
+  const checked = validateAskAnswerTrust({
+    question: 'Should I repair or replace this?', operationId: 'REPLACEMENT_GUIDANCE', propertyId: 'home-1',
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [
+        { type: 'SUMMARY', id: 'summary', title: 'Repair is currently favored', body: 'The recorded inputs favor repair.', tone: 'DEFAULT', actions: [] },
+        { type: 'BOUNDARY', id: 'tax-readiness-boundary', title: 'Legal disclaimer', body: 'Consult a tax professional.', severity: 'INFO', suggestions: [] },
+      ],
+      suggestions: [],
+    }, 'REPLACEMENT_GUIDANCE'),
+  });
+  assert.equal(checked.trust.checks.boundaryApplicability, 'FAIL');
+  assert.equal(checked.result.blocks.some((block) => block.id === 'tax-readiness-boundary'), false);
+  assert.equal(checked.trust.outcome, 'REPAIRABLE');
+});
+
+test('confirmed command completions receive audience presentation, source evidence, and trust validation', () => {
+  const checked = validateAskConfirmedCompletion({
+    question: 'Create a maintenance task to clean the gutters',
+    operationId: 'MAINTENANCE_TASK_CREATE', propertyId: 'home-1', householdRole: 'CONTRIBUTOR',
+    result: {
+      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_CREATED',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: 'created', title: 'Maintenance task created', status: 'COMPLETED',
+        description: 'The task is now in the maintenance record.', details: [],
+        actions: [{ id: 'open-task', label: 'Open task', href: '/dashboard/maintenance?propertyId=home-1', style: 'PRIMARY' }],
+      }],
+      suggestions: [],
+    },
+  });
+  assert.equal(checked.result.status, 'COMPLETED');
+  assert.equal(checked.trust.outcome, 'PASS');
+  assert.equal(checked.trust.checks.sourceIntegrity, 'PASS');
+  assert.equal(checked.result.parameters.audiencePresentation.householdRole, 'CONTRIBUTOR');
+  assert.equal(checked.result.parameters.answerTrustEvidence.sources[0].sourceId, 'maintenance.create');
 });
 
 test('TA5 semantic relevance passes direct answers and detects a different-operation answer', () => {
@@ -90,11 +187,11 @@ test('TA5 semantic relevance passes direct answers and detects a different-opera
 
   const mismatched = validateAskAnswerTrustPipeline({
     question: 'Are there any pending home details to be filled in?', operationId: 'PROPERTY_SUMMARY', semanticEnabled: true,
-    result: {
+    result: attachAskAuthoritativeSourceEvidence({
       status: 'ANSWERED',
       blocks: [{ type: 'SUMMARY', id: 'wrong', title: 'Maintenance status', body: 'Two maintenance tasks are overdue and need service.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
-    },
+    }, 'PROPERTY_SUMMARY'),
   });
   assert.equal(mismatched.semantic.outcome, 'FAIL');
   assert.equal(mismatched.trust.checks.questionCoverage, 'FAIL');

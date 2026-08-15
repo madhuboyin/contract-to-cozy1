@@ -3,30 +3,48 @@ import { getAskOperationDefinition, type AskOperationId, type AskOperationResult
 import type { AskAnswerTrustResult } from './askTrust.contract';
 import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResult } from './askSemanticAnswerValidator';
 import type { AskLanguageCode } from './askLanguageRegistry';
+import type { HouseholdRole } from '@prisma/client';
+import { applyAskAudiencePresentation } from './askAudiencePresentation';
+import {
+  actionsForAskBlock,
+  attachAskAuthoritativeSourceEvidence,
+  authoritativeEvidenceState,
+  householdRoleFromResult,
+  isAskActionApplicable,
+  isBoundaryAllowedForOperation,
+  isAskHrefSafeForProperty,
+  nestedAskHrefs,
+} from './askAnswerTrustPolicy';
 
-export const ASK_ANSWER_TRUST_VALIDATOR_VERSION = 'deterministic-1.0';
+export const ASK_ANSWER_TRUST_VALIDATOR_VERSION = 'deterministic-2.0';
 
-const ABSENCE_CLAIM = /\b(?:nothing|none|no (?:items?|tasks?|details?|coverage|risk|permit|maintenance)|not missing|fully complete|everything is complete|all clear|safe|no action (?:is )?needed)\b/i;
+const ABSENCE_CLAIM = /\b(?:nothing|none|no (?:active|current|future|items?|tasks?|details?|coverage|risk|permits?|maintenance|mortgage|record|quotes?|systems?|cases?|flags?|gaps?|issues?|actions?)|not missing|fully complete|everything is complete|all clear|no action (?:is )?needed)\b/i;
 const INTERNAL_TOKEN = /\b(?:MAINTENANCE_STATUS|PROPERTY_SUMMARY|COVERAGE_GAPS|[A-Z]{3,}_[A-Z0-9_]{2,})\b|\b\d+\s+cents?\b/i;
 const SUCCESS_STATUSES = new Set(['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS']);
 
 function visibleText(block: AskPresentationBlock): string {
-  if (block.type === 'SUMMARY' || block.type === 'BOUNDARY' || block.type === 'LIMITATION' || block.type === 'EMPTY_STATE' || block.type === 'ERROR_STATE') {
-    return `${block.title} ${'body' in block ? block.body : ''}`;
-  }
-  return block.title;
-}
-
-function actionsFor(block: AskPresentationBlock) {
-  return 'actions' in block && Array.isArray(block.actions) ? block.actions : [];
-}
-
-function sourceState(result: AskOperationResult): 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE' {
-  if (['UNAVAILABLE', 'FAILED_RETRYABLE', 'FAILED_TERMINAL'].includes(result.status)) return 'UNAVAILABLE';
-  if (/PARTIAL|UNAVAILABLE|STALE/.test(result.reasonCode ?? '')) return 'PARTIAL';
-  const serialized = JSON.stringify(result.parameters ?? {});
-  if (/"status":"(?:UNAVAILABLE|FAILED|PARTIAL|STALE)"/i.test(serialized) || /provider.{0,30}(?:unavailable|partial|stale)/i.test(serialized)) return 'PARTIAL';
-  return 'COMPLETE';
+  const visibleKeys = new Set([
+    'title', 'body', 'label', 'description', 'summary', 'value', 'detail', 'meta',
+    'expectedOutput', 'readinessLabel', 'sourceBoundary', 'threshold', 'product',
+    'channel', 'cadence', 'quietHours', 'limitation', 'note', 'observedCostLabel',
+    'predictedCostLabel', 'watchState',
+  ]);
+  const parts: string[] = [];
+  const visit = (value: unknown, key?: string): void => {
+    if (typeof value === 'string') {
+      if (key && visibleKeys.has(key)) parts.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item) => visit(item, key));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([childKey, child]) => visit(child, childKey));
+    }
+  };
+  visit(block);
+  return parts.join(' ');
 }
 
 function operationSpecificFirstBlock(operationId: AskOperationId, blocks: AskPresentationBlock[]): boolean {
@@ -36,6 +54,9 @@ function operationSpecificFirstBlock(operationId: AskOperationId, blocks: AskPre
   if (operationId === 'HVAC_DECISION_CONTINUE') return ['DECISION_PROGRESS', 'EMPTY_STATE'].includes(first.type);
   if (operationId === 'HVAC_DECISION_OUTCOME_VIEW') return ['OUTCOME_SUMMARY', 'EMPTY_STATE'].includes(first.type);
   if (operationId.endsWith('_BOUNDARY')) return first.type === 'BOUNDARY';
+  if (['WORKFLOW_PROGRESS', 'MONITOR', 'OUTCOME_SUMMARY', 'DECISION_PROGRESS', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE'].includes(first.type)) {
+    return getAskOperationDefinition(operationId).allowedBlockTypes.includes(first.type);
+  }
   return ['SUMMARY', 'EMPTY_STATE', 'ERROR_STATE', 'BOUNDARY'].includes(first.type);
 }
 
@@ -51,8 +72,11 @@ export function validateAskAnswerTrust(input: {
   const reasonCodes: string[] = [];
   let repaired = blocks.length !== input.result.blocks.length;
   if (repaired) reasonCodes.push('DISALLOWED_BLOCK_REMOVED');
-  if (SUCCESS_STATUSES.has(input.result.status) && !allowed.has('BOUNDARY') && !definition.safetyClass.endsWith('_BOUNDARY')) {
-    const withoutInapplicableBoundaries = blocks.filter((block) => block.type !== 'BOUNDARY');
+  const invalidBoundary = blocks.some((block) => block.type === 'BOUNDARY'
+    && !isBoundaryAllowedForOperation(input.operationId, block.id, input.result));
+  if (invalidBoundary) {
+    const withoutInapplicableBoundaries = blocks.filter((block) => block.type !== 'BOUNDARY'
+      || isBoundaryAllowedForOperation(input.operationId, block.id, input.result));
     if (withoutInapplicableBoundaries.length !== blocks.length) {
       blocks = withoutInapplicableBoundaries;
       repaired = true;
@@ -67,24 +91,58 @@ export function validateAskAnswerTrust(input: {
     reasonCodes.push('DIRECT_ANSWER_PROMOTED');
   }
 
-  const source = sourceState(input.result);
+  const source = authoritativeEvidenceState(input.result, input.operationId);
   const text = blocks.map(visibleText).join(' ');
   const hasAbsenceClaim = ABSENCE_CLAIM.test(text);
   const absenceSupported = !hasAbsenceClaim || source === 'COMPLETE';
   const hasInternalToken = INTERNAL_TOKEN.test(text);
-  const invalidAction = blocks.some((block) => actionsFor(block).some((action) => {
-    if (!action.href) return false;
-    if (!action.href.startsWith('/')) return true;
-    if (input.propertyId && /\/dashboard\/properties\/([^/?#]+)/.test(action.href)) {
-      const id = action.href.match(/\/dashboard\/properties\/([^/?#]+)/)?.[1];
-      return Boolean(id && decodeURIComponent(id) !== input.propertyId);
+  const householdRole = householdRoleFromResult(input.result);
+  const actionApplicable = (action: ReturnType<typeof actionsForAskBlock>[number]) => isAskActionApplicable({
+    action, operationId: input.operationId, propertyId: input.propertyId, householdRole,
+    authoritativeSourceAvailable: source !== 'UNAVAILABLE',
+  });
+  const invalidAction = blocks.some((block) => actionsForAskBlock(block).some((action) => {
+    if (block.type === 'PRIORITY_LIST' && block.items.some((item) => item.cta?.id === action.id && item.homeActionId === action.id)) {
+      return !isAskActionApplicable({
+        action, operationId: input.operationId, propertyId: input.propertyId, householdRole,
+        authoritativeSourceAvailable: source !== 'UNAVAILABLE', trustedDynamicAction: true,
+      });
     }
-    return false;
-  }));
+    return !actionApplicable(action);
+  })) || blocks.some((block) => nestedAskHrefs(block).some((href) => source === 'UNAVAILABLE' || !isAskHrefSafeForProperty(href, input.propertyId)));
   if (invalidAction) {
-    blocks = blocks.map((block) => 'actions' in block && Array.isArray(block.actions)
-      ? { ...block, actions: block.actions.filter((action) => !action.href || (action.href.startsWith('/') && (!input.propertyId || !/\/dashboard\/properties\/([^/?#]+)/.test(action.href) || decodeURIComponent(action.href.match(/\/dashboard\/properties\/([^/?#]+)/)![1]) === input.propertyId))) } as AskPresentationBlock
-      : block);
+    blocks = blocks.map((block) => {
+      if (block.type === 'PRIORITY_LIST') {
+        return { ...block, items: block.items.map((item) => ({
+          ...item, cta: item.cta && isAskActionApplicable({
+            action: item.cta, operationId: input.operationId, propertyId: input.propertyId, householdRole,
+            authoritativeSourceAvailable: source !== 'UNAVAILABLE', trustedDynamicAction: item.cta.id === item.homeActionId,
+          }) ? item.cta : null,
+        })) };
+      }
+      if (block.type === 'CAPABILITY_LIST') {
+        return { ...block, capabilities: block.capabilities.filter((capability) => source !== 'UNAVAILABLE' && isAskHrefSafeForProperty(capability.href, input.propertyId)) };
+      }
+      if (block.type === 'GROUPED_LIST') {
+        return { ...block, sections: block.sections.map((section) => ({
+          ...section, items: section.items.map((item) => ({
+            ...item, href: item.href && (source === 'UNAVAILABLE' || !isAskHrefSafeForProperty(item.href, input.propertyId)) ? null : item.href,
+          })),
+        })) };
+      }
+      if (block.type === 'TIMELINE') {
+        return { ...block, items: block.items.map((item) => ({
+          ...item, href: item.href && (source === 'UNAVAILABLE' || !isAskHrefSafeForProperty(item.href, input.propertyId)) ? null : item.href,
+        })) };
+      }
+      if (block.type === 'CHANGE_SUMMARY' && block.linkedAction
+        && (source === 'UNAVAILABLE' || !isAskHrefSafeForProperty(block.linkedAction.href, input.propertyId))) {
+        return { ...block, linkedAction: null };
+      }
+      return 'actions' in block && Array.isArray(block.actions)
+        ? { ...block, actions: block.actions.filter(actionApplicable) } as AskPresentationBlock
+        : block;
+    }).filter((block) => block.type !== 'CAPABILITY_LIST' || block.capabilities.length > 0);
     repaired = true;
     reasonCodes.push('INAPPLICABLE_ACTION_REMOVED');
   }
@@ -93,6 +151,7 @@ export function validateAskAnswerTrust(input: {
   const congruent = blocks.length > 0 && blocks.every((block) => block.type === 'BOUNDARY' || allowed.has(block.type));
   if (!coverage) reasonCodes.push('DIRECT_ANSWER_MISSING');
   if (!absenceSupported) reasonCodes.push('UNSUPPORTED_ABSENCE_CLAIM');
+  if (source !== 'COMPLETE') reasonCodes.push(source === 'PARTIAL' ? 'AUTHORITATIVE_SOURCE_PARTIAL' : 'AUTHORITATIVE_SOURCE_EVIDENCE_MISSING');
   if (hasInternalToken) reasonCodes.push('INTERNAL_PRESENTATION_TOKEN');
 
   let outcome: AskAnswerTrustResult['outcome'] = 'PASS';
@@ -108,8 +167,8 @@ export function validateAskAnswerTrust(input: {
       operationCongruence: congruent ? 'PASS' : 'FAIL',
       sourceIntegrity: source === 'COMPLETE' ? 'PASS' : source === 'PARTIAL' ? 'PARTIAL' : 'FAIL',
       absenceClaimSupport: hasAbsenceClaim ? (absenceSupported ? 'PASS' : 'FAIL') : 'NOT_APPLICABLE',
-      boundaryApplicability: blocks.some((block) => block.type === 'BOUNDARY') ? 'PASS' : 'NOT_APPLICABLE',
-      actionApplicability: blocks.some((block) => actionsFor(block).length) ? (invalidAction ? 'FAIL' : 'PASS') : 'NOT_APPLICABLE',
+      boundaryApplicability: invalidBoundary ? 'FAIL' : blocks.some((block) => block.type === 'BOUNDARY') ? 'PASS' : 'NOT_APPLICABLE',
+      actionApplicability: blocks.some((block) => actionsForAskBlock(block).length) || invalidAction ? (invalidAction ? 'FAIL' : 'PASS') : 'NOT_APPLICABLE',
       audienceSafety: invalidAction ? 'FAIL' : 'PASS',
     },
     reasonCodes,
@@ -199,4 +258,27 @@ export function validateAskAnswerTrustPipeline(input: {
     semantic,
     repaired: deterministic.repaired,
   };
+}
+
+export function validateAskConfirmedCompletion(input: {
+  question: string;
+  operationId: AskOperationId;
+  result: AskOperationResult;
+  propertyId: string;
+  householdRole: HouseholdRole;
+}) {
+  const presented = applyAskAudiencePresentation({
+    result: input.result,
+    householdRole: input.householdRole,
+    journeyContext: null,
+    propertyId: input.propertyId,
+    lifecycleFramingEnabled: false,
+  });
+  return validateAskAnswerTrustPipeline({
+    question: input.question,
+    operationId: input.operationId,
+    propertyId: input.propertyId,
+    result: attachAskAuthoritativeSourceEvidence(presented, input.operationId),
+    semanticEnabled: false,
+  });
 }

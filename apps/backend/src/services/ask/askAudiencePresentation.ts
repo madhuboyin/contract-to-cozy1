@@ -9,7 +9,7 @@ const MUTATION_ACTION_PATTERN = /^(?:add|archive|cancel|change|complete|confirm|
 const MUTATION_SUGGESTION_PATTERN = /^(?:(?:can|could|would) you |please |help me |i want to )?(?:add|archive|cancel|change|complete|confirm|create|delete|disable|edit|enable|forget|invite|mark|monitor|notify|recalculate|record|remove|report|reschedule|run|save|schedule|send|set|start|submit|unlink|update|upload)\b/i;
 const OWNER_ONLY_ACTION_PATTERN = /^(?:invite|manage household|add member|remove member|change owner|update shared profile)\b/i;
 
-function actionAllowed(action: AskAction, householdRole: HouseholdRole): boolean {
+export function isAskActionAllowedForHouseholdRole(action: AskAction, householdRole: HouseholdRole): boolean {
   const actionId = action.id.replace(/[-_]/g, ' ');
   if (householdRole === 'VIEWER' && (MUTATION_ACTION_PATTERN.test(actionId) || MUTATION_ACTION_PATTERN.test(action.label))) return false;
   if (householdRole === 'CONTRIBUTOR' && (OWNER_ONLY_ACTION_PATTERN.test(actionId) || OWNER_ONLY_ACTION_PATTERN.test(action.label))) return false;
@@ -17,7 +17,7 @@ function actionAllowed(action: AskAction, householdRole: HouseholdRole): boolean
 }
 
 function filterActions(actions: AskAction[], householdRole: HouseholdRole): AskAction[] {
-  return actions.filter((action) => actionAllowed(action, householdRole));
+  return actions.filter((action) => isAskActionAllowedForHouseholdRole(action, householdRole));
 }
 
 function filterBlockActions(block: AskPresentationBlock, householdRole: HouseholdRole): AskPresentationBlock {
@@ -40,7 +40,7 @@ function filterBlockActions(block: AskPresentationBlock, householdRole: Househol
         ...block,
         items: block.items.map((item) => ({
           ...item,
-          cta: item.cta && actionAllowed(item.cta, householdRole) ? item.cta : null,
+          cta: item.cta && isAskActionAllowedForHouseholdRole(item.cta, householdRole) ? item.cta : null,
         })),
       };
     default:

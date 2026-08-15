@@ -1328,7 +1328,7 @@ This addendum is implemented when:
 | Slice | Status | Evidence |
 | --- | --- | --- |
 | TA0 — Trust contracts and baseline corpus | Implemented | Versioned per-operation English semantic contracts, hard negatives, normalization contract, and trust evaluation fixtures |
-| TA1 — Deterministic trust validator | Implemented | Layered direct-answer, operation/block, source/absence, boundary, CTA/property-scope, audience, and presentation-token checks with safe repair/recovery |
+| TA1 — Deterministic trust validator | Implemented | Deterministic v2 requires explicit operation-bound authoritative-source evidence (completion, scope, and freshness); validates declared operation boundaries; checks direct, priority-list, capability, grouped-list, timeline, and change-summary navigation for property/audience/action-policy alignment; and runs on initial, resumed, and confirmed-completion responses before visible persistence |
 | TA2 — Hybrid semantic operation retrieval | Implemented | Versioned local lexical and character-semantic rank fusion over the runtime-eligible operation catalog with bounded candidates and hard-negative penalties |
 | TA3 — Constrained classification and calibration | Implemented | Candidate-only structured local classification, separate confidence bands, materiality policy, ambiguity margins, independent controls, and classifier-off clarification |
 | TA4 — Conversational repair | Implemented | Durable same-session intent and entity correction executions preserve the original answer, property context, authorization rechecks, and correction lineage |
@@ -1337,6 +1337,8 @@ This addendum is implemented when:
 | TA7 — Production-quality learning loop | Implemented | Protected admin trust dashboard and alerting aggregate bounded event metadata only; de-identified correction/failure clusters produce hashed review candidates; operation threshold recommendations remain advisory; semantic index, contract, and classifier version lineage is reported |
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, `Verified`, or `Deferred`. `Deferred` means the extension contract is preserved but runtime delivery is intentionally outside the active implementation scope. A slice shall not be marked `Verified` without recorded automated evidence.
+
+The August 15, 2026 critical-gap hardening pass replaced heuristic source-completion inference with explicit canonical adapter evidence, made boundary and CTA applicability operation-specific and audience-aware, and added the previously missing trust-validation/audit step to successful confirmation completions. No database schema change or migration script was required.
 
 ---
 
