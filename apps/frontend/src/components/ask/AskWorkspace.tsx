@@ -13,7 +13,7 @@ import { track } from '@/lib/analytics/events';
 import { addAskReturnContext, buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import { resolveConciergeLandingSpotlight, visibleConciergeFeaturedPrompts } from '@/features/ask/conciergeLandingPolicy';
-import { formatLegacyAskCurrency, formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
+import { canCorrectHomeInformation, formatLegacyAskCurrency, formatLegacyAskMaintenanceItem, workflowProgressStatusLabel } from '@/features/ask/presentationCompatibility';
 
 const fallbackPrompts: AskFeaturedPrompt[] = [
   { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?', source: 'DISCOVERY' },
@@ -468,7 +468,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
       <section className="rounded-2xl border border-teal-200 bg-teal-50/70 p-4">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-700 text-white"><CheckCircle2 className="h-5 w-5" /></span>
-          <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{block.title}</h3><span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-800">{block.status}</span></div><p className="mt-1 text-sm leading-5 text-slate-700">{block.description}</p></div>
+          <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{block.title}</h3><span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-800">{workflowProgressStatusLabel(block.title, block.status)}</span></div><p className="mt-1 text-sm leading-5 text-slate-700">{block.description}</p></div>
         </div>
         <dl className="mt-4 divide-y divide-teal-100 rounded-xl border border-teal-100 bg-white px-3">{block.details.map((detail) => <div key={detail.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{detail.label}</dt><dd className="font-medium text-slate-800">{detail.value}</dd></div>)}</dl>
         {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
@@ -1129,7 +1129,7 @@ function InlineCaptureCard({
   );
 }
 
-function ExecutionFeedback({ executionId, propertyId }: { executionId: string; propertyId?: string }) {
+function ExecutionFeedback({ executionId, propertyId, allowHomeCorrection = true }: { executionId: string; propertyId?: string; allowHomeCorrection?: boolean }) {
   const [rating, setRating] = useState<'UP' | 'DOWN' | null>(null);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
@@ -1171,7 +1171,7 @@ function ExecutionFeedback({ executionId, propertyId }: { executionId: string; p
             pressed, highlighted) but was silently lost if the user
             navigated away before sending a comment. */}
         <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => void submit('DOWN')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
-        {propertyId && <button type="button" disabled={correcting} onClick={() => void correctHomeRecord()} className="ml-auto font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'Correct home information'}</button>}
+        {allowHomeCorrection && propertyId && <button type="button" disabled={correcting} onClick={() => void correctHomeRecord()} className="ml-auto font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'Correct home information'}</button>}
       </div>
       {rating === 'DOWN' && (
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -1530,7 +1530,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                     return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" onClick={() => { setInput(handoffPrompt); window.localStorage.setItem(draftStorageKey(selectedPropertyId), handoffPrompt); textareaRef.current?.focus(); }} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
                   })()}
                   {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-                  <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} />
+                  <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} allowHomeCorrection={canCorrectHomeInformation(execution.operation?.family)} />
                 </div>
               </article>
               </AskActionReturnContext.Provider>;

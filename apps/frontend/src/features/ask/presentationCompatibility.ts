@@ -22,3 +22,14 @@ export function formatLegacyAskMaintenanceItem<T extends {
     meta: item.meta.map((value) => value.replace(STORED_IDENTIFIER_GLOBAL, (identifier) => humanizeActionType(identifier))),
   };
 }
+
+/** Uses the user's workflow outcome rather than the transport lifecycle label. */
+export function workflowProgressStatusLabel(title: string, status: string): string {
+  if (status === 'COMPLETED' && /\bcreated\b/i.test(title)) return 'CREATED';
+  return status;
+}
+
+/** Record corrections are relevant to answers, not completed write operations. */
+export function canCorrectHomeInformation(operationFamily?: string): boolean {
+  return operationFamily !== 'COMMAND';
+}

@@ -125,6 +125,7 @@ import { buildFocusedHomeActionGuidance, focusedHomeActionCategory, focusedHomeA
 import { lifecyclePromptsFor } from './askLifecyclePromptPolicy';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import { resolveAskAudienceContext } from './askAudienceContext';
+import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -239,7 +240,9 @@ const HouseholdInvitationInputSchema = z.object({
 type InvitableHouseholdRole = z.infer<typeof HouseholdInvitationInputSchema>['role'];
 
 const MaintenanceTaskWorkflowInputSchema = z.object({
-  title: z.string().trim().min(3).max(160),
+  title: z.string().trim().min(3).max(160).refine(isMeaningfulMaintenanceTaskTitle, {
+    message: 'Describe the maintenance work to be done.',
+  }),
   description: z.string().trim().max(1000).optional(),
   priority: z.nativeEnum(MaintenanceTaskPriority).default(MaintenanceTaskPriority.MEDIUM),
   nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -795,24 +798,11 @@ function extractMaintenanceFrequency(message: string): RecurrenceFrequency | und
   return undefined;
 }
 
-function extractMaintenanceTitle(message: string): string | undefined {
-  let title = message.trim()
-    .replace(/^(?:please\s+)?(?:create|add|schedule|set up)\s+(?:(?:a|the)\s+)?(?:(?:maintenance\s+)?task\s+(?:to|for)\s+|maintenance\s+(?:to\s+)?)/i, '')
-    .replace(/^(?:please\s+)?(?:create|add|schedule|set up)\s+(?:(?:a|the)\s+)?/i, '')
-    .replace(/^(?:please\s+)?(?:remind me to|put on my maintenance list)\s+/i, '')
-    .replace(/\s+(?:to|on)\s+my maintenance list\s*$/i, '');
-  title = title.split(/\b(?:today|tomorrow|next week|next month|in \d{1,3} (?:days?|weeks?|months?)|on \d{4}-\d{2}-\d{2}|by \d{4}-\d{2}-\d{2}|daily|weekly|monthly|quarterly|annually|annual|every (?:day|week|month|year|three months|3 months)|twice a year|semi[ -]?annually|urgent|high priority|low priority|estimated cost|for \$)\b/i)[0]
-    .replace(/[.,;:!?\s]+$/g, '')
-    .trim();
-  if (!title || /^(?:maintenance|task|(?:another )?maintenance task)$/i.test(title)) return undefined;
-  return `${title.charAt(0).toUpperCase()}${title.slice(1)}`.slice(0, 160);
-}
-
 function extractMaintenanceTaskInput(message: string, now: Date, timeZone: string): Partial<MaintenanceTaskWorkflowInput> {
   const frequency = extractMaintenanceFrequency(message);
   const cost = message.match(/(?:estimated cost(?:s| is| of)?|budget(?: of)?|for)\s*\$\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
   return {
-    title: extractMaintenanceTitle(message),
+    title: extractMaintenanceTaskTitle(message),
     priority: /\b(?:urgent|critical)\b/i.test(message)
       ? MaintenanceTaskPriority.URGENT
       : /\bhigh priority\b/i.test(message) ? MaintenanceTaskPriority.HIGH
@@ -6361,14 +6351,14 @@ export async function confirmAskExecution(userId: string, executionId: string, i
         details: [
           { label: 'Task', value: task.title },
           { label: 'Status', value: 'Pending' },
-          { label: 'Priority', value: task.priority.toLowerCase().replace(/_/g, ' ') },
+          { label: 'Priority', value: task.priority.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) },
           { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
           { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
         ],
         actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }],
       }],
       confirmation: null,
-      suggestions: ['What maintenance is still pending?', 'Create a maintenance task'],
+      suggestions: ['What maintenance is still pending?', 'Create another maintenance task'],
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK';
     artifactId = task.id;
