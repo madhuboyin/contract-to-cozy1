@@ -22,7 +22,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
+import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
@@ -128,6 +128,8 @@ import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import { resolveAskAudienceContext } from './askAudienceContext';
 import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
+import { validateAskAnswerTrust } from './askAnswerTrustValidator';
+import { ASK_LANGUAGE_CONTRACT_VERSION, ASK_OPERATION_SEMANTIC_INDEX_VERSION, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -3343,7 +3345,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ? completenessBody
       : `${context ? `${context.knownFactCount} governed property facts are currently known.` : 'Property Context details are temporarily unavailable.'} The record contains ${rooms?.count ?? 'an unknown number of'} room${rooms?.count === 1 ? '' : 's'}, ${inventory?.totalCount ?? 'an unknown number of'} inventory item${inventory?.totalCount === 1 ? '' : 's'}, and ${documents?.totalCount ?? 'an unknown number of'} document${documents?.totalCount === 1 ? '' : 's'}. ${degradedSections.length ? `${degradedSections.join(', ')} could not be fully loaded, so this is a partial summary.` : 'All summary sections loaded successfully.'}`,
     tone: degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-property-record', label: completenessFocus ? 'Review all home details' : 'Open property record', href: propertyHref, style: 'PRIMARY' }],
+    actions: [{ id: 'open-property-record', label: completenessFocus && pendingDetailCount > 0 ? 'Review missing details' : completenessFocus ? 'Review home details' : 'Open property record', href: propertyHref, style: 'PRIMARY' }],
   }];
 
   if (!completenessFocus) {
@@ -4116,7 +4118,7 @@ function routingClarificationResult(
   reasonCode: 'ASK_ROUTING_AMBIGUOUS' | 'ASK_SKILL_AMBIGUOUS' = 'ASK_ROUTING_AMBIGUOUS',
 ): AskOperationResult {
   const candidates = decision.candidates.slice(0, 3);
-  const choices = candidates.map((candidate) => candidate.operationId.toLowerCase().replace(/_/g, ' '));
+  const choices = candidates.map((candidate) => getAskOperationDefinition(candidate.operationId).semantic.supportedJobs[0]);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return {
     status: 'NEEDS_CLARIFICATION',
@@ -4136,7 +4138,7 @@ function routingClarificationResult(
       question: 'Which home request would you like Ask to handle?',
       options: candidates.map((candidate) => ({
         operationId: candidate.operationId,
-        label: candidate.operationId.toLowerCase().replace(/_/g, ' '),
+        label: getAskOperationDefinition(candidate.operationId).semantic.supportedJobs[0],
       })),
       allowFreeText: true,
       expiresAt,
@@ -4204,7 +4206,7 @@ function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: Ask
   let status: string = result.status;
   try {
     const allowedResultBlocks = allowedResultBlocksForOperation(operationId);
-    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !allowedResultBlocks.includes(block.type));
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && block.type !== 'ERROR_STATE' && !allowedResultBlocks.includes(block.type));
     if (disallowedBlock) {
       status = 'unsupported_block';
       throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
@@ -4624,7 +4626,19 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
     if (skill && skillHandoff) {
       askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
     }
-    return { ...result, skillHandoff };
+    const validation = validateAskAnswerTrust({
+      question: input.message,
+      operationId: input.operation.operationId,
+      propertyId: input.propertyId,
+      result: { ...result, skillHandoff },
+    });
+    askAnswerTrustTotal.inc({
+      operation: input.operation.operationId,
+      outcome: validation.trust.outcome,
+      source: validation.trust.checks.sourceIntegrity,
+      repaired: validation.repaired ? 'yes' : 'no',
+    });
+    return validation.result;
   };
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operation.operationId];
   if (
@@ -4936,9 +4950,23 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   let routingDecision = safetyFirstDecision.stage === 'SAFETY'
     ? safetyFirstDecision
     : resolveAskRoutingCascade(routingMessage, {
-      localRoutingEnabled: controls.localRoutingEnabled,
+      localRoutingEnabled: controls.localRoutingEnabled && controls.semanticRetrievalEnabled,
       localMinimumConfidence: controls.localRoutingMinimumConfidence,
       ambiguityMargin: controls.routingAmbiguityMargin,
+      classifierEnabled: controls.constrainedClassifierEnabled,
+      eligibleOperationIds: Object.values(ASK_OPERATION_DEFINITIONS)
+        .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
+        .filter((definition) => controls.operationEnabled(definition.operationId))
+        .filter((definition) => {
+          const skill = getSkillForOperation(definition.operationId);
+          return !skill || (controls.skillEnabled(skill.id) && skillRuntimeUnavailableReason(definition.operationId, controls) == null);
+        })
+        .filter((definition) => {
+          if (!initialPropertyAccess || !definition.propertyRoleFloor) return true;
+          const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
+          return rank[initialPropertyAccess.role] >= rank[definition.propertyRoleFloor];
+        })
+        .map((definition) => definition.operationId),
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
@@ -5040,6 +5068,17 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         operationVersion: routingDecision.requiresClarification ? null : operation.version,
         routingStage: routingDecision.stage,
         routingConfidence: operation.confidence,
+        routingConfidenceBand: operation.confidence >= 0.75 ? 'HIGH' : operation.confidence >= 0.45 ? 'MEDIUM' : 'LOW',
+        entityConfidenceBand: input.launchContext?.entityId ? 'HIGH' : null,
+        language: 'en',
+        languageContractVersion: ASK_LANGUAGE_CONTRACT_VERSION,
+        normalizedMessageHash: createHash('sha256').update(normalizeAskMessage(routingMessage).normalized).digest('hex').slice(0, 16),
+        retrievalMode: routingDecision.stage === 'LOCAL_CLASSIFIER' || routingDecision.stage === 'CLARIFICATION' ? 'HYBRID_LOCAL' : 'DETERMINISTIC',
+        classifierMode: controls.constrainedClassifierEnabled ? 'CONSTRAINED_LOCAL' : 'DISABLED',
+        operationSemanticVersion: routingDecision.requiresClarification ? null : operationDefinition.semantic.semanticVersion,
+        operationSemanticIndexVersion: ASK_OPERATION_SEMANTIC_INDEX_VERSION,
+        candidateOperationIds: routingDecision.candidates.map((candidate) => candidate.operationId),
+        candidateReasonCodes: routingDecision.candidates.flatMap((candidate) => candidate.reasonCodes ?? []),
         skillRoutingOutcome: skillRoutingDecision.outcome,
         skillRoutingReasonCode: stableSkillRoutingReasonCode(skillRoutingDecision.outcome),
         skillRoutingPath: skillRoutingDecision.path,
@@ -5087,9 +5126,13 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
-    const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
+    const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled, skillTelemetryTrace)
       : rawResult;
+    const validation = routingDecision.requiresClarification
+      ? null
+      : validateAskAnswerTrust({ question: input.message, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId });
+    const result = validation?.result ?? presentedResult;
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
@@ -5105,6 +5148,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     });
     if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version, blockTypes: result.blocks.map((block) => block.type) }) } });
+    if (validation) await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, repaired: validation.repaired, sourceCompletionState: validation.trust.checks.sourceIntegrity }) } });
     await prisma.askExecutionEvent.create({
       data: {
         executionId: execution.id,
@@ -5280,9 +5324,11 @@ export async function submitAskClarification(userId: string, executionId: string
       executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: clarifiedPropertyId, operation }),
       controls.executionTimeoutMs,
     );
-    const result = operationDefinition.executionMode === 'DETERMINISTIC'
+    const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
+    const validation = validateAskAnswerTrust({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: clarifiedPropertyId });
+    const result = validation.result;
     assertSkillResultBlocksAllowed(operation.operationId, result);
     const nextParameters = {
       ...(result.parameters ?? {}),
@@ -5300,6 +5346,7 @@ export async function submitAskClarification(userId: string, executionId: string
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CLARIFICATION_SUBMITTED', metadataJson: asInputJson({ operationId: operation.operationId }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, repaired: validation.repaired }) } });
     return mapPersistedExecution(saved, await propertySummary(clarifiedPropertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
@@ -5364,9 +5411,11 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
       executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: input.propertyId, operation }),
       controls.executionTimeoutMs,
     );
-    const result = operationDefinition.executionMode === 'DETERMINISTIC'
+    const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
+    const validation = validateAskAnswerTrust({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: input.propertyId });
+    const result = validation.result;
     assertSkillResultBlocksAllowed(operation.operationId, result);
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
@@ -5380,6 +5429,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: result.status, metadataJson: asInputJson({ operationId: operation.operationId, stage: 'PROPERTY_RESUME' }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, repaired: validation.repaired }) } });
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
@@ -7107,10 +7157,67 @@ export async function requestAskCorrection(userId: string, executionId: string, 
     throw error;
   }
   if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
+  if (input.kind === 'INTENT' || input.kind === 'ENTITY') {
+    const controls = readAskOperationalControls();
+    const semanticCandidates = retrieveAskOperationCandidates(execution.message, {
+      eligibleOperationIds: Object.values(ASK_OPERATION_DEFINITIONS)
+        .filter((definition) => controls.operationEnabled(definition.operationId))
+        .map((definition) => definition.operationId),
+      topK: 5,
+    }).filter((candidate) => input.kind === 'ENTITY' ? candidate.operationId === execution.operationId : candidate.operationId !== execution.operationId);
+    const fallbackIds: AskOperationId[] = input.kind === 'ENTITY' && execution.operationId
+      ? [execution.operationId as AskOperationId]
+      : ['PROPERTY_SUMMARY', 'MAINTENANCE_STATUS', 'INVENTORY_LOOKUP', 'HOME_ACTIONS'];
+    const candidateOperationIds = [...new Set([
+      ...semanticCandidates.map((candidate) => candidate.operationId),
+      ...fallbackIds,
+    ])].filter((operationId) => operationId in ASK_OPERATION_DEFINITIONS).slice(0, 3);
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const clarification = {
+      version: 1,
+      question: input.kind === 'ENTITY'
+        ? 'Which home item or record did you mean?'
+        : 'What did you want Ask Cozy to help with?',
+      options: input.kind === 'ENTITY' ? [] : candidateOperationIds.map((operationId) => ({
+        operationId,
+        label: getAskOperationDefinition(operationId).semantic.supportedJobs[0],
+      })),
+      allowFreeText: true,
+      expiresAt,
+    };
+    const correction = await prisma.askExecution.create({
+      data: {
+        sessionId: execution.sessionId,
+        userId,
+        propertyId: execution.propertyId,
+        clientRequestId: `correction-${execution.id}-${Date.now()}`,
+        message: execution.message,
+        intentFamily: 'CLARIFICATION',
+        status: 'NEEDS_CLARIFICATION',
+        reasonCode: input.kind === 'ENTITY' ? 'ASK_ENTITY_CORRECTION_REQUESTED' : 'ASK_INTENT_CORRECTION_REQUESTED',
+        parametersJson: asInputJson({
+          clarification: { version: 1, candidateOperationIds, expiresAt },
+          correctionOfExecutionId: execution.id,
+          correctionReason: input.kind,
+        }),
+        resultJson: asInputJson({
+          schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+          blocks: [{ type: 'SUMMARY', id: 'ask-correction', title: 'Let’s correct that', body: input.kind === 'ENTITY' ? 'Tell me which item or record you meant. I’ll keep the selected home and check access again.' : 'Choose the home job you meant. I’ll keep this conversation and re-run the correct canonical workflow.', tone: 'DEFAULT', actions: [] }],
+          captureRequests: [], confirmation: null, clarification, suggestions: [], skillHandoff: null,
+        }),
+        expiresAt: execution.expiresAt ?? new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000),
+      },
+    });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CORRECTION_REQUESTED', metadataJson: asInputJson({ kind: input.kind, correctionExecutionId: correction.id }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId: correction.id, eventType: 'CORRECTION_STARTED', metadataJson: asInputJson({ kind: input.kind, correctionOfExecutionId: execution.id, candidateOperationIds }) } });
+    askCorrectionsTotal.inc({ kind: input.kind, outcome: 'started' });
+    return { executionId: correction.id, href: `/dashboard/ask?sessionId=${encodeURIComponent(execution.sessionId)}&executionId=${encodeURIComponent(correction.id)}` };
+  }
   const href = input.kind === 'RETRY_RESPONSE'
     ? `/dashboard/ask?retryExecutionId=${encodeURIComponent(execution.id)}`
     : captureFallbackHref(execution.operationId, execution.propertyId) ?? '/dashboard/ask';
   await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CORRECTION_REQUESTED', metadataJson: asInputJson({ kind: input.kind }) } });
+  askCorrectionsTotal.inc({ kind: input.kind, outcome: 'redirected' });
   return { executionId, href };
 }
 

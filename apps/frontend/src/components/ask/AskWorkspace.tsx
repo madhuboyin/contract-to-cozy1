@@ -1129,7 +1129,7 @@ function InlineCaptureCard({
   );
 }
 
-function ExecutionFeedback({ executionId, propertyId, allowHomeCorrection = true }: { executionId: string; propertyId?: string; allowHomeCorrection?: boolean }) {
+function ExecutionFeedback({ executionId, propertyId, operationId, allowHomeCorrection = true }: { executionId: string; propertyId?: string; operationId?: string; allowHomeCorrection?: boolean }) {
   const [rating, setRating] = useState<'UP' | 'DOWN' | null>(null);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
@@ -1147,10 +1147,10 @@ function ExecutionFeedback({ executionId, propertyId, allowHomeCorrection = true
       setError(caught instanceof Error ? caught.message : 'Could not save feedback.');
     } finally { setSaving(false); }
   };
-  const correctHomeRecord = async () => {
+  const requestCorrection = async (kind: 'HOME_RECORD' | 'INTENT' | 'ENTITY') => {
     setCorrecting(true); setError(null);
     try {
-      const response = await api.requestAskCorrection(executionId, 'HOME_RECORD');
+      const response = await api.requestAskCorrection(executionId, kind);
       if (!response.success || !response.data) throw new Error(response.message || 'Could not open the correction workflow.');
       window.location.assign(response.data.href);
     } catch (caught) {
@@ -1171,7 +1171,9 @@ function ExecutionFeedback({ executionId, propertyId, allowHomeCorrection = true
             pressed, highlighted) but was silently lost if the user
             navigated away before sending a comment. */}
         <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => void submit('DOWN')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
-        {allowHomeCorrection && propertyId && <button type="button" disabled={correcting} onClick={() => void correctHomeRecord()} className="ml-auto font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'Correct home information'}</button>}
+        <button type="button" disabled={correcting} onClick={() => void requestCorrection('INTENT')} className="font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'That’s not what I meant'}</button>
+        {operationId && /(?:INVENTORY|MAINTENANCE|HVAC|QUOTE)/.test(operationId) && <button type="button" disabled={correcting} onClick={() => void requestCorrection('ENTITY')} className="font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">Wrong item</button>}
+        {allowHomeCorrection && propertyId && <button type="button" disabled={correcting} onClick={() => void requestCorrection('HOME_RECORD')} className="ml-auto font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'Correct home information'}</button>}
       </div>
       {rating === 'DOWN' && (
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -1530,7 +1532,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                     return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" onClick={() => { setInput(handoffPrompt); window.localStorage.setItem(draftStorageKey(selectedPropertyId), handoffPrompt); textareaRef.current?.focus(); }} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
                   })()}
                   {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-                  <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} allowHomeCorrection={canCorrectHomeInformation(execution.operation?.family)} />
+                  <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} operationId={execution.operation?.id} allowHomeCorrection={canCorrectHomeInformation(execution.operation?.family)} />
                 </div>
               </article>
               </AskActionReturnContext.Provider>;

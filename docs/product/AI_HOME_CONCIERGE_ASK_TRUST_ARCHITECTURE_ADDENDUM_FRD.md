@@ -2,7 +2,7 @@
 
 **Product:** ContractToCozy — Ask Cozy  
 **Document type:** Functional Requirements and Architecture Addendum  
-**Status:** Proposed — implementation not started  
+**Status:** Implementation in progress — TA0 through TA4 delivered
 **Version:** 1.0  
 **Date:** August 15, 2026  
 **Primary parent:** `AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md`  
@@ -1058,7 +1058,7 @@ Implementation may begin and proceed through these slices without a separate app
 
 ### Slice TA0 — Trust contracts and baseline corpus
 
-**Status: Not started.**
+**Status: Implemented.**
 
 - add the versioned operation semantic contract;
 - add answer-trust result and reason-code contracts;
@@ -1069,7 +1069,7 @@ Implementation may begin and proceed through these slices without a separate app
 
 ### Slice TA1 — Deterministic trust validator
 
-**Status: Not started.**
+**Status: Implemented.**
 
 - validate required first blocks by operation;
 - enforce source-backed absence claims;
@@ -1082,7 +1082,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA2 — Hybrid semantic operation retrieval
 
-**Status: Not started.**
+**Status: Implemented.**
 
 - upgrade the existing semantic index to operation-level hybrid retrieval;
 - precompute operation representations;
@@ -1093,7 +1093,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA3 — Constrained classification and calibration
 
-**Status: Not started.**
+**Status: Implemented.**
 
 - implement the strict classifier schema;
 - select only from supplied candidates;
@@ -1104,7 +1104,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA4 — Conversational repair
 
-**Status: Not started.**
+**Status: Implemented.**
 
 - add “That’s not what I meant”;
 - surface bounded alternate intents;
@@ -1115,7 +1115,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA5 — Semantic answer relevance
 
-**Status: Not started.**
+**Status: In progress.**
 
 - add the optional semantic relevance validator;
 - combine it with mandatory deterministic checks;
@@ -1134,7 +1134,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA7 — Production-quality learning loop
 
-**Status: Not started.**
+**Status: In progress.**
 
 - add trust dashboards and alerting;
 - cluster de-identified correction outcomes;
@@ -1327,14 +1327,14 @@ This addendum is implemented when:
 
 | Slice | Status | Evidence |
 | --- | --- | --- |
-| TA0 — Trust contracts and baseline corpus | Not started | Pending |
-| TA1 — Deterministic trust validator | Not started | Pending |
-| TA2 — Hybrid semantic operation retrieval | Not started | Pending |
-| TA3 — Constrained classification and calibration | Not started | Pending |
-| TA4 — Conversational repair | Not started | Pending |
-| TA5 — Semantic answer relevance | Not started | Pending |
+| TA0 — Trust contracts and baseline corpus | Implemented | Versioned per-operation English semantic contracts, hard negatives, normalization contract, and trust evaluation fixtures |
+| TA1 — Deterministic trust validator | Implemented | Layered direct-answer, operation/block, source/absence, boundary, CTA/property-scope, audience, and presentation-token checks with safe repair/recovery |
+| TA2 — Hybrid semantic operation retrieval | Implemented | Versioned local lexical and character-semantic rank fusion over the runtime-eligible operation catalog with bounded candidates and hard-negative penalties |
+| TA3 — Constrained classification and calibration | Implemented | Candidate-only structured local classification, separate confidence bands, materiality policy, ambiguity margins, independent controls, and classifier-off clarification |
+| TA4 — Conversational repair | Implemented | Durable same-session intent and entity correction executions preserve the original answer, property context, authorization rechecks, and correction lineage |
+| TA5 — Semantic answer relevance | In progress | Mandatory deterministic final-presentation validation is active; the independently controlled optional model relevance layer remains disabled by default |
 | TA6 — Multilingual expansion compatibility | Deferred | Language-versionable contracts required; runtime multilingual implementation explicitly out of scope |
-| TA7 — Production-quality learning loop | Not started | Pending |
+| TA7 — Production-quality learning loop | In progress | Bounded routing, candidate, confidence, validator, source, repair, and correction events are durable; dashboards and reviewed correction clustering remain follow-up work |
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, `Verified`, or `Deferred`. `Deferred` means the extension contract is preserved but runtime delivery is intentionally outside the active implementation scope. A slice shall not be marked `Verified` without recorded automated evidence.
 

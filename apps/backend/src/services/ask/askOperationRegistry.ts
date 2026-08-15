@@ -1,5 +1,6 @@
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import type { SkillHandoffSuggestion } from '../skills/skillHandoff';
+import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
 
 export type AskIntentFamily =
   | 'RECORD_QUERY'
@@ -74,6 +75,7 @@ export interface AskOperationDefinition extends AskOperationResolution {
   adapterKey: string;
   allowedBlockTypes: AskPresentationBlock['type'][];
   evalSuite: string;
+  semantic: AskOperationSemanticContract;
 }
 
 export interface AskOperationResult {
@@ -107,21 +109,24 @@ const definition = (
   propertyRoleFloor: AskPropertyRoleFloor,
   adapterKey: string,
   allowedBlockTypes: AskPresentationBlock['type'][],
-): AskOperationDefinition => ({
-  operationId,
-  version: '1.0',
-  family,
-  confidence: 1,
-  requiresProperty,
-  executionMode,
-  safetyClass,
-  propertyRoleFloor,
-  adapterKey,
-  allowedBlockTypes: CAPABILITY_CONTINUITY_OPERATIONS.has(operationId)
-    ? [...new Set([...allowedBlockTypes, 'CAPABILITY_LIST' as const])]
-    : allowedBlockTypes,
-  evalSuite: `ask-${operationId.toLowerCase().replace(/_/g, '-')}-golden`,
-});
+): AskOperationDefinition => {
+  const base = {
+    operationId,
+    version: '1.0',
+    family,
+    confidence: 1,
+    requiresProperty,
+    executionMode,
+    safetyClass,
+    propertyRoleFloor,
+    adapterKey,
+    allowedBlockTypes: CAPABILITY_CONTINUITY_OPERATIONS.has(operationId)
+      ? [...new Set([...allowedBlockTypes, 'CAPABILITY_LIST' as const])]
+      : allowedBlockTypes,
+    evalSuite: `ask-${operationId.toLowerCase().replace(/_/g, '-')}-golden`,
+  } satisfies Omit<AskOperationDefinition, 'semantic'>;
+  return { ...base, semantic: createAskOperationSemanticContract(base) };
+};
 
 export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOperationDefinition>> = Object.freeze({
   MAINTENANCE_STATUS: definition('MAINTENANCE_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'maintenance.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS']),
@@ -208,6 +213,7 @@ export function validateAskOperationDefinitions(): string[] {
     if (!entry.allowedBlockTypes.length) issues.push(`${key}: no allowed result blocks`);
     if (entry.requiresProperty && entry.propertyRoleFloor == null) issues.push(`${key}: property operation has no authorization floor`);
     if (entry.safetyClass.endsWith('_BOUNDARY') && !entry.allowedBlockTypes.includes('BOUNDARY')) issues.push(`${key}: boundary operation lacks boundary result`);
+    issues.push(...validateAskSemanticContract(entry.semantic).map((issue) => `${key}: ${issue}`));
   }
   return issues;
 }

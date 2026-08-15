@@ -392,7 +392,7 @@ export const SubmitHomeActionUsefulnessFeedbackSchema = z.object({
 }).strict();
 
 export const RequestAskCorrectionSchema = z.object({
-  kind: z.enum(['HOME_RECORD', 'RETRY_RESPONSE']),
+  kind: z.enum(['HOME_RECORD', 'RETRY_RESPONSE', 'INTENT', 'ENTITY']),
 }).strict();
 
 export const ContinueAskExecutionSchema = z.object({

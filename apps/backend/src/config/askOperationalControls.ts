@@ -21,6 +21,10 @@ export interface AskOperationalControls {
   askEnabled: boolean;
   remoteGenerationEnabled: boolean;
   localRoutingEnabled: boolean;
+  semanticRetrievalEnabled: boolean;
+  embeddingRetrievalEnabled: boolean;
+  constrainedClassifierEnabled: boolean;
+  semanticResponseValidatorEnabled: boolean;
   resultSynthesisEnabled: boolean;
   accountRoleEligibilityEnabled: boolean;
   audiencePolicyEnabled: boolean;
@@ -45,6 +49,14 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
       && !booleanEnv(env.ASK_KILL_SWITCH, false),
     remoteGenerationEnabled: booleanEnv(env.ASK_REMOTE_GENERATION_ENABLED, true),
     localRoutingEnabled: booleanEnv(env.ASK_LOCAL_ROUTING_ENABLED, true),
+    semanticRetrievalEnabled: booleanEnv(env.ASK_SEMANTIC_RETRIEVAL_ENABLED, true)
+      && !booleanEnv(env.ASK_SEMANTIC_RETRIEVAL_KILL_SWITCH, false),
+    embeddingRetrievalEnabled: booleanEnv(env.ASK_EMBEDDING_RETRIEVAL_ENABLED, true)
+      && !booleanEnv(env.ASK_EMBEDDING_RETRIEVAL_KILL_SWITCH, false),
+    constrainedClassifierEnabled: booleanEnv(env.ASK_CONSTRAINED_CLASSIFIER_ENABLED, true)
+      && !booleanEnv(env.ASK_CONSTRAINED_CLASSIFIER_KILL_SWITCH, false),
+    semanticResponseValidatorEnabled: booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_ENABLED, false)
+      && !booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_KILL_SWITCH, false),
     resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
       && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),
     accountRoleEligibilityEnabled: booleanEnv(env.ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED, true)

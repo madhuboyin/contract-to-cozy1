@@ -207,6 +207,20 @@ export const askRoutingDecisionsTotal = new Counter({
   registers: [register],
 });
 
+export const askAnswerTrustTotal = new Counter({
+  name: 'ask_answer_trust_total',
+  help: 'Final Ask answer trust outcomes by bounded operation, source state, and repair disposition',
+  labelNames: ['operation', 'outcome', 'source', 'repaired'] as const,
+  registers: [register],
+});
+
+export const askCorrectionsTotal = new Counter({
+  name: 'ask_corrections_total',
+  help: 'Ask conversational correction requests by bounded kind and outcome',
+  labelNames: ['kind', 'outcome'] as const,
+  registers: [register],
+});
+
 export const askResultSynthesisTotal = new Counter({
   name: 'ask_result_synthesis_total',
   help: 'Optional result-only Ask synthesis attempts by bounded outcome',
