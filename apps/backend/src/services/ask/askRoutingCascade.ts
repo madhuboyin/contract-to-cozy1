@@ -68,14 +68,45 @@ export function resolveAskRoutingCascade(message: string, options: {
   }
 
   const normalized = normalizeAskMessage(message, language);
-  const retrieved = retrieveAskOperationCandidates(normalized.normalized, {
-    eligibleOperationIds: options.eligibleOperationIds,
-    topK: 3,
+  const broadPendingScope = /\bpending\b/.test(normalized.normalized)
+    && /\b(?:home|house|property)\b/.test(normalized.normalized)
+    && !/\b(?:details?|information|record|maintenance|task|upkeep|coverage|quote|claim)\b/.test(normalized.normalized);
+  const broadMaintenanceSchedule = /\b(?:organize|plan|schedule)\b/.test(normalized.normalized)
+    && /\b(?:maintenance|upkeep)\b/.test(normalized.normalized)
+    && !/\b(?:show|list|create|add|change|move|complete|finish|overdue|pending|task)\b/.test(normalized.normalized);
+  const ambiguityOperationIds: AskOperationId[] = broadPendingScope
+    ? ['PROPERTY_SUMMARY', 'MAINTENANCE_STATUS', 'HOME_ACTIONS']
+    : broadMaintenanceSchedule
+      ? ['MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_TASK_COMPLETE']
+      : [];
+  const eligibleSet = options.eligibleOperationIds ? new Set(options.eligibleOperationIds) : null;
+  const retrievedPool = retrieveAskOperationCandidates(normalized.normalized, {
+    eligibleOperationIds: eligibleSet ?? undefined,
+    topK: ambiguityOperationIds.length ? 8 : 3,
     language,
     embeddingEnabled: options.embeddingRetrievalEnabled,
     minimumConfidence: options.localMinimumConfidence,
     ambiguityMargin: options.ambiguityMargin,
   });
+  const focusedAmbiguityCandidates = ambiguityOperationIds.length
+    ? retrieveAskOperationCandidates(normalized.normalized, {
+      eligibleOperationIds: ambiguityOperationIds.filter((operationId) => !eligibleSet || eligibleSet.has(operationId)),
+      topK: 3,
+      language,
+      embeddingEnabled: options.embeddingRetrievalEnabled,
+      minimumConfidence: options.localMinimumConfidence,
+      ambiguityMargin: options.ambiguityMargin,
+    })
+    : [];
+  const retrieved = ambiguityOperationIds.length
+    ? [...new Map([...focusedAmbiguityCandidates, ...retrievedPool].map((candidate) => [candidate.operationId, candidate])).values()].sort((left, right) => {
+      const priority = (operationId: AskOperationId): number => {
+        const index = ambiguityOperationIds.indexOf(operationId);
+        return index < 0 ? ambiguityOperationIds.length : index;
+      };
+      return priority(left.operationId) - priority(right.operationId) || right.score - left.score;
+    }).slice(0, 3)
+    : retrievedPool;
   const classification = classifyAskCandidates(retrieved, {
     minimumConfidence: options.localMinimumConfidence ?? 0.3,
     ambiguityMargin: options.ambiguityMargin ?? 0.1,

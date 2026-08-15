@@ -277,7 +277,7 @@ const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|t
 // item (fridge, water heater, etc.) keeps routing to REPLACEMENT_GUIDANCE
 // unchanged -- these four patterns are checked before replacementPattern in
 // the cascade below and all require an HVAC-family keyword.
-const hvacKeyword = '(?:hvac|furnace|air conditioner|a\\/?c unit|heat pump|central air|heating system|cooling system)';
+const hvacKeyword = '(?:hvac|furnace|heater|heating unit|air conditioner|a\\/?c unit|heat pump|central air|heating system|cooling system)';
 const hvacDecisionContinuePattern = new RegExp(`\\b(?:status of|resume|continue|check on|where (?:are we|do things stand)|update on)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b|\\bdecision\\b.{0,40}\\b(?:status|update|progress)\\b.{0,60}\\b${hvacKeyword}\\b`, 'i');
 const hvacDecisionScenarioPattern = new RegExp(`\\b(?:new |another )?quote\\b.{0,80}\\b${hvacKeyword}\\b.{0,60}\\b(?:decision|repair or replace|compare|change)\\b|\\b${hvacKeyword}\\b.{0,60}\\bquote\\b.{0,60}\\b(?:decision|compare|scenario)\\b`, 'i');
 const hvacDecisionAbandonPattern = new RegExp(`\\b(?:abandon|cancel|stop tracking|drop)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b`, 'i');
@@ -295,7 +295,7 @@ const hvacDecisionStartPattern = new RegExp(`\\b(?:repair or replace|should i re
 // hvacDecisionStartPattern's forward-looking "should I replace" phrasing
 // above and from maintenanceCompletePattern's generic task/gutter/filter
 // keyword list below, which has no HVAC-specific keyword to collide with.
-const hvacDecisionOutcomeReportPattern = new RegExp(`\\b(?:i|we)(?:'ve| have)?\\s+(?:already\\s+)?(?:replaced|repaired|fixed|completed|finished|started)\\b.{0,60}\\b${hvacKeyword}\\b|\\b${hvacKeyword}\\b.{0,60}\\b(?:is|was|has been)\\s+(?:replaced|repaired|fixed|completed|finished|done)\\b`, 'i');
+const hvacDecisionOutcomeReportPattern = new RegExp(`\\b(?:i|we)(?:'ve| have)?\\s+(?:already\\s+|ended up\\s+)?(?:installing|installed|replaced|repaired|fixed|completed|finished|started)\\b.{0,60}\\b${hvacKeyword}\\b|\\b${hvacKeyword}\\b.{0,60}\\b(?:is|was|has been)\\s+(?:installed|replaced|repaired|fixed|completed|finished|done)\\b`, 'i');
 const hvacDecisionOutcomeViewPattern = new RegExp(`\\b(?:outcome|result|what happened|how did it (?:turn out|go)|did (?:i|we|it) (?:actually )?(?:replace|repair|fix))\\b.{0,60}\\b${hvacKeyword}\\b|\\b${hvacKeyword}\\b.{0,60}\\b(?:outcome|result)\\b`, 'i');
 const hvacDecisionOutcomeUnlinkPattern = new RegExp(
   `\\b(?:that'?s (?:not right|wrong|incorrect)|undo (?:that|the) (?:outcome|report)|remove (?:that|the) outcome|dispute (?:that|the) outcome)\\b.{0,60}\\b${hvacKeyword}\\b`

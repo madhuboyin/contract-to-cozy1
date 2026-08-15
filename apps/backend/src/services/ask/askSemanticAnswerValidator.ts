@@ -4,7 +4,7 @@ import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './ask
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import { askEmbeddingCosine, embedAskSemanticText } from './askSemanticEmbedding';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-1.0';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-2.0';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -70,6 +70,16 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['EMPTY_DIRECT_ANSWER'],
     });
   }
+  const sourceEvidence = (input.result.parameters as { answerTrustEvidence?: { sources?: Array<{ operationId?: AskOperationId }> } } | undefined)
+    ?.answerTrustEvidence?.sources ?? [];
+  const mismatchedSource = sourceEvidence.find((source) => source.operationId && source.operationId !== input.operationId);
+  if (mismatchedSource?.operationId) {
+    return finish({
+      outcome: 'FAIL', selectedOperationId: input.operationId, competingOperationId: mismatchedSource.operationId,
+      selectedOperationScore: 0, competingOperationScore: 1, questionAnswerScore: 0,
+      reasonCodes: ['ANSWER_SOURCE_OPERATION_MISMATCH'],
+    });
+  }
   const definition = getAskOperationDefinition(input.operationId);
   const semantic = definition.semantic.languagePacks[language];
   if (!semantic) {
@@ -88,12 +98,24 @@ export function validateAskSemanticAnswerRelevance(input: {
     askSemanticTextSimilarity(input.question, answer, language),
     askEmbeddingCosine(embedAskSemanticText(input.question), embedAskSemanticText(answer)),
   );
-  const ranked = retrieveAskOperationCandidates(answer, { topK: 3, language });
+  // Relevance compares operation congruence on uncalibrated semantic evidence.
+  // Routing confidence profiles intentionally differ by effect/materiality and
+  // must not make a WRITE answer appear more relevant than a READ answer.
+  const ranked = retrieveAskOperationCandidates(answer, { topK: 39, language })
+    .sort((left, right) => right.rawScore - left.rawScore);
   const selectedCandidate = ranked.find((candidate) => candidate.operationId === input.operationId);
   const competitor = ranked.find((candidate) => candidate.operationId !== input.operationId) ?? null;
-  const selectedScore = Math.max(selectedOperationScore, selectedCandidate?.score ?? 0);
-  const competingScore = competitor?.score ?? 0;
-  const clearMismatch = Boolean(competitor && questionAnswerScore < 0.24 && competingScore >= 0.34 && competingScore - selectedScore >= 0.12);
+  const selectedScore = Math.max(selectedOperationScore, selectedCandidate?.rawScore ?? 0);
+  const competingScore = competitor?.rawScore ?? 0;
+  // Question/answer word overlap is corroborating evidence only. It must never
+  // override an answer that clearly belongs to a different registered
+  // operation (for example, "equipment" appearing in both a coverage question
+  // and an inventory answer).
+  const competitorLead = competingScore - selectedScore;
+  const clearMismatch = Boolean(competitor && competingScore >= 0.34 && (
+    competitorLead >= 0.12
+    || (selectedScore < 0.16 && competingScore >= 0.55)
+  ));
   if (clearMismatch) {
     return finish({
       outcome: 'FAIL', selectedOperationId: input.operationId, competingOperationId: competitor!.operationId,
@@ -101,11 +123,14 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['ANSWER_FAVORS_DIFFERENT_OPERATION'],
     });
   }
-  if ((selectedCandidate?.operationId === input.operationId && selectedScore >= 0.2) || selectedScore >= 0.3 || questionAnswerScore >= 0.24) {
+  const selectedDominates = Boolean(selectedCandidate && selectedCandidate.rawScore >= competingScore - 0.04);
+  const strongOperationLead = selectedScore >= 0.18 && selectedScore - competingScore >= 0.08;
+  const corroboratedOperationMatch = selectedScore >= 0.18 && competitorLead < 0.1 && questionAnswerScore >= 0.12;
+  if (strongOperationLead || (selectedDominates && corroboratedOperationMatch) || corroboratedOperationMatch) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: competitor?.operationId ?? null,
       selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,
-      reasonCodes: [selectedCandidate?.operationId === input.operationId ? 'SELECTED_OPERATION_TOP_MATCH' : 'DIRECT_ANSWER_SEMANTIC_MATCH'],
+      reasonCodes: [strongOperationLead || selectedDominates ? 'SELECTED_OPERATION_TOP_MATCH' : 'DIRECT_ANSWER_SEMANTIC_MATCH', ...(questionAnswerScore >= 0.12 ? ['QUESTION_ANSWER_CORROBORATION'] : [])],
     });
   }
   return finish({

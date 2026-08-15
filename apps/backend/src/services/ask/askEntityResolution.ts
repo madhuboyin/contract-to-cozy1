@@ -1,5 +1,6 @@
 import type { AskOperationId } from './askOperationRegistry';
 import type { AskConfidenceBand } from './askTrust.contract';
+import { ASK_ENTITY_CALIBRATION_VERSION, calibrateAskEntityConfidence, type AskEntityEvidenceSignal } from './askEntityCalibrationEvidence';
 
 export type AskEntityType = 'PROPERTY' | 'MAINTENANCE_TASK' | 'INVENTORY_ITEM' | 'QUOTE' | 'DECISION_THREAD';
 export type AskEntityResolutionOutcome = 'NOT_REQUIRED' | 'RESOLVED' | 'MENTION_ONLY' | 'MISSING' | 'AMBIGUOUS';
@@ -21,7 +22,11 @@ export interface AskEntityResolutionResult {
   resolverVersion: string;
 }
 
-export const ASK_ENTITY_RESOLVER_VERSION = 'bounded-entity-resolution-1.0';
+export const ASK_ENTITY_RESOLVER_VERSION = `bounded-entity-resolution-2.0:${ASK_ENTITY_CALIBRATION_VERSION}`;
+
+function entityBand(signal: AskEntityEvidenceSignal): AskConfidenceBand {
+  return calibrateAskEntityConfidence(signal).band;
+}
 
 const TARGET_ENTITY: Partial<Record<AskOperationId, AskEntityType>> = {
   MAINTENANCE_TASK_COMPLETE: 'MAINTENANCE_TASK',
@@ -60,32 +65,35 @@ export function resolveAskEntityState(input: {
   const target = requiredAskTargetEntity(input.operationId);
   const entities: AskResolvedEntityMention[] = [];
   const missingSlots: string[] = [];
-  if (input.propertyId) entities.push({ type: 'PROPERTY', originalText: 'selected property', canonicalCandidateId: input.propertyId, confidenceBand: 'HIGH' });
+  if (input.propertyId) entities.push({ type: 'PROPERTY', originalText: 'selected property', canonicalCandidateId: input.propertyId, confidenceBand: entityBand('AUTHORIZED_PROPERTY') });
   if (!target) {
     const propertyMissing = input.requiresProperty !== false && !input.propertyId;
     if (propertyMissing) missingSlots.push('propertyId');
     return {
       schemaVersion: '1.0', outcome: propertyMissing ? 'MISSING' : 'NOT_REQUIRED',
-      confidenceBand: propertyMissing ? 'LOW' : input.propertyId ? 'HIGH' : null, entities, missingSlots,
+      confidenceBand: propertyMissing ? entityBand('MISSING_ENTITY') : input.propertyId ? entityBand('AUTHORIZED_PROPERTY') : null, entities, missingSlots,
       reasonCodes: [propertyMissing ? 'PROPERTY_CONTEXT_REQUIRED' : input.propertyId ? 'AUTHORIZED_PROPERTY_CONTEXT' : 'OPERATION_HAS_NO_ENTITY_REQUIREMENT'],
       resolverVersion: ASK_ENTITY_RESOLVER_VERSION,
     };
   }
   if (input.launchEntityId) {
-    entities.push({ type: target, originalText: 'trusted launch entity', canonicalCandidateId: input.launchEntityId, confidenceBand: 'HIGH' });
-    return { schemaVersion: '1.0', outcome: 'RESOLVED', confidenceBand: 'HIGH', entities, missingSlots, reasonCodes: ['TRUSTED_LAUNCH_ENTITY'], resolverVersion: ASK_ENTITY_RESOLVER_VERSION };
+    const confidenceBand = entityBand('TRUSTED_LAUNCH_ENTITY');
+    entities.push({ type: target, originalText: 'trusted launch entity', canonicalCandidateId: input.launchEntityId, confidenceBand });
+    return { schemaVersion: '1.0', outcome: 'RESOLVED', confidenceBand, entities, missingSlots, reasonCodes: ['TRUSTED_LAUNCH_ENTITY'], resolverVersion: ASK_ENTITY_RESOLVER_VERSION };
   }
   const match = input.message.match(ENTITY_PATTERNS[target as Exclude<AskEntityType, 'PROPERTY'>]);
   if (match?.[1]) {
-    entities.push({ type: target, originalText: match[1].trim(), confidenceBand: 'MEDIUM' });
+    const confidenceBand = entityBand('UNRESOLVED_MENTION');
+    entities.push({ type: target, originalText: match[1].trim(), confidenceBand });
     return {
-      schemaVersion: '1.0', outcome: 'MENTION_ONLY', confidenceBand: 'MEDIUM', entities, missingSlots: [`${target.toLowerCase()}Id`],
+      schemaVersion: '1.0', outcome: 'MENTION_ONLY', confidenceBand, entities, missingSlots: [`${target.toLowerCase()}Id`],
       reasonCodes: ['ENTITY_MENTION_REQUIRES_AUTHORIZED_LOOKUP'], resolverVersion: ASK_ENTITY_RESOLVER_VERSION,
     };
   }
   const ambiguous = /\b(?:it|that|this one|the one|them|those)\b/i.test(input.message);
+  const confidenceBand = entityBand(ambiguous ? 'AMBIGUOUS_REFERENCE' : 'MISSING_ENTITY');
   return {
-    schemaVersion: '1.0', outcome: ambiguous ? 'AMBIGUOUS' : 'MISSING', confidenceBand: 'LOW', entities,
+    schemaVersion: '1.0', outcome: ambiguous ? 'AMBIGUOUS' : 'MISSING', confidenceBand, entities,
     missingSlots: [`${target.toLowerCase()}Id`],
     reasonCodes: [ambiguous ? 'ENTITY_REFERENCE_AMBIGUOUS' : 'ENTITY_REQUIRED'], resolverVersion: ASK_ENTITY_RESOLVER_VERSION,
   };

@@ -68,15 +68,16 @@ export function evaluateAskRoutingQuality(
   const embeddingEnabled = options.embeddingEnabled !== false;
   const rows: EvaluatedFixture[] = fixtures.map((fixture) => {
     const language = fixture.language ?? ASK_DEFAULT_LANGUAGE;
-    const candidates = retrieveAskOperationCandidates(fixture.message, { topK: 3, language, embeddingEnabled });
+    const candidates = retrieveAskOperationCandidates(fixture.message, { topK: 100, language, embeddingEnabled });
+    const retrievalRanked = [...candidates].sort((left, right) => right.rawScore - left.rawScore);
     const decision = resolveAskRoutingCascade(fixture.message, { language, embeddingRetrievalEnabled: embeddingEnabled });
     const selected = decision.requiresClarification || decision.stage === 'REMOTE_FALLBACK'
       ? null
       : decision.operation.operationId;
     return {
       fixture: { ...fixture, language },
-      top: candidates[0]?.operationId ?? decision.candidates[0]?.operationId ?? null,
-      top3: candidates.map((candidate) => candidate.operationId),
+      top: selected ?? retrievalRanked[0]?.operationId ?? decision.candidates[0]?.operationId ?? null,
+      top3: [...new Set([...(selected ? [selected] : []), ...retrievalRanked.map((candidate) => candidate.operationId)])].slice(0, 3),
       selected,
       confidence: decision.operation.confidence,
       highConfidence: decision.candidates.find((candidate) => candidate.operationId === decision.operation.operationId)?.confidenceBand === 'HIGH'

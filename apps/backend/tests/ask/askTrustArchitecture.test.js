@@ -10,7 +10,13 @@ const { validateAskAnswerTrust, validateAskAnswerTrustPipeline, validateAskConfi
 const { attachAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
 const { evaluateAskAnswerRelevanceQuality } = require('../../src/services/ask/askAnswerRelevanceQualityEvaluator.ts');
-const { ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES } = require('../../src/services/ask/askTrustCertificationCorpus.ts');
+const {
+  ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES,
+  ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX,
+  ASK_ROUTING_GENERALIZATION_REGRESSIONS,
+  ASK_TRUST_CERTIFICATION_LAYERS,
+  validateAskTrustCertificationCorpus,
+} = require('../../src/services/ask/askTrustCertificationCorpus.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 
 test('every operation exposes a valid English semantic contract', () => {
@@ -30,6 +36,16 @@ test('normalization preserves the original and semantic retrieval handles proper
   assert.equal(normalized.language, 'en');
   assert.match(normalized.normalized, /home/);
   assert.equal(retrieveAskOperationCandidates(message)[0].operationId, 'PROPERTY_SUMMARY');
+});
+
+test('independent certification is layered, non-duplicative, and keeps audited paraphrases as regressions', () => {
+  assert.deepEqual(validateAskTrustCertificationCorpus(), []);
+  assert.equal(new Set(ASK_TRUST_CERTIFICATION_LAYERS.map((entry) => entry.layer)).size, 9);
+  for (const fixture of ASK_ROUTING_GENERALIZATION_REGRESSIONS) {
+    const decision = resolveAskRoutingCascade(fixture.message);
+    assert.equal(decision.stage, 'LOCAL_CLASSIFIER', fixture.fixtureId);
+    assert.equal(decision.operation.operationId, fixture.operationId, fixture.fixtureId);
+  }
 });
 
 test('reported completeness question resolves while broad pending language clarifies', () => {
@@ -225,10 +241,31 @@ test('registered operation direct-answer fixtures do not produce semantic mismat
   }
 });
 
-test('held-out direct-answer certification reports every operation and meets the relevance objective', () => {
+test('independent direct-answer certification reports every operation and meets the relevance objective', () => {
   const report = evaluateAskAnswerRelevanceQuality(ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES, '2026-08-15T00:00:00.000Z');
   assert.equal(report.samples, Object.keys(ASK_OPERATION_DEFINITIONS).length);
   assert.equal(report.byOperation.length, Object.keys(ASK_OPERATION_DEFINITIONS).length);
   assert.equal(report.unknown, 0);
   assert.ok(report.passRate >= 0.95, JSON.stringify(report));
+});
+
+test('cross-operation negative matrix rejects every answer with mismatched operation lineage', () => {
+  assert.equal(ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX.length, Object.keys(ASK_OPERATION_DEFINITIONS).length * (Object.keys(ASK_OPERATION_DEFINITIONS).length - 1));
+  const report = evaluateAskAnswerRelevanceQuality(ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX, '2026-08-15T00:00:00.000Z');
+  assert.equal(report.passed, 0);
+  assert.equal(report.failed, ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX.length);
+  assert.equal(report.unknown, 0);
+});
+
+test('semantic relevance rejects audited wrong-answer false positives without relying on source metadata', () => {
+  for (const fixture of [
+    { question: 'Which equipment is unprotected?', operationId: 'COVERAGE_GAPS', answer: 'Your equipment inventory contains three appliances.' },
+    { question: 'Should I repair or replace my heating system?', operationId: 'HVAC_DECISION_START', answer: 'Two maintenance tasks are overdue and need service.' },
+  ]) {
+    const relevance = validateAskSemanticAnswerRelevance({
+      question: fixture.question, operationId: fixture.operationId,
+      result: { status: 'ANSWERED', blocks: [{ type: 'SUMMARY', id: 'wrong-answer', title: 'Direct answer', body: fixture.answer, tone: 'DEFAULT', actions: [] }], suggestions: [] },
+    });
+    assert.equal(relevance.outcome, 'FAIL', JSON.stringify(relevance));
+  }
 });

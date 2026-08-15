@@ -9,6 +9,8 @@ const { retrieveAskOperationCandidates } = require('../../src/services/ask/askSe
 const { evaluateAskRoutingQuality } = require('../../src/services/ask/askRoutingQualityEvaluator.ts');
 const { ASK_ROUTING_CERTIFICATION_FIXTURES } = require('../../src/services/ask/askTrustCertificationCorpus.ts');
 const { resolveAskEntityState } = require('../../src/services/ask/askEntityResolution.ts');
+const { ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA, ASK_ROUTING_CALIBRATION_OBSERVATIONS } = require('../../src/services/ask/askRoutingCalibrationEvidence.ts');
+const { ASK_ENTITY_CALIBRATION_OBSERVATIONS, ASK_ENTITY_CALIBRATION_VERSION } = require('../../src/services/ask/askEntityCalibrationEvidence.ts');
 
 test('hybrid retrieval is independently switchable and records calibrated provenance', () => {
   const hybrid = retrieveAskOperationCandidates('Should I repair or replce my aging appliance?', { topK: 3 });
@@ -16,9 +18,54 @@ test('hybrid retrieval is independently switchable and records calibrated proven
   assert.equal(hybrid[0].operationId, 'REPLACEMENT_GUIDANCE');
   assert.equal(hybrid[0].retrievalPath, 'HYBRID_LOCAL_EMBEDDING');
   assert.ok(hybrid[0].embeddingScore > 0);
-  assert.match(hybrid[0].calibrationVersion, /^routing-calibration-2\.0:[a-f0-9]{12}:en:/);
+  assert.match(hybrid[0].calibrationVersion, /^routing-calibration-3\.0:[a-f0-9]{12}:en:/);
   assert.equal(lexical[0].retrievalPath, 'LEXICAL_LOCAL');
   assert.equal(lexical[0].embeddingScore, null);
+});
+
+test('routing calibration is derived from traceable labeled fixture rows', () => {
+  const fixtureIds = new Set(ASK_ROUTING_CERTIFICATION_FIXTURES.map((fixture) => fixture.fixtureId));
+  assert.equal(ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA.datasetVersion, 'ask-routing-independent-v2');
+  assert.ok(ASK_ROUTING_CALIBRATION_OBSERVATIONS.length >= ASK_ROUTING_CERTIFICATION_FIXTURES.length);
+  assert.ok(ASK_ROUTING_CALIBRATION_OBSERVATIONS.some((row) => row.correct));
+  assert.ok(ASK_ROUTING_CALIBRATION_OBSERVATIONS.some((row) => !row.correct));
+  for (const row of ASK_ROUTING_CALIBRATION_OBSERVATIONS) {
+    assert.ok(fixtureIds.has(row.sourceFixtureId), row.sourceFixtureId);
+    assert.ok(ASK_OPERATION_DEFINITIONS[row.candidateOperationId]);
+    assert.ok(row.rawScore >= 0 && row.rawScore <= 1);
+  }
+  for (const fixture of ASK_ROUTING_CERTIFICATION_FIXTURES) {
+    const candidates = retrieveAskOperationCandidates(fixture.message, { topK: Object.keys(ASK_OPERATION_DEFINITIONS).length })
+      .sort((left, right) => right.rawScore - left.rawScore);
+    const expected = candidates.find((candidate) => candidate.operationId === fixture.operationId);
+    const competitor = candidates.find((candidate) => candidate.operationId !== fixture.operationId);
+    const rows = ASK_ROUTING_CALIBRATION_OBSERVATIONS.filter((row) => row.sourceFixtureId === fixture.fixtureId);
+    assert.ok(expected, `${fixture.fixtureId}: expected candidate absent`);
+    assert.ok(competitor, `${fixture.fixtureId}: competitor absent`);
+    assert.deepEqual(rows.find((row) => row.correct), {
+      observationId: `ask-routing-calibration-v2-${fixture.fixtureId.slice(-3)}-expected`,
+      sourceFixtureId: fixture.fixtureId,
+      candidateOperationId: expected.operationId,
+      rawScore: expected.rawScore,
+      correct: true,
+    });
+    assert.deepEqual(rows.find((row) => !row.correct), {
+      observationId: `ask-routing-calibration-v2-${fixture.fixtureId.slice(-3)}-competitor`,
+      sourceFixtureId: fixture.fixtureId,
+      candidateOperationId: competitor.operationId,
+      rawScore: competitor.rawScore,
+      correct: false,
+    });
+  }
+});
+
+test('entity confidence bands are derived from separately versioned labeled outcomes', () => {
+  assert.match(ASK_ENTITY_CALIBRATION_VERSION, /^entity-calibration-1\.0-[a-f0-9]{12}$/);
+  assert.ok(ASK_ENTITY_CALIBRATION_OBSERVATIONS.some((row) => row.canonicalResolutionCorrect));
+  assert.ok(ASK_ENTITY_CALIBRATION_OBSERVATIONS.some((row) => !row.canonicalResolutionCorrect));
+  assert.deepEqual(new Set(ASK_ENTITY_CALIBRATION_OBSERVATIONS.map((row) => row.signal)), new Set([
+    'AUTHORIZED_PROPERTY', 'TRUSTED_LAUNCH_ENTITY', 'UNRESOLVED_MENTION', 'AMBIGUOUS_REFERENCE', 'MISSING_ENTITY',
+  ]));
 });
 
 test('calibrated routing clarifies broad language and resolves a typo-tolerant material intent', () => {

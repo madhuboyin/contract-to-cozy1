@@ -267,8 +267,14 @@ export function retrieveAskOperationCandidates(message: string, options: {
         reasonCodes: [overlap ? 'SEMANTIC_TOKEN_OVERLAP' : 'SEMANTIC_PARAPHRASE', phrase >= 0.55 ? 'PHRASE_SIMILARITY' : 'CONTRACT_SIMILARITY', ...(embedding != null ? ['LOCAL_EMBEDDING_SIMILARITY'] : ['EMBEDDING_DISABLED']), ...(negativePenalty ? ['HARD_NEGATIVE_PENALTY'] : [])],
       };
     })
-    .filter((candidate) => candidate.score > 0.08)
-    .sort((left, right) => right.score - left.score || left.operationId.localeCompare(right.operationId))
+    // Candidate inclusion is based on uncalibrated retrieval evidence. A new
+    // calibration artifact may lower confidence, but must not erase the row
+    // needed to reproduce and audit that artifact.
+    .filter((candidate) => candidate.rawScore > 0.05)
+    // Retrieval order is semantic evidence order. Calibrated confidence governs
+    // execution/clarification thresholds, but differing READ/WRITE risk curves
+    // must never cause a weaker READ candidate to outrank a stronger WRITE.
+    .sort((left, right) => right.rawScore - left.rawScore || right.score - left.score || left.operationId.localeCompare(right.operationId))
     .slice(0, options.topK ?? 3);
 }
 

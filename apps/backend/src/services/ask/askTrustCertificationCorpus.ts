@@ -1,15 +1,19 @@
-import type { AskOperationId } from './askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from './askOperationRegistry';
+import { normalizeAskMessage } from './askSemanticRouter';
 
 export interface AskRoutingCertificationFixture {
+  fixtureId: string;
   operationId: AskOperationId;
   message: string;
   category: 'PARAPHRASE' | 'COLLOQUIAL' | 'PERTURBATION';
+  provenance: 'INDEPENDENT_REVIEW_V2';
 }
 
-// Held-out wording: none of these strings is indexed as an operation-positive
-// example. This prevents the quality report from certifying retrieval by
-// querying the same sentences used to build the index.
-export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze([
+// Frozen independent-review wording. Corpus integrity validation below proves
+// that no complete normalized sentence is indexed as a positive or negative
+// operation example. Shared English/domain vocabulary is expected; unlike the
+// former implementation, no sentence fragments are embedded in router regexes.
+const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fixtureId' | 'provenance'>> = [
   { operationId: 'MAINTENANCE_STATUS', message: 'Give me the upkeep backlog and recently finished work', category: 'COLLOQUIAL' },
   { operationId: 'MAINTENANCE_TASK_CREATE', message: 'Put a chimney inspection on my upkeep list', category: 'PARAPHRASE' },
   { operationId: 'MAINTENANCE_TASK_COMPLETE', message: 'The filter-change job is done', category: 'COLLOQUIAL' },
@@ -49,50 +53,124 @@ export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificatio
   { operationId: 'HVAC_DECISION_OUTCOME_REPORT', message: 'We ended up installing a new heater after the review', category: 'PARAPHRASE' },
   { operationId: 'HVAC_DECISION_OUTCOME_VIEW', message: 'How did the heating repair-or-new-unit choice turn out?', category: 'PARAPHRASE' },
   { operationId: 'HVAC_DECISION_OUTCOME_UNLINK', message: 'Retract what I said about replacing the furnace', category: 'COLLOQUIAL' },
+];
+
+export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
+  CERTIFICATION_ROWS.map((row, index) => Object.freeze({
+    ...row,
+    fixtureId: `ask-routing-independent-v2-${String(index + 1).padStart(3, '0')}`,
+    provenance: 'INDEPENDENT_REVIEW_V2' as const,
+  })),
+);
+
+export const ASK_ROUTING_GENERALIZATION_REGRESSIONS: readonly AskRoutingCertificationFixture[] = Object.freeze([
+  { fixtureId: 'ask-routing-regression-ownership-cost-001', operationId: 'OWNERSHIP_COSTS', message: 'Where is our money going each month just to keep this place?', category: 'COLLOQUIAL', provenance: 'INDEPENDENT_REVIEW_V2' },
+  { fixtureId: 'ask-routing-regression-refinance-monitor-001', operationId: 'REFINANCE_RATE_MONITOR', message: 'Watch the cost of debt and holler when it crosses five percent', category: 'COLLOQUIAL', provenance: 'INDEPENDENT_REVIEW_V2' },
+  { fixtureId: 'ask-routing-regression-property-summary-001', operationId: 'PROPERTY_SUMMARY', message: 'Is our dossier on the residence in good shape?', category: 'COLLOQUIAL', provenance: 'INDEPENDENT_REVIEW_V2' },
+  { fixtureId: 'ask-routing-regression-quote-review-001', operationId: 'QUOTE_COMPARISON_REVIEW', message: 'Lay the builders offers side by side', category: 'COLLOQUIAL', provenance: 'INDEPENDENT_REVIEW_V2' },
+  { fixtureId: 'ask-routing-regression-hvac-start-001', operationId: 'HVAC_DECISION_START', message: 'Does nursing the heating unit along beat buying another?', category: 'COLLOQUIAL', provenance: 'INDEPENDENT_REVIEW_V2' },
 ]);
 
-const CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, string>> = Object.freeze({
+export interface AskTrustDatasetLayer {
+  layer: 'GOLDEN' | 'PARAPHRASE' | 'SHORT_QUERY' | 'MULTI_INTENT' | 'HARD_NEGATIVE' | 'ENTITY_AMBIGUITY' | 'DEGRADED_SOURCE' | 'SAFETY_OVERLAP' | 'MODEL_DISABLED';
+  suite: string;
+  independentlyReviewed: boolean;
+}
+
+// The addendum requires a layered certification program, not a single score.
+// These machine-readable links keep the independent routing corpus distinct
+// from contract-owned golden/hard-negative data and from degradation/policy
+// suites that cannot be evaluated as ordinary top-k routing rows.
+export const ASK_TRUST_CERTIFICATION_LAYERS: readonly AskTrustDatasetLayer[] = Object.freeze([
+  { layer: 'GOLDEN', suite: 'skillEvaluationRegistry.test.js', independentlyReviewed: false },
+  { layer: 'PARAPHRASE', suite: 'askTrustCertificationCorpus.ts#ASK_ROUTING_CERTIFICATION_FIXTURES', independentlyReviewed: true },
+  { layer: 'SHORT_QUERY', suite: 'askRoutingCalibration.test.js#short-query', independentlyReviewed: true },
+  { layer: 'MULTI_INTENT', suite: 'askRoutingCalibration.test.js#multi-intent', independentlyReviewed: true },
+  { layer: 'HARD_NEGATIVE', suite: 'askAppendixBNegativeCatalog.test.js', independentlyReviewed: false },
+  { layer: 'ENTITY_AMBIGUITY', suite: 'askRoutingCalibration.test.js#entity-resolution', independentlyReviewed: true },
+  { layer: 'DEGRADED_SOURCE', suite: 'askTrustArchitecture.test.js#source-degradation', independentlyReviewed: true },
+  { layer: 'SAFETY_OVERLAP', suite: 'askAppendixBNegativeCatalog.test.js', independentlyReviewed: true },
+  { layer: 'MODEL_DISABLED', suite: 'skillEvaluationRegistry.test.js#model-disabled', independentlyReviewed: true },
+]);
+
+export function validateAskTrustCertificationCorpus(): string[] {
+  const issues: string[] = [];
+  const indexedSentences = new Set(Object.values(ASK_OPERATION_DEFINITIONS).flatMap((definition) => {
+    const pack = definition.semantic.languagePacks.en;
+    return pack ? [...pack.positiveExamples, ...pack.hardNegativeExamples].map((text) => normalizeAskMessage(text).normalized) : [];
+  }));
+  const seenMessages = new Set<string>();
+  const seenIds = new Set<string>();
+  for (const fixture of ASK_ROUTING_CERTIFICATION_FIXTURES) {
+    const normalized = normalizeAskMessage(fixture.message).normalized;
+    if (seenIds.has(fixture.fixtureId)) issues.push(`${fixture.fixtureId}: duplicate fixture id`);
+    if (seenMessages.has(normalized)) issues.push(`${fixture.fixtureId}: duplicate normalized message`);
+    if (indexedSentences.has(normalized)) issues.push(`${fixture.fixtureId}: sentence is present in the operation index`);
+    seenIds.add(fixture.fixtureId);
+    seenMessages.add(normalized);
+  }
+  const representedLayers = new Set(ASK_TRUST_CERTIFICATION_LAYERS.map((entry) => entry.layer));
+  for (const required of ['GOLDEN', 'PARAPHRASE', 'SHORT_QUERY', 'MULTI_INTENT', 'HARD_NEGATIVE', 'ENTITY_AMBIGUITY', 'DEGRADED_SOURCE', 'SAFETY_OVERLAP', 'MODEL_DISABLED']) {
+    if (!representedLayers.has(required as AskTrustDatasetLayer['layer'])) issues.push(`missing certification layer: ${required}`);
+  }
+  return issues;
+}
+
+export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, string>> = Object.freeze({
   MAINTENANCE_STATUS: 'Your upkeep list has two overdue jobs and one recently completed service.',
   MAINTENANCE_TASK_CREATE: 'A new chimney-inspection maintenance task is ready to be created after confirmation.',
   MAINTENANCE_TASK_COMPLETE: 'The selected filter-change maintenance task is recorded as completed.',
-  MAINTENANCE_TASK_UPDATE: 'The selected roof-inspection task is scheduled for next week.',
-  COVERAGE_GAPS: 'Two recorded appliances have neither active warranty nor recorded insurance protection.',
+  MAINTENANCE_TASK_UPDATE: 'The selected roof-inspection maintenance task now has a due date of next week.',
+  COVERAGE_GAPS: 'The coverage-gap review found two appliances without an active warranty or recorded insurance protection.',
   INCIDENT_CLAIM_STATUS: 'The filed storm claim remains open and is awaiting the next insurer update.',
   SAVINGS_OPPORTUNITIES: 'The largest recorded household savings opportunity is the recurring utility expense.',
-  OWNERSHIP_COSTS: 'Insurance and property tax are the largest categories in the recorded housing budget.',
+  OWNERSHIP_COSTS: 'The monthly cost of owning this home is led by insurance and property-tax expense categories.',
   INVENTORY_LOOKUP: 'The home inventory records the dryer model, installation year, and service history.',
   PROPERTY_SUMMARY: 'The home record is missing three governed details and has one stale field.',
-  HOME_ACTIONS: 'Focus first on the highest-priority home action: the overdue safety inspection.',
+  HOME_ACTIONS: 'The Home Actions priority list puts the overdue safety inspection first.',
   CAPABILITY_DISCOVERY: 'The guided records workflow is available for organizing this home paperwork.',
   REPLACEMENT_GUIDANCE: 'The dishwasher age and repair cost make replacement the stronger planning option.',
-  REFINANCE_ANALYSIS: 'Replacing the current home loan does not yet improve the refinance break-even numbers.',
+  REFINANCE_ANALYSIS: 'The refinance analysis shows that refinancing the current mortgage does not yet improve the break-even numbers.',
   REFINANCE_RATE_MONITOR: 'A mortgage-rate alert can watch for the five-percent threshold after confirmation.',
   SELL_HOLD_RENT_ANALYSIS: 'The recorded assumptions currently favor becoming a landlord and renting over putting the house on the market.',
   HOUSEHOLD_INVITATION: 'Your partner can be invited to this household after you confirm the role.',
   GUIDANCE_JOURNEY_CREATE: 'A guided project plan can be started with the first governed step.',
   QUOTE_COMPARISON_CREATE: 'A new contractor-bid comparison workspace is ready to create.',
   QUOTE_COMPARISON_REVIEW: 'The proposals differ most in scope, exclusions, and total price.',
-  HOME_DEADLINE_MONITOR: 'A warranty-expiration reminder can be created for the recorded deadline.',
+  HOME_DEADLINE_MONITOR: 'The home-deadline monitor can watch the warranty expiration and create a reminder before it expires.',
   CAPITAL_RESERVE_PLAN: 'The reserve outlook shows the largest future expense in the roof-replacement window.',
-  PROPERTY_TAX_APPEAL_READINESS: 'The appeal record still needs comparable evidence before it is ready.',
+  PROPERTY_TAX_APPEAL_READINESS: 'The property-tax assessment appeal is not ready because it still needs comparable-value evidence.',
   RENOVATION_PERMIT_READINESS: 'The remodel is blocked until the recorded permit approval is complete.',
   MAJOR_EVENT_ENTRY: 'Preparing the home to go on the market begins with records, repairs, and disclosure readiness.',
   EMERGENCY_BOUNDARY: 'Leave the area and contact emergency services because a carbon-monoxide alarm may indicate immediate danger.',
-  UNSAFE_RESTRICTED_BOUNDARY: 'I cannot help conceal water damage; I can help document it and follow the safe disclosure path.',
+  UNSAFE_RESTRICTED_BOUNDARY: 'That is an unsafe restricted request: I cannot help conceal water damage, but I can help document and disclose it safely.',
   OUT_OF_SCOPE_BOUNDARY: 'Coding interview exercises are outside this home-concierge workspace.',
   GROUNDED_GUIDANCE: 'Basement dampness commonly involves drainage, grading, condensation, or plumbing and should be inspected at the source.',
-  HVAC_DECISION_START: 'The heater repair-or-replace review is ready to begin with condition, quote, and cost inputs.',
+  HVAC_DECISION_START: 'A new HVAC repair-or-replace decision is ready to start with heater condition, quote, and cost inputs.',
   HVAC_DECISION_CONTINUE: 'The active heating-system decision is waiting for one remaining quote.',
   HVAC_DECISION_SCENARIO: 'The additional furnace bid changes the repair-versus-replacement comparison.',
   HVAC_DECISION_ABANDON: 'The active heating decision can be stopped after confirmation.',
-  HVAC_PREFERENCE_SAVE: 'The lower-upfront-cost HVAC preference can be saved after confirmation.',
+  HVAC_PREFERENCE_SAVE: 'Your HVAC decision preference for lower upfront cost is ready to be saved after confirmation.',
   HVAC_PREFERENCE_FORGET: 'The ownership-horizon assumption can be removed from the heating decision.',
   HOME_CHANGE_SUMMARY: 'The home record recently changed in the roof, appliance, and insurance sections.',
   HVAC_DECISION_OUTCOME_REPORT: 'The newly installed heater can be recorded as the decision outcome.',
-  HVAC_DECISION_OUTCOME_VIEW: 'The recorded heating decision ended with replacement of the old unit.',
+  HVAC_DECISION_OUTCOME_VIEW: 'The recorded HVAC decision outcome shows that the heating review ended with replacement of the old unit.',
   HVAC_DECISION_OUTCOME_UNLINK: 'The incorrect furnace-replacement outcome can be unlinked after confirmation.',
 });
 
 export const ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES = Object.freeze(
-  ASK_ROUTING_CERTIFICATION_FIXTURES.map((fixture) => ({ ...fixture, answer: CERTIFIED_DIRECT_ANSWERS[fixture.operationId] })),
+  ASK_ROUTING_CERTIFICATION_FIXTURES.map((fixture) => ({ ...fixture, answerOperationId: fixture.operationId, answer: ASK_CERTIFIED_DIRECT_ANSWERS[fixture.operationId] })),
+);
+
+export const ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX = Object.freeze(
+  ASK_ROUTING_CERTIFICATION_FIXTURES.flatMap((fixture) => Object.entries(ASK_CERTIFIED_DIRECT_ANSWERS)
+    .filter(([answerOperationId]) => answerOperationId !== fixture.operationId)
+    .map(([answerOperationId, answer]) => Object.freeze({
+      fixtureId: `${fixture.fixtureId}-wrong-${answerOperationId.toLowerCase()}`,
+      operationId: fixture.operationId,
+      answerOperationId: answerOperationId as AskOperationId,
+      message: fixture.message,
+      answer,
+      expectedOutcome: 'FAIL_OR_UNKNOWN' as const,
+    }))),
 );

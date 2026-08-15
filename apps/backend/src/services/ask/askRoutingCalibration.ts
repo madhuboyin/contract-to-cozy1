@@ -1,10 +1,11 @@
 import type { AskLanguageCode } from './askLanguageRegistry';
-import type { AskOperationDefinition, AskOperationId } from './askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, type AskOperationDefinition, type AskOperationId } from './askOperationRegistry';
 import type { AskConfidenceBand } from './askTrust.contract';
+import { ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA, ASK_ROUTING_CALIBRATION_OBSERVATIONS } from './askRoutingCalibrationEvidence';
 
 import { createHash } from 'node:crypto';
 
-export const ASK_ROUTING_CALIBRATION_VERSION = 'routing-calibration-2.0';
+export const ASK_ROUTING_CALIBRATION_VERSION = 'routing-calibration-3.0';
 export type AskRetrievalPath = 'HYBRID_LOCAL_EMBEDDING' | 'LEXICAL_LOCAL';
 
 export interface AskRoutingCalibrationResult {
@@ -27,42 +28,46 @@ interface CalibrationProfile {
   ambiguityMargin: number;
 }
 
-interface LabeledCalibrationAnchor {
-  rawScore: number;
-  correct: number;
-  samples: number;
+export const ASK_ROUTING_CALIBRATION_EVIDENCE_VERSION = createHash('sha256')
+  .update(JSON.stringify([ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA, ASK_ROUTING_CALIBRATION_OBSERVATIONS]))
+  .digest('hex').slice(0, 12);
+
+type CalibrationKind = 'READ' | 'MATERIAL' | 'WRITE';
+
+function calibrationKind(definition: AskOperationDefinition): CalibrationKind {
+  if (definition.semantic.effect === 'WRITE') return 'WRITE';
+  return definition.semantic.materiality === 'HIGH' ? 'MATERIAL' : 'READ';
 }
 
-// Versioned aggregate labels from the certified golden, paraphrase,
-// perturbation, ambiguity, and hard-negative corpora. Keeping counts rather
-// than authored probabilities makes the active curve reproducible and lets a
-// reviewed production-correction export replace this artifact later.
-const LABELED_CALIBRATION: Readonly<Record<'READ' | 'MATERIAL' | 'WRITE', readonly LabeledCalibrationAnchor[]>> = Object.freeze({
-  READ: [
-    { rawScore: 0, correct: 0, samples: 20 }, { rawScore: 0.1, correct: 1, samples: 20 },
-    { rawScore: 0.2, correct: 5, samples: 20 }, { rawScore: 0.3, correct: 10, samples: 20 },
-    { rawScore: 0.42, correct: 14, samples: 20 }, { rawScore: 0.58, correct: 17, samples: 20 },
-    { rawScore: 0.75, correct: 19, samples: 20 }, { rawScore: 1, correct: 40, samples: 40 },
-  ],
-  MATERIAL: [
-    { rawScore: 0, correct: 0, samples: 20 }, { rawScore: 0.1, correct: 1, samples: 25 },
-    { rawScore: 0.2, correct: 3, samples: 20 }, { rawScore: 0.3, correct: 6, samples: 20 },
-    { rawScore: 0.42, correct: 10, samples: 20 }, { rawScore: 0.58, correct: 15, samples: 20 },
-    { rawScore: 0.75, correct: 18, samples: 20 }, { rawScore: 1, correct: 39, samples: 40 },
-  ],
-  WRITE: [
-    { rawScore: 0, correct: 0, samples: 20 }, { rawScore: 0.1, correct: 0, samples: 20 },
-    { rawScore: 0.2, correct: 2, samples: 20 }, { rawScore: 0.3, correct: 5, samples: 20 },
-    { rawScore: 0.42, correct: 9, samples: 20 }, { rawScore: 0.58, correct: 13, samples: 20 },
-    { rawScore: 0.75, correct: 17, samples: 20 }, { rawScore: 1, correct: 39, samples: 40 },
-  ],
-});
-
-export const ASK_ROUTING_CALIBRATION_EVIDENCE_VERSION = createHash('sha256')
-  .update(JSON.stringify(LABELED_CALIBRATION)).digest('hex').slice(0, 12);
-
-function empiricalAnchors(kind: keyof typeof LABELED_CALIBRATION): CalibrationProfile['anchors'] {
-  return LABELED_CALIBRATION[kind].map(({ rawScore, correct, samples }) => [rawScore, correct / samples] as const);
+// Pool-adjacent-violators turns reviewed row labels into a monotonic empirical
+// calibration curve. No authored correct/sample aggregates participate in the
+// active curve; changing a label, raw score, or fixture changes its version.
+function empiricalAnchors(kind: CalibrationKind): CalibrationProfile['anchors'] {
+  const rows = ASK_ROUTING_CALIBRATION_OBSERVATIONS
+    .filter((row) => calibrationKind(ASK_OPERATION_DEFINITIONS[row.candidateOperationId]) === kind)
+    .sort((left, right) => left.rawScore - right.rawScore);
+  const groups = rows.map((row) => ({ scoreTotal: row.rawScore, correct: row.correct ? 1 : 0, samples: 1 }));
+  for (let index = 0; index < groups.length - 1;) {
+    const current = groups[index].correct / groups[index].samples;
+    const next = groups[index + 1].correct / groups[index + 1].samples;
+    if (current <= next) {
+      index += 1;
+      continue;
+    }
+    groups.splice(index, 2, {
+      scoreTotal: groups[index].scoreTotal + groups[index + 1].scoreTotal,
+      correct: groups[index].correct + groups[index + 1].correct,
+      samples: groups[index].samples + groups[index + 1].samples,
+    });
+    if (index > 0) index -= 1;
+  }
+  const observed = groups.map((group) => [group.scoreTotal / group.samples, group.correct / group.samples] as const);
+  if (!observed.length) return [[0, 0], [1, 1]];
+  return Object.freeze([
+    [0, 0] as const,
+    ...observed.filter(([score]) => score > 0 && score < 1),
+    [1, 1] as const,
+  ]);
 }
 
 const READ_PROFILE: CalibrationProfile = {
@@ -70,7 +75,7 @@ const READ_PROFILE: CalibrationProfile = {
   minimumExecutionConfidence: 0.42, ambiguityMargin: 0.1,
 };
 const MATERIAL_PROFILE: CalibrationProfile = {
-  anchors: empiricalAnchors('MATERIAL'), highThreshold: 0.72, mediumThreshold: 0.42,
+  anchors: empiricalAnchors('MATERIAL'), highThreshold: 0.7, mediumThreshold: 0.42,
   minimumExecutionConfidence: 0.52, ambiguityMargin: 0.12,
 };
 const WRITE_PROFILE: CalibrationProfile = {
