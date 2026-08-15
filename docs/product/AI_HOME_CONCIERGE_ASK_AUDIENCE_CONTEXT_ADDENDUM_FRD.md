@@ -7,6 +7,8 @@
 **Date:** August 14, 2026  
 **Applies to:** `AI_HOME_CONCIERGE_ASK_REDO_FRD.md`, `AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md`, and `CONTRACTTOCOZY_SKILL_PLATFORM_FRD.md`
 
+**Companion addendum:** `AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md` defines semantic natural-language routing, confidence calibration, answer trust validation, and conversational recovery without changing the audience-policy implementation status recorded here.
+
 ---
 
 ## 1. Purpose
