@@ -42,7 +42,7 @@ This document is additive. It does not replace the parent Ask, Audience Context,
 
 Where this addendum is more specific, it governs:
 
-- natural-language normalization and language detection;
+- natural-language normalization and future multilingual-extension contracts;
 - semantic operation candidate generation;
 - constrained routing classification;
 - routing confidence calibration;
@@ -181,8 +181,8 @@ These are the correct extension points. A second independent conversational rout
 | Absence claims | Generic fallback can imply missing data from an incomplete or failed lookup | Absence and all-clear claims require positive source-completion evidence |
 | Boundaries | Generic guidance can attach an irrelevant professional disclaimer | Boundary applicability must be validated against the selected operation and response content |
 | Recovery | Feedback controls do not fully repair an incorrect interpretation | Users must be able to correct intent without clearing history or re-entering context |
-| Language | Support is not expressed as a governed language capability | Language detection, supported-language policy, and honest fallback are required |
-| Evaluation | Golden phrases do not represent the full linguistic surface | Paraphrase, perturbation, adversarial, multilingual, and production-replay suites are required |
+| Language extensibility | The router is not yet governed by a language-capability contract | Keep semantic contracts, indexes, presentation, and evaluation language-versionable without implementing multilingual behavior in this addendum |
+| Evaluation | Golden phrases do not represent the full linguistic surface | English paraphrase, perturbation, adversarial, and production-replay suites are required; future languages require independent certification when implemented |
 
 ---
 
@@ -222,7 +222,8 @@ Version 1 does not attempt to:
 - let a model invent operations, adapters, routes, entities, facts, or actions;
 - let a model bypass authorization, applicability, confirmation, or canonical validation;
 - infer protected characteristics or sensitive household facts from language;
-- translate or claim support for every language;
+- implement multilingual detection, translation, routing, response generation, or certification in Version 1;
+- claim support for a language that has not been separately implemented and certified;
 - replace canonical services with generated calculations;
 - present hidden chain-of-thought or internal prompts;
 - store raw user language in metrics or labels;
@@ -293,7 +294,7 @@ A typed continuation that corrects the selected intent, entity, or scope without
 
 ```mermaid
 flowchart TD
-    INPUT["User message and bounded session context"] --> NORMALIZE["Normalize text and resolve language policy"]
+    INPUT["User message and bounded session context"] --> NORMALIZE["Normalize text through a language-versioned contract"]
     NORMALIZE --> SAFETY["Deterministic safety, security, and explicit-command interception"]
     SAFETY --> ELIGIBLE["Build currently eligible registered operation catalog"]
     ELIGIBLE --> RETRIEVE["Semantic top-k operation retrieval"]
@@ -378,7 +379,7 @@ Semantic routing shall not require these concepts in a fixed word order. Invento
 
 ---
 
-## 12. Message normalization and language policy
+## 12. Message normalization and multilingual expansion contract
 
 ### 12.1 Normalization
 
@@ -401,29 +402,23 @@ Normalization shall not:
 - infer a property or entity across households; or
 - convert ambiguous language into a material command.
 
-### 12.2 Language detection
+### 12.2 Version 1 language scope
 
-Ask shall resolve one bounded language state:
+Version 1 of this addendum implements English natural-language trust behavior only. It shall not add a runtime language detector, translation service, multilingual embedding model, multilingual prompt catalog, language selector, or non-English certification suite.
 
-- `SUPPORTED_CONFIDENT`
-- `SUPPORTED_UNCERTAIN`
-- `MIXED_LANGUAGE`
-- `UNSUPPORTED`
-- `UNKNOWN`
+The architecture shall nevertheless remain language-expandable:
 
-The initial supported-language catalog shall be explicit and versioned. The UI shall not imply universal language support.
+- semantic contracts retain an explicit `supportedLanguages` field initialized to `['en']`;
+- semantic index and classifier versions shall be capable of including a language identifier in a future compatible version;
+- typed presentation shall remain locale-capable rather than embedding English parsing assumptions into canonical services;
+- the original user message shall remain preserved separately from normalization; and
+- no core-router redesign shall be required to register a future supported language.
 
-For an unsupported or uncertain language:
+Until a language is implemented and certified, Ask shall not advertise that language as supported. Generic inability to resolve an input shall use the normal low-confidence recovery path; this addendum does not require detection or translation of that input.
 
-- safety interception shall remain available where technically supported;
-- Ask shall not pretend to have understood a material request;
-- Ask shall provide a concise supported-language recovery message;
-- the original message shall remain available for correction; and
-- no mutation shall be initiated from an untrusted translation.
+### 12.3 Requirements for a future multilingual implementation
 
-### 12.3 Multilingual expansion
-
-Adding a language requires:
+When multilingual implementation is separately authorized, adding a language shall require:
 
 - operation examples and hard negatives in that language;
 - routing and entity-resolution evaluation;
@@ -432,7 +427,7 @@ Adding a language requires:
 - locale-aware dates, money, units, and pluralization; and
 - language-specific trust metrics.
 
-English performance shall not be used as evidence for another language.
+English performance shall not be used as evidence for another language. These requirements reserve a sustainable expansion path; they are not part of the current implementation plan.
 
 ---
 
@@ -452,7 +447,7 @@ Semantic retrieval shall:
 The implementation may use:
 
 - a stronger local lexical/BM25 index;
-- local multilingual embeddings;
+- local embeddings (a future multilingual implementation may substitute a separately certified multilingual model);
 - a hosted embedding service; or
 - a hybrid lexical and embedding ranker.
 
@@ -770,7 +765,7 @@ If answer validation does not pass:
 | Entity ambiguous | Authorized entity selection |
 | Required source unavailable | “I can’t reliably check that right now” plus retry or canonical workspace navigation |
 | Unsupported question | Concise capability boundary with relevant supported alternatives |
-| Unsupported language | Supported-language recovery without pretending to understand |
+| Unresolved input | Normal low-confidence recovery without pretending to understand |
 | Response contract mismatch | Safe error state and retry; do not show the mismatched response |
 | Repairable presentation issue | Repair automatically and retain reason in telemetry |
 
@@ -826,7 +821,7 @@ Trust requirements:
 
 Existing execution/event persistence shall record, where applicable:
 
-- normalized-language state;
+- language contract/version when populated by a future implementation;
 - deterministic routing outcome;
 - candidate operation IDs;
 - semantic index version;
@@ -868,7 +863,7 @@ Raw prompts, raw model chain-of-thought, and unrestricted user text shall not be
 
 - routing path;
 - operation family and operation ID;
-- language state and supported-language code;
+- language state and supported-language code when multilingual support is implemented;
 - retrieval mode;
 - confidence band;
 - ambiguity outcome;
@@ -953,7 +948,6 @@ Each operation evaluation package shall contain:
 - explicit entity and ambiguous-entity cases;
 - audience and lifecycle variants;
 - degraded-source cases;
-- unsupported-language cases;
 - safety overlap cases;
 - model-disabled cases; and
 - answer-validation fixtures.
@@ -972,7 +966,6 @@ Production correction clusters may be converted into de-identified regression fi
 - confidence calibration and reliability diagrams;
 - ambiguity and clarification quality;
 - entity resolution and isolation;
-- language-specific routing;
 - source-unavailable truthfulness;
 - absence-claim validation;
 - boundary applicability;
@@ -1130,15 +1123,14 @@ This slice provides immediate trust protection before model-assisted routing is 
 - validate final audience-filtered presentation; and
 - benchmark added latency and cost.
 
-### Slice TA6 — Governed language expansion
+### Slice TA6 — Multilingual expansion compatibility
 
-**Status: Not started.**
+**Status: Deferred — architecture support only.**
 
-- implement language-state resolution;
-- define the supported-language registry;
-- add unsupported and mixed-language recovery;
-- add multilingual semantic retrieval where justified; and
-- certify each supported language independently.
+- retain `supportedLanguages` and language-version compatibility in semantic contracts;
+- avoid English-only assumptions in canonical operation and response contracts;
+- document the registration and independent-certification requirements for a future language; and
+- do not implement language detection, translation, multilingual routing, multilingual embeddings, localized responses, or non-English evaluation in the current delivery.
 
 ### Slice TA7 — Production-quality learning loop
 
@@ -1147,7 +1139,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 - add trust dashboards and alerting;
 - cluster de-identified correction outcomes;
 - promote representative failures into reviewed evaluation fixtures;
-- tune calibrated thresholds by operation and language; and
+- tune calibrated thresholds by operation (and by language only after a future language is implemented); and
 - document model/index/version changes and regression evidence.
 
 ---
@@ -1160,8 +1152,9 @@ This slice provides immediate trust protection before model-assisted routing is 
 4. TA3 — constrained classification and confidence calibration.
 5. TA4 — conversational repair.
 6. TA5 — semantic answer relevance.
-7. TA6 — governed language expansion.
-8. TA7 — production-quality learning loop.
+7. TA7 — production-quality learning loop.
+
+TA6 is intentionally excluded from the active implementation order. Its extension contracts shall be preserved while multilingual functionality remains deferred.
 
 This order reduces visible trust failures early, upgrades understanding without weakening execution, and postpones broader language claims until the core English trust loop is measurable.
 
@@ -1187,7 +1180,7 @@ This order reduces visible trust failures early, upgrades understanding without 
 | ASK-TRUST-014 | P1 | Clarification asks only for the unresolved distinction | Clarification UX suite |
 | ASK-TRUST-015 | P1 | Users can correct intent/entity without clearing history | Repair E2E suite |
 | ASK-TRUST-016 | P1 | Final audience-filtered responses are validated for direct relevance | Relevance suite |
-| ASK-TRUST-017 | P1 | Language support is explicit and independently evaluated | Language suite |
+| ASK-TRUST-017 | P2 | The architecture can add a separately certified language without core-router or canonical-service redesign; multilingual functionality is deferred | Contract and registry validation |
 | ASK-TRUST-018 | P1 | Trust lineage uses bounded metadata and existing retention controls | Telemetry/privacy tests |
 | ASK-TRUST-019 | P1 | New operations supply semantic examples and hard negatives without core-router branching | Registry validation |
 | ASK-TRUST-020 | P2 | Production corrections feed a reviewed regression corpus | Evaluation pipeline test |
@@ -1233,10 +1226,13 @@ This order reduces visible trust failures early, upgrades understanding without 
 **Given** a viewer asks which details are pending  
 **Then** Ask returns the authorized completeness read but omits inline write capture and unusable correction CTAs.
 
-### 33.8 Unsupported language
+### 33.8 Future language registration
 
-**When** the request language is unsupported and intent is not safely understood  
-**Then** Ask communicates the supported-language limitation and performs no mutation.
+**Given** a future team registers another supported language
+
+**Then** it can supply language-specific semantic examples, index/model versions, presentation resources, and certification fixtures without changing canonical services or adding language-specific core-router branches.
+
+This is an architecture acceptance scenario only. Runtime multilingual behavior is not required in the current implementation.
 
 ---
 
@@ -1254,7 +1250,7 @@ The exact filenames may follow repository conventions, but responsibilities shal
 | Answer trust validator | Deterministic checks, outcome contract, and safe repair policy |
 | Source-claim policy | Authoritative-source requirements for absence/all-clear statements |
 | Presentation policy | Required direct-answer blocks, boundaries, labels, and CTA applicability |
-| Language policy | Detection state, supported-language catalog, and recovery behavior |
+| Language extension contract | Reserved supported-language metadata and future registration/certification boundary; no current runtime implementation |
 | Ask workspace | Focused clarification, correction, retry, and return-to-home UX |
 | Telemetry | Bounded routing, validation, correction, cost, and language dimensions |
 | Skill evaluation packages | Paraphrases, hard negatives, ambiguity, degradation, and response fixtures |
@@ -1292,7 +1288,7 @@ No core-router branch shall be required solely because a new Skill or operation 
 | Source failure becomes an all-clear | Source-backed absence-claim policy |
 | Disclaimers overwhelm simple answers | Operation/content applicability validation |
 | Clarification becomes frequent and frustrating | Calibrate by operation, retain bounded context, ask one specific question |
-| Language translation changes a material command | Preserve original text, require supported-language confidence, clarify material intent |
+| A future translation changes a material command | Preserve original text, require separately certified language confidence, and retain material-intent clarification when multilingual support is implemented |
 | Model outage breaks Ask | Local deterministic and lexical fallback plus durable clarification |
 | Model cost grows without control | Independent calls, candidate bounds, timeouts, cost telemetry, synthesis separation |
 | Feedback exposes private text | Bounded correction codes and existing retention/deletion policy |
@@ -1316,10 +1312,10 @@ This addendum is implemented when:
 9. Boundaries, CTAs, audience content, currency, and homeowner labels are validated.
 10. The reported property-completeness question returns a direct canonical answer.
 11. Users can repair an incorrect intent or entity without clearing history.
-12. Unsupported or uncertain language degrades honestly.
+12. Semantic, operation, and presentation contracts preserve a documented path for future language registration without implementing multilingual runtime behavior.
 13. Model-disabled certified journeys remain usable.
 14. Trust telemetry and correction outcomes are bounded and observable.
-15. Quality objectives are reported per operation and supported language.
+15. Current quality objectives are reported per operation; future supported languages shall be reported independently when implemented.
 16. Adding a new operation does not require a core-router branch.
 17. Any schema change required for durable functionality is implemented and documented, while no database migration script is created.
 18. The handoff identifies any database change the user must apply separately.
@@ -1337,10 +1333,10 @@ This addendum is implemented when:
 | TA3 — Constrained classification and calibration | Not started | Pending |
 | TA4 — Conversational repair | Not started | Pending |
 | TA5 — Semantic answer relevance | Not started | Pending |
-| TA6 — Governed language expansion | Not started | Pending |
+| TA6 — Multilingual expansion compatibility | Deferred | Language-versionable contracts required; runtime multilingual implementation explicitly out of scope |
 | TA7 — Production-quality learning loop | Not started | Pending |
 
-Statuses shall use `Not started`, `In progress`, `Implemented`, or `Verified`. A slice shall not be marked `Verified` without recorded automated evidence.
+Statuses shall use `Not started`, `In progress`, `Implemented`, `Verified`, or `Deferred`. `Deferred` means the extension contract is preserved but runtime delivery is intentionally outside the active implementation scope. A slice shall not be marked `Verified` without recorded automated evidence.
 
 ---
 
