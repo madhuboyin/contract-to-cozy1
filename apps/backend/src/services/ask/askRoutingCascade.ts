@@ -15,6 +15,9 @@ export interface AskRoutingCandidate {
   confidence: number;
   semanticVersion?: string;
   reasonCodes?: string[];
+  rawConfidence?: number;
+  calibrationVersion?: string;
+  retrievalPath?: string;
 }
 
 export interface AskRoutingDecision {
@@ -42,6 +45,7 @@ export function resolveAskRoutingCascade(message: string, options: {
   ambiguityMargin?: number;
   eligibleOperationIds?: Iterable<AskOperationId>;
   classifierEnabled?: boolean;
+  embeddingRetrievalEnabled?: boolean;
   language?: AskLanguageCode;
 } = {}): AskRoutingDecision {
   const language = options.language ?? ASK_DEFAULT_LANGUAGE;
@@ -62,6 +66,9 @@ export function resolveAskRoutingCascade(message: string, options: {
     eligibleOperationIds: options.eligibleOperationIds,
     topK: 3,
     language,
+    embeddingEnabled: options.embeddingRetrievalEnabled,
+    minimumConfidence: options.localMinimumConfidence,
+    ambiguityMargin: options.ambiguityMargin,
   });
   const classification = classifyAskCandidates(retrieved, {
     minimumConfidence: options.localMinimumConfidence ?? 0.3,
@@ -74,6 +81,9 @@ export function resolveAskRoutingCascade(message: string, options: {
     confidence: candidate.score,
     semanticVersion: candidate.semanticVersion,
     reasonCodes: candidate.reasonCodes,
+    rawConfidence: candidate.rawScore,
+    calibrationVersion: candidate.calibrationVersion,
+    retrievalPath: candidate.retrievalPath,
   }));
   if (options.classifierEnabled === false && candidates.length) {
     return { language, operation: direct, stage: 'CLARIFICATION', candidates, requiresClarification: true };

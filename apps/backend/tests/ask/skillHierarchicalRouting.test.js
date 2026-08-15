@@ -79,10 +79,11 @@ test('a semantically selected multi-operation Skill requires operation clarifica
   assert.ok(result.operationCandidates.length <= 3);
 });
 
-test('hierarchical routing adds Skill narrowing only after the operation cascade falls through', () => {
+test('hierarchical routing preserves Skill narrowing when calibrated operation retrieval already requests clarification', () => {
   const message = 'Organize my home upkeep schedule';
   const operationDecision = resolveAskRoutingCascade(message);
-  assert.equal(operationDecision.stage, 'REMOTE_FALLBACK');
+  assert.equal(operationDecision.stage, 'CLARIFICATION');
+  assert.equal(operationDecision.requiresClarification, true);
   const result = resolveHierarchicalSkillRouting(message, operationDecision);
   assert.equal(result.path, 'SEMANTIC_INDEX');
   assert.equal(result.outcome, 'AMBIGUOUS_OPERATION');

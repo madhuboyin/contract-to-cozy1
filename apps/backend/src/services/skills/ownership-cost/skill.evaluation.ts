@@ -142,7 +142,8 @@ export const OWNERSHIP_COST_SKILL_EVALUATION = deepFreezeSkillPackage({
     "GROUPED_LIST",
     "TABLE",
     "EVIDENCE",
-    "CAPABILITY_LIST"
+    "CAPABILITY_LIST",
+    "BOUNDARY"
   ],
   "expectedCanonicalCalls": [
     {

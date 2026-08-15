@@ -168,6 +168,18 @@ export function evaluateAskAudienceApplicability(input: {
   };
 }
 
+export function isAskOperationDiscoverableForAudience(input: {
+  operationId: AskOperationId;
+  operationVersion?: string;
+  accountRole: AskAccountRole;
+  householdRole: HouseholdRole;
+  operatingMode: AskOperatingMode;
+}): boolean {
+  const policy = getAskAudiencePolicy(input.operationId, input.operationVersion ?? '1.0');
+  if (!policy) return true;
+  return evaluateAskAudienceApplicability({ ...input, policy, purpose: 'DISCOVERY' }).discoverable;
+}
+
 export function validateAskAudiencePolicies(): string[] {
   const issues: string[] = [];
   const supportedModes = new Set<AskOperatingMode>(ALL_MODES);

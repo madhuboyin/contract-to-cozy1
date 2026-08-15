@@ -30,6 +30,7 @@ import { skillContextProviderKey } from '../skills/context/skillContextProviderR
 import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
 import type { SeasonalChecklistContext } from '../skills/context/seasonalChecklistContext.provider';
 import {
+  operatingModeForOwnershipState,
   PROPERTY_JOURNEY_CONTEXT_PROVIDER,
   type PropertyJourneyContext,
 } from '../skills/context/propertyJourneyContext.contract';
@@ -44,6 +45,7 @@ import {
 import {
   evaluateAskAudienceApplicability,
   getAskAudiencePolicy,
+  isAskOperationDiscoverableForAudience,
   type AskAudienceApplicabilityDecision,
 } from './askAudiencePolicy';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
@@ -4893,18 +4895,50 @@ async function ensureAskServiceAccountEligibility(userId: string, knownRole?: As
   assertAskAccountRoleEligible(role);
 }
 
+async function discoverableAskOperationIds(input: {
+  propertyId?: string | null;
+  propertyAccess?: PropertyAccess | null;
+  controls: ReturnType<typeof readAskOperationalControls>;
+}): Promise<AskOperationId[]> {
+  const operatingMode = input.propertyId && input.propertyAccess && input.controls.audienceDiscoveryEnabled
+    ? operatingModeForOwnershipState((await prisma.propertyOnboarding.findUnique({
+      where: { propertyId: input.propertyId }, select: { ownershipState: true },
+    }))?.ownershipState)
+    : 'UNKNOWN';
+  const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
+  return Object.values(ASK_OPERATION_DEFINITIONS)
+    .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
+    .filter((definition) => input.controls.operationEnabled(definition.operationId))
+    .filter((definition) => {
+      const skill = getSkillForOperation(definition.operationId);
+      return !skill || (input.controls.skillEnabled(skill.id) && skillRuntimeUnavailableReason(definition.operationId, input.controls) == null);
+    })
+    .filter((definition) => !input.propertyAccess || !definition.propertyRoleFloor
+      || rank[input.propertyAccess.role] >= rank[definition.propertyRoleFloor])
+    .filter((definition) => {
+      if (!input.propertyId || !input.propertyAccess || !input.controls.audienceDiscoveryEnabled) return true;
+      return isAskOperationDiscoverableForAudience({
+        operationId: definition.operationId, operationVersion: definition.version,
+        accountRole: 'HOMEOWNER', householdRole: input.propertyAccess.role, operatingMode,
+      });
+    })
+    .map((definition) => definition.operationId);
+}
+
 export async function createAskExecution(userId: string, input: CreateAskExecutionRequest, accountRole?: AskAccountRole): Promise<AskExecutionResponse> {
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const controls = readAskOperationalControls();
   const safetyFirstDecision = resolveAskRoutingCascade(input.message, {
-    localRoutingEnabled: controls.localRoutingEnabled,
-    localMinimumConfidence: controls.localRoutingMinimumConfidence,
-    ambiguityMargin: controls.routingAmbiguityMargin,
+    localRoutingEnabled: false,
+    embeddingRetrievalEnabled: false,
   });
   const executionPropertyId = propertyScopeForAskRouting(safetyFirstDecision, input.propertyId);
   const initialPropertyAccess = executionPropertyId
     ? await ensurePropertyAccess(userId, executionPropertyId)
     : null;
+  const eligibleOperationIds = await discoverableAskOperationIds({
+    propertyId: executionPropertyId, propertyAccess: initialPropertyAccess, controls,
+  });
   await enterAskPropertyTimezoneContext(executionPropertyId);
   const duplicate = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
   if (duplicate) {
@@ -4975,19 +5009,8 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       localMinimumConfidence: controls.localRoutingMinimumConfidence,
       ambiguityMargin: controls.routingAmbiguityMargin,
       classifierEnabled: controls.constrainedClassifierEnabled,
-      eligibleOperationIds: Object.values(ASK_OPERATION_DEFINITIONS)
-        .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
-        .filter((definition) => controls.operationEnabled(definition.operationId))
-        .filter((definition) => {
-          const skill = getSkillForOperation(definition.operationId);
-          return !skill || (controls.skillEnabled(skill.id) && skillRuntimeUnavailableReason(definition.operationId, controls) == null);
-        })
-        .filter((definition) => {
-          if (!initialPropertyAccess || !definition.propertyRoleFloor) return true;
-          const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
-          return rank[initialPropertyAccess.role] >= rank[definition.propertyRoleFloor];
-        })
-        .map((definition) => definition.operationId),
+      embeddingRetrievalEnabled: controls.embeddingRetrievalEnabled,
+      eligibleOperationIds,
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
@@ -5098,6 +5121,9 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         languageContractVersion: normalizedRoutingMessage.contractVersion,
         normalizedMessageHash: createHash('sha256').update(normalizedRoutingMessage.normalized).digest('hex').slice(0, 16),
         retrievalMode: routingDecision.stage === 'LOCAL_CLASSIFIER' || routingDecision.stage === 'CLARIFICATION' ? 'HYBRID_LOCAL' : 'DETERMINISTIC',
+        retrievalPath: routingDecision.candidates[0]?.retrievalPath ?? 'DETERMINISTIC',
+        routingCalibrationVersion: routingDecision.candidates[0]?.calibrationVersion ?? null,
+        routingRawScore: routingDecision.candidates[0]?.rawConfidence ?? null,
         classifierMode: controls.constrainedClassifierEnabled ? 'CONSTRAINED_LOCAL' : 'DISABLED',
         operationSemanticVersion: routingDecision.requiresClarification ? null : operationDefinition.semantic.semanticVersion,
         operationSemanticIndexVersion: askOperationSemanticIndexVersion(routingDecision.language),
@@ -5291,13 +5317,27 @@ export async function submitAskClarification(userId: string, executionId: string
   }
   const controls = readAskOperationalControls();
   const clarifiedMessage = input.answer ? `${execution.message}\nClarification: ${input.answer}` : execution.message;
-  const safetyDecision = resolveAskRoutingCascade(clarifiedMessage, {
-    localRoutingEnabled: controls.localRoutingEnabled,
-    localMinimumConfidence: controls.localRoutingMinimumConfidence,
-    ambiguityMargin: controls.routingAmbiguityMargin,
+  const safetyOnlyDecision = resolveAskRoutingCascade(clarifiedMessage, { localRoutingEnabled: false, embeddingRetrievalEnabled: false });
+  const clarifiedPropertyId = propertyScopeForAskRouting(safetyOnlyDecision, execution.propertyId);
+  const clarifiedAccess = clarifiedPropertyId ? await ensurePropertyAccess(userId, clarifiedPropertyId) : null;
+  const clarificationEligibleOperationIds = await discoverableAskOperationIds({
+    propertyId: clarifiedPropertyId, propertyAccess: clarifiedAccess, controls,
   });
-  const clarifiedPropertyId = propertyScopeForAskRouting(safetyDecision, execution.propertyId);
-  if (clarifiedPropertyId) await ensurePropertyAccess(userId, clarifiedPropertyId);
+  const safetyDecision = safetyOnlyDecision.stage === 'SAFETY'
+    ? safetyOnlyDecision
+    : resolveAskRoutingCascade(clarifiedMessage, {
+      localRoutingEnabled: controls.localRoutingEnabled && controls.semanticRetrievalEnabled,
+      embeddingRetrievalEnabled: controls.embeddingRetrievalEnabled,
+      localMinimumConfidence: controls.localRoutingMinimumConfidence,
+      ambiguityMargin: controls.routingAmbiguityMargin,
+      classifierEnabled: controls.constrainedClassifierEnabled,
+      eligibleOperationIds: clarificationEligibleOperationIds,
+    });
+  if (input.operationId && !clarificationEligibleOperationIds.includes(input.operationId as AskOperationId)) {
+    const error = new Error('That home workflow is no longer available for the selected home and household role. Choose another option or ask again.');
+    (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_OPTION_UNAVAILABLE';
+    throw error;
+  }
   let operation: AskOperationResolution;
   if (safetyDecision.stage === 'SAFETY') {
     operation = safetyDecision.operation;
@@ -7195,14 +7235,18 @@ export async function requestAskCorrection(userId: string, executionId: string, 
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
-  if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
+  const correctionAccess = execution.propertyId ? await ensurePropertyAccess(userId, execution.propertyId) : null;
   if (input.kind === 'INTENT' || input.kind === 'ENTITY') {
     const controls = readAskOperationalControls();
+    const correctionEligibleOperationIds = await discoverableAskOperationIds({
+      propertyId: execution.propertyId, propertyAccess: correctionAccess, controls,
+    });
     const semanticCandidates = retrieveAskOperationCandidates(execution.message, {
-      eligibleOperationIds: Object.values(ASK_OPERATION_DEFINITIONS)
-        .filter((definition) => controls.operationEnabled(definition.operationId))
-        .map((definition) => definition.operationId),
+      eligibleOperationIds: correctionEligibleOperationIds,
       topK: 5,
+      embeddingEnabled: controls.embeddingRetrievalEnabled,
+      minimumConfidence: controls.localRoutingMinimumConfidence,
+      ambiguityMargin: controls.routingAmbiguityMargin,
     }).filter((candidate) => input.kind === 'ENTITY' ? candidate.operationId === execution.operationId : candidate.operationId !== execution.operationId);
     const fallbackIds: AskOperationId[] = input.kind === 'ENTITY' && execution.operationId
       ? [execution.operationId as AskOperationId]
@@ -7210,7 +7254,7 @@ export async function requestAskCorrection(userId: string, executionId: string, 
     const candidateOperationIds = [...new Set([
       ...semanticCandidates.map((candidate) => candidate.operationId),
       ...fallbackIds,
-    ])].filter((operationId) => operationId in ASK_OPERATION_DEFINITIONS).slice(0, 3);
+    ])].filter((operationId) => operationId in ASK_OPERATION_DEFINITIONS && correctionEligibleOperationIds.includes(operationId)).slice(0, 3);
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const clarification = {
       version: 1,

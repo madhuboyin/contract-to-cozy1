@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const { resolveAskAudienceContext } = require('../../src/services/ask/askAudienceContext.ts');
-const { evaluateAskAudienceApplicability, getAskAudiencePolicy } = require('../../src/services/ask/askAudiencePolicy.ts');
+const { evaluateAskAudienceApplicability, getAskAudiencePolicy, isAskOperationDiscoverableForAudience } = require('../../src/services/ask/askAudiencePolicy.ts');
 const { applyAskAudiencePresentation } = require('../../src/services/ask/askAudiencePresentation.ts');
 const { propertyScopeForAskRouting, resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 
@@ -32,6 +32,21 @@ test('effective audience context keeps authorization and lifecycle dimensions di
   assert.equal(member.propertyRelationship, 'HOUSEHOLD_MEMBER');
   assert.equal(member.ownershipState, 'UNKNOWN');
   assert.equal(member.operatingMode, 'UNKNOWN');
+});
+
+test('semantic discovery excludes lifecycle-inapplicable and unauthorized operations before classification', () => {
+  assert.equal(isAskOperationDiscoverableForAudience({
+    operationId: 'REFINANCE_ANALYSIS', accountRole: 'HOMEOWNER', householdRole: 'OWNER', operatingMode: 'BUYING',
+  }), false);
+  assert.equal(isAskOperationDiscoverableForAudience({
+    operationId: 'REFINANCE_ANALYSIS', accountRole: 'HOMEOWNER', householdRole: 'OWNER', operatingMode: 'OWNING',
+  }), true);
+  assert.equal(isAskOperationDiscoverableForAudience({
+    operationId: 'HOUSEHOLD_INVITATION', accountRole: 'HOMEOWNER', householdRole: 'VIEWER', operatingMode: 'OWNING',
+  }), false);
+  assert.equal(isAskOperationDiscoverableForAudience({
+    operationId: 'MAINTENANCE_STATUS', accountRole: 'HOMEOWNER', householdRole: 'VIEWER', operatingMode: 'BUYING',
+  }), true);
 });
 
 test('safety routing removes untrusted property scope before authorization-dependent work', () => {
