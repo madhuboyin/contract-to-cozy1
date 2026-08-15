@@ -21,7 +21,15 @@ import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
 import { getServiceQuoteDecisionMetrics } from '../services/adminAnalytics/serviceQuoteDecisionMetricsService';
 import { getRenovationOperationalHealth } from '../services/adminAnalytics/renovationOperationalHealthService';
 import { getHomeOperationsMeasurement } from '../services/adminAnalytics/homeOperationsMeasurementService';
-import { getAskTrustLearningReport } from '../services/adminAnalytics/askTrustLearningService';
+import {
+  getAskTrustLearningReport,
+  getPromotedAskTrustRegressionCorpus,
+  listAskTrustReviewCandidates,
+  promoteAskTrustCandidate,
+  reviewAskTrustCandidate,
+  syncAskTrustReviewCandidates,
+  type AskTrustReviewStatus,
+} from '../services/adminAnalytics/askTrustLearningService';
 
 const homeDigitalTwinService = new HomeDigitalTwinService();
 
@@ -150,6 +158,43 @@ export async function getAskTrustLearningHandler(
   } catch (err) {
     next(err);
   }
+}
+
+export async function syncAskTrustReviewCandidatesHandler(req: CustomRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json({ success: true, data: await syncAskTrustReviewCandidates(qDate(req.query.from), qDate(req.query.to)) });
+  } catch (err) { next(err); }
+}
+
+export async function listAskTrustReviewCandidatesHandler(req: CustomRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json({ success: true, data: await listAskTrustReviewCandidates(req.query.status as AskTrustReviewStatus | undefined) });
+  } catch (err) { next(err); }
+}
+
+export async function reviewAskTrustCandidateHandler(req: CustomRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json({ success: true, data: await reviewAskTrustCandidate({
+      fixtureKey: req.params.fixtureKey,
+      disposition: req.body.disposition,
+      expectedOperationId: req.body.expectedOperationId,
+      reviewedQuestion: req.body.reviewedQuestion,
+      reviewNotes: req.body.reviewNotes,
+      reviewerId: req.user!.userId,
+    }) });
+  } catch (err) { next(err); }
+}
+
+export async function promoteAskTrustCandidateHandler(req: CustomRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json({ success: true, data: await promoteAskTrustCandidate(req.params.fixtureKey, req.user!.userId) });
+  } catch (err) { next(err); }
+}
+
+export async function getPromotedAskTrustRegressionCorpusHandler(_req: CustomRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json({ success: true, data: await getPromotedAskTrustRegressionCorpus() });
+  } catch (err) { next(err); }
 }
 
 export async function getPhase1PilotHandler(

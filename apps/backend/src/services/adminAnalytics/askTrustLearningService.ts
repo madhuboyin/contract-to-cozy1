@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../ask/askOperationRegistry';
 
 type BoundedMetadata = Record<string, unknown>;
 
@@ -8,6 +9,9 @@ const TRACKED_EVENTS = [
   'CAPABILITY_RESOLVED', 'ANSWER_TRUST_VALIDATED', 'CORRECTION_REQUESTED',
   'CLARIFICATION_SUBMITTED',
 ] as const;
+
+export const ASK_REVIEWED_REGRESSION_DATASET_VERSION = 'ask-reviewed-regression-v1';
+export type AskTrustReviewStatus = 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED' | 'PROMOTED';
 
 export interface AskTrustLearningEvent {
   executionId: string;
@@ -210,5 +214,123 @@ export async function getAskTrustLearningReport(
     }).sort((left, right) => right.count - left.count),
     alerts,
     controls: { recommendationsAreAdvisory: true, automaticThresholdMutation: false, rawTextFixturePromotion: false },
+  };
+}
+
+export async function syncAskTrustReviewCandidates(from?: Date, to?: Date) {
+  const report = await getAskTrustLearningReport(from, to);
+  const synced = [];
+  for (const candidate of report.reviewedFixtureCandidates) {
+    synced.push(await prisma.askTrustReviewCandidate.upsert({
+      where: { fixtureKey: candidate.fixtureKey },
+      create: {
+        fixtureKey: candidate.fixtureKey,
+        datasetVersion: ASK_REVIEWED_REGRESSION_DATASET_VERSION,
+        operationId: candidate.operationId,
+        language: candidate.language,
+        category: candidate.category,
+        reasonCode: candidate.reasonCode,
+        occurrences: candidate.occurrences,
+        reviewStatus: 'NEEDS_REVIEW',
+        sourceMetadataJson: {
+          period: report.period,
+          boundedMetadataOnly: true,
+          source: 'ASK_TRUST_LEARNING_REPORT',
+        },
+      },
+      update: {
+        occurrences: candidate.occurrences,
+        sourceMetadataJson: {
+          period: report.period,
+          boundedMetadataOnly: true,
+          source: 'ASK_TRUST_LEARNING_REPORT',
+        },
+      },
+    }));
+  }
+  return { datasetVersion: ASK_REVIEWED_REGRESSION_DATASET_VERSION, synced: synced.length };
+}
+
+export async function listAskTrustReviewCandidates(status?: AskTrustReviewStatus) {
+  return prisma.askTrustReviewCandidate.findMany({
+    where: status ? { reviewStatus: status } : undefined,
+    orderBy: [{ occurrences: 'desc' }, { updatedAt: 'desc' }],
+    take: 500,
+  });
+}
+
+export async function reviewAskTrustCandidate(input: {
+  fixtureKey: string;
+  disposition: 'APPROVE' | 'REJECT';
+  expectedOperationId?: AskOperationId;
+  reviewedQuestion?: string;
+  reviewNotes?: string;
+  reviewerId: string;
+}) {
+  const candidate = await prisma.askTrustReviewCandidate.findUnique({ where: { fixtureKey: input.fixtureKey } });
+  if (!candidate) throw Object.assign(new Error('Ask trust review candidate not found.'), { code: 'ASK_TRUST_REVIEW_CANDIDATE_NOT_FOUND' });
+  if (candidate.reviewStatus === 'PROMOTED') throw Object.assign(new Error('A promoted fixture cannot be reviewed again.'), { code: 'ASK_TRUST_FIXTURE_ALREADY_PROMOTED' });
+  if (input.disposition === 'APPROVE') {
+    if (!input.expectedOperationId || !ASK_OPERATION_DEFINITIONS[input.expectedOperationId]) {
+      throw Object.assign(new Error('Approval requires a registered expected operation.'), { code: 'ASK_TRUST_EXPECTED_OPERATION_REQUIRED' });
+    }
+    if (!input.reviewedQuestion?.trim()) {
+      throw Object.assign(new Error('Approval requires de-identified representative wording.'), { code: 'ASK_TRUST_REVIEWED_QUESTION_REQUIRED' });
+    }
+  }
+  return prisma.askTrustReviewCandidate.update({
+    where: { fixtureKey: input.fixtureKey },
+    data: {
+      reviewStatus: input.disposition === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+      expectedOperationId: input.disposition === 'APPROVE' ? input.expectedOperationId : null,
+      reviewedQuestion: input.disposition === 'APPROVE' ? input.reviewedQuestion!.trim() : null,
+      reviewNotes: input.reviewNotes?.trim() || null,
+      reviewerId: input.reviewerId,
+      reviewedAt: new Date(),
+      promotedAt: null,
+    },
+  });
+}
+
+export async function promoteAskTrustCandidate(fixtureKey: string, reviewerId: string) {
+  return prisma.$transaction(async (tx) => {
+    const candidate = await tx.askTrustReviewCandidate.findUnique({ where: { fixtureKey } });
+    if (!candidate) throw Object.assign(new Error('Ask trust review candidate not found.'), { code: 'ASK_TRUST_REVIEW_CANDIDATE_NOT_FOUND' });
+    if (candidate.reviewStatus === 'PROMOTED') return candidate;
+    if (candidate.reviewStatus !== 'APPROVED' || !candidate.expectedOperationId || !candidate.reviewedQuestion) {
+      throw Object.assign(new Error('Only an approved, labeled candidate can be promoted.'), { code: 'ASK_TRUST_FIXTURE_APPROVAL_REQUIRED' });
+    }
+    if (!ASK_OPERATION_DEFINITIONS[candidate.expectedOperationId as AskOperationId]) {
+      throw Object.assign(new Error('The reviewed operation is no longer registered.'), { code: 'ASK_TRUST_EXPECTED_OPERATION_UNREGISTERED' });
+    }
+    return tx.askTrustReviewCandidate.update({
+      where: { fixtureKey },
+      data: {
+        reviewStatus: 'PROMOTED',
+        reviewerId,
+        promotedAt: new Date(),
+        datasetVersion: ASK_REVIEWED_REGRESSION_DATASET_VERSION,
+      },
+    });
+  });
+}
+
+export async function getPromotedAskTrustRegressionCorpus() {
+  const rows = await prisma.askTrustReviewCandidate.findMany({
+    where: { reviewStatus: 'PROMOTED', datasetVersion: ASK_REVIEWED_REGRESSION_DATASET_VERSION },
+    orderBy: [{ promotedAt: 'asc' }, { fixtureKey: 'asc' }],
+  });
+  return {
+    schemaVersion: '1.0',
+    datasetVersion: ASK_REVIEWED_REGRESSION_DATASET_VERSION,
+    fixtures: rows.map((row) => ({
+      fixtureId: row.fixtureKey,
+      operationId: row.expectedOperationId as AskOperationId,
+      message: row.reviewedQuestion!,
+      language: row.language,
+      provenance: 'REVIEWED_PRODUCTION_CORRECTION' as const,
+      reviewedAt: row.reviewedAt?.toISOString() ?? null,
+      promotedAt: row.promotedAt?.toISOString() ?? null,
+    })),
   };
 }

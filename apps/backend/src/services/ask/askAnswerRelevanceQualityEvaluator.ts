@@ -4,6 +4,7 @@ import { validateAskSemanticAnswerRelevance } from './askSemanticAnswerValidator
 export interface AskAnswerRelevanceFixture {
   operationId: AskOperationId;
   answerOperationId?: AskOperationId;
+  sourceOperationId?: AskOperationId;
   message: string;
   answer: string;
 }
@@ -31,10 +32,10 @@ export function evaluateAskAnswerRelevanceQuality(
       result: {
         status: 'ANSWERED', suggestions: [],
         blocks: [{ type: 'SUMMARY', id: 'certified-direct-answer', title: 'Direct answer', body: fixture.answer, tone: 'DEFAULT', actions: [] }],
-        parameters: fixture.answerOperationId ? {
+        parameters: fixture.sourceOperationId ? {
           answerTrustEvidence: {
             schemaVersion: '1.0',
-            sources: [{ sourceId: 'certification-fixture', operationId: fixture.answerOperationId, status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-08-15T00:00:00.000Z' }],
+            sources: [{ sourceId: 'certification-fixture', operationId: fixture.sourceOperationId, status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-08-15T00:00:00.000Z' }],
           },
         } : undefined,
       },

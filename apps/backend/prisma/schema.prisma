@@ -6926,6 +6926,34 @@ model AskExecutionEvent {
   @@map("ask_execution_events")
 }
 
+// Reviewed, de-identified Ask trust failures promoted into a durable
+// regression corpus. Raw conversation text is never copied automatically;
+// an admin reviewer supplies bounded representative wording before approval.
+model AskTrustReviewCandidate {
+  id                  String   @id @default(uuid())
+  fixtureKey          String   @unique
+  datasetVersion      String
+  operationId         String
+  language            String
+  category            String
+  reasonCode          String
+  occurrences         Int
+  reviewStatus        String   @default("NEEDS_REVIEW")
+  expectedOperationId String?
+  reviewedQuestion    String?
+  reviewNotes         String?
+  reviewerId          String?
+  reviewedAt          DateTime?
+  promotedAt          DateTime?
+  sourceMetadataJson  Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([reviewStatus, updatedAt])
+  @@index([operationId, language, reviewStatus])
+  @@map("ask_trust_review_candidates")
+}
+
 model AskCaptureReceipt {
   id             String   @id @default(uuid())
   executionId    String

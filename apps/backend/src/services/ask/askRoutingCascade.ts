@@ -1,4 +1,5 @@
 import {
+  ASK_OPERATION_DEFINITIONS,
   getAskOperationDefinition,
   resolveAskOperation,
   type AskOperationId,
@@ -79,9 +80,17 @@ export function resolveAskRoutingCascade(message: string, options: {
     : broadMaintenanceSchedule
       ? ['MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_TASK_COMPLETE']
       : [];
-  const eligibleSet = options.eligibleOperationIds ? new Set(options.eligibleOperationIds) : null;
+  // Safety boundaries are entered only through the deterministic safety gate
+  // above. Keeping them out of generic semantic retrieval prevents benign,
+  // low-confidence wording from being escalated into an emergency/restricted
+  // answer merely because it shares a home-system noun.
+  const eligibleSet = options.eligibleOperationIds
+    ? new Set(options.eligibleOperationIds)
+    : new Set((Object.values(ASK_OPERATION_DEFINITIONS)
+      .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
+      .map((definition) => definition.operationId)));
   const retrievedPool = retrieveAskOperationCandidates(normalized.normalized, {
-    eligibleOperationIds: eligibleSet ?? undefined,
+    eligibleOperationIds: eligibleSet,
     topK: ambiguityOperationIds.length ? 8 : 3,
     language,
     embeddingEnabled: options.embeddingRetrievalEnabled,
@@ -90,7 +99,7 @@ export function resolveAskRoutingCascade(message: string, options: {
   });
   const focusedAmbiguityCandidates = ambiguityOperationIds.length
     ? retrieveAskOperationCandidates(normalized.normalized, {
-      eligibleOperationIds: ambiguityOperationIds.filter((operationId) => !eligibleSet || eligibleSet.has(operationId)),
+      eligibleOperationIds: ambiguityOperationIds.filter((operationId) => eligibleSet.has(operationId)),
       topK: 3,
       language,
       embeddingEnabled: options.embeddingRetrievalEnabled,

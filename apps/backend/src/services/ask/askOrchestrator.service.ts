@@ -133,6 +133,7 @@ import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
 import { validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } from './askAnswerTrustValidator';
 import { resolveAskEntityState } from './askEntityResolution';
 import { attachAskAuthoritativeSourceEvidence } from './askAnswerTrustPolicy';
+import type { AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 
 const MAX_RESULT_ITEMS = 50;
@@ -4321,7 +4322,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   };
 }
 
-async function dispatchOperationAdapter(
+async function dispatchOperationAdapterResult(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
   trace?: SkillExecutionTimingTrace,
@@ -4397,6 +4398,52 @@ async function dispatchOperationAdapter(
     case 'HVAC_DECISION_OUTCOME_VIEW': return hvacDecisionOutcomeViewResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_DECISION_OUTCOME_UNLINK': return hvacDecisionOutcomeUnlinkResult(input.userId, input.propertyId!, input.message);
   }
+}
+
+function canonicalAdapterSourceEvidence(
+  operationId: AskOperationId,
+  composedContext: ComposedSkillContext | null,
+  observedAt = new Date().toISOString(),
+): AskAuthoritativeSourceEvidence[] {
+  const adapter: AskAuthoritativeSourceEvidence = {
+    sourceId: getAskOperationDefinition(operationId).adapterKey,
+    operationId,
+    status: 'COMPLETE',
+    scope: 'FULL',
+    freshness: 'CURRENT',
+    observedAt,
+  };
+  const providers = (composedContext?.entries ?? [])
+    .filter((entry) => entry.status !== 'NOT_APPLICABLE')
+    .map((entry): AskAuthoritativeSourceEvidence => {
+      const complete = entry.status === 'AVAILABLE';
+      const unavailable = ['UNAVAILABLE', 'UNAUTHORIZED', 'TIMED_OUT', 'BUDGET_EXCEEDED'].includes(entry.status);
+      return {
+        sourceId: entry.provenance
+          ? `${entry.provenance.providerId}@${entry.provenance.providerVersion}`
+          : entry.key,
+        operationId,
+        status: complete ? 'COMPLETE' : unavailable ? 'UNAVAILABLE' : 'PARTIAL',
+        scope: complete ? 'FULL' : 'LIMITED',
+        freshness: complete
+          ? 'CURRENT'
+          : entry.status === 'STALE' ? 'STALE' : 'UNKNOWN',
+        observedAt: entry.provenance?.observedAt ?? observedAt,
+      };
+    });
+  return [adapter, ...providers];
+}
+
+async function dispatchOperationAdapter(
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] },
+  composedContext: ComposedSkillContext | null,
+  trace?: SkillExecutionTimingTrace,
+): Promise<AskOperationResult> {
+  const result = await dispatchOperationAdapterResult(input, composedContext, trace);
+  return attachAskAuthoritativeSourceEvidence(
+    result,
+    canonicalAdapterSourceEvidence(input.operation.operationId, composedContext),
+  );
 }
 
 async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
@@ -4605,7 +4652,6 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
   let coreResult: AskOperationResult;
   try {
     coreResult = await executeOperationCore(input, trace);
-    coreResult = attachAskAuthoritativeSourceEvidence(coreResult, input.operation.operationId);
   } catch (error) {
     if (skill && skillStartedAt != null) {
       askSkillExecutionsTotal.inc({ skill: skill.id, skill_version: skill.version, operation: input.operation.operationId, status: 'THREW' });

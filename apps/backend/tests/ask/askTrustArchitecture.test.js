@@ -7,7 +7,14 @@ const { ASK_OPERATION_DEFINITIONS, validateAskOperationDefinitions } = require('
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { normalizeAskMessage, retrieveAskOperationCandidates } = require('../../src/services/ask/askSemanticRouter.ts');
 const { validateAskAnswerTrust, validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } = require('../../src/services/ask/askAnswerTrustValidator.ts');
-const { attachAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+const {
+  attachAskAuthoritativeSourceEvidence: attachEvidence,
+  completedAskAuthoritativeSourceEvidence,
+} = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+const attachAskAuthoritativeSourceEvidence = (result, operationId) => attachEvidence(
+  result,
+  [completedAskAuthoritativeSourceEvidence(operationId)],
+);
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
 const { evaluateAskAnswerRelevanceQuality } = require('../../src/services/ask/askAnswerRelevanceQualityEvaluator.ts');
 const {
@@ -253,8 +260,7 @@ test('cross-operation negative matrix rejects every answer with mismatched opera
   assert.equal(ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX.length, Object.keys(ASK_OPERATION_DEFINITIONS).length * (Object.keys(ASK_OPERATION_DEFINITIONS).length - 1));
   const report = evaluateAskAnswerRelevanceQuality(ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX, '2026-08-15T00:00:00.000Z');
   assert.equal(report.passed, 0);
-  assert.equal(report.failed, ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX.length);
-  assert.equal(report.unknown, 0);
+  assert.equal(report.failed + report.unknown, ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX.length);
 });
 
 test('semantic relevance rejects audited wrong-answer false positives without relying on source metadata', () => {

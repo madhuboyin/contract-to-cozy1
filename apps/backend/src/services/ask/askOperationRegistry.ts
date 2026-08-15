@@ -1,6 +1,7 @@
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import type { SkillHandoffSuggestion } from '../skills/skillHandoff';
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
+import { validateAskOperationSemanticPackages } from './askOperationSemanticPackages';
 
 export type AskIntentFamily =
   | 'RECORD_QUERY'
@@ -215,6 +216,7 @@ export function validateAskOperationDefinitions(): string[] {
     if (entry.safetyClass.endsWith('_BOUNDARY') && !entry.allowedBlockTypes.includes('BOUNDARY')) issues.push(`${key}: boundary operation lacks boundary result`);
     issues.push(...validateAskSemanticContract(entry.semantic).map((issue) => `${key}: ${issue}`));
   }
+  issues.push(...validateAskOperationSemanticPackages(Object.keys(ASK_OPERATION_DEFINITIONS) as AskOperationId[]));
   return issues;
 }
 
@@ -300,7 +302,8 @@ const hvacDecisionOutcomeViewPattern = new RegExp(`\\b(?:outcome|result|what hap
 const hvacDecisionOutcomeUnlinkPattern = new RegExp(
   `\\b(?:that'?s (?:not right|wrong|incorrect)|undo (?:that|the) (?:outcome|report)|remove (?:that|the) outcome|dispute (?:that|the) outcome)\\b.{0,60}\\b${hvacKeyword}\\b`
   + `|\\b${hvacKeyword}\\b.{0,60}\\b(?:outcome|report)\\b.{0,40}\\b(?:wrong|incorrect|undo|remove|dispute)\\b`
-  + `|\\boutcome\\b.{0,40}\\b(?:is\\s+)?(?:wrong|incorrect)\\b.{0,60}\\b${hvacKeyword}\\b`,
+  + `|\\boutcome\\b.{0,40}\\b(?:is\\s+)?(?:wrong|incorrect)\\b.{0,60}\\b${hvacKeyword}\\b`
+  + `|\\b(?:take back|retract|unlink)\\b.{0,50}\\b(?:outcome|result|report|record|logged)\\b.{0,60}\\b${hvacKeyword}\\b`,
   'i',
 );
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;

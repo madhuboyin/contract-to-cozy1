@@ -94,6 +94,10 @@ export function validateAskSemanticAnswerRelevance(input: {
     askSemanticTextSimilarity(answer, anchor, language),
     askEmbeddingCosine(embedAskSemanticText(answer), embedAskSemanticText(anchor)),
   );
+  const hardNegativeScore = Math.max(0, ...semantic.answerHardNegativeExamples.map((example) => Math.max(
+    askSemanticTextSimilarity(answer, example, language),
+    askEmbeddingCosine(embedAskSemanticText(answer), embedAskSemanticText(example)),
+  )));
   const questionAnswerScore = Math.max(
     askSemanticTextSimilarity(input.question, answer, language),
     askEmbeddingCosine(embedAskSemanticText(input.question), embedAskSemanticText(answer)),
@@ -116,17 +120,19 @@ export function validateAskSemanticAnswerRelevance(input: {
     competitorLead >= 0.12
     || (selectedScore < 0.16 && competingScore >= 0.55)
   ));
-  if (clearMismatch) {
+  const selectedHardNegative = hardNegativeScore >= 0.42 && hardNegativeScore >= selectedScore - 0.04;
+  if (clearMismatch || selectedHardNegative) {
     return finish({
       outcome: 'FAIL', selectedOperationId: input.operationId, competingOperationId: competitor!.operationId,
       selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,
-      reasonCodes: ['ANSWER_FAVORS_DIFFERENT_OPERATION'],
+      reasonCodes: [selectedHardNegative ? 'ANSWER_MATCHES_OPERATION_HARD_NEGATIVE' : 'ANSWER_FAVORS_DIFFERENT_OPERATION'],
     });
   }
-  const selectedDominates = Boolean(selectedCandidate && selectedCandidate.rawScore >= competingScore - 0.04);
-  const strongOperationLead = selectedScore >= 0.18 && selectedScore - competingScore >= 0.08;
-  const corroboratedOperationMatch = selectedScore >= 0.18 && competitorLead < 0.1 && questionAnswerScore >= 0.12;
-  if (strongOperationLead || (selectedDominates && corroboratedOperationMatch) || corroboratedOperationMatch) {
+  const selectedDominates = Boolean(selectedCandidate && selectedCandidate.rawScore >= competingScore - 0.02);
+  const strongOperationLead = selectedScore >= 0.18 && selectedScore - competingScore >= 0.05;
+  const corroboratedOperationMatch = selectedDominates && selectedScore >= 0.18 && questionAnswerScore >= 0.12;
+  const strongDirectEntailment = selectedScore >= 0.18 && selectedScore >= competingScore - 0.1 && questionAnswerScore >= 0.25;
+  if (strongOperationLead || corroboratedOperationMatch || strongDirectEntailment) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: competitor?.operationId ?? null,
       selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,

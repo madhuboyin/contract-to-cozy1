@@ -9,6 +9,7 @@ import {
   actionsForAskBlock,
   attachAskAuthoritativeSourceEvidence,
   authoritativeEvidenceState,
+  completedAskAuthoritativeSourceEvidence,
   householdRoleFromResult,
   isAskActionApplicable,
   isBoundaryAllowedForOperation,
@@ -278,7 +279,7 @@ export function validateAskConfirmedCompletion(input: {
     question: input.question,
     operationId: input.operationId,
     propertyId: input.propertyId,
-    result: attachAskAuthoritativeSourceEvidence(presented, input.operationId),
+    result: attachAskAuthoritativeSourceEvidence(presented, [completedAskAuthoritativeSourceEvidence(input.operationId)]),
     semanticEnabled: false,
   });
 }

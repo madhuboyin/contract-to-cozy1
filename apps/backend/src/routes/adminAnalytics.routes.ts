@@ -4,6 +4,7 @@
 // All routes are protected by authenticate + requireRole(ADMIN).
 
 import { Router } from 'express';
+import { z } from 'zod';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { requireCapability } from '../middleware/adminCapability.middleware';
@@ -34,7 +35,33 @@ import {
   getHomeDigitalTwinDiagnosticsHandler,
   getHomeOperationsMeasurementHandler,
   getAskTrustLearningHandler,
+  getPromotedAskTrustRegressionCorpusHandler,
+  listAskTrustReviewCandidatesHandler,
+  promoteAskTrustCandidateHandler,
+  reviewAskTrustCandidateHandler,
+  syncAskTrustReviewCandidatesHandler,
 } from '../controllers/adminAnalytics.controller';
+
+const AskTrustCandidateListSchema = z.object({
+  body: z.unknown().optional(),
+  params: z.object({}).passthrough(),
+  query: z.object({ status: z.enum(['NEEDS_REVIEW', 'APPROVED', 'REJECTED', 'PROMOTED']).optional() }).passthrough(),
+});
+const AskTrustCandidateKeySchema = z.object({
+  body: z.unknown().optional(),
+  query: z.object({}).passthrough(),
+  params: z.object({ fixtureKey: z.string().trim().min(8).max(120) }),
+});
+const AskTrustCandidateReviewSchema = z.object({
+  query: z.object({}).passthrough(),
+  params: z.object({ fixtureKey: z.string().trim().min(8).max(120) }),
+  body: z.object({
+    disposition: z.enum(['APPROVE', 'REJECT']),
+    expectedOperationId: z.string().trim().min(2).max(100).optional(),
+    reviewedQuestion: z.string().trim().min(3).max(500).optional(),
+    reviewNotes: z.string().trim().max(1000).optional(),
+  }),
+});
 
 const router = Router();
 
@@ -309,6 +336,11 @@ router.get(
   validate(OverviewQuerySchema),
   getAskTrustLearningHandler,
 );
+router.post('/admin/analytics/ask-trust/candidates/sync', validate(OverviewQuerySchema), syncAskTrustReviewCandidatesHandler);
+router.get('/admin/analytics/ask-trust/candidates', validate(AskTrustCandidateListSchema), listAskTrustReviewCandidatesHandler);
+router.post('/admin/analytics/ask-trust/candidates/:fixtureKey/review', validate(AskTrustCandidateReviewSchema), reviewAskTrustCandidateHandler);
+router.post('/admin/analytics/ask-trust/candidates/:fixtureKey/promote', validate(AskTrustCandidateKeySchema), promoteAskTrustCandidateHandler);
+router.get('/admin/analytics/ask-trust/regression-corpus', getPromotedAskTrustRegressionCorpusHandler);
 
 /**
  * @swagger

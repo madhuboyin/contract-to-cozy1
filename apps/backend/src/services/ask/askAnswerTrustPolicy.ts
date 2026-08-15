@@ -58,25 +58,30 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
 
 export function attachAskAuthoritativeSourceEvidence(
   result: AskOperationResult,
-  operationId: AskOperationId,
+  evidence: AskAuthoritativeSourceEvidence[],
 ): AskOperationResult {
-  const definition = getAskOperationDefinition(operationId);
   const successful = ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(result.status);
   if (!successful) return result;
-  const source: AskAuthoritativeSourceEvidence = {
-    sourceId: definition.adapterKey,
-    operationId,
-    status: result.status === 'READY_WITH_LIMITATIONS' ? 'PARTIAL' : 'COMPLETE',
-    scope: result.status === 'READY_WITH_LIMITATIONS' ? 'LIMITED' : 'FULL',
-    freshness: result.status === 'READY_WITH_LIMITATIONS' ? 'UNKNOWN' : 'CURRENT',
-    observedAt: new Date().toISOString(),
-  };
   return {
     ...result,
     parameters: {
       ...(result.parameters ?? {}),
-      answerTrustEvidence: { schemaVersion: '1.0', sources: [source] } satisfies AskAnswerTrustEvidence,
+      answerTrustEvidence: { schemaVersion: '1.0', sources: evidence } satisfies AskAnswerTrustEvidence,
     },
+  };
+}
+
+export function completedAskAuthoritativeSourceEvidence(
+  operationId: AskOperationId,
+  observedAt = new Date().toISOString(),
+): AskAuthoritativeSourceEvidence {
+  return {
+    sourceId: getAskOperationDefinition(operationId).adapterKey,
+    operationId,
+    status: 'COMPLETE',
+    scope: 'FULL',
+    freshness: 'CURRENT',
+    observedAt,
   };
 }
 
@@ -100,10 +105,11 @@ export function authoritativeEvidenceState(
 ): 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE' {
   const definition = getAskOperationDefinition(operationId);
   const matching = readAskAuthoritativeSourceEvidence(result)
-    .filter((source) => source.operationId === operationId && source.sourceId === definition.adapterKey);
-  if (matching.some((source) => source.status === 'COMPLETE' && source.scope === 'FULL' && source.freshness === 'CURRENT')) return 'COMPLETE';
-  if (matching.length) return 'PARTIAL';
-  return 'UNAVAILABLE';
+    .filter((source) => source.operationId === operationId);
+  const adapter = matching.find((source) => source.sourceId === definition.adapterKey);
+  if (!adapter || adapter.status !== 'COMPLETE' || adapter.scope !== 'FULL' || adapter.freshness !== 'CURRENT') return 'UNAVAILABLE';
+  if (matching.some((source) => source.status !== 'COMPLETE' || source.scope !== 'FULL' || source.freshness !== 'CURRENT')) return 'PARTIAL';
+  return 'COMPLETE';
 }
 
 export function isBoundaryAllowedForOperation(operationId: AskOperationId, boundaryId: string, result?: AskOperationResult): boolean {
