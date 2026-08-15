@@ -46,6 +46,7 @@ test('safety routing removes untrusted property scope before authorization-depen
 
 test('unknown journey context does not block authorized maintenance workflows', () => {
   for (const operationId of [
+    'MAINTENANCE_STATUS',
     'MAINTENANCE_TASK_CREATE',
     'MAINTENANCE_TASK_COMPLETE',
     'MAINTENANCE_TASK_UPDATE',

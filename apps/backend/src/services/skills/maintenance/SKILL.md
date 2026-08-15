@@ -7,6 +7,7 @@ Help homeowners understand, create, complete, update, and monitor recorded home 
 ## Homeowner goals
 
 - What maintenance is pending or overdue?
+- Which current or named-season checklist tasks are pending, completed, snoozed, or dismissed?
 - Create a maintenance task.
 - Mark a maintenance task complete.
 - Reschedule, assign, archive, or reopen a task.
@@ -35,7 +36,11 @@ Help homeowners understand, create, complete, update, and monitor recorded home 
 
 ## Context
 
-The existing operations retrieve their minimum canonical Maintenance and deadline context through their registered adapters. This first package declares no cross-domain `SkillContextProvider`; provider contracts are introduced in the context-composition phase.
+- `maintenance.task-context` is required for `MAINTENANCE_STATUS` and supplies bounded canonical Maintenance records.
+- `maintenance.seasonal-checklist-context` is optional and supplies recent seasonal checklists, item state, and canonical Maintenance links.
+- Seasonal queries use checklist state directly and deduplicate an item already linked to a canonical task. A linked canonical completion takes precedence if the two projections temporarily disagree.
+- If seasonal context is unavailable, Ask discloses that limitation and never converts it into a zero-task answer.
+- Property identity remains required and property journey context remains optional. Factual status reads use journey-neutral presentation.
 
 ## Safety and authorization
 
@@ -50,6 +55,6 @@ The machine manifest permits summary, grouped-list, evidence, workflow-progress,
 
 ## Evaluation expectations
 
-Evaluation must cover read/write routing, entity ambiguity, missing details, role enforcement, stale confirmations, retry safety, recurrence, reminder consent, negative prompts, disabled-Skill behavior, and model-disabled deterministic operation.
+Evaluation must cover read/write routing, seasonal source precedence and deduplication, pending/completed/snoozed/dismissed seasonal states, entity ambiguity, missing details, role enforcement, stale confirmations, retry safety, recurrence, reminder consent, negative prompts, disabled-Skill behavior, and model-disabled deterministic operation.
 
 This document is semantic guidance. `skill.manifest.ts`, the Ask operation registry, adapters, and canonical domain services are the executable authorities.

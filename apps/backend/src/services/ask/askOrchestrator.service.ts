@@ -28,12 +28,13 @@ import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.servi
 import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
 import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
+import type { SeasonalChecklistContext } from '../skills/context/seasonalChecklistContext.provider';
 import {
   PROPERTY_JOURNEY_CONTEXT_PROVIDER,
   type PropertyJourneyContext,
 } from '../skills/context/propertyJourneyContext.contract';
 import type { ComposedSkillContext } from '../skills/context/skillContext.contract';
-import { MAINTENANCE_TASK_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
+import { MAINTENANCE_TASK_CONTEXT_PROVIDER, SEASONAL_CHECKLIST_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
 import {
   ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED,
   ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED_MESSAGE,
@@ -126,6 +127,7 @@ import { lifecyclePromptsFor } from './askLifecyclePromptPolicy';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import { resolveAskAudienceContext } from './askAudienceContext';
 import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
+import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -1351,11 +1353,27 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
   };
 }
 
-async function maintenanceResult(userId: string, propertyId: string, message: string, context: MaintenanceTaskContext): Promise<AskOperationResult> {
+async function maintenanceResult(
+  userId: string,
+  propertyId: string,
+  message: string,
+  context: MaintenanceTaskContext,
+  seasonalContext: SeasonalChecklistContext | null,
+  seasonalContextAvailable: boolean,
+): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const now = new Date();
   const { tasks } = context;
   const timeZone = safeTimezone(context.propertyTimezone);
+  const seasonalResult = buildSeasonalMaintenanceResult({
+    message,
+    propertyId,
+    propertyTimezone: timeZone,
+    context: seasonalContext,
+    contextAvailable: seasonalContextAvailable,
+    now,
+  });
+  if (seasonalResult) return seasonalResult;
   const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(message, now, timeZone, context.purchaseDate);
   const wantsCompleted = /\b(?:completed|finished|done|completion|service history|what did (?:i|we) complete)\b/i.test(message);
   const wantsOpen = /\b(?:pending|remaining|still|open|overdue|due|upcoming|coming up|needs review|in progress|high priority|highest priority|priority tasks?|before (?:winter|spring|summer|fall|autumn))\b/i.test(message);
@@ -4286,12 +4304,19 @@ async function dispatchOperationAdapter(
     case 'MAINTENANCE_TASK_COMPLETE': return maintenanceTaskCompleteResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_TASK_UPDATE': return maintenanceTaskUpdateResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_STATUS': return maintenanceResult(
-      input.userId,
-      input.propertyId!,
-      input.message,
-      composedContext!.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
-    );
+    case 'MAINTENANCE_STATUS': {
+      const seasonalEntry = composedContext!.entries.find(
+        (entry) => entry.key === skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER),
+      );
+      return maintenanceResult(
+        input.userId,
+        input.propertyId!,
+        input.message,
+        composedContext!.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
+        (composedContext!.values[skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER)] as SeasonalChecklistContext | undefined) ?? null,
+        seasonalEntry?.status === 'AVAILABLE',
+      );
+    }
     case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
     case 'INCIDENT_CLAIM_STATUS': return incidentClaimStatusResult(input.userId, input.propertyId!, input.message);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);

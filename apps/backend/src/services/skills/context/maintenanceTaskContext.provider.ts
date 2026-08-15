@@ -5,6 +5,7 @@ import type { SkillContextProviderDefinition } from './skillContext.contract';
 import { MAINTENANCE_TASK_CONTEXT_PROVIDER } from '../maintenance/skill.manifest';
 
 type CanonicalMaintenanceTask = Awaited<ReturnType<typeof PropertyMaintenanceTaskService.getTasksForProperty>>[number];
+const MAX_CONTEXT_TASKS = 50;
 
 export interface MaintenanceTaskContextTask {
   id: CanonicalMaintenanceTask['id'];
@@ -49,10 +50,13 @@ const maintenanceTaskContextProviderDefinition: SkillContextProviderDefinition<M
       prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }),
       prisma.propertyFinancingProfile.findUnique({ where: { propertyId }, select: { purchaseDate: true } }),
     ]);
-    const boundedTasks: MaintenanceTaskContextTask[] = tasks.map((task) => ({
+    // The adapter renders at most 50 records. Bound the required provider at
+    // that same limit so a large history cannot fail the entire operation's
+    // context budget before the response has a chance to paginate or filter.
+    const boundedTasks: MaintenanceTaskContextTask[] = tasks.slice(0, MAX_CONTEXT_TASKS).map((task) => ({
       id: task.id,
       title: task.title,
-      description: task.description,
+      description: task.description?.slice(0, 400) ?? null,
       category: task.category,
       assetType: task.assetType,
       serviceCategory: task.serviceCategory,

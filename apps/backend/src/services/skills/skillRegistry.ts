@@ -33,8 +33,8 @@ const RUNTIME_CONTROL_PATTERN = /^ASK_SKILL_[A-Z0-9_]+_(?:ENABLED|KILL_SWITCH)$/
 const ROLE_RANK: Record<Exclude<AskPropertyRoleFloor, null>, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
 const SKILL_CONSUMERS: ReadonlySet<SkillConsumer> = new Set(['ASK', 'HOME_ACTIONS', 'CONCIERGE_HOME', 'PROACTIVE', 'NOTIFICATION_CONTINUATION']);
 const PLATFORM_CONTEXT_BUDGET_MAXIMUMS = Object.freeze({
-  maxFacts: 100,
-  maxEntities: 50,
+  maxFacts: 250,
+  maxEntities: 100,
   maxDocuments: 10,
   maxHistoryEvents: 200,
   maxSerializedBytes: 256_000,

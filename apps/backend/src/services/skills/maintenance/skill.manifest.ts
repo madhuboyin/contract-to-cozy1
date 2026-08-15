@@ -16,6 +16,11 @@ export const MAINTENANCE_TASK_CONTEXT_PROVIDER = Object.freeze({
   version: '1.0.0',
 });
 
+export const SEASONAL_CHECKLIST_CONTEXT_PROVIDER = Object.freeze({
+  id: 'maintenance.seasonal-checklist-context',
+  version: '1.0.0',
+});
+
 export const MAINTENANCE_SKILL = Object.freeze({
   id: 'maintenance',
   version: '1.0.0',
@@ -38,10 +43,13 @@ export const MAINTENANCE_SKILL = Object.freeze({
       PROPERTY_IDENTITY_CONTEXT_PROVIDER,
       ...(operationId === 'MAINTENANCE_STATUS' ? [MAINTENANCE_TASK_CONTEXT_PROVIDER] : []),
     ],
-    optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
+    optionalContextProviders: [
+      PROPERTY_JOURNEY_CONTEXT_PROVIDER,
+      ...(operationId === 'MAINTENANCE_STATUS' ? [SEASONAL_CHECKLIST_CONTEXT_PROVIDER] : []),
+    ],
   })),
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, MAINTENANCE_TASK_CONTEXT_PROVIDER],
-  optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
+  optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER, SEASONAL_CHECKLIST_CONTEXT_PROVIDER],
   allowedAdapters: [
     { id: 'maintenance.status', version: '1.0' },
     { id: 'maintenance.create', version: '1.0' },
@@ -67,13 +75,14 @@ export const MAINTENANCE_SKILL = Object.freeze({
       required: true,
     })),
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
+    { type: 'CONTEXT_PROVIDER', id: SEASONAL_CHECKLIST_CONTEXT_PROVIDER.id, version: SEASONAL_CHECKLIST_CONTEXT_PROVIDER.version, required: false },
   ],
   contextBudget: {
-    maxFacts: 100,
-    maxEntities: 50,
+    maxFacts: 250,
+    maxEntities: 60,
     maxDocuments: 0,
     maxHistoryEvents: 100,
-    maxSerializedBytes: 64_000,
+    maxSerializedBytes: 192_000,
     maxProviderLatencyMs: 2_000,
     maxOverallLatencyMs: 15_000,
   },

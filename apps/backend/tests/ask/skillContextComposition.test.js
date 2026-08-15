@@ -58,6 +58,7 @@ test('the context provider registry and provider-backed Skill manifests validate
   assert.deepEqual(validateSkillContextProviderDefinitions(), []);
   assert.ok(REGISTERED_SKILL_CONTEXT_PROVIDER_REFS.has('maintenance.task-context@1.0.0'));
   assert.ok(REGISTERED_SKILL_CONTEXT_PROVIDER_REFS.has('property.identity-context@1.0.0'));
+  assert.ok(REGISTERED_SKILL_CONTEXT_PROVIDER_REFS.has('maintenance.seasonal-checklist-context@1.0.0'));
   for (const definition of Object.values(SKILL_DEFINITIONS)) {
     assert.ok(definition.requiredContextProviders.some((provider) => provider.id === 'property.identity-context'), definition.id);
     for (const operation of definition.operations) {

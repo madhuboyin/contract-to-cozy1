@@ -30,12 +30,16 @@ test('execution binding pins every executable contract before context compositio
   assert.deepEqual(binding.operation, { id: 'MAINTENANCE_STATUS', version: '1.0' });
   assert.deepEqual(binding.adapter, { id: 'maintenance.status', version: '1.0' });
   assert.deepEqual(binding.contextProviders, [
+    { id: 'maintenance.seasonal-checklist-context', version: '1.0.0', required: false },
     { id: 'maintenance.task-context', version: '1.0.0', required: true },
     { id: 'property.identity-context', version: '1.0.0', required: true },
     { id: 'property.journey-context', version: '1.0.0', required: false },
   ]);
   assert.equal(binding.dependencyActivation.status, 'RESOLVED');
   assert.deepEqual(binding.dependencyActivation.dependencies, [
+    {
+      type: 'CONTEXT_PROVIDER', id: 'maintenance.seasonal-checklist-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: false, owner: 'SeasonalChecklistService',
+    },
     {
       type: 'CONTEXT_PROVIDER', id: 'maintenance.task-context', requestedVersion: '1.0.0', resolvedVersion: '1.0.0', required: true, owner: 'PropertyMaintenanceTaskService',
     },

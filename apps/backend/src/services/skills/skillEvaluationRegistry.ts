@@ -126,6 +126,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
   [maintenance.evaluationSuite]: evaluationPackage(maintenance, {
     routingCases: [
       { mode: 'EXACT', message: 'What maintenance is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },
+      { mode: 'EXACT', message: 'What seasonal tasks are pending?', expectedOperationId: 'MAINTENANCE_STATUS' },
       { mode: 'PARAPHRASED', message: 'Create a maintenance task to clean gutters', expectedOperationId: 'MAINTENANCE_TASK_CREATE' },
       { mode: 'COLLOQUIAL', message: 'Mark the gutter cleaning task complete', expectedOperationId: 'MAINTENANCE_TASK_COMPLETE' },
       { mode: 'MISSPELLED', message: 'What maintenence is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },

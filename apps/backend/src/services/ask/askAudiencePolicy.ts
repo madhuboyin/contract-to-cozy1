@@ -70,7 +70,10 @@ function definePolicy(
 }
 
 const POLICIES: readonly AskAudiencePolicy[] = [
-  definePolicy('MAINTENANCE_STATUS', ALL_MODES),
+  // Factual maintenance and seasonal-checklist reads do not become more
+  // reliable when a buying/owning/selling stage is known. Keep the answer
+  // focused on the selected records instead of adding an onboarding CTA.
+  definePolicy('MAINTENANCE_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   // Canonical maintenance work is governed by property authorization and the
   // operation's own confirmation contract. Journey stage may personalize the
   // presentation, but an absent stage must not create an onboarding wall for
