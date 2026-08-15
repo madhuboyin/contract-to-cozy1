@@ -9,11 +9,12 @@ import {
 } from './askOperationRegistry';
 import type { AskAccountRole } from './askAccountEligibility';
 
-export const ASK_AUDIENCE_POLICY_VERSION = '1.0' as const;
+export const ASK_AUDIENCE_POLICY_VERSION = '1.1' as const;
 
 export type AskAudienceUnknownModeBehavior = 'ALLOW_GENERAL' | 'EXPLAIN' | 'BLOCK';
 export type AskAudienceIneligibleTypedRequestBehavior = 'EXPLAIN' | 'BLOCK';
 export type AskAudienceDiscoveryBehavior = 'SHOW' | 'HIDE';
+export type AskAudienceJourneyPresentation = 'CONTEXTUAL' | 'NEUTRAL';
 export type AskAudienceApplicabilityOutcome =
   | 'APPLICABLE'
   | 'APPLICABLE_GENERAL'
@@ -32,6 +33,7 @@ export interface AskAudiencePolicy {
   unknownModeBehavior: AskAudienceUnknownModeBehavior;
   ineligibleTypedRequestBehavior: AskAudienceIneligibleTypedRequestBehavior;
   discoveryBehavior: AskAudienceDiscoveryBehavior;
+  journeyPresentation: AskAudienceJourneyPresentation;
 }
 
 export interface AskAudienceApplicabilityDecision {
@@ -50,7 +52,7 @@ const OWNER_LIFECYCLE_MODES: readonly AskOperatingMode[] = ['OWNING', 'SELLING']
 function definePolicy(
   operationId: AskOperationId,
   eligibleOperatingModes: readonly AskOperatingMode[],
-  options: Partial<Pick<AskAudiencePolicy, 'unknownModeBehavior' | 'ineligibleTypedRequestBehavior' | 'discoveryBehavior'>> = {},
+  options: Partial<Pick<AskAudiencePolicy, 'unknownModeBehavior' | 'ineligibleTypedRequestBehavior' | 'discoveryBehavior' | 'journeyPresentation'>> = {},
 ): AskAudiencePolicy {
   const operation = getAskOperationDefinition(operationId);
   return Object.freeze({
@@ -63,15 +65,20 @@ function definePolicy(
     unknownModeBehavior: options.unknownModeBehavior ?? (eligibleOperatingModes.includes('UNKNOWN') ? 'ALLOW_GENERAL' : 'EXPLAIN'),
     ineligibleTypedRequestBehavior: options.ineligibleTypedRequestBehavior ?? 'EXPLAIN',
     discoveryBehavior: options.discoveryBehavior ?? 'SHOW',
+    journeyPresentation: options.journeyPresentation ?? 'CONTEXTUAL',
   });
 }
 
 const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('MAINTENANCE_STATUS', ALL_MODES),
-  definePolicy('MAINTENANCE_TASK_CREATE', KNOWN_MODES),
-  definePolicy('MAINTENANCE_TASK_COMPLETE', KNOWN_MODES),
-  definePolicy('MAINTENANCE_TASK_UPDATE', KNOWN_MODES),
-  definePolicy('HOME_DEADLINE_MONITOR', KNOWN_MODES),
+  // Canonical maintenance work is governed by property authorization and the
+  // operation's own confirmation contract. Journey stage may personalize the
+  // presentation, but an absent stage must not create an onboarding wall for
+  // creating, completing, updating, or monitoring an authorized record.
+  definePolicy('MAINTENANCE_TASK_CREATE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('MAINTENANCE_TASK_COMPLETE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('MAINTENANCE_TASK_UPDATE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('HOME_DEADLINE_MONITOR', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('COVERAGE_GAPS', ALL_MODES),
   definePolicy('SAVINGS_OPPORTUNITIES', ALL_MODES),
   definePolicy('OWNERSHIP_COSTS', KNOWN_MODES),

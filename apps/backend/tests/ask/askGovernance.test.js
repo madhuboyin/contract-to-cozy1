@@ -178,6 +178,7 @@ test('golden and negative prompts route before remote generation', () => {
     ['What was the outcome of my furnace decision?', 'HVAC_DECISION_OUTCOME_VIEW'],
     ["That outcome is wrong for my furnace", 'HVAC_DECISION_OUTCOME_UNLINK'],
     ['Create a maintenance task to clean gutters', 'MAINTENANCE_TASK_CREATE'],
+    ['i want to create a maintenance task', 'MAINTENANCE_TASK_CREATE'],
     ['Mark the gutter cleaning task complete', 'MAINTENANCE_TASK_COMPLETE'],
     ['Reschedule the gutter maintenance task', 'MAINTENANCE_TASK_UPDATE'],
     ['Start a guided plan for my refrigerator warranty', 'GUIDANCE_JOURNEY_CREATE'],

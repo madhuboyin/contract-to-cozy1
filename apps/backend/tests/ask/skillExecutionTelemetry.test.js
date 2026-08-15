@@ -25,7 +25,7 @@ test('bounded telemetry records the complete Skill execution dimension set', () 
   trace.audience = {
     accountRole: 'HOMEOWNER', householdRole: 'OWNER', operatingMode: 'OWNING',
     propertyRelationship: 'PRIMARY_OWNER', audienceEligibilityOutcome: 'ELIGIBLE',
-    audienceApplicabilityOutcome: 'APPLICABLE', audiencePolicyVersion: '1.0',
+    audienceApplicabilityOutcome: 'APPLICABLE', audiencePolicyVersion: '1.1',
     audiencePolicyEvaluationMode: 'ENABLED', journeyContextStatus: 'AVAILABLE',
   };
   trace.context = {
@@ -66,7 +66,7 @@ test('bounded telemetry records the complete Skill execution dimension set', () 
   assert.equal(telemetry.propertyRelationship, 'PRIMARY_OWNER');
   assert.equal(telemetry.audienceEligibilityOutcome, 'ELIGIBLE');
   assert.equal(telemetry.audienceApplicabilityOutcome, 'APPLICABLE');
-  assert.equal(telemetry.audiencePolicyVersion, '1.0');
+  assert.equal(telemetry.audiencePolicyVersion, '1.1');
   assert.equal(telemetry.audiencePolicyEvaluationMode, 'ENABLED');
   assert.equal(telemetry.journeyContextStatus, 'AVAILABLE');
 });

@@ -396,7 +396,7 @@ The provider may include a bounded active-trigger classification when an operati
 
 ```ts
 interface AskAudiencePolicy {
-  policyVersion: '1.0';
+  policyVersion: '1.1';
   eligibleAccountRoles: readonly AskAccountRole[];
   eligibleOperatingModes: readonly AskOperatingMode[];
   minimumHouseholdRole: AskHouseholdRole | null;
@@ -446,7 +446,7 @@ The table defines default discovery behavior. A directly typed request may still
 | Skill | Buying | Owning | Selling | Unknown |
 | --- | --- | --- | --- | --- |
 | Property Record | Show | Show | Show | Show |
-| Maintenance | Show inspection/future-owner context | Show | Show only relevant readiness work | Show general read-only guidance |
+| Maintenance | Show inspection/future-owner context | Show | Show only relevant readiness work | Show general guidance; authorized contributors and owners may manage canonical maintenance tasks |
 | Repair or Replace | Explain when buyer lacks ownership/condition authority | Show | Show for sale-readiness decisions | Allow only with an exact supported item |
 | Coverage | Show record/request guidance without asserting owned coverage | Show | Show sale-transition implications where supported | Show bounded record review |
 | Capital Planning | Hide from generic buyer discovery; explain if directly asked | Show | Show only transfer-relevant obligations | Explain/context required |
@@ -1002,6 +1002,8 @@ Slice 7 is verified. When the account-eligibility runtime control pauses Ask, th
 Slice 8 is verified. A dedicated journey-context endpoint reads the canonical selected-property lifecycle for any authorized household member and permits updates only at the contributor role floor or above. The update validates one confirmed ownership state and changes only the onboarding `ownershipState`, context version, and capture timestamp; it does not regenerate the active trigger, discard evidence, reset first-value history, alter onboarding completion, or change household/property authority. The existing property setup page exposes a compact five-state selector, renders viewers read-only, and refreshes property context after a save. Unknown-context Ask results add a typed navigation action to that selector for contributors/owners, including context-required applicability boundaries; viewers continue to receive safe general guidance without an unusable write CTA. Authorization and audience-policy regression tests pass; no database schema or migration change was required.
 
 Slice 9 is verified. A single versioned resolver produces the effective audience contract from trusted sources and is reused to initialize execution telemetry before Skill selection. Current property authorization distinguishes the primary owner from other authorized household members without inferring a buyer relationship from question text. Initial and clarification safety boundaries are evaluated before property-dependent authorization, carry no untrusted property ID or launch entity into execution, and return no property summary. The presentation layer enforces preference visibility at the block level in addition to filtering mutation CTAs, captures, confirmations, and suggestions. The ten generated Skill evaluation packages and immutable Maintenance binding expectation include the registered journey provider. Backend TypeScript and all 177 Ask tests pass. Frontend fonts are packaged locally rather than fetched from Google during compilation; frontend TypeScript, the production build, and all 16 desktop/mobile Ask acceptance scenarios now pass.
+
+Post-verification maintenance workflow correction (`AskAudiencePolicy@1.1`): unknown journey context no longer blocks an authorized contributor or owner from creating, completing, updating, or enabling reminders for a canonical maintenance task. These operations continue to enforce household-role authorization, operation-specific input validation, and explicit confirmation. They are journey-neutral in presentation, so missing lifecycle context does not inject a journey-correction CTA into the focused workflow. Journey context remains bounded execution lineage, while lifecycle-dependent financial and strategic operations retain their context-required policies. The backend production build and complete 184-test Ask regression suite pass.
 
 ---
 

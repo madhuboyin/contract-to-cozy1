@@ -4338,6 +4338,9 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   const skill = getSkillForOperation(input.operation.operationId);
+  const audiencePolicy = skill
+    ? getAskAudiencePolicy(input.operation.operationId, definition.version)
+    : undefined;
   if (!controls.askEnabled) return operationalUnavailableResult('ASK_DISABLED');
   if (!controls.operationEnabled(input.operation.operationId)) return operationalUnavailableResult('OPERATION_DISABLED');
   const skillUnavailableReason = skillRuntimeUnavailableReason(input.operation.operationId, controls);
@@ -4419,7 +4422,6 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
         suggestions: ['Try again'],
       };
     }
-    const audiencePolicy = getAskAudiencePolicy(input.operation.operationId, definition.version);
     if (!audiencePolicy || !householdRole) return operationalUnavailableResult('ASK_SKILL_POLICY_MISMATCH');
     audienceDecision = evaluateAskAudienceApplicability({
       policy: audiencePolicy,
@@ -4462,7 +4464,8 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
         householdRole,
         journeyContext: journeyContextFrom(composedContext),
         propertyId: input.propertyId,
-        lifecycleFramingEnabled: controls.audiencePresentationEnabled,
+        lifecycleFramingEnabled: controls.audiencePresentationEnabled
+          && audiencePolicy?.journeyPresentation !== 'NEUTRAL',
       })
       : canonicalResult;
     const result = attachJourneyContext(

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const { resolveAskAudienceContext } = require('../../src/services/ask/askAudienceContext.ts');
+const { evaluateAskAudienceApplicability, getAskAudiencePolicy } = require('../../src/services/ask/askAudiencePolicy.ts');
 const { applyAskAudiencePresentation } = require('../../src/services/ask/askAudiencePresentation.ts');
 const { propertyScopeForAskRouting, resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 
@@ -43,6 +44,43 @@ test('safety routing removes untrusted property scope before authorization-depen
   assert.equal(propertyScopeForAskRouting(ordinary, 'property-1'), 'property-1');
 });
 
+test('unknown journey context does not block authorized maintenance workflows', () => {
+  for (const operationId of [
+    'MAINTENANCE_TASK_CREATE',
+    'MAINTENANCE_TASK_COMPLETE',
+    'MAINTENANCE_TASK_UPDATE',
+    'HOME_DEADLINE_MONITOR',
+  ]) {
+    const policy = getAskAudiencePolicy(operationId);
+    const decision = evaluateAskAudienceApplicability({
+      policy,
+      accountRole: 'HOMEOWNER',
+      householdRole: 'CONTRIBUTOR',
+      operatingMode: 'UNKNOWN',
+      purpose: 'EXECUTION',
+    });
+
+    assert.equal(decision.allowed, true, operationId);
+    assert.equal(decision.outcome, 'APPLICABLE_GENERAL', operationId);
+    assert.equal(decision.reasonCode, 'ASK_AUDIENCE_GENERAL_GUIDANCE', operationId);
+    assert.equal(policy.journeyPresentation, 'NEUTRAL', operationId);
+  }
+});
+
+test('maintenance task creation still enforces the contributor role floor', () => {
+  const decision = evaluateAskAudienceApplicability({
+    policy: getAskAudiencePolicy('MAINTENANCE_TASK_CREATE'),
+    accountRole: 'HOMEOWNER',
+    householdRole: 'VIEWER',
+    operatingMode: 'UNKNOWN',
+    purpose: 'EXECUTION',
+  });
+
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.outcome, 'INAPPLICABLE_BLOCK');
+  assert.equal(decision.reasonCode, 'ASK_PERMISSION_REQUIRED');
+});
+
 test('audience presentation removes protected preference values for non-owner roles', () => {
   const result = {
     status: 'ANSWERED', reasonCode: 'TEST', suggestions: [],
@@ -62,4 +100,23 @@ test('audience presentation removes protected preference values for non-owner ro
 
   const owner = applyAskAudiencePresentation({ result, householdRole: 'OWNER', journeyContext: null });
   assert.deepEqual(owner.blocks.filter((block) => block.type === 'PREFERENCE_REFERENCE').map((block) => block.id), ['owner', 'household']);
+});
+
+test('journey-neutral workflows do not add lifecycle copy or a journey-correction CTA', () => {
+  const result = {
+    status: 'NEEDS_CONTEXT', reasonCode: 'MAINTENANCE_TASK_INPUT_REQUIRED', suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'maintenance-create-input', title: 'Add the task details', body: 'Nothing has been created yet.', tone: 'DEFAULT', actions: [] }],
+  };
+  const presented = applyAskAudiencePresentation({
+    result,
+    householdRole: 'CONTRIBUTOR',
+    propertyId: 'property-1',
+    journeyContext: null,
+    lifecycleFramingEnabled: false,
+  });
+
+  assert.equal(presented.blocks.length, 1);
+  assert.equal(presented.blocks[0].body, 'Nothing has been created yet.');
+  assert.deepEqual(presented.blocks[0].actions, []);
+  assert.equal(presented.parameters.audiencePresentation.journeyCorrectionOffered, false);
 });
