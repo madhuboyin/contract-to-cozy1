@@ -596,8 +596,10 @@ function AskTrustLearningSection({
                 </TableHeader>
                 <TableBody>
                   {data.operations.slice(0, 12).map((operation) => (
-                    <TableRow key={operation.operationId}>
-                      <TableCell className="font-medium text-slate-900">{operation.operationId}</TableCell>
+                    <TableRow key={`${operation.language}-${operation.operationId}`}>
+                      <TableCell className="font-medium text-slate-900">
+                        {operation.operationId} <span className="text-xs font-normal text-slate-400">({operation.language})</span>
+                      </TableCell>
                       <TableCell className="text-right">{num(operation.routed)}</TableCell>
                       <TableCell className="text-right">{pct(operation.directAnswerRelevanceRate)}</TableCell>
                       <TableCell className="text-right">{pct(operation.correctionRate)}</TableCell>

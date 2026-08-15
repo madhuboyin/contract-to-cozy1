@@ -1,11 +1,13 @@
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './askSemanticRouter';
+import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 
 export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-1.0';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
+  language: AskLanguageCode;
   outcome: 'PASS' | 'FAIL' | 'UNKNOWN' | 'SKIPPED';
   selectedOperationId: AskOperationId;
   competingOperationId: AskOperationId | null;
@@ -40,10 +42,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   question: string;
   operationId: AskOperationId;
   result: AskOperationResult;
+  language?: AskLanguageCode;
 }): AskSemanticAnswerRelevanceResult {
   const startedAt = process.hrtime.bigint();
-  const finish = (result: Omit<AskSemanticAnswerRelevanceResult, 'latencyMs' | 'schemaVersion' | 'validatorVersion'>): AskSemanticAnswerRelevanceResult => ({
+  const language = input.language ?? ASK_DEFAULT_LANGUAGE;
+  requireCertifiedAskLanguage(language);
+  const finish = (result: Omit<AskSemanticAnswerRelevanceResult, 'latencyMs' | 'schemaVersion' | 'validatorVersion' | 'language'>): AskSemanticAnswerRelevanceResult => ({
     schemaVersion: '1.0',
+    language,
     validatorVersion: ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION,
     latencyMs: Number((Number(process.hrtime.bigint() - startedAt) / 1_000_000).toFixed(3)),
     ...result,
@@ -64,10 +70,18 @@ export function validateAskSemanticAnswerRelevance(input: {
     });
   }
   const definition = getAskOperationDefinition(input.operationId);
-  const anchor = [definition.semantic.intentDescription, ...definition.semantic.supportedJobs, ...definition.semantic.positiveExamples].join(' ');
-  const selectedOperationScore = askSemanticTextSimilarity(answer, anchor);
-  const questionAnswerScore = askSemanticTextSimilarity(input.question, answer);
-  const ranked = retrieveAskOperationCandidates(answer, { topK: 3 });
+  const semantic = definition.semantic.languagePacks[language];
+  if (!semantic) {
+    return finish({
+      outcome: 'SKIPPED', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 0, competingOperationScore: 0, questionAnswerScore: 0,
+      reasonCodes: ['OPERATION_LANGUAGE_PACK_UNAVAILABLE'],
+    });
+  }
+  const anchor = [semantic.intentDescription, ...semantic.supportedJobs, ...semantic.positiveExamples].join(' ');
+  const selectedOperationScore = askSemanticTextSimilarity(answer, anchor, language);
+  const questionAnswerScore = askSemanticTextSimilarity(input.question, answer, language);
+  const ranked = retrieveAskOperationCandidates(answer, { topK: 3, language });
   const selectedCandidate = ranked.find((candidate) => candidate.operationId === input.operationId);
   const competitor = ranked.find((candidate) => candidate.operationId !== input.operationId) ?? null;
   const selectedScore = Math.max(selectedOperationScore, selectedCandidate?.score ?? 0);

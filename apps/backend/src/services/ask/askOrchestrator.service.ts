@@ -129,7 +129,7 @@ import { resolveAskAudienceContext } from './askAudienceContext';
 import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
 import { validateAskAnswerTrustPipeline } from './askAnswerTrustValidator';
-import { ASK_LANGUAGE_CONTRACT_VERSION, ASK_OPERATION_SEMANTIC_INDEX_VERSION, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
+import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -4118,7 +4118,10 @@ function routingClarificationResult(
   reasonCode: 'ASK_ROUTING_AMBIGUOUS' | 'ASK_SKILL_AMBIGUOUS' = 'ASK_ROUTING_AMBIGUOUS',
 ): AskOperationResult {
   const candidates = decision.candidates.slice(0, 3);
-  const choices = candidates.map((candidate) => getAskOperationDefinition(candidate.operationId).semantic.supportedJobs[0]);
+  const languagePack = (operationId: AskOperationId) => (
+    getAskOperationDefinition(operationId).semantic.languagePacks[decision.language]
+  );
+  const choices = candidates.map((candidate) => languagePack(candidate.operationId)?.supportedJobs[0]).filter(Boolean);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return {
     status: 'NEEDS_CLARIFICATION',
@@ -4138,7 +4141,8 @@ function routingClarificationResult(
       question: 'Which home request would you like Ask to handle?',
       options: candidates.map((candidate) => ({
         operationId: candidate.operationId,
-        label: getAskOperationDefinition(candidate.operationId).semantic.supportedJobs[0],
+        label: languagePack(candidate.operationId)?.supportedJobs[0]
+          ?? getAskOperationDefinition(candidate.operationId).semantic.supportedJobs[0],
       })),
       allowFreeText: true,
       expiresAt,
@@ -5014,6 +5018,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const selectedOperation = getAskOperationDefinition(skillRoutingDecision.selectedOperationId);
     const confidence = skillRoutingDecision.skillCandidates[0]?.confidence ?? selectedOperation.confidence;
     routingDecision = {
+      language: routingDecision.language,
       operation: { ...selectedOperation, confidence },
       stage: 'LOCAL_CLASSIFIER',
       candidates: [{ operationId: selectedOperation.operationId, confidence }],
@@ -5030,6 +5035,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       })
       : skillRoutingDecision.operationCandidates;
     routingDecision = {
+      language: routingDecision.language,
       operation: routingDecision.operation,
       stage: 'CLARIFICATION',
       candidates: [...new Map(skillAmbiguityOperations.map((candidate) => [candidate.operationId, candidate])).values()].slice(0, 3),
@@ -5072,6 +5078,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     ? 'deterministic'
     : operationDefinition.executionMode === 'REMOTE_GENERATION' ? 'remote' : 'deterministic';
   askRoutingDecisionsTotal.inc({ stage: routingDecision.stage.toLowerCase(), outcome: routingDecision.requiresClarification ? 'clarification' : operation.operationId.toLowerCase() });
+  const normalizedRoutingMessage = normalizeAskMessage(routingMessage, routingDecision.language);
   await prisma.askExecutionEvent.create({
     data: {
       executionId: execution.id,
@@ -5085,13 +5092,13 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         routingConfidence: operation.confidence,
         routingConfidenceBand: operation.confidence >= 0.75 ? 'HIGH' : operation.confidence >= 0.45 ? 'MEDIUM' : 'LOW',
         entityConfidenceBand: input.launchContext?.entityId ? 'HIGH' : null,
-        language: 'en',
-        languageContractVersion: ASK_LANGUAGE_CONTRACT_VERSION,
-        normalizedMessageHash: createHash('sha256').update(normalizeAskMessage(routingMessage).normalized).digest('hex').slice(0, 16),
+        language: routingDecision.language,
+        languageContractVersion: normalizedRoutingMessage.contractVersion,
+        normalizedMessageHash: createHash('sha256').update(normalizedRoutingMessage.normalized).digest('hex').slice(0, 16),
         retrievalMode: routingDecision.stage === 'LOCAL_CLASSIFIER' || routingDecision.stage === 'CLARIFICATION' ? 'HYBRID_LOCAL' : 'DETERMINISTIC',
         classifierMode: controls.constrainedClassifierEnabled ? 'CONSTRAINED_LOCAL' : 'DISABLED',
         operationSemanticVersion: routingDecision.requiresClarification ? null : operationDefinition.semantic.semanticVersion,
-        operationSemanticIndexVersion: ASK_OPERATION_SEMANTIC_INDEX_VERSION,
+        operationSemanticIndexVersion: askOperationSemanticIndexVersion(routingDecision.language),
         candidateOperationIds: routingDecision.candidates.map((candidate) => candidate.operationId),
         candidateReasonCodes: routingDecision.candidates.flatMap((candidate) => candidate.reasonCodes ?? []),
         skillRoutingOutcome: skillRoutingDecision.outcome,
@@ -5146,7 +5153,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       : rawResult;
     const validation = routingDecision.requiresClarification
       ? null
-      : validateAskAnswerTrustPipeline({ question: input.message, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled });
+      : validateAskAnswerTrustPipeline({ question: input.message, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled, language: routingDecision.language });
     const result = validation?.result ?? presentedResult;
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);

@@ -65,7 +65,7 @@ export async function getAskTrustLearningReport(
 
   const routing = new Map<string, typeof events[number]>();
   const validation = new Map<string, typeof events[number]>();
-  const corrected = new Map<string, { kind: string; operationId: string; highConfidence: boolean }>();
+  const corrected = new Map<string, { kind: string; operationId: string; language: string; highConfidence: boolean }>();
   const clarificationResolved = new Set<string>();
   const versionCounts = new Map<string, number>();
 
@@ -73,7 +73,7 @@ export async function getAskTrustLearningReport(
     const meta = metadata(event.metadataJson);
     if (event.eventType === 'CAPABILITY_RESOLVED') {
       routing.set(event.executionId, event);
-      const versionKey = [text(meta.operationSemanticIndexVersion) ?? 'unknown-index', text(meta.operationSemanticVersion) ?? 'unknown-contract', text(meta.classifierMode) ?? 'unknown-classifier'].join('|');
+      const versionKey = [text(meta.language) ?? 'en', text(meta.operationSemanticIndexVersion) ?? 'unknown-index', text(meta.operationSemanticVersion) ?? 'unknown-contract', text(meta.classifierMode) ?? 'unknown-classifier'].join('|');
       versionCounts.set(versionKey, (versionCounts.get(versionKey) ?? 0) + 1);
     }
     if (event.eventType === 'ANSWER_TRUST_VALIDATED') validation.set(event.executionId, event);
@@ -82,18 +82,21 @@ export async function getAskTrustLearningReport(
       const kind = text(meta.kind) ?? 'UNKNOWN';
       const operationId = event.execution.operationId ?? 'UNRESOLVED';
       const routeMeta = metadata(routing.get(event.executionId)?.metadataJson ?? null);
+      const language = text(routeMeta.language) ?? 'en';
       const highConfidence = text(routeMeta.routingConfidenceBand) === 'HIGH' || (event.execution.intentConfidence ?? 0) >= 0.75;
-      corrected.set(event.executionId, { kind, operationId, highConfidence });
+      corrected.set(event.executionId, { kind, operationId, language, highConfidence });
     }
   }
 
   const operation = new Map<string, {
+    operationId: string; language: string;
     routed: number; highConfidence: number; clarified: number; validations: number;
     relevancePass: number; repairs: number; corrections: number; semanticFailures: number;
   }>();
-  const row = (operationId: string) => {
-    const current = operation.get(operationId) ?? { routed: 0, highConfidence: 0, clarified: 0, validations: 0, relevancePass: 0, repairs: 0, corrections: 0, semanticFailures: 0 };
-    operation.set(operationId, current);
+  const row = (operationId: string, language: string) => {
+    const key = `${language}|${operationId}`;
+    const current = operation.get(key) ?? { operationId, language, routed: 0, highConfidence: 0, clarified: 0, validations: 0, relevancePass: 0, repairs: 0, corrections: 0, semanticFailures: 0 };
+    operation.set(key, current);
     return current;
   };
 
@@ -103,7 +106,7 @@ export async function getAskTrustLearningReport(
   for (const event of routing.values()) {
     const meta = metadata(event.metadataJson);
     const operationId = text(meta.operationId) ?? event.execution.operationId ?? 'UNRESOLVED';
-    const current = row(operationId);
+    const current = row(operationId, text(meta.language) ?? 'en');
     current.routed += 1;
     if (text(meta.routingConfidenceBand) === 'HIGH') { current.highConfidence += 1; highConfidenceResponses += 1; }
     if (text(meta.routingStage) === 'CLARIFICATION') { current.clarified += 1; clarificationRequests += 1; }
@@ -115,11 +118,13 @@ export async function getAskTrustLearningReport(
   let irrelevantBoundaries = 0;
   let repairedResponses = 0;
   let semanticFailures = 0;
-  const failureClusters = new Map<string, { operationId: string; reasonCode: string; count: number }>();
+  const failureClusters = new Map<string, { operationId: string; language: string; reasonCode: string; count: number }>();
   for (const event of validation.values()) {
     const meta = metadata(event.metadataJson);
     const operationId = event.execution.operationId ?? 'UNRESOLVED';
-    const current = row(operationId);
+    const routeMeta = metadata(routing.get(event.executionId)?.metadataJson ?? null);
+    const language = text(routeMeta.language) ?? text(metadata(meta.semantic as Prisma.JsonValue ?? null).language) ?? 'en';
+    const current = row(operationId, language);
     current.validations += 1;
     const checks = metadata(meta.checks as Prisma.JsonValue ?? null);
     if (text(checks.questionCoverage) === 'PASS') { relevancePass += 1; current.relevancePass += 1; }
@@ -131,17 +136,17 @@ export async function getAskTrustLearningReport(
     if (reasons.includes('INAPPLICABLE_BOUNDARY_REMOVED')) irrelevantBoundaries += 1;
     for (const reasonCode of reasons) {
       if (['SELECTED_OPERATION_TOP_MATCH', 'DIRECT_ANSWER_SEMANTIC_MATCH', 'NON_SUCCESS_RESULT'].includes(reasonCode)) continue;
-      const key = `${operationId}|${reasonCode}`;
-      const cluster = failureClusters.get(key) ?? { operationId, reasonCode, count: 0 };
+      const key = `${language}|${operationId}|${reasonCode}`;
+      const cluster = failureClusters.get(key) ?? { operationId, language, reasonCode, count: 0 };
       cluster.count += 1;
       failureClusters.set(key, cluster);
     }
   }
 
-  for (const correction of corrected.values()) row(correction.operationId).corrections += 1;
+  for (const correction of corrected.values()) row(correction.operationId, correction.language).corrections += 1;
   const incorrectHighConfidence = [...corrected.values()].filter((item) => item.highConfidence && ['INTENT', 'ENTITY'].includes(item.kind)).length;
-  const operationRows = [...operation.entries()].map(([operationId, value]) => ({
-    operationId, ...value,
+  const operationRows = [...operation.values()].map((value) => ({
+    ...value,
     clarificationRate: rate(value.clarified, value.routed),
     directAnswerRelevanceRate: rate(value.relevancePass, value.validations),
     correctionRate: rate(value.corrections, value.routed),
@@ -150,23 +155,23 @@ export async function getAskTrustLearningReport(
       : (rate(value.corrections, value.routed) ?? 0) > 0.02 || value.semanticFailures > 0 ? 'RAISE_OR_CLARIFY_MORE'
         : (rate(value.clarified, value.routed) ?? 0) > 0.3 && value.corrections === 0 ? 'REVIEW_FOR_LOWER_READ_THRESHOLD'
           : 'KEEP_CURRENT',
-  })).sort((left, right) => right.routed - left.routed || left.operationId.localeCompare(right.operationId));
+  })).sort((left, right) => right.routed - left.routed || left.language.localeCompare(right.language) || left.operationId.localeCompare(right.operationId));
 
-  const correctionClusters = [...corrected.values()].reduce<Array<{ operationId: string; kind: string; count: number }>>((clusters, item) => {
-    const existing = clusters.find((cluster) => cluster.operationId === item.operationId && cluster.kind === item.kind);
+  const correctionClusters = [...corrected.values()].reduce<Array<{ operationId: string; language: string; kind: string; count: number }>>((clusters, item) => {
+    const existing = clusters.find((cluster) => cluster.operationId === item.operationId && cluster.language === item.language && cluster.kind === item.kind);
     if (existing) existing.count += 1;
-    else clusters.push({ operationId: item.operationId, kind: item.kind, count: 1 });
+    else clusters.push({ operationId: item.operationId, language: item.language, kind: item.kind, count: 1 });
     return clusters;
   }, []).sort((left, right) => right.count - left.count || left.operationId.localeCompare(right.operationId));
 
   const reviewedFixtureCandidates = [
     ...[...failureClusters.values()].sort((left, right) => right.count - left.count).slice(0, 20).map((cluster) => ({
-      fixtureKey: createHash('sha256').update(`failure|${cluster.operationId}|${cluster.reasonCode}`).digest('hex').slice(0, 16),
-      operationId: cluster.operationId, category: 'ANSWER_TRUST_FAILURE', reasonCode: cluster.reasonCode, occurrences: cluster.count, reviewStatus: 'NEEDS_REVIEW' as const,
+      fixtureKey: createHash('sha256').update(`failure|${cluster.language}|${cluster.operationId}|${cluster.reasonCode}`).digest('hex').slice(0, 16),
+      operationId: cluster.operationId, language: cluster.language, category: 'ANSWER_TRUST_FAILURE', reasonCode: cluster.reasonCode, occurrences: cluster.count, reviewStatus: 'NEEDS_REVIEW' as const,
     })),
     ...correctionClusters.slice(0, 20).map((cluster) => ({
-      fixtureKey: createHash('sha256').update(`correction|${cluster.operationId}|${cluster.kind}`).digest('hex').slice(0, 16),
-      operationId: cluster.operationId, category: 'HOMEOWNER_CORRECTION', reasonCode: cluster.kind, occurrences: cluster.count, reviewStatus: 'NEEDS_REVIEW' as const,
+      fixtureKey: createHash('sha256').update(`correction|${cluster.language}|${cluster.operationId}|${cluster.kind}`).digest('hex').slice(0, 16),
+      operationId: cluster.operationId, language: cluster.language, category: 'HOMEOWNER_CORRECTION', reasonCode: cluster.kind, occurrences: cluster.count, reviewStatus: 'NEEDS_REVIEW' as const,
     })),
   ].sort((left, right) => right.occurrences - left.occurrences).slice(0, 25);
 
@@ -200,8 +205,8 @@ export async function getAskTrustLearningReport(
     correctionClusters,
     reviewedFixtureCandidates,
     versionLineage: [...versionCounts.entries()].map(([key, count]) => {
-      const [semanticIndexVersion, semanticContractVersion, classifierMode] = key.split('|');
-      return { semanticIndexVersion, semanticContractVersion, classifierMode, count };
+      const [language, semanticIndexVersion, semanticContractVersion, classifierMode] = key.split('|');
+      return { language, semanticIndexVersion, semanticContractVersion, classifierMode, count };
     }).sort((left, right) => right.count - left.count),
     alerts,
     controls: { recommendationsAreAdvisory: true, automaticThresholdMutation: false, rawTextFixturePromotion: false },

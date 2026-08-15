@@ -56,6 +56,8 @@ test('TA7 aggregates bounded trust outcomes without reading or returning raw mes
   assert.equal(report.metrics.modelDisabledSuccessfulResolutionRate, 1);
   assert.ok(report.alerts.some((alert) => alert.code === 'UNSUPPORTED_ABSENCE_CLAIMS'));
   assert.ok(report.correctionClusters.some((cluster) => cluster.kind === 'INTENT' && cluster.count === 1));
+  assert.ok(report.operations.every((operation) => operation.language === 'en'));
+  assert.ok(report.versionLineage.every((version) => version.language === 'en'));
   assert.ok(report.reviewedFixtureCandidates.some((fixture) => fixture.reasonCode === 'UNSUPPORTED_ABSENCE_CLAIM'));
   assert.ok(report.reviewedFixtureCandidates.every((fixture) => /^[a-f0-9]{16}$/.test(fixture.fixtureKey)));
   assert.equal(report.controls.automaticThresholdMutation, false);

@@ -2,6 +2,7 @@ import type { AskPresentationBlock } from '../../productFramework/ask/ask.contra
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustResult } from './askTrust.contract';
 import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResult } from './askSemanticAnswerValidator';
+import type { AskLanguageCode } from './askLanguageRegistry';
 
 export const ASK_ANSWER_TRUST_VALIDATOR_VERSION = 'deterministic-1.0';
 
@@ -145,6 +146,7 @@ export function validateAskAnswerTrustPipeline(input: {
   result: AskOperationResult;
   propertyId?: string | null;
   semanticEnabled: boolean;
+  language?: AskLanguageCode;
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
   const deterministic = validateAskAnswerTrust(input);
   if (!input.semanticEnabled) return { ...deterministic, semantic: null };
@@ -152,6 +154,7 @@ export function validateAskAnswerTrustPipeline(input: {
     question: input.question,
     operationId: input.operationId,
     result: deterministic.result,
+    language: input.language,
   });
   const semanticFailed = semantic.outcome === 'FAIL';
   const trust: AskAnswerTrustResult = {

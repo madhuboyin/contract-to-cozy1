@@ -1,8 +1,19 @@
 import { createHash } from 'node:crypto';
 import type { AskOperationId, AskOperationDefinition } from './askOperationRegistry';
+import { getAskLanguageRegistration } from './askLanguageRegistry';
 
 export type AskOperationEffect = 'READ' | 'WRITE' | 'MONITOR' | 'BOUNDARY';
 export type AskOperationMateriality = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface AskOperationLanguageSemanticPack {
+  language: string;
+  semanticVersion: string;
+  intentDescription: string;
+  supportedJobs: string[];
+  positiveExamples: string[];
+  hardNegativeExamples: string[];
+  clarificationPromptKey: string;
+}
 
 export interface AskOperationSemanticContract {
   operationId: AskOperationId;
@@ -17,6 +28,7 @@ export interface AskOperationSemanticContract {
   effect: AskOperationEffect;
   materiality: AskOperationMateriality;
   supportedLanguages: string[];
+  languagePacks: Readonly<Record<string, AskOperationLanguageSemanticPack>>;
   clarificationPromptKey: string;
 }
 
@@ -118,20 +130,32 @@ export function createAskOperationSemanticContract(
     ?? definition.operationId.toLowerCase().replace(/_/g, ' ');
   const positiveExamples = EXAMPLES[definition.operationId] ?? [`Help me ${label}`, `I want to ${label}`];
   const basis = JSON.stringify([definition.operationId, label, positiveExamples, HARD_NEGATIVES[definition.operationId]]);
-  return Object.freeze({
-    operationId: definition.operationId,
-    semanticVersion: `1.0-${createHash('sha256').update(basis).digest('hex').slice(0, 8)}`,
+  const semanticVersion = `1.0-${createHash('sha256').update(basis).digest('hex').slice(0, 8)}`;
+  const clarificationPromptKey = `ask.clarification.${definition.operationId.toLowerCase()}`;
+  const englishPack: AskOperationLanguageSemanticPack = Object.freeze({
+    language: 'en',
+    semanticVersion,
     intentDescription: `The homeowner wants to ${label}.`,
     supportedJobs: [label],
     positiveExamples,
     hardNegativeExamples: HARD_NEGATIVES[definition.operationId] ?? ['The homeowner is asking about a different registered home job.'],
+    clarificationPromptKey,
+  });
+  return Object.freeze({
+    operationId: definition.operationId,
+    semanticVersion,
+    intentDescription: englishPack.intentDescription,
+    supportedJobs: englishPack.supportedJobs,
+    positiveExamples: englishPack.positiveExamples,
+    hardNegativeExamples: englishPack.hardNegativeExamples,
     entityTypes: definition.requiresProperty ? ['PROPERTY'] : [],
     requiredSlots: definition.requiresProperty ? ['propertyId'] : [],
     optionalSlots: [],
     effect: effectFor(definition),
     materiality: definition.safetyClass === 'MATERIAL_DECISION' || effectFor(definition) === 'WRITE' ? 'HIGH' : 'LOW',
     supportedLanguages: ['en'],
-    clarificationPromptKey: `ask.clarification.${definition.operationId.toLowerCase()}`,
+    languagePacks: Object.freeze({ en: englishPack }),
+    clarificationPromptKey,
   });
 }
 
@@ -142,5 +166,25 @@ export function validateAskSemanticContract(contract: AskOperationSemanticContra
   if (contract.positiveExamples.length < 2) issues.push('requires at least two positive examples');
   if (contract.hardNegativeExamples.length < 1) issues.push('requires at least one hard negative');
   if (!contract.supportedLanguages.includes('en')) issues.push('English support must be declared');
+  for (const language of contract.supportedLanguages) {
+    const registration = getAskLanguageRegistration(language);
+    if (!registration || registration.status !== 'CERTIFIED') {
+      issues.push(`${language}: language is not registered and certified`);
+    }
+    const pack = contract.languagePacks[language];
+    if (!pack) {
+      issues.push(`${language}: missing language semantic pack`);
+      continue;
+    }
+    if (pack.language !== language) issues.push(`${language}: semantic pack language mismatch`);
+    if (!pack.semanticVersion.trim()) issues.push(`${language}: missing semantic version`);
+    if (!pack.intentDescription.trim()) issues.push(`${language}: missing intent description`);
+    if (pack.positiveExamples.length < 2) issues.push(`${language}: requires at least two positive examples`);
+    if (pack.hardNegativeExamples.length < 1) issues.push(`${language}: requires at least one hard negative`);
+    if (!pack.clarificationPromptKey.trim()) issues.push(`${language}: missing clarification prompt key`);
+  }
+  for (const language of Object.keys(contract.languagePacks)) {
+    if (!contract.supportedLanguages.includes(language)) issues.push(`${language}: semantic pack is not declared supported`);
+  }
   return issues;
 }

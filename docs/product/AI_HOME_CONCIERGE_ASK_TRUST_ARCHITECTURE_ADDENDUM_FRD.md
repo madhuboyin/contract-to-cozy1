@@ -2,7 +2,7 @@
 
 **Product:** ContractToCozy — Ask Cozy  
 **Document type:** Functional Requirements and Architecture Addendum  
-**Status:** Implemented — active English trust slices TA0 through TA5 and TA7 delivered; TA6 deferred
+**Status:** Implemented — TA0 through TA7 delivered; TA6 provides compatibility contracts while multilingual runtime remains deferred
 **Version:** 1.0  
 **Date:** August 15, 2026  
 **Primary parent:** `AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md`  
@@ -1125,7 +1125,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA6 — Multilingual expansion compatibility
 
-**Status: Deferred — architecture support only.**
+**Status: Implemented — compatibility contract only; multilingual runtime remains deferred.**
 
 - retain `supportedLanguages` and language-version compatibility in semantic contracts;
 - avoid English-only assumptions in canonical operation and response contracts;
@@ -1154,7 +1154,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 6. TA5 — semantic answer relevance.
 7. TA7 — production-quality learning loop.
 
-TA6 is intentionally excluded from the active implementation order. Its extension contracts shall be preserved while multilingual functionality remains deferred.
+TA6 multilingual runtime is intentionally excluded from the active implementation order. Its implemented registration, certification, language-pack, and versioning contracts preserve the expansion path while multilingual functionality remains deferred.
 
 This order reduces visible trust failures early, upgrades understanding without weakening execution, and postpones broader language claims until the core English trust loop is measurable.
 
@@ -1333,7 +1333,7 @@ This addendum is implemented when:
 | TA3 — Constrained classification and calibration | Implemented | Candidate-only structured local classification, separate confidence bands, materiality policy, ambiguity margins, independent controls, and classifier-off clarification |
 | TA4 — Conversational repair | Implemented | Durable same-session intent and entity correction executions preserve the original answer, property context, authorization rechecks, and correction lineage |
 | TA5 — Semantic answer relevance | Implemented | Default-on, independently controlled local semantic relevance validation runs after deterministic final-presentation validation, records bounded scores/reasons and latency, preserves unknown evidence without overclaiming, and safely suppresses clear operation mismatches |
-| TA6 — Multilingual expansion compatibility | Deferred | Language-versionable contracts required; runtime multilingual implementation explicitly out of scope |
+| TA6 — Multilingual expansion compatibility | Implemented | English is explicitly registered and certified; every operation carries a versioned per-language semantic pack; routing and bounded telemetry use registered language/version lineage; uncertified languages fail closed; detection, translation, non-English routing, localized presentation, and multilingual evaluation remain deferred |
 | TA7 — Production-quality learning loop | Implemented | Protected admin trust dashboard and alerting aggregate bounded event metadata only; de-identified correction/failure clusters produce hashed review candidates; operation threshold recommendations remain advisory; semantic index, contract, and classifier version lineage is reported |
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, `Verified`, or `Deferred`. `Deferred` means the extension contract is preserved but runtime delivery is intentionally outside the active implementation scope. A slice shall not be marked `Verified` without recorded automated evidence.

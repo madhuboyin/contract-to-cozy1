@@ -28,19 +28,19 @@ export interface AdminAskTrustLearningResponse {
     modelDisabledSuccessfulResolutionRate: number | null;
   };
   operations: Array<{
-    operationId: string; routed: number; highConfidence: number; clarified: number;
+    operationId: string; language: string; routed: number; highConfidence: number; clarified: number;
     validations: number; relevancePass: number; repairs: number; corrections: number;
     semanticFailures: number; clarificationRate: number | null;
     directAnswerRelevanceRate: number | null; correctionRate: number | null;
     repairRate: number | null;
     thresholdRecommendation: 'INSUFFICIENT_EVIDENCE' | 'RAISE_OR_CLARIFY_MORE' | 'REVIEW_FOR_LOWER_READ_THRESHOLD' | 'KEEP_CURRENT';
   }>;
-  correctionClusters: Array<{ operationId: string; kind: string; count: number }>;
+  correctionClusters: Array<{ operationId: string; language: string; kind: string; count: number }>;
   reviewedFixtureCandidates: Array<{
-    fixtureKey: string; operationId: string; category: string; reasonCode: string;
+    fixtureKey: string; operationId: string; language: string; category: string; reasonCode: string;
     occurrences: number; reviewStatus: 'NEEDS_REVIEW';
   }>;
-  versionLineage: Array<{ semanticIndexVersion: string; semanticContractVersion: string; classifierMode: string; count: number }>;
+  versionLineage: Array<{ language: string; semanticIndexVersion: string; semanticContractVersion: string; classifierMode: string; count: number }>;
   alerts: Array<{ severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'; code: string; count: number; action: string }>;
   controls: { recommendationsAreAdvisory: true; automaticThresholdMutation: false; rawTextFixturePromotion: false };
 }
