@@ -53,6 +53,12 @@ export interface AskExecutionResponse {
   captureRequests: AskCaptureRequest[];
   confirmation: AskConfirmation | null;
   clarification: AskClarification | null;
+  correctionCapabilities: {
+    intent: boolean;
+    entity: boolean;
+    homeRecord: boolean;
+    retryResponse: boolean;
+  };
   suggestions: string[];
   createdAt: string;
   updatedAt: string;

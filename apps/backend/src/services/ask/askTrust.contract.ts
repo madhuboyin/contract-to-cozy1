@@ -14,6 +14,7 @@ export interface AskOperationLanguageSemanticPack {
   supportedJobs: string[];
   positiveExamples: string[];
   hardNegativeExamples: string[];
+  answerPositiveExamples: string[];
   answerHardNegativeExamples: string[];
   clarificationPromptKey: string;
 }
@@ -25,6 +26,7 @@ export interface AskOperationSemanticContract {
   supportedJobs: string[];
   positiveExamples: string[];
   hardNegativeExamples: string[];
+  answerPositiveExamples: string[];
   answerHardNegativeExamples: string[];
   entityTypes: string[];
   requiredSlots: string[];
@@ -95,12 +97,14 @@ export function createAskOperationSemanticContract(
   const label = semanticPackage.homeownerJob;
   const positiveExamples = [...semanticPackage.positiveExamples];
   const hardNegativeExamples = [...semanticPackage.hardNegativeExamples];
+  const answerPositiveExamples = [...semanticPackage.answerPositiveExamples];
   const answerHardNegativeExamples = [...semanticPackage.answerHardNegativeExamples];
   const basis = JSON.stringify([
     definition.operationId,
     label,
     positiveExamples,
     hardNegativeExamples,
+    answerPositiveExamples,
     answerHardNegativeExamples,
   ]);
   const semanticVersion = `1.0-${createHash('sha256').update(basis).digest('hex').slice(0, 8)}`;
@@ -113,6 +117,7 @@ export function createAskOperationSemanticContract(
     supportedJobs: [label],
     positiveExamples,
     hardNegativeExamples,
+    answerPositiveExamples,
     answerHardNegativeExamples,
     clarificationPromptKey,
   });
@@ -123,6 +128,7 @@ export function createAskOperationSemanticContract(
     supportedJobs: englishPack.supportedJobs,
     positiveExamples: englishPack.positiveExamples,
     hardNegativeExamples: englishPack.hardNegativeExamples,
+    answerPositiveExamples: englishPack.answerPositiveExamples,
     answerHardNegativeExamples: englishPack.answerHardNegativeExamples,
     entityTypes: [...(definition.requiresProperty ? ['PROPERTY'] : []), ...(targetEntity ? [targetEntity] : [])],
     requiredSlots: [...(definition.requiresProperty ? ['propertyId'] : []), ...(targetEntity ? [`${targetEntity.toLowerCase()}Id`] : [])],
@@ -141,6 +147,7 @@ export function validateAskSemanticContract(contract: AskOperationSemanticContra
   if (!contract.intentDescription.trim()) issues.push('missing intentDescription');
   if (contract.positiveExamples.length < 2) issues.push('requires at least two positive examples');
   if (contract.hardNegativeExamples.length < 1) issues.push('requires at least one hard negative');
+  if (contract.answerPositiveExamples.length < 1) issues.push('requires at least one answer positive');
   if (!Array.isArray(contract.answerHardNegativeExamples)) issues.push('missing answer hard negatives');
   if (!contract.supportedLanguages.includes('en')) issues.push('English support must be declared');
   for (const language of contract.supportedLanguages) {
@@ -158,6 +165,7 @@ export function validateAskSemanticContract(contract: AskOperationSemanticContra
     if (!pack.intentDescription.trim()) issues.push(`${language}: missing intent description`);
     if (pack.positiveExamples.length < 2) issues.push(`${language}: requires at least two positive examples`);
     if (pack.hardNegativeExamples.length < 1) issues.push(`${language}: requires at least one hard negative`);
+    if (pack.answerPositiveExamples.length < 1) issues.push(`${language}: requires at least one answer positive`);
     if (!Array.isArray(pack.answerHardNegativeExamples)) issues.push(`${language}: missing answer hard negatives`);
     if (!pack.clarificationPromptKey.trim()) issues.push(`${language}: missing clarification prompt key`);
   }

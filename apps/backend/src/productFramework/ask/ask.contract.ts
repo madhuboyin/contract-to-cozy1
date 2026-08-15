@@ -500,6 +500,12 @@ export const AskExecutionResponseSchema = z.object({
   captureRequests: z.array(AskCaptureRequestSchema).max(3).default([]),
   clarification: AskClarificationSchema.nullable().default(null),
   confirmation: AskConfirmationSchema.nullable().default(null),
+  correctionCapabilities: z.object({
+    intent: z.boolean(),
+    entity: z.boolean(),
+    homeRecord: z.boolean(),
+    retryResponse: z.boolean(),
+  }).default({ intent: false, entity: false, homeRecord: false, retryResponse: false }),
   suggestions: z.array(z.string()).max(5),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

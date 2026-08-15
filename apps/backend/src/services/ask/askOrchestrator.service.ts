@@ -131,7 +131,7 @@ import { resolveAskAudienceContext } from './askAudienceContext';
 import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
 import { validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } from './askAnswerTrustValidator';
-import { resolveAskEntityState } from './askEntityResolution';
+import { requiredAskTargetEntity, resolveAskEntityState } from './askEntityResolution';
 import { attachAskAuthoritativeSourceEvidence } from './askAnswerTrustPolicy';
 import type { AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
@@ -4794,7 +4794,7 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
 }
 
 function mapPersistedExecution(execution: {
-  id: string; sessionId: string; message: string; status: AskExecutionStatus; propertyId: string | null; operationId: string | null;
+  id: string; sessionId: string; message: string; status: AskExecutionStatus; reasonCode?: string | null; propertyId: string | null; operationId: string | null;
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
   skillId?: string | null; skillVersion?: string | null; skillDomain?: string | null;
   createdAt: Date; updatedAt: Date;
@@ -4817,6 +4817,17 @@ function mapPersistedExecution(execution: {
     ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown }
     : {};
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
+  const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;
+  const successfulAnswer = ['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(execution.status);
+  const correctionCapabilities = {
+    intent: successfulAnswer,
+    entity: successfulAnswer && Boolean(operationId && requiredAskTargetEntity(operationId)),
+    homeRecord: successfulAnswer
+      && Boolean(execution.propertyId && operationDefinition?.requiresProperty)
+      && !['COMMAND', 'CAPABILITY_DISCOVERY', 'GENERAL_HOME_GUIDANCE', 'OUT_OF_SCOPE', 'UNSAFE_OR_RESTRICTED'].includes(operationDefinition?.family ?? ''),
+    retryResponse: execution.status === 'FAILED_RETRYABLE'
+      || (execution.status === 'UNAVAILABLE' && execution.reasonCode !== 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION'),
+  };
   const candidate = {
     schemaVersion: storedSchemaVersion,
     executionId: execution.id,
@@ -4841,6 +4852,7 @@ function mapPersistedExecution(execution: {
       : [],
     confirmation: stored.confirmation ?? null,
     clarification: stored.clarification ?? null,
+    correctionCapabilities,
     suggestions: stored.suggestions ?? [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
@@ -4866,6 +4878,7 @@ function mapPersistedExecution(execution: {
     captureRequests: [],
     confirmation: null,
     clarification: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: true },
     suggestions: ['Ask this question again'],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
@@ -5238,7 +5251,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       : rawResult;
     const validation = routingDecision.requiresClarification
       ? null
-      : validateAskAnswerTrustPipeline({ question: input.message, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled, language: routingDecision.language });
+      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled, language: routingDecision.language });
     const result = validation?.result ?? presentedResult;
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
@@ -5450,7 +5463,7 @@ export async function submitAskClarification(userId: string, executionId: string
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const validation = validateAskAnswerTrustPipeline({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: clarifiedPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled });
+    const validation = validateAskAnswerTrustPipeline({ question: clarifiedMessage, operationId: operation.operationId, result: presentedResult, propertyId: clarifiedPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled, recoveryAttempted: true });
     const result = validation.result;
     recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result);
@@ -7299,17 +7312,21 @@ export async function requestAskCorrection(userId: string, executionId: string, 
     const correctionEligibleOperationIds = await discoverableAskOperationIds({
       propertyId: execution.propertyId, propertyAccess: correctionAccess, controls,
     });
+    const answerValidationRecovery = execution.reasonCode?.startsWith('ASK_ANSWER_RELEVANCE_') ?? false;
     const semanticCandidates = retrieveAskOperationCandidates(execution.message, {
       eligibleOperationIds: correctionEligibleOperationIds,
       topK: 5,
       embeddingEnabled: controls.embeddingRetrievalEnabled,
       minimumConfidence: controls.localRoutingMinimumConfidence,
       ambiguityMargin: controls.routingAmbiguityMargin,
-    }).filter((candidate) => input.kind === 'ENTITY' ? candidate.operationId === execution.operationId : candidate.operationId !== execution.operationId);
+    }).filter((candidate) => input.kind === 'ENTITY'
+      ? candidate.operationId === execution.operationId
+      : answerValidationRecovery || candidate.operationId !== execution.operationId);
     const fallbackIds: AskOperationId[] = input.kind === 'ENTITY' && execution.operationId
       ? [execution.operationId as AskOperationId]
       : ['PROPERTY_SUMMARY', 'MAINTENANCE_STATUS', 'INVENTORY_LOOKUP', 'HOME_ACTIONS'];
     const candidateOperationIds = [...new Set([
+      ...(answerValidationRecovery && execution.operationId ? [execution.operationId as AskOperationId] : []),
       ...semanticCandidates.map((candidate) => candidate.operationId),
       ...fallbackIds,
     ])].filter((operationId) => operationId in ASK_OPERATION_DEFINITIONS && correctionEligibleOperationIds.includes(operationId)).slice(0, 3);

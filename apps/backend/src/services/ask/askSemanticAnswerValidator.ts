@@ -1,10 +1,10 @@
-import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './askSemanticRouter';
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import { askEmbeddingCosine, embedAskSemanticText } from './askSemanticEmbedding';
+import { projectAskSemanticResponse } from './askSemanticResponseProjection';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-2.0';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.0';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -21,23 +21,6 @@ export interface AskSemanticAnswerRelevanceResult {
 }
 
 const SUCCESS_STATUSES = new Set(['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS']);
-
-function firstBlockText(block: AskPresentationBlock | undefined): string {
-  if (!block) return '';
-  switch (block.type) {
-    case 'SUMMARY':
-    case 'EMPTY_STATE':
-    case 'ERROR_STATE':
-    case 'BOUNDARY':
-    case 'LIMITATION':
-      return `${block.title} ${block.body}`;
-    case 'CHANGE_SUMMARY': return `${block.title} ${block.summary}`;
-    case 'DECISION_PROGRESS': return `${block.title} ${block.verdict ?? ''}`;
-    case 'OUTCOME_SUMMARY': return `${block.title} ${block.limitation}`;
-    case 'WORKFLOW_PROGRESS': return `${block.title} ${block.description}`;
-    default: return `${block.title} ${'description' in block ? block.description ?? '' : ''}`;
-  }
-}
 
 export function validateAskSemanticAnswerRelevance(input: {
   question: string;
@@ -62,7 +45,7 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['NON_SUCCESS_RESULT'],
     });
   }
-  const answer = firstBlockText(input.result.blocks[0]);
+  const answer = projectAskSemanticResponse(input.result.blocks);
   if (!answer.trim()) {
     return finish({
       outcome: 'FAIL', selectedOperationId: input.operationId, competingOperationId: null,
@@ -89,8 +72,12 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['OPERATION_LANGUAGE_PACK_UNAVAILABLE'],
     });
   }
-  const anchor = [semantic.intentDescription, ...semantic.supportedJobs, ...semantic.positiveExamples].join(' ');
-  const selectedOperationScore = Math.max(
+  const anchor = [semantic.intentDescription, ...semantic.answerPositiveExamples].join(' ');
+  const answerPositiveScore = Math.max(0, ...semantic.answerPositiveExamples.map((example) => Math.max(
+    askSemanticTextSimilarity(answer, example, language),
+    askEmbeddingCosine(embedAskSemanticText(answer), embedAskSemanticText(example)),
+  )));
+  const selectedOperationScore = Math.max(answerPositiveScore,
     askSemanticTextSimilarity(answer, anchor, language),
     askEmbeddingCosine(embedAskSemanticText(answer), embedAskSemanticText(anchor)),
   );
@@ -129,14 +116,17 @@ export function validateAskSemanticAnswerRelevance(input: {
     });
   }
   const selectedDominates = Boolean(selectedCandidate && selectedCandidate.rawScore >= competingScore - 0.02);
-  const strongOperationLead = selectedScore >= 0.18 && selectedScore - competingScore >= 0.05;
+  const strongOperationLead = selectedScore >= 0.18
+    && selectedScore - competingScore >= 0.05
+    && (questionAnswerScore >= 0.075 || definition.safetyClass.endsWith('_BOUNDARY'));
   const corroboratedOperationMatch = selectedDominates && selectedScore >= 0.18 && questionAnswerScore >= 0.12;
   const strongDirectEntailment = selectedScore >= 0.18 && selectedScore >= competingScore - 0.1 && questionAnswerScore >= 0.25;
-  if (strongOperationLead || corroboratedOperationMatch || strongDirectEntailment) {
+  const strongAnswerContractMatch = answerPositiveScore >= 0.28 && questionAnswerScore >= 0.12;
+  if (strongOperationLead || corroboratedOperationMatch || strongDirectEntailment || strongAnswerContractMatch) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: competitor?.operationId ?? null,
       selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,
-      reasonCodes: [strongOperationLead || selectedDominates ? 'SELECTED_OPERATION_TOP_MATCH' : 'DIRECT_ANSWER_SEMANTIC_MATCH', ...(questionAnswerScore >= 0.12 ? ['QUESTION_ANSWER_CORROBORATION'] : [])],
+      reasonCodes: [strongOperationLead || selectedDominates ? 'SELECTED_OPERATION_TOP_MATCH' : strongAnswerContractMatch ? 'OPERATION_ANSWER_CONTRACT_MATCH' : 'DIRECT_ANSWER_SEMANTIC_MATCH', ...(questionAnswerScore >= 0.12 ? ['QUESTION_ANSWER_CORROBORATION'] : [])],
     });
   }
   return finish({

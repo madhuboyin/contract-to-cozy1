@@ -5,6 +5,7 @@ export interface AskOperationSemanticPackage {
   homeownerJob: string;
   positiveExamples: readonly string[];
   hardNegativeExamples: readonly string[];
+  answerPositiveExamples: readonly string[];
   answerHardNegativeExamples: readonly string[];
 }
 
@@ -134,13 +135,55 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   MAJOR_EVENT_ENTRY: ['Compare selling versus renting financially', 'Show recent changes to the home record'],
 };
 
+const answerPositives: Record<AskOperationId, readonly string[]> = {
+  MAINTENANCE_STATUS: ['Pending, completed, overdue, and seasonal maintenance tasks are listed with checklist status and timing.'],
+  MAINTENANCE_TASK_CREATE: ['A maintenance task is ready to be created after confirmation.'],
+  MAINTENANCE_TASK_COMPLETE: ['The selected maintenance task was recorded as completed.'],
+  MAINTENANCE_TASK_UPDATE: ['The selected maintenance task has an updated date, owner, or priority.'],
+  COVERAGE_GAPS: ['The coverage review identifies home items without recorded insurance or warranty protection.'],
+  INCIDENT_CLAIM_STATUS: ['The recorded incident or insurance claim status and next insurer step are shown.'],
+  SAVINGS_OPPORTUNITIES: ['Recorded recurring costs, rebates, and household savings opportunities are summarized.'],
+  OWNERSHIP_COSTS: ['Monthly and annual home ownership expenses are broken down by cost category.'],
+  INVENTORY_LOOKUP: ['The home inventory shows appliance or equipment model, age, and service details.'],
+  PROPERTY_SUMMARY: ['The home record summary identifies complete, missing, and stale property details.'],
+  HOME_ACTIONS: ['The prioritized Home Actions list shows what needs attention first.'],
+  CAPABILITY_DISCOVERY: ['Available home tools and governed workflows are listed with readiness and expected output.'],
+  REPLACEMENT_GUIDANCE: ['Repair and replacement considerations are compared for the selected home item.'],
+  REFINANCE_ANALYSIS: ['The mortgage refinance analysis reports payment, savings, costs, and break-even considerations.'],
+  REFINANCE_RATE_MONITOR: ['A mortgage-rate threshold monitor is ready for confirmation or its current status is shown.'],
+  SELL_HOLD_RENT_ANALYSIS: ['Selling, holding, and renting options are compared using the recorded assumptions.'],
+  HOUSEHOLD_INVITATION: ['A household invitation and role are ready for confirmation.'],
+  GUIDANCE_JOURNEY_CREATE: ['A governed step-by-step home plan is ready to start.'],
+  QUOTE_COMPARISON_CREATE: ['A contractor quote-comparison workspace is ready to create.'],
+  QUOTE_COMPARISON_REVIEW: ['Contractor proposals are compared by scope, exclusions, and total price.'],
+  HOME_DEADLINE_MONITOR: ['A warranty, policy, permit, or maintenance deadline and reminder timing are shown.'],
+  CAPITAL_RESERVE_PLAN: ['The reserve plan shows future replacement windows and expected major expenses.'],
+  PROPERTY_TAX_APPEAL_READINESS: ['Property-tax appeal readiness and missing supporting evidence are summarized.'],
+  RENOVATION_PERMIT_READINESS: ['Renovation permit readiness, blockers, and required approvals are summarized.'],
+  MAJOR_EVENT_ENTRY: ['The home-event preparation plan lists records, repairs, and readiness steps.'],
+  EMERGENCY_BOUNDARY: ['Immediate emergency safety direction tells the homeowner to leave danger and contact emergency services.'],
+  UNSAFE_RESTRICTED_BOUNDARY: ['The unsafe request is declined and a safe documented alternative is offered.'],
+  OUT_OF_SCOPE_BOUNDARY: ['The unrelated request is identified as outside the home-concierge workspace.'],
+  GROUNDED_GUIDANCE: ['General educational home guidance explains considerations without claiming hidden property facts.', 'Common home-condition guidance explains likely causes, inspection steps, maintenance cadence, and when to call a professional.', 'Home-condition guidance may identify drainage, grading, condensation, plumbing, and inspection at the source.'],
+  HVAC_DECISION_START: ['A new HVAC repair-or-replace decision is ready with condition, cost, and quote inputs.'],
+  HVAC_DECISION_CONTINUE: ['The active HVAC decision status, missing context, and current recommendation are shown.'],
+  HVAC_DECISION_SCENARIO: ['A new HVAC quote scenario is compared with the existing repair-or-replace baseline.'],
+  HVAC_DECISION_ABANDON: ['The active HVAC decision can be stopped after confirmation.'],
+  HVAC_PREFERENCE_SAVE: ['An HVAC cost, reliability, or ownership preference is ready to save after confirmation.'],
+  HVAC_PREFERENCE_FORGET: ['A saved HVAC decision preference can be removed after confirmation.'],
+  HOME_CHANGE_SUMMARY: ['Recent changes to the home record are summarized by section and time.'],
+  HVAC_DECISION_OUTCOME_REPORT: ['A completed HVAC repair or replacement can be recorded as the decision outcome.'],
+  HVAC_DECISION_OUTCOME_VIEW: ['The recorded HVAC outcome shows whether the system was repaired or replaced.'],
+  HVAC_DECISION_OUTCOME_UNLINK: ['An incorrect recorded HVAC outcome can be unlinked after confirmation.'],
+};
+
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   MAINTENANCE_STATUS: ['A new maintenance task is ready to be created', 'The selected maintenance task has a changed due date'],
-  MAINTENANCE_TASK_CREATE: ['The selected maintenance task now has a different due date'],
+  MAINTENANCE_TASK_CREATE: ['The selected maintenance task now has a different due date', 'The upkeep list contains overdue and recently completed service work'],
   INCIDENT_CLAIM_STATUS: ['The coverage review found appliances without warranty protection'],
-  COVERAGE_GAPS: ['The home inventory records an appliance model, installation year, and service history'],
+  COVERAGE_GAPS: ['The home inventory records an appliance model, installation year, and service history', 'The home record recently changed across several sections'],
   OWNERSHIP_COSTS: ['The reserve outlook shows a future roof replacement expense'],
-  INVENTORY_LOOKUP: ['The largest household savings opportunity is a recurring expense', 'The assumptions favor renting the home instead of selling it'],
+  INVENTORY_LOOKUP: ['The largest household savings opportunity is a recurring expense', 'The assumptions favor renting the home instead of selling it', 'The home record recently changed across several sections'],
   PROPERTY_SUMMARY: ['The assumptions favor renting the home instead of selling it', 'The home record recently changed across several sections'],
   CAPABILITY_DISCOVERY: ['The home inventory records equipment details and service history'],
   GUIDANCE_JOURNEY_CREATE: ['A built-in records workflow is available for this paperwork'],
@@ -153,6 +196,7 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   HVAC_DECISION_CONTINUE: ['The active heating decision can be stopped after confirmation'],
   HVAC_DECISION_ABANDON: ['Contractor proposals differ in scope, exclusions, and price'],
   HVAC_PREFERENCE_SAVE: ['The reserve outlook shows a future roof replacement expense'],
+  HVAC_PREFERENCE_FORGET: ['An HVAC preference for lower upfront cost is ready to be saved'],
   HVAC_DECISION_OUTCOME_REPORT: ['The active heating decision can be stopped after confirmation'],
   HVAC_DECISION_OUTCOME_VIEW: ['The active heating decision can be stopped after confirmation', 'A newly installed heater can be recorded as the decision outcome'],
   HVAC_DECISION_OUTCOME_UNLINK: ['A newly installed heater can be recorded as the decision outcome'],
@@ -164,6 +208,7 @@ export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, As
     homeownerJob: jobs[operationId],
     positiveExamples: Object.freeze([...positives[operationId]]),
     hardNegativeExamples: Object.freeze([...negatives[operationId]]),
+    answerPositiveExamples: Object.freeze([...answerPositives[operationId]]),
     answerHardNegativeExamples: Object.freeze([...(answerNegatives[operationId] ?? [])]),
   })])) as Record<AskOperationId, AskOperationSemanticPackage>,
 );
@@ -181,6 +226,7 @@ export function validateAskOperationSemanticPackages(operationIds: readonly AskO
     if (!pkg.homeownerJob.trim()) issues.push(`${operationId}: missing homeowner job`);
     if (pkg.positiveExamples.length < 2) issues.push(`${operationId}: requires at least two positive examples`);
     if (pkg.hardNegativeExamples.length < 1) issues.push(`${operationId}: requires at least one hard negative`);
+    if (pkg.answerPositiveExamples.length < 1) issues.push(`${operationId}: requires at least one answer positive`);
     if (!Array.isArray(pkg.answerHardNegativeExamples)) issues.push(`${operationId}: missing answer hard negatives`);
   }
   for (const operationId of Object.keys(ASK_OPERATION_SEMANTIC_PACKAGES) as AskOperationId[]) {

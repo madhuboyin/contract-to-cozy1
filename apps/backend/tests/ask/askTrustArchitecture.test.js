@@ -16,6 +16,8 @@ const attachAskAuthoritativeSourceEvidence = (result, operationId) => attachEvid
   [completedAskAuthoritativeSourceEvidence(operationId)],
 );
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
+const { projectAskSemanticResponse } = require('../../src/services/ask/askSemanticResponseProjection.ts');
+const { buildSeasonalMaintenanceResult } = require('../../src/services/ask/askSeasonalMaintenance.ts');
 const { evaluateAskAnswerRelevanceQuality } = require('../../src/services/ask/askAnswerRelevanceQualityEvaluator.ts');
 const {
   ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES,
@@ -33,6 +35,7 @@ test('every operation exposes a valid English semantic contract', () => {
     assert.deepEqual(definition.semantic.supportedLanguages, ['en']);
     assert.ok(definition.semantic.positiveExamples.length >= 2);
     assert.ok(definition.semantic.hardNegativeExamples.length >= 1);
+    assert.ok(definition.semantic.answerPositiveExamples.length >= 1);
   }
 });
 
@@ -220,8 +223,73 @@ test('TA5 semantic relevance passes direct answers and detects a different-opera
   });
   assert.equal(mismatched.semantic.outcome, 'FAIL');
   assert.equal(mismatched.trust.checks.questionCoverage, 'FAIL');
-  assert.equal(mismatched.result.status, 'FAILED_RETRYABLE');
-  assert.equal(mismatched.result.reasonCode, 'ASK_ANSWER_RELEVANCE_FAILED');
+  assert.equal(mismatched.result.status, 'NEEDS_CLARIFICATION');
+  assert.equal(mismatched.result.reasonCode, 'ASK_ANSWER_RELEVANCE_MISMATCH_CLARIFICATION_REQUIRED');
+  assert.ok(mismatched.result.clarification.options.some((option) => option.operationId === 'PROPERTY_SUMMARY'));
+  assert.ok(mismatched.result.clarification.options.some((option) => option.operationId === 'MAINTENANCE_STATUS'));
+});
+
+test('seasonal maintenance rich responses pass the complete semantic trust pipeline', () => {
+  const question = 'list pending seasonal tasks';
+  const result = buildSeasonalMaintenanceResult({
+    message: question,
+    propertyId: 'property-1',
+    propertyTimezone: 'America/New_York',
+    now: new Date('2026-08-14T12:00:00.000Z'),
+    contextAvailable: true,
+    context: { checklists: [{
+      id: 'summer-2026', season: 'SUMMER', year: 2026, status: 'IN_PROGRESS',
+      seasonStartDate: new Date('2026-06-21T00:00:00.000Z'),
+      seasonEndDate: new Date('2026-09-21T00:00:00.000Z'), updatedAt: new Date('2026-08-14T00:00:00.000Z'),
+      items: [{
+        id: 'cooling', taskKey: 'cooling', title: 'Service air conditioner',
+        description: 'Prepare the cooling system for sustained heat.', priority: 'CRITICAL', status: 'RECOMMENDED',
+        recommendedDate: new Date('2026-08-20T00:00:00.000Z'), snoozedUntil: null,
+        updatedAt: new Date('2026-08-14T00:00:00.000Z'), maintenanceTask: null,
+      }],
+    }] },
+  });
+  const validation = validateAskAnswerTrustPipeline({
+    question,
+    operationId: 'MAINTENANCE_STATUS',
+    semanticEnabled: true,
+    propertyId: 'property-1',
+    result: attachAskAuthoritativeSourceEvidence(result, 'MAINTENANCE_STATUS'),
+  });
+  assert.equal(validation.semantic.outcome, 'PASS');
+  assert.equal(validation.result.status, 'ANSWERED');
+  const projection = projectAskSemanticResponse(result.blocks);
+  assert.match(projection, /Summer checklist/i);
+  assert.match(projection, /Service air conditioner/i);
+  assert.doesNotMatch(projection, /property-1|dashboard\/seasonal/);
+});
+
+test('semantic uncertainty requests focused clarification without claiming a mismatch', () => {
+  const uncertain = validateAskAnswerTrustPipeline({
+    question: 'What maintenance is pending?', operationId: 'MAINTENANCE_STATUS', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [{ type: 'SUMMARY', id: 'vague', title: 'Response', body: 'I found a result.', tone: 'DEFAULT', actions: [] }],
+      suggestions: [],
+    }, 'MAINTENANCE_STATUS'),
+  });
+  assert.equal(uncertain.semantic.outcome, 'UNKNOWN');
+  assert.equal(uncertain.trust.checks.questionCoverage, 'UNKNOWN');
+  assert.equal(uncertain.result.status, 'NEEDS_CLARIFICATION');
+  assert.equal(uncertain.result.reasonCode, 'ASK_ANSWER_RELEVANCE_UNCERTAIN_CLARIFICATION_REQUIRED');
+  assert.match(uncertain.result.blocks[0].body, /could not confidently connect/i);
+
+  const afterClarification = validateAskAnswerTrustPipeline({
+    question: 'What maintenance is pending? Clarification: pending upkeep',
+    operationId: 'MAINTENANCE_STATUS', semanticEnabled: true, recoveryAttempted: true,
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [{ type: 'SUMMARY', id: 'still-vague', title: 'Response', body: 'I found a result.', tone: 'DEFAULT', actions: [] }],
+      suggestions: [],
+    }, 'MAINTENANCE_STATUS'),
+  });
+  assert.equal(afterClarification.result.status, 'UNAVAILABLE');
+  assert.equal(afterClarification.result.reasonCode, 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION');
 });
 
 test('semantic response validation has an independent default-on control and kill switch', () => {

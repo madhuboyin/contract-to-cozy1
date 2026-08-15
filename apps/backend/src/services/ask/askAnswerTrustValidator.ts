@@ -207,6 +207,7 @@ export function validateAskAnswerTrustPipeline(input: {
   propertyId?: string | null;
   semanticEnabled: boolean;
   language?: AskLanguageCode;
+  recoveryAttempted?: boolean;
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
   const deterministic = validateAskAnswerTrust(input);
   if (!input.semanticEnabled) return { ...deterministic, semantic: null };
@@ -224,9 +225,9 @@ export function validateAskAnswerTrustPipeline(input: {
       : deterministic.trust.outcome,
     checks: {
       ...deterministic.trust.checks,
-      questionCoverage: semanticFailed
+      questionCoverage: semantic.outcome === 'FAIL'
         ? 'FAIL'
-        : semantic.outcome === 'UNKNOWN' && deterministic.trust.checks.questionCoverage === 'PASS'
+        : semantic.outcome === 'UNKNOWN'
           ? 'UNKNOWN'
           : deterministic.trust.checks.questionCoverage,
     },
@@ -234,16 +235,69 @@ export function validateAskAnswerTrustPipeline(input: {
     validatorVersion: `${deterministic.trust.validatorVersion}+${semantic.validatorVersion}`,
   };
   if (semanticFailed && SUCCESS_STATUSES.has(deterministic.result.status)) {
+    if (input.recoveryAttempted) {
+      return {
+        result: {
+          status: 'UNAVAILABLE',
+          reasonCode: 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION',
+          blocks: [{
+            type: 'ERROR_STATE', id: 'answer-relevance-unresolved',
+            title: 'I still couldn’t verify this answer',
+            body: 'I used your clarification, but the prepared response still did not reliably match it. I won’t show a potentially unrelated answer. Open the relevant home workspace or ask with one more specific detail.',
+            retryable: false, actions: [],
+          }],
+          suggestions: [],
+          parameters: { ...(deterministic.result.parameters ?? {}), answerTrust: trust, semanticAnswerRelevance: semantic },
+        },
+        trust,
+        semantic,
+        repaired: true,
+      };
+    }
+    const candidateOperationIds = [...new Set([
+      input.operationId,
+      semantic.competingOperationId,
+    ].filter((operationId): operationId is AskOperationId => Boolean(operationId)))]
+      .filter((operationId) => !getAskOperationDefinition(operationId).safetyClass.endsWith('_BOUNDARY'))
+      .slice(0, 3);
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const clearMismatch = semantic.outcome === 'FAIL';
+    const clarification = {
+      version: 1,
+      question: clearMismatch
+        ? 'Which home request did you want this answer to address?'
+        : 'Which home information should I check for this request?',
+      options: candidateOperationIds.map((operationId) => ({
+        operationId,
+        label: getAskOperationDefinition(operationId).semantic.supportedJobs[0],
+      })),
+      allowFreeText: true,
+      expiresAt,
+    };
     return {
       result: {
-        status: 'FAILED_RETRYABLE', reasonCode: 'ASK_ANSWER_RELEVANCE_FAILED',
+        status: 'NEEDS_CLARIFICATION',
+        reasonCode: clearMismatch
+          ? 'ASK_ANSWER_RELEVANCE_MISMATCH_CLARIFICATION_REQUIRED'
+          : 'ASK_ANSWER_RELEVANCE_UNCERTAIN_CLARIFICATION_REQUIRED',
         blocks: [{
-          type: 'ERROR_STATE', id: 'answer-relevance-failed', title: 'I couldn’t verify that this answers your question',
-          body: 'The response appears to address a different home request, so I won’t present it as a reliable answer. Nothing was changed. Try again or choose the home topic you meant.',
-          retryable: true, actions: [],
+          type: 'ERROR_STATE',
+          id: clearMismatch ? 'answer-relevance-mismatch' : 'answer-relevance-uncertain',
+          title: clearMismatch ? 'Let’s make sure I answer the right home question' : 'I need one detail to verify this answer',
+          body: clearMismatch
+            ? 'The prepared response may address a different home request. Choose the home information you meant and I’ll run that canonical workflow again.'
+            : 'I could not confidently connect the prepared response to the exact wording of your request. Choose a focus or add one detail so I can verify it without guessing.',
+          retryable: false,
+          actions: [],
         }],
-        suggestions: ['Ask this question again'],
-        parameters: { ...(deterministic.result.parameters ?? {}), answerTrust: trust, semanticAnswerRelevance: semantic },
+        clarification,
+        suggestions: [],
+        parameters: {
+          ...(deterministic.result.parameters ?? {}),
+          answerTrust: trust,
+          semanticAnswerRelevance: semantic,
+          clarification: { version: 1, candidateOperationIds, expiresAt },
+        },
       },
       trust,
       semantic,
