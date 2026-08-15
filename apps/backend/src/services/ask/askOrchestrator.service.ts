@@ -22,7 +22,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
+import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
@@ -128,7 +128,7 @@ import { applyAskAudiencePresentation } from './askAudiencePresentation';
 import { resolveAskAudienceContext } from './askAudienceContext';
 import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
-import { validateAskAnswerTrust } from './askAnswerTrustValidator';
+import { validateAskAnswerTrustPipeline } from './askAnswerTrustValidator';
 import { ASK_LANGUAGE_CONTRACT_VERSION, ASK_OPERATION_SEMANTIC_INDEX_VERSION, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 
 const MAX_RESULT_ITEMS = 50;
@@ -4154,6 +4154,25 @@ function routingClarificationResult(
   };
 }
 
+function recordAskAnswerTrustMetrics(
+  operationId: AskOperationId,
+  validation: ReturnType<typeof validateAskAnswerTrustPipeline>,
+): void {
+  askAnswerTrustTotal.inc({
+    operation: operationId,
+    outcome: validation.trust.outcome,
+    source: validation.trust.checks.sourceIntegrity,
+    repaired: validation.repaired ? 'yes' : 'no',
+  });
+  if (validation.semantic) {
+    askSemanticAnswerValidationTotal.inc({ operation: operationId, outcome: validation.semantic.outcome });
+    askSemanticAnswerValidationDurationSeconds.observe(
+      { operation: operationId, outcome: validation.semantic.outcome },
+      validation.semantic.latencyMs / 1_000,
+    );
+  }
+}
+
 async function maybeSynthesizeDeterministicResult(operationId: AskOperationResolution['operationId'], result: AskOperationResult, enabled: boolean, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   if (!enabled) return result;
   const startedAt = process.hrtime.bigint();
@@ -4572,7 +4591,7 @@ export const ASK_CAPABILITY_UNIQUE_OPERATION: Partial<Record<string, AskOperatio
   return unique;
 })();
 
-async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; deferSemanticValidation?: boolean }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const skill = getSkillForOperation(input.operation.operationId);
   const skillStartedAt = skill ? Date.now() : null;
   let coreResult: AskOperationResult;
@@ -4626,18 +4645,14 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
     if (skill && skillHandoff) {
       askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
     }
-    const validation = validateAskAnswerTrust({
+    const validation = validateAskAnswerTrustPipeline({
       question: input.message,
       operationId: input.operation.operationId,
       propertyId: input.propertyId,
       result: { ...result, skillHandoff },
+      semanticEnabled: controls.semanticResponseValidatorEnabled && !input.deferSemanticValidation,
     });
-    askAnswerTrustTotal.inc({
-      operation: input.operation.operationId,
-      outcome: validation.trust.outcome,
-      source: validation.trust.checks.sourceIntegrity,
-      repaired: validation.repaired ? 'yes' : 'no',
-    });
+    if (!input.deferSemanticValidation) recordAskAnswerTrustMetrics(input.operation.operationId, validation);
     return validation.result;
   };
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operation.operationId];
@@ -5123,7 +5138,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
         ))
-        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext }, skillTelemetryTrace),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
@@ -5131,8 +5146,9 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       : rawResult;
     const validation = routingDecision.requiresClarification
       ? null
-      : validateAskAnswerTrust({ question: input.message, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId });
+      : validateAskAnswerTrustPipeline({ question: input.message, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled });
     const result = validation?.result ?? presentedResult;
+    if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
@@ -5148,7 +5164,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     });
     if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version, blockTypes: result.blocks.map((block) => block.type) }) } });
-    if (validation) await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, repaired: validation.repaired, sourceCompletionState: validation.trust.checks.sourceIntegrity }) } });
+    if (validation) await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, semantic: validation.semantic, repaired: validation.repaired, sourceCompletionState: validation.trust.checks.sourceIntegrity }) } });
     await prisma.askExecutionEvent.create({
       data: {
         executionId: execution.id,
@@ -5321,14 +5337,15 @@ export async function submitAskClarification(userId: string, executionId: string
   }
   try {
     const rawResult = await withAskTimeout(
-      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: clarifiedPropertyId, operation }),
+      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: clarifiedMessage, propertyId: clarifiedPropertyId, operation, deferSemanticValidation: true }),
       controls.executionTimeoutMs,
     );
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const validation = validateAskAnswerTrust({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: clarifiedPropertyId });
+    const validation = validateAskAnswerTrustPipeline({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: clarifiedPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled });
     const result = validation.result;
+    recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result);
     const nextParameters = {
       ...(result.parameters ?? {}),
@@ -5346,7 +5363,7 @@ export async function submitAskClarification(userId: string, executionId: string
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CLARIFICATION_SUBMITTED', metadataJson: asInputJson({ operationId: operation.operationId }) } });
-    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, repaired: validation.repaired }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, semantic: validation.semantic, repaired: validation.repaired }) } });
     return mapPersistedExecution(saved, await propertySummary(clarifiedPropertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
@@ -5408,14 +5425,15 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
   const controls = readAskOperationalControls();
   try {
     const rawResult = await withAskTimeout(
-      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: input.propertyId, operation }),
+      executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: input.propertyId, operation, deferSemanticValidation: true }),
       controls.executionTimeoutMs,
     );
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const validation = validateAskAnswerTrust({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: input.propertyId });
+    const validation = validateAskAnswerTrustPipeline({ question: execution.message, operationId: operation.operationId, result: presentedResult, propertyId: input.propertyId, semanticEnabled: controls.semanticResponseValidatorEnabled });
     const result = validation.result;
+    recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result);
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
@@ -5429,7 +5447,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: result.status, metadataJson: asInputJson({ operationId: operation.operationId, stage: 'PROPERTY_RESUME' }) } });
-    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, repaired: validation.repaired }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, semantic: validation.semantic, repaired: validation.repaired }) } });
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);

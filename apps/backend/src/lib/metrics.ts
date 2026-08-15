@@ -214,6 +214,21 @@ export const askAnswerTrustTotal = new Counter({
   registers: [register],
 });
 
+export const askSemanticAnswerValidationTotal = new Counter({
+  name: 'ask_semantic_answer_validation_total',
+  help: 'Bounded semantic answer relevance outcomes by registered operation',
+  labelNames: ['operation', 'outcome'] as const,
+  registers: [register],
+});
+
+export const askSemanticAnswerValidationDurationSeconds = new Histogram({
+  name: 'ask_semantic_answer_validation_duration_seconds',
+  help: 'Local semantic answer relevance validation latency',
+  labelNames: ['operation', 'outcome'] as const,
+  buckets: [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1],
+  registers: [register],
+});
+
 export const askCorrectionsTotal = new Counter({
   name: 'ask_corrections_total',
   help: 'Ask conversational correction requests by bounded kind and outcome',

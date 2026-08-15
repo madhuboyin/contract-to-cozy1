@@ -62,6 +62,14 @@ function dice(left: Set<string>, right: Set<string>): number {
   return (2 * intersection) / (left.size + right.size);
 }
 
+export function askSemanticTextSimilarity(left: string, right: string): number {
+  const leftTokens = new Set(tokens(left));
+  const rightTokens = new Set(tokens(right));
+  const overlap = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  const lexical = overlap / Math.sqrt(Math.max(1, leftTokens.size * rightTokens.size));
+  return Number(((lexical * 0.62) + (dice(trigrams(left), trigrams(right)) * 0.38)).toFixed(4));
+}
+
 export interface AskSemanticCandidate {
   operationId: AskOperationId;
   semanticVersion: string;
@@ -116,8 +124,13 @@ export function classifyAskCandidates(candidates: AskSemanticCandidate[], option
   const strongest = candidates[0];
   const runnerUp = candidates[1];
   const ambiguous = Boolean(strongest && runnerUp && strongest.score >= minimum && runnerUp.score >= minimum && strongest.score - runnerUp.score < margin);
-  const multiIntent = Boolean(ambiguous && options.normalizedMessage && /\b(?:and|also|plus|then)\b/.test(options.normalizedMessage));
-  const resolved = Boolean(strongest && strongest.score >= minimum && !ambiguous);
+  const multiIntent = Boolean(
+    strongest && runnerUp
+    && strongest.score >= minimum && runnerUp.score >= minimum
+    && strongest.confidenceBand === 'HIGH' && runnerUp.confidenceBand === 'HIGH'
+    && options.normalizedMessage && /\b(?:and|also|plus|then)\b/.test(options.normalizedMessage),
+  );
+  const resolved = Boolean(strongest && strongest.score >= minimum && !ambiguous && !multiIntent);
   return {
     schemaVersion: '1.0',
     selectedOperationId: resolved ? strongest!.operationId : null,

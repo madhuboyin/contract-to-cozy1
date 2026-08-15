@@ -55,7 +55,7 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
       && !booleanEnv(env.ASK_EMBEDDING_RETRIEVAL_KILL_SWITCH, false),
     constrainedClassifierEnabled: booleanEnv(env.ASK_CONSTRAINED_CLASSIFIER_ENABLED, true)
       && !booleanEnv(env.ASK_CONSTRAINED_CLASSIFIER_KILL_SWITCH, false),
-    semanticResponseValidatorEnabled: booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_ENABLED, false)
+    semanticResponseValidatorEnabled: booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_ENABLED, true)
       && !booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_KILL_SWITCH, false),
     resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
       && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),

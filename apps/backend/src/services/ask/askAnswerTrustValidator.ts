@@ -1,6 +1,7 @@
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustResult } from './askTrust.contract';
+import { validateAskSemanticAnswerRelevance, type AskSemanticAnswerRelevanceResult } from './askSemanticAnswerValidator';
 
 export const ASK_ANSWER_TRUST_VALIDATOR_VERSION = 'deterministic-1.0';
 
@@ -135,5 +136,64 @@ export function validateAskAnswerTrust(input: {
   return {
     result: { ...input.result, blocks, parameters: { ...(input.result.parameters ?? {}), answerTrust: trust } },
     trust, repaired,
+  };
+}
+
+export function validateAskAnswerTrustPipeline(input: {
+  question: string;
+  operationId: AskOperationId;
+  result: AskOperationResult;
+  propertyId?: string | null;
+  semanticEnabled: boolean;
+}): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
+  const deterministic = validateAskAnswerTrust(input);
+  if (!input.semanticEnabled) return { ...deterministic, semantic: null };
+  const semantic = validateAskSemanticAnswerRelevance({
+    question: input.question,
+    operationId: input.operationId,
+    result: deterministic.result,
+  });
+  const semanticFailed = semantic.outcome === 'FAIL';
+  const trust: AskAnswerTrustResult = {
+    ...deterministic.trust,
+    outcome: semanticFailed && SUCCESS_STATUSES.has(deterministic.result.status)
+      ? 'CLARIFY'
+      : deterministic.trust.outcome,
+    checks: {
+      ...deterministic.trust.checks,
+      questionCoverage: semanticFailed
+        ? 'FAIL'
+        : semantic.outcome === 'UNKNOWN' && deterministic.trust.checks.questionCoverage === 'PASS'
+          ? 'UNKNOWN'
+          : deterministic.trust.checks.questionCoverage,
+    },
+    reasonCodes: [...new Set([...deterministic.trust.reasonCodes, ...semantic.reasonCodes])],
+    validatorVersion: `${deterministic.trust.validatorVersion}+${semantic.validatorVersion}`,
+  };
+  if (semanticFailed && SUCCESS_STATUSES.has(deterministic.result.status)) {
+    return {
+      result: {
+        status: 'FAILED_RETRYABLE', reasonCode: 'ASK_ANSWER_RELEVANCE_FAILED',
+        blocks: [{
+          type: 'ERROR_STATE', id: 'answer-relevance-failed', title: 'I couldn’t verify that this answers your question',
+          body: 'The response appears to address a different home request, so I won’t present it as a reliable answer. Nothing was changed. Try again or choose the home topic you meant.',
+          retryable: true, actions: [],
+        }],
+        suggestions: ['Ask this question again'],
+        parameters: { ...(deterministic.result.parameters ?? {}), answerTrust: trust, semanticAnswerRelevance: semantic },
+      },
+      trust,
+      semantic,
+      repaired: true,
+    };
+  }
+  return {
+    result: {
+      ...deterministic.result,
+      parameters: { ...(deterministic.result.parameters ?? {}), answerTrust: trust, semanticAnswerRelevance: semantic },
+    },
+    trust,
+    semantic,
+    repaired: deterministic.repaired,
   };
 }

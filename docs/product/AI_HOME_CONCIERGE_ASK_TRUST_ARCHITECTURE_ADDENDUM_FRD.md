@@ -2,7 +2,7 @@
 
 **Product:** ContractToCozy — Ask Cozy  
 **Document type:** Functional Requirements and Architecture Addendum  
-**Status:** Implementation in progress — TA0 through TA4 delivered
+**Status:** Implementation in progress — TA0 through TA5 delivered
 **Version:** 1.0  
 **Date:** August 15, 2026  
 **Primary parent:** `AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md`  
@@ -1115,7 +1115,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA5 — Semantic answer relevance
 
-**Status: In progress.**
+**Status: Implemented.**
 
 - add the optional semantic relevance validator;
 - combine it with mandatory deterministic checks;
@@ -1332,7 +1332,7 @@ This addendum is implemented when:
 | TA2 — Hybrid semantic operation retrieval | Implemented | Versioned local lexical and character-semantic rank fusion over the runtime-eligible operation catalog with bounded candidates and hard-negative penalties |
 | TA3 — Constrained classification and calibration | Implemented | Candidate-only structured local classification, separate confidence bands, materiality policy, ambiguity margins, independent controls, and classifier-off clarification |
 | TA4 — Conversational repair | Implemented | Durable same-session intent and entity correction executions preserve the original answer, property context, authorization rechecks, and correction lineage |
-| TA5 — Semantic answer relevance | In progress | Mandatory deterministic final-presentation validation is active; the independently controlled optional model relevance layer remains disabled by default |
+| TA5 — Semantic answer relevance | Implemented | Default-on, independently controlled local semantic relevance validation runs after deterministic final-presentation validation, records bounded scores/reasons and latency, preserves unknown evidence without overclaiming, and safely suppresses clear operation mismatches |
 | TA6 — Multilingual expansion compatibility | Deferred | Language-versionable contracts required; runtime multilingual implementation explicitly out of scope |
 | TA7 — Production-quality learning loop | In progress | Bounded routing, candidate, confidence, validator, source, repair, and correction events are durable; dashboards and reviewed correction clustering remain follow-up work |
 
