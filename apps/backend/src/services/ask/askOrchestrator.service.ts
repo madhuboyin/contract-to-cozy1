@@ -131,6 +131,7 @@ import { resolveAskAudienceContext } from './askAudienceContext';
 import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
 import { validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } from './askAnswerTrustValidator';
+import { resolveAskEntityState } from './askEntityResolution';
 import { attachAskAuthoritativeSourceEvidence } from './askAnswerTrustPolicy';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 
@@ -5011,6 +5012,8 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       classifierEnabled: controls.constrainedClassifierEnabled,
       embeddingRetrievalEnabled: controls.embeddingRetrievalEnabled,
       eligibleOperationIds,
+      propertyId: executionPropertyId,
+      launchEntityId: input.launchContext?.entityId,
     });
   const launchCapabilityOperationId = input.launchContext?.capabilityId
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
@@ -5048,6 +5051,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       stage: 'LOCAL_CLASSIFIER',
       candidates: [{ operationId: selectedOperation.operationId, confidence }],
       requiresClarification: false,
+      entityResolution: resolveAskEntityState({ message: routingMessage, operationId: selectedOperation.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: selectedOperation.requiresProperty }),
     };
   } else if (!forcedOperationId && routingDecision.stage === 'REMOTE_FALLBACK'
     && (skillRoutingDecision.outcome === 'AMBIGUOUS_OPERATION' || skillRoutingDecision.outcome === 'AMBIGUOUS_SKILL')) {
@@ -5065,6 +5069,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       stage: 'CLARIFICATION',
       candidates: [...new Map(skillAmbiguityOperations.map((candidate) => [candidate.operationId, candidate])).values()].slice(0, 3),
       requiresClarification: true,
+      entityResolution: null,
     };
   }
   // The local classifier already had the concatenated prior+current message
@@ -5087,6 +5092,9 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     ? { ...getAskOperationDefinition(forcedOperationId as AskOperationId), confidence: 1 }
     : routingDecision.operation;
   const operationDefinition = getAskOperationDefinition(operation.operationId);
+  const routedEntityResolution = shouldForceOperation
+    ? resolveAskEntityState({ message: routingMessage, operationId: operation.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: operation.requiresProperty })
+    : routingDecision.entityResolution;
   const selectedSkill = getSkillForOperation(operation.operationId);
   const selectedSkillBinding = selectedSkill && !routingDecision.requiresClarification
     ? buildSkillExecutionBinding({
@@ -5115,8 +5123,11 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         operationVersion: routingDecision.requiresClarification ? null : operation.version,
         routingStage: routingDecision.stage,
         routingConfidence: operation.confidence,
-        routingConfidenceBand: operation.confidence >= 0.75 ? 'HIGH' : operation.confidence >= 0.45 ? 'MEDIUM' : 'LOW',
-        entityConfidenceBand: input.launchContext?.entityId ? 'HIGH' : null,
+        routingConfidenceBand: routingDecision.candidates.find((candidate) => candidate.operationId === operation.operationId)?.confidenceBand
+          ?? (operation.confidence >= 0.9 ? 'HIGH' : operation.confidence >= 0.45 ? 'MEDIUM' : 'LOW'),
+        entityResolutionOutcome: routedEntityResolution?.outcome ?? 'NOT_REQUIRED',
+        entityConfidenceBand: routedEntityResolution?.confidenceBand ?? null,
+        entityReasonCodes: routedEntityResolution?.reasonCodes ?? [],
         language: routingDecision.language,
         languageContractVersion: normalizedRoutingMessage.contractVersion,
         normalizedMessageHash: createHash('sha256').update(normalizedRoutingMessage.normalized).digest('hex').slice(0, 16),
@@ -5332,6 +5343,7 @@ export async function submitAskClarification(userId: string, executionId: string
       ambiguityMargin: controls.routingAmbiguityMargin,
       classifierEnabled: controls.constrainedClassifierEnabled,
       eligibleOperationIds: clarificationEligibleOperationIds,
+      propertyId: clarifiedPropertyId,
     });
   if (input.operationId && !clarificationEligibleOperationIds.includes(input.operationId as AskOperationId)) {
     const error = new Error('That home workflow is no longer available for the selected home and household role. Choose another option or ask again.');

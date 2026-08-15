@@ -2,6 +2,7 @@ import type { AskPresentationBlock } from '../../productFramework/ask/ask.contra
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './askSemanticRouter';
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
+import { askEmbeddingCosine, embedAskSemanticText } from './askSemanticEmbedding';
 
 export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-1.0';
 
@@ -79,14 +80,20 @@ export function validateAskSemanticAnswerRelevance(input: {
     });
   }
   const anchor = [semantic.intentDescription, ...semantic.supportedJobs, ...semantic.positiveExamples].join(' ');
-  const selectedOperationScore = askSemanticTextSimilarity(answer, anchor, language);
-  const questionAnswerScore = askSemanticTextSimilarity(input.question, answer, language);
+  const selectedOperationScore = Math.max(
+    askSemanticTextSimilarity(answer, anchor, language),
+    askEmbeddingCosine(embedAskSemanticText(answer), embedAskSemanticText(anchor)),
+  );
+  const questionAnswerScore = Math.max(
+    askSemanticTextSimilarity(input.question, answer, language),
+    askEmbeddingCosine(embedAskSemanticText(input.question), embedAskSemanticText(answer)),
+  );
   const ranked = retrieveAskOperationCandidates(answer, { topK: 3, language });
   const selectedCandidate = ranked.find((candidate) => candidate.operationId === input.operationId);
   const competitor = ranked.find((candidate) => candidate.operationId !== input.operationId) ?? null;
   const selectedScore = Math.max(selectedOperationScore, selectedCandidate?.score ?? 0);
   const competingScore = competitor?.score ?? 0;
-  const clearMismatch = Boolean(competitor && competingScore >= 0.34 && competingScore - selectedScore >= 0.12);
+  const clearMismatch = Boolean(competitor && questionAnswerScore < 0.24 && competingScore >= 0.34 && competingScore - selectedScore >= 0.12);
   if (clearMismatch) {
     return finish({
       outcome: 'FAIL', selectedOperationId: input.operationId, competingOperationId: competitor!.operationId,
@@ -94,7 +101,7 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['ANSWER_FAVORS_DIFFERENT_OPERATION'],
     });
   }
-  if (selectedCandidate?.operationId === input.operationId || selectedScore >= 0.2 || questionAnswerScore >= 0.18) {
+  if ((selectedCandidate?.operationId === input.operationId && selectedScore >= 0.2) || selectedScore >= 0.3 || questionAnswerScore >= 0.24) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: competitor?.operationId ?? null,
       selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,

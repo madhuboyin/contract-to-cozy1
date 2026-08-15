@@ -215,7 +215,7 @@ export function validateAskAnswerTrustPipeline(input: {
     result: deterministic.result,
     language: input.language,
   });
-  const semanticFailed = semantic.outcome === 'FAIL';
+  const semanticFailed = semantic.outcome === 'FAIL' || semantic.outcome === 'UNKNOWN';
   const trust: AskAnswerTrustResult = {
     ...deterministic.trust,
     outcome: semanticFailed && SUCCESS_STATUSES.has(deterministic.result.status)

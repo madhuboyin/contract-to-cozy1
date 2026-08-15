@@ -5,8 +5,9 @@ import {
   requireCertifiedAskLanguage,
   type AskLanguageCode,
 } from './askLanguageRegistry';
-import { askEmbeddingCosine, askEmbeddingIndexVersion, embedAskSemanticText, type AskSemanticEmbedding } from './askSemanticEmbedding';
+import { askEmbeddingCosine, askEmbeddingIndexVersion, askSemanticConceptSimilarity, embedAskSemanticText, type AskSemanticEmbedding } from './askSemanticEmbedding';
 import { calibrateAskRoutingConfidence, type AskRetrievalPath } from './askRoutingCalibration';
+import { requiredAskTargetEntity, resolveAskEntityState, type AskEntityResolutionResult } from './askEntityResolution';
 
 export const ASK_LANGUAGE_CONTRACT_VERSION = requireCertifiedAskLanguage(ASK_DEFAULT_LANGUAGE).normalizationContractVersion;
 
@@ -221,6 +222,7 @@ export function retrieveAskOperationCandidates(message: string, options: {
       const overlap = [...querySet].filter((token) => documentTokens.has(token)).length;
       const lexical = Math.max(...documents.map((document) => softLexicalSimilarity(queryTokens, [...new Set(tokens(document, language))])));
       const phrase = Math.max(...documents.map((document) => dice(trigrams(message, language), trigrams(document, language))));
+      const concept = Math.max(...documents.map((document) => askSemanticConceptSimilarity(message, document)));
       const negative = Math.max(...semantic.hardNegativeExamples.map((example) => dice(trigrams(message, language), trigrams(example, language))));
       const exactConcept = documents.some((document) => normalizeAskMessage(document, language).normalized === normalizeAskMessage(message, language).normalized);
       const indexed = embeddingIndex.get(definition.operationId);
@@ -230,11 +232,15 @@ export function retrieveAskOperationCandidates(message: string, options: {
       const embeddingNegative = queryEmbedding && indexed
         ? Math.max(...indexed.hardNegativeEmbeddings.map((document) => askEmbeddingCosine(queryEmbedding, document)))
         : 0;
-      const negativePenalty = Math.max(negative, embeddingNegative) >= 0.72 ? 0.3 : 0;
+      const negativeEvidence = Math.max(negative, embeddingNegative);
+      const positiveEvidence = Math.max(lexical, phrase, embedding ?? 0, concept);
+      const negativePenalty = negativeEvidence >= 0.72 && negativeEvidence > positiveEvidence + 0.05
+        ? Math.min(0.3, (negativeEvidence - positiveEvidence) * 0.8)
+        : 0;
       const rawScore = Math.max(0, Math.min(0.99,
         embedding == null
           ? (lexical * 0.62) + (phrase * 0.38) + (exactConcept ? 0.2 : 0) - negativePenalty
-          : (lexical * 0.28) + (phrase * 0.22) + (embedding * 0.5) + (exactConcept ? 0.15 : 0) - negativePenalty,
+          : (lexical * 0.2) + (phrase * 0.15) + (embedding * 0.3) + (concept * 0.35) + (exactConcept ? 0.15 : 0) - negativePenalty,
       ));
       const calibration = calibrateAskRoutingConfidence({
         definition,
@@ -243,6 +249,7 @@ export function retrieveAskOperationCandidates(message: string, options: {
         rawScore,
         minimumConfidenceOverride: options.minimumConfidence,
         ambiguityMarginOverride: options.ambiguityMargin,
+        requiresEntityResolution: Boolean(requiredAskTargetEntity(definition.operationId)),
       });
       return {
         operationId: definition.operationId,
@@ -269,6 +276,8 @@ export function classifyAskCandidates(candidates: AskSemanticCandidate[], option
   minimumConfidence?: number;
   ambiguityMargin?: number;
   normalizedMessage?: string;
+  propertyId?: string | null;
+  launchEntityId?: string | null;
 } = {}): AskIntentClassification {
   const strongest = candidates[0];
   const runnerUp = candidates[1];
@@ -279,7 +288,22 @@ export function classifyAskCandidates(candidates: AskSemanticCandidate[], option
     options.ambiguityMargin ?? strongest?.ambiguityMargin ?? 0.1,
     contentTokenCount <= 3 ? 0.2 : 0,
   );
-  const ambiguous = Boolean(strongest && runnerUp && strongest.score >= minimum && runnerUp.score >= runnerMinimum && strongest.score - runnerUp.score < margin);
+  const broadPendingAmbiguity = Boolean(
+    options.normalizedMessage
+    && /\bpending\b/.test(options.normalizedMessage)
+    && /\b(?:home|house|property)\b/.test(options.normalizedMessage)
+    && !/\b(?:details?|information|record|maintenance|task|upkeep|coverage|quote|claim)\b/.test(options.normalizedMessage)
+    && candidates.some((candidate) => candidate.operationId === 'PROPERTY_SUMMARY')
+    && candidates.some((candidate) => candidate.operationId === 'MAINTENANCE_STATUS'),
+  );
+  const broadMaintenanceScheduleAmbiguity = Boolean(
+    options.normalizedMessage
+    && /\b(?:organize|plan|schedule)\b/.test(options.normalizedMessage)
+    && /\b(?:maintenance|upkeep)\b/.test(options.normalizedMessage)
+    && !/\b(?:show|list|create|add|change|move|complete|finish|overdue|pending|task)\b/.test(options.normalizedMessage)
+    && candidates.filter((candidate) => candidate.operationId.startsWith('MAINTENANCE_')).length > 1,
+  );
+  const ambiguous = broadPendingAmbiguity || broadMaintenanceScheduleAmbiguity || Boolean(strongest && runnerUp && strongest.score >= minimum && runnerUp.score >= runnerMinimum && strongest.score - runnerUp.score < margin);
   const multiIntent = Boolean(
     strongest && runnerUp
     && strongest.score >= minimum && runnerUp.score >= runnerMinimum
@@ -287,14 +311,23 @@ export function classifyAskCandidates(candidates: AskSemanticCandidate[], option
     && options.normalizedMessage && /\b(?:and|also|plus|then)\b/.test(options.normalizedMessage),
   );
   const resolved = Boolean(strongest && strongest.score >= minimum && !ambiguous && !multiIntent);
+  const entity: AskEntityResolutionResult = strongest
+    ? resolveAskEntityState({ message: options.normalizedMessage ?? '', operationId: strongest.operationId, propertyId: options.propertyId, launchEntityId: options.launchEntityId, requiresProperty: ASK_OPERATION_DEFINITIONS[strongest.operationId].requiresProperty })
+    : { schemaVersion: '1.0', outcome: 'NOT_REQUIRED', confidenceBand: null, entities: [], missingSlots: [], reasonCodes: ['NO_OPERATION_CANDIDATE'], resolverVersion: 'bounded-entity-resolution-1.0' };
   return {
     schemaVersion: '1.0',
     selectedOperationId: resolved ? strongest!.operationId : null,
     candidateOperationIds: candidates.map((candidate) => candidate.operationId),
     outcome: multiIntent ? 'MULTI_INTENT' : ambiguous ? 'AMBIGUOUS' : resolved ? 'RESOLVED' : 'UNSUPPORTED',
     confidenceBand: strongest?.confidenceBand ?? 'LOW',
-    extractedEntities: [],
-    missingSlots: [],
-    reasonCodes: multiIntent ? ['MULTIPLE_DISTINCT_INTENTS'] : ambiguous ? ['CANDIDATE_MARGIN_AMBIGUOUS'] : resolved ? strongest!.reasonCodes : ['INSUFFICIENT_SEMANTIC_CONFIDENCE'],
+    entityOutcome: entity.outcome,
+    entityConfidenceBand: entity.confidenceBand,
+    extractedEntities: entity.entities,
+    missingSlots: entity.missingSlots,
+    reasonCodes: multiIntent ? ['MULTIPLE_DISTINCT_INTENTS'] : ambiguous ? [
+      broadPendingAmbiguity ? 'BROAD_PENDING_SCOPE_AMBIGUOUS'
+        : broadMaintenanceScheduleAmbiguity ? 'BROAD_MAINTENANCE_SCHEDULE_AMBIGUOUS'
+          : 'CANDIDATE_MARGIN_AMBIGUOUS',
+    ] : resolved ? strongest!.reasonCodes : ['INSUFFICIENT_SEMANTIC_CONFIDENCE'],
   };
 }

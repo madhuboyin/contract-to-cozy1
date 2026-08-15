@@ -9,6 +9,8 @@ const { normalizeAskMessage, retrieveAskOperationCandidates } = require('../../s
 const { validateAskAnswerTrust, validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { attachAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
+const { evaluateAskAnswerRelevanceQuality } = require('../../src/services/ask/askAnswerRelevanceQualityEvaluator.ts');
+const { ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES } = require('../../src/services/ask/askTrustCertificationCorpus.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 
 test('every operation exposes a valid English semantic contract', () => {
@@ -221,4 +223,12 @@ test('registered operation direct-answer fixtures do not produce semantic mismat
     });
     assert.notEqual(relevance.outcome, 'FAIL', definition.operationId);
   }
+});
+
+test('held-out direct-answer certification reports every operation and meets the relevance objective', () => {
+  const report = evaluateAskAnswerRelevanceQuality(ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES, '2026-08-15T00:00:00.000Z');
+  assert.equal(report.samples, Object.keys(ASK_OPERATION_DEFINITIONS).length);
+  assert.equal(report.byOperation.length, Object.keys(ASK_OPERATION_DEFINITIONS).length);
+  assert.equal(report.unknown, 0);
+  assert.ok(report.passRate >= 0.95, JSON.stringify(report));
 });
