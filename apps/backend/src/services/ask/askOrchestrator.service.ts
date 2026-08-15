@@ -132,7 +132,7 @@ import { extractMaintenanceTaskTitle, isMeaningfulMaintenanceTaskTitle } from '.
 import { buildSeasonalMaintenanceResult } from './askSeasonalMaintenance';
 import { validateAskAnswerTrustPipeline, validateAskConfirmedCompletion } from './askAnswerTrustValidator';
 import { requiredAskTargetEntity, resolveAskEntityState } from './askEntityResolution';
-import { attachAskAuthoritativeSourceEvidence } from './askAnswerTrustPolicy';
+import { attachAskAuthoritativeSourceEvidence, includeAskContextSourceEvidence } from './askAnswerTrustPolicy';
 import type { AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 
@@ -4414,7 +4414,7 @@ function canonicalAdapterSourceEvidence(
     observedAt,
   };
   const providers = (composedContext?.entries ?? [])
-    .filter((entry) => entry.status !== 'NOT_APPLICABLE')
+    .filter(includeAskContextSourceEvidence)
     .map((entry): AskAuthoritativeSourceEvidence => {
       const complete = entry.status === 'AVAILABLE';
       const unavailable = ['UNAVAILABLE', 'UNAUTHORIZED', 'TIMED_OUT', 'BUDGET_EXCEEDED'].includes(entry.status);

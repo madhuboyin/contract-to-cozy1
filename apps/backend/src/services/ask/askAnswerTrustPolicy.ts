@@ -1,5 +1,6 @@
 import type { HouseholdRole } from '@prisma/client';
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
+import type { ComposedSkillContextEntry } from '../skills/context/skillContext.contract';
 import { isAskActionAllowedForHouseholdRole } from './askAudiencePresentation';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustEvidence, AskAuthoritativeSourceEvidence } from './askTrust.contract';
@@ -28,7 +29,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
 };
 
 const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<string>>>> = {
-  MAINTENANCE_STATUS: new Set(['open-maintenance', 'create-maintenance', 'add-purchase-date']),
+  MAINTENANCE_STATUS: new Set(['open-maintenance', 'open-seasonal', 'create-maintenance', 'add-purchase-date']),
   MAINTENANCE_TASK_CREATE: new Set(['open-maintenance', 'open-task']),
   MAINTENANCE_TASK_COMPLETE: new Set(['open-maintenance', 'open-task']),
   MAINTENANCE_TASK_UPDATE: new Set(['open-maintenance', 'open-task']),
@@ -55,6 +56,19 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HVAC_DECISION_START: new Set(['open-inventory']),
   HVAC_DECISION_CONTINUE: new Set(['open-inventory']),
 };
+
+/**
+ * Required context providers participate in canonical source-integrity
+ * evaluation even when they fail. Optional providers participate only when
+ * they actually returned usable data. An unavailable optional enhancement
+ * must not invalidate an otherwise complete canonical read; adapters that
+ * explicitly need that enhancement already return a typed limitation state.
+ */
+export function includeAskContextSourceEvidence(
+  entry: Pick<ComposedSkillContextEntry, 'required' | 'status'>,
+): boolean {
+  return entry.status !== 'NOT_APPLICABLE' && (entry.required || entry.status === 'AVAILABLE');
+}
 
 export function attachAskAuthoritativeSourceEvidence(
   result: AskOperationResult,

@@ -7,6 +7,11 @@ const {
   buildSeasonalMaintenanceResult,
   parseSeasonalMaintenanceIntent,
 } = require('../../src/services/ask/askSeasonalMaintenance.ts');
+const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+const {
+  attachAskAuthoritativeSourceEvidence,
+  completedAskAuthoritativeSourceEvidence,
+} = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 
 const NOW = new Date('2026-08-14T12:00:00.000Z');
 
@@ -68,6 +73,21 @@ test('pending summer questions return actual checklist items instead of an empty
     'Service air conditioner', 'Inspect exterior drainage',
   ]);
   assert.match(response.blocks[0].actions[0].href, /dashboard\/seasonal/);
+});
+
+test('seasonal maintenance navigation survives answer-trust validation', () => {
+  const response = result('what seasonal tasks are pending', { checklists: [checklist()] });
+  const checked = validateAskAnswerTrust({
+    question: 'what seasonal tasks are pending',
+    operationId: 'MAINTENANCE_STATUS',
+    propertyId: 'property-1',
+    result: attachAskAuthoritativeSourceEvidence(
+      response,
+      [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')],
+    ),
+  });
+  assert.equal(checked.trust.outcome, 'PASS');
+  assert.equal(checked.result.blocks[0].actions[0].id, 'open-seasonal');
 });
 
 test('an explicit season selects the latest matching year and deduplicates linked canonical tasks', () => {

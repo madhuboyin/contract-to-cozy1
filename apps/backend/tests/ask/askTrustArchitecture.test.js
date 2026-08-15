@@ -10,6 +10,7 @@ const { validateAskAnswerTrust, validateAskAnswerTrustPipeline, validateAskConfi
 const {
   attachAskAuthoritativeSourceEvidence: attachEvidence,
   completedAskAuthoritativeSourceEvidence,
+  includeAskContextSourceEvidence,
 } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const attachAskAuthoritativeSourceEvidence = (result, operationId) => attachEvidence(
   result,
@@ -128,6 +129,13 @@ test('absence claims require explicit complete, current, full-scope authoritativ
   assert.equal(proven.trust.checks.sourceIntegrity, 'PASS');
   assert.equal(proven.trust.checks.absenceClaimSupport, 'PASS');
   assert.equal(proven.trust.outcome, 'PASS');
+});
+
+test('unavailable optional context does not invalidate a complete canonical read', () => {
+  assert.equal(includeAskContextSourceEvidence({ required: false, status: 'UNAVAILABLE' }), false);
+  assert.equal(includeAskContextSourceEvidence({ required: false, status: 'STALE' }), false);
+  assert.equal(includeAskContextSourceEvidence({ required: false, status: 'AVAILABLE' }), true);
+  assert.equal(includeAskContextSourceEvidence({ required: true, status: 'UNAVAILABLE' }), true);
 });
 
 test('CTA validation enforces audience permissions and checks priority-list CTAs', () => {
