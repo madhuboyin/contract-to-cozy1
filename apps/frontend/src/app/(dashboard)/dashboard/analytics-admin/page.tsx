@@ -47,6 +47,7 @@ import {
   useAdminServiceQuoteDecisionMetrics,
   useAdminRenovationOperationalHealth,
   useAdminHomeOperationsMeasurement,
+  useAdminAskTrustLearning,
 } from '@/hooks/useAdminAnalytics';
 import AdminAnalyticsLineChart from '@/components/admin-analytics/AdminAnalyticsLineChart';
 import {
@@ -481,6 +482,148 @@ function HomeOperationsMeasurementSection({
                 {data.gaps.map((gap) => <li key={gap}>{gap}</li>)}
               </ul>
             </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AskTrustLearningSection({
+  filters,
+  enabled,
+}: {
+  filters: AdminAnalyticsFilters;
+  enabled: boolean;
+}) {
+  const query = useAdminAskTrustLearning(filters, enabled);
+  if (query.isLoading) return <TableSkeleton rows={5} />;
+  if (query.isError) {
+    return (
+      <AdminRouteState
+        state="error"
+        title="Ask trust learning report unavailable"
+        description="Trust outcomes and bounded learning signals could not be loaded."
+      />
+    );
+  }
+  if (!query.data) return null;
+  const data = query.data;
+
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-4 w-4 text-violet-600" aria-hidden="true" />
+              Ask trust learning loop
+            </CardTitle>
+            <CardDescription>
+              De-identified routing, validation, repair, and correction outcomes. Recommendations require human review.
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+            Bounded metadata only
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <OverviewCard
+            label="Incorrect high confidence"
+            value={pct(data.metrics.incorrectHighConfidenceRate)}
+            sub={`${num(data.metrics.incorrectHighConfidenceResponses)} corrected outcomes`}
+          />
+          <OverviewCard
+            label="Direct relevance"
+            value={pct(data.metrics.directAnswerRelevanceRate)}
+            sub={`${num(data.metrics.validatedResponses)} validated responses`}
+          />
+          <OverviewCard
+            label="Unsupported absence"
+            value={num(data.metrics.unsupportedAbsenceClaims)}
+            sub="Must remain zero"
+          />
+          <OverviewCard
+            label="Correction / repair"
+            value={pct(data.metrics.correctionRate)}
+            sub={`${pct(data.metrics.repairRate)} repaired`}
+          />
+        </div>
+
+        {data.alerts.length > 0 ? (
+          <div className="space-y-2">
+            {data.alerts.map((alert) => (
+              <div key={alert.code} className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="border-amber-300 text-amber-800">{alert.severity}</Badge>
+                    <p className="text-sm font-semibold text-amber-950">{alert.code.replaceAll('_', ' ')}</p>
+                    <span className="text-xs text-amber-800">{num(alert.count)} affected</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">{alert.action}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            No trust-objective alerts were triggered in this reporting window.
+          </div>
+        )}
+
+        <div className="rounded-xl border border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Operation review queue</h3>
+              <p className="mt-1 text-xs text-slate-500">Threshold suggestions are advisory and never change routing automatically.</p>
+            </div>
+            <Badge variant="outline">{data.reviewedFixtureCandidates.length} fixture candidates</Badge>
+          </div>
+          {data.operations.length > 0 ? (
+            <ScrollFadeX>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Operation</TableHead>
+                    <TableHead className="text-right">Routed</TableHead>
+                    <TableHead className="text-right">Relevance</TableHead>
+                    <TableHead className="text-right">Corrections</TableHead>
+                    <TableHead>Recommendation</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.operations.slice(0, 12).map((operation) => (
+                    <TableRow key={operation.operationId}>
+                      <TableCell className="font-medium text-slate-900">{operation.operationId}</TableCell>
+                      <TableCell className="text-right">{num(operation.routed)}</TableCell>
+                      <TableCell className="text-right">{pct(operation.directAnswerRelevanceRate)}</TableCell>
+                      <TableCell className="text-right">{pct(operation.correctionRate)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="whitespace-nowrap">
+                          {operation.thresholdRecommendation.replaceAll('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollFadeX>
+          ) : (
+            <div className="p-4 text-sm text-slate-500">No bounded Ask outcomes were recorded in this window.</div>
+          )}
+        </div>
+
+        <div className="grid gap-3 text-xs text-slate-600 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="font-semibold text-slate-900">Correction clusters</p>
+            <p className="mt-1">{num(data.correctionClusters.length)} de-identified operation/kind clusters ready for review.</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="font-semibold text-slate-900">Version lineage</p>
+            <p className="mt-1">{num(data.versionLineage.length)} semantic index, contract, and classifier combinations observed.</p>
           </div>
         </div>
       </CardContent>
@@ -1908,6 +2051,12 @@ export default function AnalyticsAdminPage() {
           filters={filters}
           enabled={isAdmin}
           key={`home-operations-measurement-${refreshKey}`}
+        />
+
+        <AskTrustLearningSection
+          filters={filters}
+          enabled={isAdmin}
+          key={`ask-trust-learning-${refreshKey}`}
         />
 
         {/* ── Phase 1 Pilot ── */}

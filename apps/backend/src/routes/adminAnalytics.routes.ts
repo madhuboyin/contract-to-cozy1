@@ -33,6 +33,7 @@ import {
   getRenovationOperationalHealthHandler,
   getHomeDigitalTwinDiagnosticsHandler,
   getHomeOperationsMeasurementHandler,
+  getAskTrustLearningHandler,
 } from '../controllers/adminAnalytics.controller';
 
 const router = Router();
@@ -301,6 +302,12 @@ router.get(
   '/admin/analytics/home-operations',
   validate(OverviewQuerySchema),
   getHomeOperationsMeasurementHandler,
+);
+
+router.get(
+  '/admin/analytics/ask-trust',
+  validate(OverviewQuerySchema),
+  getAskTrustLearningHandler,
 );
 
 /**

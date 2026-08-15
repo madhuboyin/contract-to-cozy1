@@ -2,7 +2,7 @@
 
 **Product:** ContractToCozy — Ask Cozy  
 **Document type:** Functional Requirements and Architecture Addendum  
-**Status:** Implementation in progress — TA0 through TA5 delivered
+**Status:** Implemented — active English trust slices TA0 through TA5 and TA7 delivered; TA6 deferred
 **Version:** 1.0  
 **Date:** August 15, 2026  
 **Primary parent:** `AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md`  
@@ -1134,7 +1134,7 @@ This slice provides immediate trust protection before model-assisted routing is 
 
 ### Slice TA7 — Production-quality learning loop
 
-**Status: In progress.**
+**Status: Implemented.**
 
 - add trust dashboards and alerting;
 - cluster de-identified correction outcomes;
@@ -1334,7 +1334,7 @@ This addendum is implemented when:
 | TA4 — Conversational repair | Implemented | Durable same-session intent and entity correction executions preserve the original answer, property context, authorization rechecks, and correction lineage |
 | TA5 — Semantic answer relevance | Implemented | Default-on, independently controlled local semantic relevance validation runs after deterministic final-presentation validation, records bounded scores/reasons and latency, preserves unknown evidence without overclaiming, and safely suppresses clear operation mismatches |
 | TA6 — Multilingual expansion compatibility | Deferred | Language-versionable contracts required; runtime multilingual implementation explicitly out of scope |
-| TA7 — Production-quality learning loop | In progress | Bounded routing, candidate, confidence, validator, source, repair, and correction events are durable; dashboards and reviewed correction clustering remain follow-up work |
+| TA7 — Production-quality learning loop | Implemented | Protected admin trust dashboard and alerting aggregate bounded event metadata only; de-identified correction/failure clusters produce hashed review candidates; operation threshold recommendations remain advisory; semantic index, contract, and classifier version lineage is reported |
 
 Statuses shall use `Not started`, `In progress`, `Implemented`, `Verified`, or `Deferred`. `Deferred` means the extension contract is preserved but runtime delivery is intentionally outside the active implementation scope. A slice shall not be marked `Verified` without recorded automated evidence.
 

@@ -21,6 +21,7 @@ import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
 import { getServiceQuoteDecisionMetrics } from '../services/adminAnalytics/serviceQuoteDecisionMetricsService';
 import { getRenovationOperationalHealth } from '../services/adminAnalytics/renovationOperationalHealthService';
 import { getHomeOperationsMeasurement } from '../services/adminAnalytics/homeOperationsMeasurementService';
+import { getAskTrustLearningReport } from '../services/adminAnalytics/askTrustLearningService';
 
 const homeDigitalTwinService = new HomeDigitalTwinService();
 
@@ -132,6 +133,19 @@ export async function getHomeOperationsMeasurementHandler(
 ): Promise<void> {
   try {
     const data = await getHomeOperationsMeasurement(qDate(req.query.from), qDate(req.query.to));
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getAskTrustLearningHandler(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const data = await getAskTrustLearningReport(qDate(req.query.from), qDate(req.query.to));
     res.json({ success: true, data });
   } catch (err) {
     next(err);

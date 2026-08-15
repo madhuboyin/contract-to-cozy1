@@ -14,6 +14,37 @@ export interface AdminAnalyticsFilters {
   moduleKey?: string;
 }
 
+export interface AdminAskTrustLearningResponse {
+  generatedAt: string;
+  period: { from: string; to: string };
+  privacy: { rawMessagesRead: false; rawMessagesReturned: false; boundedMetadataOnly: true };
+  metrics: {
+    routedExecutions: number; validatedResponses: number;
+    incorrectHighConfidenceResponses: number; incorrectHighConfidenceRate: number | null;
+    directAnswerRelevanceRate: number | null; unsupportedAbsenceClaims: number;
+    irrelevantBoundaries: number; clarificationRate: number | null;
+    clarificationResolutionRate: number | null; correctionRate: number | null;
+    repairRate: number | null; semanticFailureCount: number;
+    modelDisabledSuccessfulResolutionRate: number | null;
+  };
+  operations: Array<{
+    operationId: string; routed: number; highConfidence: number; clarified: number;
+    validations: number; relevancePass: number; repairs: number; corrections: number;
+    semanticFailures: number; clarificationRate: number | null;
+    directAnswerRelevanceRate: number | null; correctionRate: number | null;
+    repairRate: number | null;
+    thresholdRecommendation: 'INSUFFICIENT_EVIDENCE' | 'RAISE_OR_CLARIFY_MORE' | 'REVIEW_FOR_LOWER_READ_THRESHOLD' | 'KEEP_CURRENT';
+  }>;
+  correctionClusters: Array<{ operationId: string; kind: string; count: number }>;
+  reviewedFixtureCandidates: Array<{
+    fixtureKey: string; operationId: string; category: string; reasonCode: string;
+    occurrences: number; reviewStatus: 'NEEDS_REVIEW';
+  }>;
+  versionLineage: Array<{ semanticIndexVersion: string; semanticContractVersion: string; classifierMode: string; count: number }>;
+  alerts: Array<{ severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'; code: string; count: number; action: string }>;
+  controls: { recommendationsAreAdvisory: true; automaticThresholdMutation: false; rawTextFixturePromotion: false };
+}
+
 export interface AdminRenovationOperationalHealthResponse {
   generatedAt: string;
   funnel: {
@@ -479,6 +510,16 @@ export async function fetchAdminHomeOperationsMeasurement(
 ): Promise<AdminHomeOperationsMeasurementResponse> {
   const response = await api.get<AdminHomeOperationsMeasurementResponse>(
     '/api/admin/analytics/home-operations',
+    { params: buildParams(filters) },
+  );
+  return response.data;
+}
+
+export async function fetchAdminAskTrustLearning(
+  filters: AdminAnalyticsFilters,
+): Promise<AdminAskTrustLearningResponse> {
+  const response = await api.get<AdminAskTrustLearningResponse>(
+    '/api/admin/analytics/ask-trust',
     { params: buildParams(filters) },
   );
   return response.data;

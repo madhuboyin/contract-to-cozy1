@@ -16,6 +16,7 @@ import {
   fetchAdminServiceQuoteDecisionMetrics,
   fetchAdminRenovationOperationalHealth,
   fetchAdminHomeOperationsMeasurement,
+  fetchAdminAskTrustLearning,
 } from '@/lib/api/adminAnalytics';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 
@@ -49,6 +50,15 @@ export function useAdminHomeOperationsMeasurement(
   return useQuery({
     queryKey: ['admin-home-operations-measurement', filters.from, filters.to],
     queryFn: () => fetchAdminHomeOperationsMeasurement(filters),
+    staleTime: STALE,
+    enabled,
+  });
+}
+
+export function useAdminAskTrustLearning(filters: AdminAnalyticsFilters, enabled = true) {
+  return useQuery({
+    queryKey: ['admin-ask-trust-learning', filters.from, filters.to],
+    queryFn: () => fetchAdminAskTrustLearning(filters),
     staleTime: STALE,
     enabled,
   });
