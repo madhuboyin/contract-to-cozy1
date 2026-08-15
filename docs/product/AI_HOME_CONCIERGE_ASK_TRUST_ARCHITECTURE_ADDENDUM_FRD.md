@@ -3,10 +3,10 @@
 **Product:** ContractToCozy — Ask Cozy  
 **Document type:** Functional Requirements and Architecture Addendum  
 **Status:** Implemented — TA0 through TA7 delivered; TA6 provides compatibility contracts while multilingual runtime remains deferred
-**Version:** 1.0  
+**Version:** 1.1
 **Date:** August 15, 2026  
 **Primary parent:** `AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md`  
-**Also applies to:** `AI_HOME_CONCIERGE_ASK_REDO_FRD.md`, `AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md`, and `CONTRACTTOCOZY_SKILL_PLATFORM_FRD.md`
+**Also applies to:** `AI_HOME_CONCIERGE_ASK_REDO_FRD.md`, `AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md`, `CONTRACTTOCOZY_SKILL_PLATFORM_FRD.md`, and the living `AI_HOME_CONCIERGE_ASK_MANUAL_CERTIFICATION_ADDENDUM.md`
 
 ---
 
@@ -998,6 +998,14 @@ Nearby negative fixtures shall include:
 - “What details are missing from my contractor quote?” → quote workflow; and
 - “Fill in the missing home detail” → clarification or governed capture, not an immediate arbitrary mutation.
 
+### 27.5 Living manual-certification addendum
+
+`AI_HOME_CONCIERGE_ASK_MANUAL_CERTIFICATION_ADDENDUM.md` is the authoritative living inventory for product-authored category prompts, dynamic prompt templates, mandatory representative substitutions, runtime degradation states, manual evidence, and release criteria.
+
+The addendum shall be updated in the same change whenever a suggested prompt, dynamic prompt template, operation binding, provider dependency, canonical adapter, trust rule, clarification or confirmation path, CTA, audience rule, lifecycle, supported data state, or known failure scenario changes. Any failure discovered through manual testing, automated testing, audit, or deployment shall be added as a repeatable scenario and converted into automated regression coverage where practical.
+
+Every prompt Ask Cozy displays is a release-blocking golden path. Automated component tests or mocked frontend responses do not replace execution of these prompts through the actual orchestration and validation pipeline. A completeness review or release audit shall identify the exact version of the living addendum used and report any unexecuted row as missing evidence rather than treating it as a pass.
+
 ---
 
 ## 28. Operational controls and degradation
@@ -1320,6 +1328,8 @@ This addendum is implemented when:
 17. Any schema change required for durable functionality is implemented and documented, while no database migration script is created.
 18. The handoff identifies any database change the user must apply separately.
 19. Parent documentation is updated with delivered implementation status after each slice.
+20. Every currently displayed product-authored prompt and mandatory dynamic-template representative passes the applicable execution matrix in `AI_HOME_CONCIERGE_ASK_MANUAL_CERTIFICATION_ADDENDUM.md` against the release candidate.
+21. The living manual-certification addendum is updated in the same change for every new prompt, operation binding, provider/degradation state, or newly discovered failure scenario.
 
 ---
 
