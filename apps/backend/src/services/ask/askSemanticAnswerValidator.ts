@@ -6,8 +6,9 @@ import { projectAskSemanticResponse } from './askSemanticResponseProjection';
 import { matchesInventoryAnswerContract } from './askInventoryIntent';
 import { matchesMaintenanceStatusAnswerContract } from './askMaintenanceIntent';
 import { matchesSavingsOpportunitiesAnswerContract } from './askSavingsIntent';
+import { matchesOwnershipCostsAnswerContract } from './askOwnershipCostsIntent';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.4';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.5';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -85,6 +86,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'SAVINGS_OPPORTUNITIES'
     && matchesSavingsOpportunitiesAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'OWNERSHIP_COSTS'
+    && matchesOwnershipCostsAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,

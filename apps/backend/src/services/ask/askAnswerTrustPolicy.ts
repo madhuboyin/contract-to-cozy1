@@ -127,6 +127,7 @@ export function authoritativeEvidenceState(
 }
 
 export function isBoundaryAllowedForOperation(operationId: AskOperationId, boundaryId: string, result?: AskOperationResult): boolean {
+  if (boundaryId === 'ask-audience-applicability') return true;
   if (boundaryId === 'ask-audience-presentation') return Boolean(result && householdRoleFromResult(result));
   return OPERATION_BOUNDARIES[operationId]?.has(boundaryId) ?? false;
 }
@@ -172,16 +173,20 @@ export function isAskActionApplicable(input: {
   trustedDynamicAction?: boolean;
 }): boolean {
   const { action, operationId, propertyId, householdRole } = input;
-  if (!input.authoritativeSourceAvailable) return false;
   if (action.href && !isAskHrefSafeForProperty(action.href, propertyId)) return false;
   if (householdRole && !isAskActionAllowedForHouseholdRole(action, householdRole)) return false;
+  const audienceAction = action.id === 'review-home-journey' && Boolean(householdRole);
+  // Journey correction is a safe navigation action owned by audience policy,
+  // not by an authoritative operation data source. It must remain available
+  // when that policy is explaining why canonical execution did not run.
+  if (audienceAction) return true;
+  if (!input.authoritativeSourceAvailable) return false;
 
   // A property-scoped mutation cannot be presented without the audience policy
   // having established the viewer's role. This closes the former same-property
   // loophole while still allowing safe navigation actions.
   const mutation = /^(?:add|archive|cancel|change|complete|confirm|create|delete|disable|edit|enable|forget|invite|manage|mark|monitor|notify|pause|recalculate|record|remove|report|reschedule|run|save|schedule|send|set|start|stop|submit|unlink|update|upload)(?:[-_]|$)/i.test(action.id);
   if (getAskOperationDefinition(operationId).requiresProperty && mutation && !householdRole) return false;
-  const audienceAction = action.id === 'review-home-journey' && Boolean(householdRole);
   const focusedHomeAction = operationId === 'HOME_ACTIONS' && action.id.startsWith('home-action-primary-');
   if (!input.trustedDynamicAction && !audienceAction && !focusedHomeAction
     && !(OPERATION_ACTION_IDS[operationId]?.has(action.id) ?? false)) return false;

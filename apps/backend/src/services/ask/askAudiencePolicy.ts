@@ -9,7 +9,7 @@ import {
 } from './askOperationRegistry';
 import type { AskAccountRole } from './askAccountEligibility';
 
-export const ASK_AUDIENCE_POLICY_VERSION = '1.1' as const;
+export const ASK_AUDIENCE_POLICY_VERSION = '1.2' as const;
 
 export type AskAudienceUnknownModeBehavior = 'ALLOW_GENERAL' | 'EXPLAIN' | 'BLOCK';
 export type AskAudienceIneligibleTypedRequestBehavior = 'EXPLAIN' | 'BLOCK';
@@ -84,7 +84,10 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOME_DEADLINE_MONITOR', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('COVERAGE_GAPS', ALL_MODES),
   definePolicy('SAVINGS_OPPORTUNITIES', ALL_MODES),
-  definePolicy('OWNERSHIP_COSTS', KNOWN_MODES),
+  // This is a factual read of costs recorded against the selected home. An
+  // unknown buying/owning/selling stage may change framing, but not whether
+  // those canonical records can be shown.
+  definePolicy('OWNERSHIP_COSTS', ALL_MODES),
   definePolicy('INVENTORY_LOOKUP', ALL_MODES),
   definePolicy('PROPERTY_SUMMARY', ALL_MODES),
   definePolicy('REPLACEMENT_GUIDANCE', ALL_MODES),

@@ -222,6 +222,7 @@ function audienceApplicabilityResult(
     }],
     suggestions: ['Summarize my home record', 'What maintenance is pending?', 'What should I plan for next?'],
     parameters: {
+      audiencePresentation: householdRole ? { householdRole } : undefined,
       audienceApplicability: {
         outcome: decision.outcome,
         reasonCode: decision.reasonCode,

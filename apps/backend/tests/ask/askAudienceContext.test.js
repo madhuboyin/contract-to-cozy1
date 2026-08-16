@@ -83,6 +83,21 @@ test('unknown journey context does not block authorized maintenance workflows', 
   }
 });
 
+test('unknown journey context does not block factual ownership-cost reads', () => {
+  const policy = getAskAudiencePolicy('OWNERSHIP_COSTS');
+  const decision = evaluateAskAudienceApplicability({
+    policy,
+    accountRole: 'HOMEOWNER',
+    householdRole: 'VIEWER',
+    operatingMode: 'UNKNOWN',
+    purpose: 'EXECUTION',
+  });
+
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.outcome, 'APPLICABLE_GENERAL');
+  assert.equal(decision.reasonCode, 'ASK_AUDIENCE_GENERAL_GUIDANCE');
+});
+
 test('maintenance task creation still enforces the contributor role floor', () => {
   const decision = evaluateAskAudienceApplicability({
     policy: getAskAudiencePolicy('MAINTENANCE_TASK_CREATE'),
