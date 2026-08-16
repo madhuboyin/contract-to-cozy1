@@ -5,8 +5,9 @@ import { askEmbeddingCosine, embedAskSemanticText } from './askSemanticEmbedding
 import { projectAskSemanticResponse } from './askSemanticResponseProjection';
 import { matchesInventoryAnswerContract } from './askInventoryIntent';
 import { matchesMaintenanceStatusAnswerContract } from './askMaintenanceIntent';
+import { matchesSavingsOpportunitiesAnswerContract } from './askSavingsIntent';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.3';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.4';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -76,6 +77,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'MAINTENANCE_STATUS'
     && matchesMaintenanceStatusAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'SAVINGS_OPPORTUNITIES'
+    && matchesSavingsOpportunitiesAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
