@@ -50,6 +50,10 @@ function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function askSuggestionKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 const ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED = 'ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED';
 
 function askFailureCode(error: unknown): string | null {
@@ -1284,6 +1288,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const activeSessionRef = useRef('');
   const activeSessionPropertyRef = useRef<string | undefined>(undefined);
   const landingVisible = executions.length === 0;
+  // Also filter on read so conversations persisted before the backend policy
+  // shipped do not keep displaying a prompt the homeowner already asked.
+  const askedQuestionKeys = new Set(executions.map((execution) => askSuggestionKey(execution.question)));
   // Concierge composition is only useful on the empty starting surface.
   // It is also loaded when a user explicitly returns home without deleting
   // their conversation, which keeps discovery independent from retention.
@@ -1657,6 +1664,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
             {executions.map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
+              const visibleSuggestions = execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
               return <AskActionReturnContext.Provider key={execution.executionId} value={askReturnHref}>
               <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
                 <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
@@ -1672,7 +1680,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                     const handoffPrompt = execution.skillHandoff.suggestedGoal.replace(/[-_]+/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
                     return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" onClick={() => { setInput(handoffPrompt); window.localStorage.setItem(draftStorageKey(selectedPropertyId), handoffPrompt); textareaRef.current?.focus(); }} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
                   })()}
-                  {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
+                  {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
                   <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} />
                 </div>
               </article>

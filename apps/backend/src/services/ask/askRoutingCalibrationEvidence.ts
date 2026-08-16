@@ -21,7 +21,7 @@ type ObservationTuple = readonly [string, string, AskOperationId, number, boolea
 
 const ROWS: readonly ObservationTuple[] = [
   ['001-expected', '001', 'MAINTENANCE_STATUS', .7022, true], ['001-competitor', '001', 'MAINTENANCE_TASK_COMPLETE', .6573, false],
-  ['002-expected', '002', 'MAINTENANCE_TASK_CREATE', .7252, true], ['002-competitor', '002', 'MAINTENANCE_STATUS', .6333, false],
+  ['002-expected', '002', 'MAINTENANCE_TASK_CREATE', .7252, true], ['002-competitor', '002', 'MAINTENANCE_STATUS', .6732, false],
   ['003-expected', '003', 'MAINTENANCE_TASK_COMPLETE', .1376, true], ['003-competitor', '003', 'MAINTENANCE_TASK_UPDATE', .1224, false],
   ['004-expected', '004', 'MAINTENANCE_TASK_UPDATE', .1899, true], ['004-competitor', '004', 'UNSAFE_RESTRICTED_BOUNDARY', .1319, false],
   ['005-expected', '005', 'COVERAGE_GAPS', .7519, true], ['005-competitor', '005', 'INVENTORY_LOOKUP', .4333, false],

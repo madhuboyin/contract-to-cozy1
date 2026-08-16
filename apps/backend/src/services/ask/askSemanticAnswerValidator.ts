@@ -4,8 +4,9 @@ import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode
 import { askEmbeddingCosine, embedAskSemanticText } from './askSemanticEmbedding';
 import { projectAskSemanticResponse } from './askSemanticResponseProjection';
 import { matchesInventoryAnswerContract } from './askInventoryIntent';
+import { matchesMaintenanceStatusAnswerContract } from './askMaintenanceIntent';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.2';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.3';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -28,6 +29,7 @@ export function validateAskSemanticAnswerRelevance(input: {
   operationId: AskOperationId;
   result: AskOperationResult;
   language?: AskLanguageCode;
+  operationConfirmedByUser?: boolean;
 }): AskSemanticAnswerRelevanceResult {
   const startedAt = process.hrtime.bigint();
   const language = input.language ?? ASK_DEFAULT_LANGUAGE;
@@ -66,6 +68,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'INVENTORY_LOOKUP'
     && matchesInventoryAnswerContract(input.question, input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'MAINTENANCE_STATUS'
+    && matchesMaintenanceStatusAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
@@ -131,11 +141,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   const corroboratedOperationMatch = selectedDominates && selectedScore >= 0.18 && questionAnswerScore >= 0.12;
   const strongDirectEntailment = selectedScore >= 0.18 && selectedScore >= competingScore - 0.1 && questionAnswerScore >= 0.25;
   const strongAnswerContractMatch = answerPositiveScore >= 0.28 && questionAnswerScore >= 0.12;
-  if (strongOperationLead || corroboratedOperationMatch || strongDirectEntailment || strongAnswerContractMatch) {
+  const confirmedOperationMatch = Boolean(input.operationConfirmedByUser)
+    && selectedScore >= 0.18
+    && selectedScore >= competingScore - 0.02;
+  if (strongOperationLead || corroboratedOperationMatch || strongDirectEntailment || strongAnswerContractMatch || confirmedOperationMatch) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: competitor?.operationId ?? null,
       selectedOperationScore: selectedScore, competingOperationScore: competingScore, questionAnswerScore,
-      reasonCodes: [strongOperationLead || selectedDominates ? 'SELECTED_OPERATION_TOP_MATCH' : strongAnswerContractMatch ? 'OPERATION_ANSWER_CONTRACT_MATCH' : 'DIRECT_ANSWER_SEMANTIC_MATCH', ...(questionAnswerScore >= 0.12 ? ['QUESTION_ANSWER_CORROBORATION'] : [])],
+      reasonCodes: [confirmedOperationMatch ? 'HOMEOWNER_CONFIRMED_OPERATION_MATCH' : strongOperationLead || selectedDominates ? 'SELECTED_OPERATION_TOP_MATCH' : strongAnswerContractMatch ? 'OPERATION_ANSWER_CONTRACT_MATCH' : 'DIRECT_ANSWER_SEMANTIC_MATCH', ...(questionAnswerScore >= 0.12 ? ['QUESTION_ANSWER_CORROBORATION'] : [])],
     });
   }
   return finish({

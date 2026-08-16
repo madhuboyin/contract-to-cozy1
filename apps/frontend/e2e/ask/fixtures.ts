@@ -92,7 +92,7 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; pendingWork?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
@@ -174,7 +174,10 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
       return;
     }
-    await fulfill(route, { success: true, data: execution(/refinanc/i.test(body.message) ? 'refinance' : 'refrigerator') }, 201);
+    const response = execution(/refinanc/i.test(body.message) ? 'refinance' : 'refrigerator');
+    response.question = body.message;
+    if (options.repeatedSuggestion) (response as { suggestions: string[] }).suggestions = [body.message, 'List all appliances'];
+    await fulfill(route, { success: true, data: response }, 201);
   });
   await page.route(`${apiOrigin}/api/ask/executions/*/captures/events`, (route) => fulfill(route, {}, 204));
   await page.route(`${apiOrigin}/api/ask/executions/*/captures`, async (route) => {

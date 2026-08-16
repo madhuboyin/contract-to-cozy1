@@ -111,6 +111,7 @@ import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDe
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { conciergeLandingSubjectKey, inventoryDecisionQuestion, selectConciergeLandingSpotlight, selectInventoryDecisionCandidate } from './askConciergePromptPolicy';
 import { formatAskMaintenanceDescription, formatAskMaintenanceScope, formatAskMaintenanceTitle } from './askMaintenancePresentation';
+import { suppressRepeatedAskSuggestions } from './askSuggestionPolicy';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
@@ -4684,7 +4685,7 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
         parameters: { ...(coreResult.parameters ?? {}), requirementReasonCode: coreResult.reasonCode ?? null },
       }
       : coreResult;
-  const finalize = (): AskOperationResult => {
+  const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
     const skillHandoff = resolveSkillHandoffSuggestion({
       sourceOperationId: input.operation.operationId,
@@ -4702,11 +4703,33 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
     if (skill && skillHandoff) {
       askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
     }
+    let recentCompletedMessages: string[] = [];
+    try {
+      const recent = await prisma.askExecution.findMany({
+        where: {
+          sessionId: input.sessionId,
+          userId: input.userId,
+          id: { not: input.executionId },
+          status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        select: { message: true },
+      });
+      recentCompletedMessages = recent.map((execution) => execution.message);
+    } catch {
+      // Suggestion continuity is optional and must not block the answer.
+    }
+    const suggestionAwareResult = suppressRepeatedAskSuggestions(
+      { ...result, skillHandoff },
+      input.message,
+      recentCompletedMessages,
+    );
     const validation = validateAskAnswerTrustPipeline({
       question: input.message,
       operationId: input.operation.operationId,
       propertyId: input.propertyId,
-      result: { ...result, skillHandoff },
+      result: suggestionAwareResult,
       semanticEnabled: controls.semanticResponseValidatorEnabled && !input.deferSemanticValidation,
     });
     if (!input.deferSemanticValidation) recordAskAnswerTrustMetrics(input.operation.operationId, validation);
@@ -5466,7 +5489,15 @@ export async function submitAskClarification(userId: string, executionId: string
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC'
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
       : rawResult;
-    const validation = validateAskAnswerTrustPipeline({ question: clarifiedMessage, operationId: operation.operationId, result: presentedResult, propertyId: clarifiedPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled, recoveryAttempted: true });
+    const validation = validateAskAnswerTrustPipeline({
+      question: clarifiedMessage,
+      operationId: operation.operationId,
+      result: presentedResult,
+      propertyId: clarifiedPropertyId,
+      semanticEnabled: controls.semanticResponseValidatorEnabled,
+      recoveryAttempted: true,
+      operationConfirmedByUser: Boolean(input.operationId),
+    });
     const result = validation.result;
     recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result);

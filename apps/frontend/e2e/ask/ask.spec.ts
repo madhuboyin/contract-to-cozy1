@@ -74,6 +74,18 @@ test('pending Ask actions stay compact and can be dismissed before execution', a
   await expect(pending).toHaveCount(0);
 });
 
+test('a completed question is not repeated as its own follow-up suggestion', async ({ page }) => {
+  await installAskApi(page, { repeatedSuggestion: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const question = 'Show incomplete inventory records';
+  await page.getByPlaceholder('Ask anything about your home…').fill(question);
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  await expect(page.getByText(question, { exact: true })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: question, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'List all appliances', exact: true })).toBeVisible();
+});
+
 test('degraded personalization falls back to property-safe capability examples', async ({ page }) => {
   await installAskApi(page);
   await page.unroute('http://localhost:8080/api/ask/concierge-home*');

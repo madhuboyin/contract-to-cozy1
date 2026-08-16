@@ -3,8 +3,8 @@
 **Product:** ContractToCozy — Ask Cozy
 **Document type:** Manual Testing and Release-Certification Addendum
 **Status:** Living document
-**Version:** 1.6
-**Date:** August 15, 2026
+**Version:** 1.7
+**Date:** August 16, 2026
 **Parent:** `AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md`
 
 ---
@@ -83,6 +83,7 @@ Expected behavior:
 | [ ] | What maintenance tasks are coming due? | `MAINTENANCE_STATUS` |
 | [ ] | What home actions need attention before listing? | `HOME_ACTIONS` |
 | [ ] | What maintenance tasks are pending? | `MAINTENANCE_STATUS` |
+| [ ] | List pending maintenance tasks. | `MAINTENANCE_STATUS`; directly returns the canonical pending-task result without answer-relevance clarification or rejection. |
 
 Dynamic attention templates:
 
@@ -116,6 +117,7 @@ Expected behavior:
 - empty canonical maintenance data returns an explicit verified empty state rather than a generic source failure;
 - seasonal questions use seasonal checklist state and return a typed limitation when that optional source is specifically required by the question; and
 - create/update/complete requests require the applicable capture and confirmation flow before mutation.
+- a homeowner selecting `Review pending and completed maintenance` in a clarification reruns the canonical operation and cannot be rejected merely because the original wording had weak semantic overlap.
 
 ### 4.3 Protect
 
@@ -288,6 +290,7 @@ For every executed row, record and verify:
 - optional failures do not masquerade as required-source failures;
 - clarification asks one relevant question and offers relevant choices;
 - correction and retry controls perform the action their labels promise;
+- follow-up suggestions exclude the current question, recently completed questions in the session, and duplicate prompts while retaining distinct next-step questions;
 - links and CTAs remain within the selected home and are valid for the household role;
 - mutations do not occur before confirmation;
 - refresh, navigation, and session resume do not duplicate mutations or lose pending work; and
@@ -353,3 +356,4 @@ The generic repair-or-replace prompt intentionally lacks an entity and currently
 | 1.4 | August 15, 2026 | Added the exact lifecycle inventory suggestion across empty, no-match, matched-record, and post-clarification outcomes; required focus-specific typed answer validation |
 | 1.5 | August 15, 2026 | Added fresh-by-default Ask sessions, explicit restoration of the five most recent sessions within a rolling seven-day window, home isolation, deep-link behavior, and pending-work independence |
 | 1.6 | August 16, 2026 | Replaced the prominent continuation card with a compact three-item `Pending Ask actions` surface and added safe dismissal for pre-execution workflows while preserving non-dismissible running-command recovery |
+| 1.7 | August 16, 2026 | Added the exact first-party pending-maintenance suggestion and post-clarification path as release-blocking regressions; required canonical typed maintenance answer validation and suppression of current, recent, and duplicate follow-up prompts |

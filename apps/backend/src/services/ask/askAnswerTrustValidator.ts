@@ -208,6 +208,7 @@ export function validateAskAnswerTrustPipeline(input: {
   semanticEnabled: boolean;
   language?: AskLanguageCode;
   recoveryAttempted?: boolean;
+  operationConfirmedByUser?: boolean;
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; semantic: AskSemanticAnswerRelevanceResult | null; repaired: boolean } {
   const deterministic = validateAskAnswerTrust(input);
   if (!input.semanticEnabled) return { ...deterministic, semantic: null };
@@ -216,6 +217,7 @@ export function validateAskAnswerTrustPipeline(input: {
     operationId: input.operationId,
     result: deterministic.result,
     language: input.language,
+    operationConfirmedByUser: input.operationConfirmedByUser,
   });
   const semanticFailed = semantic.outcome === 'FAIL' || semantic.outcome === 'UNKNOWN';
   const trust: AskAnswerTrustResult = {
