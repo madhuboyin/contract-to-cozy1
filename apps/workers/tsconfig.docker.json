@@ -2,10 +2,9 @@
 //
 // W5 (items 1/2/4/5): used only inside the Docker build. Identical to
 // tsconfig.json in every setting (extends it) except `paths` — the Docker
-// build copies backend source into ./src/shared/backend (mirroring
-// apps/backend/src's own layout) rather than reading the live sibling
-// apps/backend/src directory used locally, so @worker-shared/* must
-// resolve there instead. Keeping this as an `extends` override (rather
+// build compiles the backend first and reads its declarations from the
+// sibling dist artifact, so @worker-shared/* resolves there instead.
+// Keeping this as an `extends` override (rather
 // than a second hand-maintained tsconfig) is what guarantees local and
 // Docker TypeScript never drift in strictness/module-resolution.
 //
@@ -17,12 +16,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@worker-shared/*": ["./src/shared/backend/*"]
+      "@worker-shared/*": ["../backend/dist/*"]
     },
-    // Safe here (unlike the base config) because every file the Docker
-    // build's compilation reaches — including the copied shared/backend
-    // mirror — lives under ./src. Keeps dist/worker.js at the exact path
-    // CMD expects instead of TypeScript inferring a wider common root.
+    // Every emitted file lives under ./src. This keeps dist/worker.js at the
+    // exact path CMD expects.
     "rootDir": "./src"
   },
   "exclude": [

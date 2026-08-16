@@ -1,13 +1,8 @@
 // apps/workers/tests/unit/checkWorkerImportBoundary.test.js
 //
-// W5 (items 1/2/4): unit coverage for the Dockerfile COPY-rule parser that
-// backs scripts/check-worker-import-boundary.js. Since W5 removed the `sed`
-// import-rewriting mechanism in favor of the @worker-shared/* tsconfig
-// alias, this script's job changed from "is every backend import covered by
-// a sed rule" to "does every @worker-shared/X import have a matching COPY
-// destination in the image." Uses synthetic Dockerfile snippets, not the
-// real one, so this stays fast/deterministic and exercises the parser's
-// directory-vs-renamed-file COPY semantics directly.
+// Unit coverage for the worker/backend import boundary. The current Docker
+// build consumes the compiled backend artifact; legacy COPY-map helpers stay
+// covered because they also validate synthetic Dockerfile instructions.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,7 +14,9 @@ const {
   findImportViolationsFromSources,
   findCopiedRelativeImportViolationsFromSources,
   findMissingCopySources,
+  usesCompiledBackendArtifact,
   DOCKERFILE_PATH,
+  DOCKER_TSCONFIG_PATH,
 } = require('../../scripts/check-worker-import-boundary.js');
 
 test('parseDockerfileCopyRules extracts a single-source, directory-destination COPY', () => {
@@ -81,16 +78,13 @@ test('resolveAvailableSharedModules ignores COPY rules whose dest is outside src
   assert.equal(available.size, 0);
 });
 
-test('real Docker copy map expands contract directories and includes property-tax ingestion', () => {
-  const rules = parseDockerfileCopyRules(fs.readFileSync(DOCKERFILE_PATH, 'utf8'));
-  const available = resolveAvailableSharedModules(rules);
-  assert.ok(
-    available.has('src/shared/backend/modules/homeEventRadar/contracts/index'),
-  );
-  assert.ok(
-    available.has(
-      'src/shared/backend/services/propertyTax/propertyTaxSourceIngestion.service',
+test('real Docker build uses the complete compiled backend artifact', () => {
+  assert.equal(
+    usesCompiledBackendArtifact(
+      fs.readFileSync(DOCKERFILE_PATH, 'utf8'),
+      fs.readFileSync(DOCKER_TSCONFIG_PATH, 'utf8'),
     ),
+    true,
   );
 });
 

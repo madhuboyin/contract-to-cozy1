@@ -3,25 +3,16 @@
 /**
  * Worker-safe import boundary lint check (W4 item 7 / W5 items 1-4).
  *
- * Every apps/workers/src file that reaches into backend source now does so
- * through the `@worker-shared/*` alias (apps/workers/tsconfig.json) rather
- * than a `../../../backend/src/...`-style relative path. Locally that alias
- * resolves straight to the live sibling apps/backend/src, so it always
- * "just works" in dev/tests. The Docker build is different: it resolves
- * the same alias (tsconfig.docker.json) against a hand-curated COPY'd
- * mirror at src/shared/backend/... — so a new `@worker-shared/X` import
- * with no matching `COPY .../X.ts src/shared/backend/.../` line still
- * breaks `docker build` with a TS2307 "Cannot find module" error, exactly
- * like the old sed-rewrite mechanism this replaced (W5 removed the ~70
- * hand-maintained `sed -i` rules; the COPY-list itself is unchanged and
- * still needs this check). See feedback_workers_docker_curated_copy_list.
+ * Every apps/workers/src file that reaches into backend source does so
+ * through the `@worker-shared/*` alias. Locally it resolves to backend/src;
+ * Docker compiles the complete backend artifact and exposes it through a
+ * runtime package link. This avoids a hand-curated copied-source mirror.
  *
  * This does NOT run a real Docker build. It parses the same Dockerfile the
  * build uses and checks:
  *
- *   1. Every apps/workers/src file's `@worker-shared/X` import has a
- *      matching Dockerfile `COPY` instruction that lands a file at the
- *      corresponding src/shared/backend/X(.ts) path in the image.
+ *   1. Every apps/workers/src file's `@worker-shared/X` import resolves to
+ *      a real backend source module.
  *   2. Every relative import inside a copied backend module resolves to
  *      another module available in the assembled shared tree. This catches
  *      the otherwise Docker-only TS2307 failure where a copied file gains a
@@ -38,6 +29,8 @@ const WORKERS_ROOT = path.resolve(__dirname, '..');
 const REPO_ROOT = path.resolve(WORKERS_ROOT, '..', '..');
 const SRC_ROOT = path.join(WORKERS_ROOT, 'src');
 const DOCKERFILE_PATH = path.join(REPO_ROOT, 'infrastructure/docker/workers/Dockerfile');
+const DOCKER_TSCONFIG_PATH = path.join(WORKERS_ROOT, 'tsconfig.docker.json');
+const BACKEND_SRC_ROOT = path.join(REPO_ROOT, 'apps/backend/src');
 
 function collectTsFiles(dir, out = []) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -193,6 +186,37 @@ function findImportViolations(files, availableSharedModules) {
   return findImportViolationsFromSources(entries, availableSharedModules);
 }
 
+function findBackendArtifactImportViolations(files) {
+  const violations = [];
+  for (const file of files) {
+    const source = fs.readFileSync(file, 'utf8');
+    for (const spec of importsFromSource(source)) {
+      if (!spec.startsWith('@worker-shared/')) continue;
+      const relativeModule = spec.slice('@worker-shared/'.length);
+      const candidate = path.join(BACKEND_SRC_ROOT, relativeModule);
+      if (
+        !fs.existsSync(`${candidate}.ts`) &&
+        !fs.existsSync(`${candidate}.tsx`) &&
+        !fs.existsSync(path.join(candidate, 'index.ts'))
+      ) {
+        violations.push({
+          file: `src/${path.relative(SRC_ROOT, file).split(path.sep).join('/')}`,
+          spec,
+        });
+      }
+    }
+  }
+  return violations;
+}
+
+function usesCompiledBackendArtifact(dockerfileText, dockerTsconfigText) {
+  return dockerTsconfigText.includes('"@worker-shared/*": ["../backend/dist/*"]')
+    && dockerfileText.includes('NODE_OPTIONS=--max-old-space-size=4096 npm run build')
+    && dockerfileText.includes('COPY --from=builder /app/apps/backend/dist /app/apps/backend/dist')
+    && dockerfileText.includes('build-worker-backend-overrides.js')
+    && dockerfileText.includes('node_modules/@worker-shared');
+}
+
 function copiedSharedSourceEntries(copyRules) {
   const entries = [];
   for (const { sources, dest } of copyRules) {
@@ -247,14 +271,18 @@ function findMissingCopySources(copySources) {
 
 if (require.main === module) {
   const dockerfileText = fs.readFileSync(DOCKERFILE_PATH, 'utf8');
+  const dockerTsconfigText = fs.readFileSync(DOCKER_TSCONFIG_PATH, 'utf8');
   const copyRules = parseDockerfileCopyRules(dockerfileText);
   const availableSharedModules = resolveAvailableSharedModules(copyRules);
   const copySources = parseDockerfileBackendCopySources(dockerfileText);
 
   const files = collectTsFiles(SRC_ROOT);
-  const importViolations = findImportViolations(files, availableSharedModules);
+  const compiledBackendArtifact = usesCompiledBackendArtifact(dockerfileText, dockerTsconfigText);
+  const importViolations = compiledBackendArtifact
+    ? findBackendArtifactImportViolations(files)
+    : findImportViolations(files, availableSharedModules);
   const copiedRelativeImportViolations =
-    findCopiedRelativeImportViolationsFromSources(
+    compiledBackendArtifact ? [] : findCopiedRelativeImportViolationsFromSources(
       copiedSharedSourceEntries(copyRules),
       availableSharedModules,
     );
@@ -267,16 +295,12 @@ if (require.main === module) {
   ) {
     console.error('[worker-import-boundary] FAIL');
     if (importViolations.length > 0) {
-      console.error('\n@worker-shared imports with no matching Dockerfile COPY destination');
-      console.error('(these will break `docker build` with a TS2307 "Cannot find module" error):');
+      console.error('\n@worker-shared imports with no matching backend source module');
+      console.error('(these will break local and Docker TypeScript compilation):');
       for (const v of importViolations) {
         console.error(`  - ${v.file}: import '${v.spec}'`);
       }
-      console.error(
-        '\nFix: add a `COPY apps/backend/src/<path>.ts src/shared/backend/<path>/` line to\n' +
-        'infrastructure/docker/workers/Dockerfile so the alias resolves inside the image too.\n' +
-        'See feedback_workers_docker_curated_copy_list for the pattern.'
-      );
+      console.error('\nFix: correct the import path or restore the referenced backend module.');
     }
     if (copiedRelativeImportViolations.length > 0) {
       console.error(
@@ -303,7 +327,7 @@ if (require.main === module) {
 
   console.log(
     `[worker-import-boundary] PASS: validated ${files.length} TypeScript files against ` +
-    `${availableSharedModules.size} available @worker-shared modules and ${copySources.length} backend COPY sources`,
+    `${compiledBackendArtifact ? 'the compiled backend artifact' : `${availableSharedModules.size} copied @worker-shared modules`}`,
   );
 }
 
@@ -317,8 +341,11 @@ module.exports = {
   importsFromSource,
   findImportViolations,
   findImportViolationsFromSources,
+  findBackendArtifactImportViolations,
+  usesCompiledBackendArtifact,
   findCopiedRelativeImportViolationsFromSources,
   findMissingCopySources,
   SRC_ROOT,
   DOCKERFILE_PATH,
+  DOCKER_TSCONFIG_PATH,
 };
