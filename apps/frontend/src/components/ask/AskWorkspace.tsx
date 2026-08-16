@@ -1185,12 +1185,22 @@ function ExecutionFeedback({ executionId, propertyId, capabilities }: {
   );
 }
 
-function PendingWorkInbox({ items, loadingId, onResume }: { items: AskPendingWorkItem[]; loadingId: string | null; onResume: (item: AskPendingWorkItem) => void }) {
+function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onDismiss }: {
+  items: AskPendingWorkItem[];
+  loadingId: string | null;
+  dismissingId: string | null;
+  onResume: (item: AskPendingWorkItem) => void;
+  onDismiss: (item: AskPendingWorkItem) => void;
+}) {
   if (!items.length) return null;
   return (
-    <section className="mx-auto mb-6 max-w-3xl rounded-2xl border border-indigo-200 bg-indigo-50/80 p-4" aria-labelledby="ask-pending-title">
-      <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-700 text-white"><Clock3 className="h-5 w-5" /></span><div><h2 id="ask-pending-title" className="font-semibold text-slate-950">Continue where you left off</h2><p className="mt-1 text-sm text-slate-600">Pending requests for this home are stored securely with your account and can be resumed on another device.</p></div></div>
-      <ul className="mt-4 space-y-2">{items.map((item) => <li key={item.execution.executionId} className="flex flex-col gap-3 rounded-xl border border-indigo-100 bg-white p-3 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{item.execution.question}</p><p className="mt-1 text-xs text-slate-500">{item.pendingKind.toLowerCase().replace(/_/g, ' ')} · Updated {new Date(item.execution.updatedAt).toLocaleString()}</p></div><button type="button" disabled={Boolean(loadingId)} onClick={() => onResume(item)} className="min-h-10 shrink-0 rounded-xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{loadingId === item.execution.executionId ? 'Opening…' : item.actionLabel}</button></li>)}</ul>
+    <section className="mx-auto mb-5 max-w-3xl rounded-2xl border border-indigo-200 bg-indigo-50/60 p-3" aria-labelledby="ask-pending-title">
+      <div className="flex items-center gap-2"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-indigo-700 text-white"><Clock3 className="h-3.5 w-3.5" /></span><div><h2 id="ask-pending-title" className="text-sm font-semibold text-slate-950">Pending Ask actions</h2><p className="text-xs text-slate-600">Unfinished actions that still need your input.</p></div></div>
+      <ul className="mt-3 divide-y divide-indigo-100 overflow-hidden rounded-xl border border-indigo-100 bg-white">{items.slice(0, 3).map((item) => {
+        const actionBusy = loadingId === item.execution.executionId || dismissingId === item.execution.executionId;
+        const canDismiss = item.pendingKind !== 'COMMAND_RECOVERY';
+        return <li key={item.execution.executionId} className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{item.execution.question}</p><p className="mt-0.5 text-[11px] text-slate-500">{item.pendingKind.toLowerCase().replace(/_/g, ' ')} · {new Date(item.execution.updatedAt).toLocaleString()}</p></div><div className="flex shrink-0 items-center gap-1.5">{canDismiss && <button type="button" disabled={Boolean(loadingId || dismissingId)} onClick={() => onDismiss(item)} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{dismissingId === item.execution.executionId ? 'Dismissing…' : item.pendingKind === 'CONFIRMATION' ? 'Cancel' : 'Dismiss'}</button>}<button type="button" disabled={Boolean(loadingId || dismissingId)} onClick={() => onResume(item)} className="min-h-9 rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{loadingId === item.execution.executionId ? 'Opening…' : actionBusy ? 'Please wait…' : item.actionLabel}</button></div></li>;
+      })}</ul>
     </section>
   );
 }
@@ -1255,6 +1265,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [pendingWork, setPendingWork] = useState<AskPendingWorkItem[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [continuingId, setContinuingId] = useState<string | null>(null);
+  const [dismissingPendingId, setDismissingPendingId] = useState<string | null>(null);
   const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [availabilityEpoch, setAvailabilityEpoch] = useState(0);
   const [recentSessions, setRecentSessions] = useState<AskRecentSessionSummary[]>([]);
@@ -1540,6 +1551,22 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } finally { setHistoryLoading(false); setContinuingId(null); }
   };
 
+  const dismissPendingWork = async (item: AskPendingWorkItem) => {
+    if (continuingId || dismissingPendingId || loading || item.pendingKind === 'COMMAND_RECOVERY') return;
+    setDismissingPendingId(item.execution.executionId);
+    setError(null);
+    try {
+      const response = await api.cancelAskExecution(item.execution.executionId);
+      if (!response.success || !response.data || response.data.status !== 'CANCELLED') throw new Error(response.message || 'Could not dismiss this pending action.');
+      setPendingWork((current) => current.filter((pending) => pending.execution.executionId !== item.execution.executionId));
+      setRecentSessionsEpoch((current) => current + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not dismiss this pending action.');
+    } finally {
+      setDismissingPendingId(null);
+    }
+  };
+
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId);
   const personalizedFeaturedPrompts = concierge.view ? visibleConciergeFeaturedPrompts(concierge.view) : [];
@@ -1620,13 +1647,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                 onSelect={(prompt) => runPrompt(prompt, 'EXPLORER')}
               />
             </section>
-            <div className="mt-8"><PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} onResume={(item) => void resumePendingWork(item)} /></div>
+            <div className="mt-8"><PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} /></div>
             {pendingLoading && <p className="mt-4 text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
             <ConciergeHome propertyId={selectedPropertyId} view={concierge.view} loading={concierge.loading} failed={concierge.failed} onAsk={(prompt, source) => runPrompt(prompt, source)} />
           </div>
         ) : (
           <div className="mx-auto max-w-3xl space-y-7">
-            <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} onResume={(item) => void resumePendingWork(item)} />
+            <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} />
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
             {executions.map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });

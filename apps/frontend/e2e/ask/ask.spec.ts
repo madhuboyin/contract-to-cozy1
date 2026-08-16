@@ -62,6 +62,18 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await expect(page.getByRole('button', { name: 'New Ask Cozy session' })).toBeVisible();
 });
 
+test('pending Ask actions stay compact and can be dismissed before execution', async ({ page }) => {
+  await installAskApi(page, { pendingWork: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+
+  const pending = page.getByRole('region', { name: 'Pending Ask actions' });
+  await expect(pending).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Continue where you left off' })).toHaveCount(0);
+  await expect(pending.getByText('I want to create a maintenance task')).toBeVisible();
+  await pending.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(pending).toHaveCount(0);
+});
+
 test('degraded personalization falls back to property-safe capability examples', async ({ page }) => {
   await installAskApi(page);
   await page.unroute('http://localhost:8080/api/ask/concierge-home*');

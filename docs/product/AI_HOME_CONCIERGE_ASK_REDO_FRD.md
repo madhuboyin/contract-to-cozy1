@@ -1315,10 +1315,11 @@ Introduce durable execution records. Suggested conceptual models:
 - Recent sessions are ordered by last activity and show a short title, last-active time, latest status, and question count.
 - Selecting a recent session explicitly restores its conversation context. Starting a new conversation preserves previous sessions rather than deleting them.
 - Notification links, pending-action continuations, and other explicit session links continue to restore the referenced session directly.
-- Pending clarification, capture, confirmation, and command-recovery work remains a separate resumable surface and is not limited by the recent-conversation presentation window.
+- Pending clarification, entity selection, context capture, confirmation, and command-recovery work remains a separate resumable surface and is not limited by the recent-conversation presentation window.
+- The pending-action surface is compact, is labeled `Pending Ask actions`, and shows no more than the three newest actionable, unexpired items. Pre-execution items may be dismissed or cancelled with an explicit `CANCELLED` execution outcome and no domain mutation. Work whose command may already be `RUNNING` cannot be dismissed from this surface.
 - Switching homes never silently carries conversational context from the previously selected home.
 
-**Implementation status — August 15, 2026:** Implemented using the existing `AskSession` title and `lastActiveAt` fields; no schema migration is required. `GET /api/ask/sessions/recent?propertyId=...` applies current property authorization, a rolling seven-day cutoff, and a five-session limit. The Ask Workspace creates a new client session on ordinary entry while retaining explicit deep-link and pending-work restoration.
+**Implementation status — August 16, 2026:** Implemented using the existing `AskSession` title and `lastActiveAt` fields; no schema migration is required. `GET /api/ask/sessions/recent?propertyId=...` applies current property authorization, a rolling seven-day cutoff, and a five-session limit. The Ask Workspace creates a new client session on ordinary entry while retaining explicit deep-link and pending-work restoration. Pending work is independently limited to three rendered items and supports safe pre-execution dismissal.
 
 ## 25. Authorization, privacy, security, and audit
 

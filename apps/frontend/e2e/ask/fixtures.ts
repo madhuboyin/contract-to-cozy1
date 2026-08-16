@@ -92,14 +92,21 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; pendingWork?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
   let captureAttempts = 0;
+  let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
   await page.route(`${apiOrigin}/api/properties*`, (route) => fulfill(route, { success: true, data: { properties: [{ id: propertyId, name: 'Acceptance Home', addressLine1: '1 Cozy Way', city: 'Boston', state: 'MA', zipCode: '02108' }] } }));
-  await page.route(`${apiOrigin}/api/ask/pending*`, (route) => fulfill(route, { success: true, data: { items: [] } }));
+  await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
+    const pendingExecution = {
+      ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',
+      question: 'I want to create a maintenance task', updatedAt: new Date().toISOString(),
+    };
+    return fulfill(route, { success: true, data: { items: options.pendingWork && !pendingDismissed ? [{ pendingKind: 'CONTEXT_CAPTURE', actionLabel: 'Add the missing detail', execution: pendingExecution }] : [] } });
+  });
   await page.route(`${apiOrigin}/api/ask/concierge-home*`, (route) => fulfill(route, { success: true, data: {
     propertyId, generatedAt: new Date().toISOString(),
     priorityList: {
@@ -188,6 +195,16 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       return;
     }
     await fulfill(route, { success: true, data: execution(body.captureKey === 'FINANCING_PROFILE_REFINANCE_INPUTS' ? 'refinance' : 'refrigerator', true) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-pending-maintenance/cancel`, (route) => {
+    pendingDismissed = true;
+    const cancelled = {
+      ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',
+      question: 'I want to create a maintenance task', status: 'CANCELLED', captureRequests: [],
+      blocks: [{ type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed', body: 'No action was performed.', tone: 'DEFAULT', actions: [] }],
+      updatedAt: new Date().toISOString(),
+    };
+    return fulfill(route, { success: true, data: cancelled });
   });
   return { captureBodies, executionQuestions, executionBodies, captureAttempts: () => captureAttempts };
 }

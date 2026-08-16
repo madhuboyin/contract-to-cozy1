@@ -7014,8 +7014,8 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     // this per-operation validation ran. Without this, any freshness/
     // validation failure here (e.g. ASK_CONTEXT_VERSION_CONFLICT) left the
     // execution stuck at RUNNING forever: expirePendingInteraction() is a
-    // no-op for RUNNING, cancelAskExecution() only acts on
-    // NEEDS_CONFIRMATION, and a retry after the lease expires just re-reads
+    // no-op for RUNNING, cancelAskExecution() never acts on a command that
+    // may already be running, and a retry after the lease expires just re-reads
     // the same stale parametersJson and fails identically, indefinitely.
     // Release the claim and land on the same "ask again" terminal state
     // already used for confirmation expiry, so the homeowner has an actual
@@ -7091,8 +7091,33 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
   await prisma.askSession.update({ where: { id: execution.sessionId }, data: { lastActiveAt: new Date() } });
-  if (execution.status !== 'NEEDS_CONFIRMATION') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+  if (execution.status !== 'NEEDS_CONFIRMATION') {
+    if (!INTERACTIVE_ASK_STATUSES.includes(execution.status)) return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    const cancelled = await prisma.askExecution.updateMany({
+      where: { id: execution.id, userId, status: execution.status },
+      data: {
+        status: 'CANCELLED', reasonCode: 'USER_DISMISSED_PENDING_REQUEST',
+        resultJson: asInputJson({
+          schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+          blocks: [{
+            type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed',
+            body: 'No action was performed. You can ask the question again whenever you are ready.', tone: 'DEFAULT', actions: [],
+          }],
+          captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask a new question'],
+        }),
+        completedAt: new Date(),
+      },
+    });
+    if (cancelled.count !== 1) {
+      const current = await prisma.askExecution.findFirstOrThrow({ where: { id: execution.id, userId } });
+      return mapPersistedExecution(current, await propertySummary(current.propertyId));
+    }
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CANCELLED', metadataJson: asInputJson({ reason: 'USER_DISMISSED_PENDING_REQUEST', previousStatus: execution.status }) } });
+    const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+    return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+  }
   const command = getAskDomainCommandByOperation(execution.operationId ?? '');
   if (!command || !command.supportsCancelBeforeExecution) {
     const error = new Error('This execution does not have an active cancellable command.');
@@ -7105,8 +7130,8 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     body: command.cancellation.body,
     tone: 'DEFAULT', actions: [],
   }];
-  const saved = await prisma.askExecution.update({
-    where: { id: execution.id },
+  const cancelled = await prisma.askExecution.updateMany({
+    where: { id: execution.id, userId, status: 'NEEDS_CONFIRMATION' },
     data: {
       status: 'CANCELLED', reasonCode: 'USER_CANCELLED',
       resultJson: asInputJson({
@@ -7120,7 +7145,12 @@ export async function cancelAskExecution(userId: string, executionId: string): P
       completedAt: new Date(),
     },
   });
+  if (cancelled.count !== 1) {
+    const current = await prisma.askExecution.findFirstOrThrow({ where: { id: execution.id, userId } });
+    return mapPersistedExecution(current, await propertySummary(current.propertyId));
+  }
   await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CANCELLED' } });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
@@ -7327,6 +7357,7 @@ export async function getAskPendingWork(userId: string, propertyId: string | nul
       actionLabel: pendingActionLabel(current.status),
       execution: mapPersistedExecution(current, property),
     });
+    if (items.length === 3) break;
   }
   return items;
 }

@@ -3,7 +3,7 @@
 **Product:** ContractToCozy — Ask Cozy
 **Document type:** Manual Testing and Release-Certification Addendum
 **Status:** Living document
-**Version:** 1.5
+**Version:** 1.6
 **Date:** August 15, 2026
 **Parent:** `AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md`
 
@@ -269,7 +269,9 @@ Every fixed prompt and every dynamic-template representative shall be exercised 
 | Start a new conversation | The current transcript leaves the workspace without being deleted and becomes eligible for the recent-session list |
 | Session older than seven days | It is absent from the recent-session list without changing backend retention or canonical artifacts |
 | Switch selected home | No transcript or context from the previous home is carried into the new home |
-| Pending consequential workflow | It remains available in the pending-work surface independently of the five-session/seven-day recent list |
+| Pending consequential workflow | It remains available in the compact `Pending Ask actions` surface independently of the five-session/seven-day recent list; no more than three actionable, unexpired items are shown |
+| Dismiss pending pre-execution work | Clarification, entity, context, property-selection, or confirmation work becomes `CANCELLED`, disappears from the surface, and performs no domain mutation |
+| Running command recovery | It remains resumable but has no dismiss control because execution status may be uncertain |
 | Delete current conversation | The session disappears while domain records and artifacts created through Ask remain unchanged |
 
 ## 6. Cross-cutting manual assertions
@@ -350,3 +352,4 @@ The generic repair-or-replace prompt intentionally lacks an entity and currently
 | 1.3 | August 15, 2026 | Expanded the incomplete-inventory regression from one synthetic item to the exact first-party prompt across empty, no-match, multi-item, synthesized-summary, and post-clarification canonical result shapes |
 | 1.4 | August 15, 2026 | Added the exact lifecycle inventory suggestion across empty, no-match, matched-record, and post-clarification outcomes; required focus-specific typed answer validation |
 | 1.5 | August 15, 2026 | Added fresh-by-default Ask sessions, explicit restoration of the five most recent sessions within a rolling seven-day window, home isolation, deep-link behavior, and pending-work independence |
+| 1.6 | August 16, 2026 | Replaced the prominent continuation card with a compact three-item `Pending Ask actions` surface and added safe dismissal for pre-execution workflows while preserving non-dismissible running-command recovery |
