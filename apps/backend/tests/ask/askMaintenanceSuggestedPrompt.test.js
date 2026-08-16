@@ -14,6 +14,7 @@ const {
 } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 
 const QUESTION = 'List pending maintenance tasks';
+const DUE_THIS_MONTH_QUESTION = 'What maintenance tasks are due this month?';
 
 function canonicalMaintenanceResult() {
   return {
@@ -36,6 +37,12 @@ function canonicalMaintenanceResult() {
 
 test('the exact first-party pending-maintenance suggestion routes directly', () => {
   const routing = resolveAskRoutingCascade(QUESTION);
+  assert.equal(routing.operation.operationId, 'MAINTENANCE_STATUS');
+  assert.equal(routing.requiresClarification, false);
+});
+
+test('the exact first-party due-this-month suggestion routes directly', () => {
+  const routing = resolveAskRoutingCascade(DUE_THIS_MONTH_QUESTION);
   assert.equal(routing.operation.operationId, 'MAINTENANCE_STATUS');
   assert.equal(routing.requiresClarification, false);
 });
@@ -64,6 +71,47 @@ test('canonical maintenance results pass typed relevance before and after explic
   assert.equal(afterClarification.semantic.outcome, 'PASS');
   assert.equal(afterClarification.result.status, 'ANSWERED');
   assert.notEqual(afterClarification.result.reasonCode, 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION');
+});
+
+test('record-owned enum-like maintenance titles do not invalidate the answer', () => {
+  const result = canonicalMaintenanceResult();
+  result.blocks[1].sections[0].items.push({
+    id: 'task-1',
+    title: 'HVAC_FILTER_CHANGE',
+    description: 'Replace the filter this month.',
+    meta: ['HVAC_SYSTEM'],
+    status: 'PENDING',
+    href: '/dashboard/maintenance?propertyId=property-1&taskId=task-1',
+  });
+  const validation = validateAskAnswerTrustPipeline({
+    question: DUE_THIS_MONTH_QUESTION,
+    operationId: 'MAINTENANCE_STATUS',
+    propertyId: 'property-1',
+    semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(
+      result,
+      [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')],
+    ),
+  });
+  assert.equal(validation.trust.outcome, 'PASS');
+  assert.equal(validation.result.status, 'ANSWERED');
+});
+
+test('internal tokens in Ask-authored maintenance narrative remain blocked', () => {
+  const result = canonicalMaintenanceResult();
+  result.blocks[0].body = 'The MAINTENANCE_STATUS adapter returned two tasks.';
+  const validation = validateAskAnswerTrustPipeline({
+    question: DUE_THIS_MONTH_QUESTION,
+    operationId: 'MAINTENANCE_STATUS',
+    propertyId: 'property-1',
+    semanticEnabled: false,
+    result: attachAskAuthoritativeSourceEvidence(
+      result,
+      [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')],
+    ),
+  });
+  assert.equal(validation.trust.outcome, 'BLOCK');
+  assert.equal(validation.result.reasonCode, 'ASK_ANSWER_TRUST_FAILED');
 });
 
 test('typed maintenance contract rejects unrelated result blocks', () => {

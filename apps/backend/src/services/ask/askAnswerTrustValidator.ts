@@ -48,6 +48,29 @@ function visibleText(block: AskPresentationBlock): string {
   return parts.join(' ');
 }
 
+/**
+ * Internal implementation tokens are unsafe when they leak through copy that
+ * Ask authors. Canonical record values are different: homeowners can
+ * legitimately store titles, labels, model numbers, and source names that
+ * resemble an enum (for example, `HVAC_FILTER_CHANGE`). Those values must not
+ * invalidate an otherwise trustworthy record query.
+ */
+function authoredPresentationText(block: AskPresentationBlock): string {
+  if (block.type === 'GROUPED_LIST') {
+    return [
+      block.title,
+      block.description,
+      ...block.sections.map((section) => section.title),
+    ].filter(Boolean).join(' ');
+  }
+  if (block.type === 'EVIDENCE') return block.title;
+  if (block.type === 'TABLE') {
+    return [block.title, block.description, ...block.columns.map((column) => column.label)]
+      .filter(Boolean).join(' ');
+  }
+  return visibleText(block);
+}
+
 function operationSpecificFirstBlock(operationId: AskOperationId, blocks: AskPresentationBlock[]): boolean {
   const first = blocks[0];
   if (!first) return false;
@@ -96,7 +119,7 @@ export function validateAskAnswerTrust(input: {
   const text = blocks.map(visibleText).join(' ');
   const hasAbsenceClaim = ABSENCE_CLAIM.test(text);
   const absenceSupported = !hasAbsenceClaim || source === 'COMPLETE';
-  const hasInternalToken = INTERNAL_TOKEN.test(text);
+  const hasInternalToken = INTERNAL_TOKEN.test(blocks.map(authoredPresentationText).join(' '));
   const householdRole = householdRoleFromResult(input.result);
   const actionApplicable = (action: ReturnType<typeof actionsForAskBlock>[number]) => isAskActionApplicable({
     action, operationId: input.operationId, propertyId: input.propertyId, householdRole,
