@@ -3,7 +3,7 @@
 **Product:** ContractToCozy — Ask Cozy
 **Document type:** Manual Testing and Release-Certification Addendum
 **Status:** Living document
-**Version:** 1.0
+**Version:** 1.4
 **Date:** August 15, 2026
 **Parent:** `AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md`
 
@@ -62,6 +62,7 @@ Dynamic prompts cannot be exhaustively enumerated because record titles and enti
 | [ ] | Give me a summary of this home record. | `PROPERTY_SUMMARY` |
 | [ ] | Show missing inventory details. | `INVENTORY_LOOKUP` |
 | [ ] | Show incomplete inventory records. | `INVENTORY_LOOKUP` |
+| [ ] | Which systems are nearing end of life? | `INVENTORY_LOOKUP`; directly returns recorded lifecycle matches or a truthful no-match/empty-record answer without clarification. |
 
 Expected behavior:
 
@@ -333,3 +334,4 @@ The generic repair-or-replace prompt intentionally lacks an entity and currently
 | 1.1 | August 15, 2026 | Added the missing-inventory response suggestion and its post-capture/clarification continuation as a release-blocking regression scenario |
 | 1.2 | August 15, 2026 | Recorded local remediation of the capital-reserve and general home-deadline routing failures; retained both as deployed manual-verification rows |
 | 1.3 | August 15, 2026 | Expanded the incomplete-inventory regression from one synthetic item to the exact first-party prompt across empty, no-match, multi-item, synthesized-summary, and post-clarification canonical result shapes |
+| 1.4 | August 15, 2026 | Added the exact lifecycle inventory suggestion across empty, no-match, matched-record, and post-clarification outcomes; required focus-specific typed answer validation |

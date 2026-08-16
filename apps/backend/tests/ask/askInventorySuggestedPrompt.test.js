@@ -3,7 +3,12 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { isIncompleteInventoryRequest, matchesIncompleteInventoryAnswerContract } = require('../../src/services/ask/askInventoryIntent.ts');
+const {
+  isIncompleteInventoryRequest,
+  isLifecycleInventoryRequest,
+  matchesIncompleteInventoryAnswerContract,
+  matchesInventoryAnswerContract,
+} = require('../../src/services/ask/askInventoryIntent.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
 const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
@@ -14,6 +19,7 @@ const {
 
 const QUESTION = 'Show missing inventory details';
 const FIRST_PARTY_QUESTION = 'Show incomplete inventory records';
+const LIFECYCLE_QUESTION = 'Which systems are nearing end of life?';
 
 test('first-party missing-inventory suggestion binds to incomplete inventory intent', () => {
   assert.equal(isIncompleteInventoryRequest(QUESTION), true);
@@ -22,6 +28,15 @@ test('first-party missing-inventory suggestion binds to incomplete inventory int
   assert.equal(isIncompleteInventoryRequest('List all appliances'), false);
 
   const routing = resolveAskRoutingCascade(QUESTION);
+  assert.equal(routing.operation.operationId, 'INVENTORY_LOOKUP');
+  assert.equal(routing.requiresClarification, false);
+});
+
+test('first-party lifecycle suggestion binds to lifecycle inventory intent and routes directly', () => {
+  assert.equal(isLifecycleInventoryRequest(LIFECYCLE_QUESTION), true);
+  assert.equal(isLifecycleInventoryRequest('List all appliances'), false);
+
+  const routing = resolveAskRoutingCascade(LIFECYCLE_QUESTION);
   assert.equal(routing.operation.operationId, 'INVENTORY_LOOKUP');
   assert.equal(routing.requiresClarification, false);
 });
@@ -69,6 +84,64 @@ test('incomplete inventory answer passes semantic relevance for the first-party 
   assert.equal(afterClarification.semantic.outcome, 'PASS');
   assert.equal(afterClarification.result.status, 'READY_WITH_LIMITATIONS');
   assert.notEqual(afterClarification.result.reasonCode, 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION');
+});
+
+test('exact lifecycle suggestion accepts every canonical lifecycle result shape before and after clarification', () => {
+  const canonicalResults = [{
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'INVENTORY_NOT_RECORDED',
+    blocks: [{
+      type: 'SUMMARY', id: 'inventory-empty', title: 'No inventory items are recorded for this home yet',
+      body: 'No recorded items are available for lifecycle review.', tone: 'CAUTION', actions: [],
+    }], suggestions: [],
+  }, {
+    status: 'ANSWERED', reasonCode: 'INVENTORY_MATCH_NOT_FOUND',
+    blocks: [{
+      type: 'SUMMARY', id: 'inventory-no-match',
+      title: 'I could not find items with a recorded end-of-life date in the next three years',
+      body: 'Existing items do not have a matching recorded lifecycle date.', tone: 'DEFAULT', actions: [],
+    }], suggestions: [],
+  }, {
+    status: 'ANSWERED',
+    blocks: [{
+      type: 'SUMMARY', id: 'inventory-summary', title: '2 inventory records match this request',
+      body: 'The matching records are listed below.', tone: 'DEFAULT', actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'inventory-results', title: 'Recorded lifecycle dates approaching',
+      description: 'Only recorded dates are used.',
+      sections: [{ id: 'items', title: 'Living Home Record', count: 2, items: [] }], actions: [],
+    }], suggestions: [],
+  }];
+
+  for (const result of canonicalResults) {
+    assert.equal(matchesInventoryAnswerContract(LIFECYCLE_QUESTION, result), true);
+    const initial = validateAskSemanticAnswerRelevance({
+      question: LIFECYCLE_QUESTION, operationId: 'INVENTORY_LOOKUP', result,
+    });
+    assert.equal(initial.outcome, 'PASS');
+    assert.deepEqual(initial.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
+
+    const afterClarification = validateAskAnswerTrustPipeline({
+      question: `${LIFECYCLE_QUESTION}\nClarification: look up appliance, system, or equipment details`,
+      operationId: 'INVENTORY_LOOKUP', propertyId: 'property-1', semanticEnabled: true, recoveryAttempted: true,
+      result: attachAskAuthoritativeSourceEvidence(
+        result,
+        [completedAskAuthoritativeSourceEvidence('INVENTORY_LOOKUP')],
+      ),
+    });
+    assert.equal(afterClarification.semantic.outcome, 'PASS');
+    assert.notEqual(afterClarification.result.reasonCode, 'ASK_ANSWER_RELEVANCE_UNRESOLVED_AFTER_CLARIFICATION');
+  }
+});
+
+test('inventory canonical contract does not accept a response for the wrong inventory focus', () => {
+  const incompleteResult = {
+    status: 'ANSWERED',
+    blocks: [{
+      type: 'GROUPED_LIST', id: 'inventory-results', title: 'Incomplete inventory records',
+      sections: [{ id: 'items', title: 'Living Home Record', count: 1, items: [] }], actions: [],
+    }], suggestions: [],
+  };
+  assert.equal(matchesInventoryAnswerContract(LIFECYCLE_QUESTION, incompleteResult), false);
 });
 
 test('exact first-party prompt accepts every canonical incomplete-inventory result shape after synthesis and clarification', () => {

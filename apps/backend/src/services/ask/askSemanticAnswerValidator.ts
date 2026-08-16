@@ -3,9 +3,9 @@ import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './ask
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import { askEmbeddingCosine, embedAskSemanticText } from './askSemanticEmbedding';
 import { projectAskSemanticResponse } from './askSemanticResponseProjection';
-import { isIncompleteInventoryRequest, matchesIncompleteInventoryAnswerContract } from './askInventoryIntent';
+import { matchesInventoryAnswerContract } from './askInventoryIntent';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.1';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.2';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -65,8 +65,7 @@ export function validateAskSemanticAnswerRelevance(input: {
     });
   }
   if (input.operationId === 'INVENTORY_LOOKUP'
-    && isIncompleteInventoryRequest(input.question)
-    && matchesIncompleteInventoryAnswerContract(input.result)) {
+    && matchesInventoryAnswerContract(input.question, input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,

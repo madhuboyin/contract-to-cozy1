@@ -10,6 +10,8 @@ const INCOMPLETE_INVENTORY_PATTERNS = [
   new RegExp(`\\b${INVENTORY_SUBJECT}\\s+needs?\\s+(?:${DETAIL_SUBJECT}|completion)\\b`, 'i'),
 ] as const;
 
+const LIFECYCLE_INVENTORY_PATTERN = /\b(?:end of life|nearing (?:replacement|expiry)|expir(?:e|y|ing)|oldest systems?)\b/i;
+
 /**
  * Recognizes incomplete-inventory intent independently of word order so
  * first-party prompts and ordinary homeowner paraphrases use the same
@@ -17,6 +19,10 @@ const INCOMPLETE_INVENTORY_PATTERNS = [
  */
 export function isIncompleteInventoryRequest(message: string): boolean {
   return INCOMPLETE_INVENTORY_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+export function isLifecycleInventoryRequest(message: string): boolean {
+  return LIFECYCLE_INVENTORY_PATTERN.test(message);
 }
 
 /**
@@ -40,5 +46,47 @@ export function matchesIncompleteInventoryAnswerContract(result: AskOperationRes
     block.type === 'GROUPED_LIST'
       && block.id === 'inventory-results'
       && /incomplete inventory records/i.test(block.title)
+  ));
+}
+
+/**
+ * Validates the stable, adapter-owned inventory response contract for the
+ * requested focus. This deliberately checks typed block identity and focus-
+ * specific titles instead of trusting arbitrary inventory-shaped prose.
+ */
+export function matchesInventoryAnswerContract(question: string, result: AskOperationResult): boolean {
+  if (!['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status)) return false;
+
+  const empty = result.blocks.some((block) => (
+    block.type === 'SUMMARY'
+      && block.id === 'inventory-empty'
+      && /no inventory items are recorded/i.test(block.title)
+  ));
+  if (empty) return true;
+
+  if (isIncompleteInventoryRequest(question)) {
+    return matchesIncompleteInventoryAnswerContract(result);
+  }
+
+  if (isLifecycleInventoryRequest(question)) {
+    return result.blocks.some((block) => (
+      block.type === 'SUMMARY'
+        && block.id === 'inventory-no-match'
+        && /items with a recorded end-of-life date in the next three years/i.test(block.title)
+    ) || (
+      block.type === 'GROUPED_LIST'
+        && block.id === 'inventory-results'
+        && /recorded lifecycle dates approaching/i.test(block.title)
+    ));
+  }
+
+  return result.blocks.some((block) => (
+    block.type === 'SUMMARY'
+      && block.id === 'inventory-no-match'
+      && /matching inventory record/i.test(block.title)
+  ) || (
+    block.type === 'GROUPED_LIST'
+      && block.id === 'inventory-results'
+      && /inventory details/i.test(block.title)
   ));
 }
