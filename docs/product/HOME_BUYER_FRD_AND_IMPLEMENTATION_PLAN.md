@@ -12,15 +12,18 @@
 ## 1. Executive summary
 
 ContractToCozy shall provide a premium, continuous home-buyer experience that
-begins when a homeowner account is shopping for or purchasing a property and
+begins when a consumer account is shopping for or purchasing a property and
 continues through due diligence, closing, move-in, the first 90 days, and normal
 homeownership.
 
-A buyer is a guaranteed `HOMEOWNER` account. Buyer is not a reduced account
-role and shall not become a new `UserRole` enum. Buying is a property-scoped
-journey derived from canonical entry context, ownership state, an active buyer
-plan, and the user's property access. The same person may own one home while
-buying another.
+A buyer is a possible future homeowner, not a guaranteed property owner. The
+platform may represent the consumer with the existing `HOMEOWNER` account role,
+but that technical role must not imply that the purchase will close. Buyer is
+not a reduced account role and shall not become a new `UserRole` enum. Buying is
+a property-scoped journey derived from canonical entry context, ownership
+state, an active buyer plan, and the user's property access. The same person may
+own one home while buying another, and an active purchase may be paused,
+cancelled, or abandoned without becoming an owned property.
 
 The product promise is:
 
@@ -35,9 +38,13 @@ and post-close setup. Ask Cozy shall understand the exact buyer stage and offer
 buyer-specific prompts and operations grounded in the selected property's
 records.
 
-The experience must feel like the best expression of ContractToCozy. A
-successful buyer is likely to invite a co-buyer, agent, family member, or future
-home buyer and therefore acts as a natural marketing advocate for the product.
+The experience must feel like the best expression of ContractToCozy. Buyers are
+high-intent acquisition users with unusually low tolerance for friction because
+they are already navigating a stressful, deadline-driven transaction. A broken
+link, confusing status, repeated question, slow workflow, or missing next step
+can cause immediate abandonment. When the experience consistently reduces that
+stress, a buyer is likely to invite a co-buyer, agent, family member, or future
+home buyer and may become a strong organic advocate for the product.
 
 ---
 
@@ -75,6 +82,8 @@ committed.
 ### 3.1 Account identity
 
 - Account role remains `HOMEOWNER`.
+- `HOMEOWNER` is the platform's consumer account classification; it is not a
+  factual claim that an active buyer owns the selected property.
 - A buyer receives the complete homeowner application and is never routed into
   a restricted mini-product.
 - Property permissions remain `OWNER`, `CONTRIBUTOR`, and `VIEWER`.
@@ -223,6 +232,30 @@ Closing, inspection review, move-in, and 90-day handoff deserve polished
 celebration states. Safety findings, legal deadlines, coverage gaps, and
 uncertain evidence shall remain clear and serious.
 
+### 5.9 Near-zero friction is a retention requirement
+
+Buyer friction is a product failure, not cosmetic inconvenience. The primary
+journey shall minimize required input, page transitions, redirects, repeated
+questions, loading states, and unclear decisions. Every buyer surface must make
+the next useful action obvious, preserve entered data, recover safely from
+errors, and allow the user to leave and resume without reconstructing context.
+
+The experience shall specifically prevent:
+
+- asking for information already recorded elsewhere;
+- requiring unknown transaction details before the buyer can receive value;
+- routing through global pages that must rediscover the property;
+- exposing an API capability without an understandable UI path;
+- showing generic homeowner content ahead of urgent buyer work;
+- losing draft input after upload, validation, network, or provider failure;
+- forcing the user to understand internal terms such as orchestration,
+  disposition, lineage, or handoff; and
+- presenting an error without a recovery action.
+
+The buyer must receive useful first value in the initial session even when the
+address lookup, inspection report, closing date, or external AI provider is
+unavailable.
+
 ---
 
 ## 6. Personas and jobs to be done
@@ -251,12 +284,14 @@ and post-close obligations without unsupported legal or financial conclusions.
 Needs speed, editable templates, bulk actions, concise status, and reliable
 evidence lineage.
 
-### 6.6 Natural advocate
+### 6.6 High-intent acquisition and advocacy user
 
-After receiving visible value, needs a tasteful way to invite a co-buyer,
-recommend ContractToCozy, or carry the Home Record into long-term ownership.
-Referral actions shall be optional and appear only after a meaningful success
-moment.
+The buyer may never complete the purchase and must receive standalone value
+before ownership. If the experience is fast, calm, and dependable, the buyer is
+well positioned to invite a co-buyer, recommend ContractToCozy, or carry the
+Home Record into long-term ownership. Referral actions shall be optional and
+appear only after a meaningful success moment. Advocacy is an earned outcome,
+not an assumption about the user.
 
 ---
 
@@ -1448,6 +1483,19 @@ Key product measures before real-user learning:
 - no buyer mutation available above the user's property permission;
 - no unresolved task silently lost during handoff.
 
+Buyer-friction measures to instrument from the first usable build:
+
+- time from sign-in to first buyer-specific value;
+- time and click count from Home to the next buyer action;
+- buyer-plan load and mutation failure rate;
+- address lookup fallback completion rate;
+- upload retry and recovery rate;
+- repeated-field prompt count;
+- dead-end/empty-state exits;
+- journey resume success after session interruption;
+- abandonment before first plan open; and
+- abandonment after an error or failed redirect.
+
 ---
 
 ## 21. Implementation plan
@@ -1841,4 +1889,5 @@ contracts and canonical ownership defined by this FRD.
 | `HB-LIFE-001` | Pause/cancel stops reminders and prevents recurring handoff | 7.9, 16.2 |
 | `HB-LIFE-002` | Closing and day-90 handoff preserve history and strand no unresolved obligation | 7.7–7.8, Slice 7 |
 | `HB-UX-001` | The complete buyer journey is responsive, accessible, fast, and reliable | 19 |
+| `HB-UX-002` | Buyer flows minimize input and clicks, preserve context, recover from errors, and deliver first-session value even with missing data | 5.9, 7, 8, 19 |
 | `HB-ADV-001` | Advocacy prompts appear only after meaningful value and never interrupt urgent work | 14.11, Slice 7 |
