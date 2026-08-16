@@ -148,7 +148,7 @@ export function validateAskSemanticContract(contract: AskOperationSemanticContra
   if (contract.positiveExamples.length < 2) issues.push('requires at least two positive examples');
   if (contract.hardNegativeExamples.length < 1) issues.push('requires at least one hard negative');
   if (contract.answerPositiveExamples.length < 1) issues.push('requires at least one answer positive');
-  if (!Array.isArray(contract.answerHardNegativeExamples)) issues.push('missing answer hard negatives');
+  if (contract.answerHardNegativeExamples.length < 1) issues.push('requires at least one answer hard negative');
   if (!contract.supportedLanguages.includes('en')) issues.push('English support must be declared');
   for (const language of contract.supportedLanguages) {
     const registration = getAskLanguageRegistration(language);
@@ -166,7 +166,7 @@ export function validateAskSemanticContract(contract: AskOperationSemanticContra
     if (pack.positiveExamples.length < 2) issues.push(`${language}: requires at least two positive examples`);
     if (pack.hardNegativeExamples.length < 1) issues.push(`${language}: requires at least one hard negative`);
     if (pack.answerPositiveExamples.length < 1) issues.push(`${language}: requires at least one answer positive`);
-    if (!Array.isArray(pack.answerHardNegativeExamples)) issues.push(`${language}: missing answer hard negatives`);
+    if (pack.answerHardNegativeExamples.length < 1) issues.push(`${language}: requires at least one answer hard negative`);
     if (!pack.clarificationPromptKey.trim()) issues.push(`${language}: missing clarification prompt key`);
   }
   for (const language of Object.keys(contract.languagePacks)) {

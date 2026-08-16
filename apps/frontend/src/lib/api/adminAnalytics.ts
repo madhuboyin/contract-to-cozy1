@@ -40,9 +40,74 @@ export interface AdminAskTrustLearningResponse {
     fixtureKey: string; operationId: string; language: string; category: string; reasonCode: string;
     occurrences: number; reviewStatus: 'NEEDS_REVIEW';
   }>;
+  registeredOperationIds: string[];
   versionLineage: Array<{ language: string; semanticIndexVersion: string; semanticContractVersion: string; classifierMode: string; count: number }>;
   alerts: Array<{ severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'; code: string; count: number; action: string }>;
   controls: { recommendationsAreAdvisory: true; automaticThresholdMutation: false; rawTextFixturePromotion: false };
+}
+
+export type AdminAskTrustReviewStatus = 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED' | 'PROMOTED';
+
+export interface AdminAskTrustReviewCandidate {
+  id: string;
+  fixtureKey: string;
+  datasetVersion: string;
+  operationId: string;
+  language: string;
+  category: string;
+  reasonCode: string;
+  occurrences: number;
+  reviewStatus: AdminAskTrustReviewStatus;
+  expectedOperationId: string | null;
+  reviewedQuestion: string | null;
+  reviewNotes: string | null;
+  reviewerId: string | null;
+  reviewedAt: string | null;
+  promotedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminAskTrustRegressionCorpus {
+  schemaVersion: '1.0';
+  datasetVersion: string;
+  fixtures: Array<{
+    fixtureId: string;
+    operationId: string;
+    message: string;
+    language: string;
+    provenance: 'REVIEWED_PRODUCTION_CORRECTION';
+    reviewedAt: string | null;
+    promotedAt: string | null;
+  }>;
+}
+
+export interface AdminAskTrustCalibrationArtifact {
+  schemaVersion: '1.0';
+  artifactVersion: string;
+  generatedAt: string;
+  provenance: {
+    baseDatasetVersion: string;
+    reviewedCorrectionDatasetVersion: string;
+    evaluationObservationCount: number;
+    promotedCorrectionFixtureCount: number;
+    productionCorrectionObservationCount: number;
+  };
+  observations: Array<{
+    observationId: string;
+    sourceFixtureId: string;
+    candidateOperationId: string;
+    rawScore: number;
+    correct: boolean;
+  }>;
+  profiles: Record<string, { anchors: readonly (readonly [number, number])[] }>;
+  excludedFixtures: Array<{ fixtureId: string; reason: string }>;
+  controls: {
+    reviewedCorrectionsOnly: true;
+    activeCalibrationMutated: false;
+    activationRequiresCodeReviewAndRelease: true;
+    recommendationsAreAdvisory: true;
+  };
 }
 
 export interface AdminRenovationOperationalHealthResponse {
@@ -522,6 +587,51 @@ export async function fetchAdminAskTrustLearning(
     '/api/admin/analytics/ask-trust',
     { params: buildParams(filters) },
   );
+  return response.data;
+}
+
+export async function syncAdminAskTrustReviewCandidates(filters: AdminAnalyticsFilters): Promise<{ datasetVersion: string; synced: number }> {
+  const params = new URLSearchParams(buildParams(filters));
+  const query = params.toString();
+  const response = await api.post<{ datasetVersion: string; synced: number }>(
+    `/api/admin/analytics/ask-trust/candidates/sync${query ? `?${query}` : ''}`,
+  );
+  return response.data;
+}
+
+export async function fetchAdminAskTrustReviewCandidates(status?: AdminAskTrustReviewStatus): Promise<AdminAskTrustReviewCandidate[]> {
+  const response = await api.get<AdminAskTrustReviewCandidate[]>(
+    '/api/admin/analytics/ask-trust/candidates',
+    { params: status ? { status } : undefined },
+  );
+  return response.data;
+}
+
+export async function reviewAdminAskTrustCandidate(
+  fixtureKey: string,
+  input: { disposition: 'APPROVE' | 'REJECT'; expectedOperationId?: string; reviewedQuestion?: string; reviewNotes?: string },
+): Promise<AdminAskTrustReviewCandidate> {
+  const response = await api.post<AdminAskTrustReviewCandidate>(
+    `/api/admin/analytics/ask-trust/candidates/${encodeURIComponent(fixtureKey)}/review`,
+    input,
+  );
+  return response.data;
+}
+
+export async function promoteAdminAskTrustCandidate(fixtureKey: string): Promise<AdminAskTrustReviewCandidate> {
+  const response = await api.post<AdminAskTrustReviewCandidate>(
+    `/api/admin/analytics/ask-trust/candidates/${encodeURIComponent(fixtureKey)}/promote`,
+  );
+  return response.data;
+}
+
+export async function fetchAdminAskTrustRegressionCorpus(): Promise<AdminAskTrustRegressionCorpus> {
+  const response = await api.get<AdminAskTrustRegressionCorpus>('/api/admin/analytics/ask-trust/regression-corpus');
+  return response.data;
+}
+
+export async function fetchAdminAskTrustCalibrationArtifact(): Promise<AdminAskTrustCalibrationArtifact> {
+  const response = await api.get<AdminAskTrustCalibrationArtifact>('/api/admin/analytics/ask-trust/calibration-artifact');
   return response.data;
 }
 

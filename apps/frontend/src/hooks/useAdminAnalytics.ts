@@ -2,7 +2,7 @@
 //
 // React Query hooks for the admin analytics dashboard.
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchAdminAnalyticsOverview,
   fetchAdminAnalyticsTrends,
@@ -17,8 +17,12 @@ import {
   fetchAdminRenovationOperationalHealth,
   fetchAdminHomeOperationsMeasurement,
   fetchAdminAskTrustLearning,
+  fetchAdminAskTrustReviewCandidates,
+  promoteAdminAskTrustCandidate,
+  reviewAdminAskTrustCandidate,
+  syncAdminAskTrustReviewCandidates,
 } from '@/lib/api/adminAnalytics';
-import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
+import type { AdminAnalyticsFilters, AdminAskTrustReviewStatus } from '@/lib/api/adminAnalytics';
 
 const STALE = 5 * 60_000; // 5 minutes
 
@@ -61,6 +65,45 @@ export function useAdminAskTrustLearning(filters: AdminAnalyticsFilters, enabled
     queryFn: () => fetchAdminAskTrustLearning(filters),
     staleTime: STALE,
     enabled,
+  });
+}
+
+export function useAdminAskTrustReviewCandidates(status: AdminAskTrustReviewStatus | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['admin-ask-trust-review-candidates', status ?? 'ALL'],
+    queryFn: () => fetchAdminAskTrustReviewCandidates(status),
+    staleTime: 15_000,
+    enabled,
+  });
+}
+
+export function useSyncAdminAskTrustReviewCandidates(filters: AdminAnalyticsFilters) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => syncAdminAskTrustReviewCandidates(filters),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-ask-trust-review-candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-ask-trust-learning'] });
+    },
+  });
+}
+
+export function useReviewAdminAskTrustCandidate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { fixtureKey: string; disposition: 'APPROVE' | 'REJECT'; expectedOperationId?: string; reviewedQuestion?: string; reviewNotes?: string }) => {
+      const { fixtureKey, ...body } = input;
+      return reviewAdminAskTrustCandidate(fixtureKey, body);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-ask-trust-review-candidates'] }),
+  });
+}
+
+export function usePromoteAdminAskTrustCandidate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fixtureKey: string) => promoteAdminAskTrustCandidate(fixtureKey),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-ask-trust-review-candidates'] }),
   });
 }
 

@@ -80,6 +80,22 @@ test('calibrated routing clarifies broad language and resolves a typo-tolerant m
   assert.ok(repair.operation.confidence >= 0.7);
 });
 
+test('product-authored reserve and general home-deadline prompts resolve to their registered operations', () => {
+  const reserve = resolveAskRoutingCascade('Create a capital reserve plan for future replacements.');
+  assert.equal(reserve.operation.operationId, 'CAPITAL_RESERVE_PLAN');
+  assert.equal(reserve.requiresClarification, false);
+
+  const deadlines = resolveAskRoutingCascade('Monitor my important home deadlines.');
+  assert.equal(deadlines.operation.operationId, 'HOME_DEADLINE_MONITOR');
+  assert.equal(deadlines.requiresClarification, false);
+});
+
+test('every operation owns at least one answer hard negative', () => {
+  for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
+    assert.ok(definition.semantic.answerHardNegativeExamples.length > 0, definition.operationId);
+  }
+});
+
 test('routing quality reports are broken out by operation with reliability bins', () => {
   const fixtures = ASK_ROUTING_CERTIFICATION_FIXTURES;
   const report = evaluateAskRoutingQuality(fixtures, { generatedAt: '2026-08-15T00:00:00.000Z' });

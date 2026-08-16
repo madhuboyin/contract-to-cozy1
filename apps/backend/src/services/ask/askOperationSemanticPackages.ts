@@ -180,23 +180,40 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   MAINTENANCE_STATUS: ['A new maintenance task is ready to be created', 'The selected maintenance task has a changed due date'],
   MAINTENANCE_TASK_CREATE: ['The selected maintenance task now has a different due date', 'The upkeep list contains overdue and recently completed service work'],
+  MAINTENANCE_TASK_COMPLETE: ['A new maintenance task is ready to be created', 'The selected maintenance task was moved to a later due date'],
+  MAINTENANCE_TASK_UPDATE: ['The selected maintenance task was recorded as completed', 'Pending and overdue upkeep is listed without changing a task'],
   INCIDENT_CLAIM_STATUS: ['The coverage review found appliances without warranty protection'],
   COVERAGE_GAPS: ['The home inventory records an appliance model, installation year, and service history', 'The home record recently changed across several sections'],
+  SAVINGS_OPPORTUNITIES: ['Monthly ownership expenses are broken down by category', 'The reserve plan forecasts major replacement costs'],
   OWNERSHIP_COSTS: ['The reserve outlook shows a future roof replacement expense'],
   INVENTORY_LOOKUP: ['The largest household savings opportunity is a recurring expense', 'The assumptions favor renting the home instead of selling it', 'The home record recently changed across several sections'],
   PROPERTY_SUMMARY: ['The assumptions favor renting the home instead of selling it', 'The home record recently changed across several sections'],
+  HOME_ACTIONS: ['Pending maintenance tasks are listed without prioritizing the next action', 'The property record summary lists missing fields'],
   CAPABILITY_DISCOVERY: ['The home inventory records equipment details and service history'],
+  REPLACEMENT_GUIDANCE: ['A new HVAC repair-or-replace decision thread is ready to start', 'The reserve plan forecasts replacement windows across the home'],
+  REFINANCE_RATE_MONITOR: ['The refinance analysis compares payments, closing costs, and break-even timing', 'A warranty expiration reminder is scheduled'],
+  SELL_HOLD_RENT_ANALYSIS: ['The home-sale preparation checklist lists repairs and records', 'Monthly ownership expenses are summarized without comparing disposition options'],
+  HOUSEHOLD_INVITATION: ['Current household members and roles are listed', 'A contractor quote is ready to be shared'],
   GUIDANCE_JOURNEY_CREATE: ['A built-in records workflow is available for this paperwork'],
   QUOTE_COMPARISON_CREATE: ['The proposals differ in scope exclusions and total price'],
+  QUOTE_COMPARISON_REVIEW: ['A blank contractor quote-comparison workspace is ready to create', 'A maintenance task is ready for confirmation'],
   REFINANCE_ANALYSIS: ['The home inventory records equipment model and service details'],
   HOME_DEADLINE_MONITOR: ['The home inventory records equipment details and service history'],
   CAPITAL_RESERVE_PLAN: ['The monthly cost of owning the home is led by insurance and tax expense'],
+  PROPERTY_TAX_APPEAL_READINESS: ['Renovation permit blockers and approvals are summarized', 'The current property-tax bill is shown without appeal evidence'],
+  RENOVATION_PERMIT_READINESS: ['Property-tax appeal evidence and assessment comparables are summarized', 'The active renovation project status is shown without permit readiness'],
   MAJOR_EVENT_ENTRY: ['The home inventory records an appliance model and service history'],
+  EMERGENCY_BOUNDARY: ['Routine furnace maintenance guidance is provided for a non-emergency condition'],
+  UNSAFE_RESTRICTED_BOUNDARY: ['Permit requirements and safe inspection steps are summarized without bypass instructions'],
+  OUT_OF_SCOPE_BOUNDARY: ['The home record summary identifies missing property details'],
+  GROUNDED_GUIDANCE: ['Canonical maintenance tasks are listed from the home record', 'A recorded home fact is changed after confirmation'],
   HVAC_DECISION_START: ['The dishwasher age and repair cost make replacement the planning option'],
   HVAC_DECISION_CONTINUE: ['The active heating decision can be stopped after confirmation'],
+  HVAC_DECISION_SCENARIO: ['The active HVAC decision is summarized without comparing the new quote', 'Unrelated contractor proposals are compared by scope and price'],
   HVAC_DECISION_ABANDON: ['Contractor proposals differ in scope, exclusions, and price'],
   HVAC_PREFERENCE_SAVE: ['The reserve outlook shows a future roof replacement expense'],
   HVAC_PREFERENCE_FORGET: ['An HVAC preference for lower upfront cost is ready to be saved'],
+  HOME_CHANGE_SUMMARY: ['The prioritized home actions list shows what needs attention next', 'Maintenance due dates are listed without describing record changes'],
   HVAC_DECISION_OUTCOME_REPORT: ['The active heating decision can be stopped after confirmation'],
   HVAC_DECISION_OUTCOME_VIEW: ['The active heating decision can be stopped after confirmation', 'A newly installed heater can be recorded as the decision outcome'],
   HVAC_DECISION_OUTCOME_UNLINK: ['A newly installed heater can be recorded as the decision outcome'],
@@ -227,7 +244,7 @@ export function validateAskOperationSemanticPackages(operationIds: readonly AskO
     if (pkg.positiveExamples.length < 2) issues.push(`${operationId}: requires at least two positive examples`);
     if (pkg.hardNegativeExamples.length < 1) issues.push(`${operationId}: requires at least one hard negative`);
     if (pkg.answerPositiveExamples.length < 1) issues.push(`${operationId}: requires at least one answer positive`);
-    if (!Array.isArray(pkg.answerHardNegativeExamples)) issues.push(`${operationId}: missing answer hard negatives`);
+    if (pkg.answerHardNegativeExamples.length < 1) issues.push(`${operationId}: requires at least one answer hard negative`);
   }
   for (const operationId of Object.keys(ASK_OPERATION_SEMANTIC_PACKAGES) as AskOperationId[]) {
     if (!operationIds.includes(operationId)) issues.push(`${operationId}: semantic package has no registered operation`);

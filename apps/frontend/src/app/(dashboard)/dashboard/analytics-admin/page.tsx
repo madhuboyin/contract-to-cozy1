@@ -58,6 +58,7 @@ import {
 import { decideAdminPhase6PilotAdmission, type AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
+import { AskTrustReviewWorkspace } from '@/components/admin-analytics/AskTrustReviewWorkspace';
 
 // ============================================================================
 // HELPERS
@@ -628,6 +629,12 @@ function AskTrustLearningSection({
             <p className="mt-1">{num(data.versionLineage.length)} semantic index, contract, and classifier combinations observed.</p>
           </div>
         </div>
+
+        <AskTrustReviewWorkspace
+          filters={filters}
+          operationIds={data.registeredOperationIds}
+          enabled={enabled}
+        />
       </CardContent>
     </Card>
   );

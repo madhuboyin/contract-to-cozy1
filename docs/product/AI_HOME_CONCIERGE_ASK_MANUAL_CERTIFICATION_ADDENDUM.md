@@ -316,14 +316,14 @@ Passing this checklist is bounded evidence for the scenarios recorded. It reduce
 
 ## 9. Change log
 
-### 9.1 Open baseline findings
+### 9.1 Baseline findings and resolution status
 
-The initial inventory validation found the following release-blocking mismatches. These remain failed checklist rows until fixed and retested through the deployed application:
+The initial inventory validation found the following release-blocking mismatches. Both routing defects are fixed in the local implementation and protected by automated regressions. They remain deployment-verification rows until retested through the deployed application:
 
-| Prompt | Expected | Current local routing observation on August 15, 2026 |
+| Prompt | Expected | Current local routing observation after remediation on August 15, 2026 |
 | --- | --- | --- |
-| Create a capital reserve plan for future replacements. | `CAPITAL_RESERVE_PLAN` | Clarification from `GROUNDED_GUIDANCE` |
-| Monitor my important home deadlines. | `HOME_DEADLINE_MONITOR` | `CAPABILITY_DISCOVERY` |
+| Create a capital reserve plan for future replacements. | `CAPITAL_RESERVE_PLAN` | `CAPITAL_RESERVE_PLAN` through deterministic precedence; deployed retest pending |
+| Monitor my important home deadlines. | `HOME_DEADLINE_MONITOR` | `HOME_DEADLINE_MONITOR` through deterministic precedence; deployed retest pending |
 
 The generic repair-or-replace prompt intentionally lacks an entity and currently requests clarification. That is acceptable only when the clarification is focused on selecting the home system or appliance and continues to the appropriate registered decision operation.
 
@@ -331,3 +331,4 @@ The generic repair-or-replace prompt intentionally lacks an entity and currently
 | --- | --- | --- |
 | 1.0 | August 15, 2026 | Initial living inventory of fixed and dynamic Ask Cozy category prompts, degradation states, manual assertions, evidence fields, and release criteria |
 | 1.1 | August 15, 2026 | Added the missing-inventory response suggestion and its post-capture/clarification continuation as a release-blocking regression scenario |
+| 1.2 | August 15, 2026 | Recorded local remediation of the capital-reserve and general home-deadline routing failures; retained both as deployed manual-verification rows |

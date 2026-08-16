@@ -35,6 +35,7 @@ import {
   getHomeDigitalTwinDiagnosticsHandler,
   getHomeOperationsMeasurementHandler,
   getAskTrustLearningHandler,
+  getAskTrustCalibrationArtifactHandler,
   getPromotedAskTrustRegressionCorpusHandler,
   listAskTrustReviewCandidatesHandler,
   promoteAskTrustCandidateHandler,
@@ -341,6 +342,7 @@ router.get('/admin/analytics/ask-trust/candidates', validate(AskTrustCandidateLi
 router.post('/admin/analytics/ask-trust/candidates/:fixtureKey/review', validate(AskTrustCandidateReviewSchema), reviewAskTrustCandidateHandler);
 router.post('/admin/analytics/ask-trust/candidates/:fixtureKey/promote', validate(AskTrustCandidateKeySchema), promoteAskTrustCandidateHandler);
 router.get('/admin/analytics/ask-trust/regression-corpus', getPromotedAskTrustRegressionCorpusHandler);
+router.get('/admin/analytics/ask-trust/calibration-artifact', getAskTrustCalibrationArtifactHandler);
 
 /**
  * @swagger

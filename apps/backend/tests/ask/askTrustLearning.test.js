@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { getAskTrustLearningReport } = require('../../src/services/adminAnalytics/askTrustLearningService.ts');
+const { getAskTrustCalibrationArtifact, getAskTrustLearningReport } = require('../../src/services/adminAnalytics/askTrustLearningService.ts');
 
 const from = new Date('2026-08-01T00:00:00.000Z');
 const to = new Date('2026-08-31T23:59:59.999Z');
@@ -82,4 +82,30 @@ test('TA7 operation threshold recommendations remain advisory and require eviden
   assert.equal(operation.thresholdRecommendation, 'RAISE_OR_CLARIFY_MORE');
   assert.equal(report.controls.recommendationsAreAdvisory, true);
   assert.equal(report.controls.rawTextFixturePromotion, false);
+});
+
+test('TA7 calibration proposal combines evaluation evidence with explicitly promoted corrections without activating it', async () => {
+  const artifact = await getAskTrustCalibrationArtifact({
+    corpus: {
+      schemaVersion: '1.0',
+      datasetVersion: 'ask-reviewed-regression-v1',
+      fixtures: [{
+        fixtureId: 'reviewed-capital-reserve-1',
+        operationId: 'CAPITAL_RESERVE_PLAN',
+        message: 'Create a capital reserve plan for future replacements.',
+        language: 'en',
+        provenance: 'REVIEWED_PRODUCTION_CORRECTION',
+        reviewedAt: '2026-08-15T12:00:00.000Z',
+        promotedAt: '2026-08-15T13:00:00.000Z',
+      }],
+    },
+  });
+
+  assert.equal(artifact.provenance.promotedCorrectionFixtureCount, 1);
+  assert.equal(artifact.provenance.productionCorrectionObservationCount, 2);
+  assert.ok(artifact.observations.some((row) => row.sourceFixtureId === 'reviewed-capital-reserve-1' && row.correct));
+  assert.ok(artifact.observations.some((row) => row.sourceFixtureId === 'reviewed-capital-reserve-1' && !row.correct));
+  assert.deepEqual(Object.keys(artifact.profiles), ['READ', 'MATERIAL', 'WRITE']);
+  assert.equal(artifact.controls.activeCalibrationMutated, false);
+  assert.equal(artifact.controls.activationRequiresCodeReviewAndRelease, true);
 });

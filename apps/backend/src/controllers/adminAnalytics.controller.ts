@@ -23,6 +23,7 @@ import { getRenovationOperationalHealth } from '../services/adminAnalytics/renov
 import { getHomeOperationsMeasurement } from '../services/adminAnalytics/homeOperationsMeasurementService';
 import {
   getAskTrustLearningReport,
+  getAskTrustCalibrationArtifact,
   getPromotedAskTrustRegressionCorpus,
   listAskTrustReviewCandidates,
   promoteAskTrustCandidate,
@@ -194,6 +195,12 @@ export async function promoteAskTrustCandidateHandler(req: CustomRequest, res: R
 export async function getPromotedAskTrustRegressionCorpusHandler(_req: CustomRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     res.json({ success: true, data: await getPromotedAskTrustRegressionCorpus() });
+  } catch (err) { next(err); }
+}
+
+export async function getAskTrustCalibrationArtifactHandler(_req: CustomRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json({ success: true, data: await getAskTrustCalibrationArtifact() });
   } catch (err) { next(err); }
 }
 

@@ -32,9 +32,9 @@ export const ASK_ROUTING_CALIBRATION_EVIDENCE_VERSION = createHash('sha256')
   .update(JSON.stringify([ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA, ASK_ROUTING_CALIBRATION_OBSERVATIONS]))
   .digest('hex').slice(0, 12);
 
-type CalibrationKind = 'READ' | 'MATERIAL' | 'WRITE';
+export type AskRoutingCalibrationKind = 'READ' | 'MATERIAL' | 'WRITE';
 
-function calibrationKind(definition: AskOperationDefinition): CalibrationKind {
+export function askRoutingCalibrationKind(definition: AskOperationDefinition): AskRoutingCalibrationKind {
   if (definition.semantic.effect === 'WRITE') return 'WRITE';
   return definition.semantic.materiality === 'HIGH' ? 'MATERIAL' : 'READ';
 }
@@ -42,9 +42,12 @@ function calibrationKind(definition: AskOperationDefinition): CalibrationKind {
 // Pool-adjacent-violators turns reviewed row labels into a monotonic empirical
 // calibration curve. No authored correct/sample aggregates participate in the
 // active curve; changing a label, raw score, or fixture changes its version.
-function empiricalAnchors(kind: CalibrationKind): CalibrationProfile['anchors'] {
-  const rows = ASK_ROUTING_CALIBRATION_OBSERVATIONS
-    .filter((row) => calibrationKind(ASK_OPERATION_DEFINITIONS[row.candidateOperationId]) === kind)
+export function deriveAskRoutingCalibrationAnchors(
+  observations: readonly typeof ASK_ROUTING_CALIBRATION_OBSERVATIONS[number][],
+  kind: AskRoutingCalibrationKind,
+): CalibrationProfile['anchors'] {
+  const rows = observations
+    .filter((row) => askRoutingCalibrationKind(ASK_OPERATION_DEFINITIONS[row.candidateOperationId]) === kind)
     .sort((left, right) => left.rawScore - right.rawScore);
   const groups = rows.map((row) => ({ scoreTotal: row.rawScore, correct: row.correct ? 1 : 0, samples: 1 }));
   for (let index = 0; index < groups.length - 1;) {
@@ -68,6 +71,10 @@ function empiricalAnchors(kind: CalibrationKind): CalibrationProfile['anchors'] 
     ...observed.filter(([score]) => score > 0 && score < 1),
     [1, 1] as const,
   ]);
+}
+
+function empiricalAnchors(kind: AskRoutingCalibrationKind): CalibrationProfile['anchors'] {
+  return deriveAskRoutingCalibrationAnchors(ASK_ROUTING_CALIBRATION_OBSERVATIONS, kind);
 }
 
 const READ_PROFILE: CalibrationProfile = {

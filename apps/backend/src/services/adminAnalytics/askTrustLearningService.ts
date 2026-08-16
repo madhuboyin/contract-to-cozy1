@@ -2,6 +2,16 @@ import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../ask/askOperationRegistry';
+import { retrieveAskOperationCandidates } from '../ask/askSemanticRouter';
+import {
+  ASK_ROUTING_CALIBRATION_OBSERVATIONS,
+  ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA,
+  type AskRoutingCalibrationObservation,
+} from '../ask/askRoutingCalibrationEvidence';
+import {
+  deriveAskRoutingCalibrationAnchors,
+  type AskRoutingCalibrationKind,
+} from '../ask/askRoutingCalibration';
 
 type BoundedMetadata = Record<string, unknown>;
 
@@ -208,6 +218,7 @@ export async function getAskTrustLearningReport(
     operations: operationRows,
     correctionClusters,
     reviewedFixtureCandidates,
+    registeredOperationIds: Object.keys(ASK_OPERATION_DEFINITIONS) as AskOperationId[],
     versionLineage: [...versionCounts.entries()].map(([key, count]) => {
       const [language, semanticIndexVersion, semanticContractVersion, classifierMode] = key.split('|');
       return { language, semanticIndexVersion, semanticContractVersion, classifierMode, count };
@@ -332,5 +343,97 @@ export async function getPromotedAskTrustRegressionCorpus() {
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
       promotedAt: row.promotedAt?.toISOString() ?? null,
     })),
+  };
+}
+
+/**
+ * Produces a reviewable, immutable calibration proposal from the active
+ * evaluation evidence plus explicitly promoted production corrections.
+ * It never mutates the active runtime curve; activation remains a separate
+ * code-review/release decision so correction traffic cannot tune routing by
+ * itself.
+ */
+export async function getAskTrustCalibrationArtifact(options: {
+  /** Test/offline seam; production callers always use the promoted durable corpus. */
+  corpus?: Awaited<ReturnType<typeof getPromotedAskTrustRegressionCorpus>>;
+} = {}) {
+  const corpus = options.corpus ?? await getPromotedAskTrustRegressionCorpus();
+  const eligibleOperationIds = Object.values(ASK_OPERATION_DEFINITIONS)
+    .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
+    .map((definition) => definition.operationId);
+  const productionObservations: AskRoutingCalibrationObservation[] = [];
+  const excludedFixtures: Array<{ fixtureId: string; reason: string }> = [];
+
+  for (const fixture of corpus.fixtures) {
+    const definition = ASK_OPERATION_DEFINITIONS[fixture.operationId];
+    if (!definition || definition.safetyClass.endsWith('_BOUNDARY')) {
+      excludedFixtures.push({ fixtureId: fixture.fixtureId, reason: 'DETERMINISTIC_BOUNDARY_NOT_SEMANTICALLY_CALIBRATED' });
+      continue;
+    }
+    if (fixture.language !== 'en') {
+      excludedFixtures.push({ fixtureId: fixture.fixtureId, reason: 'LANGUAGE_NOT_CERTIFIED_FOR_ACTIVE_CALIBRATION' });
+      continue;
+    }
+    const candidates = retrieveAskOperationCandidates(fixture.message, {
+      eligibleOperationIds,
+      topK: eligibleOperationIds.length,
+      language: 'en',
+    }).sort((left, right) => right.rawScore - left.rawScore);
+    const expected = candidates.find((candidate) => candidate.operationId === fixture.operationId);
+    const competitor = candidates.find((candidate) => candidate.operationId !== fixture.operationId);
+    if (!expected || !competitor) {
+      excludedFixtures.push({ fixtureId: fixture.fixtureId, reason: 'EXPECTED_OR_COMPETING_CANDIDATE_UNAVAILABLE' });
+      continue;
+    }
+    productionObservations.push(
+      {
+        observationId: `${fixture.fixtureId}-expected`,
+        sourceFixtureId: fixture.fixtureId,
+        candidateOperationId: expected.operationId,
+        rawScore: expected.rawScore,
+        correct: true,
+      },
+      {
+        observationId: `${fixture.fixtureId}-competitor`,
+        sourceFixtureId: fixture.fixtureId,
+        candidateOperationId: competitor.operationId,
+        rawScore: competitor.rawScore,
+        correct: false,
+      },
+    );
+  }
+
+  const combinedObservations = [...ASK_ROUTING_CALIBRATION_OBSERVATIONS, ...productionObservations];
+  const kinds: AskRoutingCalibrationKind[] = ['READ', 'MATERIAL', 'WRITE'];
+  const profiles = Object.fromEntries(kinds.map((kind) => [
+    kind,
+    { anchors: deriveAskRoutingCalibrationAnchors(combinedObservations, kind) },
+  ]));
+  const evidenceVersion = createHash('sha256').update(JSON.stringify({
+    baseDatasetVersion: ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA.datasetVersion,
+    reviewedCorrectionDatasetVersion: corpus.datasetVersion,
+    observations: combinedObservations,
+  })).digest('hex').slice(0, 12);
+
+  return {
+    schemaVersion: '1.0',
+    artifactVersion: `ask-routing-calibration-proposal-${evidenceVersion}`,
+    generatedAt: new Date().toISOString(),
+    provenance: {
+      baseDatasetVersion: ASK_ROUTING_CALIBRATION_EVIDENCE_METADATA.datasetVersion,
+      reviewedCorrectionDatasetVersion: corpus.datasetVersion,
+      evaluationObservationCount: ASK_ROUTING_CALIBRATION_OBSERVATIONS.length,
+      promotedCorrectionFixtureCount: corpus.fixtures.length,
+      productionCorrectionObservationCount: productionObservations.length,
+    },
+    observations: combinedObservations,
+    profiles,
+    excludedFixtures,
+    controls: {
+      reviewedCorrectionsOnly: true,
+      activeCalibrationMutated: false,
+      activationRequiresCodeReviewAndRelease: true,
+      recommendationsAreAdvisory: true,
+    },
   };
 }
