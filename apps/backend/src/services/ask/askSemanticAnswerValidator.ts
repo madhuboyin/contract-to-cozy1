@@ -3,8 +3,9 @@ import { askSemanticTextSimilarity, retrieveAskOperationCandidates } from './ask
 import { ASK_DEFAULT_LANGUAGE, requireCertifiedAskLanguage, type AskLanguageCode } from './askLanguageRegistry';
 import { askEmbeddingCosine, embedAskSemanticText } from './askSemanticEmbedding';
 import { projectAskSemanticResponse } from './askSemanticResponseProjection';
+import { isIncompleteInventoryRequest, matchesIncompleteInventoryAnswerContract } from './askInventoryIntent';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.0';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.1';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -61,6 +62,15 @@ export function validateAskSemanticAnswerRelevance(input: {
       outcome: 'FAIL', selectedOperationId: input.operationId, competingOperationId: mismatchedSource.operationId,
       selectedOperationScore: 0, competingOperationScore: 1, questionAnswerScore: 0,
       reasonCodes: ['ANSWER_SOURCE_OPERATION_MISMATCH'],
+    });
+  }
+  if (input.operationId === 'INVENTORY_LOOKUP'
+    && isIncompleteInventoryRequest(input.question)
+    && matchesIncompleteInventoryAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
     });
   }
   const definition = getAskOperationDefinition(input.operationId);

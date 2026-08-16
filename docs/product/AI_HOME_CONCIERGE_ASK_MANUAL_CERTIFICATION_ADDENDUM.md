@@ -332,3 +332,4 @@ The generic repair-or-replace prompt intentionally lacks an entity and currently
 | 1.0 | August 15, 2026 | Initial living inventory of fixed and dynamic Ask Cozy category prompts, degradation states, manual assertions, evidence fields, and release criteria |
 | 1.1 | August 15, 2026 | Added the missing-inventory response suggestion and its post-capture/clarification continuation as a release-blocking regression scenario |
 | 1.2 | August 15, 2026 | Recorded local remediation of the capital-reserve and general home-deadline routing failures; retained both as deployed manual-verification rows |
+| 1.3 | August 15, 2026 | Expanded the incomplete-inventory regression from one synthetic item to the exact first-party prompt across empty, no-match, multi-item, synthesized-summary, and post-clarification canonical result shapes |
