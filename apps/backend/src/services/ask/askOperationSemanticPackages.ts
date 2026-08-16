@@ -54,7 +54,7 @@ const jobs: Record<AskOperationId, string> = {
 const positives: Record<AskOperationId, readonly string[]> = {
   PROPERTY_SUMMARY: ['Are there any pending home details to be filled in?', 'What information is left to add to this property?', 'Did I miss anything while setting up this house?', 'Is my home profile complete?', 'What else do you need to know about this property?', 'What information does this house still need?', 'What home record items need attention and coverage?', 'Is the residence file complete and in good shape?', 'How complete are the records for this address?'],
   MAINTENANCE_STATUS: ['What maintenance is pending?', 'Show overdue upkeep and completed work', 'Give me a rundown of household work remaining and finished'],
-  INVENTORY_LOOKUP: ['What appliance details are missing?', 'What do you know about my refrigerator?', 'Which home record items need attention or coverage?', 'Show my appliance inventory', 'Find the recorded information for my laundry dryer', 'What have we got on file for the range?'],
+  INVENTORY_LOOKUP: ['What appliance details are missing?', 'Show missing inventory details', 'Show incomplete inventory records', 'What do you know about my refrigerator?', 'Which home record items need attention or coverage?', 'Show my appliance inventory', 'Find the recorded information for my laundry dryer', 'What have we got on file for the range?'],
   HOME_ACTIONS: ['What should I do next for this home?', 'What needs my attention first?', 'What deserves attention before everything else?'],
   QUOTE_COMPARISON_REVIEW: ['What details are missing from my contractor quote?', 'Compare these contractor bids', 'Which estimate is best?', 'Review my quotes and estimats', 'Lay the existing contractor offers side by side for review', 'Contrast the scope and price across these proposals'],
   COVERAGE_GAPS: ['Which items have no warranty or insurance coverage?', 'Show gaps in my home protection', 'What is uncovered in my home?', 'Show missing coverage for my applicances', 'Which costly home items lack protection?', 'What expensive equipment is exposed without protection?', 'Which possessions would leave us paying entirely out of pocket?'],
@@ -144,7 +144,7 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   INCIDENT_CLAIM_STATUS: ['The recorded incident or insurance claim status and next insurer step are shown.'],
   SAVINGS_OPPORTUNITIES: ['Recorded recurring costs, rebates, and household savings opportunities are summarized.'],
   OWNERSHIP_COSTS: ['Monthly and annual home ownership expenses are broken down by cost category.'],
-  INVENTORY_LOOKUP: ['The home inventory shows appliance or equipment model, age, and service details.'],
+  INVENTORY_LOOKUP: ['The home inventory shows appliance or equipment model, age, and service details.', 'The incomplete inventory review identifies missing brand, model, serial number, installation date, documents, and coverage evidence without inferring unknown values.'],
   PROPERTY_SUMMARY: ['The home record summary identifies complete, missing, and stale property details.'],
   HOME_ACTIONS: ['The prioritized Home Actions list shows what needs attention first.'],
   CAPABILITY_DISCOVERY: ['Available home tools and governed workflows are listed with readiness and expected output.'],

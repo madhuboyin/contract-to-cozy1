@@ -135,6 +135,7 @@ import { requiredAskTargetEntity, resolveAskEntityState } from './askEntityResol
 import { attachAskAuthoritativeSourceEvidence, includeAskContextSourceEvidence } from './askAnswerTrustPolicy';
 import type { AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
+import { isIncompleteInventoryRequest } from './askInventoryIntent';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -3016,7 +3017,7 @@ async function majorEventEntryResult(userId: string, propertyId: string, message
 
 const INVENTORY_QUERY_STOP_WORDS = new Set([
   'about', 'appliance', 'appliances', 'details', 'equipment', 'find', 'have', 'home', 'house',
-  'information', 'inventory', 'item', 'items', 'know', 'list', 'property', 'record', 'records',
+  'incomplete', 'information', 'inventory', 'item', 'items', 'know', 'list', 'missing', 'property', 'record', 'records',
   'show', 'system', 'systems', 'tell', 'that', 'the', 'this', 'what', 'which', 'with', 'your', 'my',
 ]);
 
@@ -3066,7 +3067,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
   }
 
   const historyFocus = /\b(?:history|timeline|what happened|repairs?|service(?:d| history)?|maintenance history)\b/i.test(message);
-  const incompleteFocus = /\b(?:incomplete|missing (?:details|information|records?)|needs? (?:details|information|completion))\b/i.test(message);
+  const incompleteFocus = isIncompleteInventoryRequest(message);
   const lifecycleFocus = /\b(?:end of life|nearing (?:replacement|expiry)|expir(?:e|y|ing)|oldest systems?)\b/i.test(message);
   const categoryFilter = /\bhvac|furnace|air conditioner|heat pump|boiler\b/i.test(message)
     ? 'HVAC'
@@ -3253,7 +3254,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     captureRequests,
     blocks,
     suggestions: selectedItem
-      ? ['Show missing inventory details', 'Which systems are nearing end of life?', 'List all appliances']
+      ? ['Show incomplete inventory records', 'Which systems are nearing end of life?', 'List all appliances']
       : ['Show incomplete inventory records', 'Which systems are nearing end of life?', 'List all appliances'],
   };
 }
@@ -3445,8 +3446,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     captureRequests,
     blocks,
     suggestions: completenessFocus
-      ? ['Summarize my home record', 'Show missing inventory details', 'List pending maintenance tasks']
-      : ['How complete is my property profile?', 'Show missing inventory details', 'What maintenance is pending?'],
+      ? ['Summarize my home record', 'Show incomplete inventory records', 'List pending maintenance tasks']
+      : ['How complete is my property profile?', 'Show incomplete inventory records', 'What maintenance is pending?'],
   };
 }
 

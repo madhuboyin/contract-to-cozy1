@@ -60,13 +60,16 @@ Dynamic prompts cannot be exhaustively enumerated because record titles and enti
 | [ ] | Give me a summary of my new home record. | `PROPERTY_SUMMARY` |
 | [ ] | Summarize my home record for a buyer. | `PROPERTY_SUMMARY` |
 | [ ] | Give me a summary of this home record. | `PROPERTY_SUMMARY` |
+| [ ] | Show missing inventory details. | `INVENTORY_LOOKUP` |
+| [ ] | Show incomplete inventory records. | `INVENTORY_LOOKUP` |
 
 Expected behavior:
 
 - return a direct summary or completeness answer grounded in the selected home;
 - distinguish a complete record from missing, conflicted, stale, or unavailable information;
-- never turn missing source data into an all-clear; and
-- show only role-appropriate record-review or capture actions.
+- never turn missing source data into an all-clear;
+- show only role-appropriate record-review or capture actions; and
+- treat both missing-inventory word orders as the same incomplete-inventory request and continue successfully after inline context capture or clarification.
 
 ### 4.2 Maintain
 
@@ -327,3 +330,4 @@ The generic repair-or-replace prompt intentionally lacks an entity and currently
 | Version | Date | Change |
 | --- | --- | --- |
 | 1.0 | August 15, 2026 | Initial living inventory of fixed and dynamic Ask Cozy category prompts, degradation states, manual assertions, evidence fields, and release criteria |
+| 1.1 | August 15, 2026 | Added the missing-inventory response suggestion and its post-capture/clarification continuation as a release-blocking regression scenario |
