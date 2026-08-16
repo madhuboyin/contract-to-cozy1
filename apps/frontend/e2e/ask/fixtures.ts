@@ -23,7 +23,9 @@ function capabilityExecution(unavailable = false) {
         { type: 'CAPABILITY_LIST', id: 'capability-matches', title: 'Best match for your goal', description: 'Ranked from reviewed homeowner language.', capabilities: [capability] },
         { type: 'CAPABILITY_LIST', id: 'related-capabilities', title: 'Related tools for what comes next', description: 'Filtered for this home.', capabilities: [{ ...capability, id: 'break-even', label: 'Break-Even', href: `/dashboard/properties/${propertyId}/tools/break-even`, readiness: 'READY', readinessLabel: 'Ready for this home', readinessReasons: [] }] },
       ],
-    captureRequests: [], confirmation: null, suggestions: ['What information does this tool need?'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    suggestions: ['What information does this tool need?'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
 }
 
@@ -51,7 +53,9 @@ function heatPreparationExecution() {
       },
       { type: 'EVIDENCE', id: 'heat-evidence', title: 'Evidence for this guidance', items: [{ label: 'Local heat forecast', source: 'Open-Meteo forecast and property profile', observedAt: '2026-08-14T12:00:00.000Z' }] },
     ],
-    captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
 }
 
@@ -78,7 +82,9 @@ function execution(kind: 'refrigerator' | 'refinance', captured = false) {
     schemaVersion: '1.0', executionId: `execution-${kind}`, sessionId: 'ask-acceptance-session', question: kind === 'refrigerator' ? 'When should I replace my refrigerator?' : 'Is refinancing a good option?',
     status: captured ? 'ANSWERED' : 'NEEDS_CONTEXT', property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: kind === 'refrigerator' ? 'REPLACEMENT_GUIDANCE' : 'REFINANCE_ANALYSIS', version: '1.0', family: 'DECISION' },
     contextVersion: captured ? 'context-v2' : 'context-v1', blocks: [{ type: 'SUMMARY', id: 'summary', title: captured ? 'Updated answer' : 'A little more context will improve this answer', body: captured ? 'The saved home details were applied automatically.' : 'Complete the inline card to continue.', tone: 'DEFAULT', actions: [] }],
-    captureRequests: captured ? [] : [capture], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    skill: null, skillHandoff: null, captureRequests: captured ? [] : [capture], confirmation: null, clarification: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: true, retryResponse: false },
+    suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
 }
 
@@ -86,7 +92,7 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
@@ -129,7 +135,21 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     ],
     suggestedQuestions: ['Help me continue this decision: Repair or replace the refrigerator', 'What should I do next for “Schedule HVAC service”?', 'Which items are missing coverage?', 'Where could I save money on this home?'],
   } }));
-  await page.route(`${apiOrigin}/api/ask/sessions/*`, (route) => fulfill(route, { success: true, data: { executions: [] } }));
+  await page.route(`${apiOrigin}/api/ask/sessions/*`, (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/recent')) {
+      return fulfill(route, { success: true, data: { items: options.recentSessions ? [{
+        sessionId: 'recent-session-1', title: 'Refrigerator replacement timing',
+        property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'NEEDS_CONTEXT',
+        latestExecutionId: 'execution-refrigerator', executionCount: 1,
+        lastActiveAt: new Date().toISOString(),
+      }] : [] } });
+    }
+    if (url.pathname.endsWith('/recent-session-1')) {
+      return fulfill(route, { success: true, data: { executions: [execution('refrigerator')] } });
+    }
+    return fulfill(route, { success: true, data: { executions: [] } });
+  });
   await page.route(`${apiOrigin}/api/ask/executions`, async (route) => {
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as { message: string } & Record<string, unknown>;

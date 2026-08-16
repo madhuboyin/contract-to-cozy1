@@ -1007,6 +1007,9 @@ class APIClient {
   async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
     return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);
   }
+  async getRecentAskSessions(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ items: import('@/features/ask/types').AskRecentSessionSummary[] }>> {
+    return this.request(`/api/ask/sessions/recent?propertyId=${encodeURIComponent(propertyId)}`, options);
+  }
   async getAskExecution(executionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}`, options);
   }

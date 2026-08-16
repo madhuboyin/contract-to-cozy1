@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { ComponentProps, createContext, FormEvent, KeyboardEvent, Ref, useContext, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, House, Loader2, Maximize2, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskFeaturedPrompt, AskPendingWorkItem, AskPresentationBlock, ConciergeHomeView } from '@/features/ask/types';
+import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskFeaturedPrompt, AskPendingWorkItem, AskPresentationBlock, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { track } from '@/lib/analytics/events';
@@ -64,10 +64,6 @@ function askFailureCode(error: unknown): string | null {
 
 function askServiceIsPaused(error: unknown): boolean {
   return askFailureCode(error) === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
-}
-
-function sessionStorageKey(propertyId?: string): string {
-  return `ctc:ask-session:v2:${propertyId ?? 'general'}`;
 }
 
 function draftStorageKey(propertyId?: string): string {
@@ -801,7 +797,6 @@ function PropertySelectionCard({ executionId, onCompleted, autoFocus = false }: 
     try {
       const response = await api.resolveAskExecutionProperty(executionId, propertyId);
       if (!response.success || !response.data) throw new Error(response.message || 'Could not select that home.');
-      window.localStorage.setItem(sessionStorageKey(propertyId), response.data.sessionId);
       onCompleted(response.data);
       setSelectedPropertyId(propertyId);
     } catch (caught) {
@@ -1200,6 +1195,43 @@ function PendingWorkInbox({ items, loadingId, onResume }: { items: AskPendingWor
   );
 }
 
+function recentSessionStatus(status: AskRecentSessionSummary['latestStatus']): string {
+  if (['NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT'].includes(status)) return 'Needs input';
+  if (status === 'NEEDS_CONFIRMATION') return 'Awaiting confirmation';
+  if (status === 'RUNNING') return 'In progress';
+  if (['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(status)) return 'Completed';
+  return status.toLowerCase().replace(/_/g, ' ');
+}
+
+function RecentAskSessions({ items, loading, openingId, onOpen }: {
+  items: AskRecentSessionSummary[];
+  loading: boolean;
+  openingId: string | null;
+  onOpen: (session: AskRecentSessionSummary) => void;
+}) {
+  if (loading) return <p className="mt-7 text-xs text-slate-400" role="status">Loading recent Ask Cozy sessions…</p>;
+  if (!items.length) return null;
+  return (
+    <section className="mt-8" aria-labelledby="ask-recent-sessions-title">
+      <div className="flex items-end justify-between gap-3">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Continue a recent conversation</p><h2 id="ask-recent-sessions-title" className="mt-1 text-lg font-semibold text-slate-950">Recent Ask Cozy sessions</h2></div>
+        <p className="text-xs text-slate-500">Last 7 days · Up to 5</p>
+      </div>
+      <ul className="mt-3 space-y-2">
+        {items.map((session) => (
+          <li key={session.sessionId}>
+            <button type="button" disabled={Boolean(openingId)} onClick={() => onOpen(session)} className="flex min-h-16 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-teal-300 hover:shadow-md disabled:opacity-60">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700"><MessageCircle className="h-4 w-4" /></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{session.title}</span><span className="mt-1 block text-xs text-slate-500">{new Date(session.lastActiveAt).toLocaleString()} · {recentSessionStatus(session.latestStatus)} · {session.executionCount} {session.executionCount === 1 ? 'question' : 'questions'}</span></span>
+              <span className="shrink-0 text-xs font-semibold text-teal-700">{openingId === session.sessionId ? 'Opening…' : 'Open'}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; launchSurface?: string; launchCapabilityId?: string }) {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link (e.g. a monitor-fired reminder) carries the
@@ -1220,12 +1252,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [showLanding, setShowLanding] = useState(false);
   const [pendingWork, setPendingWork] = useState<AskPendingWorkItem[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [continuingId, setContinuingId] = useState<string | null>(null);
   const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [availabilityEpoch, setAvailabilityEpoch] = useState(0);
+  const [recentSessions, setRecentSessions] = useState<AskRecentSessionSummary[]>([]);
+  const [recentSessionsLoading, setRecentSessionsLoading] = useState(false);
+  const [openingRecentSessionId, setOpeningRecentSessionId] = useState<string | null>(null);
+  const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
   // Marks the execution whose pending card should receive focus: set right
   // after a turn this session actually produced (a new question answered,
   // or an existing execution advancing after a capture/clarification/
@@ -1235,7 +1270,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [justUpdatedExecutionId, setJustUpdatedExecutionId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const landingVisible = showLanding || executions.length === 0;
+  const activeSessionRef = useRef('');
+  const activeSessionPropertyRef = useRef<string | undefined>(undefined);
+  const landingVisible = executions.length === 0;
   // Concierge composition is only useful on the empty starting surface.
   // It is also loaded when a user explicitly returns home without deleting
   // their conversation, which keeps discovery independent from retention.
@@ -1249,6 +1286,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const safeBackTo = resolveDashboardBackHref(initialBackTo, '');
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
+
+  useEffect(() => { activeSessionRef.current = sessionId; }, [sessionId]);
 
   useEffect(() => {
     if (propertyMismatch) return;
@@ -1267,19 +1306,42 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   }, [selectedPropertyId, propertyMismatch, availabilityEpoch]);
 
   useEffect(() => {
+    if (propertyMismatch || !selectedPropertyId) return;
+    const controller = new AbortController();
+    setRecentSessionsLoading(true);
+    api.getRecentAskSessions(selectedPropertyId, { signal: controller.signal })
+      .then((response) => {
+        const items = response.success && response.data ? response.data.items : [];
+        setRecentSessions(Array.isArray(items) ? items : []);
+      })
+      .catch((caught) => {
+        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+          setRecentSessions([]);
+          if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+        }
+      })
+      .finally(() => { if (!controller.signal.aborted) setRecentSessionsLoading(false); });
+    return () => controller.abort();
+  }, [selectedPropertyId, propertyMismatch, availabilityEpoch, recentSessionsEpoch]);
+
+  useEffect(() => {
     if (propertyMismatch) return;
     const controller = new AbortController();
-    const key = sessionStorageKey(selectedPropertyId);
-    let nextSession = initialSessionId.trim() || window.localStorage.getItem(key);
-    if (!nextSession) {
-      nextSession = newId();
-    }
-    window.localStorage.setItem(key, nextSession);
+    const explicitSession = initialSessionId.trim();
+    const continuingActiveSession = !explicitSession
+      && Boolean(activeSessionRef.current)
+      && activeSessionPropertyRef.current === selectedPropertyId;
+    const nextSession = explicitSession || (continuingActiveSession ? activeSessionRef.current : '') || newId();
+    activeSessionRef.current = nextSession;
+    activeSessionPropertyRef.current = selectedPropertyId;
     setSessionId(nextSession);
     setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
-    setShowLanding(false);
     setExecutions([]);
-    setHistoryLoading(true);
+    setHistoryLoading(Boolean(explicitSession || continuingActiveSession));
+    if (!explicitSession && !continuingActiveSession) {
+      setHistoryLoading(false);
+      return () => controller.abort();
+    }
     api.getAskSession(nextSession, { signal: controller.signal })
       .then((response) => {
         const loaded = 'data' in response ? response.data?.executions ?? [] : [];
@@ -1296,6 +1358,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       })
       .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
     return () => controller.abort();
+  // Deliberately excludes executions/sessionId: this effect owns session
+  // initialization and should run only when navigation scope changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch, availabilityEpoch]);
 
   useEffect(() => {
@@ -1321,7 +1386,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => {
     const message = question.trim();
     if (!message || !sessionId || loading) return;
-    setShowLanding(false);
     setInput('');
     window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
     setError(null);
@@ -1390,14 +1454,59 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       const response = await api.deleteAskSession(sessionId);
       if (!response.success) throw new Error(response.message || 'Could not clear Ask history.');
       const nextSession = newId();
-      window.localStorage.setItem(sessionStorageKey(selectedPropertyId), nextSession);
-      setSessionId(nextSession); setExecutions([]); setShowLanding(false); setConfirmClear(false);
+      activeSessionRef.current = nextSession;
+      activeSessionPropertyRef.current = selectedPropertyId;
+      setSessionId(nextSession); setExecutions([]); setConfirmClear(false);
+      setRecentSessionsEpoch((current) => current + 1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not clear Ask history.');
     } finally { setLoading(false); }
   };
 
+  const startNewSession = () => {
+    if (loading) return;
+    const nextSession = newId();
+    activeSessionRef.current = nextSession;
+    activeSessionPropertyRef.current = selectedPropertyId;
+    setSessionId(nextSession);
+    setExecutions([]);
+    setConfirmClear(false);
+    setJustUpdatedExecutionId(null);
+    setInput('');
+    window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
+    setRecentSessionsEpoch((current) => current + 1);
+    window.setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+
+  const openRecentSession = async (recent: AskRecentSessionSummary) => {
+    if (openingRecentSessionId || loading) return;
+    setOpeningRecentSessionId(recent.sessionId);
+    setError(null);
+    setHistoryLoading(true);
+    try {
+      const history = await api.getAskSession(recent.sessionId);
+      if (!history.success || !history.data) throw new Error(history.message || 'Could not load that Ask Cozy session.');
+      activeSessionRef.current = recent.sessionId;
+      activeSessionPropertyRef.current = recent.property.id;
+      setSessionId(recent.sessionId);
+      setExecutions(history.data.executions);
+      setJustUpdatedExecutionId(null);
+    } catch (caught) {
+      if (askServiceIsPaused(caught)) {
+        setServiceUnavailable(true);
+        setError(null);
+      } else {
+        setError(caught instanceof Error ? caught.message : 'Could not load that Ask Cozy session.');
+      }
+    } finally {
+      setHistoryLoading(false);
+      setOpeningRecentSessionId(null);
+    }
+  };
+
   const updateExecution = (updated: AskExecutionResponse) => {
+    activeSessionRef.current = updated.sessionId;
+    activeSessionPropertyRef.current = updated.property?.id ?? selectedPropertyId;
     setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item));
     setJustUpdatedExecutionId(updated.executionId);
     if (!['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'].includes(updated.status)) {
@@ -1413,8 +1522,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       if (!response.success || !response.data) throw new Error(response.message || 'Could not resume this request.');
       const resumed = response.data;
       if ((resumed.property?.id ?? undefined) !== selectedPropertyId) throw new Error('Select the matching home before resuming this request.');
-      window.localStorage.setItem(sessionStorageKey(selectedPropertyId), resumed.sessionId);
-      setSessionId(resumed.sessionId); setShowLanding(false); setHistoryLoading(true);
+      activeSessionRef.current = resumed.sessionId;
+      activeSessionPropertyRef.current = resumed.property?.id ?? selectedPropertyId;
+      setSessionId(resumed.sessionId); setHistoryLoading(true);
       const history = await api.getAskSession(resumed.sessionId);
       if (!history.success || !history.data) throw new Error(history.message || 'Could not load the pending conversation.');
       setExecutions(history.data.executions);
@@ -1431,6 +1541,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
+  const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId);
   const personalizedFeaturedPrompts = concierge.view ? visibleConciergeFeaturedPrompts(concierge.view) : [];
   const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
   const featuredPrompts = usingFallbackPrompts ? fallbackPrompts : personalizedFeaturedPrompts;
@@ -1476,9 +1587,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <header className={cn('flex items-center justify-between', mode === 'page' ? 'px-1 pb-5 pt-1 sm:pb-7 sm:pt-3' : 'border-b border-slate-200 bg-white px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
         <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-11 w-11 rounded-2xl' : 'h-9 w-9 rounded-xl')}><Sparkles className={mode === 'page' ? 'h-5 w-5' : 'h-4 w-4'} /></span><div>{mode === 'page' ? <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className={cn('truncate text-slate-500', mode === 'page' ? 'mt-1 text-sm' : 'text-xs')}>{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
-          {mode === 'page' && executions.length > 0 && !askUnavailable && (showLanding
-            ? <button type="button" aria-label="Back to conversation" onClick={() => { setShowLanding(false); window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50); }} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><MessageCircle className="h-4 w-4" /><span className="hidden sm:inline">Back to conversation</span></button>
-            : <><button type="button" aria-label="Ask home" onClick={() => { setShowLanding(true); setConfirmClear(false); }} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><House className="h-4 w-4" /><span className="hidden sm:inline">Ask home</span></button><button type="button" aria-label="Clear history" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" /><span className="hidden md:inline">Clear history</span></button></>)}
+          {mode === 'page' && executions.length > 0 && !askUnavailable && <><button type="button" aria-label="New Ask Cozy session" onClick={startNewSession} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">New conversation</span></button><button type="button" aria-label="Clear history" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" /><span className="hidden md:inline">Clear history</span></button></>}
           {mode === 'panel' && <Link href={fullWorkspaceHref} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
           {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
         </div>
@@ -1501,6 +1610,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           <div className="mx-auto max-w-3xl">
             <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>
             {renderComposer('hero')}
+            <RecentAskSessions items={visibleRecentSessions} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} />
             <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, usingFallbackPrompts ? 'FALLBACK' : prompt.source)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
@@ -1547,7 +1657,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      {executions.length > 0 && !showLanding && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
+      {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
     </div>
   );
 }

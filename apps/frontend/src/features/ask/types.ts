@@ -70,6 +70,16 @@ export interface AskPendingWorkItem {
   execution: AskExecutionResponse;
 }
 
+export interface AskRecentSessionSummary {
+  sessionId: string;
+  title: string;
+  property: { id: string; label: string };
+  latestStatus: AskExecutionStatus;
+  latestExecutionId: string;
+  executionCount: number;
+  lastActiveAt: string;
+}
+
 export interface AskClarification {
   version: number;
   question: string;

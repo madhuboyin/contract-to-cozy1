@@ -1308,6 +1308,18 @@ Introduce durable execution records. Suggested conceptual models:
 
 **Implementation status — August 11, 2026:** Implemented in the repository and production manifests. See [AI Home Concierge — Ask Operations and Governance](../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md). Formal privacy approval remains a launch sign-off rather than a code task.
 
+### 24.5 Homeowner session experience
+
+- Opening Ask Cozy without an explicit session deep link starts a fresh conversation and does not automatically render the previous transcript.
+- The starting surface shows at most the five most recently active non-empty sessions for the selected home within a rolling seven-day window.
+- Recent sessions are ordered by last activity and show a short title, last-active time, latest status, and question count.
+- Selecting a recent session explicitly restores its conversation context. Starting a new conversation preserves previous sessions rather than deleting them.
+- Notification links, pending-action continuations, and other explicit session links continue to restore the referenced session directly.
+- Pending clarification, capture, confirmation, and command-recovery work remains a separate resumable surface and is not limited by the recent-conversation presentation window.
+- Switching homes never silently carries conversational context from the previously selected home.
+
+**Implementation status — August 15, 2026:** Implemented using the existing `AskSession` title and `lastActiveAt` fields; no schema migration is required. `GET /api/ask/sessions/recent?propertyId=...` applies current property authorization, a rolling seven-day cutoff, and a five-session limit. The Ask Workspace creates a new client session on ordinary entry while retaining explicit deep-link and pending-work restoration.
+
 ## 25. Authorization, privacy, security, and audit
 
 ### 25.1 Authorization

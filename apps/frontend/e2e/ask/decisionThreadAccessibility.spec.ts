@@ -19,7 +19,10 @@ async function fulfill(route: Route, body: unknown, status = 200) {
 async function installDecisionPlatformRoutes(page: Page) {
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
   await page.route(`${apiOrigin}/api/properties*`, (route) => fulfill(route, { success: true, data: { properties: [{ id: propertyId, name: 'Acceptance Home', addressLine1: '1 Cozy Way', city: 'Boston', state: 'MA', zipCode: '02108' }] } }));
-  await page.route(`${apiOrigin}/api/ask/sessions/*`, (route) => fulfill(route, { success: true, data: { executions: [] } }));
+  await page.route(`${apiOrigin}/api/ask/sessions/*`, (route) => fulfill(route, {
+    success: true,
+    data: new URL(route.request().url()).pathname.endsWith('/recent') ? { items: [] } : { executions: [] },
+  }));
 
   await page.route(`${apiOrigin}/api/ask/executions`, async (route) => {
     const body = route.request().postDataJSON() as { message: string };
@@ -44,7 +47,9 @@ async function installDecisionPlatformRoutes(page: Page) {
             // inline instead of linking out.
             actions: [],
           }],
-          captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null,
+          correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+          suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         },
       }, 201);
       return;
@@ -65,7 +70,9 @@ async function installDecisionPlatformRoutes(page: Page) {
             comparisonDirection: 'SCENARIO_FAVORS_REPLACE',
             actions: [],
           }],
-          captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null,
+          correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+          suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         },
       }, 201);
       return;
@@ -107,7 +114,9 @@ async function installDecisionPlatformRoutes(page: Page) {
               visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 31536000000).toISOString(),
             },
           ],
-          captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null,
+          correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+          suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         },
       }, 201);
       return;

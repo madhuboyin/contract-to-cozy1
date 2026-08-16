@@ -9,6 +9,7 @@ import {
   type AskCaptureRequest,
   type AskExecutionResponse,
   type AskPendingWorkItem,
+  type AskRecentSessionSummary,
   type AskPresentationBlock,
   type CreateAskExecutionRequest,
   type ContinueAskExecution,
@@ -5342,6 +5343,7 @@ export async function submitAskClarification(userId: string, executionId: string
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  await prisma.askSession.update({ where: { id: execution.sessionId }, data: { lastActiveAt: new Date() } });
   await enterAskPropertyTimezoneContext(execution.propertyId);
   const bindingExpiry = await expireIfSkillBindingChanged(execution);
   if (bindingExpiry) return bindingExpiry;
@@ -5599,6 +5601,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  await prisma.askSession.update({ where: { id: execution.sessionId }, data: { lastActiveAt: new Date() } });
   await ensurePropertyAccess(userId, execution.propertyId);
   await enterAskPropertyTimezoneContext(execution.propertyId);
   const bindingExpiry = await expireIfSkillBindingChanged(execution);
@@ -6209,6 +6212,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  await prisma.askSession.update({ where: { id: execution.sessionId }, data: { lastActiveAt: new Date() } });
   await enterAskPropertyTimezoneContext(execution.propertyId);
   const bindingExpiry = await expireIfSkillBindingChanged(execution);
   if (bindingExpiry) return bindingExpiry;
@@ -7087,6 +7091,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  await prisma.askSession.update({ where: { id: execution.sessionId }, data: { lastActiveAt: new Date() } });
   if (execution.status !== 'NEEDS_CONFIRMATION') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   const command = getAskDomainCommandByOperation(execution.operationId ?? '');
   if (!command || !command.supportsCancelBeforeExecution) {
@@ -7137,6 +7142,52 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   const properties = await prisma.property.findMany({ where: { id: { in: [...accessiblePropertyIds] } }, select: { id: true, name: true, address: true, city: true, state: true } });
   const labels = new Map(properties.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]));
   return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
+}
+
+const ASK_RECENT_SESSION_LIMIT = 5;
+const ASK_RECENT_SESSION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function getRecentAskSessions(userId: string, propertyId: string): Promise<AskRecentSessionSummary[]> {
+  await ensurePropertyAccess(userId, propertyId);
+  const now = new Date();
+  const sessions = await prisma.askSession.findMany({
+    where: {
+      userId,
+      propertyId,
+      lastActiveAt: { gte: new Date(now.getTime() - ASK_RECENT_SESSION_WINDOW_MS) },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      executions: { some: {} },
+    },
+    orderBy: [{ lastActiveAt: 'desc' }, { id: 'desc' }],
+    take: ASK_RECENT_SESSION_LIMIT,
+    select: {
+      id: true,
+      title: true,
+      lastActiveAt: true,
+      _count: { select: { executions: true } },
+      executions: {
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 1,
+        select: { id: true, message: true, status: true },
+      },
+    },
+  });
+  const property = await propertySummary(propertyId);
+  if (!property) return [];
+  return sessions.flatMap((session) => {
+    const latest = session.executions[0];
+    if (!latest) return [];
+    const title = (session.title?.trim() || latest.message.trim()).slice(0, 120);
+    return [{
+      sessionId: session.id,
+      title,
+      property,
+      latestStatus: latest.status,
+      latestExecutionId: latest.id,
+      executionCount: session._count.executions,
+      lastActiveAt: session.lastActiveAt.toISOString(),
+    }];
+  });
 }
 
 export async function getAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {

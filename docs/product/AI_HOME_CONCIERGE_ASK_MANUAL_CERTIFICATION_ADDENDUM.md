@@ -3,7 +3,7 @@
 **Product:** ContractToCozy — Ask Cozy
 **Document type:** Manual Testing and Release-Certification Addendum
 **Status:** Living document
-**Version:** 1.4
+**Version:** 1.5
 **Date:** August 15, 2026
 **Parent:** `AI_HOME_CONCIERGE_ASK_TRUST_ARCHITECTURE_ADDENDUM_FRD.md`
 
@@ -258,6 +258,20 @@ Every fixed prompt and every dynamic-template representative shall be exercised 
 | Backend restart/redeployment | Persisted pending work resumes safely and a new prompt can still be started |
 | Production-like schema | All providers required by the prompt can query the deployed schema; optional missing schema does not poison unrelated reads |
 
+### 5.1 Session lifecycle matrix
+
+| Test | Expected behavior |
+| --- | --- |
+| Open Ask Cozy normally | A fresh empty conversation opens; the prior transcript is not rendered automatically |
+| Open an explicit session or notification link | The referenced session and execution are restored |
+| Recent-session inventory | At most five non-empty sessions for the selected home are shown, newest first, and every item was active within the rolling previous seven days |
+| Open a recent session | The exact selected transcript is restored and accepts follow-up questions in the same session |
+| Start a new conversation | The current transcript leaves the workspace without being deleted and becomes eligible for the recent-session list |
+| Session older than seven days | It is absent from the recent-session list without changing backend retention or canonical artifacts |
+| Switch selected home | No transcript or context from the previous home is carried into the new home |
+| Pending consequential workflow | It remains available in the pending-work surface independently of the five-session/seven-day recent list |
+| Delete current conversation | The session disappears while domain records and artifacts created through Ask remain unchanged |
+
 ## 6. Cross-cutting manual assertions
 
 For every executed row, record and verify:
@@ -335,3 +349,4 @@ The generic repair-or-replace prompt intentionally lacks an entity and currently
 | 1.2 | August 15, 2026 | Recorded local remediation of the capital-reserve and general home-deadline routing failures; retained both as deployed manual-verification rows |
 | 1.3 | August 15, 2026 | Expanded the incomplete-inventory regression from one synthetic item to the exact first-party prompt across empty, no-match, multi-item, synthesized-summary, and post-clarification canonical result shapes |
 | 1.4 | August 15, 2026 | Added the exact lifecycle inventory suggestion across empty, no-match, matched-record, and post-clarification outcomes; required focus-specific typed answer validation |
+| 1.5 | August 15, 2026 | Added fresh-by-default Ask sessions, explicit restoration of the five most recent sessions within a rolling seven-day window, home isolation, deep-link behavior, and pending-work independence |

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskFeedback, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskFeedback, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
@@ -22,6 +22,7 @@ router.get('/ask/executions/:executionId', getAskExecutionById);
 router.get('/ask/pending', getAskPendingExecutions);
 router.patch('/ask/monitors/:monitorId', patchAskMonitor);
 router.get('/ask/monitors/:monitorId', getAskMonitor);
+router.get('/ask/sessions/recent', getAskRecentSessions);
 router.get('/ask/sessions/:sessionId', getAskSessionExecutions);
 router.delete('/ask/sessions/:sessionId', deleteAskSession);
 

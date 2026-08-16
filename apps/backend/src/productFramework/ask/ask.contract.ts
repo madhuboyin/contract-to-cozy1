@@ -517,6 +517,16 @@ export const AskPendingWorkItemSchema = z.object({
   execution: AskExecutionResponseSchema,
 });
 
+export const AskRecentSessionSummarySchema = z.object({
+  sessionId: z.string(),
+  title: z.string().trim().min(1).max(120),
+  property: z.object({ id: z.string(), label: z.string() }),
+  latestStatus: AskExecutionStatusSchema,
+  latestExecutionId: z.string(),
+  executionCount: z.number().int().positive(),
+  lastActiveAt: z.string().datetime(),
+});
+
 export type AskExecutionStatus = z.infer<typeof AskExecutionStatusSchema>;
 export type AskPresentationBlock = z.infer<typeof AskPresentationBlockSchema>;
 export type AskCaptureRequest = z.infer<typeof AskCaptureRequestSchema>;
@@ -532,5 +542,6 @@ export type RequestAskCorrection = z.infer<typeof RequestAskCorrectionSchema>;
 export type ContinueAskExecution = z.infer<typeof ContinueAskExecutionSchema>;
 export type ResolveAskExecutionProperty = z.infer<typeof ResolveAskExecutionPropertySchema>;
 export type AskPendingWorkItem = z.infer<typeof AskPendingWorkItemSchema>;
+export type AskRecentSessionSummary = z.infer<typeof AskRecentSessionSummarySchema>;
 export type SubmitAskClarification = z.infer<typeof SubmitAskClarificationSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;
