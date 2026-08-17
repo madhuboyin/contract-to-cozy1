@@ -413,6 +413,12 @@ const MILESTONE_CONFIG: Record<
     accent: 'bg-amber-50 border-amber-100',
     ring: 'ring-amber-200',
   },
+  closing: {
+    title: 'Welcome home!',
+    subtitle: 'Your closing record is safe. Your first 90-day home plan is ready.',
+    accent: 'bg-emerald-50 border-emerald-100',
+    ring: 'ring-emerald-200',
+  },
 };
 
 const ANIMATION_MAP: Record<MilestoneType, () => JSX.Element> = {
@@ -420,6 +426,7 @@ const ANIMATION_MAP: Record<MilestoneType, () => JSX.Element> = {
   savings: FinancialBloom,
   scan: RadarSweep,
   cozy: CozyHouse,
+  closing: CozyHouse,
 };
 
 // ─── Component ─────────────────────────────────────────────────────────────

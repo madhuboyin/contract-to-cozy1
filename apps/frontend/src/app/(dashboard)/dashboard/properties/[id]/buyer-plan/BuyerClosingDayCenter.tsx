@@ -1,12 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowRight, ClipboardList, FolderLock, House } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
 import { useToast } from '@/components/ui/use-toast';
+import { useCelebration } from '@/hooks/useCelebration';
 import { api } from '@/lib/api/client';
 import type { BuyerClosingChecklistItemStatus, BuyerClosingDayInput, BuyerClosingDayWorkspaceResponse } from '@/types';
 
@@ -28,6 +32,7 @@ function StatusField({ name, label, value, disabled }: { name: string; label: st
 export function BuyerClosingDayCenter({ propertyId, readOnly }: { propertyId: string; readOnly: boolean }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { celebration, celebrate, dismiss } = useCelebration(`buyer-closing-${propertyId}`);
   const [signedFile, setSignedFile] = useState<File | null>(null);
   const queryKey = ['buyer-closing-day', propertyId];
   const query = useQuery({
@@ -71,6 +76,7 @@ export function BuyerClosingDayCenter({ propertyId, readOnly }: { propertyId: st
     onSuccess: (data) => {
       apply(data);
       void queryClient.invalidateQueries({ queryKey: ['buyer-closing-home', propertyId] });
+      celebrate('closing');
       toast({ title: 'Professional closing recorded', description: 'This property is now presented as a recent home. Closing records remain available.' });
     },
     onError: (error) => toast({ title: 'Close confirmation not recorded', description: error instanceof Error ? error.message : 'Complete every required confirmation.', variant: 'destructive' }),
@@ -82,7 +88,7 @@ export function BuyerClosingDayCenter({ propertyId, readOnly }: { propertyId: st
   const data = query.data;
   const workspace = data.workspace;
   const closed = Boolean(workspace?.professionalClosingConfirmedAt);
-  return <Card className={closed ? 'border-emerald-300 bg-emerald-50/30' : 'border-blue-200 bg-blue-50/20'}>
+  return <><Card className={closed ? 'border-emerald-300 bg-emerald-50/30' : 'border-blue-200 bg-blue-50/20'}>
     <CardHeader><CardTitle className="flex flex-wrap items-center justify-between gap-2 text-lg"><span>Closing Day Companion</span><Badge variant={closed ? 'default' : 'secondary'}>{closed ? 'Professional close recorded' : 'Preparation in progress'}</Badge></CardTitle></CardHeader>
     <CardContent className="space-y-5">
       <p className="text-sm text-muted-foreground">Prepare the appointment, record what you received, and preserve signed copies. This workflow never tells you whether to close or interprets the legal effect of a document.</p>
@@ -149,8 +155,17 @@ export function BuyerClosingDayCenter({ propertyId, readOnly }: { propertyId: st
         <Button type="submit" disabled={readOnly || confirmMutation.isPending}>{confirmMutation.isPending ? 'Recording…' : 'Confirm professional close'}</Button>
       </form>}
 
-      {closed && <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm"><p className="font-semibold">Professional close recorded</p><p>Effective {workspace?.closeEffectiveAt ? new Date(workspace.closeEffectiveAt).toLocaleString() : 'time unavailable'}. The canonical property state is now Recent Owner.</p></div>}
+      {closed && <div className="space-y-4 rounded-xl border border-emerald-300 bg-emerald-50 p-5">
+        <div><p className="flex items-center gap-2 text-lg font-semibold text-emerald-950"><House className="h-5 w-5" />Welcome home</p><p className="mt-1 text-sm text-emerald-900">Professional close was recorded effective {workspace?.closeEffectiveAt ? new Date(workspace.closeEffectiveAt).toLocaleString() : 'time unavailable'}. A durable purchase-completion milestone and its signed-record evidence are now preserved in this home’s history.</p></div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Button asChild><Link href={`/dashboard/properties/${propertyId}/buyer-plan`}><ClipboardList className="mr-2 h-4 w-4" />First 90-day plan</Link></Button>
+          <Button asChild variant="outline"><Link href={`/dashboard/properties/${propertyId}/timeline`}>View home milestone</Link></Button>
+          <Button asChild variant="outline"><Link href={`/dashboard/properties/${propertyId}/tools/home-records`}><FolderLock className="mr-2 h-4 w-4" />Home Records</Link></Button>
+          <Button asChild variant="outline"><Link href={`/dashboard/properties/${propertyId}/home-operations`}>Home Operations <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+        </div>
+        <p className="text-xs text-emerald-800">Closing evidence stays intact while move-in, safety, setup, and recurring-care work continue from the same property plan.</p>
+      </div>}
       <p className="text-xs text-muted-foreground">Never enter identity-document numbers, account or routing numbers, passwords, security codes, or full wire instructions. {data.disclaimer}</p>
     </CardContent>
-  </Card>;
+  </Card><MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} /></>;
 }

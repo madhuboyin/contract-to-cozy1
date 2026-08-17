@@ -160,6 +160,95 @@ export class BuyerClosingDayService {
       });
       await BuyerAcquisitionService.applyConfirmedClose(tx, propertyId, checklist.id, closedAt, now);
       await this.reconcile(tx, checklist.id, confirmed, userId);
+      const homeRecordEvent = await tx.homeEvent.upsert({
+        where: {
+          propertyId_idempotencyKey: {
+            propertyId,
+            idempotencyKey: `buyer-journey-completed:${checklist.id}`,
+          },
+        },
+        create: {
+          propertyId,
+          createdById: userId,
+          type: 'MILESTONE',
+          subtype: 'BUYER_JOURNEY_COMPLETED',
+          importance: 'HIGHLIGHT',
+          occurredAt: closedAt,
+          title: 'Home purchase completed',
+          summary: 'The buyer explicitly recorded that the professional closing process was complete. Transaction records and accepted work remain attached to this home.',
+          idempotencyKey: `buyer-journey-completed:${checklist.id}`,
+          sourceBadge: 'USER_REPORTED',
+          observationKind: 'USER_REPORTED',
+          verificationStatus: 'HOMEOWNER_CONFIRMED',
+          sourceType: 'DOMAIN_ENTITY',
+          sourceEntityType: 'BUYER_CLOSING_DAY_WORKSPACE',
+          sourceEntityId: confirmed.id,
+          sourceAsOf: now,
+          confirmedAt: now,
+          confirmedByUserId: userId,
+          meta: {
+            buyerChecklistId: checklist.id,
+            closingDayWorkspaceId: confirmed.id,
+            signedClosingDocumentId: confirmed.signedClosingDocumentId,
+            provenanceNote: 'User-confirmed professional close; ContractToCozy did not determine legal effect.',
+          },
+        },
+        update: {},
+      });
+      await tx.homeEventEvidence.upsert({
+        where: {
+          eventId_evidenceKey: {
+            eventId: homeRecordEvent.id,
+            evidenceKey: `buyer-close-confirmation:${confirmed.id}`,
+          },
+        },
+        create: {
+          eventId: homeRecordEvent.id,
+          evidenceType: 'DOMAIN_RECORD',
+          evidenceKey: `buyer-close-confirmation:${confirmed.id}`,
+          sourceEntityType: 'BUYER_CLOSING_DAY_WORKSPACE',
+          sourceEntityId: confirmed.id,
+          observedAt: closedAt,
+          note: 'Buyer explicitly confirmed completion of the professional closing process.',
+          addedByUserId: userId,
+        },
+        update: {},
+      });
+      if (confirmed.signedClosingDocumentId) {
+        await tx.homeEventEvidence.upsert({
+          where: {
+            eventId_evidenceKey: {
+              eventId: homeRecordEvent.id,
+              evidenceKey: `signed-closing-document:${confirmed.signedClosingDocumentId}`,
+            },
+          },
+          create: {
+            eventId: homeRecordEvent.id,
+            evidenceType: 'DOCUMENT',
+            evidenceKey: `signed-closing-document:${confirmed.signedClosingDocumentId}`,
+            documentId: confirmed.signedClosingDocumentId,
+            observedAt: closedAt,
+            note: 'Buyer-supplied signed closing record; legal effect was not interpreted.',
+            addedByUserId: userId,
+          },
+          update: {},
+        });
+        await tx.homeEventDocument.upsert({
+          where: {
+            eventId_documentId: {
+              eventId: homeRecordEvent.id,
+              documentId: confirmed.signedClosingDocumentId,
+            },
+          },
+          create: {
+            eventId: homeRecordEvent.id,
+            documentId: confirmed.signedClosingDocumentId,
+            kind: 'OTHER',
+            caption: 'Buyer-supplied signed closing record',
+          },
+          update: {},
+        });
+      }
     });
     return this.get(userId, propertyId);
   }

@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 
-export type MilestoneType = 'success' | 'savings' | 'scan' | 'cozy';
+export type MilestoneType = 'success' | 'savings' | 'scan' | 'cozy' | 'closing';
 
 interface CelebrationState {
   type: MilestoneType | null;
