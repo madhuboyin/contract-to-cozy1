@@ -3,12 +3,12 @@
  * PHASE 2 INTEGRATION: Risk Assessment → PropertyMaintenanceTask
  * 
  * This service handles creation of maintenance tasks from risk assessment
- * recommendations for EXISTING_OWNER segment.
+ * recommendations when the selected property is in ownership-care mode.
  * 
  * Integration Points:
  * - Risk assessment generates recommendations
  * - Creates PropertyMaintenanceTask with source=RISK_ASSESSMENT
- * - Skips HOME_BUYER segment (they don't need risk-based maintenance)
+ * - Skips active pre-close purchase contexts where ownership care is not applicable
  * - Idempotent via actionKey
  */
 
@@ -257,9 +257,9 @@ function mapAssetTypeToServiceCategory(assetType: string): ServiceCategory | und
  *    ```
  * 
  * 5. TEST
- *    - Trigger risk assessment for an EXISTING_OWNER property
+ *    - Trigger risk assessment for a property in established ownership care
  *    - Verify PropertyMaintenanceTask records created in database
- *    - Verify no tasks created for HOME_BUYER properties
+ *    - Verify no tasks are created for active pre-close purchase properties
  *    - Verify tasks appear in Action Center
  * 
  * 6. VERIFY IDEMPOTENCY

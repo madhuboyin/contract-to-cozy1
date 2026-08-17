@@ -6,8 +6,8 @@
  * @deprecated These endpoints are being phased out.
  * 
  * New Endpoints:
- * - HOME_BUYER: /api/home-buyer-tasks/*
- * - EXISTING_OWNER: /api/maintenance-tasks/*
+ * - Property-scoped purchase journeys: /api/home-buyer-tasks/properties/:propertyId/*
+ * - Ownership care: /api/maintenance-tasks/*
  * 
  * See: homeBuyerTask.controller.ts, propertyMaintenanceTask.controller.ts
  */
@@ -21,7 +21,8 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 
 /**
  * Gets the user's checklist.
- * @deprecated Use GET /api/home-buyer-tasks/checklist or GET /api/maintenance-tasks/property/:propertyId
+ * @deprecated Use GET /api/home-buyer-tasks/properties/:propertyId/checklist or
+ *             GET /api/maintenance-tasks/property/:propertyId
  */
 const handleGetChecklist = async (
   req: AuthRequest,

@@ -297,7 +297,7 @@ export async function getSeasonalItemsWithTaskStatus(
  *    - Allow removal with DELETE endpoint
  * 
  * 4. TEST
- *    - Create seasonal checklist for EXISTING_OWNER property
+ *    - Create seasonal checklist for a property in established ownership care
  *    - Click "Add to Checklist" on seasonal item
  *    - Verify PropertyMaintenanceTask created
  *    - Verify seasonal item status = 'ADDED'
@@ -305,6 +305,6 @@ export async function getSeasonalItemsWithTaskStatus(
  *    - Test removal functionality
  * 
  * 5. VERIFY SEGMENT RESTRICTION
- *    - Try with HOME_BUYER property
- *    - Should get error: "only available for existing homeowners"
+ *    - Try with an active pre-close purchase property
+ *    - Should get an ownership-care applicability error
  */

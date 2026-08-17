@@ -67,8 +67,8 @@ export class ChecklistService {
   /**
    * Get or create a checklist for a user.
    * 
-   * @deprecated Use HomeBuyerTaskService.getOrCreateChecklist() for HOME_BUYER segment
-   *             or PropertyMaintenanceTaskService for EXISTING_OWNER segment.
+   * @deprecated Use HomeBuyerTaskService.getOrCreateChecklist() for a property-scoped
+   *             purchase journey or PropertyMaintenanceTaskService for ownership care.
    */
   static async getOrCreateChecklist(userId: string): Promise<Checklist & { items: ChecklistItem[] } | null> {
     logger.warn('⚠️  DEPRECATED: ChecklistService.getOrCreateChecklist() - Use HomeBuyerTaskService or PropertyMaintenanceTaskService');
@@ -255,8 +255,8 @@ export class ChecklistService {
 
   /**
    * Creates a single checklist item directly.
-   * @deprecated Use PropertyMaintenanceTaskService.createFromActionCenter() for EXISTING_OWNER
-   *             or HomeBuyerTaskService.createTask() for HOME_BUYER.
+   * @deprecated Use PropertyMaintenanceTaskService.createFromActionCenter() for ownership
+   *             care or HomeBuyerTaskService.createTask() for a property purchase journey.
    */
   static async createDirectChecklistItem(
     userId: string,

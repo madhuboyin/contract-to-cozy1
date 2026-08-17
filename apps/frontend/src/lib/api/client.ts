@@ -3520,9 +3520,9 @@ class APIClient {
 
   
   /**
-   * Get or create HOME_BUYER checklist with 8 default tasks
+   * Get or create the checklist for a property-scoped buyer journey.
    * 
-   * @returns Checklist with default tasks (auto-created on first access)
+   * @returns Checklist composed for the selected property's purchase context.
    */
   async getHomeBuyerChecklist(propertyId: string): Promise<APIResponse<HomeBuyerChecklist>> {
     return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/checklist`, {
@@ -3559,7 +3559,7 @@ class APIClient {
   }
 
   /**
-   * Get all HOME_BUYER tasks for authenticated user
+   * Get all tasks for the selected property's buyer journey.
    * 
    * @returns Array of tasks
    */
@@ -3570,7 +3570,7 @@ class APIClient {
   }
 
   /**
-   * Get single HOME_BUYER task by ID
+   * Get one property-scoped buyer task by ID.
    * 
    * @param taskId - Task ID
    * @returns Single task
@@ -3582,7 +3582,7 @@ class APIClient {
   }
 
   /**
-   * Get HOME_BUYER task statistics (progress, completion percentage)
+   * Get buyer-journey task statistics for the selected property.
    * 
    * @returns Task statistics
    */
@@ -4018,7 +4018,7 @@ class APIClient {
   }
 
   /**
-   * Create custom HOME_BUYER task (in addition to 8 defaults)
+   * Create a custom task in the selected property's buyer journey.
    * 
    * @param data - Task data
    * @returns Created task
@@ -4034,7 +4034,7 @@ class APIClient {
   }
 
   /**
-   * Update HOME_BUYER task details (title, description, category, sort order)
+   * Update property-scoped buyer task details.
    * 
    * @param taskId - Task ID
    * @param data - Updated fields
@@ -4052,7 +4052,7 @@ class APIClient {
   }
 
   /**
-   * Update HOME_BUYER task status (PENDING → IN_PROGRESS → COMPLETED)
+   * Update a property-scoped buyer task status.
    * 
    * @param taskId - Task ID
    * @param status - New status
@@ -4070,7 +4070,7 @@ class APIClient {
   }
 
   /**
-   * Delete custom HOME_BUYER task (cannot delete 8 default tasks)
+   * Delete an eligible custom buyer task from the selected property.
    * 
    * @param taskId - Task ID
    */
@@ -4081,7 +4081,7 @@ class APIClient {
   }
 
   /**
-   * Link HOME_BUYER task to booking
+   * Link a property-scoped buyer task to a booking.
    * 
    * @param taskId - Task ID
    * @param bookingId - Booking ID

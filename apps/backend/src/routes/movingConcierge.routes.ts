@@ -14,7 +14,7 @@ const router = Router();
  * @swagger
  * /api/moving-concierge/generate-plan:
  *   post:
- *     summary: Generate AI-powered moving plan (HOME_BUYER only)
+ *     summary: Generate a moving plan for a property-scoped purchase journey
  *     tags: [Moving Concierge]
  *     security:
  *       - bearerAuth: []
@@ -53,7 +53,7 @@ const router = Router();
  *       200:
  *         description: Moving plan generated
  *       403:
- *         description: Only available for HOME_BUYER users
+ *         description: A moving plan is not available for this property context
  */
 router.post('/generate-plan', authenticate, async (req: AuthRequest, res: Response) => {
   try {

@@ -32,9 +32,6 @@ const router = Router();
  *                 data:
  *                   type: object
  *                   properties:
- *                     segment:
- *                       type: string
- *                       enum: [HOME_BUYER, EXISTING_OWNER]
  *                     categories:
  *                       type: array
  *                       items:
@@ -115,7 +112,7 @@ router.get(
  * /api/service-categories/all:
  *   get:
  *     summary: Get ALL service categories (admin/debugging)
- *     description: Returns all active service categories regardless of user segment
+ *     description: Returns all active service categories regardless of journey relevance
  *     tags: [Service Categories]
  *     security:
  *       - bearerAuth: []
