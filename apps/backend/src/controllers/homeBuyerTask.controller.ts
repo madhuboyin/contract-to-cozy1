@@ -11,6 +11,7 @@ import {
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { BuyerAcquisitionService } from '../services/buyerAcquisition.service';
 import { BuyerPurchaseLoanEstimateService } from '../services/buyerPurchaseLoanEstimate.service';
+import { BuyerPurchaseLenderReadinessService } from '../services/buyerPurchaseLenderReadiness.service';
 import {
   BuyerDocumentVerificationInputSchema,
   BuyerFindingDispositionInputSchema,
@@ -21,6 +22,9 @@ import {
   BuyerPurchaseLoanEstimateRevisionCreateSchema,
   BuyerPurchaseLoanEstimateUpdateSchema,
   BuyerPurchaseLoanSelectionSchema,
+  BuyerPurchaseLenderReadinessUpdateSchema,
+  BuyerLenderConditionCreateSchema,
+  BuyerLenderConditionUpdateSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -625,6 +629,43 @@ const handleSelectPurchaseLoanOffer = async (req: AuthRequest, res: Response, ne
   } catch (error) { next(error); }
 };
 
+const handleGetPurchaseLenderReadiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const data = await BuyerPurchaseLenderReadinessService.get(req.user.userId, req.params.propertyId);
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+const handleUpdatePurchaseLenderReadiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerPurchaseLenderReadinessUpdateSchema.parse(req.body);
+    const data = await BuyerPurchaseLenderReadinessService.updateReadiness(req.user.userId, req.params.propertyId, input);
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+const handleCreateBuyerLenderCondition = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerLenderConditionCreateSchema.parse(req.body);
+    const data = await BuyerPurchaseLenderReadinessService.createCondition(req.user.userId, req.params.propertyId, input);
+    return res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerLenderCondition = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerLenderConditionUpdateSchema.parse(req.body);
+    const data = await BuyerPurchaseLenderReadinessService.updateCondition(
+      req.user.userId, req.params.propertyId, req.params.conditionId, input,
+    );
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
 const handleUpdateInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -745,6 +786,10 @@ export const homeBuyerTaskController = {
   handleConfirmPurchaseLoanEstimate,
   handleExtractPurchaseLoanEstimate,
   handleSelectPurchaseLoanOffer,
+  handleGetPurchaseLenderReadiness,
+  handleUpdatePurchaseLenderReadiness,
+  handleCreateBuyerLenderCondition,
+  handleUpdateBuyerLenderCondition,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

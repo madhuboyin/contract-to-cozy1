@@ -3716,6 +3716,40 @@ class APIClient {
     );
   }
 
+  async getBuyerPurchaseLenderReadiness(
+    propertyId: string,
+  ): Promise<APIResponse<import('@/types').BuyerPurchaseLenderReadinessWorkspace>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/readiness`, { method: 'GET' });
+  }
+
+  async updateBuyerPurchaseLenderReadiness(
+    propertyId: string,
+    input: import('@/types').BuyerPurchaseLenderReadinessInput,
+  ): Promise<APIResponse<import('@/types').BuyerPurchaseLenderReadinessWorkspace>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/readiness`, {
+      method: 'PUT', body: JSON.stringify(input),
+    });
+  }
+
+  async createBuyerLenderCondition(
+    propertyId: string,
+    input: import('@/types').BuyerLenderConditionInput,
+  ): Promise<APIResponse<import('@/types').BuyerPurchaseLenderReadinessWorkspace>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/readiness/conditions`, {
+      method: 'POST', body: JSON.stringify(input),
+    });
+  }
+
+  async updateBuyerLenderCondition(
+    propertyId: string,
+    conditionId: string,
+    input: Partial<Omit<import('@/types').BuyerLenderConditionInput, 'category'>> & { status?: import('@/types').BuyerLenderConditionStatus },
+  ): Promise<APIResponse<import('@/types').BuyerPurchaseLenderReadinessWorkspace>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/readiness/conditions/${conditionId}`, {
+      method: 'PATCH', body: JSON.stringify(input),
+    });
+  }
+
   async updateBuyerLifecycle(propertyId: string, input: {
     targetCloseDate?: string | null;
     ownershipStartedAt?: string | null;

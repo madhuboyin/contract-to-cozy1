@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.21
+**Version:** 1.22
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2878,9 +2878,21 @@ buyer-selected confirmed revision and separately records intent to proceed as a
 buyer decision, never as a platform recommendation or approval. Selection
 writes the exact offer/revision into the stable Loan Estimate task and advances
 the lender-appraisal task to in progress; confirming a newer revision for the
-same selected offer clears the stale selection for renewed buyer review.
-Detailed appraisal/underwriting condition tracking, Title/Escrow Center, and
-buyer Coverage mode remain next.
+same selected offer clears the stale selection for renewed buyer review. The
+fourth increment adds a purchase-only
+lender-readiness record after a current confirmed offer is selected. Buyers can
+record appraisal ordered/scheduled/completed dates, value or property-condition
+issues and resolution, underwriting state, and lender-requested conditions with
+due dates and explicit blocking impact. Readiness is scoped to the exact
+selected revision and resets when the buyer changes lenders or selects a newer
+offer revision, preventing stale lender conditions from crossing offers. These
+user-recorded facts reconcile the
+stable appraisal task and canonical appraisal milestone: unresolved appraisal
+issues or blocking lender conditions block readiness, while completion requires
+a completed/resolved appraisal, every condition dispositioned, and an explicit
+user record that the lender communicated clear-to-close. The product continues
+to state that it does not perform appraisals, approve underwriting, or certify
+clear-to-close status. Title/Escrow Center and buyer Coverage mode remain next.
 
 **Goal:** Give financed and cash buyers the correct conditional preparation
 without rebranding homeowner financial tools.

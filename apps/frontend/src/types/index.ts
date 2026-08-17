@@ -3565,6 +3565,66 @@ export interface BuyerPurchaseLoanEstimateExtractionProposal {
   };
 }
 
+export type BuyerPurchaseAppraisalStatus = 'NOT_ORDERED' | 'ORDERED' | 'SCHEDULED' | 'COMPLETED' | 'ISSUE_REPORTED' | 'RESOLVED';
+export type BuyerPurchaseUnderwritingStatus = 'NOT_STARTED' | 'IN_REVIEW' | 'CONDITIONAL' | 'USER_RECORDED_CLEAR_TO_CLOSE';
+export type BuyerLenderConditionCategory = 'INCOME_ASSET' | 'CREDIT' | 'APPRAISAL' | 'INSURANCE_PROOF' | 'TITLE' | 'FINAL_VERIFICATION' | 'OTHER';
+export type BuyerLenderConditionStatus = 'OPEN' | 'SUBMITTED' | 'SATISFIED' | 'WAIVED';
+
+export interface BuyerPurchaseLenderReadinessInput {
+  appraisalStatus?: BuyerPurchaseAppraisalStatus;
+  appraisalOrderedAt?: string | null;
+  appraisalScheduledAt?: string | null;
+  appraisalCompletedAt?: string | null;
+  appraisalIssueType?: string | null;
+  appraisalIssueNotes?: string | null;
+  appraisalIssueResolvedAt?: string | null;
+  underwritingStatus?: BuyerPurchaseUnderwritingStatus;
+}
+
+export interface BuyerLenderConditionInput {
+  category: BuyerLenderConditionCategory;
+  title: string;
+  notes?: string | null;
+  dueAt?: string | null;
+  blocking: boolean;
+}
+
+export interface BuyerPurchaseLenderReadinessWorkspace {
+  purchasePath: 'UNKNOWN' | BuyerPurchasePath;
+  selectedRevisionId: string | null;
+  readiness: ({
+    id: string;
+    planId: string;
+    propertyId: string;
+    selectedLoanEstimateRevisionId: string;
+    appraisalStatus: BuyerPurchaseAppraisalStatus;
+    appraisalOrderedAt: string | null;
+    appraisalScheduledAt: string | null;
+    appraisalCompletedAt: string | null;
+    appraisalIssueType: string | null;
+    appraisalIssueNotes: string | null;
+    appraisalIssueResolvedAt: string | null;
+    underwritingStatus: BuyerPurchaseUnderwritingStatus;
+    clearToCloseRecordedAt: string | null;
+    clearToCloseRecordedByUserId: string | null;
+    lastUpdatedByUserId: string | null;
+    createdAt: string;
+    updatedAt: string;
+    conditions: Array<{
+      id: string;
+      category: BuyerLenderConditionCategory;
+      status: BuyerLenderConditionStatus;
+      title: string;
+      notes: string | null;
+      dueAt: string | null;
+      blocking: boolean;
+      resolvedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }) | null;
+}
+
 export interface BuyerInspectionModuleRecommendation {
   moduleKey: string;
   title: string;

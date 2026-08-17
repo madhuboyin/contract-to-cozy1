@@ -477,6 +477,39 @@ enum BuyerPurchaseRateLockStatus {
   UNKNOWN
 }
 
+enum BuyerPurchaseAppraisalStatus {
+  NOT_ORDERED
+  ORDERED
+  SCHEDULED
+  COMPLETED
+  ISSUE_REPORTED
+  RESOLVED
+}
+
+enum BuyerPurchaseUnderwritingStatus {
+  NOT_STARTED
+  IN_REVIEW
+  CONDITIONAL
+  USER_RECORDED_CLEAR_TO_CLOSE
+}
+
+enum BuyerLenderConditionCategory {
+  INCOME_ASSET
+  CREDIT
+  APPRAISAL
+  INSURANCE_PROOF
+  TITLE
+  FINAL_VERIFICATION
+  OTHER
+}
+
+enum BuyerLenderConditionStatus {
+  OPEN
+  SUBMITTED
+  SATISFIED
+  WAIVED
+}
+
 enum BuyerCompletionMethod {
   USER_ATTESTATION
   DOCUMENT
@@ -2624,6 +2657,7 @@ model BuyerPurchaseFinancingPlan {
   property    Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   confirmedBy User?              @relation("BuyerPurchasePathConfirmer", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
   loanOffers  BuyerPurchaseLoanOffer[]
+  lenderReadiness BuyerPurchaseLenderReadiness?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2695,6 +2729,61 @@ model BuyerPurchaseLoanEstimateRevision {
   @@index([offerId, status, revisionNumber(sort: Desc)])
   @@index([sourceDocumentId])
   @@map("buyer_purchase_loan_estimate_revisions")
+}
+
+model BuyerPurchaseLenderReadiness {
+  id         String @id @default(uuid())
+  planId     String @unique
+  propertyId String @unique
+  selectedLoanEstimateRevisionId String
+
+  appraisalStatus          BuyerPurchaseAppraisalStatus @default(NOT_ORDERED)
+  appraisalOrderedAt       DateTime?
+  appraisalScheduledAt     DateTime?
+  appraisalCompletedAt     DateTime?
+  appraisalIssueType       String?
+  appraisalIssueNotes      String? @db.Text
+  appraisalIssueResolvedAt DateTime?
+  underwritingStatus       BuyerPurchaseUnderwritingStatus @default(NOT_STARTED)
+  clearToCloseRecordedAt   DateTime?
+  clearToCloseRecordedByUserId String?
+  lastUpdatedByUserId      String?
+
+  plan       BuyerPurchaseFinancingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  conditions BuyerPurchaseLenderCondition[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, appraisalStatus])
+  @@index([selectedLoanEstimateRevisionId])
+  @@index([underwritingStatus])
+  @@map("buyer_purchase_lender_readiness")
+}
+
+model BuyerPurchaseLenderCondition {
+  id          String @id @default(uuid())
+  readinessId String
+  propertyId  String
+
+  category BuyerLenderConditionCategory
+  status   BuyerLenderConditionStatus @default(OPEN)
+  title    String
+  notes    String? @db.Text
+  dueAt    DateTime?
+  blocking Boolean @default(false)
+  resolvedAt DateTime?
+  recordedByUserId String?
+  lastUpdatedByUserId String?
+
+  readiness BuyerPurchaseLenderReadiness @relation(fields: [readinessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([readinessId, status, dueAt])
+  @@index([propertyId, blocking, status])
+  @@map("buyer_purchase_lender_conditions")
 }
 
 model BuyerInspectionPlan {

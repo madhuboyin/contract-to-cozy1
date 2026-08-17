@@ -25,6 +25,7 @@ import type {
 import { appendBuyerPlanReturnContext } from '@/lib/navigation/buyerReturnContext';
 import { startBuyerNegotiationCase } from '../tools/negotiation-shield/negotiationShieldApi';
 import { BuyerPurchaseLoanEstimateCenter } from './BuyerPurchaseLoanEstimateCenter';
+import { BuyerPurchaseLenderReadinessCenter } from './BuyerPurchaseLenderReadinessCenter';
 
 const PHASES: Array<{ key: BuyerPlanPhase; label: string }> = [
   { key: 'EXPLORING', label: 'Exploring' },
@@ -382,7 +383,7 @@ export default function BuyerPlanPage() {
           </CardContent>
         </Card>
 
-        {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} />}
+        {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <><BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} /><BuyerPurchaseLenderReadinessCenter propertyId={propertyId} readOnly={readOnly} /></>}
 
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5" />Inspection scheduling and reinspection</CardTitle></CardHeader>

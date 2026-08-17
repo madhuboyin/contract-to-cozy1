@@ -66,6 +66,10 @@ router.post(
   homeBuyerTaskController.handleExtractPurchaseLoanEstimate,
 );
 router.post('/properties/:propertyId/purchase-financing/loan-estimates/select', homeBuyerTaskController.handleSelectPurchaseLoanOffer);
+router.get('/properties/:propertyId/purchase-financing/readiness', homeBuyerTaskController.handleGetPurchaseLenderReadiness);
+router.put('/properties/:propertyId/purchase-financing/readiness', homeBuyerTaskController.handleUpdatePurchaseLenderReadiness);
+router.post('/properties/:propertyId/purchase-financing/readiness/conditions', homeBuyerTaskController.handleCreateBuyerLenderCondition);
+router.patch('/properties/:propertyId/purchase-financing/readiness/conditions/:conditionId', homeBuyerTaskController.handleUpdateBuyerLenderCondition);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

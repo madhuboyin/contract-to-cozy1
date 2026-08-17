@@ -10,6 +10,7 @@ import {
   type BuyerPurchaseLoanEstimateUpdateInput,
   type BuyerPurchaseLoanSelectionInput,
   BUYER_ACTION_KEYS,
+  BUYER_MILESTONE_KEYS,
 } from '../productFramework/buyerAcquisition.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import {
@@ -346,6 +347,7 @@ export class BuyerPurchaseLoanEstimateService {
       throw new APIError('Select a current confirmed Loan Estimate.', 409, 'PURCHASE_LOAN_SELECTION_REQUIRES_CONFIRMED_REVISION');
     }
     const now = new Date();
+    const selectionChanged = revision.offer.plan.selectedLoanEstimateRevisionId !== revision.id;
     await prisma.$transaction(async (tx) => {
       await tx.buyerPurchaseFinancingPlan.update({
         where: { id: revision.offer.planId },
@@ -375,17 +377,50 @@ export class BuyerPurchaseLoanEstimateService {
           },
         },
       });
-      await tx.homeBuyerTask.updateMany({
-        where: {
-          checklistId: revision.offer.plan.checklistId,
-          actionKey: BUYER_ACTION_KEYS.APPRAISAL_TRACKING,
-          status: 'PENDING',
-        },
-        data: {
-          status: 'IN_PROGRESS',
-          statusReason: 'A lender offer is selected; record lender appraisal timing and conditions next.',
-        },
-      });
+      if (selectionChanged) {
+        await tx.homeBuyerTask.updateMany({
+          where: {
+            checklistId: revision.offer.plan.checklistId,
+            actionKey: BUYER_ACTION_KEYS.APPRAISAL_TRACKING,
+            status: { notIn: ['CANCELLED', 'NOT_NEEDED'] },
+          },
+          data: {
+            status: 'IN_PROGRESS',
+            statusReason: 'A different confirmed lender revision is selected; record its appraisal timing and conditions.',
+            completedAt: null,
+            completedByUserId: null,
+            completionMethod: null,
+            completionEvidenceJson: Prisma.JsonNull,
+          },
+        });
+        await tx.buyerJourneyMilestone.updateMany({
+          where: {
+            checklistId: revision.offer.plan.checklistId,
+            milestoneKey: BUYER_MILESTONE_KEYS.APPRAISAL,
+          },
+          data: {
+            status: 'NOT_STARTED',
+            dueAt: null,
+            completedAt: null,
+            sourceType: 'BUYER_PURCHASE_LOAN_SELECTION',
+            sourceEntityId: revision.id,
+            confidence: 1,
+            notes: 'Reset after the buyer selected a different confirmed lender revision.',
+          },
+        });
+      } else {
+        await tx.homeBuyerTask.updateMany({
+          where: {
+            checklistId: revision.offer.plan.checklistId,
+            actionKey: BUYER_ACTION_KEYS.APPRAISAL_TRACKING,
+            status: 'PENDING',
+          },
+          data: {
+            status: 'IN_PROGRESS',
+            statusReason: 'A lender offer is selected; record lender appraisal timing and conditions next.',
+          },
+        });
+      }
     });
     return this.list(userId, propertyId);
   }

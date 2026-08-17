@@ -216,6 +216,52 @@ export const BuyerPurchaseLoanSelectionSchema = z.strictObject({
 });
 export type BuyerPurchaseLoanSelectionInput = z.infer<typeof BuyerPurchaseLoanSelectionSchema>;
 
+export const BUYER_PURCHASE_APPRAISAL_STATUSES = [
+  'NOT_ORDERED', 'ORDERED', 'SCHEDULED', 'COMPLETED', 'ISSUE_REPORTED', 'RESOLVED',
+] as const;
+export const BUYER_PURCHASE_UNDERWRITING_STATUSES = [
+  'NOT_STARTED', 'IN_REVIEW', 'CONDITIONAL', 'USER_RECORDED_CLEAR_TO_CLOSE',
+] as const;
+export const BUYER_LENDER_CONDITION_CATEGORIES = [
+  'INCOME_ASSET', 'CREDIT', 'APPRAISAL', 'INSURANCE_PROOF', 'TITLE', 'FINAL_VERIFICATION', 'OTHER',
+] as const;
+export const BUYER_LENDER_CONDITION_STATUSES = ['OPEN', 'SUBMITTED', 'SATISFIED', 'WAIVED'] as const;
+
+export const BuyerPurchaseLenderReadinessUpdateSchema = z.strictObject({
+  appraisalStatus: z.enum(BUYER_PURCHASE_APPRAISAL_STATUSES).optional(),
+  appraisalOrderedAt: z.string().datetime().nullable().optional(),
+  appraisalScheduledAt: z.string().datetime().nullable().optional(),
+  appraisalCompletedAt: z.string().datetime().nullable().optional(),
+  appraisalIssueType: z.string().trim().max(160).nullable().optional(),
+  appraisalIssueNotes: z.string().trim().max(4_000).nullable().optional(),
+  appraisalIssueResolvedAt: z.string().datetime().nullable().optional(),
+  underwritingStatus: z.enum(BUYER_PURCHASE_UNDERWRITING_STATUSES).optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one appraisal or underwriting field must be provided.',
+});
+
+export const BuyerLenderConditionCreateSchema = z.strictObject({
+  category: z.enum(BUYER_LENDER_CONDITION_CATEGORIES),
+  title: z.string().trim().min(1).max(200),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  blocking: z.boolean().default(false),
+});
+
+export const BuyerLenderConditionUpdateSchema = z.strictObject({
+  status: z.enum(BUYER_LENDER_CONDITION_STATUSES).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  blocking: z.boolean().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one lender-condition field must be provided.',
+});
+
+export type BuyerPurchaseLenderReadinessUpdateInput = z.infer<typeof BuyerPurchaseLenderReadinessUpdateSchema>;
+export type BuyerLenderConditionCreateInput = z.infer<typeof BuyerLenderConditionCreateSchema>;
+export type BuyerLenderConditionUpdateInput = z.infer<typeof BuyerLenderConditionUpdateSchema>;
+
 export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
   'RADON',
   'SEWER_SEPTIC',
