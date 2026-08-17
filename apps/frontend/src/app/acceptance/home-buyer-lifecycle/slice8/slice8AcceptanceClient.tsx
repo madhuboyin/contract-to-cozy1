@@ -110,6 +110,15 @@ function buyerOverview(mode: 'buyer' | 'protected'): BuyerClosingHomeOverview {
       dueAt: '2026-08-18T12:00:00.000Z',
       assignedToUserId: null,
     },
+    nextActionGuidance: {
+      actionId: 'slice8-contract-review',
+      rationale: 'Confirm the dates that change your closing guidance.',
+      consequenceOfDelay: 'A missed confirmed contract date can reduce your options.',
+      responsibleParty: 'Buyer agent or attorney',
+      suggestedQuestion: 'Which confirmed contract date affects me first?',
+      ctaLabel: 'Review this step',
+      ctaHref: `/dashboard/properties/${PURCHASE_ID}/buyer-plan?taskId=slice8-contract-review`,
+    },
     blockers: [],
     milestones: [
       { id: 'inspection', milestoneKey: 'INSPECTION_CONTINGENCY', type: 'INSPECTION_CONTINGENCY', label: 'Inspection contingency', dueAt: '2026-08-19T12:00:00.000Z', status: 'IN_PROGRESS' },

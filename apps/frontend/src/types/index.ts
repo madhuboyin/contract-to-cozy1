@@ -3247,13 +3247,19 @@ export interface BuyerChecklistComposition {
     whyWeAsk: string;
     correctionPath: string | null;
     affectedTemplateKeys: string[];
+    impactRank: number;
+    answerKind: 'SINGLE_SELECT' | 'YEAR';
+    options?: Array<{ label: string; value: unknown }>;
   }>;
+  knownFacts: Array<{ factKey: string; label: string; value: string }>;
+  personalizedItems: Array<{ actionKey: string; title: string; whyMatters: string }>;
+  setupStatus: 'NEEDS_INPUT' | 'PERSONALIZED';
   delta: {
     added: number;
     removed: number;
     unchanged: number;
     addedItems: Array<{ actionKey: string; title: string; reasonCodes: string[] }>;
-    removedItems: Array<{ actionKey: string }>;
+    removedItems: Array<{ actionKey: string; title: string | null }>;
   };
   applied?: boolean;
   checklist?: HomeBuyerChecklist;
@@ -3274,6 +3280,16 @@ export interface BuyerClosingHomeTaskSummary {
   assignedToUserId: string | null;
 }
 
+export interface BuyerNextActionGuidance {
+  actionId: string;
+  rationale: string;
+  consequenceOfDelay: string;
+  responsibleParty: string;
+  suggestedQuestion: string;
+  ctaLabel: string;
+  ctaHref: string;
+}
+
 export interface BuyerClosingHomeOverview {
   property: {
     id: string;
@@ -3290,6 +3306,7 @@ export interface BuyerClosingHomeOverview {
     progress: { completed: number; total: number; percent: number };
   };
   nextAction: BuyerClosingHomeTaskSummary | null;
+  nextActionGuidance: BuyerNextActionGuidance | null;
   blockers: BuyerClosingHomeTaskSummary[];
   milestones: Array<{
     id: string;
@@ -3422,6 +3439,7 @@ export interface BuyerPlanOverview {
     completed: number; notNeeded: number; cancelled: number; progressPercent: number;
   };
   nextAction: BuyerPlanOverviewTask | null;
+  nextActionGuidance: BuyerNextActionGuidance | null;
   workload: Array<{
     userId: string; displayName: string | null; firstName: string; lastName: string;
     role: HouseholdRole; assignedTaskCount: number;

@@ -89,8 +89,7 @@ const FIELD_VALUES: Record<(typeof BUYER_CONTRACT_FIELD_KEYS)[number], keyof Buy
 };
 
 const REQUIRED_FIELDS = new Set<(typeof BUYER_CONTRACT_FIELD_KEYS)[number]>([
-  'PROPERTY_ADDRESS', 'BUYER_NAMES', 'SELLER_NAMES', 'ACCEPTANCE_DATE',
-  'TARGET_CLOSING_DATE', 'POSSESSION_TERMS',
+  'PROPERTY_ADDRESS',
 ]);
 
 function hasValue(value: unknown) {
@@ -184,10 +183,10 @@ export class BuyerContractService {
 
     const requiredMissing = [...REQUIRED_FIELDS].filter((key) => !hasValue(revision[FIELD_VALUES[key]]));
     if (requiredMissing.length) throw new APIError(`Complete required contract fields: ${requiredMissing.join(', ')}.`, 409, 'BUYER_CONTRACT_INCOMPLETE');
-    const populatedFields = BUYER_CONTRACT_FIELD_KEYS.filter((key) => hasValue(revision[FIELD_VALUES[key]]));
     const confirmedFields = new Set(input.fieldConfirmations.map((item) => item.fieldKey));
-    const unconfirmed = populatedFields.filter((key) => !confirmedFields.has(key));
-    if (unconfirmed.length) throw new APIError(`Confirm each populated field against its source: ${unconfirmed.join(', ')}.`, 409, 'BUYER_CONTRACT_FIELDS_UNCONFIRMED');
+    if (!confirmedFields.has('PROPERTY_ADDRESS')) {
+      throw new APIError('Confirm the property address before updating this closing plan.', 409, 'BUYER_CONTRACT_PROPERTY_UNCONFIRMED');
+    }
     await this.assertDocumentIds(propertyId, [revision.sourceDocumentId, ...input.fieldConfirmations.map((item) => item.sourceDocumentId)]);
 
     const previous = revision.workspace.currentRevisionId
@@ -201,15 +200,15 @@ export class BuyerContractService {
       await tx.buyerContractContingency.updateMany({ where: { revisionId }, data: { confirmedAt: now, confirmedByUserId: userId } });
       await tx.buyerContractRevision.update({ where: { id: revisionId }, data: { status: 'CONFIRMED', confirmedAt: now, confirmedByUserId: userId } });
       await tx.buyerContractWorkspace.update({ where: { id: revision.workspaceId }, data: { currentRevisionId: revisionId } });
-      await this.reconcile(tx, revision, previous, userId, now);
+      await this.reconcile(tx, revision, previous, userId, now, confirmedFields);
     });
     return this.get(userId, propertyId);
   }
 
-  private static async reconcile(tx: Prisma.TransactionClient, revision: any, previous: BuyerContractRevision | null, userId: string, now: Date) {
+  private static async reconcile(tx: Prisma.TransactionClient, revision: any, previous: BuyerContractRevision | null, userId: string, now: Date, confirmedFields: Set<string>) {
     const checklist = revision.workspace.checklist;
     const targetCanMove = !checklist.targetCloseDate || sameInstant(checklist.targetCloseDate, previous?.targetClosingDate);
-    if (targetCanMove && revision.targetClosingDate) {
+    if (confirmedFields.has('TARGET_CLOSING_DATE') && targetCanMove && revision.targetClosingDate) {
       await tx.homeBuyerChecklist.update({ where: { id: checklist.id }, data: { targetCloseDate: revision.targetClosingDate } });
       const tasks = await tx.homeBuyerTask.findMany({
         where: { checklistId: checklist.id, anchorOffsetDays: { not: null }, userEditedAt: null, status: { notIn: ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'] } },
@@ -222,9 +221,9 @@ export class BuyerContractService {
       }
     }
 
-    await this.upsertMilestone(tx, checklist.id, BUYER_MILESTONE_KEYS.CONTRACT_ACCEPTED, 'CONTRACT_ACCEPTED', revision.acceptedAt, 'COMPLETED', revision, now);
-    await this.upsertMilestone(tx, checklist.id, BUYER_MILESTONE_KEYS.CLOSING, 'CLOSING', revision.targetClosingDate, 'IN_PROGRESS', revision, null);
-    if (revision.possessionAt) await this.upsertMilestone(tx, checklist.id, 'buyer:milestone:possession', 'CUSTOM', revision.possessionAt, 'IN_PROGRESS', revision, null, 'Possession');
+    if (confirmedFields.has('ACCEPTANCE_DATE')) await this.upsertMilestone(tx, checklist.id, BUYER_MILESTONE_KEYS.CONTRACT_ACCEPTED, 'CONTRACT_ACCEPTED', revision.acceptedAt, 'COMPLETED', revision, now);
+    if (confirmedFields.has('TARGET_CLOSING_DATE')) await this.upsertMilestone(tx, checklist.id, BUYER_MILESTONE_KEYS.CLOSING, 'CLOSING', revision.targetClosingDate, 'IN_PROGRESS', revision, null);
+    if (confirmedFields.has('POSSESSION_DATE') && revision.possessionAt) await this.upsertMilestone(tx, checklist.id, 'buyer:milestone:possession', 'CUSTOM', revision.possessionAt, 'IN_PROGRESS', revision, null, 'Possession');
     for (const contingency of revision.contingencies) {
       const definition = MILESTONE_BY_CONTINGENCY[contingency.type];
       if (!definition || !contingency.dueAt) continue;
@@ -236,8 +235,8 @@ export class BuyerContractService {
     const open = revision.contingencies.filter((item: any) => item.status === 'ACTIVE');
     await tx.homeBuyerTask.upsert({
       where: { checklistId_actionKey: { checklistId: checklist.id, actionKey: BUYER_ACTION_KEYS.CONTRACT_REVISION_CONFIRM } },
-      create: { checklistId: checklist.id, actionKey: BUYER_ACTION_KEYS.CONTRACT_REVISION_CONFIRM, templateKey: BUYER_ACTION_KEYS.CONTRACT_REVISION_CONFIRM, title: 'Confirm the current accepted contract revision', description: 'Record and confirm the current signed contract dates and terms with field-level source references.', phase: 'OFFER_CONTRACT', priority: 'NOW', taskType: 'DOCUMENT', checklistSection: 'CONTRACT_CONTINGENCIES', evidenceRequirement: 'REQUIRED', applicability: 'APPLICABLE', required: true, blocking: true, sourceType: 'DOCUMENT', sourceEntityType: 'BUYER_CONTRACT_REVISION', sourceEntityId: revision.id, sortOrder: 10, status: 'COMPLETED', statusReason: `Contract revision ${revision.revisionNumber} was confirmed against its source.`, completedAt: now, completedByUserId: userId, completionMethod: revision.sourceDocumentId ? 'DOCUMENT' : 'USER_ATTESTATION', completionDocumentId: revision.sourceDocumentId, completionEvidenceJson: { revisionId: revision.id, fieldConfirmationCount: inputFieldCount(revision), disclaimer: 'Buyer-confirmed record; not legal review.' } },
-      update: { sourceEntityId: revision.id, status: 'COMPLETED', statusReason: `Contract revision ${revision.revisionNumber} was confirmed against its source.`, completedAt: now, completedByUserId: userId, completionMethod: revision.sourceDocumentId ? 'DOCUMENT' : 'USER_ATTESTATION', completionDocumentId: revision.sourceDocumentId, completionEvidenceJson: { revisionId: revision.id, fieldConfirmationCount: inputFieldCount(revision), disclaimer: 'Buyer-confirmed record; not legal review.' } },
+      create: { checklistId: checklist.id, actionKey: BUYER_ACTION_KEYS.CONTRACT_REVISION_CONFIRM, templateKey: BUYER_ACTION_KEYS.CONTRACT_REVISION_CONFIRM, title: 'Confirm the current accepted contract revision', description: 'Record and confirm the current signed contract dates and terms with field-level source references.', phase: 'OFFER_CONTRACT', priority: 'NOW', taskType: 'DOCUMENT', checklistSection: 'CONTRACT_CONTINGENCIES', evidenceRequirement: 'REQUIRED', applicability: 'APPLICABLE', required: true, blocking: true, sourceType: 'DOCUMENT', sourceEntityType: 'BUYER_CONTRACT_REVISION', sourceEntityId: revision.id, sortOrder: 10, status: 'COMPLETED', statusReason: `Contract revision ${revision.revisionNumber} was confirmed against its source.`, completedAt: now, completedByUserId: userId, completionMethod: revision.sourceDocumentId ? 'DOCUMENT' : 'USER_ATTESTATION', completionDocumentId: revision.sourceDocumentId, completionEvidenceJson: { revisionId: revision.id, fieldConfirmationCount: confirmedFields.size, disclaimer: 'Buyer-confirmed record; not legal review.' } },
+      update: { sourceEntityId: revision.id, status: 'COMPLETED', statusReason: `Contract revision ${revision.revisionNumber} was confirmed against its source.`, completedAt: now, completedByUserId: userId, completionMethod: revision.sourceDocumentId ? 'DOCUMENT' : 'USER_ATTESTATION', completionDocumentId: revision.sourceDocumentId, completionEvidenceJson: { revisionId: revision.id, fieldConfirmationCount: confirmedFields.size, disclaimer: 'Buyer-confirmed record; not legal review.' } },
     });
     await tx.homeBuyerTask.upsert({
       where: { checklistId_actionKey: { checklistId: checklist.id, actionKey: BUYER_ACTION_KEYS.CONTRACT_CONTINGENCIES_REVIEW } },
@@ -263,8 +262,4 @@ export class BuyerContractService {
     const count = await prisma.document.count({ where: { id: { in: requested }, propertyId, deletedAt: null } });
     if (count !== requested.length) throw new APIError('A linked contract source document was not found for this property.', 404, 'BUYER_CONTRACT_SOURCE_NOT_FOUND');
   }
-}
-
-function inputFieldCount(revision: BuyerContractRevision) {
-  return BUYER_CONTRACT_FIELD_KEYS.filter((key) => hasValue(revision[FIELD_VALUES[key]])).length;
 }

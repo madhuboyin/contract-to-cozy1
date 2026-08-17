@@ -13,6 +13,7 @@ function overview(): BuyerClosingHomeOverview {
       progress: { completed: 2, total: 8, percent: 25 },
     },
     nextAction: null,
+    nextActionGuidance: null,
     blockers: [],
     milestones: [],
     readinessLanes: [

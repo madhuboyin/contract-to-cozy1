@@ -45,7 +45,8 @@ function dueLabel(value: string | null): string {
 }
 
 export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverview }) {
-  const { journey, nextAction, blockers, readinessLanes, evidence, people, routes } = overview;
+  const { journey, nextAction, nextActionGuidance, blockers, readinessLanes, evidence, people, routes } = overview;
+  const nextActionHref = nextActionGuidance?.ctaHref ?? routes.plan;
   const paused = journey.status === 'PAUSED';
   const stageLabel = paused ? 'Paused' : STAGE_LABELS[journey.stage];
   const mobileActionLabel = paused
@@ -121,10 +122,15 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                   <div>
                     <p className="text-xl font-semibold text-slate-950">{nextAction.title}</p>
-                    {nextAction.description ? <p className="mt-1 max-w-2xl text-sm text-slate-600">{nextAction.description}</p> : null}
+                    <p className="mt-1 max-w-2xl text-sm text-slate-600">{nextActionGuidance?.rationale ?? nextAction.description}</p>
                     <p className="mt-3 text-sm font-medium text-teal-800">{dueLabel(nextAction.dueAt)}</p>
+                    {nextActionGuidance ? <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                      <p className="rounded-xl bg-amber-50 p-3 text-amber-950"><span className="font-semibold">If you delay: </span>{nextActionGuidance.consequenceOfDelay}</p>
+                      <p className="rounded-xl bg-slate-50 p-3 text-slate-700"><span className="font-semibold">Who can help: </span>{nextActionGuidance.responsibleParty}</p>
+                      <p className="rounded-xl bg-teal-50 p-3 text-teal-950 sm:col-span-2"><span className="font-semibold">Ask: </span>“{nextActionGuidance.suggestedQuestion}”</p>
+                    </div> : null}
                   </div>
-                  <Button asChild><Link href={routes.plan}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                  <Button asChild><Link href={nextActionHref}>{nextActionGuidance?.ctaLabel ?? 'Continue'} <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
                 </div>
               ) : (
                 <div>
@@ -210,7 +216,7 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
         reserveSize="floatingAction"
         action={(
           <Button asChild size="lg" className="w-full shadow-xl">
-            <Link href={routes.plan} aria-label={mobileActionLabel}>
+            <Link href={nextActionHref} aria-label={mobileActionLabel}>
               {paused ? 'Review paused plan' : nextAction ? 'Continue next action' : 'Review Closing Plan'}
               <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
             </Link>

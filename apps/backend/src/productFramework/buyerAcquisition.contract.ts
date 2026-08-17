@@ -821,6 +821,16 @@ const BuyerClosingHomeReadinessLaneSchema = z.strictObject({
   blocked: z.number().int().nonnegative(),
 });
 
+export const BuyerNextActionGuidanceSchema = z.strictObject({
+  actionId: z.string().min(1),
+  rationale: z.string().min(1),
+  consequenceOfDelay: z.string().min(1),
+  responsibleParty: z.string().min(1),
+  suggestedQuestion: z.string().min(1),
+  ctaLabel: z.string().min(1),
+  ctaHref: z.string().startsWith('/dashboard/properties/'),
+});
+
 export const BuyerClosingHomeOverviewSchema = z.strictObject({
   property: z.strictObject({
     id: z.string().min(1),
@@ -841,6 +851,7 @@ export const BuyerClosingHomeOverviewSchema = z.strictObject({
     }),
   }),
   nextAction: BuyerClosingHomeTaskSummarySchema.nullable(),
+  nextActionGuidance: BuyerNextActionGuidanceSchema.nullable(),
   blockers: z.array(BuyerClosingHomeTaskSummarySchema),
   milestones: z.array(BuyerClosingHomeMilestoneSchema),
   readinessLanes: z.array(BuyerClosingHomeReadinessLaneSchema),
@@ -995,6 +1006,7 @@ export const BuyerPlanOverviewSchema = z.strictObject({
     progressPercent: z.number().min(0).max(100),
   }),
   nextAction: BuyerPlanOverviewTaskSchema.nullable(),
+  nextActionGuidance: BuyerNextActionGuidanceSchema.nullable(),
   workload: z.array(z.strictObject({
     userId: z.string().min(1),
     displayName: z.string().nullable(),

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { BuyerJourneyStage, BuyerPlanOverviewTask } from '@/types';
+import type { BuyerJourneyStage, BuyerNextActionGuidance, BuyerPlanOverviewTask } from '@/types';
 
 export type BuyerPlanWorkspaceKey = 'CONTRACT' | 'DUE_DILIGENCE' | 'FINANCING_PROTECTION' | 'CLOSING_PREP' | 'CLOSE_MOVE_IN';
 
@@ -145,6 +145,7 @@ export function BuyerPlanPhaseNavigation({
 export function BuyerPlanOverviewPanel({
   targetCloseDate,
   nextAction,
+  nextActionGuidance,
   milestones,
   blockedCount,
   currentWorkspace,
@@ -153,6 +154,7 @@ export function BuyerPlanOverviewPanel({
 }: {
   targetCloseDate: string | null;
   nextAction: BuyerPlanOverviewTask | null;
+  nextActionGuidance: BuyerNextActionGuidance | null;
   milestones: Array<{ id: string; label: string; status: string; dueAt: string | null }>;
   blockedCount: number;
   currentWorkspace: BuyerPlanWorkspaceKey;
@@ -175,7 +177,7 @@ export function BuyerPlanOverviewPanel({
             <div>
               <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700"><Sparkles className="h-4 w-4" />Your next move</p>
               <h2 className="mt-3 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{nextAction?.title ?? 'Review what matters in your current phase'}</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">{nextAction?.description ?? 'We will keep the detailed records out of the way and guide you to the next useful decision.'}</p>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">{nextActionGuidance?.rationale ?? nextAction?.description ?? 'We will keep the detailed records out of the way and guide you to the next useful decision.'}</p>
             </div>
             {blockedCount > 0 && <Badge className="border border-amber-200 bg-amber-50 text-amber-800">{blockedCount} need help</Badge>}
           </div>
@@ -185,9 +187,8 @@ export function BuyerPlanOverviewPanel({
               className="bg-teal-700 text-white hover:bg-teal-800"
               onClick={() => nextAction ? onOpenTask(nextAction) : onOpenWorkspace(currentWorkspace)}
             >
-              {nextAction ? 'Review next action' : 'Open current phase'}<ArrowRight className="ml-2 h-4 w-4" />
+              {nextActionGuidance?.ctaLabel ?? (nextAction ? 'Review next action' : 'Open current phase')}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button type="button" variant="ghost" className="text-slate-700 hover:bg-white/70 hover:text-slate-950" onClick={() => onOpenWorkspace(currentWorkspace)}>See phase guidance</Button>
           </div>
           <div className="mt-8 grid gap-4 border-t border-teal-100 pt-5 sm:grid-cols-2">
             <div><p className="text-xs text-slate-500">Target closing</p><p className="mt-1 text-xl font-semibold text-slate-950">{closeDate ? closeDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Not set yet'}</p><p className="text-xs text-slate-500">{daysToClose === null ? 'Add it when the date is known' : daysToClose >= 0 ? `${daysToClose} days remaining` : `${Math.abs(daysToClose)} days past target`}</p></div>
@@ -214,27 +215,24 @@ export function BuyerPlanOverviewPanel({
 export function BuyerPlanPhaseGuidance({
   workspace,
   tasks,
+  nextAction,
+  nextActionGuidance,
   milestones,
   targetCloseDate,
   onOpenTask,
 }: {
   workspace: BuyerPlanWorkspaceKey;
   tasks: BuyerPlanOverviewTask[];
+  nextAction: BuyerPlanOverviewTask | null;
+  nextActionGuidance: BuyerNextActionGuidance | null;
   milestones: Array<{ id: string; label: string; status: string; dueAt: string | null }>;
   targetCloseDate: string | null;
   onOpenTask: (task: BuyerPlanOverviewTask) => void;
 }) {
   const guidance = WORKSPACE_GUIDANCE[workspace];
-  const openTasks = tasks
-    .filter((task) => !resolved(task))
-    .sort((left, right) => {
-      const priority = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 } as const;
-      const priorityDifference = priority[left.priority] - priority[right.priority];
-      if (priorityDifference !== 0) return priorityDifference;
-      if (left.dueAt && right.dueAt) return new Date(left.dueAt).getTime() - new Date(right.dueAt).getTime();
-      return left.dueAt ? -1 : right.dueAt ? 1 : left.sortOrder - right.sortOrder;
-    });
-  const nextTask = openTasks[0] ?? null;
+  const openTasks = tasks.filter((task) => !resolved(task));
+  const nextTask = nextAction;
+  const canWait = openTasks.filter((task) => task.id !== nextTask?.id && ['PLAN', 'CONSIDER'].includes(task.priority)).slice(0, 2);
   const datedItems = [
     ...openTasks.filter((task) => task.dueAt).map((task) => ({ id: task.id, label: task.title, dueAt: task.dueAt! })),
     ...milestones.filter((milestone) => milestone.dueAt && !['COMPLETED', 'WAIVED', 'CANCELLED'].includes(milestone.status)).map((milestone) => ({ id: milestone.id, label: milestone.label, dueAt: milestone.dueAt! })),
@@ -252,8 +250,12 @@ export function BuyerPlanPhaseGuidance({
           <div className="mt-6 rounded-2xl border border-teal-100 bg-white p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Recommended next action</p>
             <h3 className="mt-2 text-lg font-semibold text-slate-950">{nextTask?.title ?? 'No action is waiting for you in this phase'}</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-600">{nextTask?.description ?? 'You can review the questions below or return to the current phase when something changes.'}</p>
-            {nextTask && <Button type="button" className="mt-4" onClick={() => onOpenTask(nextTask)}>Do this next<ArrowRight className="ml-2 h-4 w-4" /></Button>}
+            <p className="mt-1 text-sm leading-6 text-slate-600">{nextActionGuidance?.rationale ?? nextTask?.description ?? 'You can review the questions below or return to the current phase when something changes.'}</p>
+            {nextTask && nextActionGuidance && <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div className="rounded-xl bg-amber-50 p-3 text-amber-950"><span className="font-semibold">If you delay: </span>{nextActionGuidance.consequenceOfDelay}</div>
+              <div className="rounded-xl bg-slate-50 p-3 text-slate-700"><span className="font-semibold">Who can help: </span>{nextActionGuidance.responsibleParty}</div>
+            </div>}
+            {nextTask && <Button type="button" className="mt-4" onClick={() => onOpenTask(nextTask)}>{nextActionGuidance?.ctaLabel ?? 'Do this next'}<ArrowRight className="ml-2 h-4 w-4" /></Button>}
           </div>
         </div>
 
@@ -266,9 +268,13 @@ export function BuyerPlanPhaseGuidance({
       <div className="border-t border-teal-100 bg-white/70 p-5 sm:p-7">
         <div className="flex items-center gap-2"><HelpCircle className="h-5 w-5 text-teal-600" /><h3 className="font-semibold text-slate-950">Helpful questions to ask</h3></div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {guidance.questions.map((question) => <div key={question} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">“{question}”</div>)}
+          {[nextActionGuidance?.suggestedQuestion, ...guidance.questions].filter((question, index, values): question is string => Boolean(question) && values.indexOf(question) === index).slice(0, 2).map((question) => <div key={question} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">“{question}”</div>)}
         </div>
-        <p className="mt-4 text-xs leading-5 text-slate-500">The detailed forms and full action list below are optional records. Open them only when they help you complete the next step or preserve something important.</p>
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">What can safely wait</p>
+          <p className="mt-1 text-sm text-slate-600">{canWait.length > 0 ? canWait.map((task) => task.title).join(' · ') : 'Administrative details and future-phase preparation can stay closed until they affect a recommendation.'}</p>
+        </div>
+        <p className="mt-4 text-xs leading-5 text-slate-500">Forms, history and advanced records remain below and collapsed by default. Open them only when they help complete this step or preserve something important.</p>
       </div>
     </section>
   );

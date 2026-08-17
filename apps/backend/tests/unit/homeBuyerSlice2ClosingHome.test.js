@@ -28,6 +28,11 @@ function buyerOverview() {
       status: 'PENDING', phase: 'DUE_DILIGENCE', priority: 'NOW', checklistSection: null,
       dueAt: null, assignedToUserId: null,
     },
+    nextActionGuidance: {
+      actionId: 'task-1', rationale: 'Prepare for the inspection.', consequenceOfDelay: 'Less time remains.',
+      responsibleParty: 'Inspector and buyer agent', suggestedQuestion: 'What should the inspection cover?',
+      ctaLabel: 'Review this step', ctaHref: '/dashboard/properties/property-1/buyer-plan?taskId=task-1',
+    },
     blockers: [],
     milestones: [],
     readinessLanes: [

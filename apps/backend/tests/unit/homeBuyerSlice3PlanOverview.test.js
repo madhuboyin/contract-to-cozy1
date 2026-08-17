@@ -38,6 +38,11 @@ function overview() {
     contacts: [],
     summary: { total: 1, pending: 1, inProgress: 0, blocked: 0, completed: 0, notNeeded: 0, cancelled: 0, progressPercent: 0 },
     nextAction: task(),
+    nextActionGuidance: {
+      actionId: 'task-1', rationale: 'Prepare for the inspection.', consequenceOfDelay: 'Less time remains.',
+      responsibleParty: 'Inspector and buyer agent', suggestedQuestion: 'What should the inspection cover?',
+      ctaLabel: 'Review this step', ctaHref: '/dashboard/properties/property-1/buyer-plan?taskId=task-1',
+    },
     workload: [{ userId: 'user-1', displayName: null, firstName: 'Alex', lastName: 'Buyer', role: 'VIEWER', assignedTaskCount: 1 }],
     history: [{ id: 'task:task-1', kind: 'TASK', label: 'Import inspection', status: 'PENDING', occurredAt: '2026-08-17T12:00:00.000Z' }],
   };
@@ -62,7 +67,7 @@ test('Slice 3 overview endpoint is property-scoped and read-only', () => {
   assert.doesNotMatch(method, /\.create\(|\.update\(|getOrCreateChecklist/);
 });
 
-test('Buyer Plan consumes one core overview query and renders viewer, milestone, workload, and history states', () => {
+test('Buyer Plan consumes one core overview query and renders canonical next-action guidance', () => {
   const page = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/page.tsx');
   const checklist = read('../../../frontend/src/components/tasks/HomeBuyerChecklist.tsx');
 
@@ -71,8 +76,8 @@ test('Buyer Plan consumes one core overview query and renders viewer, milestone,
   assert.doesNotMatch(page, /api\.listHouseholdMembers\(propertyId\)/);
   assert.match(page, /overview\.accessRole === 'VIEWER'/);
   assert.match(page, /overview\.milestones/);
-  assert.match(page, /overview\.workload/);
-  assert.match(page, /overview\.history/);
+  assert.match(page, /overview\.nextActionGuidance/);
+  assert.match(page, /BuyerPlanPhaseGuidance/);
   assert.doesNotMatch(checklist, /DEFAULT_TASK_TITLES/);
   assert.match(checklist, /task\.sourceType === 'SYSTEM' \|\| Boolean\(task\.templateKey\)/);
 });

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, SlidersHorizontal, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, Users } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { api } from '@/lib/api/client';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +44,7 @@ import {
   workspaceForTask,
 } from './BuyerPlanExperience';
 import RouteStateCard from '@/components/system/RouteStateCard';
+import { BuyerPlanPersonalization } from './BuyerPlanPersonalization';
 
 const PRE_CLOSE_PHASES: BuyerPlanPhase[] = ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'];
 const ACTIVE_TASK_STATUSES: HomeBuyerTaskStatus[] = ['PENDING', 'IN_PROGRESS', 'BLOCKED'];
@@ -62,14 +63,6 @@ const NEXT_STEP_LABELS = {
   VERIFY_DOCUMENTS: 'Verify imported property documents',
   BUILD_90_DAY_PLAN: 'Continue the 90-day plan',
 } as const;
-
-function dateInputValue(value: string | null | undefined) {
-  return value ? value.slice(0, 10) : '';
-}
-
-function isoFromDateInput(value: string) {
-  return value ? new Date(`${value}T12:00:00.000Z`).toISOString() : null;
-}
 
 function datetimeInputValue(value: string | null | undefined) {
   if (!value) return '';
@@ -95,6 +88,7 @@ export default function BuyerPlanPage() {
   const returnTaskId = searchParams.get('taskId');
   const returnSection = searchParams.get('section');
   const restoredPositionRef = useRef(false);
+  const autoAppliedCompositionRef = useRef<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [activeWorkspace, setActiveWorkspace] = useState<BuyerPlanWorkspaceKey | null>(null);
@@ -178,11 +172,6 @@ export default function BuyerPlanPage() {
     enabled: Boolean(propertyId),
   });
 
-  const lifecycleMutation = useMutation({
-    mutationFn: (input: { targetCloseDate: string | null }) =>
-      api.updateBuyerLifecycle(propertyId, input),
-    onSuccess: () => { void refresh(); toast({ title: 'Timeline updated', description: 'Plan due dates were recalculated from the new lifecycle anchors.' }); },
-  });
   const journeyStatusMutation = useMutation({
     mutationFn: async (action: 'pause' | 'resume') => {
       const response = action === 'pause'
@@ -319,6 +308,30 @@ export default function BuyerPlanPage() {
       });
     },
   });
+  const personalizationAnswerMutation = useMutation({
+    mutationFn: ({ factKey, value }: { factKey: string; value: unknown }) =>
+      api.patch(`/api/properties/${propertyId}/context/${encodeURIComponent(factKey)}`, { value }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['buyer-checklist-composition', propertyId] });
+      toast({ title: 'Answer saved', description: 'We’re updating only the guidance affected by this answer.' });
+    },
+    onError: (error) => toast({
+      title: 'Unable to save this answer',
+      description: error instanceof Error ? error.message : 'Try again.',
+      variant: 'destructive',
+    }),
+  });
+
+  useEffect(() => {
+    const composition = compositionQuery.data;
+    const overview = overviewQuery.data;
+    if (!composition || !overview || composition.delta.added === 0 || composition.delta.removed > 0) return;
+    if (overview.accessRole === 'VIEWER' || ['PAUSED', 'CANCELLED', 'HANDED_OFF', 'ARCHIVED'].includes(overview.plan.status)) return;
+    const applicationKey = `${composition.contextVersion}:${composition.delta.added}`;
+    if (autoAppliedCompositionRef.current === applicationKey || compositionMutation.isPending) return;
+    autoAppliedCompositionRef.current = applicationKey;
+    compositionMutation.mutate();
+  }, [compositionQuery.data, compositionMutation, overviewQuery.data]);
 
   useEffect(() => {
     if (restoredPositionRef.current || (!returnTaskId && !returnSection) || !overviewQuery.data) return;
@@ -457,11 +470,20 @@ export default function BuyerPlanPage() {
         {plan.status === 'PAUSED' && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-blue-950"><div><strong>This closing plan is paused.</strong> Deadline and task reminders are stopped. Your tasks, notes, documents, and evidence remain saved and can be reviewed below.</div>{canPauseResume && <Button size="sm" onClick={() => journeyStatusMutation.mutate('resume')} disabled={journeyStatusMutation.isPending}>{journeyStatusMutation.isPending ? 'Resuming…' : 'Resume closing plan'}</Button>}</CardContent></Card>}
         {overview.accessRole === 'VIEWER' && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="py-4 text-sm text-blue-950"><strong>View-only access.</strong> You can review tasks, milestones, contacts, evidence, and history, but only an owner or contributor can change this plan.</CardContent></Card>}
 
+        {composition && <BuyerPlanPersonalization
+          composition={composition}
+          readOnly={readOnly}
+          saving={compositionMutation.isPending || personalizationAnswerMutation.isPending}
+          onAnswer={(factKey, value) => personalizationAnswerMutation.mutate({ factKey, value })}
+          onApplyReviewedChanges={() => compositionMutation.mutate()}
+        />}
+
         <BuyerPlanPhaseNavigation active={activeWorkspace} current={currentWorkspace} tasks={plan.tasks} onChange={setActiveWorkspace} />
 
         {!activeWorkspace && <BuyerPlanOverviewPanel
           targetCloseDate={plan.targetCloseDate}
           nextAction={overview.nextAction}
+          nextActionGuidance={overview.nextActionGuidance}
           milestones={overview.milestones}
           blockedCount={overview.summary.blocked}
           currentWorkspace={currentWorkspace}
@@ -474,27 +496,15 @@ export default function BuyerPlanPage() {
         {activeWorkspace && <BuyerPlanPhaseGuidance
           workspace={activeWorkspace}
           tasks={selectedTasks}
+          nextAction={overview.nextAction}
+          nextActionGuidance={overview.nextActionGuidance}
           milestones={overview.milestones}
           targetCloseDate={plan.targetCloseDate}
           onOpenTask={openTask}
         />}
 
         {activeWorkspace === 'CONTRACT' && <div className="space-y-4">
-          <BuyerPlanTool title="Closing date" description="Set the working target date used to calculate eligible Buyer Plan reminders." meta={plan.targetCloseDate ? new Date(plan.targetCloseDate).toLocaleDateString() : 'Optional'}>
-            <Card className="border-0 shadow-none"><CardContent className="pt-6"><form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              lifecycleMutation.mutate({ targetCloseDate: isoFromDateInput(String(form.get('targetCloseDate') ?? '')) });
-            }}><label className="space-y-1 text-sm"><span>Target closing date</span><Input name="targetCloseDate" type="date" defaultValue={dateInputValue(plan.targetCloseDate)} disabled={readOnly} /></label><div className="flex items-end"><Button type="submit" disabled={readOnly || lifecycleMutation.isPending}>Update timeline</Button></div></form><p className="mt-3 text-xs text-muted-foreground">Ownership begins only after explicit professional-close confirmation in the Closing Day Companion.</p></CardContent></Card>
-          </BuyerPlanTool>
-
-          {composition && <BuyerPlanTool title="Plan tailoring" description="Review optional property details only when they materially improve the closing checklist." meta={composition.delta.added || composition.delta.removed ? `${composition.delta.added + composition.delta.removed} suggested changes` : 'Up to date'}>
-            <Card className="border-0 shadow-none"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><SlidersHorizontal className="h-5 w-5" />Property-aware checklist</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-medium">{composition.delta.added} add, {composition.delta.removed} remove, {composition.delta.unchanged} unchanged</p><p className="text-xs text-muted-foreground">Unknown details remain optional and outside active progress.</p></div><Button disabled={readOnly || compositionMutation.isPending || (composition.delta.added === 0 && composition.delta.removed === 0)} onClick={() => compositionMutation.mutate()}>{compositionMutation.isPending ? 'Updating…' : 'Apply suggested changes'}</Button></div>{composition.questions.length > 0 && <div className="grid gap-2 md:grid-cols-2">{composition.questions.slice(0, 4).map((question) => <div key={question.factKey} className="rounded-2xl border bg-white p-4"><p className="text-sm font-medium">{question.prompt}</p><p className="mt-1 text-xs text-muted-foreground">{question.whyWeAsk}</p>{question.correctionPath && <Button asChild variant="link" className="h-auto p-0 pt-2 text-xs"><Link href={question.correctionPath}>Add when known</Link></Button>}</div>)}</div>}</CardContent></Card>
-          </BuyerPlanTool>}
-
-          <BuyerPlanTool title="Contract & contingencies" description="Record or confirm the signed contract, important terms and time-sensitive contingency dates." meta="Optional until confirmed">
-            <BuyerContractContingencyCenter propertyId={propertyId} readOnly={readOnly} onChanged={() => void refresh()} />
-          </BuyerPlanTool>
+          <BuyerContractContingencyCenter propertyId={propertyId} readOnly={readOnly} onChanged={() => void refresh()} />
 
           <BuyerPlanTool title="Purchase method" description="Tell the plan whether lender-only work applies. You can change this later." meta={purchaseFinancingPlan?.purchasePath === 'CASH' ? 'Cash' : purchaseFinancingPlan?.purchasePath === 'FINANCED' ? 'Financed' : 'Not confirmed'}>
         <Card className="border-0 shadow-none">

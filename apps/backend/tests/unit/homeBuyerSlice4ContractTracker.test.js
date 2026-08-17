@@ -57,7 +57,8 @@ test('strict contracts allow manual drafts and require explicit field-level conf
 
 test('confirmation supersedes revisions and performs guarded Buyer Plan write-back', () => {
   assert.match(service, /status: 'SUPERSEDED'/);
-  assert.match(service, /BUYER_CONTRACT_FIELDS_UNCONFIRMED/);
+  assert.match(service, /BUYER_CONTRACT_PROPERTY_UNCONFIRMED/);
+  assert.match(service, /confirmedFields\.has\('TARGET_CLOSING_DATE'\)/);
   assert.match(service, /targetCanMove = !checklist\.targetCloseDate \|\| sameInstant/);
   assert.match(service, /userEditedAt: null/);
   assert.match(service, /BUYER_MILESTONE_KEYS\.CONTRACT_ACCEPTED/);
@@ -70,10 +71,11 @@ test('confirmation supersedes revisions and performs guarded Buyer Plan write-ba
 test('property-scoped API and Buyer Plan UI support resumable revisions without legal conclusions', () => {
   assert.match(routes, /properties\/:propertyId\/contract-contingencies/);
   assert.match(routes, /contract-contingencies\/revisions\/:revisionId\/confirm/);
-  assert.match(center, /Contract & Contingency Tracker/);
-  assert.match(center, /Save contract draft/);
-  assert.match(center, /Save as new revision/);
-  assert.match(center, /Confirm revision and update timeline/);
+  assert.match(center, /Contract dates that guide your plan/);
+  assert.match(center, /Upload or photograph contract/);
+  assert.match(center, /View extracted contract details/);
+  assert.match(center, /Save reviewed dates/);
+  assert.match(center, /Confirm dates and update my plan/);
   assert.match(center, /not legal review/);
   assert.doesNotMatch(center, /waive this contingency|contract is compliant|legally approved/i);
 });

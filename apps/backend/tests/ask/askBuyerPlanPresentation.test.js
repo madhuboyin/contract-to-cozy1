@@ -24,7 +24,7 @@ function context(overrides = {}) {
     overview: {
       property: { id: 'property/1', address: '1 Main St', city: 'Boston', state: 'MA', zipCode: '02108' },
       journey: { status: 'ACTIVE', stage: 'CLOSING_PREP', targetCloseDate: '2026-08-25T00:00:00.000Z', moveInDate: null, progress: { completed: 8, total: 10, percent: 80 } },
-      nextAction: task(), blockers: [], milestones: [], readinessLanes: [],
+      nextAction: task(), nextActionGuidance: null, blockers: [], milestones: [], readinessLanes: [],
       evidence: { inspectionState: 'CONFIRMED', inspectionReportCount: 1, openMaterialFindingCount: 0, documentCount: 3, verifiedDocumentCount: 2, documentsNeedingReviewCount: 1 },
       people: { contactCount: 2, assignedTaskCount: 1 },
       routes: { plan: '/dashboard/properties/property%2F1/buyer-plan', documents: '/dashboard/properties/property%2F1/documents', inspection: '/dashboard/properties/property%2F1/inspection-hub', ask: '/dashboard/ask?propertyId=property%2F1' },

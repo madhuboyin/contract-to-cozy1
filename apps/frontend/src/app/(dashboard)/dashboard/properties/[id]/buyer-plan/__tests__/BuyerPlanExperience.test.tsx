@@ -79,9 +79,20 @@ describe('Buyer Plan progressive disclosure', () => {
 
   it('leads an opened phase with guidance, one next action, a deadline, and professional questions', () => {
     const onOpenTask = jest.fn();
+    const nextAction = task({ title: 'Prepare for your inspection', dueAt: '2026-08-20T12:00:00.000Z' });
     render(<BuyerPlanPhaseGuidance
       workspace="DUE_DILIGENCE"
-      tasks={[task({ title: 'Prepare for your inspection', dueAt: '2026-08-20T12:00:00.000Z' })]}
+      tasks={[nextAction]}
+      nextAction={nextAction}
+      nextActionGuidance={{
+        actionId: nextAction.id,
+        rationale: 'Know what the inspector should focus on.',
+        consequenceOfDelay: 'You may have less time to investigate findings.',
+        responsibleParty: 'Inspector and buyer agent',
+        suggestedQuestion: 'What should this inspection cover?',
+        ctaLabel: 'Review this step',
+        ctaHref: '/dashboard/properties/property-1/buyer-plan?taskId=task-1',
+      }}
       milestones={[]}
       targetCloseDate="2026-09-30T12:00:00.000Z"
       onOpenTask={onOpenTask}
@@ -90,8 +101,10 @@ describe('Buyer Plan progressive disclosure', () => {
     expect(screen.getByText('Understand the home before your inspection deadline passes')).toBeInTheDocument();
     expect(screen.getAllByText('Prepare for your inspection')).toHaveLength(2);
     expect(screen.getByText('Nearest known deadline')).toBeInTheDocument();
-    expect(screen.getByText(/What should be checked more closely/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /do this next/i }));
+    expect(screen.getByText(/What should this inspection cover/)).toBeInTheDocument();
+    expect(screen.getByText(/If you delay/)).toBeInTheDocument();
+    expect(screen.getByText(/What can safely wait/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /review this step/i }));
     expect(onOpenTask).toHaveBeenCalled();
   });
 });

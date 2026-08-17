@@ -150,6 +150,126 @@ function planOverviewTask(task: HomeBuyerTask) {
   };
 }
 
+type NextActionMilestone = {
+  type: string;
+  status: string;
+};
+
+const PRIORITY_RANK: Record<BuyerPlanPriority, number> = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 };
+
+function currentBuyerPhase(stage: string): BuyerPlanPhase {
+  if (['EXPLORING'].includes(stage)) return 'EXPLORING';
+  if (['OFFER_CONTRACT'].includes(stage)) return 'OFFER_CONTRACT';
+  if (['DUE_DILIGENCE'].includes(stage)) return 'DUE_DILIGENCE';
+  if (['CLOSING_PREP'].includes(stage)) return 'CLOSING_PREP';
+  return 'MOVE_IN';
+}
+
+/**
+ * Canonical next-action selector shared by Home and Buyer Plan.
+ * Upload/review work is intentionally gated until the underlying event or
+ * document exists, so the product never asks a buyer to import a report before
+ * an inspection has happened.
+ */
+export function selectBuyerNextAction(input: {
+  tasks: HomeBuyerTask[];
+  stage: string;
+  milestones: NextActionMilestone[];
+  inspectionReportCount: number;
+  now?: Date;
+}): HomeBuyerTask | null {
+  const now = input.now ?? new Date();
+  const phase = currentBuyerPhase(input.stage);
+  const inspectionComplete = input.inspectionReportCount > 0 || input.milestones.some((milestone) =>
+    milestone.type === 'INSPECTION' && milestone.status === 'COMPLETED',
+  );
+  const reportDependentActions = new Set<string>([
+    BUYER_ACTION_KEYS.INSPECTION_IMPORT,
+    BUYER_ACTION_KEYS.INSPECTION_VERIFY,
+    BUYER_ACTION_KEYS.NEGOTIATION_SEPARATE,
+  ]);
+
+  return input.tasks
+    .filter((task) => task.applicability !== 'NOT_APPLICABLE')
+    .filter((task) => !['COMPLETED', 'NOT_NEEDED', 'CANCELLED', 'BLOCKED'].includes(task.status))
+    .filter((task) => inspectionComplete || !reportDependentActions.has(task.actionKey))
+    .sort((left, right) => {
+      const rank = (task: HomeBuyerTask) => {
+        const overdue = Boolean(task.dueAt && task.dueAt.getTime() < now.getTime());
+        if (overdue) return 0;
+        if (task.phase === phase && (task.required || task.blocking || task.priority === 'NOW')) return 1;
+        if (task.phase === phase) return 2;
+        if (reportDependentActions.has(task.actionKey)) return 3;
+        return 4;
+      };
+      const leftDue = left.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const rightDue = right.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return rank(left) - rank(right)
+        || leftDue - rightDue
+        || PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority]
+        || left.sortOrder - right.sortOrder;
+    })[0] ?? null;
+}
+
+export function buyerNextActionGuidance(task: HomeBuyerTask, propertyId: string) {
+  const section = task.checklistSection ?? 'GENERAL';
+  const guidanceBySection: Record<string, { consequence: string; party: string; question: string }> = {
+    CONTRACT_CONTINGENCIES: {
+      consequence: 'A missed confirmed contract date can reduce your options. Confirm any uncertain date with your agent or attorney.',
+      party: 'Buyer agent or attorney',
+      question: 'Which confirmed contract date affects me first, and what should I do before it?',
+    },
+    INSPECTION_DUE_DILIGENCE: {
+      consequence: 'Delaying inspection preparation can leave less time to investigate findings before your deadline.',
+      party: 'Inspector and buyer agent',
+      question: 'For this home, what should the inspection cover and when will the report be ready?',
+    },
+    FINANCING_APPRAISAL: {
+      consequence: 'A delayed lender item can put financing or the closing date at risk.',
+      party: 'Lender or loan officer',
+      question: 'What is the next item you need from me, and when is it due?',
+    },
+    TITLE_ESCROW_HOA: {
+      consequence: 'Unresolved title or closing questions can create last-minute delays.',
+      party: 'Closing professional or attorney',
+      question: 'Is anything unresolved that could delay closing or possession?',
+    },
+    INSURANCE: {
+      consequence: 'Waiting too long can limit time to compare coverage or satisfy a lender requirement.',
+      party: 'Licensed insurance agent',
+      question: 'What information do you need to confirm coverage by my closing date?',
+    },
+    MOVE_POSSESSION: {
+      consequence: 'Delaying this step may make closing day or move-in more stressful.',
+      party: 'Buyer and relevant professional',
+      question: 'What must be confirmed before closing day, and what can wait until after move-in?',
+    },
+    GENERAL: {
+      consequence: 'Waiting may compress the time available for later closing steps.',
+      party: 'Buyer and relevant professional',
+      question: 'What should I confirm before I mark this step complete?',
+    },
+  };
+  if (['FINAL_WALKTHROUGH', 'CLOSING_DISCLOSURE_FUNDS', 'CLOSING_DAY'].includes(section)) {
+    guidanceBySection[section] = {
+      consequence: 'Delaying this step may leave less time to resolve a closing-day surprise.',
+      party: 'Buyer agent, lender, attorney, or closing professional',
+      question: 'What must I review or confirm before closing, and what can safely wait?',
+    };
+  }
+  const copy = guidanceBySection[section] ?? guidanceBySection.GENERAL;
+  const query = new URLSearchParams({ taskId: task.id, section }).toString();
+  return {
+    actionId: task.id,
+    rationale: task.description ?? 'Completing this now keeps the closing plan accurate and reduces last-minute surprises.',
+    consequenceOfDelay: copy.consequence,
+    responsibleParty: copy.party,
+    suggestedQuestion: copy.question,
+    ctaLabel: 'Review this step',
+    ctaHref: `/dashboard/properties/${propertyId}/buyer-plan?${query}`,
+  };
+}
+
 /** Property-scoped acquisition and first-90-days ownership plan. */
 export class HomeBuyerTaskService {
   private static async assertAccess(
@@ -359,14 +479,12 @@ export class HomeBuyerTaskService {
     const activeTasks = visibleTasks.filter((task) =>
       !['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status),
     );
-    const priorityRank: Record<BuyerPlanPriority, number> = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 };
-    const executableTasks = activeTasks
-      .filter((task) => task.status !== 'BLOCKED')
-      .sort((left, right) => {
-        const leftDue = left.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
-        const rightDue = right.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
-        return leftDue - rightDue || priorityRank[left.priority] - priorityRank[right.priority] || left.sortOrder - right.sortOrder;
-      });
+    const nextAction = plan.status === 'PAUSED' ? null : selectBuyerNextAction({
+      tasks: visibleTasks,
+      stage: plan.stage,
+      milestones: plan.milestones,
+      inspectionReportCount: property.inspectionReports.length,
+    });
     const blockers = activeTasks.filter((task) => task.status === 'BLOCKED' || task.blocking);
     const completed = visibleTasks.filter((task) => task.status === 'COMPLETED').length;
     const total = visibleTasks.length;
@@ -403,7 +521,8 @@ export class HomeBuyerTaskService {
             percent: total === 0 ? 0 : Math.round((completed / total) * 100),
           },
         },
-        nextAction: executableTasks[0] ? closingTaskSummary(executableTasks[0]) : null,
+        nextAction: nextAction ? closingTaskSummary(nextAction) : null,
+        nextActionGuidance: nextAction ? buyerNextActionGuidance(nextAction, property.id) : null,
         blockers: blockers.slice(0, 5).map(closingTaskSummary),
         milestones: plan.milestones
           .filter((milestone) => !['CANCELLED', 'WAIVED'].includes(milestone.status))
@@ -481,6 +600,10 @@ export class HomeBuyerTaskService {
             contacts: { orderBy: [{ role: 'asc' }, { createdAt: 'asc' }] },
           },
         },
+        inspectionReports: {
+          where: { status: { not: 'ARCHIVED' } },
+          select: { status: true },
+        },
       },
     });
     if (!property) throw new Error('Property not found or user does not have access.');
@@ -489,16 +612,12 @@ export class HomeBuyerTaskService {
 
     const member = property.householdMembers.find((candidate) => candidate.userId === userId);
     const accessRole = property.homeownerProfile.userId === userId ? 'OWNER' : member?.role ?? 'VIEWER';
-    const activeTasks = plan.tasks.filter((task) =>
-      task.applicability !== 'NOT_APPLICABLE'
-      && !['COMPLETED', 'NOT_NEEDED', 'CANCELLED', 'BLOCKED'].includes(task.status),
-    );
-    const priorityRank: Record<BuyerPlanPriority, number> = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 };
-    const nextAction = plan.status === 'PAUSED' ? null : [...activeTasks].sort((left, right) => {
-      const leftDue = left.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      const rightDue = right.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      return leftDue - rightDue || priorityRank[left.priority] - priorityRank[right.priority] || left.sortOrder - right.sortOrder;
-    })[0] ?? null;
+    const nextAction = plan.status === 'PAUSED' ? null : selectBuyerNextAction({
+      tasks: plan.tasks,
+      stage: plan.stage,
+      milestones: plan.milestones,
+      inspectionReportCount: property.inspectionReports.length,
+    });
     const count = (status: HomeBuyerTaskStatus) => plan.tasks.filter((task) => task.status === status).length;
     const completed = count('COMPLETED');
     const total = plan.tasks.length;
@@ -576,6 +695,7 @@ export class HomeBuyerTaskService {
         progressPercent: total === 0 ? 0 : Math.round((completed / total) * 100),
       },
       nextAction: nextAction ? planOverviewTask(nextAction) : null,
+      nextActionGuidance: nextAction ? buyerNextActionGuidance(nextAction, property.id) : null,
       workload: property.householdMembers.map((householdMember) => ({
         userId: householdMember.userId,
         displayName: householdMember.displayName,

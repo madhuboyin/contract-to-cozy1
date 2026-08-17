@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { PropertyContextSnapshot, PropertyFact } from '../modules/propertyContext/domain/contracts';
 
-export const BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION = 'buyer-phase-checklists-v1';
+export const BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION = 'buyer-phase-checklists-v2';
 
 type Applicability = 'UNKNOWN' | 'APPLICABLE' | 'NOT_APPLICABLE';
 type Phase = 'OFFER_CONTRACT' | 'DUE_DILIGENCE' | 'CLOSING_PREP' | 'MOVE_IN';
@@ -65,6 +65,27 @@ const universal = (reasonCode: string): BuyerChecklistTemplate['evaluate'] => ()
   missingFactKeys: [],
   conflictedFactKeys: [],
 });
+
+function associationContextDecision(context: PropertyContextSnapshot): RuleDecision {
+  const dwelling = context.facts['core.dwellingType'];
+  const ownership = context.facts['core.ownershipForm'];
+  if (dwelling?.state === 'CONFLICTED' || ownership?.state === 'CONFLICTED') {
+    return { result: 'UNKNOWN', reasonCodes: ['PROPERTY_CONTEXT_CONFLICT'], usedFactKeys: [], missingFactKeys: [], conflictedFactKeys: [dwelling?.state === 'CONFLICTED' ? 'core.dwellingType' : null, ownership?.state === 'CONFLICTED' ? 'core.ownershipForm' : null].filter((key): key is string => Boolean(key)) };
+  }
+  const dwellingValue = dwelling?.state === 'KNOWN' ? dwelling.value : null;
+  const ownershipValue = ownership?.state === 'KNOWN' ? ownership.value : null;
+  if (dwellingValue === 'CONDO_UNIT' || ownershipValue === 'CONDOMINIUM' || ownershipValue === 'COOPERATIVE') {
+    return { result: 'APPLICABLE', reasonCodes: ['ASSOCIATION_CONTEXT_CONFIRMED'], usedFactKeys: [dwellingValue === 'CONDO_UNIT' ? 'core.dwellingType' : 'core.ownershipForm'], missingFactKeys: [], conflictedFactKeys: [] };
+  }
+  if (['DETACHED_SINGLE_FAMILY', 'MANUFACTURED_HOME', 'OTHER'].includes(String(dwellingValue))) {
+    return { result: 'NOT_APPLICABLE', reasonCodes: ['NON_ASSOCIATION_CONTEXT_CONFIRMED'], usedFactKeys: ['core.dwellingType'], missingFactKeys: [], conflictedFactKeys: [] };
+  }
+  if (ownershipValue) {
+    return { result: 'NOT_APPLICABLE', reasonCodes: ['NON_ASSOCIATION_CONTEXT_CONFIRMED'], usedFactKeys: ['core.ownershipForm'], missingFactKeys: [], conflictedFactKeys: [] };
+  }
+  const missingFactKeys = dwellingValue ? ['core.ownershipForm'] : ['core.dwellingType'];
+  return { result: 'UNKNOWN', reasonCodes: ['PROPERTY_DETAIL_REQUIRED'], usedFactKeys: dwellingValue ? ['core.dwellingType'] : [], missingFactKeys, conflictedFactKeys: [] };
+}
 
 function factDecision(
   context: PropertyContextSnapshot,
@@ -220,29 +241,28 @@ export const BUYER_PROPERTY_CHECKLIST_TEMPLATES: readonly BuyerChecklistTemplate
     blockedGuidance: 'Request the current association package and record unresolved responsibility questions.',
     phase: 'DUE_DILIGENCE', priority: 'NOW', taskType: 'DOCUMENT', evidenceRequirement: 'REQUIRED', required: true,
     blocking: false, anchorOffsetDays: -14, ruleKey: 'buyer.rule.property.association-records',
-    evaluate: (context) => factDecision(context, ['core.dwellingType', 'core.ownershipForm'], (values) => {
-      const dwelling = values['core.dwellingType'];
-      const ownership = values['core.ownershipForm'];
-      const applies = dwelling === 'CONDO_UNIT' || ownership === 'CONDOMINIUM' || ownership === 'COOPERATIVE';
-      return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'ASSOCIATION_CONTEXT_CONFIRMED' : 'NON_ASSOCIATION_CONTEXT_CONFIRMED' };
-    }),
+    evaluate: associationContextDecision,
   }),
   base('INSPECTION_DUE_DILIGENCE', 'association-envelope-questions', {
-    title: 'Separate visible-condition checks from association responsibility',
+    title: 'Confirm what the association maintains',
     description: 'Record visible roof/exterior concerns as association questions instead of buyer-owned component work.',
     whyMatters: 'Responsibility-aware guidance avoids representing common elements as buyer-owned systems.',
     completionCriteria: 'Visible concerns and association record questions are separated and assigned.',
     blockedGuidance: 'Confirm roof and exterior responsibility in governing documents or with the appropriate professional.',
     phase: 'DUE_DILIGENCE', priority: 'SOON', taskType: 'ACTION', evidenceRequirement: 'OPTIONAL', required: false,
     blocking: false, anchorOffsetDays: -12, ruleKey: 'buyer.rule.property.association-envelope',
-    evaluate: (context) => factDecision(context, ['responsibility.roof', 'responsibility.buildingExterior'], (values) => {
-      const parties = [values['responsibility.roof'], values['responsibility.buildingExterior']];
-      const applies = parties.some((party) => party === 'ASSOCIATION' || party === 'SHARED');
-      return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'ASSOCIATION_ENVELOPE_RESPONSIBILITY' : 'PRIVATE_ENVELOPE_RESPONSIBILITY' };
-    }),
+    evaluate: (context) => {
+      const association = associationContextDecision(context);
+      if (association.result !== 'APPLICABLE') return association;
+      return factDecision(context, ['responsibility.roof', 'responsibility.buildingExterior'], (values) => {
+        const parties = [values['responsibility.roof'], values['responsibility.buildingExterior']];
+        const applies = parties.some((party) => party === 'ASSOCIATION' || party === 'SHARED');
+        return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'ASSOCIATION_ENVELOPE_RESPONSIBILITY' : 'PRIVATE_ENVELOPE_RESPONSIBILITY' };
+      });
+    },
   }),
   base('INSPECTION_DUE_DILIGENCE', 'pool-specialist-review', {
-    title: 'Add pool or spa due-diligence questions',
+    title: 'Ask what the pool or spa inspection covers',
     description: 'Review visible condition, barrier, equipment, electrical, leak, permit, and specialist questions for the confirmed pool or spa.',
     whyMatters: 'Confirmed site features add focused questions without treating presence as a defect.',
     completionCriteria: 'Pool or spa questions and any chosen specialist review are dispositioned.',
@@ -254,8 +274,22 @@ export const BUYER_PROPERTY_CHECKLIST_TEMPLATES: readonly BuyerChecklistTemplate
       return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'POOL_SPA_CONFIRMED' : 'POOL_SPA_ABSENT' };
     }),
   }),
+  base('INSPECTION_DUE_DILIGENCE', 'basement-inspection-focus', {
+    title: 'Focus the inspection on basement moisture and safety',
+    description: 'Add basement-specific questions about moisture, drainage, foundation surfaces, radon considerations, and finished-space safety when applicable.',
+    whyMatters: 'A confirmed basement changes the most useful inspection questions without treating the feature itself as a problem.',
+    completionCriteria: 'Basement-specific questions have been discussed with the inspector or intentionally set aside.',
+    blockedGuidance: 'Ask the inspector what basement observations are included and whether any specialist review is appropriate.',
+    phase: 'DUE_DILIGENCE', priority: 'SOON', taskType: 'ACTION', evidenceRequirement: 'OPTIONAL', required: false,
+    blocking: false, anchorOffsetDays: -12, ruleKey: 'buyer.rule.property.basement',
+    evaluate: (context) => factDecision(context, ['structure.basementConfiguration'], (values) => {
+      const configuration = values['structure.basementConfiguration'];
+      const applies = configuration === 'FINISHED' || configuration === 'UNFINISHED';
+      return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'BASEMENT_CONFIRMED' : 'BASEMENT_ABSENT' };
+    }),
+  }),
   base('INSPECTION_DUE_DILIGENCE', 'age-records-questions', {
-    title: 'Review age-relevant records and permit questions',
+    title: 'Ask about older-home records and renovations',
     description: 'Use confirmed property age and location to prepare renovation, permit, materials, and major-system-history questions.',
     whyMatters: 'Age and location can focus record questions but are not proof of a defect, hazard, or professional finding.',
     completionCriteria: 'Age-relevant record questions have been reviewed or explicitly dispositioned.',
@@ -269,7 +303,7 @@ export const BUYER_PROPERTY_CHECKLIST_TEMPLATES: readonly BuyerChecklistTemplate
     }),
   }),
   base('INSPECTION_DUE_DILIGENCE', 'hvac-history-questions', {
-    title: 'Review HVAC age, service, and warranty history',
+    title: 'Ask about heating and cooling service history',
     description: 'Use the recorded installation year to focus service-history, warranty, and inspection questions without inferring condition.',
     whyMatters: 'Source-qualified system age can focus useful records while remaining separate from a professional condition finding.',
     completionCriteria: 'HVAC age, service, warranty, and inspection questions have been dispositioned.',
@@ -290,38 +324,86 @@ export const BUYER_CHECKLIST_TEMPLATES = [
   ...BUYER_PROPERTY_CHECKLIST_TEMPLATES,
 ] as const;
 
-const QUESTION_COPY: Record<string, { prompt: string; whyWeAsk: string }> = {
+type PersonalizationQuestionCopy = {
+  prompt: string;
+  whyWeAsk: string;
+  impactRank: number;
+  answerKind: 'SINGLE_SELECT' | 'YEAR';
+  options?: Array<{ label: string; value: unknown }>;
+};
+
+const QUESTION_COPY: Record<string, PersonalizationQuestionCopy> = {
   'core.dwellingType': {
-    prompt: 'What kind of dwelling is this property?',
-    whyWeAsk: 'Dwelling type helps separate unit, attached, and whole-building inspection and document questions. You can choose Not sure and continue.',
+    prompt: 'What type of home are you buying?',
+    whyWeAsk: 'This tells us whether to focus on the whole building or on the parts inside your unit.',
+    impactRank: 100,
+    answerKind: 'SINGLE_SELECT',
+    options: [
+      { label: 'Detached house', value: 'DETACHED_SINGLE_FAMILY' },
+      { label: 'Townhouse or attached home', value: 'TOWNHOUSE' },
+      { label: 'Condo', value: 'CONDO_UNIT' },
+      { label: 'Two- or multi-family home', value: 'MULTI_FAMILY' },
+      { label: 'Manufactured home', value: 'MANUFACTURED_HOME' },
+      { label: 'I’m not sure', value: 'UNKNOWN' },
+    ],
   },
   'core.ownershipForm': {
-    prompt: 'What ownership form applies to this purchase?',
-    whyWeAsk: 'Ownership form helps add association, cooperative, or leasehold document questions without assuming an HOA exists.',
+    prompt: 'Will a condo, co-op, or building association manage shared parts of the property?',
+    whyWeAsk: 'If yes, we’ll add the documents and responsibility questions that help you understand what the association—not you—maintains.',
+    impactRank: 90,
+    answerKind: 'SINGLE_SELECT',
+    options: [
+      { label: 'Yes, a condo association', value: 'CONDOMINIUM' },
+      { label: 'Yes, a co-op', value: 'COOPERATIVE' },
+      { label: 'No shared building association', value: 'FEE_SIMPLE' },
+      { label: 'I’m not sure', value: 'UNKNOWN' },
+    ],
   },
   'core.yearBuilt': {
-    prompt: 'What is the approximate year built?',
-    whyWeAsk: 'Year built helps add age-relevant inspection and permit questions. Age alone will not be treated as a defect.',
+    prompt: 'About when was the home built?',
+    whyWeAsk: 'This adds age-relevant system, renovation, and permit questions without assuming anything is wrong.',
+    impactRank: 80,
+    answerKind: 'YEAR',
   },
   'location.state': {
     prompt: 'Can you confirm the property location?',
     whyWeAsk: 'Confirmed location helps tailor local record questions. Regional context is not proof of a property-specific problem.',
+    impactRank: 70,
+    answerKind: 'SINGLE_SELECT',
   },
   'responsibility.roof': {
-    prompt: 'Who is responsible for the roof?',
-    whyWeAsk: 'Responsibility helps separate visible-condition questions from buyer-owned repair obligations.',
+    prompt: 'Does the association maintain the roof?',
+    whyWeAsk: 'This keeps roof questions with the right person and avoids treating shared building work as your personal repair.',
+    impactRank: 65,
+    answerKind: 'SINGLE_SELECT',
+    options: [{ label: 'Yes', value: 'ASSOCIATION' }, { label: 'No, the homeowner does', value: 'OWNER' }, { label: 'Responsibility is shared', value: 'SHARED' }, { label: 'I’m not sure', value: 'UNKNOWN' }],
   },
   'responsibility.buildingExterior': {
-    prompt: 'Who is responsible for the building exterior?',
-    whyWeAsk: 'Responsibility helps separate unit checks from association-managed common elements.',
+    prompt: 'Does the association maintain the outside of the building?',
+    whyWeAsk: 'This separates what your inspector should observe from what the association is expected to maintain.',
+    impactRank: 64,
+    answerKind: 'SINGLE_SELECT',
+    options: [{ label: 'Yes', value: 'ASSOCIATION' }, { label: 'No, the homeowner does', value: 'OWNER' }, { label: 'Responsibility is shared', value: 'SHARED' }, { label: 'I’m not sure', value: 'UNKNOWN' }],
   },
   'exterior.hasPoolOrSpa': {
     prompt: 'Does the property have a pool or spa?',
-    whyWeAsk: 'A confirmed pool or spa adds focused inspection, document, and specialist questions; Not sure is always allowed.',
+    whyWeAsk: 'If yes, we’ll add focused safety, equipment, leak, permit, and specialist questions.',
+    impactRank: 75,
+    answerKind: 'SINGLE_SELECT',
+    options: [{ label: 'Yes', value: true }, { label: 'No', value: false }, { label: 'I’m not sure', value: null }],
+  },
+  'structure.basementConfiguration': {
+    prompt: 'Does the home have a basement?',
+    whyWeAsk: 'A basement adds useful moisture, drainage, radon, foundation, and finished-space questions.',
+    impactRank: 76,
+    answerKind: 'SINGLE_SELECT',
+    options: [{ label: 'No basement', value: 'NONE' }, { label: 'Unfinished basement', value: 'UNFINISHED' }, { label: 'Finished basement', value: 'FINISHED' }, { label: 'I’m not sure', value: 'UNKNOWN' }],
   },
   'systems.hvacInstallYear': {
-    prompt: 'Do you know the HVAC installation year?',
+    prompt: 'Do you know when the heating and cooling system was installed?',
     whyWeAsk: 'System age helps focus service and warranty questions without assuming replacement or poor condition.',
+    impactRank: 40,
+    answerKind: 'YEAR',
   },
 };
 
@@ -361,13 +443,26 @@ export function composeBuyerChecklist(
     return !next || next.applicability.result !== 'APPLICABLE';
   });
   const unchangedItems = applicable.filter((item) => current.has(item.actionKey));
-  const questionMap = new Map<string, { factKey: string; prompt: string; whyWeAsk: string; correctionPath: string | null; affectedTemplateKeys: string[] }>();
+  const questionMap = new Map<string, {
+    factKey: string;
+    prompt: string;
+    whyWeAsk: string;
+    correctionPath: string | null;
+    affectedTemplateKeys: string[];
+    impactRank: number;
+    answerKind: 'SINGLE_SELECT' | 'YEAR';
+    options?: Array<{ label: string; value: unknown }>;
+  }>();
   for (const item of items.filter((candidate) => candidate.applicability.result === 'UNKNOWN')) {
     for (const factKey of [...item.applicability.missingFactKeys, ...item.applicability.conflictedFactKeys]) {
       const copy = QUESTION_COPY[factKey];
       if (!copy) continue;
       const existing = questionMap.get(factKey);
       const fact = context.facts[factKey] as PropertyFact | undefined;
+      // A buyer who explicitly chose “I’m not sure” has answered the setup
+      // question. Keep the fact unknown for decision safety, but do not trap
+      // them in a repeated prompt on every visit.
+      if (fact?.state === 'UNKNOWN' && fact.source === 'USER_REPORTED') continue;
       questionMap.set(factKey, {
         factKey,
         ...copy,
@@ -376,18 +471,42 @@ export function composeBuyerChecklist(
       });
     }
   }
+  const knownFactSpecs: Array<{ factKey: string; label: string; format: (value: unknown) => string }> = [
+    { factKey: 'core.dwellingType', label: 'Home type', format: (value) => String(value).toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) },
+    { factKey: 'core.yearBuilt', label: 'Built', format: (value) => `${value} · about ${Math.max(0, new Date(evaluatedAt).getUTCFullYear() - Number(value))} years old` },
+    { factKey: 'core.bedrooms', label: 'Bedrooms', format: String },
+    { factKey: 'core.bathrooms', label: 'Bathrooms', format: String },
+    { factKey: 'structure.basementConfiguration', label: 'Basement', format: (value) => value === 'NONE' ? 'No basement' : `${String(value).toLowerCase().replace(/_/g, ' ')} basement` },
+    { factKey: 'exterior.hasPoolOrSpa', label: 'Pool or spa', format: (value) => value === true ? 'Yes' : 'No' },
+  ];
+  const knownFacts = knownFactSpecs.flatMap((spec) => {
+    const fact = context.facts[spec.factKey];
+    return fact?.state === 'KNOWN' && fact.value !== null && fact.value !== 'UNKNOWN'
+      ? [{ factKey: spec.factKey, label: spec.label, value: spec.format(fact.value) }]
+      : [];
+  });
+  const questions = [...questionMap.values()].sort((left, right) => right.impactRank - left.impactRank);
+  const personalizedItems = applicable
+    .filter((item) => item.ruleKey.startsWith('buyer.rule.property.'))
+    .map((item) => ({ actionKey: item.actionKey, title: item.title, whyMatters: item.whyMatters }));
   return {
     templateVersion: BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION,
     contextVersion: context.contextVersion,
     evaluatedAt,
     items,
-    questions: [...questionMap.values()],
+    knownFacts,
+    questions,
+    personalizedItems,
+    setupStatus: questions.length === 0 ? 'PERSONALIZED' as const : 'NEEDS_INPUT' as const,
     delta: {
       added: addedItems.length,
       removed: removedItems.length,
       unchanged: unchangedItems.length,
       addedItems: addedItems.map((item) => ({ actionKey: item.actionKey, title: item.title, reasonCodes: item.applicability.reasonCodes })),
-      removedItems: removedItems.map((item) => ({ actionKey: item.actionKey })),
+      removedItems: removedItems.map((item) => ({
+        actionKey: item.actionKey,
+        title: items.find((candidate) => candidate.actionKey === item.actionKey)?.title ?? null,
+      })),
     },
   };
 }
