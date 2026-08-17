@@ -33,12 +33,13 @@ function context(overrides = {}) {
   };
 }
 
-test('the buying lifecycle features the FRD acceptance question', () => {
+test('the buying lifecycle features the buyer closing copilot operations, not generic HOME_ACTIONS', () => {
   const prompts = lifecyclePromptsFor('UNDER_CONTRACT');
-  const featured = prompts.find((prompt) => prompt.operationId === 'HOME_ACTIONS');
-  assert.equal(featured.question, 'What should I do before closing?');
+  const featured = prompts.find((prompt) => prompt.operationId === 'BUYER_PLAN_STATUS');
+  assert.equal(featured.question, 'What should I do next for this purchase?');
   assert.equal(featured.categoryId, 'PLAN_MONITOR');
-  assert.equal(resolveAskRoutingCascade(featured.question).operation.operationId, 'HOME_ACTIONS');
+  assert.equal(resolveAskRoutingCascade(featured.question).operation.operationId, 'BUYER_PLAN_STATUS');
+  assert.equal(prompts.some((prompt) => prompt.operationId === 'HOME_ACTIONS'), false);
 });
 
 test('buyer Home Actions reads the canonical next task and links its exact plan section', () => {
