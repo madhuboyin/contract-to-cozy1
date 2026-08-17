@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, Edit2, X } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import type {
@@ -19,6 +19,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../../components/route-templates/DetailTemplate';
 import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
+import { inspectionHubLaunchQuery } from '@/features/tools/inspectionHubLaunchContext';
 
 const SEVERITY_STYLES: Record<InspectionFindingSeverity, { chip: 'danger' | 'elevated' | 'info' | 'good'; label: string; border: string }> = {
   SAFETY:        { chip: 'danger',   label: 'Safety',        border: 'border-rose-200 bg-rose-50' },
@@ -232,6 +233,9 @@ function EditSheet({
 export default function ReportDetailPage() {
   const params = useParams<{ id: string; reportId: string }>();
   const { id: propertyId, reportId } = params;
+  const searchParams = useSearchParams();
+  const launchQuery = inspectionHubLaunchQuery(searchParams);
+  const launchSuffix = launchQuery ? `?${launchQuery}` : '';
 
   const [report, setReport] = useState<InspectionReportSummary | null>(null);
   const [grouped, setGrouped] = useState<Record<string, InspectionFinding[]>>({});
@@ -326,7 +330,7 @@ export default function ReportDetailPage() {
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-3xl lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}/inspection-hub`}>
+        <Link href={`/dashboard/properties/${propertyId}/inspection-hub${launchSuffix}`}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Inspection Hub
         </Link>

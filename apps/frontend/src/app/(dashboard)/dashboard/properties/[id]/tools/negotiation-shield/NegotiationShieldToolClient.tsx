@@ -46,7 +46,10 @@ import {
   getNegotiationShieldCaseDetail,
   listNegotiationShieldCases,
   parseNegotiationShieldCaseDocument,
+  recordBuyerNegotiationOutcome,
   saveNegotiationShieldInput,
+  type BuyerNegotiationOutcome,
+  type BuyerNegotiationSellerResponse,
   type CreateNegotiationShieldCasePayload,
   type NegotiationShieldAnalysis,
   type NegotiationShieldCaseDetail,
@@ -65,6 +68,7 @@ import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCo
 import TrustStrip from '../../components/route-templates/TrustStrip';
 import { negotiationLoopTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
+import { buyerPlanReturnHref } from '@/lib/navigation/buyerReturnContext';
 
 type ScenarioRouteValue =
   | 'contractor-quote-review'
@@ -1497,7 +1501,9 @@ function BuyerInspectionManualInputSection({
       <CardHeader className={SECTION_HEADER_CLASS}>
         <CardTitle>Manual input</CardTitle>
         <CardDescription>
-          Capture the buyer request and the inspection issues that seem most relevant.
+          {caseDetail.case.perspective === 'BUYER'
+            ? 'Organize the selected finding and the repair or credit you want your agent or attorney to discuss.'
+            : 'Capture the buyer request and the inspection issues that seem most relevant.'}
           {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
         </CardDescription>
       </CardHeader>
@@ -1515,7 +1521,7 @@ function BuyerInspectionManualInputSection({
           <Textarea
             value={values.inspectionIssuesSummary}
             onChange={(event) => setValues((current) => ({ ...current, inspectionIssuesSummary: event.target.value }))}
-            placeholder="Summarize the main findings the buyer is relying on."
+            placeholder={caseDetail.case.perspective === 'BUYER' ? 'Summarize the finding and why it matters to your purchase decision.' : 'Summarize the main findings the buyer is relying on.'}
             className="min-h-[96px] sm:min-h-[120px]"
           />
         </Field>
@@ -1524,7 +1530,7 @@ function BuyerInspectionManualInputSection({
           <Textarea
             value={values.requestedRepairs}
             onChange={(event) => setValues((current) => ({ ...current, requestedRepairs: event.target.value }))}
-            placeholder="List the repairs or credits the buyer is asking for."
+            placeholder={caseDetail.case.perspective === 'BUYER' ? 'Describe the seller repair, closing credit, or either option you want discussed.' : 'List the repairs or credits the buyer is asking for.'}
             className="min-h-[96px] sm:min-h-[120px]"
           />
         </Field>
@@ -1533,7 +1539,7 @@ function BuyerInspectionManualInputSection({
           <Textarea
             value={values.recentUpgradeNotes}
             onChange={(event) => setValues((current) => ({ ...current, recentUpgradeNotes: event.target.value }))}
-            placeholder="Recent roof, HVAC, plumbing, electrical, or other work that may narrow the request."
+            placeholder={caseDetail.case.perspective === 'BUYER' ? 'Add seller-provided repair or upgrade evidence that affects the request.' : 'Recent roof, HVAC, plumbing, electrical, or other work that may narrow the request.'}
             className="min-h-[96px] sm:min-h-[120px]"
           />
         </Field>
@@ -1542,7 +1548,7 @@ function BuyerInspectionManualInputSection({
           <Textarea
             value={values.rawText}
             onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
-            placeholder="Paste inspection report text, buyer repair requests, or agent notes here."
+            placeholder={caseDetail.case.perspective === 'BUYER' ? 'Paste relevant inspection text or notes from your agent or attorney.' : 'Paste inspection report text, buyer repair requests, or agent notes here.'}
             className="min-h-[136px] sm:min-h-[180px]"
           />
         </Field>
@@ -2176,6 +2182,11 @@ function CaseWorkspace({
   const [documentFeedback, setDocumentFeedback] = useState<InlineFeedbackState | null>(null);
   const [analysisFeedback, setAnalysisFeedback] = useState<InlineFeedbackState | null>(null);
   const [draftFeedback, setDraftFeedback] = useState<InlineFeedbackState | null>(null);
+  const buyerFinding = (caseDetail.buyerFindings ?? [])[0] ?? null;
+  const [sellerResponse, setSellerResponse] = useState<BuyerNegotiationSellerResponse>('PENDING');
+  const [buyerOutcome, setBuyerOutcome] = useState<BuyerNegotiationOutcome>('PENDING');
+  const [outcomeNotes, setOutcomeNotes] = useState('');
+  const [agreedCreditDollars, setAgreedCreditDollars] = useState('');
 
   useEffect(() => {
     setSelectedFile(null);
@@ -2186,7 +2197,11 @@ function CaseWorkspace({
     setDocumentFeedback(null);
     setAnalysisFeedback(null);
     setDraftFeedback(null);
-  }, [caseDetail.case.id, caseDetail.case.scenarioType]);
+    setSellerResponse(buyerFinding?.sellerResponse ?? 'PENDING');
+    setBuyerOutcome(buyerFinding?.outcome ?? 'PENDING');
+    setOutcomeNotes(buyerFinding?.outcomeNotes ?? buyerFinding?.sellerResponseNotes ?? '');
+    setAgreedCreditDollars(buyerFinding?.agreedCreditCents == null ? '' : String(buyerFinding.agreedCreditCents / 100));
+  }, [buyerFinding?.agreedCreditCents, buyerFinding?.outcome, buyerFinding?.outcomeNotes, buyerFinding?.sellerResponse, buyerFinding?.sellerResponseNotes, caseDetail.case.id, caseDetail.case.scenarioType]);
 
   const detailQueryKey = ['negotiation-shield-case', propertyId, caseDetail.case.id];
   const listQueryKey = ['negotiation-shield-cases', propertyId];
@@ -2402,6 +2417,31 @@ function CaseWorkspace({
       });
       toast({ title: 'Analysis failed', description: failureMessage, variant: 'destructive' });
     },
+  });
+
+  const buyerOutcomeMutation = useMutation({
+    mutationFn: () => {
+      if (!buyerFinding) throw new Error('No inspection finding is linked to this buyer case.');
+      return recordBuyerNegotiationOutcome(propertyId, caseDetail.case.id, {
+        findingId: buyerFinding.findingId,
+        sellerResponse,
+        sellerResponseNotes: outcomeNotes || null,
+        outcome: buyerOutcome,
+        agreedCreditCents: agreedCreditDollars
+          ? Math.round(Number(agreedCreditDollars) * 100)
+          : null,
+        outcomeNotes: outcomeNotes || null,
+      });
+    },
+    onSuccess: (nextDetail) => {
+      syncCaseDetail(nextDetail);
+      toast({ title: 'Seller response recorded', description: 'The finding and linked Closing Plan task were updated.' });
+    },
+    onError: (error) => toast({
+      title: 'Unable to record outcome',
+      description: errorMessage(error, 'Check the response details and try again.'),
+      variant: 'destructive',
+    }),
   });
 
   const parsedDocumentsCount = caseDetail.documents.filter((document) => getDocumentParseInfo(document, caseDetail.inputs).isParsed).length;
@@ -2679,6 +2719,46 @@ function CaseWorkspace({
       onCopy={handleDraftCopy}
     />
   );
+  const buyerOutcomeSection = caseDetail.case.perspective === 'BUYER' && buyerFinding ? (
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <CardTitle>Seller response and final outcome</CardTitle>
+        <CardDescription>
+          Record what the seller actually agreed to. This updates the linked inspection finding and Closing Plan task; it is not a legal notice or amendment.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4')}>
+        <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+          <p className="font-medium">{buyerFinding.homeSystem.replace(/_/g, ' ')} · {buyerFinding.severity}</p>
+          <p className="mt-1 text-muted-foreground">{buyerFinding.inspectorDescription}</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Seller response">
+            <Select value={sellerResponse} onValueChange={(value: BuyerNegotiationSellerResponse) => setSellerResponse(value)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {['PENDING', 'ACCEPTED', 'PARTIALLY_ACCEPTED', 'REJECTED', 'COUNTERED'].map((value) => <SelectItem key={value} value={value}>{value.replace(/_/g, ' ').toLowerCase()}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Final outcome">
+            <Select value={buyerOutcome} onValueChange={(value: BuyerNegotiationOutcome) => setBuyerOutcome(value)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {['PENDING', 'ACCEPTED_REPAIR', 'ACCEPTED_CREDIT', 'SELLER_REPAIRED', 'REJECTED', 'TRANSFERRED_TO_BUYER'].map((value) => <SelectItem key={value} value={value}>{value.replace(/_/g, ' ').toLowerCase()}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        {buyerOutcome === 'ACCEPTED_CREDIT' ? <Field label="Agreed credit amount"><Input inputMode="decimal" value={agreedCreditDollars} onChange={(event) => setAgreedCreditDollars(event.target.value)} placeholder="0.00" /></Field> : null}
+        <Field label="Response or outcome notes"><Textarea value={outcomeNotes} onChange={(event) => setOutcomeNotes(event.target.value)} placeholder="Capture the seller response, agreed scope, credit, or reason work transfers to the buyer." /></Field>
+        <Button type="button" onClick={() => buyerOutcomeMutation.mutate()} disabled={buyerOutcomeMutation.isPending || (buyerOutcome === 'ACCEPTED_CREDIT' && !agreedCreditDollars)}>
+          {buyerOutcomeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Save seller response
+        </Button>
+      </CardContent>
+    </Card>
+  ) : null;
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -2688,13 +2768,14 @@ function CaseWorkspace({
             <div className="space-y-2">
               <Button type="button" variant="ghost" className="-ml-3 w-fit" onClick={onBack}>
                 <ArrowLeft className="h-4 w-4" />
-                Back to cases
+                {caseDetail.case.perspective === 'BUYER' ? 'Back to Closing Plan' : 'Back to cases'}
               </Button>
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={getStatusVariant(caseDetail.case.status)}>{formatStatusLabel(caseDetail.case.status)}</Badge>
                   <Badge variant="outline">{formatScenarioLabel(caseDetail.case.scenarioType)}</Badge>
                   <Badge variant="outline">{formatSourceLabel(caseDetail.case.sourceType)}</Badge>
+                  {caseDetail.case.perspective === 'BUYER' ? <Badge>Buyer mode</Badge> : null}
                 </div>
                 <CardTitle className="text-xl leading-tight sm:text-2xl">{caseDetail.case.title}</CardTitle>
                 <CardDescription className="max-w-3xl">
@@ -2719,6 +2800,7 @@ function CaseWorkspace({
         <>
           {resultsSection}
           {draftSection}
+          {buyerOutcomeSection}
           {/* Sprint 3: pricing loop handoff — after draft is ready, route to Price Finalization */}
           {caseDetail.latestDraft && caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' && (() => {
             const inputs = caseDetail.inputs;
@@ -2764,6 +2846,7 @@ function CaseWorkspace({
         </>
       ) : (
         <>
+          {buyerOutcomeSection}
           {manualInputSection}
           {documentSection}
           {analysisActionSection}
@@ -2781,6 +2864,7 @@ export default function NegotiationShieldToolClient() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const buyerReturnHref = buyerPlanReturnHref(propertyId, searchParams);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const openedViewRef = useRef<string | null>(null);
@@ -3096,7 +3180,9 @@ export default function NegotiationShieldToolClient() {
               propertyId={propertyId}
               property={property}
               caseDetail={selectedCaseQuery.data}
-              onBack={goToList}
+              onBack={selectedCaseQuery.data.case.perspective === 'BUYER' && buyerReturnHref
+                ? () => router.push(buyerReturnHref)
+                : goToList}
               trackEvent={trackNegotiationEvent}
             />
           ) : caseId && selectedCaseQuery.isError ? (

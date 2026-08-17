@@ -18,6 +18,7 @@ import {
 import DetailTemplate from '../components/route-templates/DetailTemplate';
 import { track } from '@/lib/analytics/events';
 import { inspectionHubLaunchQuery } from '@/features/tools/inspectionHubLaunchContext';
+import { buyerPlanReturnHref } from '@/lib/navigation/buyerReturnContext';
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
   GENERAL: 'General Home',
@@ -63,6 +64,7 @@ export default function InspectionHubPage() {
   const searchParams = useSearchParams();
   const launchQuery = inspectionHubLaunchQuery(searchParams);
   const launchSuffix = launchQuery ? `?${launchQuery}` : '';
+  const buyerReturnHref = buyerPlanReturnHref(propertyId, searchParams);
 
   const [hub, setHub] = useState<InspectionHubSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,9 +102,9 @@ export default function InspectionHubPage() {
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-4xl lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
+        <Link href={buyerReturnHref ?? `/dashboard/properties/${propertyId}`}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
+          {buyerReturnHref ? 'Back to Closing Plan' : 'Back to property'}
         </Link>
       </Button>
 
@@ -152,7 +154,7 @@ export default function InspectionHubPage() {
             </Button>
             {(hub?.openCount ?? 0) > 0 && (
               <Button variant="outline" className="min-h-[44px] gap-1.5" asChild>
-                <Link href={`/dashboard/properties/${propertyId}/inspection-hub/open-items`}>
+                <Link href={`/dashboard/properties/${propertyId}/inspection-hub/open-items${launchSuffix}`}>
                   <ClipboardList className="h-4 w-4" />
                   Open Items ({hub?.openCount})
                 </Link>
@@ -182,7 +184,7 @@ export default function InspectionHubPage() {
             {hub?.reports.map((report) => (
               <Link
                 key={report.id}
-                href={`/dashboard/properties/${propertyId}/inspection-hub/${report.id}`}
+                href={`/dashboard/properties/${propertyId}/inspection-hub/${report.id}${launchSuffix}`}
                 className="block"
               >
                 <MobileCard variant="compact" className="flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors">

@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -32,7 +32,7 @@ import {
 import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 
-import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buyerPlanReturnHref } from '@/lib/navigation/buyerReturnContext';
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
     'INSPECTION_REPORT', 'ESTIMATE', 'INVOICE', 'CONTRACT', 'PERMIT',
@@ -540,9 +540,9 @@ export default function DocumentsPage() {
   const [ingestedDocument, setIngestedDocument] =
     useState<DocumentIngestionResult | null>(null);
   const { toast } = useToast();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const activePropertyId = useCanonicalPropertyId();
+  const buyerReturnHref = buyerPlanReturnHref(activePropertyId, searchParams);
   const targetDocumentId = searchParams.get('documentId');
   const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
@@ -672,12 +672,10 @@ export default function DocumentsPage() {
         />
       ) : null}
       {activePropertyId && (
-        <Button
-            variant="link"
-            className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-            onClick={() => navigateBackWithDashboardFallback(router)}
-        >
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" asChild>
+          <Link href={buyerReturnHref ?? `/dashboard/properties/${activePropertyId}`}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> {buyerReturnHref ? 'Back to Closing Plan' : 'Back to property'}
+          </Link>
         </Button>
       )}
       <MobilePageIntro

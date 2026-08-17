@@ -13,6 +13,15 @@ export const NEGOTIATION_SHIELD_CASE_STATUSES = [
   'ARCHIVED',
 ] as const;
 
+export const NEGOTIATION_SHIELD_PERSPECTIVES = ['HOMEOWNER', 'BUYER'] as const;
+export const BUYER_NEGOTIATION_REQUEST_TYPES = ['REPAIR', 'CREDIT', 'REPAIR_OR_CREDIT'] as const;
+export const BUYER_NEGOTIATION_SELLER_RESPONSES = [
+  'PENDING', 'ACCEPTED', 'PARTIALLY_ACCEPTED', 'REJECTED', 'COUNTERED',
+] as const;
+export const BUYER_NEGOTIATION_OUTCOMES = [
+  'PENDING', 'ACCEPTED_REPAIR', 'ACCEPTED_CREDIT', 'SELLER_REPAIRED', 'REJECTED', 'TRANSFERRED_TO_BUYER',
+] as const;
+
 export const NEGOTIATION_SHIELD_SOURCE_TYPES = [
   'MANUAL',
   'DOCUMENT_UPLOAD',
@@ -67,6 +76,10 @@ export type NegotiationShieldCaseStatus =
 
 export type NegotiationShieldSourceType =
   (typeof NEGOTIATION_SHIELD_SOURCE_TYPES)[number];
+export type NegotiationShieldPerspective = (typeof NEGOTIATION_SHIELD_PERSPECTIVES)[number];
+export type BuyerNegotiationRequestType = (typeof BUYER_NEGOTIATION_REQUEST_TYPES)[number];
+export type BuyerNegotiationSellerResponse = (typeof BUYER_NEGOTIATION_SELLER_RESPONSES)[number];
+export type BuyerNegotiationOutcome = (typeof BUYER_NEGOTIATION_OUTCOMES)[number];
 
 export type NegotiationShieldInputType =
   (typeof NEGOTIATION_SHIELD_INPUT_TYPES)[number];
@@ -160,6 +173,7 @@ export type NegotiationShieldCaseSummaryDTO = {
   title: string;
   description: string | null;
   sourceType: NegotiationShieldSourceType;
+  perspective: NegotiationShieldPerspective;
   analysisVersion: string | null;
   latestAnalysisAt: string | null;
   quoteDecisionWorkspaceId: string | null;
@@ -224,6 +238,27 @@ export type NegotiationShieldCaseDetailDTO = {
   documents: NegotiationShieldDocumentDTO[];
   latestAnalysis: NegotiationShieldAnalysisDTO | null;
   latestDraft: NegotiationShieldDraftDTO | null;
+  buyerFindings: BuyerNegotiationFindingDTO[];
+};
+
+export type BuyerNegotiationFindingDTO = {
+  id: string;
+  findingId: string;
+  homeSystem: string;
+  severity: string;
+  inspectorDescription: string;
+  estimatedCostCentsLow: number | null;
+  estimatedCostCentsHigh: number | null;
+  buyerTaskId: string | null;
+  requestType: BuyerNegotiationRequestType;
+  requestedCreditCents: number | null;
+  sellerResponse: BuyerNegotiationSellerResponse;
+  sellerResponseNotes: string | null;
+  sellerRespondedAt: string | null;
+  outcome: BuyerNegotiationOutcome;
+  agreedCreditCents: number | null;
+  outcomeNotes: string | null;
+  outcomeRecordedAt: string | null;
 };
 
 export type CreateNegotiationShieldCaseInput = {
@@ -231,12 +266,29 @@ export type CreateNegotiationShieldCaseInput = {
   title: string;
   description?: string | null;
   sourceType: NegotiationShieldSourceType;
+  perspective?: NegotiationShieldPerspective;
   quoteDecisionWorkspaceId?: string | null;
   initialInput?: {
     inputType: NegotiationShieldInputType;
     rawText?: string | null;
     structuredData?: Record<string, unknown>;
   };
+};
+
+export type StartBuyerNegotiationInput = {
+  findingId: string;
+  requestType: BuyerNegotiationRequestType;
+  requestedCreditCents?: number | null;
+  notes?: string | null;
+};
+
+export type RecordBuyerNegotiationOutcomeInput = {
+  findingId: string;
+  sellerResponse: BuyerNegotiationSellerResponse;
+  sellerResponseNotes?: string | null;
+  outcome: BuyerNegotiationOutcome;
+  agreedCreditCents?: number | null;
+  outcomeNotes?: string | null;
 };
 
 export type SaveNegotiationShieldInputPayload = {

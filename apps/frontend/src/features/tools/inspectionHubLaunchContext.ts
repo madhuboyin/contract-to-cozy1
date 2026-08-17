@@ -1,4 +1,6 @@
-type SearchParamsReader = Pick<URLSearchParams, 'get' | 'toString'>;
+import { buyerPlanReturnQuery } from '@/lib/navigation/buyerReturnContext';
+
+type SearchParamsReader = Pick<URLSearchParams, 'get'>;
 
 export function inspectionUploadLineage(searchParams: SearchParamsReader) {
   return {
@@ -15,5 +17,12 @@ export function inspectionUploadLineage(searchParams: SearchParamsReader) {
 export function inspectionHubLaunchQuery(
   searchParams: SearchParamsReader,
 ): string {
-  return new URLSearchParams(searchParams.toString()).toString();
+  const query = new URLSearchParams();
+  for (const key of ['sourceActionId', 'sourceEntityType', 'sourceEntityId', 'journeyId', 'guidanceJourneyId']) {
+    const value = searchParams.get(key);
+    if (value) query.set(key, value);
+  }
+  const buyerReturn = buyerPlanReturnQuery(searchParams);
+  new URLSearchParams(buyerReturn).forEach((value, key) => query.set(key, value));
+  return query.toString();
 }

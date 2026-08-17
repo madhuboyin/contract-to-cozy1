@@ -8667,6 +8667,34 @@ enum NegotiationShieldCaseStatus {
   ARCHIVED
 }
 
+enum NegotiationShieldPerspective {
+  HOMEOWNER
+  BUYER
+}
+
+enum BuyerNegotiationRequestType {
+  REPAIR
+  CREDIT
+  REPAIR_OR_CREDIT
+}
+
+enum BuyerNegotiationSellerResponse {
+  PENDING
+  ACCEPTED
+  PARTIALLY_ACCEPTED
+  REJECTED
+  COUNTERED
+}
+
+enum BuyerNegotiationOutcome {
+  PENDING
+  ACCEPTED_REPAIR
+  ACCEPTED_CREDIT
+  SELLER_REPAIRED
+  REJECTED
+  TRANSFERRED_TO_BUYER
+}
+
 enum NegotiationShieldSourceType {
   MANUAL
   DOCUMENT_UPLOAD
@@ -8802,6 +8830,7 @@ model NegotiationShieldCase {
   scenarioType NegotiationShieldScenarioType
   status       NegotiationShieldCaseStatus   @default(DRAFT)
   sourceType   NegotiationShieldSourceType
+  perspective  NegotiationShieldPerspective  @default(HOMEOWNER)
 
   title       String
   description String?
@@ -8822,6 +8851,7 @@ model NegotiationShieldCase {
   analyses           NegotiationShieldAnalysis[]
   drafts             NegotiationShieldDraft[]
   priceFinalizations PriceFinalization[]
+  buyerFindingLinks  NegotiationShieldBuyerFinding[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, status])
@@ -8829,6 +8859,35 @@ model NegotiationShieldCase {
   @@index([createdByUserId])
   @@index([quoteDecisionWorkspaceId])
   @@map("negotiation_shield_cases")
+}
+
+model NegotiationShieldBuyerFinding {
+  id        String @id @default(uuid())
+  caseId    String
+  findingId String @unique
+
+  requestType          BuyerNegotiationRequestType @default(REPAIR_OR_CREDIT)
+  requestedCreditCents Int?
+
+  sellerResponse      BuyerNegotiationSellerResponse @default(PENDING)
+  sellerResponseNotes String?
+  sellerRespondedAt   DateTime?
+  outcome             BuyerNegotiationOutcome        @default(PENDING)
+  agreedCreditCents   Int?
+  outcomeNotes        String?
+  outcomeRecordedAt   DateTime?
+  outcomeRecordedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  negotiationCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  finding         InspectionFinding     @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([sellerResponse])
+  @@index([outcome])
+  @@map("negotiation_shield_buyer_findings")
 }
 
 model NegotiationShieldInput {
@@ -19246,6 +19305,7 @@ model InspectionFinding {
   inventoryItem     InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   recallMatch       RecallMatch?           @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
   writeBacks        InspectionWriteBack[]
+  negotiationCaseLinks NegotiationShieldBuyerFinding[]
   resolvedByProject ProjectRecord?         @relation("InspectionFindingResolvedByProject", fields: [resolvedByProjectId], references: [id], onDelete: SetNull)
 
   @@index([reportId])

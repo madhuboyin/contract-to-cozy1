@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import {
+  BUYER_NEGOTIATION_OUTCOMES,
+  BUYER_NEGOTIATION_REQUEST_TYPES,
+  BUYER_NEGOTIATION_SELLER_RESPONSES,
   NEGOTIATION_SHIELD_DOCUMENT_TYPES,
   NEGOTIATION_SHIELD_INPUT_TYPES,
   NEGOTIATION_SHIELD_SCENARIO_TYPES,
@@ -77,6 +80,30 @@ export const saveNegotiationShieldInputBodySchema = z.object({
       code: z.ZodIssueCode.custom,
       message: 'rawText or structuredData is required.',
       path: ['rawText'],
+    });
+  }
+});
+
+export const startBuyerNegotiationBodySchema = z.object({
+  findingId: uuidSchema,
+  requestType: z.enum(BUYER_NEGOTIATION_REQUEST_TYPES).default('REPAIR_OR_CREDIT'),
+  requestedCreditCents: z.number().int().min(0).max(1_000_000_000).optional().nullable(),
+  notes: z.string().trim().max(4000).optional().nullable(),
+});
+
+export const recordBuyerNegotiationOutcomeBodySchema = z.object({
+  findingId: uuidSchema,
+  sellerResponse: z.enum(BUYER_NEGOTIATION_SELLER_RESPONSES),
+  sellerResponseNotes: z.string().trim().max(4000).optional().nullable(),
+  outcome: z.enum(BUYER_NEGOTIATION_OUTCOMES),
+  agreedCreditCents: z.number().int().min(0).max(1_000_000_000).optional().nullable(),
+  outcomeNotes: z.string().trim().max(4000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.outcome === 'ACCEPTED_CREDIT' && value.agreedCreditCents == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'agreedCreditCents is required for an accepted credit.',
+      path: ['agreedCreditCents'],
     });
   }
 });

@@ -37,6 +37,10 @@ export type NegotiationShieldDocumentType =
   | 'SUPPORTING_DOCUMENT';
 
 export type NegotiationShieldDraftType = 'EMAIL' | 'MESSAGE';
+export type NegotiationShieldPerspective = 'HOMEOWNER' | 'BUYER';
+export type BuyerNegotiationRequestType = 'REPAIR' | 'CREDIT' | 'REPAIR_OR_CREDIT';
+export type BuyerNegotiationSellerResponse = 'PENDING' | 'ACCEPTED' | 'PARTIALLY_ACCEPTED' | 'REJECTED' | 'COUNTERED';
+export type BuyerNegotiationOutcome = 'PENDING' | 'ACCEPTED_REPAIR' | 'ACCEPTED_CREDIT' | 'SELLER_REPAIRED' | 'REJECTED' | 'TRANSFERRED_TO_BUYER';
 
 export type NegotiationShieldFinding = {
   key: string;
@@ -86,6 +90,7 @@ export type NegotiationShieldCaseSummary = {
   title: string;
   description: string | null;
   sourceType: NegotiationShieldSourceType;
+  perspective: NegotiationShieldPerspective;
   analysisVersion: string | null;
   latestAnalysisAt: string | null;
   quoteDecisionWorkspaceId: string | null;
@@ -149,6 +154,27 @@ export type NegotiationShieldCaseDetail = {
   documents: NegotiationShieldDocument[];
   latestAnalysis: NegotiationShieldAnalysis | null;
   latestDraft: NegotiationShieldDraft | null;
+  buyerFindings: BuyerNegotiationFinding[];
+};
+
+export type BuyerNegotiationFinding = {
+  id: string;
+  findingId: string;
+  homeSystem: string;
+  severity: string;
+  inspectorDescription: string;
+  estimatedCostCentsLow: number | null;
+  estimatedCostCentsHigh: number | null;
+  buyerTaskId: string | null;
+  requestType: BuyerNegotiationRequestType;
+  requestedCreditCents: number | null;
+  sellerResponse: BuyerNegotiationSellerResponse;
+  sellerResponseNotes: string | null;
+  sellerRespondedAt: string | null;
+  outcome: BuyerNegotiationOutcome;
+  agreedCreditCents: number | null;
+  outcomeNotes: string | null;
+  outcomeRecordedAt: string | null;
 };
 
 export type CreateNegotiationShieldCasePayload = {
@@ -202,6 +228,41 @@ export async function createNegotiationShieldCase(
   const res = await api.post<NegotiationShieldCaseDetail>(
     `/api/properties/${propertyId}/negotiation-shield/cases`,
     payload
+  );
+  return res.data;
+}
+
+export async function startBuyerNegotiationCase(
+  propertyId: string,
+  payload: {
+    findingId: string;
+    requestType: BuyerNegotiationRequestType;
+    requestedCreditCents?: number | null;
+    notes?: string | null;
+  },
+): Promise<NegotiationShieldCaseDetail> {
+  const res = await api.post<NegotiationShieldCaseDetail>(
+    `/api/properties/${propertyId}/negotiation-shield/buyer-cases`,
+    payload,
+  );
+  return res.data;
+}
+
+export async function recordBuyerNegotiationOutcome(
+  propertyId: string,
+  caseId: string,
+  payload: {
+    findingId: string;
+    sellerResponse: BuyerNegotiationSellerResponse;
+    sellerResponseNotes?: string | null;
+    outcome: BuyerNegotiationOutcome;
+    agreedCreditCents?: number | null;
+    outcomeNotes?: string | null;
+  },
+): Promise<NegotiationShieldCaseDetail> {
+  const res = await api.put<NegotiationShieldCaseDetail>(
+    `/api/properties/${propertyId}/negotiation-shield/cases/${caseId}/buyer-outcome`,
+    payload,
   );
   return res.data;
 }

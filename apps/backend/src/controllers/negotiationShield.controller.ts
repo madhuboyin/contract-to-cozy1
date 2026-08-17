@@ -6,7 +6,9 @@ import {
   AttachNegotiationShieldDocumentPayload,
   CreateNegotiationShieldCaseInput,
   NegotiationShieldEventInput,
+  RecordBuyerNegotiationOutcomeInput,
   SaveNegotiationShieldInputPayload,
+  StartBuyerNegotiationInput,
 } from '../services/negotiationShield.types';
 import { NegotiationShieldService } from '../services/negotiationShield.service';
 import { logger } from '../lib/logger';
@@ -16,6 +18,43 @@ import {
 } from '../services/projectCompliance/context';
 
 const service = new NegotiationShieldService();
+
+export async function startBuyerNegotiation(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { userId } = requireUser(req);
+    const detail = await service.startBuyerNegotiation(
+      req.params.propertyId,
+      userId,
+      req.body as StartBuyerNegotiationInput,
+    );
+    res.status(201).json({ success: true, data: detail });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function recordBuyerNegotiationOutcome(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { userId } = requireUser(req);
+    const detail = await service.recordBuyerNegotiationOutcome(
+      req.params.propertyId,
+      req.params.caseId,
+      userId,
+      req.body as RecordBuyerNegotiationOutcomeInput,
+    );
+    res.json({ success: true, data: detail });
+  } catch (error) {
+    next(error);
+  }
+}
 
 function readQueryString(value: unknown): string | null {
   if (typeof value === 'string') {

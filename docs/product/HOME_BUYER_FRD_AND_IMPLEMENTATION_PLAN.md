@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.11
+**Version:** 1.13
 **Date:** 2026-08-16
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2771,6 +2771,23 @@ Functional check:
   the inspection/title/insurance checklist predictably and explains every delta.
 
 ### Slice 4A — Inspection, negotiation, documents, and repair continuity
+
+**Implementation status:** In progress. The first continuity increment routes
+Buyer Plan document imports to the canonical property Documents surface,
+preserves an allowlisted property/task return contract through Documents and
+every Inspection Hub hop, and restores/highlights the originating checklist
+task on return. Finding reclassification now synchronizes the stable buyer task,
+inspection/repair journeys and signals, finding lineage, and report counts in
+one database transaction; completed work and user-edited dates remain
+protected. The second increment adds a distinct buyer perspective to the existing
+Negotiation Shield case system, idempotently links a pre-close case to one
+canonical inspection finding, generates buyer-oriented professional discussion
+points with explicit legal boundaries, and persists structured seller response
+and outcome. Accepted credits and completed seller repairs close the linked
+finding/task with evidence; accepted repairs move the task into verification,
+rejections block it for an explicit buyer decision, and transferred work moves
+the existing obligation into the first-30-days phase. Multi-finding requests,
+completion-document evidence, and closing-triggered repair handoff remain next.
 
 **Goal:** Turn transaction evidence into one trustworthy plan.
 

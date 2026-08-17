@@ -16,6 +16,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../../components/route-templates/DetailTemplate';
 import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
+import { inspectionHubLaunchQuery } from '@/features/tools/inspectionHubLaunchContext';
 
 const SEVERITY_CHIP: Record<string, 'danger' | 'elevated' | 'info' | 'good'> = {
   SAFETY: 'danger', MAJOR: 'elevated', MINOR: 'info', MONITOR: 'info', INFORMATIONAL: 'good',
@@ -139,6 +140,8 @@ export default function OpenItemsPage() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const searchParams = useSearchParams();
+  const launchQuery = inspectionHubLaunchQuery(searchParams);
+  const launchSuffix = launchQuery ? `?${launchQuery}` : '';
   // Deep-link support (Slice 11 cross-linking) — this page already lists
   // every open finding for the property with no report-scoping needed, so
   // it's the right target for a Sale Case readiness item (or anything
@@ -191,7 +194,7 @@ export default function OpenItemsPage() {
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-3xl lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}/inspection-hub`}>
+        <Link href={`/dashboard/properties/${propertyId}/inspection-hub${launchSuffix}`}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Inspection Hub
         </Link>
@@ -293,7 +296,7 @@ export default function OpenItemsPage() {
                     {cost && <span>{cost}</span>}
                     {finding.report && (
                       <Link
-                        href={`/dashboard/properties/${propertyId}/inspection-hub/${finding.reportId}`}
+                        href={`/dashboard/properties/${propertyId}/inspection-hub/${finding.reportId}${launchSuffix}`}
                         className="text-blue-600 underline"
                       >
                         {finding.report.reportType?.replace('_', ' ')} report

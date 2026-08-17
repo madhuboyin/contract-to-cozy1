@@ -89,7 +89,12 @@ export class BuyerAcquisitionService {
       });
 
       const tasks = await tx.homeBuyerTask.findMany({
-        where: { checklistId: plan.id, anchorOffsetDays: { not: null }, status: { not: 'COMPLETED' } },
+        where: {
+          checklistId: plan.id,
+          anchorOffsetDays: { not: null },
+          status: { notIn: ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'] },
+          userEditedAt: null,
+        },
         select: { id: true, phase: true, anchorOffsetDays: true },
       });
       for (const task of tasks) {
@@ -214,28 +219,11 @@ export class BuyerAcquisitionService {
     let taskId: string | null = finding.buyerTaskId;
     let journeyId: string | null = finding.buyerGuidanceJourneyId;
     let repairJourneyId: string | null = finding.buyerRepairJourneyId;
+    let checklistId: string | null = null;
     const createsTask = input.disposition === 'PRE_CLOSE_NEGOTIATION' || input.disposition === 'POST_CLOSE_ACTION';
     if (createsTask) {
-      const phase = input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'DUE_DILIGENCE' : 'FIRST_30_DAYS';
-      const actionKey = `buyer:inspection-finding:${finding.id}`;
       const plan = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
-      const existing = await prisma.homeBuyerTask.findUnique({
-        where: { checklistId_actionKey: { checklistId: plan.id, actionKey } },
-      });
-      const task = existing ?? await HomeBuyerTaskService.createTask(userId, propertyId, {
-        title: `${input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'Negotiate' : 'Address'} ${finding.homeSystem.toLowerCase().replace(/_/g, ' ')} finding`,
-        description: finding.inspectorDescription,
-        actionKey,
-        phase,
-        priority: severityPriority(finding.severity),
-        dueAt: input.dueAt ?? null,
-        assignedToUserId: input.assignedToUserId ?? userId,
-        sourceType: 'INSPECTION_FINDING',
-        sourceEntityType: 'INSPECTION_FINDING',
-        sourceEntityId: finding.id,
-        homeActionKey: `inspection:${finding.id}`,
-      });
-      taskId = task.id;
+      checklistId = plan.id;
 
       if (finding.severity === 'SAFETY' || finding.severity === 'MAJOR') {
         const result = await guidanceJourneyService.ingestSignal({
@@ -294,43 +282,120 @@ export class BuyerAcquisitionService {
           actorUserId: userId,
         });
         repairJourneyId = repairResult.journey.id;
-        await prisma.homeBuyerTask.update({
-          where: { id: taskId },
-          data: { guidanceJourneyId: repairJourneyId, sourceType: 'INSPECTION_FINDING' },
-        });
       }
     }
 
     const dismissed = input.disposition === 'DISMISSED';
     const verifiedFact = input.disposition === 'VERIFIED_FACT';
-    if (!createsTask && finding.buyerTaskId) {
-      await prisma.homeBuyerTask.updateMany({
-        where: { id: finding.buyerTaskId, checklist: { propertyId } },
-        data: { status: 'NOT_NEEDED', completedAt: null },
-      });
-    }
-    if (!createsTask) {
-      for (const priorJourneyId of [finding.buyerGuidanceJourneyId, finding.buyerRepairJourneyId].filter(Boolean) as string[]) {
-        const priorJourney = await prisma.guidanceJourney.update({
-          where: { id: priorJourneyId },
-          data: { status: 'DISMISSED', completedAt: new Date() },
-          select: { primarySignalId: true },
-        }).catch(() => null);
-        if (priorJourney?.primarySignalId) {
-          await prisma.guidanceSignal.update({
-            where: { id: priorJourney.primarySignalId },
-            data: { status: 'ARCHIVED', archivedAt: new Date() },
-          }).catch(() => null);
+    const updated = await prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const linkedJourneyIds = Array.from(new Set([
+        finding.buyerGuidanceJourneyId,
+        finding.buyerRepairJourneyId,
+        journeyId,
+        repairJourneyId,
+      ].filter(Boolean) as string[]));
+
+      if (createsTask && checklistId) {
+        const actionKey = `buyer:inspection-finding:${finding.id}`;
+        const existing = await tx.homeBuyerTask.findUnique({
+          where: { checklistId_actionKey: { checklistId, actionKey } },
+        });
+        const phase: BuyerPlanPhase = input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'DUE_DILIGENCE' : 'FIRST_30_DAYS';
+        const title = `${input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'Negotiate' : 'Address'} ${finding.homeSystem.toLowerCase().replace(/_/g, ' ')} finding`;
+        const canonicalTaskData: Pick<Prisma.HomeBuyerTaskUncheckedCreateInput,
+          'title' | 'description' | 'phase' | 'priority' | 'sourceType' | 'sourceEntityType' |
+          'sourceEntityId' | 'homeActionKey' | 'guidanceJourneyId'> = {
+          title,
+          description: finding.inspectorDescription,
+          phase,
+          priority: severityPriority(finding.severity),
+          sourceType: 'INSPECTION_FINDING' as const,
+          sourceEntityType: 'INSPECTION_FINDING',
+          sourceEntityId: finding.id,
+          homeActionKey: `inspection:${finding.id}`,
+          guidanceJourneyId: repairJourneyId ?? journeyId,
+        };
+        const task = existing
+          ? await tx.homeBuyerTask.update({
+            where: { id: existing.id },
+            data: {
+              ...canonicalTaskData,
+              status: ['NOT_NEEDED', 'CANCELLED'].includes(existing.status) ? 'PENDING' : existing.status,
+              completedAt: ['NOT_NEEDED', 'CANCELLED'].includes(existing.status) ? null : existing.completedAt,
+              ...(input.dueAt !== undefined
+                ? { dueAt: input.dueAt ? new Date(input.dueAt) : null }
+                : {}),
+              ...(input.assignedToUserId !== undefined ? { assignedToUserId: input.assignedToUserId } : {}),
+            },
+          })
+          : await tx.homeBuyerTask.create({
+            data: {
+              checklistId,
+              actionKey,
+              ...canonicalTaskData,
+              dueAt: input.dueAt ? new Date(input.dueAt) : null,
+              assignedToUserId: input.assignedToUserId ?? userId,
+            },
+          });
+        taskId = task.id;
+
+        if (linkedJourneyIds.length) {
+          const linkedJourneys = await tx.guidanceJourney.findMany({
+            where: { id: { in: linkedJourneyIds }, propertyId },
+            select: { id: true, primarySignalId: true, status: true },
+          });
+          await tx.guidanceJourney.updateMany({
+            where: {
+              id: { in: linkedJourneys.map((item) => item.id) },
+              status: { in: ['DISMISSED', 'ARCHIVED', 'ABORTED'] },
+            },
+            data: { status: 'ACTIVE', completedAt: null },
+          });
+          const signalIds = linkedJourneys.map((item) => item.primarySignalId).filter(Boolean) as string[];
+          if (signalIds.length) {
+            await tx.guidanceSignal.updateMany({
+              where: { id: { in: signalIds }, propertyId },
+              data: { status: 'ACTIVE', archivedAt: null },
+            });
+          }
+        }
+      } else {
+        if (finding.buyerTaskId) {
+          await tx.homeBuyerTask.updateMany({
+            where: {
+              id: finding.buyerTaskId,
+              checklist: { propertyId },
+              status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] },
+            },
+            data: { status: 'NOT_NEEDED', completedAt: null },
+          });
+        }
+        if (linkedJourneyIds.length) {
+          const linkedJourneys = await tx.guidanceJourney.findMany({
+            where: { id: { in: linkedJourneyIds }, propertyId },
+            select: { id: true, primarySignalId: true },
+          });
+          await tx.guidanceJourney.updateMany({
+            where: { id: { in: linkedJourneys.map((item) => item.id) }, propertyId },
+            data: { status: 'DISMISSED', completedAt: now },
+          });
+          const signalIds = linkedJourneys.map((item) => item.primarySignalId).filter(Boolean) as string[];
+          if (signalIds.length) {
+            await tx.guidanceSignal.updateMany({
+              where: { id: { in: signalIds }, propertyId },
+              data: { status: 'ARCHIVED', archivedAt: now },
+            });
+          }
         }
       }
-    }
-    const updated = await prisma.$transaction(async (tx) => {
+
       const row = await tx.inspectionFinding.update({
         where: { id: finding.id },
         data: {
           buyerDisposition: input.disposition,
           buyerDispositionNotes: input.notes ?? null,
-          buyerDispositionAt: new Date(),
+          buyerDispositionAt: now,
           buyerDispositionByUserId: userId,
           buyerTaskId: taskId,
           buyerGuidanceJourneyId: journeyId,
@@ -338,7 +403,7 @@ export class BuyerAcquisitionService {
           status: dismissed ? 'DISMISSED' : verifiedFact ? 'ACCEPTED_AS_IS' : 'OPEN',
           resolutionMethod: dismissed ? 'DISMISSED' : null,
           resolutionNotes: dismissed ? input.notes ?? 'Dismissed during buyer review' : null,
-          resolvedAt: dismissed ? new Date() : null,
+          resolvedAt: dismissed ? now : null,
         },
       });
       const openFindings = await tx.inspectionFinding.count({

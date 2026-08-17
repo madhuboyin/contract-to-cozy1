@@ -10,7 +10,9 @@ import {
   getNegotiationShieldCaseDetail,
   listNegotiationShieldCases,
   parseNegotiationShieldDocument,
+  recordBuyerNegotiationOutcome,
   saveNegotiationShieldManualInput,
+  startBuyerNegotiation,
   trackNegotiationShieldEvent,
 } from '../controllers/negotiationShield.controller';
 import {
@@ -20,6 +22,8 @@ import {
   negotiationShieldCaseDocumentParamsSchema,
   negotiationShieldPropertyParamsSchema,
   saveNegotiationShieldInputBodySchema,
+  startBuyerNegotiationBodySchema,
+  recordBuyerNegotiationOutcomeBodySchema,
   trackNegotiationShieldEventBodySchema,
 } from '../validators/negotiationShield.validators';
 
@@ -41,6 +45,22 @@ router.post(
   validate(negotiationShieldPropertyParamsSchema),
   validateBody(trackNegotiationShieldEventBodySchema),
   trackNegotiationShieldEvent
+);
+
+router.post(
+  '/properties/:propertyId/negotiation-shield/buyer-cases',
+  propertyAuthMiddleware,
+  validate(negotiationShieldPropertyParamsSchema),
+  validateBody(startBuyerNegotiationBodySchema),
+  startBuyerNegotiation,
+);
+
+router.put(
+  '/properties/:propertyId/negotiation-shield/cases/:caseId/buyer-outcome',
+  propertyAuthMiddleware,
+  validate(negotiationShieldCaseParamsSchema),
+  validateBody(recordBuyerNegotiationOutcomeBodySchema),
+  recordBuyerNegotiationOutcome,
 );
 
 router.post(

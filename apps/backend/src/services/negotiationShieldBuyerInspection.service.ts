@@ -14,6 +14,7 @@ type BuyerInspectionPropertySignals = {
 };
 
 export type NormalizedBuyerInspectionNegotiationContext = {
+  perspective: 'HOMEOWNER' | 'BUYER';
   caseTitle: string;
   caseDescription: string | null;
   requestedConcessionAmount: number | null;
@@ -31,6 +32,96 @@ export type NormalizedBuyerInspectionNegotiationContext = {
 };
 
 const MODEL_VERSION = 'buyer-inspection-negotiation-rules-v1';
+
+function generateBuyerPerspectiveAnalysis(
+  ctx: NormalizedBuyerInspectionNegotiationContext,
+): BuyerInspectionNegotiationAnalysisResult {
+  const hasAmount = ctx.requestedConcessionAmount !== null;
+  const hasIssue = hasText(ctx.inspectionIssuesSummary, 20);
+  const hasRequest = hasText(ctx.requestedRepairs, 20);
+  const supportScore = Number(hasAmount) + Number(hasIssue) + Number(hasRequest) + Number(ctx.hasAnyDocument);
+  const confidence = clamp(0.35 + supportScore * 0.12, 0.3, 0.83);
+  const amount = formatCurrency(ctx.requestedConcessionAmount);
+  const findings: NegotiationShieldFinding[] = [
+    {
+      key: 'buyer_request_scope',
+      title: hasRequest ? 'Requested remedy is organized' : 'Choose repair, credit, or either',
+      detail: hasRequest
+        ? 'The case records the remedy the buyer wants to discuss.'
+        : 'Record whether the preferred outcome is seller repair, a closing credit, or either option.',
+      status: hasRequest ? 'POSITIVE' : 'MISSING',
+    },
+    {
+      key: 'buyer_evidence_scope',
+      title: hasIssue ? 'Finding is tied to inspection evidence' : 'Inspection rationale needs detail',
+      detail: hasIssue
+        ? 'The request is connected to a specific inspection issue.'
+        : 'Add the finding description and relevant evidence before discussing a remedy.',
+      status: hasIssue ? 'POSITIVE' : 'MISSING',
+    },
+  ];
+  const actions: NegotiationShieldRecommendedAction[] = [
+    {
+      key: 'confirm_professional_strategy',
+      title: 'Confirm strategy with your agent or attorney',
+      detail: 'Ask the licensed professional handling the transaction how the request should be documented and delivered under the contract.',
+      priority: 'HIGH',
+    },
+    {
+      key: 'tie_request_to_finding',
+      title: 'Keep the request tied to the finding',
+      detail: 'State the observed issue, the requested remedy, and the evidence supporting it without making unsupported legal or safety claims.',
+      priority: 'HIGH',
+    },
+    {
+      key: 'record_seller_outcome',
+      title: 'Record the seller response',
+      detail: 'Save the accepted, partial, rejected, credited, repaired, or buyer-transferred outcome so the Closing Plan stays current.',
+      priority: 'MEDIUM',
+    },
+  ];
+  return {
+    summary: `This buyer request is ${supportScore >= 3 ? 'organized enough for professional review' : 'missing details before professional review'}. Keep the discussion tied to the selected inspection finding${amount ? ` and the proposed ${amount} credit` : ''}.`,
+    findings,
+    negotiationLeverage: [{
+      key: 'specific_inspection_evidence',
+      title: 'Specific evidence is clearer than a broad request',
+      detail: 'A focused request tied to a confirmed finding gives the buyer’s agent or attorney a clearer basis for discussion with the seller.',
+      strength: hasIssue ? 'HIGH' : 'MEDIUM',
+    }],
+    recommendedActions: actions,
+    pricingAssessment: {
+      status: supportScore >= 3 ? 'NEEDS_REVIEW' : 'INSUFFICIENT_DATA',
+      summary: amount
+        ? `The proposed credit is ${amount}; ContractToCozy does not determine whether that amount is legally required or contractually available.`
+        : 'No proposed credit amount is recorded. A repair request can still be organized without one.',
+      rationale: ['The request remains subject to the purchase contract and professional review.'],
+      confidenceLabel: inferConfidenceLabel(confidence),
+      currency: 'USD',
+      requestedConcessionAmount: ctx.requestedConcessionAmount,
+    },
+    confidence,
+    modelVersion: `${MODEL_VERSION}-buyer-mode`,
+    draft: {
+      draftType: 'EMAIL',
+      subject: 'Inspection finding discussion points',
+      body: [
+        'Hello,',
+        '',
+        'We would like to discuss the inspection finding described below and the available repair or credit options.',
+        ctx.inspectionIssuesSummary ?? ctx.caseDescription ?? ctx.caseTitle,
+        ctx.requestedRepairs ? `Requested outcome: ${ctx.requestedRepairs}` : null,
+        amount ? `Proposed credit: ${amount}` : null,
+        '',
+        'Please coordinate any final request and contract language through the licensed professionals handling the transaction.',
+        '',
+        'Thank you,',
+        '[Your Name]',
+      ].filter((line): line is string => line !== null).join('\n'),
+      tone: 'CALM_SPECIFIC',
+    },
+  };
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -186,6 +277,7 @@ function buildDraft(
 export function generateBuyerInspectionNegotiationAnalysis(
   ctx: NormalizedBuyerInspectionNegotiationContext
 ): BuyerInspectionNegotiationAnalysisResult {
+  if (ctx.perspective === 'BUYER') return generateBuyerPerspectiveAnalysis(ctx);
   const findings: NegotiationShieldFinding[] = [];
   const leverage: NegotiationShieldLeveragePoint[] = [];
   const actions: NegotiationShieldRecommendedAction[] = [];

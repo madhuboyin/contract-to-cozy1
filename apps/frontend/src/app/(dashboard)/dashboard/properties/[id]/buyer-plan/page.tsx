@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, Loader2, SlidersHorizontal, Users } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -17,6 +18,8 @@ import type {
   BuyerPlanOverviewTask,
   HomeBuyerTaskStatus,
 } from '@/types';
+import { appendBuyerPlanReturnContext } from '@/lib/navigation/buyerReturnContext';
+import { startBuyerNegotiationCase } from '../tools/negotiation-shield/negotiationShieldApi';
 
 const PHASES: Array<{ key: BuyerPlanPhase; label: string }> = [
   { key: 'EXPLORING', label: 'Exploring' },
@@ -54,7 +57,12 @@ function isoFromDateInput(value: string) {
 
 export default function BuyerPlanPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
+  const returnTaskId = searchParams.get('taskId');
+  const returnSection = searchParams.get('section');
+  const restoredPositionRef = useRef(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -144,6 +152,24 @@ export default function BuyerPlanPage() {
       api.verifyBuyerDocument(propertyId, documentId, status),
     onSuccess: () => void refresh(),
   });
+  const negotiationMutation = useMutation({
+    mutationFn: ({ findingId }: { findingId: string }) => startBuyerNegotiationCase(propertyId, {
+      findingId,
+      requestType: 'REPAIR_OR_CREDIT',
+    }),
+    onSuccess: (detail) => {
+      const finding = detail.buyerFindings[0];
+      router.push(appendBuyerPlanReturnContext(
+        `/dashboard/properties/${propertyId}/tools/negotiation-shield?caseId=${detail.case.id}`,
+        { taskId: finding?.buyerTaskId, section: 'INSPECTION_DUE_DILIGENCE' },
+      ));
+    },
+    onError: (error) => toast({
+      title: 'Unable to open buyer negotiation',
+      description: error instanceof Error ? error.message : 'Try again after confirming the inspection finding.',
+      variant: 'destructive',
+    }),
+  });
   const handoffMutation = useMutation({
     mutationFn: () => api.handoffBuyerPlan(propertyId),
     onSuccess: (response) => {
@@ -164,6 +190,16 @@ export default function BuyerPlanPage() {
     },
   });
 
+  useEffect(() => {
+    if (restoredPositionRef.current || (!returnTaskId && !returnSection) || !overviewQuery.data) return;
+    const targetTaskId = returnTaskId
+      ?? overviewQuery.data.tasks.find((task) => task.checklistSection === returnSection)?.id;
+    const target = targetTaskId ? document.getElementById(`buyer-task-${targetTaskId}`) : null;
+    if (!target) return;
+    restoredPositionRef.current = true;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [overviewQuery.data, returnSection, returnTaskId]);
+
   if (overviewQuery.isLoading) return <DashboardShell><div className="flex min-h-64 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin" /></div></DashboardShell>;
   if (overviewQuery.isError || !overviewQuery.data) return <DashboardShell><Card><CardContent className="py-8 text-sm text-destructive">{overviewQuery.error instanceof Error ? overviewQuery.error.message : 'Unable to load the buyer plan.'}</CardContent></Card></DashboardShell>;
 
@@ -176,6 +212,10 @@ export default function BuyerPlanPage() {
   const members = overview.workload;
   const completed = overview.summary.completed;
   const readOnly = overview.accessRole === 'VIEWER';
+  const inspectionTask = plan.tasks.find((task) => task.actionKey === 'buyer:inspection:import');
+  const documentsTask = plan.tasks.find((task) => task.actionKey === 'buyer:closing:documents');
+  const restoredTaskId = returnTaskId
+    ?? plan.tasks.find((task) => task.checklistSection === returnSection)?.id;
 
   return (
     <DashboardShell>
@@ -231,18 +271,18 @@ export default function BuyerPlanPage() {
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><History className="h-5 w-5" />Recent plan history</CardTitle></CardHeader><CardContent className="space-y-3">{overview.history.slice(0, 6).map((item) => <div key={item.id}><p className="text-sm font-medium">{item.label}</p><p className="text-xs text-muted-foreground">{item.status.replace(/_/g, ' ')} · {new Date(item.occurredAt).toLocaleDateString()}</p></div>)}</CardContent></Card>
         </div>
 
-        {readiness && <Card className="border-blue-200 bg-blue-50/60"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileSearch className="h-5 w-5" />Evidence readiness</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-4"><div className="text-sm"><p className="font-medium">Next: {NEXT_STEP_LABELS[readiness.nextRecommendedStep]}</p><p className="text-muted-foreground">{readiness.inspectionReports.total} report(s), {readiness.inspectionReports.openMaterialFindings} open material finding(s), {readiness.documents.verified}/{readiness.documents.total} documents verified</p></div><div className="flex gap-2"><Button asChild variant="outline"><Link href={`/dashboard/properties/${propertyId}/inspection-hub`}>Import inspection</Link></Button><Button asChild variant="outline"><Link href={`/dashboard/vault?propertyId=${propertyId}`}>Import documents</Link></Button></div></CardContent></Card>}
+        {readiness && <Card className="border-blue-200 bg-blue-50/60"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileSearch className="h-5 w-5" />Evidence readiness</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-4"><div className="text-sm"><p className="font-medium">Next: {NEXT_STEP_LABELS[readiness.nextRecommendedStep]}</p><p className="text-muted-foreground">{readiness.inspectionReports.total} report(s), {readiness.inspectionReports.openMaterialFindings} open material finding(s), {readiness.documents.verified}/{readiness.documents.total} documents verified</p></div><div className="flex gap-2"><Button asChild variant="outline"><Link href={appendBuyerPlanReturnContext(`/dashboard/properties/${propertyId}/inspection-hub`, { taskId: inspectionTask?.id, section: 'INSPECTION_DUE_DILIGENCE' })}>Import inspection</Link></Button><Button asChild variant="outline"><Link href={appendBuyerPlanReturnContext(`/dashboard/properties/${propertyId}/documents?action=upload`, { taskId: documentsTask?.id, section: 'CLOSING_DISCLOSURE_FUNDS' })}>Import documents</Link></Button></div></CardContent></Card>}
 
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Users className="h-5 w-5" />Evidence and decisions</CardTitle></CardHeader>
           <CardContent className="space-y-5">
-            {evidence?.reports.map((report) => <div key={report.id} className="space-y-3"><div className="flex items-center justify-between"><p className="font-semibold">{report.reportType.replace(/_/g, ' ')} · {new Date(report.inspectionDate).toLocaleDateString()}</p><Badge variant="outline">{report.status}</Badge></div>{report.findings.map((finding) => <div key={finding.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="max-w-3xl"><div className="flex gap-2"><Badge variant={finding.severity === 'SAFETY' ? 'destructive' : 'outline'}>{finding.severity}</Badge><Badge variant="secondary">{finding.buyerDisposition.replace(/_/g, ' ')}</Badge></div><p className="mt-2 font-medium">{finding.homeSystem.replace(/_/g, ' ')}</p><p className="mt-1 text-sm text-muted-foreground">{finding.inspectorDescription}</p>{finding.buyerRepairJourneyId && <Button asChild variant="link" className="h-auto p-0 pt-2"><Link href={`/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${finding.buyerRepairJourneyId}`}>Open major-repair journey</Link></Button>}</div><div className="flex max-w-md flex-wrap gap-2">{FINDING_DECISIONS.map((decision) => <Button key={decision.value} size="sm" variant={finding.buyerDisposition === decision.value ? 'default' : 'outline'} disabled={readOnly || report.status !== 'CONFIRMED' || findingMutation.isPending} onClick={() => findingMutation.mutate({ findingId: finding.id, disposition: decision.value })}>{decision.label}</Button>)}</div></div></div>)}</div>)}
+            {evidence?.reports.map((report) => <div key={report.id} className="space-y-3"><div className="flex items-center justify-between"><p className="font-semibold">{report.reportType.replace(/_/g, ' ')} · {new Date(report.inspectionDate).toLocaleDateString()}</p><Badge variant="outline">{report.status}</Badge></div>{report.findings.map((finding) => <div key={finding.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div className="max-w-3xl"><div className="flex gap-2"><Badge variant={finding.severity === 'SAFETY' ? 'destructive' : 'outline'}>{finding.severity}</Badge><Badge variant="secondary">{finding.buyerDisposition.replace(/_/g, ' ')}</Badge></div><p className="mt-2 font-medium">{finding.homeSystem.replace(/_/g, ' ')}</p><p className="mt-1 text-sm text-muted-foreground">{finding.inspectorDescription}</p><div className="flex flex-wrap gap-2">{finding.buyerDisposition === 'PRE_CLOSE_NEGOTIATION' && <Button variant="link" className="h-auto p-0 pt-2" disabled={negotiationMutation.isPending} onClick={() => negotiationMutation.mutate({ findingId: finding.id })}>Open buyer negotiation</Button>}{finding.buyerRepairJourneyId && <Button asChild variant="link" className="h-auto p-0 pt-2"><Link href={`/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${finding.buyerRepairJourneyId}`}>Open major-repair journey</Link></Button>}</div></div><div className="flex max-w-md flex-wrap gap-2">{FINDING_DECISIONS.map((decision) => <Button key={decision.value} size="sm" variant={finding.buyerDisposition === decision.value ? 'default' : 'outline'} disabled={readOnly || report.status !== 'CONFIRMED' || findingMutation.isPending} onClick={() => findingMutation.mutate({ findingId: finding.id, disposition: decision.value })}>{decision.label}</Button>)}</div></div></div>)}</div>)}
             {!evidence?.reports.length && <p className="text-sm text-muted-foreground">No inspection reports imported yet.</p>}
             <div className="border-t pt-4"><p className="mb-3 font-semibold">Property documents</p><div className="space-y-2">{evidence?.documents.map((document) => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{document.name}</p><p className="text-xs text-muted-foreground">{document.type.replace(/_/g, ' ')} · {document.verificationStatus}</p></div><div className="flex gap-2"><Button size="sm" variant={document.verificationStatus === 'VERIFIED' ? 'default' : 'outline'} disabled={readOnly} onClick={() => documentMutation.mutate({ documentId: document.id, status: 'VERIFIED' })}>Verify</Button><Button size="sm" variant="outline" disabled={readOnly} onClick={() => documentMutation.mutate({ documentId: document.id, status: 'REJECTED' })}>Reject</Button></div></div>)}{!evidence?.documents.length && <p className="text-sm text-muted-foreground">No transaction, disclosure, or warranty documents imported yet.</p>}</div></div>
           </CardContent>
         </Card>
 
-        {PHASES.map((phase) => <Card key={phase.key}><CardHeader><CardTitle>{phase.label}</CardTitle></CardHeader><CardContent className="space-y-3">{plan.tasks.filter((task) => task.phase === phase.key).map((task) => { const done = task.status === 'COMPLETED'; return <div key={task.id} className="flex flex-col justify-between gap-4 rounded-lg border p-4 lg:flex-row"><div className="flex gap-3">{done ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" /> : <Circle className="mt-0.5 h-5 w-5 text-muted-foreground" />}<div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p>{task.templateKey && <Badge variant="secondary">Plan template</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">{task.description}</p><p className="mt-1 text-xs text-muted-foreground">{task.dueAt ? `Due ${new Date(task.dueAt).toLocaleDateString()}` : 'No due date'}{task.handedOffMaintenanceTaskId ? ' · In recurring Home feed' : ''}</p></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{task.priority}</Badge><select aria-label={`Assign ${task.title}`} className="h-9 rounded-md border bg-background px-2 text-sm" value={task.assignedToUserId ?? ''} disabled={readOnly} onChange={(event) => taskMutation.mutate({ task, assignedToUserId: event.target.value || null })}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || `${member.firstName} ${member.lastName}`}</option>)}</select><Button size="sm" variant={done ? 'outline' : 'default'} disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: done ? 'PENDING' : 'COMPLETED' })}>{done ? 'Reopen' : 'Mark complete'}</Button></div></div>; })}</CardContent></Card>)}
+        {PHASES.map((phase) => <Card key={phase.key}><CardHeader><CardTitle>{phase.label}</CardTitle></CardHeader><CardContent className="space-y-3">{plan.tasks.filter((task) => task.phase === phase.key).map((task) => { const done = task.status === 'COMPLETED'; const restored = task.id === restoredTaskId; return <div id={`buyer-task-${task.id}`} key={task.id} className={`flex flex-col justify-between gap-4 rounded-lg border p-4 lg:flex-row ${restored ? 'border-blue-400 bg-blue-50/60 ring-2 ring-blue-100' : ''}`}><div className="flex gap-3">{done ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" /> : <Circle className="mt-0.5 h-5 w-5 text-muted-foreground" />}<div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p>{task.templateKey && <Badge variant="secondary">Plan template</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">{task.description}</p><p className="mt-1 text-xs text-muted-foreground">{task.dueAt ? `Due ${new Date(task.dueAt).toLocaleDateString()}` : 'No due date'}{task.handedOffMaintenanceTaskId ? ' · In recurring Home feed' : ''}</p></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{task.priority}</Badge><select aria-label={`Assign ${task.title}`} className="h-9 rounded-md border bg-background px-2 text-sm" value={task.assignedToUserId ?? ''} disabled={readOnly} onChange={(event) => taskMutation.mutate({ task, assignedToUserId: event.target.value || null })}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || `${member.firstName} ${member.lastName}`}</option>)}</select><Button size="sm" variant={done ? 'outline' : 'default'} disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: done ? 'PENDING' : 'COMPLETED' })}>{done ? 'Reopen' : 'Mark complete'}</Button></div></div>; })}</CardContent></Card>)}
 
         <Card className={acceptance?.acceptanceReady ? 'border-green-300' : ''}><CardHeader><CardTitle className="text-lg">Continuity status</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="grid gap-2 sm:grid-cols-4"><p>Findings reviewed: {acceptance?.findings.reviewed ?? 0}/{acceptance?.findings.total ?? 0}</p><p>Material journeys: {acceptance?.findings.materialBranched ?? 0}/{acceptance?.findings.material ?? 0}</p><p>Documents verified: {acceptance?.documents.verified ?? 0}/{acceptance?.documents.total ?? 0}</p><p>Tasks assigned: {acceptance?.tasks.assigned ?? 0}/{acceptance?.tasks.total ?? 0}</p></div><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-muted-foreground">Day-91 handoff is automatically checked whenever the recurring Home feed or this plan opens.</p><Button variant="outline" onClick={() => handoffMutation.mutate()} disabled={readOnly || handoffMutation.isPending || plan.status === 'HANDED_OFF'}>{plan.status === 'HANDED_OFF' ? 'Handoff complete' : 'Check handoff now'}</Button></div></CardContent></Card>
       </div>

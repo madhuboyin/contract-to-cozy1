@@ -4,6 +4,7 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { APIError } from '../middleware/error.middleware';
 import {
   AttachNegotiationShieldDocumentPayload,
+  BuyerNegotiationFindingDTO,
   BuyerInspectionNegotiationAnalysisResult,
   CreateNegotiationShieldCaseInput,
   ContractorUrgencyPressureAnalysisResult,
@@ -18,7 +19,9 @@ import {
   NegotiationShieldInputDTO,
   NegotiationShieldEventInput,
   NegotiationShieldSourceType,
+  RecordBuyerNegotiationOutcomeInput,
   SaveNegotiationShieldInputPayload,
+  StartBuyerNegotiationInput,
 } from './negotiationShield.types';
 import { generateBuyerInspectionNegotiationAnalysis } from './negotiationShieldBuyerInspection.service';
 import { generateContractorQuoteAnalysis } from './negotiationShieldContractorQuote.service';
@@ -146,8 +149,9 @@ export class NegotiationShieldService {
     const documentModel = db.negotiationShieldDocument;
     const analysisModel = db.negotiationShieldAnalysis;
     const draftModel = db.negotiationShieldDraft;
+    const buyerFindingModel = db.negotiationShieldBuyerFinding;
 
-    if (!caseModel || !inputModel || !documentModel || !analysisModel || !draftModel) {
+    if (!caseModel || !inputModel || !documentModel || !analysisModel || !draftModel || !buyerFindingModel) {
       throw new APIError(
         'Negotiation Shield models are unavailable. Run prisma generate.',
         500,
@@ -161,6 +165,7 @@ export class NegotiationShieldService {
       documentModel,
       analysisModel,
       draftModel,
+      buyerFindingModel,
     };
   }
 
@@ -174,6 +179,7 @@ export class NegotiationShieldService {
       title: record.title,
       description: record.description ?? null,
       sourceType: record.sourceType,
+      perspective: record.perspective ?? 'HOMEOWNER',
       analysisVersion: record.analysisVersion ?? null,
       latestAnalysisAt: asIsoString(record.latestAnalysisAt),
       quoteDecisionWorkspaceId: record.quoteDecisionWorkspaceId ?? null,
@@ -244,6 +250,29 @@ export class NegotiationShieldService {
       tone: record.tone ?? null,
       isLatest: Boolean(record.isLatest),
       createdAt: asIsoString(record.createdAt) as string,
+    };
+  }
+
+  private serializeBuyerFinding(record: any): BuyerNegotiationFindingDTO {
+    const finding = record.finding ?? {};
+    return {
+      id: String(record.id),
+      findingId: String(record.findingId),
+      homeSystem: String(finding.homeSystem ?? ''),
+      severity: String(finding.severity ?? ''),
+      inspectorDescription: String(finding.inspectorDescription ?? ''),
+      estimatedCostCentsLow: finding.estimatedCostCentsLow ?? null,
+      estimatedCostCentsHigh: finding.estimatedCostCentsHigh ?? null,
+      buyerTaskId: finding.buyerTaskId ?? null,
+      requestType: record.requestType,
+      requestedCreditCents: record.requestedCreditCents ?? null,
+      sellerResponse: record.sellerResponse,
+      sellerResponseNotes: record.sellerResponseNotes ?? null,
+      sellerRespondedAt: asIsoString(record.sellerRespondedAt),
+      outcome: record.outcome,
+      agreedCreditCents: record.agreedCreditCents ?? null,
+      outcomeNotes: record.outcomeNotes ?? null,
+      outcomeRecordedAt: asIsoString(record.outcomeRecordedAt),
     };
   }
 
@@ -980,6 +1009,7 @@ export class NegotiationShieldService {
     return {
       hasMeaningfulInput,
       analysisInput: {
+        perspective: (record.perspective === 'BUYER' ? 'BUYER' : 'HOMEOWNER') as 'BUYER' | 'HOMEOWNER',
         caseTitle: record.title,
         caseDescription: record.description ?? null,
         requestedConcessionAmount,
@@ -1209,6 +1239,10 @@ export class NegotiationShieldService {
           orderBy: [{ isLatest: 'desc' }, { createdAt: 'desc' }],
           take: 1,
         },
+        buyerFindingLinks: {
+          include: { finding: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
       },
     });
 
@@ -1230,6 +1264,9 @@ export class NegotiationShieldService {
         Array.isArray(record.drafts) && record.drafts[0]
           ? this.serializeDraft(record.drafts[0])
           : null,
+      buyerFindings: Array.isArray(record.buyerFindingLinks)
+        ? record.buyerFindingLinks.map((row: any) => this.serializeBuyerFinding(row))
+        : [],
     };
   }
 
@@ -1273,6 +1310,7 @@ export class NegotiationShieldService {
           title: input.title.trim(),
           description: input.description?.trim() || null,
           sourceType,
+          perspective: input.perspective ?? 'HOMEOWNER',
           quoteDecisionWorkspaceId: input.quoteDecisionWorkspaceId ?? null,
         },
         select: { id: true },
@@ -1317,6 +1355,209 @@ export class NegotiationShieldService {
       });
     }
     return this.getCaseDetail(propertyId, created.id);
+  }
+
+  async startBuyerNegotiation(
+    propertyId: string,
+    createdByUserId: string,
+    input: StartBuyerNegotiationInput,
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const finding = await prisma.inspectionFinding.findFirst({
+      where: { id: input.findingId, propertyId },
+      include: { report: { select: { status: true } } },
+    });
+    if (!finding) {
+      throw new APIError('Inspection finding not found.', 404, 'FINDING_NOT_FOUND');
+    }
+    if (
+      finding.report.status !== 'CONFIRMED'
+      || finding.status === 'DISMISSED'
+      || finding.buyerDisposition !== 'PRE_CLOSE_NEGOTIATION'
+    ) {
+      throw new APIError(
+        'Only a confirmed, active inspection finding can start buyer negotiation.',
+        409,
+        'BUYER_NEGOTIATION_FINDING_NOT_READY',
+      );
+    }
+
+    const existingLink = await this.models.buyerFindingModel.findUnique({
+      where: { findingId: finding.id },
+      select: { caseId: true },
+    });
+    if (existingLink) return this.getCaseDetail(propertyId, existingLink.caseId);
+
+    let created: { id: string };
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        const negotiationCase = await tx.negotiationShieldCase.create({
+          data: {
+            propertyId,
+            createdByUserId,
+            scenarioType: 'BUYER_INSPECTION_NEGOTIATION',
+            perspective: 'BUYER',
+            status: 'DRAFT',
+            sourceType: 'MANUAL',
+            title: `Negotiate ${finding.homeSystem.toLowerCase().replace(/_/g, ' ')} inspection finding`,
+            description: finding.inspectorDescription,
+          },
+        });
+        await tx.negotiationShieldBuyerFinding.create({
+          data: {
+            caseId: negotiationCase.id,
+            findingId: finding.id,
+            requestType: input.requestType,
+            requestedCreditCents: input.requestedCreditCents ?? null,
+          },
+        });
+        await tx.negotiationShieldInput.create({
+          data: {
+            caseId: negotiationCase.id,
+            inputType: 'BUYER_INSPECTION',
+            rawText: input.notes ?? null,
+            structuredData: {
+              requestedConcessionAmount: input.requestedCreditCents == null
+                ? null
+                : input.requestedCreditCents / 100,
+              inspectionIssuesSummary: finding.inspectorDescription,
+              requestedRepairs: input.requestType === 'CREDIT'
+                ? 'Request a closing credit tied to this inspection finding.'
+                : 'Request seller repair or a documented credit for this inspection finding.',
+              buyerPerspective: true,
+              findingId: finding.id,
+            },
+          },
+        });
+        return negotiationCase;
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const concurrentLink = await this.models.buyerFindingModel.findUnique({
+          where: { findingId: finding.id },
+          select: { caseId: true },
+        });
+        if (concurrentLink) return this.getCaseDetail(propertyId, concurrentLink.caseId);
+      }
+      throw error;
+    }
+
+    return this.getCaseDetail(propertyId, created.id);
+  }
+
+  async recordBuyerNegotiationOutcome(
+    propertyId: string,
+    caseId: string,
+    actorUserId: string,
+    input: RecordBuyerNegotiationOutcomeInput,
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const linked = await this.models.buyerFindingModel.findFirst({
+      where: {
+        caseId,
+        findingId: input.findingId,
+        negotiationCase: { propertyId, perspective: 'BUYER' },
+      },
+      include: { finding: true },
+    });
+    if (!linked) {
+      throw new APIError('Buyer negotiation finding not found.', 404, 'BUYER_NEGOTIATION_FINDING_NOT_FOUND');
+    }
+
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      await tx.negotiationShieldBuyerFinding.update({
+        where: { id: linked.id },
+        data: {
+          sellerResponse: input.sellerResponse,
+          sellerResponseNotes: input.sellerResponseNotes ?? null,
+          sellerRespondedAt: input.sellerResponse === 'PENDING' ? null : now,
+          outcome: input.outcome,
+          agreedCreditCents: input.agreedCreditCents ?? null,
+          outcomeNotes: input.outcomeNotes ?? null,
+          outcomeRecordedAt: input.outcome === 'PENDING' ? null : now,
+          outcomeRecordedById: input.outcome === 'PENDING' ? null : actorUserId,
+        },
+      });
+
+      const closesPreCloseWork = input.outcome === 'ACCEPTED_CREDIT' || input.outcome === 'SELLER_REPAIRED';
+      const transfersToBuyer = input.outcome === 'TRANSFERRED_TO_BUYER';
+      await tx.inspectionFinding.update({
+        where: { id: linked.findingId },
+        data: {
+          ...(closesPreCloseWork ? {
+            status: 'RESOLVED',
+            resolvedAt: now,
+            resolutionMethod: input.outcome === 'ACCEPTED_CREDIT' ? 'CREDITED_AT_CLOSING' : 'SELLER_REPAIR',
+            resolutionCostCents: input.outcome === 'ACCEPTED_CREDIT' ? input.agreedCreditCents ?? null : null,
+            resolutionNotes: input.outcomeNotes ?? input.sellerResponseNotes ?? null,
+          } : {}),
+          ...(transfersToBuyer ? {
+            buyerDisposition: 'POST_CLOSE_ACTION',
+            buyerDispositionAt: now,
+            buyerDispositionByUserId: actorUserId,
+            status: 'OPEN',
+            resolvedAt: null,
+            resolutionMethod: null,
+          } : {}),
+        },
+      });
+
+      if (linked.finding.buyerTaskId) {
+        if (closesPreCloseWork) {
+          await tx.homeBuyerTask.updateMany({
+            where: { id: linked.finding.buyerTaskId, checklist: { propertyId } },
+            data: {
+              status: 'COMPLETED',
+              completedAt: now,
+              completedByUserId: actorUserId,
+              completionMethod: 'EXTERNAL_CONFIRMATION',
+              statusReason: input.outcome === 'ACCEPTED_CREDIT'
+                ? 'Seller credit accepted and recorded.'
+                : 'Seller repair recorded as complete.',
+              completionEvidenceJson: {
+                proofType: 'NEGOTIATION_OUTCOME',
+                negotiationCaseId: caseId,
+                findingId: linked.findingId,
+                outcome: input.outcome,
+                sellerResponse: input.sellerResponse,
+              },
+            },
+          });
+        } else if (transfersToBuyer) {
+          await tx.homeBuyerTask.updateMany({
+            where: { id: linked.finding.buyerTaskId, checklist: { propertyId } },
+            data: {
+              title: `Address ${linked.finding.homeSystem.toLowerCase().replace(/_/g, ' ')} finding`,
+              phase: 'FIRST_30_DAYS',
+              status: 'PENDING',
+              completedAt: null,
+              completedByUserId: null,
+              completionMethod: null,
+              completionEvidenceJson: Prisma.DbNull,
+              statusReason: 'Seller response transferred this finding to the buyer ownership plan.',
+            },
+          });
+        } else if (input.outcome === 'ACCEPTED_REPAIR') {
+          await tx.homeBuyerTask.updateMany({
+            where: { id: linked.finding.buyerTaskId, checklist: { propertyId } },
+            data: {
+              title: `Verify seller repair for ${linked.finding.homeSystem.toLowerCase().replace(/_/g, ' ')} finding`,
+              status: 'IN_PROGRESS',
+              statusReason: 'Seller repair accepted; verify completion before closing.',
+            },
+          });
+        } else if (input.outcome === 'REJECTED') {
+          await tx.homeBuyerTask.updateMany({
+            where: { id: linked.finding.buyerTaskId, checklist: { propertyId } },
+            data: {
+              status: 'BLOCKED',
+              statusReason: 'Seller rejected the request; choose whether to revise, waive, or transfer the finding.',
+            },
+          });
+        }
+      }
+    });
+
+    return this.getCaseDetail(propertyId, caseId);
   }
 
   async saveManualInput(
