@@ -3919,7 +3919,7 @@ class APIClient {
     });
   }
 
-  async handoffBuyerPlan(propertyId: string): Promise<APIResponse<{ handedOff: boolean; reason: string; taskCount: number }>> {
+  async handoffBuyerPlan(propertyId: string): Promise<APIResponse<{ handedOff: boolean; reason: string; taskCount: number; strandedTaskCount: number }>> {
     return this.request(`/api/home-buyer-tasks/properties/${propertyId}/handoff`, { method: 'POST' });
   }
 

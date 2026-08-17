@@ -44,6 +44,9 @@ const PHASES: Array<{ key: BuyerPlanPhase; label: string }> = [
   { key: 'RECURRING_HOME', label: 'Recurring Home handoff' },
 ];
 
+const PRE_CLOSE_PHASES: BuyerPlanPhase[] = ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'];
+const ACTIVE_TASK_STATUSES: HomeBuyerTaskStatus[] = ['PENDING', 'IN_PROGRESS', 'BLOCKED'];
+
 const FINDING_DECISIONS: Array<{ value: Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>; label: string }> = [
   { value: 'VERIFIED_FACT', label: 'Verified fact' },
   { value: 'PRE_CLOSE_NEGOTIATION', label: 'Negotiate pre-close' },
@@ -271,7 +274,15 @@ export default function BuyerPlanPage() {
     onSuccess: (response) => {
       void refresh();
       const result = response.success ? response.data : null;
-      toast({ title: result?.handedOff ? 'Recurring Home handoff complete' : 'Handoff is not due yet', description: result?.handedOff ? `${result.taskCount} unresolved item(s) moved into recurring Home care.` : 'The plan will hand off on day 91 or when ownership becomes established.' });
+      if (result?.handedOff) {
+        toast({ title: 'Recurring Home handoff complete', description: `${result.taskCount} unresolved ownership item(s) moved into recurring Home care.` });
+      } else if (result?.reason === 'STRANDED_PRE_CLOSE_WORK') {
+        toast({ title: 'Resolve pre-close work first', description: `${result.strandedTaskCount} pre-close item(s) still need to be completed or marked not needed.` });
+      } else if (result?.reason === 'OWNERSHIP_NOT_CONFIRMED') {
+        toast({ title: 'Ownership is not confirmed', description: 'Handoff starts only after an explicit professional-close confirmation persists.' });
+      } else {
+        toast({ title: 'Handoff is not due yet', description: 'The plan will hand off on day 91 or when ownership becomes established.' });
+      }
     },
   });
   const compositionMutation = useMutation({
@@ -326,6 +337,9 @@ export default function BuyerPlanPage() {
   const canCancel = overview.accessRole !== 'VIEWER'
     && ['ACTIVE', 'PAUSED'].includes(plan.status)
     && ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(plan.stage);
+  const strandedPreCloseTasks = ['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90'].includes(plan.stage)
+    ? plan.tasks.filter((task) => PRE_CLOSE_PHASES.includes(task.phase) && ACTIVE_TASK_STATUSES.includes(task.status))
+    : [];
   const inspectionTask = plan.tasks.find((task) => task.actionKey === 'buyer:inspection:import');
   const documentsTask = plan.tasks.find((task) => task.actionKey === 'buyer:closing:documents');
   const restoredTaskId = returnTaskId
@@ -494,9 +508,42 @@ export default function BuyerPlanPage() {
           </CardContent>
         </Card>
 
-        {PHASES.map((phase) => <Card key={phase.key}><CardHeader><CardTitle>{phase.label}</CardTitle></CardHeader><CardContent className="space-y-3">{plan.tasks.filter((task) => task.phase === phase.key).map((task) => { const done = task.status === 'COMPLETED'; const restored = task.id === restoredTaskId; return <div id={`buyer-task-${task.id}`} key={task.id} className={`flex flex-col justify-between gap-4 rounded-lg border p-4 lg:flex-row ${restored ? 'border-blue-400 bg-blue-50/60 ring-2 ring-blue-100' : ''}`}><div className="flex gap-3">{done ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" /> : <Circle className="mt-0.5 h-5 w-5 text-muted-foreground" />}<div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p>{task.templateKey && <Badge variant="secondary">Plan template</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">{task.description}</p><p className="mt-1 text-xs text-muted-foreground">{task.dueAt ? `Due ${new Date(task.dueAt).toLocaleDateString()}` : 'No due date'}{task.handedOffMaintenanceTaskId ? ' · In recurring Home feed' : ''}</p></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{task.priority}</Badge><select aria-label={`Assign ${task.title}`} className="h-9 rounded-md border bg-background px-2 text-sm" value={task.assignedToUserId ?? ''} disabled={readOnly} onChange={(event) => taskMutation.mutate({ task, assignedToUserId: event.target.value || null })}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || `${member.firstName} ${member.lastName}`}</option>)}</select><Button size="sm" variant={done ? 'outline' : 'default'} disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: done ? 'PENDING' : 'COMPLETED' })}>{done ? 'Reopen' : 'Mark complete'}</Button></div></div>; })}</CardContent></Card>)}
+        {PHASES.map((phase) => <Card key={phase.key}>
+          <CardHeader><CardTitle>{phase.label}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {plan.tasks.filter((task) => task.phase === phase.key).map((task) => {
+              const done = task.status === 'COMPLETED';
+              const resolvedWithoutCompletion = ['NOT_NEEDED', 'CANCELLED'].includes(task.status);
+              const stranded = strandedPreCloseTasks.some((candidate) => candidate.id === task.id);
+              const restored = task.id === restoredTaskId;
+              return <div id={`buyer-task-${task.id}`} key={task.id} className={`flex flex-col justify-between gap-4 rounded-lg border p-4 lg:flex-row ${restored ? 'border-blue-400 bg-blue-50/60 ring-2 ring-blue-100' : ''} ${stranded ? 'border-amber-300 bg-amber-50/50' : ''}`}>
+                <div className="flex gap-3">
+                  {done || resolvedWithoutCompletion ? <CheckCircle2 className={`mt-0.5 h-5 w-5 ${done ? 'text-green-600' : 'text-slate-500'}`} /> : <Circle className="mt-0.5 h-5 w-5 text-muted-foreground" />}
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p>{task.templateKey && <Badge variant="secondary">Plan template</Badge>}{stranded && <Badge className="bg-amber-200 text-amber-950">Resolve before handoff</Badge>}</div>
+                    <p className="mt-1 text-sm text-muted-foreground">{task.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{task.dueAt ? `Due ${new Date(task.dueAt).toLocaleDateString()}` : 'No due date'}{task.handedOffMaintenanceTaskId ? ' · In recurring Home feed' : ''}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{task.priority}</Badge>
+                  <select aria-label={`Assign ${task.title}`} className="h-9 rounded-md border bg-background px-2 text-sm" value={task.assignedToUserId ?? ''} disabled={readOnly} onChange={(event) => taskMutation.mutate({ task, assignedToUserId: event.target.value || null })}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || `${member.firstName} ${member.lastName}`}</option>)}</select>
+                  <Button size="sm" variant={done || resolvedWithoutCompletion ? 'outline' : 'default'} disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: done || resolvedWithoutCompletion ? 'PENDING' : 'COMPLETED' })}>{done ? 'Reopen' : resolvedWithoutCompletion ? 'Restore' : 'Mark complete'}</Button>
+                  {stranded && <Button size="sm" variant="outline" disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: 'NOT_NEEDED' })}>Not needed after close</Button>}
+                </div>
+              </div>;
+            })}
+          </CardContent>
+        </Card>)}
 
-        <Card className={acceptance?.acceptanceReady ? 'border-green-300' : ''}><CardHeader><CardTitle className="text-lg">Continuity status</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="grid gap-2 sm:grid-cols-4"><p>Findings reviewed: {acceptance?.findings.reviewed ?? 0}/{acceptance?.findings.total ?? 0}</p><p>Material journeys: {acceptance?.findings.materialBranched ?? 0}/{acceptance?.findings.material ?? 0}</p><p>Documents verified: {acceptance?.documents.verified ?? 0}/{acceptance?.documents.total ?? 0}</p><p>Tasks assigned: {acceptance?.tasks.assigned ?? 0}/{acceptance?.tasks.total ?? 0}</p></div><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-muted-foreground">Day-91 handoff is automatically checked whenever the recurring Home feed or this plan opens.</p><Button variant="outline" onClick={() => handoffMutation.mutate()} disabled={readOnly || handoffMutation.isPending || plan.status === 'HANDED_OFF'}>{plan.status === 'HANDED_OFF' ? 'Handoff complete' : 'Check handoff now'}</Button></div></CardContent></Card>
+        <Card className={acceptance?.acceptanceReady ? 'border-green-300' : strandedPreCloseTasks.length ? 'border-amber-300' : ''}>
+          <CardHeader><CardTitle className="text-lg">Continuity status</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid gap-2 sm:grid-cols-4"><p>Findings reviewed: {acceptance?.findings.reviewed ?? 0}/{acceptance?.findings.total ?? 0}</p><p>Material journeys: {acceptance?.findings.materialBranched ?? 0}/{acceptance?.findings.material ?? 0}</p><p>Documents verified: {acceptance?.documents.verified ?? 0}/{acceptance?.documents.total ?? 0}</p><p>Tasks assigned: {acceptance?.tasks.assigned ?? 0}/{acceptance?.tasks.total ?? 0}</p></div>
+            {strandedPreCloseTasks.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3"><div><p className="font-medium text-amber-950">{strandedPreCloseTasks.length} pre-close item(s) need a final decision</p><p className="text-amber-900">Complete each item or mark it not needed so nothing disappears during recurring Home handoff.</p></div><Button asChild size="sm" variant="outline"><a href={`#buyer-task-${strandedPreCloseTasks[0].id}`}>Review first item</a></Button></div>}
+            <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-muted-foreground">Day-91 handoff is checked from the persisted ownership start—not the scheduled closing date—and promotes this property to Established Owner only after all pre-close work is resolved.</p><Button variant="outline" onClick={() => handoffMutation.mutate()} disabled={readOnly || handoffMutation.isPending || plan.status === 'HANDED_OFF'}>{plan.status === 'HANDED_OFF' ? 'Handoff complete' : 'Check handoff now'}</Button></div>
+          </CardContent>
+        </Card>
 
         {canCancel && <Card className="border-destructive/30">
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><XCircle className="h-5 w-5" />Cancel this purchase journey</CardTitle></CardHeader>

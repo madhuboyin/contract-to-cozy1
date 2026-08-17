@@ -1119,25 +1119,59 @@ export class BuyerAcquisitionService {
       where: { propertyId },
       include: {
         property: { select: { onboarding: { select: { ownershipState: true } } } },
-        tasks: {
-          where: {
-            status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] },
-            phase: { in: ['MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'RECURRING_HOME'] },
-          },
-        },
       },
     });
-    if (!plan) return { handedOff: false, reason: 'NO_BUYER_PLAN', taskCount: 0 };
-    if (plan.handoffCompletedAt) return { handedOff: true, reason: 'ALREADY_HANDED_OFF', taskCount: 0 };
+    if (!plan) return { handedOff: false, reason: 'NO_BUYER_PLAN', taskCount: 0, strandedTaskCount: 0 };
+    if (plan.handoffCompletedAt) return { handedOff: true, reason: 'ALREADY_HANDED_OFF', taskCount: 0, strandedTaskCount: 0 };
+    if (!plan.ownershipStartedAt || !['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90'].includes(plan.stage)) {
+      return { handedOff: false, reason: 'OWNERSHIP_NOT_CONFIRMED', taskCount: 0, strandedTaskCount: 0 };
+    }
 
-    const ownershipAnchor = plan.ownershipStartedAt ?? plan.targetCloseDate ?? plan.planStartDate;
-    const day91Reached = now.getTime() >= ownershipAnchor.getTime() + 90 * DAY_MS;
+    const day91Reached = now.getTime() >= plan.ownershipStartedAt.getTime() + 90 * DAY_MS;
     const established = plan.property.onboarding?.ownershipState === 'ESTABLISHED_OWNER';
-    if (!day91Reached && !established) return { handedOff: false, reason: 'NOT_DUE', taskCount: 0 };
+    if (!day91Reached && !established) return { handedOff: false, reason: 'NOT_DUE', taskCount: 0, strandedTaskCount: 0 };
+    assertBuyerJourneyStageTransition(plan.stage, 'HANDED_OFF');
 
-    let taskCount = 0;
-    await prisma.$transaction(async (tx) => {
-      for (const task of plan.tasks) {
+    const result = await prisma.$transaction(async (tx) => {
+      const strandedTaskCount = await tx.homeBuyerTask.count({
+        where: {
+          checklistId: plan.id,
+          status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] },
+          phase: { in: ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'] },
+        },
+      });
+      if (strandedTaskCount > 0) return { handedOff: false as const, taskCount: 0, strandedTaskCount };
+
+      const claimed = await tx.homeBuyerChecklist.updateMany({
+        where: {
+          id: plan.id,
+          status: { in: ['ACTIVE', 'PAUSED'] },
+          stage: { in: ['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90'] },
+          ownershipStartedAt: { not: null },
+          handoffCompletedAt: null,
+        },
+        data: {
+          status: 'HANDED_OFF',
+          stage: 'HANDED_OFF',
+          completedAt: now,
+          lastStageChangedAt: now,
+          transitionedToRecurringAt: now,
+          handoffCompletedAt: now,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new APIError('The buyer journey changed before handoff completed.', 409, 'BUYER_HANDOFF_TRANSITION_CONFLICT');
+      }
+
+      const ownershipTasks = await tx.homeBuyerTask.findMany({
+        where: {
+          checklistId: plan.id,
+          status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] },
+          phase: { in: ['MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'RECURRING_HOME'] },
+        },
+      });
+      let taskCount = 0;
+      for (const task of ownershipTasks) {
         const maintenanceId = await this.materializeHandoffTask(
           tx, propertyId, task, now, 'BUYER_90_DAY_HANDOFF', 'BUYER_90_DAY_PLAN',
         );
@@ -1153,12 +1187,20 @@ export class BuyerAcquisitionService {
         }
         taskCount += 1;
       }
-      await tx.homeBuyerChecklist.update({
-        where: { id: plan.id },
-        data: { status: 'HANDED_OFF', transitionedToRecurringAt: now, handoffCompletedAt: now },
+      await tx.propertyOnboarding.updateMany({
+        where: {
+          propertyId,
+          entryPath: 'EXISTING_HOME_PURCHASE',
+          ownershipState: { in: ['RECENT_OWNER', 'ESTABLISHED_OWNER'] },
+        },
+        data: { ownershipState: 'ESTABLISHED_OWNER' },
       });
+      return { handedOff: true as const, taskCount, strandedTaskCount: 0 };
     });
-    return { handedOff: true, reason: day91Reached ? 'DAY_91_REACHED' : 'OWNERSHIP_ESTABLISHED', taskCount };
+    if (!result.handedOff) {
+      return { ...result, reason: 'STRANDED_PRE_CLOSE_WORK' };
+    }
+    return { ...result, reason: day91Reached ? 'DAY_91_REACHED' : 'OWNERSHIP_ESTABLISHED' };
   }
 
   static async getAcceptanceStatus(userId: string, propertyId: string) {
