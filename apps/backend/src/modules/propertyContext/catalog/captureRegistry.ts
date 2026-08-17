@@ -2,6 +2,7 @@ import {
   CoolingType,
   DwellingType,
   FoundationType,
+  BasementConfiguration,
   HeatingType,
   OccupancyStatus,
   OutdoorSpaceType,
@@ -66,6 +67,7 @@ const inputSchemas: Record<string, CaptureInputSchema> = {
   'structure.roofType': enumSchema(Object.values(RoofType)),
   'structure.roofReplacementYear': { type: 'INTEGER', min: 1600, max: 2200, unit: 'year' },
   'structure.foundationType': enumSchema(Object.values(FoundationType)),
+  'structure.basementConfiguration': enumSchema(Object.values(BasementConfiguration)),
   'structure.sidingType': { type: 'SHORT_TEXT', maxLength: 200 },
   'structure.electricalPanelAgeYears': nonNegativeInteger('years'),
   'exterior.outdoorSpaceTypes': {

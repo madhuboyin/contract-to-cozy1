@@ -259,6 +259,9 @@ async function assertPropertyAccess(propertyId: string, userId: string) {
       yearBuilt: true,
       propertySize: true,
       dwellingType: true,
+      bedrooms: true,
+      bathrooms: true,
+      basementConfiguration: true,
     },
   });
   if (!property) throw new Error('Property not found or access denied.');
@@ -593,6 +596,16 @@ export type ActivationFirstValue = {
       inspectionStatus: string;
       documentsRecorded: number;
     };
+    homeSnapshot: {
+      dwellingType: string;
+      yearBuilt: number | null;
+      propertyAgeYears: number | null;
+      bedrooms: number | null;
+      bathrooms: number | null;
+      basementConfiguration: string;
+      hasPoolOrSpa: boolean | null;
+    };
+    personalizedGuidance: string[];
     planHref: string;
     askHref: string;
     askPrompt: string;
@@ -604,6 +617,7 @@ export async function getActivationFirstValue(
   userId: string,
 ): Promise<ActivationFirstValue> {
   const property = await assertPropertyAccess(propertyId, userId);
+  const exteriorProfile = await prisma.propertyExteriorProfile.findUnique({ where: { propertyId } });
   const onboarding = await prisma.propertyOnboarding.findUnique({ where: { propertyId } });
   if (!onboarding) throw new Error('Entry context has not been captured.');
   const entryContext = mapEntryContext(onboarding);
@@ -847,6 +861,26 @@ export async function getActivationFirstValue(
       : buyerPlan.stage === 'OFFER_CONTRACT'
         ? 'What should I confirm before accepting a contract?'
         : 'What should I do next to protect my closing timeline?';
+    const propertyAgeYears = property.yearBuilt
+      ? Math.max(0, now.getUTCFullYear() - property.yearBuilt)
+      : null;
+    const personalizedGuidance: string[] = [];
+    if (propertyAgeYears !== null && propertyAgeYears >= 40) {
+      personalizedGuidance.push(`Because this home is about ${propertyAgeYears} years old, ask the inspector about the remaining life of major systems and whether older materials or past updates need specialist review.`);
+    } else if (propertyAgeYears !== null) {
+      personalizedGuidance.push(`Because this home is about ${propertyAgeYears} years old, use the inspection to confirm the condition and maintenance history of its major systems.`);
+    }
+    if (property.basementConfiguration === 'FINISHED') {
+      personalizedGuidance.push('For the finished basement, ask about moisture, drainage, emergency egress, and permits for finished work.');
+    } else if (property.basementConfiguration === 'UNFINISHED') {
+      personalizedGuidance.push('For the basement, ask the inspector to check visible moisture, drainage, foundation surfaces, and radon considerations.');
+    }
+    if (exteriorProfile?.hasPoolOrSpa === true) {
+      personalizedGuidance.push('For the pool or spa, confirm barriers, equipment condition, electrical safety, leaks, and ongoing maintenance needs.');
+    }
+    if (personalizedGuidance.length === 0) {
+      personalizedGuidance.push('Your plan will become more specific as you add a document or answer a question that changes the recommendation.');
+    }
     return {
       planId: buyerPlan.id,
       stage: buyerPlan.stage,
@@ -865,6 +899,16 @@ export async function getActivationFirstValue(
         inspectionStatus: inspectionMilestone?.status ?? 'NOT_STARTED',
         documentsRecorded: buyerDocumentCount,
       },
+      homeSnapshot: {
+        dwellingType: property.dwellingType,
+        yearBuilt: property.yearBuilt,
+        propertyAgeYears,
+        bedrooms: property.bedrooms,
+        bathrooms: property.bathrooms,
+        basementConfiguration: property.basementConfiguration,
+        hasPoolOrSpa: exteriorProfile?.hasPoolOrSpa ?? null,
+      },
+      personalizedGuidance,
       planHref: `/dashboard/properties/${propertyId}/buyer-plan`,
       askHref: `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}&prompt=${encodeURIComponent(askPrompt)}`,
       askPrompt,

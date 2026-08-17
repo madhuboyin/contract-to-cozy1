@@ -14,6 +14,10 @@ type OnboardingLookupPayload = {
   propertySize?: number | null;
   estimatedValue?: number | null;
   dwellingType?: string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  basementConfiguration?: 'NONE' | 'UNFINISHED' | 'FINISHED' | 'UNKNOWN';
+  hasPoolOrSpa?: boolean | null;
   lastSalePrice?: number | null;
   lastSaleDate?: string | null;
   activationContext?: ActivationEntryContextInput;
@@ -94,6 +98,10 @@ function normalizeNumber(value: unknown): number | null | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function normalizeBoolean(value: unknown): boolean | null | undefined {
+  return value === null ? null : typeof value === 'boolean' ? value : undefined;
+}
+
 function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
   if (!input || typeof input !== 'object') return null;
   const source = input as Record<string, unknown>;
@@ -121,6 +129,12 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
     propertySize: normalizeNumber(source.propertySize),
     estimatedValue: normalizeNumber(source.estimatedValue),
     dwellingType: normalizeString(source.dwellingType) ?? null,
+    bedrooms: normalizeNumber(source.bedrooms),
+    bathrooms: normalizeNumber(source.bathrooms),
+    basementConfiguration: ['NONE', 'UNFINISHED', 'FINISHED', 'UNKNOWN'].includes(String(source.basementConfiguration))
+      ? source.basementConfiguration as OnboardingLookupPayload['basementConfiguration']
+      : 'UNKNOWN',
+    hasPoolOrSpa: normalizeBoolean(source.hasPoolOrSpa),
     lastSalePrice: normalizeNumber(source.lastSalePrice),
     lastSaleDate: normalizeString(source.lastSaleDate) ?? null,
     activationContext: sanitizeActivationContext(source.activationContext),

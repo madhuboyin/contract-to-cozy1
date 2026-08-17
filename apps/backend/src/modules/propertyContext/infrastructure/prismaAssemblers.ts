@@ -155,6 +155,7 @@ export const structureAssembler: PropertyContextAssembler = {
           roofType: true,
           roofReplacementYear: true,
           foundationType: true,
+          basementConfiguration: true,
           sidingType: true,
           electricalPanelAge: true,
         },
@@ -168,6 +169,7 @@ export const structureAssembler: PropertyContextAssembler = {
       'structure.roofReplacementYear': roofReplacementYear,
       'structure.roofAgeYears': roofReplacementYear === null ? null : Math.max(0, now.getUTCFullYear() - roofReplacementYear),
       'structure.foundationType': property.foundationType === 'UNKNOWN' ? null : property.foundationType,
+      'structure.basementConfiguration': property.basementConfiguration === 'UNKNOWN' ? null : property.basementConfiguration,
       'structure.sidingType': property.sidingType,
       'structure.electricalPanelAgeYears': property.electricalPanelAge,
     };

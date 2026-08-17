@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty, Season } from '@prisma/client';
+import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, BasementConfiguration, Prisma, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty, Season } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
 import type { PropertyApplianceDTO } from './propertyApplianceInventory.service';
@@ -90,6 +90,7 @@ interface CreatePropertyData {
   waterHeaterInstallYear?: number | null;
   roofReplacementYear?: number | null;
   foundationType?: FoundationType | null;
+  basementConfiguration?: BasementConfiguration;
   sidingType?: string | null;
   electricalPanelAge?: number | null;
   lotSize?: number | null; // FIX
@@ -206,6 +207,7 @@ function capturedFactKeys(data: CreatePropertyData | UpdatePropertyData): string
     ['bathrooms', 'core.bathrooms'], ['city', 'location.city'], ['state', 'location.state'],
     ['zipCode', 'location.zipCode'], ['timezone', 'location.timezone'], ['roofType', 'structure.roofType'],
     ['roofReplacementYear', 'structure.roofReplacementYear'], ['foundationType', 'structure.foundationType'],
+    ['basementConfiguration', 'structure.basementConfiguration'],
     ['sidingType', 'structure.sidingType'], ['electricalPanelAge', 'structure.electricalPanelAgeYears'],
     ['heatingType', 'systems.heatingType'], ['coolingType', 'systems.coolingType'],
     ['waterHeaterType', 'systems.waterHeaterType'], ['hasSmokeDetectors', 'safety.hasSmokeDetectors'],
@@ -564,7 +566,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hvacInstallYear: data.hvacInstallYear || null,
       waterHeaterInstallYear: data.waterHeaterInstallYear || null,
       roofReplacementYear: data.roofReplacementYear || null,
-      foundationType: data.foundationType || null,
+      foundationType: data.foundationType
+        || (['FINISHED', 'UNFINISHED'].includes(data.basementConfiguration ?? '') ? 'BASEMENT' : null),
+      basementConfiguration: data.basementConfiguration ?? 'UNKNOWN',
       sidingType: data.sidingType || null,
       electricalPanelAge: data.electricalPanelAge || null,
       lotSize: data.lotSize || null,
@@ -963,6 +967,12 @@ export async function updateProperty(
   if (data.waterHeaterInstallYear !== undefined) updatePayload.waterHeaterInstallYear = data.waterHeaterInstallYear || null;
   if (data.roofReplacementYear !== undefined) updatePayload.roofReplacementYear = data.roofReplacementYear || null;
   if (data.foundationType !== undefined) updatePayload.foundationType = data.foundationType || null;
+  if (data.basementConfiguration !== undefined) {
+    updatePayload.basementConfiguration = data.basementConfiguration;
+    if (['FINISHED', 'UNFINISHED'].includes(data.basementConfiguration) && data.foundationType === undefined) {
+      updatePayload.foundationType = 'BASEMENT';
+    }
+  }
   if (data.sidingType !== undefined) updatePayload.sidingType = data.sidingType || null;
   if (data.electricalPanelAge !== undefined) updatePayload.electricalPanelAge = data.electricalPanelAge || null;
   if (data.lotSize !== undefined) updatePayload.lotSize = data.lotSize || null;

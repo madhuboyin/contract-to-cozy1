@@ -20,7 +20,7 @@ import {
   type OnboardingAddressSource,
 } from '@/lib/onboarding/addressIntegrity';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
-import type { DwellingType } from '@/types';
+import type { BasementConfiguration, DwellingType } from '@/types';
 
 type Situation = 'own' | 'buying' | 'new-build' | 'exploring';
 type TriggerType = ActivationEntryContextInput['activeTrigger']['type'];
@@ -68,6 +68,8 @@ export default function AddressOnboardingPage() {
   const [yearBuilt, setYearBuilt] = useState('');
   const [bedrooms, setBedrooms] = useState('');
   const [bathrooms, setBathrooms] = useState('');
+  const [basementConfiguration, setBasementConfiguration] = useState<BasementConfiguration>('UNKNOWN');
+  const [hasPoolOrSpa, setHasPoolOrSpa] = useState<'YES' | 'NO' | 'UNKNOWN'>('UNKNOWN');
 
   // Mount tracking
   React.useEffect(() => {
@@ -219,6 +221,8 @@ export default function AddressOnboardingPage() {
       ...(parsedYearBuilt === undefined ? {} : { yearBuilt: parsedYearBuilt }),
       ...(parsedBedrooms === undefined ? {} : { bedrooms: parsedBedrooms }),
       ...(parsedBathrooms === undefined ? {} : { bathrooms: parsedBathrooms }),
+      basementConfiguration,
+      hasPoolOrSpa: hasPoolOrSpa === 'UNKNOWN' ? null : hasPoolOrSpa === 'YES',
     };
 
     try {
@@ -472,6 +476,31 @@ export default function AddressOnboardingPage() {
                   <label className="space-y-1.5 text-sm font-medium text-slate-700">
                     Bathrooms <span className="font-normal text-slate-400">(optional)</span>
                     <Input type="number" min={0.5} max={99} step={0.5} inputMode="decimal" placeholder="e.g., 2.5" value={bathrooms} onChange={(event) => setBathrooms(event.target.value)} />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Basement <span className="font-normal text-slate-400">(optional)</span>
+                    <select
+                      value={basementConfiguration}
+                      onChange={(event) => setBasementConfiguration(event.target.value as BasementConfiguration)}
+                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    >
+                      <option value="UNKNOWN">I’m not sure</option>
+                      <option value="NONE">No basement</option>
+                      <option value="UNFINISHED">Unfinished basement</option>
+                      <option value="FINISHED">Finished basement</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Pool or spa <span className="font-normal text-slate-400">(optional)</span>
+                    <select
+                      value={hasPoolOrSpa}
+                      onChange={(event) => setHasPoolOrSpa(event.target.value as 'YES' | 'NO' | 'UNKNOWN')}
+                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    >
+                      <option value="UNKNOWN">I’m not sure</option>
+                      <option value="NO">No</option>
+                      <option value="YES">Yes</option>
+                    </select>
                   </label>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">Not sure? Choose “I’m not sure” for home type and leave the rest blank.</p>

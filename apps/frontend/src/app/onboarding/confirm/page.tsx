@@ -19,13 +19,15 @@ import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
 import { addressOnlyPropertyData, onboardingAddressError } from '@/lib/onboarding/addressIntegrity';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
-import type { DwellingType } from '@/types';
+import type { BasementConfiguration, DwellingType } from '@/types';
 
 type HomeProfileDraft = {
   dwellingType: DwellingType;
   yearBuilt: string;
   bedrooms: string;
   bathrooms: string;
+  basementConfiguration: BasementConfiguration;
+  hasPoolOrSpa: 'YES' | 'NO' | 'UNKNOWN';
 };
 
 const EMPTY_HOME_PROFILE: HomeProfileDraft = {
@@ -33,6 +35,8 @@ const EMPTY_HOME_PROFILE: HomeProfileDraft = {
   yearBuilt: '',
   bedrooms: '',
   bathrooms: '',
+  basementConfiguration: 'UNKNOWN',
+  hasPoolOrSpa: 'UNKNOWN',
 };
 
 function numericDraft(value: unknown): string {
@@ -89,6 +93,10 @@ export default function ConfirmOnboardingPage() {
           yearBuilt: numericDraft(payload.data.yearBuilt),
           bedrooms: numericDraft(payload.data.bedrooms),
           bathrooms: numericDraft(payload.data.bathrooms),
+          basementConfiguration: ['NONE', 'UNFINISHED', 'FINISHED', 'UNKNOWN'].includes(payload.data.basementConfiguration)
+            ? payload.data.basementConfiguration
+            : 'UNKNOWN',
+          hasPoolOrSpa: payload.data.hasPoolOrSpa === true ? 'YES' : payload.data.hasPoolOrSpa === false ? 'NO' : 'UNKNOWN',
         });
       } catch {
         router.push('/onboarding/address');
@@ -159,6 +167,10 @@ export default function ConfirmOnboardingPage() {
         dwellingType: homeProfile.dwellingType,
         bedrooms,
         bathrooms,
+        basementConfiguration: homeProfile.basementConfiguration,
+        exteriorProfile: {
+          hasPoolOrSpa: homeProfile.hasPoolOrSpa === 'UNKNOWN' ? null : homeProfile.hasPoolOrSpa === 'YES',
+        },
         isPrimary: true,
         // Pre-populate other fields found during lookup
         purchasePriceCents: data.lastSalePrice,
@@ -372,6 +384,31 @@ export default function ConfirmOnboardingPage() {
                     value={homeProfile.bathrooms}
                     onChange={(event) => setHomeProfile((current) => ({ ...current, bathrooms: event.target.value }))}
                   />
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                  Basement <span className="font-normal text-slate-500">(optional)</span>
+                  <select
+                    value={homeProfile.basementConfiguration}
+                    onChange={(event) => setHomeProfile((current) => ({ ...current, basementConfiguration: event.target.value as BasementConfiguration }))}
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  >
+                    <option value="UNKNOWN">I’m not sure</option>
+                    <option value="NONE">No basement</option>
+                    <option value="UNFINISHED">Unfinished basement</option>
+                    <option value="FINISHED">Finished basement</option>
+                  </select>
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                  Pool or spa <span className="font-normal text-slate-500">(optional)</span>
+                  <select
+                    value={homeProfile.hasPoolOrSpa}
+                    onChange={(event) => setHomeProfile((current) => ({ ...current, hasPoolOrSpa: event.target.value as HomeProfileDraft['hasPoolOrSpa'] }))}
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  >
+                    <option value="UNKNOWN">I’m not sure</option>
+                    <option value="NO">No</option>
+                    <option value="YES">Yes</option>
+                  </select>
                 </label>
               </div>
               <p className="mt-3 text-xs text-slate-500">Not sure? Choose “I’m not sure” for home type and leave the other fields blank.</p>

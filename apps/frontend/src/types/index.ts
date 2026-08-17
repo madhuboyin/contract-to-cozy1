@@ -318,6 +318,16 @@ export type ActivationFirstValueDTO = {
     nextAction: { id: string; title: string; dueAt: string | null; status: HomeBuyerTaskStatus } | null;
     nearestDeadline: { label: string; dueAt: string } | null;
     evidenceReadiness: { inspectionStatus: BuyerMilestoneStatus; documentsRecorded: number };
+    homeSnapshot: {
+      dwellingType: DwellingType;
+      yearBuilt: number | null;
+      propertyAgeYears: number | null;
+      bedrooms: number | null;
+      bathrooms: number | null;
+      basementConfiguration: BasementConfiguration;
+      hasPoolOrSpa: boolean | null;
+    };
+    personalizedGuidance: string[];
     planHref: string;
     askHref: string;
     askPrompt: string;
@@ -757,6 +767,7 @@ export type PropertyResponsibilityScope =
   | 'DRIVEWAY_WALKWAYS' | 'DECK_PATIO_BALCONY' | 'PLUMBING' | 'HVAC'
   | 'COMMON_SAFETY' | 'SNOW_ICE' | 'PEST_CONTROL' | 'SHARED_SYSTEMS';
 export type ResponsibleParty = 'OWNER' | 'ASSOCIATION' | 'LANDLORD' | 'SHARED' | 'UNKNOWN';
+export type BasementConfiguration = 'NONE' | 'UNFINISHED' | 'FINISHED' | 'UNKNOWN';
 
 export interface PropertyResponsibilityInput {
   scope: PropertyResponsibilityScope;
@@ -1756,6 +1767,7 @@ export interface Property {
   waterHeaterInstallYear: number | null;
   roofReplacementYear: number | null;
   foundationType: FoundationType | null;
+  basementConfiguration: BasementConfiguration;
   sidingType: string | null;
   electricalPanelAge: number | null;
   lotSize: number | null;

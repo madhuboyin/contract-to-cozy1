@@ -36,6 +36,7 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'structure.roofReplacementYear', scope: 'STRUCTURE', canonicalOwner: 'Property.roofReplacementYear', correctionPath: propertyPath('structure'), writable: true },
   { key: 'structure.roofAgeYears', scope: 'STRUCTURE', canonicalOwner: 'Derived from Property.roofReplacementYear', correctionPath: propertyPath('structure'), writable: false },
   { key: 'structure.foundationType', scope: 'STRUCTURE', canonicalOwner: 'Property.foundationType', correctionPath: propertyPath('structure'), writable: true },
+  { key: 'structure.basementConfiguration', scope: 'STRUCTURE', canonicalOwner: 'Property.basementConfiguration', correctionPath: propertyPath('structure'), writable: true },
   { key: 'structure.sidingType', scope: 'STRUCTURE', canonicalOwner: 'Property.sidingType', correctionPath: propertyPath('structure'), writable: true },
   { key: 'structure.electricalPanelAgeYears', scope: 'STRUCTURE', canonicalOwner: 'Property.electricalPanelAge', correctionPath: propertyPath('structure'), writable: true },
   { key: 'exterior.hasPrivateOutdoorSpace', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasPrivateOutdoorSpace', correctionPath: propertyPath('exterior'), writable: true },

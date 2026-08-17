@@ -289,6 +289,13 @@ enum FoundationType {
   UNKNOWN
 }
 
+enum BasementConfiguration {
+  NONE
+  UNFINISHED
+  FINISHED
+  UNKNOWN
+}
+
 // ============================================================================
 // NEW ENUMS FOR RISK ASSESSMENT (PHASE 1)
 // ============================================================================
@@ -3993,6 +4000,7 @@ model Property {
   waterHeaterInstallYear Int?
   roofReplacementYear    Int?
   foundationType         FoundationType?
+  basementConfiguration  BasementConfiguration @default(UNKNOWN)
   sidingType             String?
   electricalPanelAge     Int?
 

@@ -1,6 +1,7 @@
 import {
   DwellingType,
   FoundationType,
+  BasementConfiguration,
   OccupancyStatus,
   OutdoorSpaceType,
   OwnershipForm,
@@ -58,6 +59,7 @@ const propertyFacts = {
   'structure.roofType': { field: 'roofType', schema: z.nativeEnum(RoofType).nullable() },
   'structure.roofReplacementYear': { field: 'roofReplacementYear', schema: nullableNonNegativeInteger },
   'structure.foundationType': { field: 'foundationType', schema: z.nativeEnum(FoundationType).nullable() },
+  'structure.basementConfiguration': { field: 'basementConfiguration', schema: z.nativeEnum(BasementConfiguration), unknown: 'UNKNOWN' },
   'structure.sidingType': { field: 'sidingType', schema: nullableString },
   'structure.electricalPanelAgeYears': { field: 'electricalPanelAge', schema: nullableNonNegativeInteger },
   'systems.heatingType': { field: 'heatingType', schema: z.nativeEnum(HeatingType).nullable() },

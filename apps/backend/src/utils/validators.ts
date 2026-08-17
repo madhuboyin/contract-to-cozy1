@@ -97,6 +97,7 @@ export const FoundationTypeEnum = z.preprocess(
   normalizeFoundationType,
   z.enum(FOUNDATION_TYPE_VALUES),
 );
+const BasementConfigurationEnum = z.enum(['NONE', 'UNFINISHED', 'FINISHED', 'UNKNOWN']);
 
 
 // ============================================================================
@@ -228,6 +229,7 @@ export const createPropertySchema = z.object({
   waterHeaterInstallYear: z.number().int().min(1700).optional(),
   roofReplacementYear: z.number().int().min(1700).optional(),
   foundationType: FoundationTypeEnum.optional(),
+  basementConfiguration: BasementConfigurationEnum.optional(),
   sidingType: z.string().max(100).optional(),
   electricalPanelAge: z.number().int().positive().optional(),
   lotSize: z.number().positive().optional(),

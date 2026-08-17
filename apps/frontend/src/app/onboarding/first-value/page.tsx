@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, FileUp, ListChecks, Loader2, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, FileUp, Home, ListChecks, Loader2, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
@@ -20,6 +20,10 @@ function displayDate(value: string | null): string {
   return value
     ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(value))
     : 'Not set yet';
+}
+
+function humanize(value: string): string {
+  return value.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export default function OnboardingFirstValuePage() {
@@ -187,6 +191,44 @@ export default function OnboardingFirstValuePage() {
               We created the plan before this reveal, using only the dates and transaction context you recorded.
             </p>
           </header>
+
+          <section className="rounded-3xl border border-brand-200 bg-brand-50 p-6 shadow-sm sm:p-8">
+            <p className="flex items-center gap-2 text-sm font-bold text-brand-800">
+              <Home className="h-5 w-5" /> Your plan now fits this home
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm">
+                {humanize(buyer.homeSnapshot.dwellingType)}
+              </span>
+              {buyer.homeSnapshot.propertyAgeYears !== null && (
+                <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm">
+                  About {buyer.homeSnapshot.propertyAgeYears} years old
+                </span>
+              )}
+              {buyer.homeSnapshot.bedrooms !== null && (
+                <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm">{buyer.homeSnapshot.bedrooms} bed</span>
+              )}
+              {buyer.homeSnapshot.bathrooms !== null && (
+                <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm">{buyer.homeSnapshot.bathrooms} bath</span>
+              )}
+              {buyer.homeSnapshot.basementConfiguration !== 'UNKNOWN' && (
+                <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm">
+                  {buyer.homeSnapshot.basementConfiguration === 'NONE' ? 'No basement' : `${humanize(buyer.homeSnapshot.basementConfiguration)} basement`}
+                </span>
+              )}
+              {buyer.homeSnapshot.hasPoolOrSpa === true && (
+                <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm">Pool or spa</span>
+              )}
+            </div>
+            <ul className="mt-5 space-y-3 text-sm leading-6 text-brand-950">
+              {buyer.personalizedGuidance.map((guidance) => (
+                <li key={guidance} className="flex gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
+                  <span>{guidance}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <p className="text-sm font-bold text-brand-700">Next best action</p>

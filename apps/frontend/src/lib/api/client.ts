@@ -122,6 +122,7 @@ import {
   ResolutionCenterPayload,
   EnvironmentReportDTO,
   FoundationType,
+  BasementConfiguration,
   PropertyContextCompleteness,
   PropertyContextScope,
   PropertyContextSnapshot,
@@ -1614,6 +1615,7 @@ class APIClient {
     yearBuilt?: number | null;
     bedrooms?: number | null;
     bathrooms?: number | null;
+    basementConfiguration?: BasementConfiguration;
     purchasePriceCents?: number | null;
     purchaseDate?: Date | string | null;
   }): Promise<APIResponse<Property>> {
@@ -1660,6 +1662,7 @@ class APIClient {
       waterHeaterInstallYear?: number;
       roofReplacementYear?: number;
       foundationType?: FoundationType;
+      basementConfiguration?: BasementConfiguration;
       sidingType?: string;
       electricalPanelAge?: number;
       lotSize?: number;
