@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, Loader2, SlidersHorizontal, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, Loader2, SlidersHorizontal, Users, XCircle } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { api } from '@/lib/api/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import type {
   BuyerFindingDisposition,
@@ -93,6 +94,7 @@ export default function BuyerPlanPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [selectedNegotiationFindingIds, setSelectedNegotiationFindingIds] = useState<string[]>([]);
+  const [cancellationReason, setCancellationReason] = useState('');
 
   const refresh = async () => {
     await Promise.all([
@@ -174,6 +176,21 @@ export default function BuyerPlanPage() {
     mutationFn: (input: { targetCloseDate: string | null }) =>
       api.updateBuyerLifecycle(propertyId, input),
     onSuccess: () => { void refresh(); toast({ title: 'Timeline updated', description: 'Plan due dates were recalculated from the new lifecycle anchors.' }); },
+  });
+  const cancellationMutation = useMutation({
+    mutationFn: () => api.cancelBuyerJourney(propertyId, { confirmed: true, reason: cancellationReason.trim() }),
+    onSuccess: () => {
+      void refresh();
+      toast({
+        title: 'Purchase journey cancelled',
+        description: 'Active purchase work was stopped. Completed work, documents, and evidence remain in this property record.',
+      });
+    },
+    onError: (error) => toast({
+      title: 'Unable to cancel purchase journey',
+      description: error instanceof Error ? error.message : 'Refresh the plan and try again.',
+      variant: 'destructive',
+    }),
   });
   const taskMutation = useMutation({
     mutationFn: ({ task, status, assignedToUserId }: { task: BuyerPlanOverviewTask; status?: HomeBuyerTaskStatus; assignedToUserId?: string | null }) =>
@@ -304,7 +321,11 @@ export default function BuyerPlanPage() {
   const composition = compositionQuery.data;
   const members = overview.workload;
   const completed = overview.summary.completed;
-  const readOnly = overview.accessRole === 'VIEWER';
+  const journeyLocked = ['CANCELLED', 'HANDED_OFF', 'ARCHIVED'].includes(plan.status);
+  const readOnly = overview.accessRole === 'VIEWER' || journeyLocked;
+  const canCancel = overview.accessRole !== 'VIEWER'
+    && ['ACTIVE', 'PAUSED'].includes(plan.status)
+    && ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(plan.stage);
   const inspectionTask = plan.tasks.find((task) => task.actionKey === 'buyer:inspection:import');
   const documentsTask = plan.tasks.find((task) => task.actionKey === 'buyer:closing:documents');
   const restoredTaskId = returnTaskId
@@ -319,10 +340,11 @@ export default function BuyerPlanPage() {
             <div className="flex flex-wrap items-center gap-2"><h1 className="text-3xl font-bold">Closing Plan</h1><Badge variant="outline">{plan.stage.replace(/_/g, ' ')}</Badge></div>
             <p className="mt-1 text-muted-foreground">{overview.property.address}, {overview.property.city}, {overview.property.state} · one canonical plan from contract through handoff.</p>
           </div>
-          <Badge variant={plan.status === 'ACTIVE' ? 'default' : 'secondary'}>{plan.status === 'HANDED_OFF' ? 'Handed off to Home' : `${completed} of ${overview.summary.total} complete`}</Badge>
+          <Badge variant={plan.status === 'ACTIVE' ? 'default' : 'secondary'}>{plan.status === 'HANDED_OFF' ? 'Handed off to Home' : plan.status === 'CANCELLED' ? 'Purchase cancelled' : `${completed} of ${overview.summary.total} complete`}</Badge>
         </div>
 
-        {readOnly && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="py-4 text-sm text-blue-950"><strong>View-only access.</strong> You can review tasks, milestones, contacts, evidence, and history, but only an owner or contributor can change this plan.</CardContent></Card>}
+        {plan.status === 'CANCELLED' && <Card className="border-amber-200 bg-amber-50/60"><CardContent className="py-4 text-sm text-amber-950"><strong>This purchase journey is closed.</strong> Active tasks and milestones were cancelled, while completed work, documents, findings, and evidence remain available for reference.{plan.cancellationReason ? ` Reason: ${plan.cancellationReason}` : ''}</CardContent></Card>}
+        {overview.accessRole === 'VIEWER' && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="py-4 text-sm text-blue-950"><strong>View-only access.</strong> You can review tasks, milestones, contacts, evidence, and history, but only an owner or contributor can change this plan.</CardContent></Card>}
 
         {composition && <Card className="border-violet-200 bg-violet-50/40">
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><SlidersHorizontal className="h-5 w-5" />Property-aware closing checklist</CardTitle></CardHeader>
@@ -475,6 +497,21 @@ export default function BuyerPlanPage() {
         {PHASES.map((phase) => <Card key={phase.key}><CardHeader><CardTitle>{phase.label}</CardTitle></CardHeader><CardContent className="space-y-3">{plan.tasks.filter((task) => task.phase === phase.key).map((task) => { const done = task.status === 'COMPLETED'; const restored = task.id === restoredTaskId; return <div id={`buyer-task-${task.id}`} key={task.id} className={`flex flex-col justify-between gap-4 rounded-lg border p-4 lg:flex-row ${restored ? 'border-blue-400 bg-blue-50/60 ring-2 ring-blue-100' : ''}`}><div className="flex gap-3">{done ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" /> : <Circle className="mt-0.5 h-5 w-5 text-muted-foreground" />}<div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p>{task.templateKey && <Badge variant="secondary">Plan template</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">{task.description}</p><p className="mt-1 text-xs text-muted-foreground">{task.dueAt ? `Due ${new Date(task.dueAt).toLocaleDateString()}` : 'No due date'}{task.handedOffMaintenanceTaskId ? ' · In recurring Home feed' : ''}</p></div></div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{task.priority}</Badge><select aria-label={`Assign ${task.title}`} className="h-9 rounded-md border bg-background px-2 text-sm" value={task.assignedToUserId ?? ''} disabled={readOnly} onChange={(event) => taskMutation.mutate({ task, assignedToUserId: event.target.value || null })}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || `${member.firstName} ${member.lastName}`}</option>)}</select><Button size="sm" variant={done ? 'outline' : 'default'} disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: done ? 'PENDING' : 'COMPLETED' })}>{done ? 'Reopen' : 'Mark complete'}</Button></div></div>; })}</CardContent></Card>)}
 
         <Card className={acceptance?.acceptanceReady ? 'border-green-300' : ''}><CardHeader><CardTitle className="text-lg">Continuity status</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="grid gap-2 sm:grid-cols-4"><p>Findings reviewed: {acceptance?.findings.reviewed ?? 0}/{acceptance?.findings.total ?? 0}</p><p>Material journeys: {acceptance?.findings.materialBranched ?? 0}/{acceptance?.findings.material ?? 0}</p><p>Documents verified: {acceptance?.documents.verified ?? 0}/{acceptance?.documents.total ?? 0}</p><p>Tasks assigned: {acceptance?.tasks.assigned ?? 0}/{acceptance?.tasks.total ?? 0}</p></div><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-muted-foreground">Day-91 handoff is automatically checked whenever the recurring Home feed or this plan opens.</p><Button variant="outline" onClick={() => handoffMutation.mutate()} disabled={readOnly || handoffMutation.isPending || plan.status === 'HANDED_OFF'}>{plan.status === 'HANDED_OFF' ? 'Handoff complete' : 'Check handoff now'}</Button></div></CardContent></Card>
+
+        {canCancel && <Card className="border-destructive/30">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><XCircle className="h-5 w-5" />Cancel this purchase journey</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">Use this only when this property purchase is no longer proceeding. Active tasks and milestones will stop; completed work, documents, findings, and evidence will be preserved.</p>
+            <Textarea aria-label="Purchase cancellation reason" value={cancellationReason} onChange={(event) => setCancellationReason(event.target.value)} placeholder="Why is this purchase no longer proceeding?" maxLength={500} />
+            <Button
+              variant="destructive"
+              disabled={cancellationReason.trim().length < 5 || cancellationMutation.isPending}
+              onClick={() => {
+                if (window.confirm('Cancel this purchase journey? This stops all active purchase tasks and cannot be undone from this screen.')) cancellationMutation.mutate();
+              }}
+            >{cancellationMutation.isPending ? 'Cancelling…' : 'Cancel purchase journey'}</Button>
+          </CardContent>
+        </Card>}
       </div>
     </DashboardShell>
   );

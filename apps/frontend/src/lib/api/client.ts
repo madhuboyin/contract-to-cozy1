@@ -3893,6 +3893,15 @@ class APIClient {
     });
   }
 
+  async cancelBuyerJourney(propertyId: string, input: {
+    confirmed: true;
+    reason: string;
+  }): Promise<APIResponse<HomeBuyerChecklist>> {
+    return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/cancel`, {
+      method: 'POST', body: JSON.stringify(input),
+    });
+  }
+
   async dispositionBuyerFinding(propertyId: string, findingId: string, input: {
     disposition: Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>;
     notes?: string | null;

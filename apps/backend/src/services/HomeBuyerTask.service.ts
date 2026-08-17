@@ -442,6 +442,8 @@ export class HomeBuyerTaskService {
         targetCloseDate: plan.targetCloseDate?.toISOString() ?? null,
         moveInDate: plan.moveInDate?.toISOString() ?? null,
         ownershipStartedAt: plan.ownershipStartedAt?.toISOString() ?? null,
+        cancelledAt: plan.cancelledAt?.toISOString() ?? null,
+        cancellationReason: plan.cancellationReason,
         generationVersion: plan.generationVersion,
         handoffCompletedAt: plan.handoffCompletedAt?.toISOString() ?? null,
       },

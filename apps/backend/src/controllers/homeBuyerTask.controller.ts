@@ -22,6 +22,7 @@ import {
   BuyerFindingDispositionInputSchema,
   BuyerInspectionPlanInputSchema,
   BuyerLifecycleUpdateSchema,
+  BuyerJourneyCancelSchema,
   BuyerPurchaseFinancingInputSchema,
   BuyerPurchaseLoanEstimateCreateSchema,
   BuyerPurchaseLoanEstimateRevisionCreateSchema,
@@ -508,6 +509,23 @@ const handleUpdateLifecycle = async (req: AuthRequest, res: Response, next: Next
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
       metadataJson: { actionType: 'buyer_lifecycle_updated' },
+    });
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
+const handleCancelBuyerJourney = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerJourneyCancelSchema.parse(req.body);
+    const plan = await BuyerAcquisitionService.cancelJourney(req.user.userId, req.params.propertyId, input);
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_journey_cancelled' },
     });
     return res.json({ success: true, data: plan });
   } catch (error) { next(error); }
@@ -1020,6 +1038,7 @@ export const homeBuyerTaskController = {
   handleGetStats,
   handleGetImportReadiness,
   handleUpdateLifecycle,
+  handleCancelBuyerJourney,
   handleGetEvidenceReview,
   handleGetInspectionPlan,
   handleUpdateInspectionPlan,

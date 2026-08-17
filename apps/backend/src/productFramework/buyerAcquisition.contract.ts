@@ -171,6 +171,11 @@ export const BuyerLifecycleUpdateSchema = z.strictObject({
   message: 'At least one lifecycle anchor must be provided.',
 });
 
+export const BuyerJourneyCancelSchema = z.strictObject({
+  confirmed: z.literal(true),
+  reason: z.string().trim().min(5).max(500),
+});
+
 export const BUYER_PURCHASE_PATHS = ['CASH', 'FINANCED'] as const;
 export const BuyerPurchaseFinancingInputSchema = z.strictObject({
   purchasePath: z.enum(BUYER_PURCHASE_PATHS),
@@ -822,6 +827,8 @@ export const BuyerPlanOverviewSchema = z.strictObject({
     targetCloseDate: z.string().datetime().nullable(),
     moveInDate: z.string().datetime().nullable(),
     ownershipStartedAt: z.string().datetime().nullable(),
+    cancelledAt: z.string().datetime().nullable(),
+    cancellationReason: z.string().nullable(),
     generationVersion: z.string().nullable(),
     handoffCompletedAt: z.string().datetime().nullable(),
   }),
@@ -867,6 +874,7 @@ export const BuyerPlanOverviewSchema = z.strictObject({
 export type BuyerPlanTaskInput = z.infer<typeof BuyerPlanTaskInputSchema>;
 export type BuyerImportReadiness = z.infer<typeof BuyerImportReadinessSchema>;
 export type BuyerLifecycleUpdate = z.infer<typeof BuyerLifecycleUpdateSchema>;
+export type BuyerJourneyCancelInput = z.infer<typeof BuyerJourneyCancelSchema>;
 export type BuyerFindingDispositionInput = z.infer<typeof BuyerFindingDispositionInputSchema>;
 export type BuyerMilestoneInput = z.infer<typeof BuyerMilestoneInputSchema>;
 export type BuyerContactInput = z.infer<typeof BuyerContactInputSchema>;

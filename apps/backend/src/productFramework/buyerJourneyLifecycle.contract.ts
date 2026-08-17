@@ -50,6 +50,15 @@ export function canTransitionBuyerJourneyStatus(
   return current === next || BUYER_JOURNEY_STATUS_TRANSITIONS[current].includes(next);
 }
 
+export function assertBuyerJourneyStatusTransition(
+  current: BuyerJourneyStatusValue,
+  next: BuyerJourneyStatusValue,
+): void {
+  if (!canTransitionBuyerJourneyStatus(current, next)) {
+    throw new Error(`INVALID_BUYER_STATUS_TRANSITION:${current}:${next}`);
+  }
+}
+
 export function deriveBuyerJourneyStage(input: {
   currentStage: BuyerJourneyStageValue;
   ownershipState?: 'SHOPPING' | 'UNDER_CONTRACT' | 'RECENT_OWNER' | 'ESTABLISHED_OWNER' | null;

@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.29
+**Version:** 1.30
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2460,7 +2460,9 @@ not defer an introduced homeowner regression to a later cleanup slice.
 | Slice 2 | In progress | Read-only server-derived dashboard presentation mode; strict bounded Buyer Closing Home overview; dedicated dashboard dispatcher and separate responsive closing surface; intentional neutral candidate state for cancelled/archived purchases; next action, blockers, milestones, readiness lanes, evidence/documents, contacts/assignments, Ask, direct property-scoped routes, mobile continue action; homeowner signal-query gating | Complete persistent navigation/journey-chip integration, buyer stage labels in property switching, canonical buyer-aware discovery policy and catalog filtering, paused/resume commands, richer empty/error recovery, and rendered desktop/mobile end-to-end verification |
 | Slice 3 | In progress | Strict read-only one-query core Buyer Plan overview; plan/stage/progress/next-action loading; milestones, workload, contacts, and recent history; property-scoped access role with clear viewer-only presentation; canonical source/template-key default-task identity; lifecycle date recalculation now preserves user-edited tasks | Complete create/edit/status/not-needed/cancel/delete/restore UI, explicit evidence completion, milestone/contact mutations, filters, batch operations, booking/cost/note controls, checklist delta presentation, and rendered end-to-end verification |
 | Slice 4 | In progress | Versioned code-owned entry template for each of the nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys; condo/association responsibility, pool/spa, property-age-plus-location, and HVAC-age example rules; explainable applicability provenance, missing-detail benefit copy/correction paths, exact deltas, and idempotent preservation of user work | Complete the full composition-layer catalog and transaction-path facts; render questions, deltas, applicability, and section progress in Buyer Closing Home/Buyer Plan; build the revision-aware Contract & Contingency Tracker, confirmed milestone write-back, blocker recovery, deep-link return continuity, and phase-aware Ask context |
-| Slices 5–8 | Not started | — | Follow the dependency order in Section 22 |
+| Slices 5–6 | In progress | Buyer-aware Ask context/actions and canonical Moving Concierge task projection are implemented as the first vertical increments | Complete the remaining scope listed in each slice below |
+| Slice 7 | In progress | Explicit professional close plus atomic purchase cancellation; mutually exclusive persisted lifecycle claims; cancellation stops active tasks/milestones while preserving completed work, documents, findings, and evidence | Complete celebration, progressive owner reveal, stranded-work resolution, completion Home Record milestone, refined recurring handoff, and advocacy prompts |
+| Slice 8 | Not started | — | Follow the dependency order in Section 22 |
 
 The Slice 0 foundation is complete enough for vertical Slice 1 work, but the
 minimum coherent release in Section 21.1 is not yet satisfied. No current
@@ -3096,6 +3098,16 @@ Functional check:
   count everywhere.
 
 ### Slice 7 — Closing, handoff, retention, and advocacy
+
+**Implementation status:** In progress. The first vertical increment adds a
+strict, property-scoped purchase-cancellation command and Buyer Plan control.
+Only active or paused pre-close journeys can be cancelled. The transaction
+conditionally claims the lifecycle row, records the time and user-supplied
+reason, cancels only active tasks and milestones, and returns under-contract
+onboarding state to shopping. Completed work, completion evidence, documents,
+findings, and outcomes remain intact. Professional close now uses the same
+conditional-claim pattern, so close and cancel cannot both persist for the same
+journey.
 
 **Goal:** Convert transaction value into durable homeowner value.
 

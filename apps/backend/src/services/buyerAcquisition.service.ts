@@ -11,11 +11,15 @@ import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
-import { assertBuyerJourneyStageTransition } from '../productFramework/buyerJourneyLifecycle.contract';
+import {
+  assertBuyerJourneyStageTransition,
+  assertBuyerJourneyStatusTransition,
+} from '../productFramework/buyerJourneyLifecycle.contract';
 import {
   BUYER_ACTION_KEYS,
   BUYER_MILESTONE_KEYS,
   type BuyerInspectionPlanInput,
+  type BuyerJourneyCancelInput,
   type BuyerPurchaseFinancingInput,
 } from '../productFramework/buyerAcquisition.contract';
 import { getPropertyContext } from '../modules/propertyContext';
@@ -130,10 +134,20 @@ export class BuyerAcquisitionService {
     closedAt: Date,
     now = new Date(),
   ) {
-    const checklist = await tx.homeBuyerChecklist.update({
-      where: { id: checklistId },
+    const claimed = await tx.homeBuyerChecklist.updateMany({
+      where: {
+        id: checklistId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        stage: 'CLOSING_PREP',
+        cancelledAt: null,
+        ownershipStartedAt: null,
+      },
       data: { stage: 'CLOSED', ownershipStartedAt: closedAt, lastStageChangedAt: now },
     });
+    if (claimed.count !== 1) {
+      throw new APIError('This purchase can no longer be recorded as closed.', 409, 'BUYER_CLOSE_TRANSITION_UNAVAILABLE');
+    }
+    const checklist = await tx.homeBuyerChecklist.findUniqueOrThrow({ where: { id: checklistId } });
     const tasks = await tx.homeBuyerTask.findMany({
       where: {
         checklistId,
@@ -311,6 +325,68 @@ export class BuyerAcquisitionService {
     });
 
     return HomeBuyerTaskService.getOrCreateChecklist(userId, updated.propertyId);
+  }
+
+  static async cancelJourney(
+    userId: string,
+    propertyId: string,
+    input: BuyerJourneyCancelInput,
+  ) {
+    await this.assertAccess(userId, propertyId);
+    const plan = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
+    if (!['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(plan.stage)) {
+      throw new APIError('A purchase cannot be cancelled after ownership has started.', 409, 'BUYER_JOURNEY_ALREADY_CLOSED');
+    }
+    try {
+      assertBuyerJourneyStatusTransition(plan.status, 'CANCELLED');
+    } catch {
+      throw new APIError('This purchase journey can no longer be cancelled.', 409, 'BUYER_CANCEL_TRANSITION_UNAVAILABLE');
+    }
+
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      const cancelled = await tx.homeBuyerChecklist.updateMany({
+        where: {
+          id: plan.id,
+          status: { in: ['ACTIVE', 'PAUSED'] },
+          stage: { in: ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'] },
+          ownershipStartedAt: null,
+          cancelledAt: null,
+        },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: now,
+          cancellationReason: input.reason,
+          pausedAt: null,
+        },
+      });
+      if (cancelled.count !== 1) {
+        throw new APIError('This purchase journey changed before cancellation completed.', 409, 'BUYER_CANCEL_TRANSITION_CONFLICT');
+      }
+      await tx.homeBuyerTask.updateMany({
+        where: {
+          checklistId: plan.id,
+          status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] },
+        },
+        data: {
+          status: 'CANCELLED',
+          statusReason: `Purchase journey cancelled: ${input.reason}`,
+        },
+      });
+      await tx.buyerJourneyMilestone.updateMany({
+        where: {
+          checklistId: plan.id,
+          status: { in: ['NOT_STARTED', 'IN_PROGRESS'] },
+        },
+        data: { status: 'CANCELLED' },
+      });
+      await tx.propertyOnboarding.updateMany({
+        where: { propertyId, entryPath: 'EXISTING_HOME_PURCHASE', ownershipState: 'UNDER_CONTRACT' },
+        data: { ownershipState: 'SHOPPING' },
+      });
+    });
+
+    return HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
   }
 
   static async getPurchaseFinancingPlan(userId: string, propertyId: string) {
