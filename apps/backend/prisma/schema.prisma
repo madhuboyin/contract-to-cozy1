@@ -4076,6 +4076,8 @@ model Document {
   riskMitigationPlanItems    RiskMitigationPlanItem[]
   capitalTimelineItems       HomeCapitalTimelineItem[]
   negotiationShieldDocuments NegotiationShieldDocument[]
+  buyerNegotiationOutcomeLinks NegotiationShieldBuyerFinding[] @relation("BuyerNegotiationOutcomeDocument")
+  buyerFindingOutcomeLinks     InspectionFinding[]             @relation("BuyerFindingOutcomeDocument")
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
@@ -8877,16 +8879,19 @@ model NegotiationShieldBuyerFinding {
   outcomeNotes        String?
   outcomeRecordedAt   DateTime?
   outcomeRecordedById String?
+  outcomeDocumentId   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   negotiationCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
   finding         InspectionFinding     @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  outcomeDocument Document?             @relation("BuyerNegotiationOutcomeDocument", fields: [outcomeDocumentId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@index([sellerResponse])
   @@index([outcome])
+  @@index([outcomeDocumentId])
   @@map("negotiation_shield_buyer_findings")
 }
 
@@ -19284,6 +19289,7 @@ model InspectionFinding {
   buyerGuidanceJourneyId   String?
   buyerRepairJourneyId     String?
   buyerMaintenanceTaskId   String?
+  buyerOutcomeDocumentId   String?
 
   // Links set during write-back on confirmation
   permitFlagId    String?
@@ -19306,6 +19312,7 @@ model InspectionFinding {
   recallMatch       RecallMatch?           @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
   writeBacks        InspectionWriteBack[]
   negotiationCaseLinks NegotiationShieldBuyerFinding[]
+  buyerOutcomeDocument Document?        @relation("BuyerFindingOutcomeDocument", fields: [buyerOutcomeDocumentId], references: [id], onDelete: SetNull)
   resolvedByProject ProjectRecord?         @relation("InspectionFindingResolvedByProject", fields: [resolvedByProjectId], references: [id], onDelete: SetNull)
 
   @@index([reportId])
@@ -19315,6 +19322,7 @@ model InspectionFinding {
   @@index([buyerTaskId])
   @@index([buyerGuidanceJourneyId])
   @@index([buyerRepairJourneyId])
+  @@index([buyerOutcomeDocumentId])
   @@index([propertyId, homeSystem])
   @@index([permitFlagId])
   @@index([inventoryItemId])

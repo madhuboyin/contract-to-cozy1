@@ -56,6 +56,60 @@ export class BuyerAcquisitionService {
     return access;
   }
 
+  private static async ensureClosingRepairHandoff(
+    tx: Prisma.TransactionClient,
+    propertyId: string,
+    checklistId: string,
+    now: Date,
+  ) {
+    const tasks = await tx.homeBuyerTask.findMany({
+      where: {
+        checklistId,
+        phase: 'FIRST_30_DAYS',
+        status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] },
+        sourceEntityType: 'INSPECTION_FINDING',
+        sourceEntityId: { not: null },
+      },
+    });
+    for (const task of tasks) {
+      const actionKey = `buyer-handoff:${task.actionKey}`;
+      const maintenance = await tx.propertyMaintenanceTask.upsert({
+        where: { propertyId_actionKey: { propertyId, actionKey } },
+        create: {
+          propertyId,
+          title: task.title,
+          description: task.description,
+          status: task.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'PENDING',
+          source: 'ACTION_CENTER',
+          actionKey,
+          assetType: 'BUYER_CLOSING_REPAIR_HANDOFF',
+          category: task.phase,
+          priority: maintenancePriority(task.priority),
+          serviceCategory: task.serviceCategory,
+          nextDueDate: task.dueAt ?? now,
+          estimatedCost: task.estimatedCostCents == null ? null : task.estimatedCostCents / 100,
+          assignedToUserId: task.assignedToUserId,
+          completionMetadata: {
+            sourceType: 'BUYER_CLOSING_REPAIR_HANDOFF',
+            buyerTaskId: task.id,
+            sourceEntityType: task.sourceEntityType,
+            sourceEntityId: task.sourceEntityId,
+            guidanceJourneyId: task.guidanceJourneyId,
+          },
+        },
+        update: {},
+      });
+      await tx.homeBuyerTask.update({
+        where: { id: task.id },
+        data: { handedOffMaintenanceTaskId: maintenance.id },
+      });
+      await tx.inspectionFinding.updateMany({
+        where: { id: task.sourceEntityId as string, propertyId },
+        data: { buyerMaintenanceTaskId: maintenance.id },
+      });
+    }
+  }
+
   static async updateLifecycle(userId: string, propertyId: string, input: {
     targetCloseDate?: string | null;
     moveInDate?: string | null;
@@ -103,6 +157,10 @@ export class BuyerAcquisitionService {
           where: { id: task.id },
           data: { dueAt: new Date(anchor.getTime() + (task.anchorOffsetDays ?? 0) * DAY_MS) },
         });
+      }
+
+      if (['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'HANDED_OFF'].includes(stage)) {
+        await this.ensureClosingRepairHandoff(tx, propertyId, plan.id, new Date());
       }
 
       const now = new Date();

@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.13
+**Version:** 1.14
 **Date:** 2026-08-16
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2786,8 +2786,17 @@ points with explicit legal boundaries, and persists structured seller response
 and outcome. Accepted credits and completed seller repairs close the linked
 finding/task with evidence; accepted repairs move the task into verification,
 rejections block it for an explicit buyer decision, and transferred work moves
-the existing obligation into the first-30-days phase. Multi-finding requests,
-completion-document evidence, and closing-triggered repair handoff remain next.
+the existing obligation into the first-30-days phase. The third increment lets
+one request cover up to 20 confirmed findings while preserving one canonical
+case per finding and surfacing conflicts instead of silently merging cases.
+Seller outcomes can now select an attached Home Record document; the evidence
+link is persisted on the negotiation outcome, inspection finding, and completed
+buyer task. When the lifecycle reaches closed or a later ownership stage,
+transferred first-30-days inspection work is immediately upserted into the
+canonical maintenance queue with the same stable key used by day-91 handoff.
+Repair-journey evidence propagation, the full inspection scheduling/reinspection
+checklist, property-aware inspection modules, and broader obligation deduplication
+remain next.
 
 **Goal:** Turn transaction evidence into one trustworthy plan.
 

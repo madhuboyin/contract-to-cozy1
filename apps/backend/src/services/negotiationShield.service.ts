@@ -273,6 +273,8 @@ export class NegotiationShieldService {
       agreedCreditCents: record.agreedCreditCents ?? null,
       outcomeNotes: record.outcomeNotes ?? null,
       outcomeRecordedAt: asIsoString(record.outcomeRecordedAt),
+      outcomeDocumentId: record.outcomeDocumentId ?? null,
+      outcomeDocumentName: record.outcomeDocument?.name ?? null,
     };
   }
 
@@ -1240,7 +1242,7 @@ export class NegotiationShieldService {
           take: 1,
         },
         buyerFindingLinks: {
-          include: { finding: true },
+          include: { finding: true, outcomeDocument: { select: { name: true } } },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
       },
@@ -1362,55 +1364,73 @@ export class NegotiationShieldService {
     createdByUserId: string,
     input: StartBuyerNegotiationInput,
   ): Promise<NegotiationShieldCaseDetailDTO> {
-    const finding = await prisma.inspectionFinding.findFirst({
-      where: { id: input.findingId, propertyId },
+    const findingIds = Array.from(new Set([...(input.findingIds ?? []), ...(input.findingId ? [input.findingId] : [])]));
+    if (findingIds.length === 0) {
+      throw new APIError('At least one inspection finding is required.', 400, 'BUYER_NEGOTIATION_FINDING_REQUIRED');
+    }
+    const findings = await prisma.inspectionFinding.findMany({
+      where: { id: { in: findingIds }, propertyId },
       include: { report: { select: { status: true } } },
     });
-    if (!finding) {
-      throw new APIError('Inspection finding not found.', 404, 'FINDING_NOT_FOUND');
+    if (findings.length !== findingIds.length) {
+      throw new APIError('One or more inspection findings were not found.', 404, 'FINDING_NOT_FOUND');
     }
-    if (
+    if (findings.some((finding) => (
       finding.report.status !== 'CONFIRMED'
       || finding.status === 'DISMISSED'
       || finding.buyerDisposition !== 'PRE_CLOSE_NEGOTIATION'
-    ) {
+    ))) {
       throw new APIError(
-        'Only a confirmed, active inspection finding can start buyer negotiation.',
+        'Only confirmed, active inspection findings can start buyer negotiation.',
         409,
         'BUYER_NEGOTIATION_FINDING_NOT_READY',
       );
     }
 
-    const existingLink = await this.models.buyerFindingModel.findUnique({
-      where: { findingId: finding.id },
+    const existingLinks = await this.models.buyerFindingModel.findMany({
+      where: { findingId: { in: findingIds } },
       select: { caseId: true },
     });
-    if (existingLink) return this.getCaseDetail(propertyId, existingLink.caseId);
+    const existingCaseIds = Array.from(new Set(existingLinks.map((link: { caseId: string }) => link.caseId)));
+    if (existingCaseIds.length > 1) {
+      throw new APIError('Selected findings already belong to different negotiation cases.', 409, 'BUYER_NEGOTIATION_CASE_CONFLICT');
+    }
+    const existingCaseId = existingCaseIds[0] ?? null;
 
     let created: { id: string };
     try {
       created = await prisma.$transaction(async (tx) => {
-        const negotiationCase = await tx.negotiationShieldCase.create({
-          data: {
-            propertyId,
-            createdByUserId,
-            scenarioType: 'BUYER_INSPECTION_NEGOTIATION',
-            perspective: 'BUYER',
-            status: 'DRAFT',
-            sourceType: 'MANUAL',
-            title: `Negotiate ${finding.homeSystem.toLowerCase().replace(/_/g, ' ')} inspection finding`,
-            description: finding.inspectorDescription,
-          },
-        });
-        await tx.negotiationShieldBuyerFinding.create({
-          data: {
+        const negotiationCase = existingCaseId
+          ? await tx.negotiationShieldCase.findFirstOrThrow({ where: { id: existingCaseId, propertyId, perspective: 'BUYER' } })
+          : await tx.negotiationShieldCase.create({
+            data: {
+              propertyId,
+              createdByUserId,
+              scenarioType: 'BUYER_INSPECTION_NEGOTIATION',
+              perspective: 'BUYER',
+              status: 'DRAFT',
+              sourceType: 'MANUAL',
+              title: findings.length === 1
+                ? `Negotiate ${findings[0].homeSystem.toLowerCase().replace(/_/g, ' ')} inspection finding`
+                : `Negotiate ${findings.length} inspection findings`,
+              description: findings.map((finding) => finding.inspectorDescription).join('\n\n'),
+            },
+          });
+        const createdLinks = await tx.negotiationShieldBuyerFinding.createMany({
+          data: findings.map((finding) => ({
             caseId: negotiationCase.id,
             findingId: finding.id,
             requestType: input.requestType,
             requestedCreditCents: input.requestedCreditCents ?? null,
-          },
+          })),
+          skipDuplicates: true,
         });
-        await tx.negotiationShieldInput.create({
+        const caseFindings = await tx.negotiationShieldBuyerFinding.findMany({
+          where: { caseId: negotiationCase.id },
+          include: { finding: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (createdLinks.count > 0) await tx.negotiationShieldInput.create({
           data: {
             caseId: negotiationCase.id,
             inputType: 'BUYER_INSPECTION',
@@ -1419,12 +1439,12 @@ export class NegotiationShieldService {
               requestedConcessionAmount: input.requestedCreditCents == null
                 ? null
                 : input.requestedCreditCents / 100,
-              inspectionIssuesSummary: finding.inspectorDescription,
+              inspectionIssuesSummary: caseFindings.map((link) => link.finding.inspectorDescription).join('\n'),
               requestedRepairs: input.requestType === 'CREDIT'
                 ? 'Request a closing credit tied to this inspection finding.'
                 : 'Request seller repair or a documented credit for this inspection finding.',
               buyerPerspective: true,
-              findingId: finding.id,
+              findingIds: caseFindings.map((link) => link.findingId),
             },
           },
         });
@@ -1432,11 +1452,14 @@ export class NegotiationShieldService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const concurrentLink = await this.models.buyerFindingModel.findUnique({
-          where: { findingId: finding.id },
+        const concurrentLinks = await this.models.buyerFindingModel.findMany({
+          where: { findingId: { in: findingIds } },
           select: { caseId: true },
         });
-        if (concurrentLink) return this.getCaseDetail(propertyId, concurrentLink.caseId);
+        const concurrentCaseIds = Array.from(new Set<string>(concurrentLinks.map((link: { caseId: string }) => link.caseId)));
+        if (concurrentLinks.length === findingIds.length && concurrentCaseIds.length === 1) {
+          return this.getCaseDetail(propertyId, concurrentCaseIds[0]);
+        }
       }
       throw error;
     }
@@ -1462,6 +1485,19 @@ export class NegotiationShieldService {
       throw new APIError('Buyer negotiation finding not found.', 404, 'BUYER_NEGOTIATION_FINDING_NOT_FOUND');
     }
 
+    if (input.completionDocumentId) {
+      const evidence = await prisma.negotiationShieldDocument.findFirst({
+        where: { caseId, documentId: input.completionDocumentId, negotiationShieldCase: { propertyId } },
+        select: { id: true },
+      });
+      if (!evidence) {
+        throw new APIError('Completion evidence must be attached to this negotiation case.', 409, 'BUYER_NEGOTIATION_EVIDENCE_NOT_ATTACHED');
+      }
+    }
+    const effectiveCompletionDocumentId = input.completionDocumentId === undefined
+      ? linked.outcomeDocumentId
+      : input.completionDocumentId;
+
     const now = new Date();
     await prisma.$transaction(async (tx) => {
       await tx.negotiationShieldBuyerFinding.update({
@@ -1475,6 +1511,7 @@ export class NegotiationShieldService {
           outcomeNotes: input.outcomeNotes ?? null,
           outcomeRecordedAt: input.outcome === 'PENDING' ? null : now,
           outcomeRecordedById: input.outcome === 'PENDING' ? null : actorUserId,
+          outcomeDocumentId: effectiveCompletionDocumentId,
         },
       });
 
@@ -1490,6 +1527,7 @@ export class NegotiationShieldService {
             resolutionCostCents: input.outcome === 'ACCEPTED_CREDIT' ? input.agreedCreditCents ?? null : null,
             resolutionNotes: input.outcomeNotes ?? input.sellerResponseNotes ?? null,
           } : {}),
+          buyerOutcomeDocumentId: effectiveCompletionDocumentId,
           ...(transfersToBuyer ? {
             buyerDisposition: 'POST_CLOSE_ACTION',
             buyerDispositionAt: now,
@@ -1509,7 +1547,8 @@ export class NegotiationShieldService {
               status: 'COMPLETED',
               completedAt: now,
               completedByUserId: actorUserId,
-              completionMethod: 'EXTERNAL_CONFIRMATION',
+              completionDocumentId: effectiveCompletionDocumentId,
+              completionMethod: effectiveCompletionDocumentId ? 'DOCUMENT' : 'EXTERNAL_CONFIRMATION',
               statusReason: input.outcome === 'ACCEPTED_CREDIT'
                 ? 'Seller credit accepted and recorded.'
                 : 'Seller repair recorded as complete.',
@@ -1519,6 +1558,7 @@ export class NegotiationShieldService {
                 findingId: linked.findingId,
                 outcome: input.outcome,
                 sellerResponse: input.sellerResponse,
+                completionDocumentId: effectiveCompletionDocumentId,
               },
             },
           });

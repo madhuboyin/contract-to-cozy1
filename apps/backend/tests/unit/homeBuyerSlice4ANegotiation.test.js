@@ -56,11 +56,18 @@ test('buyer negotiation persistence has one canonical finding link and structure
   assert.match(schema, /findingId String @unique/);
   assert.match(schema, /sellerResponse\s+BuyerNegotiationSellerResponse/);
   assert.match(schema, /outcome\s+BuyerNegotiationOutcome/);
+  assert.match(schema, /outcomeDocumentId\s+String\?/);
+  assert.match(schema, /buyerOutcomeDocumentId\s+String\?/);
   assert.match(service, /perspective: 'BUYER'/);
   assert.match(service, /PrismaClientKnownRequestError/);
   assert.match(service, /tx\.negotiationShieldBuyerFinding\.update/);
   assert.match(service, /tx\.inspectionFinding\.update/);
   assert.match(service, /tx\.homeBuyerTask\.updateMany/);
+  assert.match(service, /findingIds = Array\.from\(new Set/);
+  assert.match(service, /negotiationShieldBuyerFinding\.createMany/);
+  assert.match(service, /BUYER_NEGOTIATION_CASE_CONFLICT/);
+  assert.match(service, /BUYER_NEGOTIATION_EVIDENCE_NOT_ATTACHED/);
+  assert.match(service, /effectiveCompletionDocumentId/);
   assert.match(routes, /negotiation-shield\/buyer-cases/);
   assert.match(routes, /buyer-outcome/);
 });
@@ -70,11 +77,25 @@ test('Buyer Plan launches buyer mode from a pre-close finding and the workspace 
   const client = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/negotiation-shield/NegotiationShieldToolClient.tsx'), 'utf8');
 
   assert.match(buyerPlan, /startBuyerNegotiationCase/);
-  assert.match(buyerPlan, /Open buyer negotiation/);
+  assert.match(buyerPlan, /Open grouped negotiation/);
+  assert.match(buyerPlan, /selectedNegotiationFindingIds/);
   assert.match(buyerPlan, /appendBuyerPlanReturnContext/);
   assert.match(client, /Buyer mode/);
   assert.match(client, /Seller response and final outcome/);
   assert.match(client, /Back to Closing Plan/);
   assert.match(client, /recordBuyerNegotiationOutcome/);
+  assert.match(client, /Completion evidence/);
+  assert.match(client, /selectedBuyerFindingId/);
   assert.match(client, /not a legal notice or amendment/);
+});
+
+test('closing lifecycle immediately hands transferred findings to the canonical maintenance queue', () => {
+  const service = fs.readFileSync(path.resolve(__dirname, '../../src/services/buyerAcquisition.service.ts'), 'utf8');
+
+  assert.match(service, /ensureClosingRepairHandoff/);
+  assert.match(service, /BUYER_CLOSING_REPAIR_HANDOFF/);
+  assert.match(service, /buyer-handoff:\$\{task\.actionKey\}/);
+  assert.match(service, /propertyMaintenanceTask\.upsert/);
+  assert.match(service, /buyerMaintenanceTaskId: maintenance\.id/);
+  assert.match(service, /\['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'HANDED_OFF'\]/);
 });

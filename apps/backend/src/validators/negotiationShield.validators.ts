@@ -85,10 +85,15 @@ export const saveNegotiationShieldInputBodySchema = z.object({
 });
 
 export const startBuyerNegotiationBodySchema = z.object({
-  findingId: uuidSchema,
+  findingId: uuidSchema.optional(),
+  findingIds: z.array(uuidSchema).min(1).max(20).optional(),
   requestType: z.enum(BUYER_NEGOTIATION_REQUEST_TYPES).default('REPAIR_OR_CREDIT'),
   requestedCreditCents: z.number().int().min(0).max(1_000_000_000).optional().nullable(),
   notes: z.string().trim().max(4000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (!value.findingId && !value.findingIds?.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'findingId or findingIds is required.', path: ['findingIds'] });
+  }
 });
 
 export const recordBuyerNegotiationOutcomeBodySchema = z.object({
@@ -98,6 +103,7 @@ export const recordBuyerNegotiationOutcomeBodySchema = z.object({
   outcome: z.enum(BUYER_NEGOTIATION_OUTCOMES),
   agreedCreditCents: z.number().int().min(0).max(1_000_000_000).optional().nullable(),
   outcomeNotes: z.string().trim().max(4000).optional().nullable(),
+  completionDocumentId: uuidSchema.optional().nullable(),
 }).superRefine((value, ctx) => {
   if (value.outcome === 'ACCEPTED_CREDIT' && value.agreedCreditCents == null) {
     ctx.addIssue({

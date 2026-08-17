@@ -2182,11 +2182,14 @@ function CaseWorkspace({
   const [documentFeedback, setDocumentFeedback] = useState<InlineFeedbackState | null>(null);
   const [analysisFeedback, setAnalysisFeedback] = useState<InlineFeedbackState | null>(null);
   const [draftFeedback, setDraftFeedback] = useState<InlineFeedbackState | null>(null);
-  const buyerFinding = (caseDetail.buyerFindings ?? [])[0] ?? null;
+  const buyerFindings = caseDetail.buyerFindings ?? [];
+  const [selectedBuyerFindingId, setSelectedBuyerFindingId] = useState(buyerFindings[0]?.findingId ?? '');
+  const buyerFinding = buyerFindings.find((finding) => finding.findingId === selectedBuyerFindingId) ?? buyerFindings[0] ?? null;
   const [sellerResponse, setSellerResponse] = useState<BuyerNegotiationSellerResponse>('PENDING');
   const [buyerOutcome, setBuyerOutcome] = useState<BuyerNegotiationOutcome>('PENDING');
   const [outcomeNotes, setOutcomeNotes] = useState('');
   const [agreedCreditDollars, setAgreedCreditDollars] = useState('');
+  const [completionDocumentId, setCompletionDocumentId] = useState('');
 
   useEffect(() => {
     setSelectedFile(null);
@@ -2197,11 +2200,13 @@ function CaseWorkspace({
     setDocumentFeedback(null);
     setAnalysisFeedback(null);
     setDraftFeedback(null);
+    setSelectedBuyerFindingId(buyerFinding?.findingId ?? '');
     setSellerResponse(buyerFinding?.sellerResponse ?? 'PENDING');
     setBuyerOutcome(buyerFinding?.outcome ?? 'PENDING');
     setOutcomeNotes(buyerFinding?.outcomeNotes ?? buyerFinding?.sellerResponseNotes ?? '');
     setAgreedCreditDollars(buyerFinding?.agreedCreditCents == null ? '' : String(buyerFinding.agreedCreditCents / 100));
-  }, [buyerFinding?.agreedCreditCents, buyerFinding?.outcome, buyerFinding?.outcomeNotes, buyerFinding?.sellerResponse, buyerFinding?.sellerResponseNotes, caseDetail.case.id, caseDetail.case.scenarioType]);
+    setCompletionDocumentId(buyerFinding?.outcomeDocumentId ?? '');
+  }, [buyerFinding?.agreedCreditCents, buyerFinding?.findingId, buyerFinding?.outcome, buyerFinding?.outcomeDocumentId, buyerFinding?.outcomeNotes, buyerFinding?.sellerResponse, buyerFinding?.sellerResponseNotes, caseDetail.case.id, caseDetail.case.scenarioType]);
 
   const detailQueryKey = ['negotiation-shield-case', propertyId, caseDetail.case.id];
   const listQueryKey = ['negotiation-shield-cases', propertyId];
@@ -2431,6 +2436,7 @@ function CaseWorkspace({
           ? Math.round(Number(agreedCreditDollars) * 100)
           : null,
         outcomeNotes: outcomeNotes || null,
+        completionDocumentId: completionDocumentId || null,
       });
     },
     onSuccess: (nextDetail) => {
@@ -2728,6 +2734,7 @@ function CaseWorkspace({
         </CardDescription>
       </CardHeader>
       <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4')}>
+        {buyerFindings.length > 1 ? <div className="flex flex-wrap gap-2" aria-label="Negotiation findings">{buyerFindings.map((finding, index) => <Button key={finding.findingId} type="button" size="sm" variant={finding.findingId === buyerFinding.findingId ? 'default' : 'outline'} onClick={() => setSelectedBuyerFindingId(finding.findingId)}>Finding {index + 1} · {finding.homeSystem.replace(/_/g, ' ')}</Button>)}</div> : null}
         <div className="rounded-xl border bg-muted/30 p-3 text-sm">
           <p className="font-medium">{buyerFinding.homeSystem.replace(/_/g, ' ')} · {buyerFinding.severity}</p>
           <p className="mt-1 text-muted-foreground">{buyerFinding.inspectorDescription}</p>
@@ -2751,6 +2758,15 @@ function CaseWorkspace({
           </Field>
         </div>
         {buyerOutcome === 'ACCEPTED_CREDIT' ? <Field label="Agreed credit amount"><Input inputMode="decimal" value={agreedCreditDollars} onChange={(event) => setAgreedCreditDollars(event.target.value)} placeholder="0.00" /></Field> : null}
+        <Field label="Completion evidence">
+          <Select value={completionDocumentId || 'NONE'} onValueChange={(value) => setCompletionDocumentId(value === 'NONE' ? '' : value)}>
+            <SelectTrigger><SelectValue placeholder="No attached document selected" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="NONE">No attached document</SelectItem>
+              {caseDetail.documents.map((document) => <SelectItem key={document.documentId} value={document.documentId}>{document.fileName}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
         <Field label="Response or outcome notes"><Textarea value={outcomeNotes} onChange={(event) => setOutcomeNotes(event.target.value)} placeholder="Capture the seller response, agreed scope, credit, or reason work transfers to the buyer." /></Field>
         <Button type="button" onClick={() => buyerOutcomeMutation.mutate()} disabled={buyerOutcomeMutation.isPending || (buyerOutcome === 'ACCEPTED_CREDIT' && !agreedCreditDollars)}>
           {buyerOutcomeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

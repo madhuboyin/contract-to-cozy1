@@ -259,6 +259,8 @@ export type BuyerNegotiationFindingDTO = {
   agreedCreditCents: number | null;
   outcomeNotes: string | null;
   outcomeRecordedAt: string | null;
+  outcomeDocumentId: string | null;
+  outcomeDocumentName: string | null;
 };
 
 export type CreateNegotiationShieldCaseInput = {
@@ -276,7 +278,8 @@ export type CreateNegotiationShieldCaseInput = {
 };
 
 export type StartBuyerNegotiationInput = {
-  findingId: string;
+  findingId?: string;
+  findingIds?: string[];
   requestType: BuyerNegotiationRequestType;
   requestedCreditCents?: number | null;
   notes?: string | null;
@@ -289,6 +292,7 @@ export type RecordBuyerNegotiationOutcomeInput = {
   outcome: BuyerNegotiationOutcome;
   agreedCreditCents?: number | null;
   outcomeNotes?: string | null;
+  completionDocumentId?: string | null;
 };
 
 export type SaveNegotiationShieldInputPayload = {
