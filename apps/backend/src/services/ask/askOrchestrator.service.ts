@@ -4574,11 +4574,33 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
       suggestions: ['What do I need for closing day?'],
     };
   }
-  if (/\bpause\b/i.test(message)) {
+  if (/\b(?:pause|resume)\b/i.test(message)) {
+    const isResume = /\bresume\b/i.test(message);
+    if (access.role !== HouseholdRole.OWNER) {
+      return {
+        status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+        blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-pause-permission', title: `Only the property owner can ${isResume ? 'resume' : 'pause'} this purchase`, body: `${isResume ? 'Resuming' : 'Pausing'} this purchase requires owner permission.`, tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }] }],
+        suggestions: ['What should I do next for this purchase?'],
+      };
+    }
+    const confirmationVersion = 1;
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     return {
-      status: 'OUT_OF_SCOPE', reasonCode: 'BUYER_PAUSE_NOT_AVAILABLE',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-pause-unavailable', title: 'Pausing this purchase is not available yet', body: 'This capability is not built yet. You can cancel the purchase if it is no longer active.', tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }] }],
-      suggestions: ['Cancel this purchase'],
+      status: 'NEEDS_CONFIRMATION', reasonCode: isResume ? 'BUYER_RESUME_CONFIRMATION_REQUIRED' : 'BUYER_PAUSE_CONFIRMATION_REQUIRED',
+      parameters: { buyerLifecycleAction: isResume ? 'RESUME' : 'PAUSE', confirmationVersion, confirmationExpiresAt: expiresAt.toISOString() },
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-lifecycle-pause-review', title: `Review this ${isResume ? 'resume' : 'pause'}`,
+        body: isResume ? 'Nothing has changed yet. Resuming reactivates deadline reminders and active tasks.' : 'Nothing has changed yet. Pausing stops deadline reminders while preserving all recorded work.',
+        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      }],
+      confirmation: {
+        confirmationId: `buyer-lifecycle-${isResume ? 'resume' : 'pause'}-${propertyId}-${confirmationVersion}`, version: confirmationVersion,
+        title: isResume ? 'Resume this purchase?' : 'Pause this purchase?',
+        description: isResume ? 'This reactivates deadline reminders for this purchase.' : 'This stops deadline reminders for this purchase without cancelling it. Recorded work, documents, findings, and evidence are preserved.',
+        fields: [], confirmLabel: isResume ? 'Resume purchase' : 'Pause purchase',
+        consentText: `I confirm this purchase is being ${isResume ? 'resumed' : 'paused'}.`, expiresAt: expiresAt.toISOString(),
+      },
+      suggestions: [],
     };
   }
   if (/\bcancel\b/i.test(message)) {
@@ -7749,7 +7771,29 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   } else if (execution.operationId === 'BUYER_LIFECYCLE_UPDATE') {
     const lifecycleAction = parameters.buyerLifecycleAction;
     const buyerPlanHrefValue = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan`;
-    if (lifecycleAction === 'CANCEL') {
+    if (lifecycleAction === 'PAUSE' || lifecycleAction === 'RESUME') {
+      if (access.role !== HouseholdRole.OWNER) {
+        const error = new Error(`Only the property owner can ${lifecycleAction === 'RESUME' ? 'resume' : 'pause'} this purchase.`);
+        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+        throw error;
+      }
+      const updatedPlan = lifecycleAction === 'RESUME'
+        ? await BuyerAcquisitionService.resumeJourney(userId, execution.propertyId, { confirmed: true })
+        : await BuyerAcquisitionService.pauseJourney(userId, execution.propertyId, { confirmed: true });
+      result = {
+        status: 'COMPLETED', reasonCode: lifecycleAction === 'RESUME' ? 'BUYER_JOURNEY_RESUMED' : 'BUYER_JOURNEY_PAUSED', contextVersion: updatedPlan.updatedAt.toISOString(),
+        blocks: [{
+          type: 'WORKFLOW_PROGRESS', id: `buyer-lifecycle-${lifecycleAction.toLowerCase()}`, title: lifecycleAction === 'RESUME' ? 'Purchase resumed' : 'Purchase paused', status: 'COMPLETED',
+          description: lifecycleAction === 'RESUME' ? 'Deadline reminders and active tasks are reactivated.' : 'Deadline reminders are stopped. Recorded work, documents, findings, and evidence are preserved.',
+          details: [],
+          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
+        }],
+        confirmation: null,
+        suggestions: [],
+      };
+      artifactType = 'HOME_BUYER_CHECKLIST';
+      artifactId = updatedPlan.id;
+    } else if (lifecycleAction === 'CANCEL') {
       if (access.role !== HouseholdRole.OWNER) {
         const error = new Error('Only the property owner can cancel this purchase.');
         (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
