@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { BuyerPlanOverviewTask } from '@/types';
 import {
   BuyerPlanPhaseNavigation,
+  BuyerPlanPhaseGuidance,
   BuyerPlanTool,
   workspaceForStage,
   workspaceForTask,
@@ -57,15 +58,40 @@ describe('Buyer Plan progressive disclosure', () => {
     expect(screen.getByText('Private form content')).toBeInTheDocument();
   });
 
+  it('opens optional details when guidance targets a specific record', () => {
+    const { rerender } = render(<BuyerPlanTool title="Phase actions" description="Optional details"><div>Target action</div></BuyerPlanTool>);
+    expect(screen.queryByText('Target action')).not.toBeInTheDocument();
+    rerender(<BuyerPlanTool title="Phase actions" description="Optional details" openSignal="task-1"><div>Target action</div></BuyerPlanTool>);
+    expect(screen.getByText('Target action')).toBeInTheDocument();
+  });
+
   it('presents the complete five-phase navigator without locking navigation', () => {
     const onChange = jest.fn();
     render(<BuyerPlanPhaseNavigation active={null} current="DUE_DILIGENCE" tasks={[task({})]} onChange={onChange} />);
     expect(screen.getByRole('button', { name: /contract/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /due diligence/i })).toHaveAttribute('aria-current', 'step');
-    expect(screen.getByRole('button', { name: /financing & protection/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /closing preparation/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /close & move in/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /inspect the home/i })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: /prepare to fund & protect/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /get ready to close/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /close & get the keys/i })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: /contract/i }));
     expect(onChange).toHaveBeenCalledWith('CONTRACT');
+  });
+
+  it('leads an opened phase with guidance, one next action, a deadline, and professional questions', () => {
+    const onOpenTask = jest.fn();
+    render(<BuyerPlanPhaseGuidance
+      workspace="DUE_DILIGENCE"
+      tasks={[task({ title: 'Prepare for your inspection', dueAt: '2026-08-20T12:00:00.000Z' })]}
+      milestones={[]}
+      targetCloseDate="2026-09-30T12:00:00.000Z"
+      onOpenTask={onOpenTask}
+    />);
+    expect(screen.getByText('What matters now')).toBeInTheDocument();
+    expect(screen.getByText('Understand the home before your inspection deadline passes')).toBeInTheDocument();
+    expect(screen.getAllByText('Prepare for your inspection')).toHaveLength(2);
+    expect(screen.getByText('Nearest known deadline')).toBeInTheDocument();
+    expect(screen.getByText(/What should be checked more closely/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /do this next/i }));
+    expect(onOpenTask).toHaveBeenCalled();
   });
 });

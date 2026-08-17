@@ -36,6 +36,7 @@ import { BuyerContractContingencyCenter } from './BuyerContractContingencyCenter
 import {
   BUYER_PLAN_WORKSPACES,
   BuyerPlanOverviewPanel,
+  BuyerPlanPhaseGuidance,
   BuyerPlanPhaseNavigation,
   BuyerPlanTool,
   type BuyerPlanWorkspaceKey,
@@ -97,6 +98,7 @@ export default function BuyerPlanPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [activeWorkspace, setActiveWorkspace] = useState<BuyerPlanWorkspaceKey | null>(null);
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [selectedNegotiationFindingIds, setSelectedNegotiationFindingIds] = useState<string[]>([]);
   const [cancellationReason, setCancellationReason] = useState('');
 
@@ -419,8 +421,9 @@ export default function BuyerPlanPage() {
     ? plan.tasks.filter((task) => workspaceForTask(task) === activeWorkspace)
     : [];
   const openTask = (task: BuyerPlanOverviewTask) => {
+    setFocusedTaskId(task.id);
     setActiveWorkspace(workspaceForTask(task));
-    window.setTimeout(() => document.getElementById(`buyer-task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    window.setTimeout(() => document.getElementById(`buyer-task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   };
 
   return (
@@ -457,9 +460,6 @@ export default function BuyerPlanPage() {
         <BuyerPlanPhaseNavigation active={activeWorkspace} current={currentWorkspace} tasks={plan.tasks} onChange={setActiveWorkspace} />
 
         {!activeWorkspace && <BuyerPlanOverviewPanel
-          progressPercent={overview.summary.progressPercent}
-          completed={completed}
-          total={overview.summary.total}
           targetCloseDate={plan.targetCloseDate}
           nextAction={overview.nextAction}
           milestones={overview.milestones}
@@ -470,6 +470,14 @@ export default function BuyerPlanPage() {
         />}
 
         {selectedWorkspace && <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">{selectedWorkspace.eyebrow}</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{selectedWorkspace.label}</h2><p className="mt-1 text-sm text-slate-500">{selectedWorkspace.description}. Open only the details you need right now.</p></div><Button type="button" variant="outline" onClick={() => setActiveWorkspace(null)}>Back to overview</Button></div>}
+
+        {activeWorkspace && <BuyerPlanPhaseGuidance
+          workspace={activeWorkspace}
+          tasks={selectedTasks}
+          milestones={overview.milestones}
+          targetCloseDate={plan.targetCloseDate}
+          onOpenTask={openTask}
+        />}
 
         {activeWorkspace === 'CONTRACT' && <div className="space-y-4">
           <BuyerPlanTool title="Closing date" description="Set the working target date used to calculate eligible Buyer Plan reminders." meta={plan.targetCloseDate ? new Date(plan.targetCloseDate).toLocaleDateString() : 'Optional'}>
@@ -615,7 +623,7 @@ export default function BuyerPlanPage() {
         </BuyerPlanTool>
         </div>}
 
-        {activeWorkspace && <BuyerPlanTool title={`${selectedWorkspace?.label ?? 'Phase'} actions`} description="These are the actions currently associated with this phase. Resolved items remain available for reference." meta={`${selectedTasks.length} item${selectedTasks.length === 1 ? '' : 's'}`} defaultOpen>
+        {activeWorkspace && <BuyerPlanTool title="All phase actions" description="Optional checklist and record of completed work. Your recommended next action appears at the top of this phase." meta={`${selectedTasks.length} item${selectedTasks.length === 1 ? '' : 's'}`} openSignal={focusedTaskId ?? restoredTaskId}>
           <Card className="border-0 shadow-none"><CardContent className="space-y-3 pt-6">
             {selectedTasks.map((task) => {
               const done = task.status === 'COMPLETED';
