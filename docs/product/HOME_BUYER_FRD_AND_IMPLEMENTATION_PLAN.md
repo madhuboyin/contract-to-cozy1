@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.23
+**Version:** 1.24
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2902,8 +2902,21 @@ idempotently reconcile stable title-contact, document-review, issue-resolution,
 association-records, and closing-document work plus the canonical title/survey
 milestone. Completion means the buyer recorded professional review and
 dispositioned applicable preparation; it never represents platform legal
-review, title clearance, or wire-instruction validation. Buyer Coverage mode
-remains next.
+review, title clearance, or wire-instruction validation. The sixth increment
+adds Buyer Coverage preparation without changing established-owner Coverage
+semantics. Purchase quotes, comparable limits/deductibles, replacement-cost
+basis, exclusions, endorsements, catastrophe options, source documents,
+expiration, and insurer/lender requirements remain buyer-journey records and
+are never presented as bound coverage or a platform recommendation. The buyer
+explicitly selects a quote and may record binding only after confirming a
+policy number and effective term with the insurer or agent. That binding
+promotes the selected quote into the canonical `InsurancePolicy` and verified
+term, preserving the actual actor in confirmation evidence; the binder is then
+linked to that policy. Required effective date, lender/closing proof delivery,
+and unresolved blocking requirements reconcile the stable insurance task and
+canonical `INSURANCE_EFFECTIVE` milestone. Slice 4B's planned vertical
+functionality is now established; conditional property/jurisdiction refinement
+can continue incrementally while Slice 4C is next.
 
 **Goal:** Give financed and cash buyers the correct conditional preparation
 without rebranding homeowner financial tools.

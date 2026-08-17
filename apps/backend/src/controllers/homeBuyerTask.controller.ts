@@ -13,6 +13,7 @@ import { BuyerAcquisitionService } from '../services/buyerAcquisition.service';
 import { BuyerPurchaseLoanEstimateService } from '../services/buyerPurchaseLoanEstimate.service';
 import { BuyerPurchaseLenderReadinessService } from '../services/buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../services/buyerTitleEscrow.service';
+import { BuyerInsuranceService } from '../services/buyerInsurance.service';
 import {
   BuyerDocumentVerificationInputSchema,
   BuyerFindingDispositionInputSchema,
@@ -29,6 +30,12 @@ import {
   BuyerTitleEscrowWorkspaceUpdateSchema,
   BuyerTitleEscrowIssueCreateSchema,
   BuyerTitleEscrowIssueUpdateSchema,
+  BuyerInsuranceWorkspaceUpdateSchema,
+  BuyerInsuranceQuoteCreateSchema,
+  BuyerInsuranceQuoteUpdateSchema,
+  BuyerInsuranceBindSchema,
+  BuyerInsuranceRequirementCreateSchema,
+  BuyerInsuranceRequirementUpdateSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -707,6 +714,68 @@ const handleUpdateBuyerTitleEscrowIssue = async (req: AuthRequest, res: Response
   } catch (error) { next(error); }
 };
 
+const handleGetBuyerInsurance = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    return res.json({ success: true, data: await BuyerInsuranceService.get(req.user.userId, req.params.propertyId) });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerInsurance = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerInsuranceWorkspaceUpdateSchema.parse(req.body);
+    return res.json({ success: true, data: await BuyerInsuranceService.update(req.user.userId, req.params.propertyId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleCreateBuyerInsuranceQuote = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerInsuranceQuoteCreateSchema.parse(req.body);
+    return res.status(201).json({ success: true, data: await BuyerInsuranceService.createQuote(req.user.userId, req.params.propertyId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerInsuranceQuote = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerInsuranceQuoteUpdateSchema.parse(req.body);
+    return res.json({ success: true, data: await BuyerInsuranceService.updateQuote(req.user.userId, req.params.propertyId, req.params.quoteId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleSelectBuyerInsuranceQuote = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    return res.json({ success: true, data: await BuyerInsuranceService.selectQuote(req.user.userId, req.params.propertyId, req.params.quoteId) });
+  } catch (error) { next(error); }
+};
+
+const handleBindBuyerInsurance = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerInsuranceBindSchema.parse(req.body);
+    return res.json({ success: true, data: await BuyerInsuranceService.bind(req.user.userId, req.params.propertyId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleCreateBuyerInsuranceRequirement = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerInsuranceRequirementCreateSchema.parse(req.body);
+    return res.status(201).json({ success: true, data: await BuyerInsuranceService.createRequirement(req.user.userId, req.params.propertyId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerInsuranceRequirement = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerInsuranceRequirementUpdateSchema.parse(req.body);
+    return res.json({ success: true, data: await BuyerInsuranceService.updateRequirement(req.user.userId, req.params.propertyId, req.params.requirementId, input) });
+  } catch (error) { next(error); }
+};
+
 const handleUpdateInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -835,6 +904,14 @@ export const homeBuyerTaskController = {
   handleUpdateBuyerTitleEscrow,
   handleCreateBuyerTitleEscrowIssue,
   handleUpdateBuyerTitleEscrowIssue,
+  handleGetBuyerInsurance,
+  handleUpdateBuyerInsurance,
+  handleCreateBuyerInsuranceQuote,
+  handleUpdateBuyerInsuranceQuote,
+  handleSelectBuyerInsuranceQuote,
+  handleBindBuyerInsurance,
+  handleCreateBuyerInsuranceRequirement,
+  handleUpdateBuyerInsuranceRequirement,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

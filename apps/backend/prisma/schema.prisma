@@ -550,6 +550,36 @@ enum BuyerTitleIssueStatus {
   WAIVED
 }
 
+enum BuyerInsuranceQuoteStatus {
+  DRAFT
+  REVIEWED
+  SELECTED
+  DECLINED
+}
+
+enum BuyerInsuranceProofStatus {
+  NOT_REQUIRED
+  PENDING
+  DELIVERED
+}
+
+enum BuyerInsuranceRequirementCategory {
+  PROPERTY_CONDITION
+  ROOF
+  ELECTRICAL
+  PLUMBING
+  PRIOR_LOSS
+  LENDER
+  OTHER
+}
+
+enum BuyerInsuranceRequirementStatus {
+  OPEN
+  SUBMITTED
+  RESOLVED
+  WAIVED
+}
+
 enum BuyerCompletionMethod {
   USER_ATTESTATION
   DOCUMENT
@@ -2673,6 +2703,7 @@ model HomeBuyerChecklist {
   inspectionPlan BuyerInspectionPlan?
   purchaseFinancingPlan BuyerPurchaseFinancingPlan?
   titleEscrowWorkspace BuyerTitleEscrowWorkspace?
+  insuranceWorkspace BuyerInsuranceWorkspace?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2885,6 +2916,97 @@ model BuyerTitleEscrowIssue {
   @@index([workspaceId, status, dueAt])
   @@index([propertyId, blocking, status])
   @@map("buyer_title_escrow_issues")
+}
+
+model BuyerInsuranceWorkspace {
+  id          String @id @default(uuid())
+  checklistId String @unique
+  propertyId  String @unique
+
+  insuranceContactId          String?
+  selectedQuoteId             String?
+  boundPolicyId               String?
+  requiredEffectiveAt         DateTime?
+  binderDocumentId            String?
+  lenderProofStatus           BuyerInsuranceProofStatus @default(PENDING)
+  lenderProofDeliveredAt      DateTime?
+  closingProofStatus          BuyerInsuranceProofStatus @default(PENDING)
+  closingProofDeliveredAt     DateTime?
+  riskAndEligibilityNotes     String? @db.Text
+  boundRecordedAt             DateTime?
+  boundRecordedByUserId       String?
+  lastUpdatedByUserId         String?
+
+  checklist   HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  quotes      BuyerInsuranceQuote[]
+  requirements BuyerInsuranceRequirement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, boundPolicyId])
+  @@index([insuranceContactId])
+  @@index([selectedQuoteId])
+  @@index([binderDocumentId])
+  @@map("buyer_insurance_workspaces")
+}
+
+model BuyerInsuranceQuote {
+  id          String @id @default(uuid())
+  workspaceId String
+  propertyId  String
+
+  carrierName                String
+  status                     BuyerInsuranceQuoteStatus @default(DRAFT)
+  annualPremiumCents         Int?
+  deductibleCents            Int?
+  dwellingLimitCents         Int?
+  personalPropertyLimitCents Int?
+  liabilityLimitCents        Int?
+  lossOfUseLimitCents        Int?
+  replacementCostBasis       Boolean?
+  exclusionsNotes            String? @db.Text
+  endorsementsNotes          String? @db.Text
+  catastropheOptionsNotes    String? @db.Text
+  sourceDocumentId           String?
+  validUntil                 DateTime?
+  recordedByUserId           String?
+  lastUpdatedByUserId        String?
+
+  workspace BuyerInsuranceWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, status, createdAt])
+  @@index([propertyId, status])
+  @@index([sourceDocumentId])
+  @@map("buyer_insurance_quotes")
+}
+
+model BuyerInsuranceRequirement {
+  id          String @id @default(uuid())
+  workspaceId String
+  propertyId  String
+
+  category    BuyerInsuranceRequirementCategory
+  status      BuyerInsuranceRequirementStatus @default(OPEN)
+  title       String
+  notes       String? @db.Text
+  dueAt       DateTime?
+  blocking    Boolean @default(false)
+  resolvedAt  DateTime?
+  recordedByUserId    String?
+  lastUpdatedByUserId String?
+
+  workspace BuyerInsuranceWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, status, dueAt])
+  @@index([propertyId, blocking, status])
+  @@map("buyer_insurance_requirements")
 }
 
 model BuyerInspectionPlan {

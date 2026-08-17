@@ -324,6 +324,91 @@ export type BuyerTitleEscrowWorkspaceUpdateInput = z.infer<typeof BuyerTitleEscr
 export type BuyerTitleEscrowIssueCreateInput = z.infer<typeof BuyerTitleEscrowIssueCreateSchema>;
 export type BuyerTitleEscrowIssueUpdateInput = z.infer<typeof BuyerTitleEscrowIssueUpdateSchema>;
 
+export const BUYER_INSURANCE_QUOTE_STATUSES = ['DRAFT', 'REVIEWED', 'SELECTED', 'DECLINED'] as const;
+export const BUYER_INSURANCE_PROOF_STATUSES = ['NOT_REQUIRED', 'PENDING', 'DELIVERED'] as const;
+export const BUYER_INSURANCE_REQUIREMENT_CATEGORIES = [
+  'PROPERTY_CONDITION', 'ROOF', 'ELECTRICAL', 'PLUMBING', 'PRIOR_LOSS', 'LENDER', 'OTHER',
+] as const;
+export const BUYER_INSURANCE_REQUIREMENT_STATUSES = ['OPEN', 'SUBMITTED', 'RESOLVED', 'WAIVED'] as const;
+
+const BuyerInsuranceContactSchema = z.strictObject({
+  name: z.string().trim().min(1).max(200),
+  company: z.string().trim().max(200).nullable().optional(),
+  email: z.string().trim().email().max(320).nullable().optional(),
+  phone: z.string().trim().max(40).nullable().optional(),
+  notes: z.string().trim().max(2_000).nullable().optional(),
+});
+
+export const BuyerInsuranceWorkspaceUpdateSchema = z.strictObject({
+  contact: BuyerInsuranceContactSchema.nullable().optional(),
+  requiredEffectiveAt: z.string().datetime().nullable().optional(),
+  binderDocumentId: z.string().uuid().nullable().optional(),
+  lenderProofStatus: z.enum(BUYER_INSURANCE_PROOF_STATUSES).optional(),
+  closingProofStatus: z.enum(BUYER_INSURANCE_PROOF_STATUSES).optional(),
+  riskAndEligibilityNotes: z.string().trim().max(4_000).nullable().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one buyer-insurance field must be provided.',
+});
+
+const BuyerInsuranceQuoteFieldsSchema = z.strictObject({
+  carrierName: z.string().trim().min(1).max(200),
+  annualPremiumCents: z.number().int().min(0).nullable().optional(),
+  deductibleCents: z.number().int().min(0).nullable().optional(),
+  dwellingLimitCents: z.number().int().min(0).nullable().optional(),
+  personalPropertyLimitCents: z.number().int().min(0).nullable().optional(),
+  liabilityLimitCents: z.number().int().min(0).nullable().optional(),
+  lossOfUseLimitCents: z.number().int().min(0).nullable().optional(),
+  replacementCostBasis: z.boolean().nullable().optional(),
+  exclusionsNotes: z.string().trim().max(4_000).nullable().optional(),
+  endorsementsNotes: z.string().trim().max(4_000).nullable().optional(),
+  catastropheOptionsNotes: z.string().trim().max(4_000).nullable().optional(),
+  sourceDocumentId: z.string().uuid().nullable().optional(),
+  validUntil: z.string().datetime().nullable().optional(),
+});
+export const BuyerInsuranceQuoteCreateSchema = BuyerInsuranceQuoteFieldsSchema;
+export const BuyerInsuranceQuoteUpdateSchema = BuyerInsuranceQuoteFieldsSchema.partial().extend({
+  status: z.enum(BUYER_INSURANCE_QUOTE_STATUSES).optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one quote field must be provided.',
+}).refine((value) => value.status !== 'SELECTED', {
+  message: 'Use the dedicated buyer-selection action to select a quote.',
+  path: ['status'],
+});
+
+export const BuyerInsuranceBindSchema = z.strictObject({
+  quoteId: z.string().uuid(),
+  policyNumber: z.string().trim().min(1).max(160),
+  effectiveAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+}).refine((value) => new Date(value.expiresAt) > new Date(value.effectiveAt), {
+  message: 'Policy expiration must be after its effective date.',
+  path: ['expiresAt'],
+});
+
+export const BuyerInsuranceRequirementCreateSchema = z.strictObject({
+  category: z.enum(BUYER_INSURANCE_REQUIREMENT_CATEGORIES),
+  title: z.string().trim().min(1).max(200),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  blocking: z.boolean().default(false),
+});
+export const BuyerInsuranceRequirementUpdateSchema = z.strictObject({
+  status: z.enum(BUYER_INSURANCE_REQUIREMENT_STATUSES).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  blocking: z.boolean().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one insurance-requirement field must be provided.',
+});
+
+export type BuyerInsuranceWorkspaceUpdateInput = z.infer<typeof BuyerInsuranceWorkspaceUpdateSchema>;
+export type BuyerInsuranceQuoteCreateInput = z.infer<typeof BuyerInsuranceQuoteCreateSchema>;
+export type BuyerInsuranceQuoteUpdateInput = z.infer<typeof BuyerInsuranceQuoteUpdateSchema>;
+export type BuyerInsuranceBindInput = z.infer<typeof BuyerInsuranceBindSchema>;
+export type BuyerInsuranceRequirementCreateInput = z.infer<typeof BuyerInsuranceRequirementCreateSchema>;
+export type BuyerInsuranceRequirementUpdateInput = z.infer<typeof BuyerInsuranceRequirementUpdateSchema>;
+
 export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
   'RADON',
   'SEWER_SEPTIC',

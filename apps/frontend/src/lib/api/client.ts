@@ -3784,6 +3784,38 @@ class APIClient {
     });
   }
 
+  async getBuyerInsurance(propertyId: string): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance`, { method: 'GET' });
+  }
+
+  async updateBuyerInsurance(propertyId: string, input: import('@/types').BuyerInsuranceWorkspaceInput): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance`, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  async createBuyerInsuranceQuote(propertyId: string, input: import('@/types').BuyerInsuranceQuoteInput): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance/quotes`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateBuyerInsuranceQuote(propertyId: string, quoteId: string, input: Partial<import('@/types').BuyerInsuranceQuoteInput> & { status?: import('@/types').BuyerInsuranceQuoteStatus }): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance/quotes/${quoteId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async selectBuyerInsuranceQuote(propertyId: string, quoteId: string): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance/quotes/${quoteId}/select`, { method: 'POST' });
+  }
+
+  async bindBuyerInsurance(propertyId: string, input: { quoteId: string; policyNumber: string; effectiveAt: string; expiresAt: string }): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance/bind`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async createBuyerInsuranceRequirement(propertyId: string, input: { category: import('@/types').BuyerInsuranceRequirementCategory; title: string; notes?: string | null; dueAt?: string | null; blocking: boolean }): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance/requirements`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateBuyerInsuranceRequirement(propertyId: string, requirementId: string, input: { status?: import('@/types').BuyerInsuranceRequirementStatus; title?: string; notes?: string | null; dueAt?: string | null; blocking?: boolean }): Promise<APIResponse<import('@/types').BuyerInsuranceWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance/requirements/${requirementId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
   async updateBuyerLifecycle(propertyId: string, input: {
     targetCloseDate?: string | null;
     ownershipStartedAt?: string | null;

@@ -411,7 +411,8 @@ export async function deleteWarranty(
 
 export async function createInsurancePolicy(
   homeownerProfileId: string, 
-  data: CreateInsurancePolicyDTO
+  data: CreateInsurancePolicyDTO,
+  confirmedByUserId?: string,
 ): Promise<InsurancePolicy> {
   try {
     const rawPolicy = await prisma.$transaction(async (tx) => {
@@ -456,7 +457,7 @@ export async function createInsurancePolicy(
             currency: 'USD',
             extractionMethod: 'HOMEOWNER_ENTRY',
             confirmationStatus: 'CONFIRMED',
-            confirmedByUserId: profile?.userId,
+            confirmedByUserId: confirmedByUserId ?? profile?.userId,
             confirmedAt,
             effectiveFrom: new Date(data.startDate),
             effectiveTo: new Date(data.expiryDate),
@@ -468,7 +469,7 @@ export async function createInsurancePolicy(
                 textValue: data.coverageType,
                 extractionMethod: 'HOMEOWNER_ENTRY',
                 confirmationStatus: 'CONFIRMED',
-                confirmedByUserId: profile?.userId,
+                confirmedByUserId: confirmedByUserId ?? profile?.userId,
                 confirmedAt,
                 effectiveFrom: new Date(data.startDate),
                 effectiveTo: new Date(data.expiryDate),
@@ -482,7 +483,7 @@ export async function createInsurancePolicy(
                 currency: 'USD',
                 extractionMethod: 'HOMEOWNER_ENTRY',
                 confirmationStatus: 'CONFIRMED',
-                confirmedByUserId: profile?.userId,
+                confirmedByUserId: confirmedByUserId ?? profile?.userId,
                 confirmedAt,
                 effectiveFrom: new Date(data.startDate),
                 effectiveTo: new Date(data.expiryDate),
@@ -504,7 +505,7 @@ export async function createInsurancePolicy(
         });
         await tx.auditLog.create({
           data: {
-            userId: profile?.userId,
+            userId: confirmedByUserId ?? profile?.userId,
             action: 'insurance_policy_term_confirmed',
             entityType: 'InsurancePolicyTerm',
             entityId: term.id,

@@ -3715,6 +3715,73 @@ export interface BuyerTitleEscrowWorkspaceResponse {
   }>;
 }
 
+export type BuyerInsuranceProofStatus = 'NOT_REQUIRED' | 'PENDING' | 'DELIVERED';
+export type BuyerInsuranceQuoteStatus = 'DRAFT' | 'REVIEWED' | 'SELECTED' | 'DECLINED';
+export type BuyerInsuranceRequirementCategory = 'PROPERTY_CONDITION' | 'ROOF' | 'ELECTRICAL' | 'PLUMBING' | 'PRIOR_LOSS' | 'LENDER' | 'OTHER';
+export type BuyerInsuranceRequirementStatus = 'OPEN' | 'SUBMITTED' | 'RESOLVED' | 'WAIVED';
+
+export interface BuyerInsuranceWorkspaceInput {
+  contact?: null | { name: string; company?: string | null; email?: string | null; phone?: string | null; notes?: string | null };
+  requiredEffectiveAt?: string | null;
+  binderDocumentId?: string | null;
+  lenderProofStatus?: BuyerInsuranceProofStatus;
+  closingProofStatus?: BuyerInsuranceProofStatus;
+  riskAndEligibilityNotes?: string | null;
+}
+
+export interface BuyerInsuranceQuoteInput {
+  carrierName: string;
+  annualPremiumCents?: number | null;
+  deductibleCents?: number | null;
+  dwellingLimitCents?: number | null;
+  personalPropertyLimitCents?: number | null;
+  liabilityLimitCents?: number | null;
+  lossOfUseLimitCents?: number | null;
+  replacementCostBasis?: boolean | null;
+  exclusionsNotes?: string | null;
+  endorsementsNotes?: string | null;
+  catastropheOptionsNotes?: string | null;
+  sourceDocumentId?: string | null;
+  validUntil?: string | null;
+}
+
+export interface BuyerInsuranceWorkspaceResponse {
+  workspace: null | {
+    id: string;
+    checklistId: string;
+    propertyId: string;
+    insuranceContactId: string | null;
+    selectedQuoteId: string | null;
+    boundPolicyId: string | null;
+    requiredEffectiveAt: string | null;
+    binderDocumentId: string | null;
+    lenderProofStatus: BuyerInsuranceProofStatus;
+    lenderProofDeliveredAt: string | null;
+    closingProofStatus: BuyerInsuranceProofStatus;
+    closingProofDeliveredAt: string | null;
+    riskAndEligibilityNotes: string | null;
+    boundRecordedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    quotes: Array<BuyerInsuranceQuoteInput & { id: string; status: BuyerInsuranceQuoteStatus; createdAt: string; updatedAt: string }>;
+    requirements: Array<{
+      id: string;
+      category: BuyerInsuranceRequirementCategory;
+      status: BuyerInsuranceRequirementStatus;
+      title: string;
+      notes: string | null;
+      dueAt: string | null;
+      blocking: boolean;
+      resolvedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  };
+  contact: null | { id: string; name: string; company: string | null; email: string | null; phone: string | null; notes: string | null };
+  policy: null | { id: string; carrierName: string; policyNumber: string; coverageType: string | null; premiumAmount: string | null; deductibleCents: number | null; personalPropertyLimitCents: number | null; startDate: string | null; expiryDate: string | null };
+  documents: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+}
+
 export interface BuyerInspectionModuleRecommendation {
   moduleKey: string;
   title: string;

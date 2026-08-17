@@ -74,6 +74,14 @@ router.get('/properties/:propertyId/title-escrow', homeBuyerTaskController.handl
 router.put('/properties/:propertyId/title-escrow', homeBuyerTaskController.handleUpdateBuyerTitleEscrow);
 router.post('/properties/:propertyId/title-escrow/issues', homeBuyerTaskController.handleCreateBuyerTitleEscrowIssue);
 router.patch('/properties/:propertyId/title-escrow/issues/:issueId', homeBuyerTaskController.handleUpdateBuyerTitleEscrowIssue);
+router.get('/properties/:propertyId/buyer-insurance', homeBuyerTaskController.handleGetBuyerInsurance);
+router.put('/properties/:propertyId/buyer-insurance', homeBuyerTaskController.handleUpdateBuyerInsurance);
+router.post('/properties/:propertyId/buyer-insurance/quotes', homeBuyerTaskController.handleCreateBuyerInsuranceQuote);
+router.patch('/properties/:propertyId/buyer-insurance/quotes/:quoteId', homeBuyerTaskController.handleUpdateBuyerInsuranceQuote);
+router.post('/properties/:propertyId/buyer-insurance/quotes/:quoteId/select', homeBuyerTaskController.handleSelectBuyerInsuranceQuote);
+router.post('/properties/:propertyId/buyer-insurance/bind', homeBuyerTaskController.handleBindBuyerInsurance);
+router.post('/properties/:propertyId/buyer-insurance/requirements', homeBuyerTaskController.handleCreateBuyerInsuranceRequirement);
+router.patch('/properties/:propertyId/buyer-insurance/requirements/:requirementId', homeBuyerTaskController.handleUpdateBuyerInsuranceRequirement);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);
