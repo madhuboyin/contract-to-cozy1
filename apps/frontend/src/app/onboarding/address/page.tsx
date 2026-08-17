@@ -19,6 +19,8 @@ import {
   reconcilePropertyLookup,
   type OnboardingAddressSource,
 } from '@/lib/onboarding/addressIntegrity';
+import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
+import type { DwellingType } from '@/types';
 
 type Situation = 'own' | 'buying' | 'new-build' | 'exploring';
 type TriggerType = ActivationEntryContextInput['activeTrigger']['type'];
@@ -62,6 +64,10 @@ export default function AddressOnboardingPage() {
   const [targetCloseDate, setTargetCloseDate] = useState('');
   const [moveInDate, setMoveInDate] = useState('');
   const [buyerConcern, setBuyerConcern] = useState('');
+  const [dwellingType, setDwellingType] = useState<DwellingType | ''>('');
+  const [yearBuilt, setYearBuilt] = useState('');
+  const [bedrooms, setBedrooms] = useState('');
+  const [bathrooms, setBathrooms] = useState('');
 
   // Mount tracking
   React.useEffect(() => {
@@ -158,6 +164,22 @@ export default function AddressOnboardingPage() {
       toast({ title: 'Complete the address', description: validationError, variant: 'destructive' });
       return;
     }
+    const parsedYearBuilt = yearBuilt.trim() === '' ? undefined : Number(yearBuilt);
+    const parsedBedrooms = bedrooms.trim() === '' ? undefined : Number(bedrooms);
+    const parsedBathrooms = bathrooms.trim() === '' ? undefined : Number(bathrooms);
+    const currentYear = new Date().getFullYear();
+    if (parsedYearBuilt !== undefined && (!Number.isInteger(parsedYearBuilt) || parsedYearBuilt < 1700 || parsedYearBuilt > currentYear + 1)) {
+      toast({ title: 'Check the year built', description: `Enter a year from 1700 to ${currentYear + 1}, or leave it blank.`, variant: 'destructive' });
+      return;
+    }
+    if (parsedBedrooms !== undefined && (!Number.isInteger(parsedBedrooms) || parsedBedrooms <= 0 || parsedBedrooms > 99)) {
+      toast({ title: 'Check the bedrooms', description: 'Enter a whole number greater than zero, or leave it blank.', variant: 'destructive' });
+      return;
+    }
+    if (parsedBathrooms !== undefined && (parsedBathrooms <= 0 || parsedBathrooms > 99)) {
+      toast({ title: 'Check the bathrooms', description: 'Enter a number greater than zero, or leave it blank.', variant: 'destructive' });
+      return;
+    }
 
     setLoading(true);
     track('address_lookup_started', { source: 'onboarding_page' });
@@ -190,6 +212,14 @@ export default function AddressOnboardingPage() {
         description: 'Your address is saved. Unknown property facts will stay unknown.',
       });
     }
+
+    propertyData = {
+      ...propertyData,
+      dwellingType,
+      ...(parsedYearBuilt === undefined ? {} : { yearBuilt: parsedYearBuilt }),
+      ...(parsedBedrooms === undefined ? {} : { bedrooms: parsedBedrooms }),
+      ...(parsedBathrooms === undefined ? {} : { bathrooms: parsedBathrooms }),
+    };
 
     try {
       await prepareConfirmation(propertyData, addressSource);
@@ -412,9 +442,43 @@ export default function AddressOnboardingPage() {
                   />
                 </label>
               </div>
+              <div className="border-t border-slate-100 pt-4">
+                <div className="mb-3">
+                  <p className="text-sm font-bold text-slate-900">Help us tailor your first checklist</p>
+                  <p className="mt-1 text-xs text-slate-500">A few basics help us surface age- and home-specific inspection guidance.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Home type <span className="text-red-500">*</span>
+                    <select
+                      value={dwellingType}
+                      onChange={(event) => setDwellingType(event.target.value as DwellingType)}
+                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    >
+                      <option value="" disabled>Select a home type</option>
+                      {DWELLING_TYPE_OPTIONS.map((type) => (
+                        <option key={type} value={type}>{DWELLING_TYPE_LABELS[type]}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Approximate year built <span className="font-normal text-slate-400">(optional)</span>
+                    <Input type="number" min={1700} max={new Date().getFullYear() + 1} inputMode="numeric" placeholder="e.g., 1998" value={yearBuilt} onChange={(event) => setYearBuilt(event.target.value)} />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Bedrooms <span className="font-normal text-slate-400">(optional)</span>
+                    <Input type="number" min={1} max={99} inputMode="numeric" placeholder="e.g., 3" value={bedrooms} onChange={(event) => setBedrooms(event.target.value)} />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Bathrooms <span className="font-normal text-slate-400">(optional)</span>
+                    <Input type="number" min={0.5} max={99} step={0.5} inputMode="decimal" placeholder="e.g., 2.5" value={bathrooms} onChange={(event) => setBathrooms(event.target.value)} />
+                  </label>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Not sure? Choose “I’m not sure” for home type and leave the rest blank.</p>
+              </div>
               <Button 
                 type="submit"
-                disabled={loading || !address.trim() || !city.trim() || !state.trim() || !zipCode.trim() || !situation || (situation !== 'buying' && !triggerType)}
+                disabled={loading || !address.trim() || !city.trim() || !state.trim() || !zipCode.trim() || !dwellingType || !situation || (situation !== 'buying' && !triggerType)}
                 className="h-11 w-full rounded-xl bg-slate-900 px-6 text-white font-bold group transition-all"
               >
                 {loading ? (

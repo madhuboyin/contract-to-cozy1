@@ -103,8 +103,16 @@ function closingTaskSummary(task: {
   assignedToUserId: string | null;
 }) {
   return {
-    ...task,
+    id: task.id,
+    actionKey: task.actionKey,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    phase: task.phase,
+    priority: task.priority,
+    checklistSection: task.checklistSection,
     dueAt: task.dueAt?.toISOString() ?? null,
+    assignedToUserId: task.assignedToUserId,
   };
 }
 

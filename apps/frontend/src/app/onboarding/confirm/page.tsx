@@ -18,6 +18,36 @@ import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
 import { addressOnlyPropertyData, onboardingAddressError } from '@/lib/onboarding/addressIntegrity';
+import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
+import type { DwellingType } from '@/types';
+
+type HomeProfileDraft = {
+  dwellingType: DwellingType;
+  yearBuilt: string;
+  bedrooms: string;
+  bathrooms: string;
+};
+
+const EMPTY_HOME_PROFILE: HomeProfileDraft = {
+  dwellingType: 'UNKNOWN',
+  yearBuilt: '',
+  bedrooms: '',
+  bathrooms: '',
+};
+
+function numericDraft(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+}
+
+function dwellingTypeDraft(value: unknown): DwellingType {
+  return typeof value === 'string' && (DWELLING_TYPE_OPTIONS as readonly string[]).includes(value)
+    ? value as DwellingType
+    : 'UNKNOWN';
+}
+
+function optionalNumber(value: string): number | undefined {
+  return value.trim() === '' ? undefined : Number(value);
+}
 
 /**
  * ConfirmOnboardingPage handles the final conversion.
@@ -33,6 +63,7 @@ export default function ConfirmOnboardingPage() {
   const [editingAddress, setEditingAddress] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressDraft, setAddressDraft] = useState({ address: '', city: '', state: '', zipCode: '' });
+  const [homeProfile, setHomeProfile] = useState<HomeProfileDraft>(EMPTY_HOME_PROFILE);
 
   useEffect(() => {
     (async () => {
@@ -52,6 +83,12 @@ export default function ConfirmOnboardingPage() {
           city: payload.data.city ?? '',
           state: payload.data.state ?? '',
           zipCode: payload.data.zipCode ?? '',
+        });
+        setHomeProfile({
+          dwellingType: dwellingTypeDraft(payload.data.dwellingType),
+          yearBuilt: numericDraft(payload.data.yearBuilt),
+          bedrooms: numericDraft(payload.data.bedrooms),
+          bathrooms: numericDraft(payload.data.bathrooms),
         });
       } catch {
         router.push('/onboarding/address');
@@ -79,6 +116,7 @@ export default function ConfirmOnboardingPage() {
       });
       if (!response.ok) throw new Error('Unable to save corrected address');
       setData(correctedData);
+      setHomeProfile(EMPTY_HOME_PROFILE);
       setEditingAddress(false);
       toast({ title: 'Address updated', description: 'Public property facts were cleared so they cannot be applied to the wrong home.' });
     } catch {
@@ -91,6 +129,23 @@ export default function ConfirmOnboardingPage() {
   const handleConfirm = async () => {
     if (!data) return;
 
+    const yearBuilt = optionalNumber(homeProfile.yearBuilt);
+    const bedrooms = optionalNumber(homeProfile.bedrooms);
+    const bathrooms = optionalNumber(homeProfile.bathrooms);
+    const currentYear = new Date().getFullYear();
+    if (yearBuilt !== undefined && (!Number.isInteger(yearBuilt) || yearBuilt < 1700 || yearBuilt > currentYear + 1)) {
+      toast({ title: 'Check the year built', description: `Enter a year from 1700 to ${currentYear + 1}, or leave it blank.`, variant: 'destructive' });
+      return;
+    }
+    if (bedrooms !== undefined && (!Number.isInteger(bedrooms) || bedrooms <= 0 || bedrooms > 99)) {
+      toast({ title: 'Check the bedrooms', description: 'Enter a whole number greater than zero, or leave it blank.', variant: 'destructive' });
+      return;
+    }
+    if (bathrooms !== undefined && (bathrooms <= 0 || bathrooms > 99)) {
+      toast({ title: 'Check the bathrooms', description: 'Enter a number greater than zero, or leave it blank.', variant: 'destructive' });
+      return;
+    }
+
     setSubmitting(true);
     try {
       // Create the real property from the lookup data
@@ -99,9 +154,11 @@ export default function ConfirmOnboardingPage() {
         city: data.city,
         state: data.state,
         zipCode: data.zipCode,
-        yearBuilt: data.yearBuilt,
-        propertySize: data.propertySize,
-        dwellingType: data.dwellingType || undefined,
+        yearBuilt,
+        propertySize: typeof data.propertySize === 'number' ? data.propertySize : undefined,
+        dwellingType: homeProfile.dwellingType,
+        bedrooms,
+        bathrooms,
         isPrimary: true,
         // Pre-populate other fields found during lookup
         purchasePriceCents: data.lastSalePrice,
@@ -127,7 +184,7 @@ export default function ConfirmOnboardingPage() {
 
         track('property_claimed', {
           zipCode: data.zipCode,
-          yearBuilt: data.yearBuilt || 0,
+          yearBuilt: yearBuilt || 0,
           source: data.addressSource === 'MANUAL' ? 'MANUAL' : 'API'
         });
 
@@ -174,7 +231,7 @@ export default function ConfirmOnboardingPage() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 text-center"
+        className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 text-center"
       >
         {success ? (
           <div className="space-y-6 py-8">
@@ -257,6 +314,67 @@ export default function ConfirmOnboardingPage() {
                   )}
                 </>
               )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm">
+              <div className="mb-4">
+                <p className="font-bold text-slate-900">A few details for better guidance</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  We use these to tailor inspection questions and age-specific reminders. Estimates are fine.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                  Home type
+                  <select
+                    value={homeProfile.dwellingType}
+                    onChange={(event) => setHomeProfile((current) => ({ ...current, dwellingType: event.target.value as DwellingType }))}
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  >
+                    {DWELLING_TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>{DWELLING_TYPE_LABELS[type]}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                  Approximate year built <span className="font-normal text-slate-500">(optional)</span>
+                  <Input
+                    type="number"
+                    min={1700}
+                    max={new Date().getFullYear() + 1}
+                    inputMode="numeric"
+                    placeholder="e.g., 1998"
+                    value={homeProfile.yearBuilt}
+                    onChange={(event) => setHomeProfile((current) => ({ ...current, yearBuilt: event.target.value }))}
+                  />
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                  Bedrooms <span className="font-normal text-slate-500">(optional)</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={99}
+                    inputMode="numeric"
+                    placeholder="e.g., 3"
+                    value={homeProfile.bedrooms}
+                    onChange={(event) => setHomeProfile((current) => ({ ...current, bedrooms: event.target.value }))}
+                  />
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                  Bathrooms <span className="font-normal text-slate-500">(optional)</span>
+                  <Input
+                    type="number"
+                    min={0.5}
+                    max={99}
+                    step={0.5}
+                    inputMode="decimal"
+                    placeholder="e.g., 2.5"
+                    value={homeProfile.bathrooms}
+                    onChange={(event) => setHomeProfile((current) => ({ ...current, bathrooms: event.target.value }))}
+                  />
+                </label>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">Not sure? Choose “I’m not sure” for home type and leave the other fields blank.</p>
             </div>
 
             <div className="space-y-4">

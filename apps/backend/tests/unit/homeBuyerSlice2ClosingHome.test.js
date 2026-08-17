@@ -80,6 +80,20 @@ test('Slice 2 endpoint is read-only and derives presentation mode on the server'
   assert.doesNotMatch(method, /\.create\(|\.update\(|getOrCreateChecklist/);
 });
 
+test('closing-home explicitly projects persisted tasks into the strict summary contract', () => {
+  const service = read('../../src/services/HomeBuyerTask.service.ts');
+  const summary = (service.split('function closingTaskSummary')[1] ?? '')
+    .split('function planOverviewTask')[0];
+
+  assert.doesNotMatch(summary, /\.\.\.task/);
+  for (const field of [
+    'id', 'actionKey', 'title', 'description', 'status', 'phase', 'priority',
+    'checklistSection', 'dueAt', 'assignedToUserId',
+  ]) {
+    assert.match(summary, new RegExp(`${field}: task\\.${field}`));
+  }
+});
+
 test('dashboard dispatches to a separate Buyer Closing Home and gates homeowner payloads', () => {
   const dashboard = read('../../../frontend/src/app/(dashboard)/dashboard/page.tsx');
   const buyerHome = read('../../../frontend/src/components/home/BuyerClosingHome.tsx');
