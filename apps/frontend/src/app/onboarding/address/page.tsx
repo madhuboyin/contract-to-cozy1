@@ -46,7 +46,7 @@ export default function AddressOnboardingPage() {
   const [zipCode, setZipCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [manualMode, setManualMode] = useState(false);
-  const [situation, setSituation] = useState<Situation>('own');
+  const [situation, setSituation] = useState<Situation | null>(null);
   const [triggerType, setTriggerType] = useState<TriggerType | null>(null);
   const [triggerDetail, setTriggerDetail] = useState('');
   const [buyerPurchaseStage, setBuyerPurchaseStage] = useState<BuyerPurchaseStage>('UNDER_CONTRACT');
@@ -66,6 +66,7 @@ export default function AddressOnboardingPage() {
   }, []);
 
   const buildActivationContext = (): ActivationEntryContextInput => {
+    if (!situation) throw new Error('Choose where you are in the home journey.');
     const selectedTrigger = TRIGGER_OPTIONS.find((option) => option.type === triggerType);
     if (situation === 'buying') {
       const buyerLabel = buyerConcern.trim()
@@ -127,6 +128,8 @@ export default function AddressOnboardingPage() {
   };
 
   const prepareConfirmation = async (propertyData: Record<string, unknown>, source: 'LOOKUP' | 'MANUAL') => {
+    const selectedSituation = situation;
+    if (!selectedSituation) throw new Error('Choose where you are in the home journey.');
     const activationContext = buildActivationContext();
     const sessionRes = await fetch('/api/onboarding-lookup-session', {
           method: 'POST',
@@ -134,13 +137,13 @@ export default function AddressOnboardingPage() {
       body: JSON.stringify({ data: { ...propertyData, activationContext, addressSource: source } }),
         });
     if (!sessionRes.ok) throw new Error('Unable to prepare onboarding session');
-    track('active_trigger_selected', { triggerType: triggerType!, situation });
+    track('active_trigger_selected', { triggerType: triggerType!, situation: selectedSituation });
     router.push('/onboarding/confirm');
   };
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address.trim() || (situation !== 'buying' && !triggerType)) return;
+    if (!address.trim() || !situation || (situation !== 'buying' && !triggerType)) return;
 
     if (manualMode) {
       if (!city.trim() || !/^[A-Za-z]{2}$/.test(state.trim()) || !/^\d{5}$/.test(zipCode.trim())) {
@@ -326,7 +329,7 @@ export default function AddressOnboardingPage() {
                 </label>
                 <p className="text-xs text-brand-800">Unknown dates are fine. Your plan will still start with the next useful action.</p>
               </fieldset>
-            ) : (
+            ) : situation ? (
               <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                 <legend className="px-2 text-sm font-bold text-slate-900">What brought you here?</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -353,6 +356,10 @@ export default function AddressOnboardingPage() {
                   maxLength={2000}
                 />
               </fieldset>
+            ) : (
+              <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-4 text-sm text-slate-600" role="status">
+                Choose your home journey above to continue with the right setup.
+              </p>
             )}
 
             <div className="relative group">
@@ -378,7 +385,7 @@ export default function AddressOnboardingPage() {
               </div>
               <Button 
                 type="submit"
-                disabled={loading || !address.trim() || (situation !== 'buying' && !triggerType)}
+                disabled={loading || !address.trim() || !situation || (situation !== 'buying' && !triggerType)}
                 className="h-14 px-8 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-lg group transition-all"
               >
                 {loading ? (

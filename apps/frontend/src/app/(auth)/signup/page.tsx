@@ -121,8 +121,8 @@ export default function SignupPage() {
   return (
     <AuthTemplate
       activeRoute="signup"
-      title="Create your homeowner account"
-      subtitle="Get personalized guidance for maintenance, risk, and savings in one place."
+      title="Create your ContractToCozy account"
+      subtitle="Get a clear next step whether you’re buying, building, exploring, or caring for a home."
     >
       {formError ? (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

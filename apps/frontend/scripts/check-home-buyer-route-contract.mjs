@@ -14,6 +14,8 @@ const requiredRouteFiles = [
   'src/app/(dashboard)/dashboard/properties/[id]/household/page.tsx',
   'src/app/(dashboard)/dashboard/properties/[id]/home-operations/page.tsx',
   'src/app/(dashboard)/dashboard/properties/[id]/tools/home-records/page.tsx',
+  'src/app/onboarding/address/page.tsx',
+  'src/app/onboarding/confirm/page.tsx',
 ];
 
 const removedLegacyFiles = [
@@ -96,6 +98,31 @@ requireMatch(
   /<RouteStateCard[\s\S]*state="loading"[\s\S]*state="error"[\s\S]*overviewQuery\.refetch\(\)[\s\S]*Back to property/,
   'Buyer Plan is missing accessible loading and recoverable error states',
 );
+requireMatch(
+  'src/app/(dashboard)/dashboard/components/WelcomeModal.tsx',
+  /href="\/onboarding\/address"[\s\S]*Choose my home journey/,
+  'zero-property welcome no longer enters trigger-first owner/buyer onboarding',
+);
+requireMatch(
+  'src/app/(auth)/signup/page.tsx',
+  /role:\s*'HOMEOWNER'[\s\S]*buying, building, exploring, or caring for a home/,
+  'signup must keep the technical account role while welcoming owner and buyer journeys',
+);
+requireMatch(
+  'src/app/onboarding/address/page.tsx',
+  /useState<Situation \| null>\(null\)[\s\S]*\['buying', 'Buying existing'\]/,
+  'onboarding must require an explicit owner or buyer journey choice',
+);
+requireMatch(
+  'src/app/onboarding/address/page.tsx',
+  /if \(situation === 'buying'\)[\s\S]*entryPath:\s*'EXISTING_HOME_PURCHASE'/,
+  'buyer onboarding no longer produces the purchase activation context',
+);
+requireMatch(
+  'src/app/onboarding/confirm/page.tsx',
+  /createProperty\([\s\S]*captureEntryContext\(propertyId, data\.activationContext\)/,
+  'onboarding confirmation no longer captures the buyer journey after property creation',
+);
 
 const apiClient = read('src/lib/api/client.ts');
 if (/\bHOME_BUYER\b/.test(apiClient)) {
@@ -120,4 +147,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Home buyer route contract passed (${requiredRouteFiles.length} canonical routes, 9 guarded CTAs).`);
+console.log(`Home buyer route contract passed (${requiredRouteFiles.length} canonical routes, 10 guarded CTAs).`);

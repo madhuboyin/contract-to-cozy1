@@ -3,7 +3,7 @@ import React, { useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Home, Shield, DollarSign } from 'lucide-react';
+import { ClipboardCheck, Home, ShieldCheck, Sparkles } from 'lucide-react';
 
 interface WelcomeModalProps {
     userFirstName: string;
@@ -25,7 +25,7 @@ const FeatureBlock = ({ icon: Icon, title, description }: FeatureBlockProps) => 
 );
 
 /**
- * Full-screen welcome and value proposition modal for new EXISTING_OWNER users with no properties.
+ * Full-screen journey entry for new owner and buyer accounts with no properties.
  */
 export function WelcomeModal({ userFirstName }: WelcomeModalProps) {
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -58,37 +58,37 @@ export function WelcomeModal({ userFirstName }: WelcomeModalProps) {
                         Welcome to Cozy, {userFirstName}!
                     </CardTitle>
                     <CardDescription className="text-lg mt-2">
-                        Your Personalized Home Intelligence Dashboard Awaits.
+                        Tell us where you are in your home journey.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-4">
 
                     <p className="text-base text-muted-foreground">
-                        To unlock the full potential of your dashboard, including personalized scores, maintenance alerts, and cost-saving insights, please set up your property profile.
+                        Whether you own, are buying, building, or exploring, start with the address and situation. We’ll prepare the right property-scoped experience.
                     </p>
 
                     <div className="grid grid-cols-1 gap-4 border-t pt-4 sm:grid-cols-3">
                         <FeatureBlock
-                            icon={Shield}
-                            title="Property Health score"
-                            description="Evaluate the overall condition of your systems."
+                            icon={ClipboardCheck}
+                            title="Closing guidance"
+                            description="Build a focused plan when you are buying."
                         />
                         <FeatureBlock
-                            icon={Shield}
-                            title="Risk Assessment"
-                            description="Predict potential future breakdown threats."
+                            icon={ShieldCheck}
+                            title="Home intelligence"
+                            description="Protect and maintain a home you own."
                         />
                         <FeatureBlock
-                            icon={DollarSign}
-                            title="Financial Efficiency"
-                            description="Track long-term investment value and savings."
+                            icon={Sparkles}
+                            title="One next action"
+                            description="Start with the most useful supported step."
                         />
                     </div>
 
                     <div className="pt-4">
-                        <Link href="/dashboard/properties/new">
+                        <Link href="/onboarding/address">
                             <Button id="welcome-modal-cta" size="lg" className="text-lg w-full font-bold">
-                                Start My Property Setup Now
+                                Choose my home journey
                             </Button>
                         </Link>
                     </div>
