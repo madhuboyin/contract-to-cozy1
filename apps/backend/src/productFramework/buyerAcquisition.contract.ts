@@ -696,6 +696,7 @@ const BuyerClosingHomeTaskSummarySchema = z.strictObject({
   status: HomeBuyerTaskStatusSchema,
   phase: BuyerPlanPhaseSchema,
   priority: BuyerPlanPrioritySchema,
+  checklistSection: BuyerChecklistSectionSchema.nullable(),
   dueAt: z.string().datetime().nullable(),
   assignedToUserId: z.string().nullable(),
 });

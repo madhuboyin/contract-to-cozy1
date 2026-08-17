@@ -17,6 +17,14 @@ const FOCUSED_BLOCK_IDS = new Set([
   'related-capabilities',
 ]);
 
+const BUYER_PLAN_BLOCK_IDS = new Set([
+  'buyer-plan-summary',
+  'buyer-plan-actions',
+  'buyer-plan-professional-boundary',
+  'buyer-plan-not-active',
+  'related-capabilities',
+]);
+
 /**
  * Home Actions are produced by the deterministic governed feed. Their titles,
  * explanations, evidence, and even empty-state copy necessarily vary by home,
@@ -32,6 +40,12 @@ export function matchesHomeActionsAnswerContract(result: AskOperationResult): bo
     block.type === 'SUMMARY' && block.id === 'home-actions-summary'
   ));
   if (hasFeedSummary) return ids.every((id) => FEED_BLOCK_IDS.has(id));
+
+  const hasBuyerPlanSummary = result.blocks.some((block) => (
+    block.type === 'SUMMARY'
+    && (block.id === 'buyer-plan-summary' || block.id === 'buyer-plan-not-active')
+  ));
+  if (hasBuyerPlanSummary) return ids.every((id) => BUYER_PLAN_BLOCK_IDS.has(id));
 
   const hasFocusedSummary = result.blocks.some((block) => (
     block.type === 'SUMMARY' && block.id === 'focused-home-action-summary'

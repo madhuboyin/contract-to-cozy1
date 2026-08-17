@@ -30,6 +30,7 @@ import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
 import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
 import type { SeasonalChecklistContext } from '../skills/context/seasonalChecklistContext.provider';
+import { buyerPlanContextProvider } from '../skills/context/buyerPlanContext.provider';
 import {
   operatingModeForOwnershipState,
   PROPERTY_JOURNEY_CONTEXT_PROVIDER,
@@ -85,6 +86,7 @@ import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '..
 import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
+import { buildBuyerPlanHomeActionsResult } from './askBuyerPlanPresentation';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
 import { getOrCreateQuoteComparisonWorkspace, getQuoteComparisonWorkspace, getWorkspaceComparability } from '../quoteComparison.service';
 import { upsertNotificationPreference } from '../notificationPreference.service';
@@ -3468,10 +3470,21 @@ function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title
 
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
-  const [access, evaluation] = await Promise.all([
+  const [access, buyerContextValue] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
-    evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_ACTIONS', operationKey: 'VIEW_FEED' }),
+    buyerPlanContextProvider.load({
+      userId,
+      propertyId,
+      operationId: 'HOME_ACTIONS',
+      signal: new AbortController().signal,
+    }),
   ]);
+  const buyerResult = buyerContextValue.status === 'AVAILABLE' && buyerContextValue.data
+    ? buildBuyerPlanHomeActionsResult(buyerContextValue.data)
+    : null;
+  if (buyerResult) return buyerResult;
+
+  const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_ACTIONS', operationKey: 'VIEW_FEED' });
   const activeRequirement = evaluation.requirements[0];
   const canImproveContext = access.role !== HouseholdRole.VIEWER;
   const captureSupported = activeRequirement

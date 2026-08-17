@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.27
+**Version:** 1.28
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -3022,6 +3022,17 @@ Functional check:
   the closing checklist without losing source or revision context.
 
 ### Slice 5 — Ask Cozy buyer copilot
+
+**Implementation status:** In progress. The first vertical increment registers
+a bounded, permission-scoped Buyer Plan context provider backed by
+`HomeBuyerTaskService`, replaces the generic pre-close Home Actions prompt with
+“What should I do before closing?”, and resolves that read through the canonical
+Buyer Plan before the homeowner Home Actions feed is evaluated. The response
+links to the exact next task and checklist section, surfaces recorded blockers,
+preserves professional-decision boundaries, and prevents candidate purchase
+properties from receiving substitute homeowner recommendations. Remaining Slice
+5 work adds the broader buyer operation catalog, writes with confirmations,
+entity-aware entry points, and richer buyer-specific presentation blocks.
 
 **Goal:** Make Ask Cozy a genuinely buyer-specific closing copilot before the
 purchase is complete.

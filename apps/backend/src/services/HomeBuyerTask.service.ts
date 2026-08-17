@@ -98,6 +98,7 @@ function closingTaskSummary(task: {
   status: HomeBuyerTaskStatus;
   phase: BuyerPlanPhase;
   priority: BuyerPlanPriority;
+  checklistSection: HomeBuyerTask['checklistSection'];
   dueAt: Date | null;
   assignedToUserId: string | null;
 }) {

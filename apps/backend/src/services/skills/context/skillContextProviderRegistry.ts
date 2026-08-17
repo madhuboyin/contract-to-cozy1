@@ -1,4 +1,5 @@
 import type { SkillContextProviderDefinition } from './skillContext.contract';
+import { buyerPlanContextProvider } from './buyerPlanContext.provider';
 import { maintenanceTaskContextProvider } from './maintenanceTaskContext.provider';
 import { propertyIdentityContextProvider } from './propertyIdentityContext.provider';
 import { propertyJourneyContextProvider } from './propertyJourneyContext.provider';
@@ -11,6 +12,7 @@ export function skillContextProviderKey(provider: { id: string; version: string 
 }
 
 export const SKILL_CONTEXT_PROVIDERS = Object.freeze({
+  [skillContextProviderKey(buyerPlanContextProvider)]: buyerPlanContextProvider,
   [skillContextProviderKey(maintenanceTaskContextProvider)]: maintenanceTaskContextProvider,
   [skillContextProviderKey(propertyIdentityContextProvider)]: propertyIdentityContextProvider,
   [skillContextProviderKey(propertyJourneyContextProvider)]: propertyJourneyContextProvider,

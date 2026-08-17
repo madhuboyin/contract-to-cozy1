@@ -3195,6 +3195,7 @@ export interface BuyerClosingHomeTaskSummary {
   status: HomeBuyerTaskStatus;
   phase: BuyerPlanPhase;
   priority: BuyerPlanPriority;
+  checklistSection: BuyerChecklistSection | null;
   dueAt: string | null;
   assignedToUserId: string | null;
 }

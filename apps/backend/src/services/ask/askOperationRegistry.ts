@@ -263,7 +263,7 @@ const PROPERTY_COMPLETENESS_PATTERNS = [
 export function isPropertyCompletenessRequest(message: string): boolean {
   return PROPERTY_COMPLETENESS_PATTERNS.some((pattern) => pattern.test(message));
 }
-const homeActionsPattern = /\b(?:what should i do next|what needs (?:my |our )?attention|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
+const homeActionsPattern = /\b(?:what should i do next|what should i do before closing|what needs (?:my |our )?attention|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
 // Ask Intelligence FRD Phase 9A ("What changed?", §16). Deliberately excludes
 // any message mentioning "decision" (checked at the call site) -- a phrase
 // like "what changed about this decision" is a Decision Thread continuity

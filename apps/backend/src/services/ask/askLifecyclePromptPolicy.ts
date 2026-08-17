@@ -13,7 +13,7 @@ export interface AskLifecyclePromptDefinition {
 
 const BUYING_PROMPTS: readonly AskLifecyclePromptDefinition[] = Object.freeze([
   { id: 'buying-record-summary', operationId: 'PROPERTY_SUMMARY', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Summarize this home record before closing.' },
-  { id: 'buying-attention', operationId: 'HOME_ACTIONS', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What home actions need attention before closing?' },
+  { id: 'buying-attention', operationId: 'HOME_ACTIONS', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'What should I do before closing?' },
   { id: 'buying-costs', operationId: 'OWNERSHIP_COSTS', categoryId: 'SAVE', categoryLabel: 'Save', question: 'What are the ownership costs for this home after purchase?' },
   { id: 'buying-coverage-records', operationId: 'COVERAGE_GAPS', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage records?' },
 ]);

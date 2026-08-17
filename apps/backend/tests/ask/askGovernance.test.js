@@ -171,6 +171,7 @@ test('golden and negative prompts route before remote generation', () => {
     ['Show missing appliance details', 'INVENTORY_LOOKUP'],
     ['List my pending maintenance tasks', 'MAINTENANCE_STATUS'],
     ['What should I do next?', 'HOME_ACTIONS'],
+    ['What should I do before closing?', 'HOME_ACTIONS'],
     ['What changed on my property recently?', 'HOME_CHANGE_SUMMARY'],
     ['Any recent updates to my home?', 'HOME_CHANGE_SUMMARY'],
     // Phase 9A: a message mentioning "decision" is a Decision Thread
