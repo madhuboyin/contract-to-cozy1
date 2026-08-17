@@ -24,6 +24,11 @@ const STATUS_CONFIG = {
     iconName: getTaskStatusIcon('IN_PROGRESS'),
     className: 'bg-blue-100 text-blue-800 border-blue-300',
   },
+  BLOCKED: {
+    label: 'Blocked',
+    iconName: 'AlertCircle',
+    className: 'bg-amber-100 text-amber-900 border-amber-300',
+  },
   COMPLETED: {
     label: 'Completed',
     iconName: getTaskStatusIcon('COMPLETED'),

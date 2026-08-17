@@ -9,7 +9,15 @@ const {
   BuyerPlanTaskInputSchema,
   BuyerImportReadinessSchema,
   BuyerFindingDispositionInputSchema,
+  BuyerMilestoneInputSchema,
+  BuyerContactInputSchema,
+  BuyerTaskCompletionInputSchema,
 } = require('../../src/productFramework/buyerAcquisition.contract.ts');
+const {
+  assertBuyerJourneyStageTransition,
+  canTransitionBuyerJourneyStatus,
+  deriveBuyerJourneyStage,
+} = require('../../src/productFramework/buyerJourneyLifecycle.contract.ts');
 
 function read(relativePath) {
   return fs.readFileSync(path.resolve(__dirname, relativePath), 'utf8');
@@ -52,12 +60,51 @@ test('buyer finding review contract has explicit durable dispositions', () => {
   }
 });
 
+test('Slice 0 contracts reject removed phases and validate milestones, contacts, and evidence completion', () => {
+  assert.equal(BuyerPlanTaskInputSchema.safeParse({ title: 'Legacy task', phase: 'PRE_CLOSE' }).success, false);
+  assert.equal(BuyerPlanTaskInputSchema.safeParse({ title: 'Review inspection', phase: 'DUE_DILIGENCE' }).success, true);
+  assert.equal(BuyerMilestoneInputSchema.safeParse({ milestoneKey: 'buyer:milestone:seller-credit', type: 'CUSTOM' }).success, false);
+  assert.equal(BuyerMilestoneInputSchema.safeParse({ milestoneKey: 'buyer:milestone:seller-credit', type: 'CUSTOM', customLabel: 'Seller credit response' }).success, true);
+  assert.equal(BuyerContactInputSchema.safeParse({ role: 'LENDER', name: 'Taylor Smith', extra: true }).success, false);
+  assert.equal(BuyerTaskCompletionInputSchema.safeParse({ method: 'DOCUMENT' }).success, false);
+  assert.equal(BuyerTaskCompletionInputSchema.safeParse({ method: 'DOCUMENT', documentId: 'document-1' }).success, true);
+});
+
+test('buyer journey transitions require explicit close evidence and never infer close from a date', () => {
+  assert.equal(deriveBuyerJourneyStage({
+    currentStage: 'DUE_DILIGENCE',
+    ownershipState: 'UNDER_CONTRACT',
+    closingPreparationStarted: true,
+    closeConfirmed: false,
+    daysSinceOwnershipStart: 45,
+  }), 'CLOSING_PREP');
+  assert.equal(deriveBuyerJourneyStage({
+    currentStage: 'CLOSING_PREP',
+    ownershipState: 'UNDER_CONTRACT',
+    closeConfirmed: false,
+  }), 'CLOSING_PREP');
+  assert.equal(deriveBuyerJourneyStage({
+    currentStage: 'CLOSING_PREP',
+    closeConfirmed: true,
+    daysSinceOwnershipStart: 0,
+  }), 'CLOSED');
+  assert.doesNotThrow(() => assertBuyerJourneyStageTransition('CLOSING_PREP', 'CLOSED'));
+  assert.throws(() => assertBuyerJourneyStageTransition('DUE_DILIGENCE', 'CLOSED'), /INVALID_BUYER_TRANSITION/);
+  assert.equal(canTransitionBuyerJourneyStatus('PAUSED', 'ACTIVE'), true);
+  assert.equal(canTransitionBuyerJourneyStatus('CANCELLED', 'ACTIVE'), false);
+});
+
 test('Prisma buyer plan is property-scoped and source-traceable', () => {
   const schema = read('../../prisma/schema.prisma');
   assert.match(schema, /model HomeBuyerChecklist[\s\S]*propertyId\s+String\s+@unique/);
   assert.doesNotMatch(schema, /model HomeBuyerChecklist[\s\S]*homeownerProfileId\s+String\s+@unique[\s\S]*model HomeBuyerTask/);
   assert.match(schema, /model HomeBuyerTask[\s\S]*@@unique\(\[checklistId, actionKey\]\)/);
   assert.match(schema, /model HomeBuyerTask[\s\S]*sourceType\s+BuyerTaskSourceType/);
+  assert.match(schema, /model BuyerJourneyMilestone/);
+  assert.match(schema, /model BuyerJourneyContact/);
+  const buyerPhaseEnum = schema.match(/enum BuyerPlanPhase\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.doesNotMatch(buyerPhaseEnum, /\bPRE_CLOSE\b/);
+  assert.match(schema, /enum BuyerFindingDisposition\s*\{[\s\S]*?PRE_CLOSE_NEGOTIATION/);
 });
 
 test('Phase 5 endpoints and callers require property context', () => {
@@ -67,6 +114,17 @@ test('Phase 5 endpoints and callers require property context', () => {
   assert.match(routes, /properties\/:propertyId\/import-readiness/);
   assert.match(client, /getHomeBuyerChecklist\(propertyId: string\)/);
   assert.match(client, /home-buyer-tasks\/properties\/\$\{propertyId\}/);
+});
+
+test('buyer plan reads are viewer-safe and do not create or transition lifecycle state', () => {
+  const service = read('../../src/services/HomeBuyerTask.service.ts');
+  const controller = read('../../src/controllers/homeBuyerTask.controller.ts');
+  const readMethod = service.match(/static async getChecklist\([\s\S]*?\n  }/)?.[0] ?? '';
+  assert.match(readMethod, /'VIEWER'/);
+  assert.match(readMethod, /homeBuyerChecklist\.findUnique/);
+  assert.doesNotMatch(readMethod, /\.create\(|\.update\(|getOrCreateChecklist/);
+  assert.match(controller, /HomeBuyerTaskService\.getChecklist/);
+  assert.doesNotMatch(controller.match(/const handleGetChecklist[\s\S]*?\n};/)?.[0] ?? '', /ensureRecurringHandoff/);
 });
 
 test('Phase 5 does not add a database migration script', () => {

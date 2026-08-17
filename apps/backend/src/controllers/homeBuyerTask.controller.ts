@@ -31,9 +31,7 @@ const handleGetChecklist = async (
     }
 
     const { propertyId } = req.params;
-    let checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId, propertyId);
-    const handoff = await BuyerAcquisitionService.ensureRecurringHandoff(req.user.userId, propertyId);
-    if (handoff.handedOff) checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId, propertyId);
+    const checklist = await HomeBuyerTaskService.getChecklist(req.user.userId, propertyId);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -41,7 +39,7 @@ const handleGetChecklist = async (
       propertyId,
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
-      metadataJson: { actionType: 'buyer_plan_opened', planStatus: checklist.status, handoffReason: handoff.reason },
+      metadataJson: { actionType: 'buyer_plan_opened', planStatus: checklist.status },
     });
 
     return res.status(200).json({

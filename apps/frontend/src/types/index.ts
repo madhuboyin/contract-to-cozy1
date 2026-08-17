@@ -2998,10 +2998,22 @@ export interface LocalUpdate {
 export type HomeBuyerTaskStatus = 
   | 'PENDING'
   | 'IN_PROGRESS'
+  | 'BLOCKED'
   | 'COMPLETED'
-  | 'NOT_NEEDED';
+  | 'NOT_NEEDED'
+  | 'CANCELLED';
 
-export type BuyerPlanPhase = 'PRE_CLOSE' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90' | 'RECURRING_HOME';
+export type BuyerPlanPhase = 'EXPLORING' | 'OFFER_CONTRACT' | 'DUE_DILIGENCE' | 'CLOSING_PREP' | 'MOVE_IN' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90' | 'RECURRING_HOME';
+export type BuyerJourneyStage = 'EXPLORING' | 'OFFER_CONTRACT' | 'DUE_DILIGENCE' | 'CLOSING_PREP' | 'CLOSED' | 'MOVE_IN' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90' | 'HANDED_OFF';
+export type BuyerJourneyStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'HANDED_OFF' | 'ARCHIVED';
+export type BuyerTaskType = 'ACTION' | 'MILESTONE_SUPPORT' | 'DECISION' | 'DOCUMENT' | 'SERVICE' | 'MOVE' | 'HOME_SETUP';
+export type BuyerChecklistSection = 'CONTRACT_CONTINGENCIES' | 'INSPECTION_DUE_DILIGENCE' | 'FINANCING_APPRAISAL' | 'TITLE_ESCROW_HOA' | 'INSURANCE' | 'FINAL_WALKTHROUGH' | 'CLOSING_DISCLOSURE_FUNDS' | 'CLOSING_DAY' | 'MOVE_POSSESSION' | 'POST_CLOSE_SAVED';
+export type BuyerEvidenceRequirement = 'NONE' | 'OPTIONAL' | 'REQUIRED';
+export type BuyerTaskApplicability = 'UNKNOWN' | 'APPLICABLE' | 'NOT_APPLICABLE';
+export type BuyerCompletionMethod = 'USER_ATTESTATION' | 'DOCUMENT' | 'PHOTO' | 'BOOKING_COMPLETION' | 'INSPECTION_CONFIRMATION' | 'EXTERNAL_CONFIRMATION';
+export type BuyerMilestoneStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'WAIVED' | 'MISSED' | 'CANCELLED';
+export type BuyerMilestoneType = 'OFFER_SUBMITTED' | 'CONTRACT_ACCEPTED' | 'EARNEST_MONEY_DUE' | 'INSPECTION' | 'INSPECTION_CONTINGENCY' | 'ATTORNEY_REVIEW' | 'FINANCING_CONTINGENCY' | 'APPRAISAL' | 'TITLE_SURVEY' | 'INSURANCE_EFFECTIVE' | 'CLOSING_DISCLOSURE' | 'FINAL_WALKTHROUGH' | 'CLOSING' | 'MOVE_IN' | 'DAY_30' | 'DAY_60' | 'DAY_90' | 'CUSTOM';
+export type BuyerContactRole = 'BUYER_AGENT' | 'LENDER' | 'ATTORNEY' | 'TITLE_ESCROW' | 'INSPECTOR' | 'INSURANCE' | 'MOVER' | 'OTHER';
 export type BuyerPlanPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
 export type BuyerTaskSourceType = 'SYSTEM' | 'USER' | 'INSPECTION_FINDING' | 'DOCUMENT' | 'GUIDANCE_JOURNEY' | 'HOME_ACTION';
 export type BuyerFindingDisposition = 'PENDING_REVIEW' | 'VERIFIED_FACT' | 'PRE_CLOSE_NEGOTIATION' | 'POST_CLOSE_ACTION' | 'DISMISSED';
@@ -3031,6 +3043,16 @@ export interface HomeBuyerTask {
   actionKey: string;
   phase: BuyerPlanPhase;
   priority: BuyerPlanPriority;
+  taskType: BuyerTaskType;
+  checklistSection: BuyerChecklistSection | null;
+  templateKey: string | null;
+  templateVersion: string | null;
+  evidenceRequirement: BuyerEvidenceRequirement;
+  applicability: BuyerTaskApplicability;
+  blocking: boolean;
+  required: boolean;
+  statusReason: string | null;
+  notes: string | null;
   dueAt: string | null;
   anchorOffsetDays: number | null;
   assignedToUserId: string | null;
@@ -3045,22 +3067,62 @@ export interface HomeBuyerTask {
   sortOrder: number;
   bookingId: string | null;
   completedAt: Date | null;
+  completedByUserId: string | null;
+  completionMethod: BuyerCompletionMethod | null;
+  completionDocumentId: string | null;
+  completionVerifiedAt: Date | null;
+  completionVerifiedById: string | null;
   completionEvidenceJson: Record<string, unknown> | null;
   handedOffMaintenanceTaskId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
+export interface BuyerJourneyMilestone {
+  id: string;
+  checklistId: string;
+  milestoneKey: string;
+  type: BuyerMilestoneType;
+  customLabel: string | null;
+  status: BuyerMilestoneStatus;
+  dueAt: string | null;
+  completedAt: string | null;
+  responsibleUserId: string | null;
+  sourceDocumentId: string | null;
+  notes: string | null;
+}
+
+export interface BuyerJourneyContact {
+  id: string;
+  checklistId: string;
+  role: BuyerContactRole;
+  name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+}
+
 export interface HomeBuyerChecklist {
   id: string;
   propertyId: string;
-  status: 'ACTIVE' | 'HANDED_OFF' | 'ARCHIVED';
+  status: BuyerJourneyStatus;
+  stage: BuyerJourneyStage;
   planStartDate: string;
   targetCloseDate: string | null;
+  moveInDate: string | null;
   ownershipStartedAt: string | null;
+  pausedAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  completedAt: string | null;
+  lastStageChangedAt: string | null;
+  generationVersion: string | null;
   transitionedToRecurringAt: string | null;
   handoffCompletedAt: string | null;
   tasks: HomeBuyerTask[];
+  milestones?: BuyerJourneyMilestone[];
+  contacts?: BuyerJourneyContact[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -3069,8 +3131,10 @@ export interface HomeBuyerTaskStats {
   total: number;
   pending: number;
   inProgress: number;
+  blocked: number;
   completed: number;
   notNeeded: number;
+  cancelled: number;
   progressPercentage: number;
 }
 

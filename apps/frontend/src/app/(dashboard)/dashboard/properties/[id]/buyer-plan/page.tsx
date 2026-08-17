@@ -19,7 +19,11 @@ import type {
 } from '@/types';
 
 const PHASES: Array<{ key: BuyerPlanPhase; label: string }> = [
-  { key: 'PRE_CLOSE', label: 'Before closing' },
+  { key: 'EXPLORING', label: 'Exploring' },
+  { key: 'OFFER_CONTRACT', label: 'Offer & contract' },
+  { key: 'DUE_DILIGENCE', label: 'Due diligence' },
+  { key: 'CLOSING_PREP', label: 'Closing preparation' },
+  { key: 'MOVE_IN', label: 'Move-in' },
   { key: 'FIRST_30_DAYS', label: 'First 30 days' },
   { key: 'DAYS_31_TO_90', label: 'Days 31–90' },
   { key: 'RECURRING_HOME', label: 'Recurring Home handoff' },

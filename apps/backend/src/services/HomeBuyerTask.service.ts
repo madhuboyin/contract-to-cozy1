@@ -10,7 +10,11 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
-import { BuyerImportReadinessSchema } from '../productFramework/buyerAcquisition.contract';
+import {
+  BUYER_ACTION_KEYS,
+  BUYER_CHECKLIST_TEMPLATE_VERSION,
+  BuyerImportReadinessSchema,
+} from '../productFramework/buyerAcquisition.contract';
 
 type TaskInput = {
   title: string;
@@ -29,8 +33,6 @@ type TaskInput = {
   completionEvidenceJson?: Record<string, unknown> | null;
 };
 
-type BuyerChecklistWithTasks = Prisma.HomeBuyerChecklistGetPayload<{ include: { tasks: true } }>;
-
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
 function offsetDate(anchor: Date, days: number): Date {
@@ -44,9 +46,13 @@ function customActionKey(title: string): string {
 
 /** Property-scoped acquisition and first-90-days ownership plan. */
 export class HomeBuyerTaskService {
-  private static async assertAccess(userId: string, propertyId: string) {
+  private static async assertAccess(
+    userId: string,
+    propertyId: string,
+    minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR',
+  ) {
     const access = await resolvePropertyAccess(userId, propertyId);
-    if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
+    if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
       throw new Error('Property not found or user does not have access.');
     }
 
@@ -78,47 +84,64 @@ export class HomeBuyerTaskService {
       where: { propertyId },
       include: { tasks: { orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }] } },
     });
-    if (existing) return this.syncJourneyLifecycle(existing, property.onboarding?.ownershipState);
+    if (existing) return existing;
 
-    return this.createChecklistWithDefaults(propertyId, userId);
+    return this.createChecklistWithDefaults(propertyId, userId, property.onboarding?.ownershipState);
   }
 
-  private static async syncJourneyLifecycle(
-    checklist: BuyerChecklistWithTasks,
-    ownershipState?: string | null,
-  ): Promise<BuyerChecklistWithTasks> {
-    if (ownershipState !== 'ESTABLISHED_OWNER' || checklist.status !== 'ACTIVE') return checklist;
-    return prisma.homeBuyerChecklist.update({
-      where: { id: checklist.id },
-      data: { status: 'HANDED_OFF', transitionedToRecurringAt: checklist.transitionedToRecurringAt ?? new Date() },
-      include: { tasks: { orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }] } },
+  static async getChecklist(userId: string, propertyId: string) {
+    await this.assertAccess(userId, propertyId, 'VIEWER');
+    const checklist = await prisma.homeBuyerChecklist.findUnique({
+      where: { propertyId },
+      include: {
+        tasks: { orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }] },
+        milestones: { orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }] },
+        contacts: { orderBy: [{ role: 'asc' }, { createdAt: 'asc' }] },
+      },
     });
+    if (!checklist) throw new Error('Buyer plan not found.');
+    return checklist;
   }
 
-  private static async createChecklistWithDefaults(propertyId: string, ownerUserId: string) {
+  private static async createChecklistWithDefaults(
+    propertyId: string,
+    ownerUserId: string,
+    ownershipState?: string | null,
+  ) {
     const now = new Date();
     const defaults = [
-      ['buyer:inspection:import', 'Import inspection report', 'Bring inspection findings into the property record for review.', 'PRE_CLOSE', 'NOW', -21, ServiceCategory.INSPECTION],
-      ['buyer:inspection:verify', 'Verify material inspection findings', 'Confirm safety and major findings before deciding what belongs in negotiation or ownership.', 'PRE_CLOSE', 'NOW', -14, null],
-      ['buyer:negotiation:separate', 'Separate pre-close negotiation from ownership work', 'Record which findings are resolved by the seller and which transfer into your ownership plan.', 'PRE_CLOSE', 'SOON', -10, ServiceCategory.ATTORNEY],
-      ['buyer:coverage:bind', 'Confirm homeowners coverage', 'Bind coverage and store the policy before ownership begins.', 'PRE_CLOSE', 'NOW', -5, ServiceCategory.INSURANCE],
-      ['buyer:closing:documents', 'Store closing, disclosure, and warranty documents', 'Keep the durable source documents attached to this property.', 'PRE_CLOSE', 'SOON', 0, null],
-      ['buyer:safety:access', 'Secure access and verify life-safety basics', 'Rekey locks and verify smoke and carbon-monoxide protection.', 'FIRST_30_DAYS', 'NOW', 2, ServiceCategory.LOCKSMITH],
-      ['buyer:utilities:setup', 'Confirm utilities and essential services', 'Verify power, water, gas, waste, internet, and emergency shutoff access.', 'FIRST_30_DAYS', 'NOW', 3, null],
-      ['buyer:inspection:repair-journeys', 'Start repair journeys for material findings', 'Turn each accepted major or safety finding into a scoped, traceable repair journey.', 'FIRST_30_DAYS', 'SOON', 10, null],
-      ['buyer:household:responsibility', 'Assign household responsibilities', 'Choose owners for recurring care, documents, coverage, and urgent home decisions.', 'FIRST_30_DAYS', 'PLAN', 21, null],
-      ['buyer:systems:baseline', 'Build home systems baseline', 'Capture age, condition, warranty, and maintenance context for major systems.', 'DAYS_31_TO_90', 'PLAN', 45, ServiceCategory.HVAC],
-      ['buyer:maintenance:first-cycle', 'Schedule the first maintenance cycle', 'Prioritize seasonal and preventive work using verified property context.', 'DAYS_31_TO_90', 'PLAN', 60, null],
-      ['buyer:recurring:handoff', 'Review the recurring Home plan', 'Confirm unresolved work, owners, timing, and the next normal Home feed actions.', 'RECURRING_HOME', 'CONSIDER', 90, null],
+      [BUYER_ACTION_KEYS.INSPECTION_IMPORT, 'Import inspection report', 'Bring inspection findings into the property record for review.', 'DUE_DILIGENCE', 'NOW', -21, ServiceCategory.INSPECTION],
+      [BUYER_ACTION_KEYS.INSPECTION_VERIFY, 'Verify material inspection findings', 'Confirm safety and major findings before deciding what belongs in negotiation or ownership.', 'DUE_DILIGENCE', 'NOW', -14, null],
+      [BUYER_ACTION_KEYS.NEGOTIATION_SEPARATE, 'Separate pre-close negotiation from ownership work', 'Record which findings are resolved by the seller and which transfer into your ownership plan.', 'DUE_DILIGENCE', 'SOON', -10, ServiceCategory.ATTORNEY],
+      [BUYER_ACTION_KEYS.COVERAGE_BIND, 'Confirm homeowners coverage', 'Bind coverage and store the policy before ownership begins.', 'CLOSING_PREP', 'NOW', -5, ServiceCategory.INSURANCE],
+      [BUYER_ACTION_KEYS.CLOSING_DOCUMENTS, 'Store closing, disclosure, and warranty documents', 'Keep the durable source documents attached to this property.', 'CLOSING_PREP', 'SOON', 0, null],
+      [BUYER_ACTION_KEYS.SAFETY_ACCESS, 'Secure access and verify life-safety basics', 'Rekey locks and verify smoke and carbon-monoxide protection.', 'FIRST_30_DAYS', 'NOW', 2, ServiceCategory.LOCKSMITH],
+      [BUYER_ACTION_KEYS.UTILITIES_SETUP, 'Confirm utilities and essential services', 'Verify power, water, gas, waste, internet, and emergency shutoff access.', 'FIRST_30_DAYS', 'NOW', 3, null],
+      [BUYER_ACTION_KEYS.INSPECTION_REPAIR_JOURNEYS, 'Start repair journeys for material findings', 'Turn each accepted major or safety finding into a scoped, traceable repair journey.', 'FIRST_30_DAYS', 'SOON', 10, null],
+      [BUYER_ACTION_KEYS.HOUSEHOLD_RESPONSIBILITY, 'Assign household responsibilities', 'Choose owners for recurring care, documents, coverage, and urgent home decisions.', 'FIRST_30_DAYS', 'PLAN', 21, null],
+      [BUYER_ACTION_KEYS.SYSTEMS_BASELINE, 'Build home systems baseline', 'Capture age, condition, warranty, and maintenance context for major systems.', 'DAYS_31_TO_90', 'PLAN', 45, ServiceCategory.HVAC],
+      [BUYER_ACTION_KEYS.MAINTENANCE_FIRST_CYCLE, 'Schedule the first maintenance cycle', 'Prioritize seasonal and preventive work using verified property context.', 'DAYS_31_TO_90', 'PLAN', 60, null],
+      [BUYER_ACTION_KEYS.RECURRING_HANDOFF, 'Review the recurring Home plan', 'Confirm unresolved work, owners, timing, and the next normal Home feed actions.', 'RECURRING_HOME', 'CONSIDER', 90, null],
     ] as const;
 
     return prisma.homeBuyerChecklist.create({
       data: {
         propertyId,
         planStartDate: now,
+        stage: ownershipState === 'UNDER_CONTRACT'
+          ? 'DUE_DILIGENCE'
+          : ownershipState === 'RECENT_OWNER'
+            ? 'FIRST_30_DAYS'
+            : 'EXPLORING',
+        lastStageChangedAt: now,
+        generationVersion: BUYER_CHECKLIST_TEMPLATE_VERSION,
         tasks: {
           create: defaults.map(([actionKey, title, description, phase, priority, days, serviceCategory], index) => ({
             actionKey,
+            templateKey: actionKey,
+            templateVersion: BUYER_CHECKLIST_TEMPLATE_VERSION,
+            generatedBy: 'SYSTEM_TEMPLATE',
+            generationVersion: BUYER_CHECKLIST_TEMPLATE_VERSION,
             title,
             description,
             phase,
@@ -137,11 +160,16 @@ export class HomeBuyerTaskService {
   }
 
   static async getTasks(userId: string, propertyId: string) {
-    return (await this.getOrCreateChecklist(userId, propertyId)).tasks;
+    return (await this.getChecklist(userId, propertyId)).tasks;
   }
 
-  static async getTask(userId: string, propertyId: string, taskId: string) {
-    await this.assertAccess(userId, propertyId);
+  static async getTask(
+    userId: string,
+    propertyId: string,
+    taskId: string,
+    minimum: 'VIEWER' | 'CONTRIBUTOR' = 'VIEWER',
+  ) {
+    await this.assertAccess(userId, propertyId, minimum);
     const task = await prisma.homeBuyerTask.findFirst({
       where: { id: taskId, checklist: { propertyId } },
       include: { booking: true },
@@ -151,12 +179,14 @@ export class HomeBuyerTaskService {
   }
 
   static async updateTaskStatus(userId: string, propertyId: string, taskId: string, status: HomeBuyerTaskStatus): Promise<HomeBuyerTask> {
-    await this.getTask(userId, propertyId, taskId);
+    await this.getTask(userId, propertyId, taskId, 'CONTRIBUTOR');
     return prisma.homeBuyerTask.update({
       where: { id: taskId },
       data: {
         status,
         completedAt: status === 'COMPLETED' ? new Date() : null,
+        completedByUserId: status === 'COMPLETED' ? userId : null,
+        completionMethod: status === 'COMPLETED' ? 'USER_ATTESTATION' : null,
         completionEvidenceJson: status === 'COMPLETED'
           ? { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString() }
           : undefined,
@@ -169,7 +199,7 @@ export class HomeBuyerTaskService {
     frequency?: RecurrenceFrequency | null;
     estimatedCostCents?: number | null;
   }): Promise<HomeBuyerTask> {
-    await this.getTask(userId, propertyId, taskId);
+    await this.getTask(userId, propertyId, taskId, 'CONTRIBUTOR');
     if (data.serviceCategory) await this.validateServiceCategory(data.serviceCategory);
     if (data.assignedToUserId) {
       const member = await prisma.householdMember.findUnique({
@@ -188,6 +218,8 @@ export class HomeBuyerTaskService {
         ...data,
         dueAt: data.dueAt === undefined ? undefined : data.dueAt === null ? null : new Date(data.dueAt),
         completedAt: data.status === undefined ? undefined : data.status === 'COMPLETED' ? new Date() : null,
+        completedByUserId: data.status === undefined ? undefined : data.status === 'COMPLETED' ? userId : null,
+        completionMethod: data.status === undefined ? undefined : data.status === 'COMPLETED' ? 'USER_ATTESTATION' : null,
         completionEvidenceJson: data.completionEvidenceJson === null
           ? Prisma.JsonNull
           : data.completionEvidenceJson as Prisma.InputJsonValue | undefined
@@ -227,13 +259,13 @@ export class HomeBuyerTaskService {
   }
 
   static async deleteTask(userId: string, propertyId: string, taskId: string): Promise<void> {
-    const task = await this.getTask(userId, propertyId, taskId);
+    const task = await this.getTask(userId, propertyId, taskId, 'CONTRIBUTOR');
     if (task.sourceType === 'SYSTEM') throw new Error('Default plan tasks cannot be deleted; mark them not needed instead.');
     await prisma.homeBuyerTask.delete({ where: { id: taskId } });
   }
 
   static async linkToBooking(userId: string, propertyId: string, taskId: string, bookingId: string): Promise<HomeBuyerTask> {
-    await this.getTask(userId, propertyId, taskId);
+    await this.getTask(userId, propertyId, taskId, 'CONTRIBUTOR');
     const booking = await prisma.booking.findFirst({ where: { id: bookingId, homeownerId: userId } });
     if (!booking) throw new Error('Booking not found or user does not have access.');
     return prisma.homeBuyerTask.update({ where: { id: taskId }, data: { bookingId } });
@@ -247,17 +279,27 @@ export class HomeBuyerTaskService {
   }
 
   static async getTaskStats(userId: string, propertyId: string) {
-    const checklist = await this.getOrCreateChecklist(userId, propertyId);
+    const checklist = await this.getChecklist(userId, propertyId);
     const counts = await prisma.homeBuyerTask.groupBy({ by: ['status'], where: { checklistId: checklist.id }, _count: true });
     const count = (status: HomeBuyerTaskStatus) => counts.find((item) => item.status === status)?._count ?? 0;
     const total = checklist.tasks.length;
     const completed = count('COMPLETED');
     const progressPercentage = total ? Math.round((completed / total) * 100) : 0;
-    return { total, completed, pending: count('PENDING'), inProgress: count('IN_PROGRESS'), notNeeded: count('NOT_NEEDED'), progress: progressPercentage, progressPercentage };
+    return {
+      total,
+      completed,
+      pending: count('PENDING'),
+      inProgress: count('IN_PROGRESS'),
+      blocked: count('BLOCKED'),
+      notNeeded: count('NOT_NEEDED'),
+      cancelled: count('CANCELLED'),
+      progress: progressPercentage,
+      progressPercentage,
+    };
   }
 
   static async getImportReadiness(userId: string, propertyId: string) {
-    await this.assertAccess(userId, propertyId);
+    await this.assertAccess(userId, propertyId, 'VIEWER');
     const [reportGroups, materialFindings, documentGroups] = await Promise.all([
       prisma.inspectionReport.groupBy({ by: ['status'], where: { propertyId }, _count: true }),
       prisma.inspectionFinding.count({ where: { propertyId, status: 'OPEN', severity: { in: ['SAFETY', 'MAJOR'] } } }),

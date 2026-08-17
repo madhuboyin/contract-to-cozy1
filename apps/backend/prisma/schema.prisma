@@ -370,21 +370,126 @@ enum TaskPriority {
 enum HomeBuyerTaskStatus {
   PENDING
   IN_PROGRESS
+  BLOCKED
   COMPLETED
   NOT_NEEDED
+  CANCELLED
 }
 
 enum BuyerJourneyStatus {
   ACTIVE
+  PAUSED
+  CANCELLED
   HANDED_OFF
   ARCHIVED
 }
 
+enum BuyerJourneyStage {
+  EXPLORING
+  OFFER_CONTRACT
+  DUE_DILIGENCE
+  CLOSING_PREP
+  CLOSED
+  MOVE_IN
+  FIRST_30_DAYS
+  DAYS_31_TO_90
+  HANDED_OFF
+}
+
 enum BuyerPlanPhase {
-  PRE_CLOSE
+  EXPLORING
+  OFFER_CONTRACT
+  DUE_DILIGENCE
+  CLOSING_PREP
+  MOVE_IN
   FIRST_30_DAYS
   DAYS_31_TO_90
   RECURRING_HOME
+}
+
+enum BuyerTaskType {
+  ACTION
+  MILESTONE_SUPPORT
+  DECISION
+  DOCUMENT
+  SERVICE
+  MOVE
+  HOME_SETUP
+}
+
+enum BuyerChecklistSection {
+  CONTRACT_CONTINGENCIES
+  INSPECTION_DUE_DILIGENCE
+  FINANCING_APPRAISAL
+  TITLE_ESCROW_HOA
+  INSURANCE
+  FINAL_WALKTHROUGH
+  CLOSING_DISCLOSURE_FUNDS
+  CLOSING_DAY
+  MOVE_POSSESSION
+  POST_CLOSE_SAVED
+}
+
+enum BuyerEvidenceRequirement {
+  NONE
+  OPTIONAL
+  REQUIRED
+}
+
+enum BuyerTaskApplicability {
+  UNKNOWN
+  APPLICABLE
+  NOT_APPLICABLE
+}
+
+enum BuyerCompletionMethod {
+  USER_ATTESTATION
+  DOCUMENT
+  PHOTO
+  BOOKING_COMPLETION
+  INSPECTION_CONFIRMATION
+  EXTERNAL_CONFIRMATION
+}
+
+enum BuyerMilestoneStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  WAIVED
+  MISSED
+  CANCELLED
+}
+
+enum BuyerMilestoneType {
+  OFFER_SUBMITTED
+  CONTRACT_ACCEPTED
+  EARNEST_MONEY_DUE
+  INSPECTION
+  INSPECTION_CONTINGENCY
+  ATTORNEY_REVIEW
+  FINANCING_CONTINGENCY
+  APPRAISAL
+  TITLE_SURVEY
+  INSURANCE_EFFECTIVE
+  CLOSING_DISCLOSURE
+  FINAL_WALKTHROUGH
+  CLOSING
+  MOVE_IN
+  DAY_30
+  DAY_60
+  DAY_90
+  CUSTOM
+}
+
+enum BuyerContactRole {
+  BUYER_AGENT
+  LENDER
+  ATTORNEY
+  TITLE_ESCROW
+  INSPECTOR
+  INSURANCE
+  MOVER
+  OTHER
 }
 
 enum BuyerPlanPriority {
@@ -2095,6 +2200,9 @@ model User {
   maintenanceTasksAssigned       PropertyMaintenanceTask[] @relation("MaintenanceTaskAssignee")
   seasonalChecklistItemsAssigned SeasonalChecklistItem[]   @relation("SeasonalTaskAssignee")
   homeBuyerTasksAssigned         HomeBuyerTask[]           @relation("HomeBuyerTaskAssignee")
+  homeBuyerTasksCompleted        HomeBuyerTask[]           @relation("HomeBuyerTaskCompletedBy")
+  homeBuyerTasksVerified         HomeBuyerTask[]           @relation("HomeBuyerTaskCompletionVerifier")
+  buyerMilestonesResponsible     BuyerJourneyMilestone[]   @relation("BuyerMilestoneResponsibleUser")
 
   // Home Operations — durable operational work identity (Slice 1)
   operationalWorkItemsOwned   OperationalWorkItem[]        @relation("OperationalWorkItemOwner")
@@ -2434,14 +2542,25 @@ model HomeBuyerChecklist {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   status                    BuyerJourneyStatus @default(ACTIVE)
+  stage                     BuyerJourneyStage  @default(EXPLORING)
   planStartDate             DateTime           @default(now())
   targetCloseDate           DateTime?
+  moveInDate                DateTime?
   ownershipStartedAt        DateTime?
+  pausedAt                  DateTime?
+  cancelledAt               DateTime?
+  cancellationReason        String?
+  completedAt               DateTime?
+  lastStageChangedAt        DateTime?
+  movingPreferencesJson     Json?
+  generationVersion         String?
   transitionedToRecurringAt DateTime?
   handoffCompletedAt        DateTime?
 
   // Relations
-  tasks HomeBuyerTask[]
+  tasks      HomeBuyerTask[]
+  milestones BuyerJourneyMilestone[]
+  contacts   BuyerJourneyContact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2459,11 +2578,34 @@ model HomeBuyerTask {
   status      HomeBuyerTaskStatus @default(PENDING)
 
   // Canonical 90-day ownership-plan placement and stable idempotency key.
-  actionKey        String
-  phase            BuyerPlanPhase    @default(FIRST_30_DAYS)
-  priority         BuyerPlanPriority @default(PLAN)
-  dueAt            DateTime?
-  anchorOffsetDays Int?
+  actionKey                       String
+  phase                           BuyerPlanPhase           @default(FIRST_30_DAYS)
+  priority                        BuyerPlanPriority        @default(PLAN)
+  taskType                        BuyerTaskType            @default(ACTION)
+  checklistSection                BuyerChecklistSection?
+  templateKey                     String?
+  templateVersion                 String?
+  applicabilityRuleKey            String?
+  applicabilityReasonCodes        String[]                 @default([])
+  applicabilityUsedFactKeys       String[]                 @default([])
+  applicabilityMissingFactKeys    String[]                 @default([])
+  applicabilityConflictedFactKeys String[]                 @default([])
+  applicabilityBasisHash          String?
+  applicabilityEvaluatedAt        DateTime?
+  whyMatters                      String?
+  completionCriteria              String?
+  blockedGuidance                 String?
+  evidenceRequirement             BuyerEvidenceRequirement @default(NONE)
+  applicability                   BuyerTaskApplicability    @default(UNKNOWN)
+  blocking                        Boolean                  @default(false)
+  required                        Boolean                  @default(false)
+  statusReason                    String?
+  notes                           String?
+  generatedBy                     String?
+  generationVersion               String?
+  userEditedAt                    DateTime?
+  dueAt                           DateTime?
+  anchorOffsetDays                Int?
 
   // Service integration
   serviceCategory ServiceCategory?
@@ -2479,10 +2621,20 @@ model HomeBuyerTask {
   // Completion tracking
   completedAt            DateTime?
   completionEvidenceJson Json?
+  completedByUserId      String?
+  completionMethod       BuyerCompletionMethod?
+  completionDocumentId   String?
+  completionVerifiedAt   DateTime?
+  completionVerifiedById String?
 
   // Task assignment
-  assignedToUserId String?
-  assignedTo       User?   @relation("HomeBuyerTaskAssignee", fields: [assignedToUserId], references: [id])
+  assignedToUserId      String?
+  assignedTo            User?                @relation("HomeBuyerTaskAssignee", fields: [assignedToUserId], references: [id])
+  assignedContactId     String?
+  assignedContact       BuyerJourneyContact? @relation(fields: [assignedContactId], references: [id], onDelete: SetNull)
+  completedBy           User?                @relation("HomeBuyerTaskCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  completionVerifiedBy  User?                @relation("HomeBuyerTaskCompletionVerifier", fields: [completionVerifiedById], references: [id], onDelete: SetNull)
+  completionDocument    Document?            @relation("HomeBuyerTaskCompletionDocument", fields: [completionDocumentId], references: [id], onDelete: SetNull)
 
   // Durable lineage back to imported evidence or a canonical journey/action.
   sourceType                 BuyerTaskSourceType @default(USER)
@@ -2505,9 +2657,60 @@ model HomeBuyerTask {
   @@index([checklistId, phase, priority])
   @@index([status])
   @@index([assignedToUserId])
+  @@index([assignedContactId])
+  @@index([checklistSection, status])
+  @@index([templateKey])
   @@index([sourceEntityType, sourceEntityId])
   @@index([handedOffMaintenanceTaskId])
   @@map("home_buyer_tasks")
+}
+
+model BuyerJourneyMilestone {
+  id                String               @id @default(uuid())
+  checklistId       String
+  milestoneKey      String
+  type              BuyerMilestoneType
+  customLabel       String?
+  status            BuyerMilestoneStatus @default(NOT_STARTED)
+  dueAt             DateTime?
+  completedAt       DateTime?
+  responsibleUserId String?
+  sourceType        String?
+  sourceEntityId    String?
+  sourceDocumentId  String?
+  confidence        Float?
+  notes             String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  checklist       HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  responsibleUser User?              @relation("BuyerMilestoneResponsibleUser", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  sourceDocument  Document?          @relation("BuyerMilestoneSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([checklistId, milestoneKey])
+  @@index([checklistId, type])
+  @@index([checklistId, status, dueAt])
+  @@index([responsibleUserId])
+  @@map("buyer_journey_milestones")
+}
+
+model BuyerJourneyContact {
+  id          String           @id @default(uuid())
+  checklistId String
+  role        BuyerContactRole
+  name        String
+  company     String?
+  email       String?
+  phone       String?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  checklist     HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  assignedTasks HomeBuyerTask[]
+
+  @@index([checklistId, role])
+  @@map("buyer_journey_contacts")
 }
 
 model NewHomePilotAssessment {
@@ -3887,6 +4090,8 @@ model Document {
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
   quoteComparisonExtractions QuoteComparisonExtraction[]
   hoaApprovalDecisionEvidence HoaApprovalRecord[]        @relation("HoaApprovalDecisionEvidence")
+  homeBuyerTaskCompletions    HomeBuyerTask[]           @relation("HomeBuyerTaskCompletionDocument")
+  buyerMilestoneSources       BuyerJourneyMilestone[]   @relation("BuyerMilestoneSourceDocument")
 
   homeSavingsAccountId     String?
   homeSavingsOpportunityId String?

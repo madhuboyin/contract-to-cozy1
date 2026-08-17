@@ -49,6 +49,12 @@ const STATUS_CONFIG: Record<HomeBuyerTaskStatus, {
     className: 'text-blue-500',
     badgeClassName: 'bg-blue-100 text-blue-800',
   },
+  BLOCKED: {
+    icon: AlertCircle,
+    label: 'Blocked',
+    className: 'text-amber-600',
+    badgeClassName: 'bg-amber-100 text-amber-900',
+  },
   COMPLETED: {
     icon: CheckCircle2,
     label: 'Completed',
@@ -59,6 +65,12 @@ const STATUS_CONFIG: Record<HomeBuyerTaskStatus, {
     icon: Circle,
     label: 'Not Needed',
     className: 'text-gray-300',
+    badgeClassName: 'bg-gray-100 text-gray-600',
+  },
+  CANCELLED: {
+    icon: Circle,
+    label: 'Cancelled',
+    className: 'text-gray-400',
     badgeClassName: 'bg-gray-100 text-gray-600',
   },
 };

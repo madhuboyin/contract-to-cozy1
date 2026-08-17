@@ -11,6 +11,7 @@ import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
+import { assertBuyerJourneyStageTransition } from '../productFramework/buyerJourneyLifecycle.contract';
 
 const DAY_MS = 86_400_000;
 
@@ -40,7 +41,9 @@ function taskAnchor(phase: BuyerPlanPhase, plan: {
   targetCloseDate: Date | null;
   ownershipStartedAt: Date | null;
 }) {
-  if (phase === 'PRE_CLOSE') return plan.targetCloseDate ?? plan.planStartDate;
+  if (['OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(phase)) {
+    return plan.targetCloseDate ?? plan.planStartDate;
+  }
   return plan.ownershipStartedAt ?? plan.targetCloseDate ?? plan.planStartDate;
 }
 
@@ -55,7 +58,9 @@ export class BuyerAcquisitionService {
 
   static async updateLifecycle(userId: string, propertyId: string, input: {
     targetCloseDate?: string | null;
+    moveInDate?: string | null;
     ownershipStartedAt?: string | null;
+    stage?: import('@prisma/client').BuyerJourneyStage;
   }) {
     await this.assertAccess(userId, propertyId);
     const plan = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
@@ -65,11 +70,22 @@ export class BuyerAcquisitionService {
     const ownershipStartedAt = input.ownershipStartedAt === undefined
       ? plan.ownershipStartedAt
       : input.ownershipStartedAt ? new Date(input.ownershipStartedAt) : null;
+    const moveInDate = input.moveInDate === undefined
+      ? plan.moveInDate
+      : input.moveInDate ? new Date(input.moveInDate) : null;
+    const stage = input.stage ?? plan.stage;
+    if (input.stage) assertBuyerJourneyStageTransition(plan.stage, input.stage);
 
     const updated = await prisma.$transaction(async (tx) => {
       const checklist = await tx.homeBuyerChecklist.update({
         where: { id: plan.id },
-        data: { targetCloseDate, ownershipStartedAt },
+        data: {
+          targetCloseDate,
+          moveInDate,
+          ownershipStartedAt,
+          stage,
+          lastStageChangedAt: input.stage && input.stage !== plan.stage ? new Date() : undefined,
+        },
       });
 
       const tasks = await tx.homeBuyerTask.findMany({
@@ -200,7 +216,7 @@ export class BuyerAcquisitionService {
     let repairJourneyId: string | null = finding.buyerRepairJourneyId;
     const createsTask = input.disposition === 'PRE_CLOSE_NEGOTIATION' || input.disposition === 'POST_CLOSE_ACTION';
     if (createsTask) {
-      const phase = input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'PRE_CLOSE' : 'FIRST_30_DAYS';
+      const phase = input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'DUE_DILIGENCE' : 'FIRST_30_DAYS';
       const actionKey = `buyer:inspection-finding:${finding.id}`;
       const plan = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
       const existing = await prisma.homeBuyerTask.findUnique({
@@ -343,7 +359,12 @@ export class BuyerAcquisitionService {
       where: { propertyId },
       include: {
         property: { select: { onboarding: { select: { ownershipState: true } } } },
-        tasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] }, phase: { not: 'PRE_CLOSE' } } },
+        tasks: {
+          where: {
+            status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] },
+            phase: { in: ['MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'RECURRING_HOME'] },
+          },
+        },
       },
     });
     if (!plan) return { handedOff: false, reason: 'NO_BUYER_PLAN', taskCount: 0 };
