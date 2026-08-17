@@ -23,7 +23,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['001-expected', '001', 'MAINTENANCE_STATUS', .7022, true], ['001-competitor', '001', 'MAINTENANCE_TASK_COMPLETE', .6573, false],
   ['002-expected', '002', 'MAINTENANCE_TASK_CREATE', .7252, true], ['002-competitor', '002', 'MAINTENANCE_STATUS', .6732, false],
   ['003-expected', '003', 'MAINTENANCE_TASK_COMPLETE', .1376, true], ['003-competitor', '003', 'MAINTENANCE_TASK_UPDATE', .1224, false],
-  ['004-expected', '004', 'MAINTENANCE_TASK_UPDATE', .1899, true], ['004-competitor', '004', 'BUYER_INSPECTION_REVIEW', .1333, false],
+  ['004-expected', '004', 'MAINTENANCE_TASK_UPDATE', .1899, true], ['004-competitor', '004', 'BUYER_TASK_UPDATE', .2814, false],
   ['005-expected', '005', 'COVERAGE_GAPS', .7519, true], ['005-competitor', '005', 'INVENTORY_LOOKUP', .4333, false],
   ['006-expected', '006', 'INCIDENT_CLAIM_STATUS', .1065, true], ['006-competitor', '006', 'HVAC_DECISION_CONTINUE', .1622, false],
   ['007-expected', '007', 'SAVINGS_OPPORTUNITIES', .6503, true], ['007-competitor', '007', 'OWNERSHIP_COSTS', .4253, false],
@@ -48,7 +48,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['026-expected', '026', 'EMERGENCY_BOUNDARY', .1177, true], ['026-competitor', '026', 'SELL_HOLD_RENT_ANALYSIS', .0871, false],
   ['027-expected', '027', 'UNSAFE_RESTRICTED_BOUNDARY', .1706, true], ['027-competitor', '027', 'COVERAGE_GAPS', .1457, false],
   ['028-expected', '028', 'OUT_OF_SCOPE_BOUNDARY', .1374, true], ['028-competitor', '028', 'MAINTENANCE_TASK_CREATE', .2651, false],
-  ['029-expected', '029', 'GROUNDED_GUIDANCE', .1587, true], ['029-competitor', '029', 'HOME_DEADLINE_MONITOR', .0668, false],
+  ['029-expected', '029', 'GROUNDED_GUIDANCE', .1587, true], ['029-competitor', '029', 'BUYER_TASK_CREATE', .081, false],
   ['030-expected', '030', 'HVAC_DECISION_START', .5729, true], ['030-competitor', '030', 'REPLACEMENT_GUIDANCE', .5399, false],
   ['031-expected', '031', 'HVAC_DECISION_CONTINUE', .441, true], ['031-competitor', '031', 'HVAC_DECISION_ABANDON', .234, false],
   ['032-expected', '032', 'HVAC_DECISION_SCENARIO', .6966, true], ['032-competitor', '032', 'HVAC_DECISION_OUTCOME_REPORT', .5336, false],
@@ -64,6 +64,9 @@ const ROWS: readonly ObservationTuple[] = [
   ['042-expected', '042', 'BUYER_DOCUMENT_READINESS', .3609, true], ['042-competitor', '042', 'MAINTENANCE_STATUS', .2779, false],
   ['043-expected', '043', 'BUYER_INSPECTION_REVIEW', .3538, true], ['043-competitor', '043', 'BUYER_DEADLINES', .1533, false],
   ['044-expected', '044', 'BUYER_TASK_COMPLETE', .2923, true], ['044-competitor', '044', 'MAINTENANCE_TASK_COMPLETE', .7034, false],
+  ['045-expected', '045', 'BUYER_TASK_CREATE', .4239, true], ['045-competitor', '045', 'BUYER_TASK_UPDATE', .408, false],
+  ['046-expected', '046', 'BUYER_TASK_UPDATE', .4248, true], ['046-competitor', '046', 'BUYER_TASK_CREATE', .3329, false],
+  ['047-expected', '047', 'BUYER_MOVE_STATUS', .3212, true], ['047-competitor', '047', 'BUYER_DEADLINES', .2129, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

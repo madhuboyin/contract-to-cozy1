@@ -3944,6 +3944,194 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
   };
 }
 
+function extractBuyerTaskTitle(message: string): string | null {
+  let text = message.trim();
+  text = text.replace(/^\s*(?:please\s+)?(?:add|create)\s+(?:a\s+|an\s+)?(?:buyer plan|closing plan)\s+task\s+for\s+/i, '');
+  text = text.replace(/^\s*(?:please\s+)?(?:add|create)\s+(?:a\s+|an\s+)?/i, '');
+  text = text.replace(/\s+(?:to|as)\s+(?:my|the)\s*(?:buyer plan|closing plan)(?:\s+task)?\s*$/i, '');
+  text = text.replace(/^\s*the\s+/i, '').trim();
+  if (text.length < 3 || text.length > 160) return null;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+async function buyerTaskCreateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const planHref = buyerPlanHref(propertyId);
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-task-create-permission', title: 'A contributor or owner needs to add this task',
+        body: 'Adding a task changes the shared Buyer Plan. Viewers can review the plan but cannot change it.',
+        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  const title = extractBuyerTaskTitle(message);
+  if (!title) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'BUYER_TASK_TITLE_REQUIRED',
+      ...durableFreeTextClarification('BUYER_TASK_CREATE', 'What should this closing checklist item be called?'),
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-task-create-title', title: 'Name the closing checklist item', body: 'Nothing has been created yet. Name the task, then review it before it is saved.',
+        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan instead', href: planHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['Add final walkthrough photos to my buyer plan'],
+    };
+  }
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } });
+  const dueAt = extractMaintenanceDueDate(message, new Date(), safeTimezone(property?.timezone));
+  const confirmationVersion = 1;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'BUYER_TASK_CREATE_CONFIRMATION_REQUIRED',
+    parameters: {
+      buyerTaskTitle: title,
+      buyerTaskDueAt: dueAt ?? null,
+      confirmationVersion,
+      confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{
+      type: 'SUMMARY', id: 'buyer-task-create-review', title: 'Review this closing checklist item',
+      body: 'No task has been created yet. Confirm below or cancel without saving.',
+      tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+    }],
+    confirmation: {
+      confirmationId: `buyer-task-create-${propertyId}-${confirmationVersion}`,
+      version: confirmationVersion,
+      title: 'Add this closing checklist item?',
+      description: 'This adds one pending task to this purchase’s canonical Buyer Plan.',
+      fields: [
+        { label: 'Task', value: title },
+        { label: 'Due', value: dueAt ?? 'Not scheduled' },
+      ],
+      confirmLabel: 'Add task',
+      consentText: 'I confirm these details are correct and authorize adding this task to the shared Buyer Plan.',
+      expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function buyerTaskUpdateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const planHref = buyerPlanHref(propertyId);
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-task-update-permission', title: 'A contributor or owner needs to update this task',
+        body: 'Updating a task changes the shared Buyer Plan. Viewers can review the plan but cannot change it.',
+        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  const [allTasks, members] = await Promise.all([
+    HomeBuyerTaskService.getTasks(userId, propertyId),
+    prisma.householdMember.findMany({ where: { propertyId }, include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } }),
+  ]);
+  const openTasks = allTasks.filter((task) => !['COMPLETED', 'CANCELLED'].includes(task.status) && task.applicability !== 'NOT_APPLICABLE');
+  const subject = maintenanceUpdateSubject(message);
+  const matched = maintenanceCompletionMatch(subject, openTasks) ?? (openTasks.length === 1 ? openTasks[0] : null);
+  if (!matched) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'BUYER_TASK_SELECTION_REQUIRED',
+      ...durableFreeTextClarification('BUYER_TASK_UPDATE', 'Which Buyer Plan task should Ask update? Use its exact title.'),
+      blocks: [{
+        type: 'GROUPED_LIST', id: 'buyer-task-update-options', title: 'Choose the task to change',
+        description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
+        sections: [{ id: 'tasks', title: 'Buyer Plan tasks', count: openTasks.length, items: openTasks.slice(0, 20).map((task) => ({
+          id: task.id, title: task.title, description: task.dueAt ? `Due ${humanDate(task.dueAt)}` : 'No due date',
+          meta: [task.priority, task.status], status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
+        })) }], actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      }], suggestions: openTasks.slice(0, 3).map((task) => `Reschedule the ${task.title} buyer plan task`),
+    };
+  }
+  const action = maintenanceUpdateAction(message);
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } });
+  const dueDate = extractMaintenanceDueDate(message, new Date(), safeTimezone(property?.timezone));
+  const assigneeText = message.match(/\b(?:assign|reassign)\b.{0,20}\bto\s+([^,.;]+)/i)?.[1]?.trim().toLowerCase();
+  const assignee = (action === 'ASSIGN' && assigneeText)
+    ? members.find((member) => [member.user.email, member.user.firstName, `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim()]
+      .some((value) => value?.toLowerCase() === assigneeText || value?.toLowerCase().includes(assigneeText)))
+    : null;
+  if ((action === 'RESCHEDULE' && !dueDate) || (action === 'ASSIGN' && !assignee)) {
+    return {
+      status: 'NEEDS_CLARIFICATION', reasonCode: 'BUYER_TASK_UPDATE_VALUE_REQUIRED',
+      ...durableFreeTextClarification('BUYER_TASK_UPDATE', `What should change for ${matched.title}?`),
+      blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-value', title: `What should change for ${matched.title}?`, body: action === 'RESCHEDULE'
+        ? 'Include a date such as 2026-10-15.'
+        : 'Name an active household member or use their email address.', tone: 'CAUTION', actions: [] }],
+      suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${matched.title} to ${member.user.email}`) : [],
+    };
+  }
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const actionLabel = action === 'UNASSIGN' ? 'unassign' : action === 'ASSIGN' ? 'assign' : action === 'RESCHEDULE' ? 'reschedule' : 'update';
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'BUYER_TASK_UPDATE_CONFIRMATION_REQUIRED', contextVersion: buyerTaskVersion(matched),
+    parameters: {
+      buyerTaskId: matched.id, buyerTaskAction: action,
+      buyerTaskDueAt: dueDate ?? null,
+      buyerTaskAssigneeUserId: action === 'ASSIGN' ? assignee!.userId : action === 'UNASSIGN' ? null : undefined,
+      buyerTaskVersion: buyerTaskVersion(matched),
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: `Review this ${actionLabel}`, body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${planHref}?${new URLSearchParams({ taskId: matched.id }).toString()}`, style: 'SECONDARY' }] }],
+    confirmation: {
+      confirmationId: `buyer-task-update-${matched.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${matched.title}?`,
+      description: 'This command writes through the canonical Buyer Plan and preserves closing readiness.',
+      fields: [{ label: 'Task', value: matched.title }, { label: 'Action', value: actionLabel },
+        ...(dueDate ? [{ label: 'New due date', value: dueDate }] : []),
+        ...(assignee ? [{ label: 'Assignee', value: assignee.user.email }] : [])],
+      confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Buyer Plan.`, expiresAt: expiresAt.toISOString(),
+    }, suggestions: [],
+  };
+}
+
+async function buyerMoveStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s move status right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no move status to review.');
+  }
+  const allTasks = await HomeBuyerTaskService.getTasks(userId, propertyId);
+  const moveTasks = allTasks.filter((task) => task.taskType === 'MOVE' && task.applicability !== 'NOT_APPLICABLE');
+  const completed = moveTasks.filter((task) => task.status === 'COMPLETED').length;
+  const open = moveTasks.filter((task) => !['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status));
+  const blocks: AskOperationResult['blocks'] = [{
+    type: 'SUMMARY',
+    id: 'buyer-move-status-summary',
+    title: moveTasks.length ? `${completed} of ${moveTasks.length} move tasks complete` : 'No move tasks are generated yet',
+    body: moveTasks.length
+      ? `${open.length} move task${open.length === 1 ? '' : 's'} still open for this purchase.`
+      : 'Moving Concierge has not generated move tasks for this purchase yet. Generated tasks appear directly in the canonical Buyer Plan.',
+    tone: open.length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: `${planHref}?filter=MOVE`, style: 'PRIMARY' }],
+  }];
+  if (open.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'buyer-move-status-tasks', title: 'Open move tasks',
+      description: 'From the canonical Buyer Plan, filtered to move tasks.',
+      sections: [{ id: 'move-tasks', title: 'Move', count: open.length, items: open.slice(0, 10).map((task) => ({
+        id: task.id, title: task.title, description: task.description,
+        meta: [task.priority === 'NOW' ? 'Now' : task.priority, task.dueAt ? `Due ${humanDate(task.dueAt)}` : null].filter((value): value is string => Boolean(value)),
+        status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
+      })) }],
+      actions: [],
+    });
+  }
+  return {
+    status: 'ANSWERED',
+    contextVersion: data.contextVersion,
+    blocks,
+    suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis] = await Promise.all([
@@ -4708,6 +4896,9 @@ async function dispatchOperationAdapterResult(
     case 'BUYER_DOCUMENT_READINESS': return buyerDocumentReadinessResult(input.userId, input.propertyId!);
     case 'BUYER_INSPECTION_REVIEW': return buyerInspectionReviewResult(input.userId, input.propertyId!);
     case 'BUYER_TASK_COMPLETE': return buyerTaskCompleteResult(input.userId, input.propertyId!, input.message);
+    case 'BUYER_TASK_CREATE': return buyerTaskCreateResult(input.userId, input.propertyId!, input.message);
+    case 'BUYER_TASK_UPDATE': return buyerTaskUpdateResult(input.userId, input.propertyId!, input.message);
+    case 'BUYER_MOVE_STATUS': return buyerMoveStatusResult(input.userId, input.propertyId!);
   }
 }
 
@@ -6900,6 +7091,91 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       }],
       confirmation: null,
       suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+    };
+    artifactType = 'HOME_BUYER_TASK';
+    artifactId = updated.id;
+  } else if (execution.operationId === 'BUYER_TASK_CREATE') {
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to add Buyer Plan tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const title = parameters.buyerTaskTitle;
+    if (typeof title !== 'string' || !title.trim()) {
+      const error = new Error('The closing checklist item title is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const dueAt = typeof parameters.buyerTaskDueAt === 'string' ? parameters.buyerTaskDueAt : null;
+    const actionKey = `ask:${execution.id}:buyer-task-create`;
+    let created = await prisma.homeBuyerTask.findFirst({ where: { actionKey, checklist: { propertyId: execution.propertyId } } });
+    if (!created) {
+      try {
+        created = await HomeBuyerTaskService.createTask(userId, execution.propertyId, {
+          title, actionKey, dueAt, phase: 'CLOSING_PREP', priority: 'PLAN',
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+        created = await prisma.homeBuyerTask.findFirst({ where: { actionKey, checklist: { propertyId: execution.propertyId } } });
+        if (!created) throw error;
+      }
+    }
+    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(created.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'BUYER_TASK_CREATED', contextVersion: buyerTaskVersion(created),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `buyer-task-created-${created.id}`, title: 'Closing checklist item added', status: 'COMPLETED',
+        description: 'The task is recorded in this purchase’s canonical Buyer Plan.',
+        details: [
+          { label: 'Task', value: created.title },
+          { label: 'Due', value: created.dueAt ? humanDate(created.dueAt) ?? 'Not scheduled' : 'Not scheduled' },
+        ],
+        actions: [{ id: 'open-task', label: 'Open new task', href: buyerTaskHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What should I do next for this purchase?'],
+    };
+    artifactType = 'HOME_BUYER_TASK';
+    artifactId = created.id;
+  } else if (execution.operationId === 'BUYER_TASK_UPDATE') {
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to update Buyer Plan tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const taskId = parameters.buyerTaskId;
+    if (typeof taskId !== 'string') {
+      const error = new Error('The Buyer Plan task selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } } });
+    if (!task || parameters.buyerTaskVersion !== buyerTaskVersion(task)) {
+      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const buyerAction = parameters.buyerTaskAction;
+    const dueAt = typeof parameters.buyerTaskDueAt === 'string' ? parameters.buyerTaskDueAt : undefined;
+    const assigneeUserId = parameters.buyerTaskAssigneeUserId === null ? null : typeof parameters.buyerTaskAssigneeUserId === 'string' ? parameters.buyerTaskAssigneeUserId : undefined;
+    const updated = await HomeBuyerTaskService.updateTask(userId, execution.propertyId, task.id, {
+      ...(buyerAction === 'RESCHEDULE' && dueAt ? { dueAt } : {}),
+      ...(buyerAction === 'ASSIGN' || buyerAction === 'UNASSIGN' ? { assignedToUserId: assigneeUserId } : {}),
+    });
+    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'BUYER_TASK_UPDATED', contextVersion: buyerTaskVersion(updated),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `buyer-task-updated-${updated.id}`, title: 'Buyer Plan task updated', status: 'COMPLETED',
+        description: 'The change is recorded in this purchase’s canonical Buyer Plan.',
+        details: [
+          { label: 'Task', value: updated.title },
+          ...(dueAt ? [{ label: 'New due date', value: dueAt }] : []),
+        ],
+        actions: [{ id: 'open-task', label: 'Open updated task', href: buyerTaskHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What should I do next for this purchase?'],
     };
     artifactType = 'HOME_BUYER_TASK';
     artifactId = updated.id;

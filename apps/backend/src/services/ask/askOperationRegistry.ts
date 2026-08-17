@@ -66,7 +66,10 @@ export type AskOperationId =
   | 'BUYER_DEADLINES'
   | 'BUYER_DOCUMENT_READINESS'
   | 'BUYER_INSPECTION_REVIEW'
-  | 'BUYER_TASK_COMPLETE';
+  | 'BUYER_TASK_COMPLETE'
+  | 'BUYER_TASK_CREATE'
+  | 'BUYER_TASK_UPDATE'
+  | 'BUYER_MOVE_STATUS';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -216,6 +219,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   BUYER_DOCUMENT_READINESS: definition('BUYER_DOCUMENT_READINESS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.document-readiness', ['SUMMARY', 'EVIDENCE']),
   BUYER_INSPECTION_REVIEW: definition('BUYER_INSPECTION_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.inspection-review', ['SUMMARY', 'EVIDENCE', 'BOUNDARY']),
   BUYER_TASK_COMPLETE: definition('BUYER_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  BUYER_TASK_CREATE: definition('BUYER_TASK_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  BUYER_TASK_UPDATE: definition('BUYER_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
+  BUYER_MOVE_STATUS: definition('BUYER_MOVE_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.move-status', ['SUMMARY', 'GROUPED_LIST']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
@@ -251,6 +257,9 @@ const buyerDeadlinesPattern = /\b(?:next deadline|what'?s due|what is due|upcomi
 const buyerDocumentReadinessPattern = /\b(?:transaction|closing)\b.{0,40}\bdocuments?\b.{0,50}\b(?:missing|still need|readiness|received)\b|\bwhich (?:transaction |closing )?documents?\b.{0,50}\b(?:missing|before closing|for (?:this|my) closing)\b/i;
 const buyerInspectionReviewPattern = /\b(?:inspection )?findings?\b.{0,50}\b(?:need(?:s)? a decision|still need(?:s)? a decision|undecided|need(?:s)? classif(?:y|ication))\b|\breview (?:my |the )?(?:inspection )?findings?\b.{0,30}\b(?:before closing|for (?:this|my) (?:purchase|closing))\b/i;
 const buyerPlanStatusPattern = /\b(?:what should i do next|next step)\b.{0,50}\b(?:this purchase|my closing|buying this home|closing plan|buyer plan)\b|\bstatus of (?:my |this )?(?:home )?purchase\b|\bhow close am i\b.{0,40}\bclosing\b|\b(?:closing plan|buyer plan) status\b/i;
+const buyerTaskCreatePattern = /\b(?:add|create)\b.{0,60}\b(?:to (?:my |the )?(?:buyer plan|closing plan)|as a (?:buyer plan|closing) task)\b|\b(?:add|create) (?:a |an )?(?:buyer plan|closing plan) task\b/i;
+const buyerTaskUpdatePattern = /\b(?:reschedule|move|assign|unassign|reassign)\b.{0,60}\b(?:buyer plan|closing plan) task\b|\b(?:buyer plan|closing plan) task\b.{0,60}\b(?:reschedule|assign|due date)\b/i;
+const buyerMoveStatusPattern = /\bwhat should i do\b.{0,30}\bbefore (?:i )?move[- ]?in\b|\bmov(?:e|ing)[- ](?:in|out) (?:progress|status|readiness)\b.{0,40}\bpurchase\b|\bmoving\b.{0,40}\b(?:progress|status)\b.{0,30}\b(?:closing|purchase|buyer plan)\b/i;
 
 const emergencyPattern = /\b(smell(?:ing)? gas|gas smell|gas leak|carbon monoxide|\bco (?:alarm|detector)|sparks?\b.{0,25}\b(?:from|at)\b|electrical fire|actively flooding.*electric(?:al)?|fire now)\b/i;
 const unsafeRestrictedPattern = /\b(?:bypass|avoid|evade|skip|work around)\b.{0,60}\b(?:permit|inspection|code|licen[cs]e|hoa|disclosure)\b|\b(?:disable|disconnect|remove|tamper with|cover|block)\b.{0,60}\b(?:smoke|carbon monoxide|co|fire|safety)\s*(?:detector|alarm|device)?\b|\b(?:conceal|hide|omit|misrepresent)\b.{0,80}\b(?:damage|defect|mold|leak|flood|fire|buyer|insurer|inspector|lender)\b|\b(?:remove|alter|cut|demolish|open up)\b.{0,70}\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:wall|beam|column|support)?\b|\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:without|skip|avoid|myself|diy)\b.{0,40}\b(?:inspection|permit|engineer|approval)?\b|\b(?:guarantee|certify|confirm(?: definitively)?|promise|tell me (?:for sure|the exact))\b.{0,100}\b(?:approved|approval|eligible|eligibility|legal|compliant|safe|pass inspection|refinanc|mortgage|loan|insurance claim|tax appeal|damage|loss|claim|covered|coverage|sale price|sell for)\b/i;
@@ -380,6 +389,15 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (buyerPlanStatusPattern.test(message)) {
     return resolved('BUYER_PLAN_STATUS', 0.95);
+  }
+  if (buyerTaskCreatePattern.test(message)) {
+    return resolved('BUYER_TASK_CREATE', 0.96);
+  }
+  if (buyerTaskUpdatePattern.test(message)) {
+    return resolved('BUYER_TASK_UPDATE', 0.96);
+  }
+  if (buyerMoveStatusPattern.test(message)) {
+    return resolved('BUYER_MOVE_STATUS', 0.95);
   }
   // Ask Intelligence FRD Phase 8A: checked ahead of quoteComparisonReviewPattern
   // and replacementPattern below, since both are generic enough to otherwise

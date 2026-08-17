@@ -15,6 +15,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'HVAC_DECISION_OUTCOME_REPORT',
   'HVAC_DECISION_OUTCOME_UNLINK',
   'BUYER_TASK_COMPLETE',
+  'BUYER_TASK_CREATE',
+  'BUYER_TASK_UPDATE',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -73,6 +75,8 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   HVAC_DECISION_OUTCOME_REPORT: command('HVAC_DECISION_OUTCOME_REPORT', 'HVAC_DECISION_OUTCOME_REPORT', 'decision-platform.hvac.outcome.report', 'CONTRIBUTOR', 'OUTCOME_OBSERVATION', ['EDIT'], { title: 'Outcome not recorded', body: 'No reported outcome or attribution was created; the decision thread is unchanged.', suggestion: 'Show my HVAC decision' }),
   HVAC_DECISION_OUTCOME_UNLINK: command('HVAC_DECISION_OUTCOME_UNLINK', 'HVAC_DECISION_OUTCOME_UNLINK', 'decision-platform.hvac.outcome.unlink', 'CONTRIBUTOR', 'OUTCOME_OBSERVATION', ['REOPEN'], { title: 'Outcome not disputed', body: 'The reported outcome remains as recorded.', suggestion: 'Show my HVAC decision' }),
   BUYER_TASK_COMPLETE: command('BUYER_TASK_COMPLETE', 'BUYER_TASK_COMPLETE', 'buyer.task.complete', 'CONTRIBUTOR', 'HOME_BUYER_TASK', ['REOPEN'], { title: 'Buyer Plan task not completed', body: 'Task status and closing readiness were not changed.', suggestion: 'What should I do next for this purchase?' }),
+  BUYER_TASK_CREATE: command('BUYER_TASK_CREATE', 'BUYER_TASK_CREATE', 'buyer.task.create', 'CONTRIBUTOR', 'HOME_BUYER_TASK', ['EDIT', 'STOP'], { title: 'Closing checklist item not created', body: 'No task or shared Buyer Plan record was changed.', suggestion: 'What should I do next for this purchase?' }),
+  BUYER_TASK_UPDATE: command('BUYER_TASK_UPDATE', 'BUYER_TASK_UPDATE', 'buyer.task.update', 'CONTRIBUTOR', 'HOME_BUYER_TASK', ['EDIT', 'STOP'], { title: 'Closing checklist item not updated', body: 'The task, due date, and assignment were not changed.', suggestion: 'What should I do next for this purchase?' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

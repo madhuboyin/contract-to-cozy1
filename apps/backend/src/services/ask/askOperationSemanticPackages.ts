@@ -54,6 +54,9 @@ const jobs: Record<AskOperationId, string> = {
   BUYER_DOCUMENT_READINESS: 'review which transaction documents are missing or unverified before closing',
   BUYER_INSPECTION_REVIEW: 'review inspection findings that still need a decision before closing',
   BUYER_TASK_COMPLETE: 'check off a closing checklist item',
+  BUYER_TASK_CREATE: 'add a custom task to the closing checklist',
+  BUYER_TASK_UPDATE: 'reschedule or reassign a closing checklist item',
+  BUYER_MOVE_STATUS: 'review move-in progress for this purchase',
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
@@ -101,6 +104,9 @@ const positives: Record<AskOperationId, readonly string[]> = {
   BUYER_DOCUMENT_READINESS: ['Which transaction documents are missing before closing?', 'Which closing documents am I still missing?', 'Show document readiness for this closing'],
   BUYER_INSPECTION_REVIEW: ['Which inspection findings still need a decision?', 'Review my inspection findings before closing', 'What inspection findings are still undecided?'],
   BUYER_TASK_COMPLETE: ['Check off the locksmith closing checklist item', 'Complete this closing checklist item', 'I finished the rekey checklist item'],
+  BUYER_TASK_CREATE: ['Add final walkthrough photos to my buyer plan', 'Create a buyer plan task for the survey pickup', 'Add a closing plan task for the movers deposit'],
+  BUYER_TASK_UPDATE: ['Reschedule the survey closing plan task', 'Assign the utilities buyer plan task to Alex', 'Move the walkthrough buyer plan task to next week'],
+  BUYER_MOVE_STATUS: ['What should I do before I move in?', 'Show my move-in readiness for this purchase', 'How is moving progress tracking for this closing?'],
 };
 
 const negatives: Record<AskOperationId, readonly string[]> = {
@@ -148,6 +154,9 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   BUYER_DOCUMENT_READINESS: ['What is my next deadline before closing?', 'Show my recorded home inventory'],
   BUYER_INSPECTION_REVIEW: ['What should I do next for this purchase?', 'Should I repair or replace my furnace?'],
   BUYER_TASK_COMPLETE: ['Create a new maintenance task', 'What should I do next for this purchase?'],
+  BUYER_TASK_CREATE: ['Mark the locksmith closing checklist item complete', 'What is due before closing?'],
+  BUYER_TASK_UPDATE: ['Add a new closing checklist item', 'Mark the survey task complete'],
+  BUYER_MOVE_STATUS: ['What is due before closing?', 'Which inspection findings still need a decision?'],
 };
 
 const answerPositives: Record<AskOperationId, readonly string[]> = {
@@ -195,6 +204,9 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   BUYER_DOCUMENT_READINESS: ['Expected, received, and unverified transaction document counts are shown.'],
   BUYER_INSPECTION_REVIEW: ['Inspection report status and open material findings still needing a decision are shown.'],
   BUYER_TASK_COMPLETE: ['The locksmith closing checklist item is now checked off and its assignee cleared.'],
+  BUYER_TASK_CREATE: ['A custom closing checklist item is ready to be added after confirmation.'],
+  BUYER_TASK_UPDATE: ['The selected closing checklist item has an updated due date or assignee.'],
+  BUYER_MOVE_STATUS: ['Move-in tasks and their completion progress for this purchase are shown.'],
 };
 
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
@@ -242,6 +254,9 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   BUYER_DOCUMENT_READINESS: ['The Buyer Plan next action and closing blockers are shown'],
   BUYER_INSPECTION_REVIEW: ['Expected and missing transaction document counts are shown'],
   BUYER_TASK_COMPLETE: ['A new maintenance task is ready to be created'],
+  BUYER_TASK_CREATE: ['The selected closing checklist item is now checked off'],
+  BUYER_TASK_UPDATE: ['A custom closing checklist item is ready to be added'],
+  BUYER_MOVE_STATUS: ['Two closing-timeline milestones are due before this purchase closes'],
 };
 
 export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, AskOperationSemanticPackage>> = Object.freeze(

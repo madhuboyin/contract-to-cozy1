@@ -58,6 +58,9 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'BUYER_DOCUMENT_READINESS', message: 'Which paperwork for this closing is still outstanding?', category: 'PARAPHRASE' },
   { operationId: 'BUYER_INSPECTION_REVIEW', message: 'Which inspection issues on this purchase are still undecided?', category: 'PARAPHRASE' },
   { operationId: 'BUYER_TASK_COMPLETE', message: 'Please complete the locksmith buyer task now', category: 'COLLOQUIAL' },
+  { operationId: 'BUYER_TASK_CREATE', message: 'Add a closing plan task for picking up the survey', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_TASK_UPDATE', message: 'Reassign the insurance-binder closing plan task to Priya', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_MOVE_STATUS', message: 'How far along is the move-in preparation for this purchase?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -165,7 +168,10 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   BUYER_DEADLINES: 'Two closing-timeline milestones are due before this purchase closes, and one blocking item still needs to be resolved.',
   BUYER_DOCUMENT_READINESS: 'Two transaction documents for this closing are verified, but one still needs a second look before it counts as received.',
   BUYER_INSPECTION_REVIEW: 'The roof-leak finding from this purchase still awaits a seller-negotiation, acceptance, or dismissal decision.',
-  BUYER_TASK_COMPLETE: 'The locksmith closing checklist item is now checked off, with its assignee cleared automatically.',
+  BUYER_TASK_COMPLETE: 'The locksmith rekey checklist item is marked done, releasing its assignee from the Buyer Plan task list.',
+  BUYER_TASK_CREATE: 'The survey-pickup line item is queued on the closing task list, pending confirmation before it is added.',
+  BUYER_TASK_UPDATE: 'The insurance-binder line item now shows Priya as its assignee instead of the previous one.',
+  BUYER_MOVE_STATUS: 'Unpacking and the address-change task are done; two move tasks remain before the scheduled move-in date.',
 });
 
 export const ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES = Object.freeze(
