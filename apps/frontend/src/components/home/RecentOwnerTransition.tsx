@@ -36,7 +36,7 @@ export function RecentOwnerTransition({ transition }: { transition: BuyerRecentO
             <Badge className="border-white/20 bg-white/10 text-white hover:bg-white/10">Recent owner · Day {ownerDay} of 90</Badge>
             <Badge className="bg-teal-300 text-teal-950 hover:bg-teal-300">{STAGE_LABELS[journey.stage]}</Badge>
           </div>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Welcome home. Your first 90 days are organized.</h1>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Welcome home. Your first 90 days are organized.</h1>
           <p className="mt-2 text-sm text-teal-50 sm:text-base">
             {property.address}, {property.city}, {property.state} {property.zipCode}
           </p>
@@ -52,7 +52,7 @@ export function RecentOwnerTransition({ transition }: { transition: BuyerRecentO
       <div className="mt-7 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-teal-100">First-90-day progress</p>
-          <p className="mt-1 font-semibold">{journey.progress.resolved} of {journey.progress.total} resolved</p>
+          <p className="mt-1 font-semibold text-white">{journey.progress.resolved} of {journey.progress.total} resolved</p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
             <div className="h-full rounded-full bg-teal-300" style={{ width: `${journey.progress.percent}%` }} />
           </div>
@@ -60,12 +60,12 @@ export function RecentOwnerTransition({ transition }: { transition: BuyerRecentO
         </div>
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-teal-100">Records carried forward</p>
-          <p className="mt-1 font-semibold">{evidence.documentCount} documents · {evidence.inspectionReportCount} inspections</p>
+          <p className="mt-1 font-semibold text-white">{evidence.documentCount} documents · {evidence.inspectionReportCount} inspections</p>
           <p className="mt-2 text-xs text-teal-100">{evidence.verifiedDocumentCount} verified · {evidence.openMaterialFindingCount} material findings open</p>
         </div>
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-teal-100">Homeowner workspace</p>
-          <p className="mt-1 font-semibold">Live below this transition</p>
+          <p className="mt-1 font-semibold text-white">Live below this transition</p>
           <p className="mt-2 text-xs text-teal-100">Your normal Home recommendations and signals remain available.</p>
         </div>
       </div>

@@ -28,6 +28,7 @@
     "test:property-intelligence:e2e": "PROPERTY_INTELLIGENCE_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.property-intelligence.config.ts",
     "test:property-tax:e2e": "PROPERTY_TAX_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.property-tax.config.ts",
     "test:home-digital-twin:e2e": "HOME_DIGITAL_TWIN_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.home-digital-twin.config.ts",
+    "test:home-buyer-lifecycle:e2e": "HOME_BUYER_LIFECYCLE_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.home-buyer-lifecycle.config.ts",
     "test:ownership-cost:e2e": "OWNERSHIP_COST_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.ownership-cost.config.ts",
     "test:savings-benefits:e2e": "SAVINGS_BENEFITS_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.savings-benefits.config.ts",
     "test:service-quote-decision:e2e": "npm run build && playwright test --config=playwright.service-quote-decision.config.ts",
