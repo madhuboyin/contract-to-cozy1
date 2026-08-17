@@ -13,6 +13,7 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import {
   BUYER_ACTION_KEYS,
   BUYER_CHECKLIST_TEMPLATE_VERSION,
+  BUYER_MILESTONE_KEYS,
   BuyerImportReadinessSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
@@ -33,6 +34,13 @@ type TaskInput = {
   completionEvidenceJson?: Record<string, unknown> | null;
 };
 
+export type BuyerEntryPlanInput = {
+  purchaseStage: 'EXPLORING' | 'OFFER_MADE' | 'UNDER_CONTRACT';
+  targetCloseDate?: string | null;
+  moveInDate?: string | null;
+  inspectionStatus: 'NOT_SCHEDULED' | 'SCHEDULED' | 'REPORT_AVAILABLE' | 'REVIEWED';
+};
+
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
 function offsetDate(anchor: Date, days: number): Date {
@@ -42,6 +50,25 @@ function offsetDate(anchor: Date, days: number): Date {
 function customActionKey(title: string): string {
   const slug = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return `buyer:user:${slug || 'task'}:${Date.now()}`;
+}
+
+function entryStage(input: BuyerEntryPlanInput): 'EXPLORING' | 'OFFER_CONTRACT' | 'DUE_DILIGENCE' {
+  if (input.purchaseStage === 'UNDER_CONTRACT') return 'DUE_DILIGENCE';
+  if (input.purchaseStage === 'OFFER_MADE') return 'OFFER_CONTRACT';
+  return 'EXPLORING';
+}
+
+function taskAnchorForEntry(
+  phase: BuyerPlanPhase,
+  plan: { planStartDate: Date; targetCloseDate: Date | null; moveInDate: Date | null },
+): Date {
+  if (['OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(phase)) {
+    return plan.targetCloseDate ?? plan.planStartDate;
+  }
+  if (['MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'RECURRING_HOME'].includes(phase)) {
+    return plan.moveInDate ?? plan.targetCloseDate ?? plan.planStartDate;
+  }
+  return plan.planStartDate;
 }
 
 /** Property-scoped acquisition and first-90-days ownership plan. */
@@ -101,6 +128,154 @@ export class HomeBuyerTaskService {
     });
     if (!checklist) throw new Error('Buyer plan not found.');
     return checklist;
+  }
+
+  static async initializeFromEntryContext(
+    userId: string,
+    propertyId: string,
+    input: BuyerEntryPlanInput,
+  ) {
+    const plan = await this.getOrCreateChecklist(userId, propertyId);
+    const targetCloseDate = input.targetCloseDate ? new Date(input.targetCloseDate) : null;
+    const moveInDate = input.moveInDate ? new Date(input.moveInDate) : null;
+    const stage = entryStage(input);
+    const now = new Date();
+    const inspectionMilestoneStatus = input.inspectionStatus === 'REVIEWED'
+      ? 'COMPLETED'
+      : input.inspectionStatus === 'NOT_SCHEDULED'
+        ? 'NOT_STARTED'
+        : 'IN_PROGRESS';
+
+    await prisma.$transaction(async (tx) => {
+      const checklist = await tx.homeBuyerChecklist.update({
+        where: { id: plan.id },
+        data: {
+          stage,
+          targetCloseDate,
+          moveInDate,
+          lastStageChangedAt: plan.stage === stage ? plan.lastStageChangedAt : now,
+        },
+      });
+
+      const tasks = await tx.homeBuyerTask.findMany({
+        where: {
+          checklistId: plan.id,
+          anchorOffsetDays: { not: null },
+          status: { notIn: ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'] },
+        },
+        select: { id: true, phase: true, anchorOffsetDays: true },
+      });
+      for (const task of tasks) {
+        const anchor = taskAnchorForEntry(task.phase, checklist);
+        await tx.homeBuyerTask.update({
+          where: { id: task.id },
+          data: { dueAt: offsetDate(anchor, task.anchorOffsetDays ?? 0) },
+        });
+      }
+
+      await tx.buyerJourneyMilestone.upsert({
+        where: {
+          checklistId_milestoneKey: {
+            checklistId: plan.id,
+            milestoneKey: BUYER_MILESTONE_KEYS.INSPECTION,
+          },
+        },
+        create: {
+          checklistId: plan.id,
+          milestoneKey: BUYER_MILESTONE_KEYS.INSPECTION,
+          type: 'INSPECTION',
+          status: inspectionMilestoneStatus,
+          completedAt: inspectionMilestoneStatus === 'COMPLETED' ? now : null,
+          sourceType: 'USER_ONBOARDING',
+          confidence: 1,
+        },
+        update: {
+          status: inspectionMilestoneStatus,
+          completedAt: inspectionMilestoneStatus === 'COMPLETED' ? now : null,
+          sourceType: 'USER_ONBOARDING',
+          confidence: 1,
+        },
+      });
+
+      await tx.buyerJourneyMilestone.upsert({
+        where: {
+          checklistId_milestoneKey: {
+            checklistId: plan.id,
+            milestoneKey: BUYER_MILESTONE_KEYS.CLOSING,
+          },
+        },
+        create: {
+          checklistId: plan.id,
+          milestoneKey: BUYER_MILESTONE_KEYS.CLOSING,
+          type: 'CLOSING',
+          dueAt: targetCloseDate,
+          sourceType: 'USER_ONBOARDING',
+          confidence: targetCloseDate ? 1 : null,
+        },
+        update: {
+          dueAt: targetCloseDate,
+          sourceType: 'USER_ONBOARDING',
+          confidence: targetCloseDate ? 1 : null,
+        },
+      });
+
+      if (moveInDate) {
+        await tx.buyerJourneyMilestone.upsert({
+          where: {
+            checklistId_milestoneKey: {
+              checklistId: plan.id,
+              milestoneKey: BUYER_MILESTONE_KEYS.MOVE_IN,
+            },
+          },
+          create: {
+            checklistId: plan.id,
+            milestoneKey: BUYER_MILESTONE_KEYS.MOVE_IN,
+            type: 'MOVE_IN',
+            dueAt: moveInDate,
+            sourceType: 'USER_ONBOARDING',
+            confidence: 1,
+          },
+          update: {
+            dueAt: moveInDate,
+            sourceType: 'USER_ONBOARDING',
+            confidence: 1,
+          },
+        });
+      }
+
+      const completedMilestone = input.purchaseStage === 'UNDER_CONTRACT'
+        ? { key: BUYER_MILESTONE_KEYS.CONTRACT_ACCEPTED, type: 'CONTRACT_ACCEPTED' as const }
+        : input.purchaseStage === 'OFFER_MADE'
+          ? { key: BUYER_MILESTONE_KEYS.OFFER_SUBMITTED, type: 'OFFER_SUBMITTED' as const }
+          : null;
+      if (completedMilestone) {
+        await tx.buyerJourneyMilestone.upsert({
+          where: {
+            checklistId_milestoneKey: {
+              checklistId: plan.id,
+              milestoneKey: completedMilestone.key,
+            },
+          },
+          create: {
+            checklistId: plan.id,
+            milestoneKey: completedMilestone.key,
+            type: completedMilestone.type,
+            status: 'COMPLETED',
+            completedAt: now,
+            sourceType: 'USER_ONBOARDING',
+            confidence: 1,
+          },
+          update: {
+            status: 'COMPLETED',
+            completedAt: now,
+            sourceType: 'USER_ONBOARDING',
+            confidence: 1,
+          },
+        });
+      }
+    });
+
+    return this.getChecklist(userId, propertyId);
   }
 
   private static async createChecklistWithDefaults(

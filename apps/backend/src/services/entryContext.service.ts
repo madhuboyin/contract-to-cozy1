@@ -18,8 +18,19 @@ import {
 import { emitNorthStarLineageEvent } from './analytics';
 import { getOrCreateOnboarding } from './propertyOnboarding.service';
 import { resolvePropertyAccess } from './propertyAccess.service';
+import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 
 const TRIGGER_SOURCES = ['USER_SELECTED', 'CONVERSATION', 'DOCUMENT', 'PHOTO', 'SYSTEM_SIGNAL', 'OTHER'] as const;
+export const BUYER_PURCHASE_STAGES = ['EXPLORING', 'OFFER_MADE', 'UNDER_CONTRACT'] as const;
+export const BUYER_INSPECTION_STATUSES = ['NOT_SCHEDULED', 'SCHEDULED', 'REPORT_AVAILABLE', 'REVIEWED'] as const;
+
+export const BuyerEntryContextSchema = z.strictObject({
+  purchaseStage: z.enum(BUYER_PURCHASE_STAGES),
+  targetCloseDate: z.string().datetime().nullable().optional(),
+  inspectionStatus: z.enum(BUYER_INSPECTION_STATUSES),
+  moveInDate: z.string().datetime().nullable().optional(),
+  immediateConcern: z.string().trim().max(2_000).nullable().optional(),
+});
 
 export const EntryContextCaptureSchema = z.object({
   entryPath: z.enum(HOMEOWNER_ENTRY_PATHS),
@@ -34,6 +45,7 @@ export const EntryContextCaptureSchema = z.object({
     source: z.enum(TRIGGER_SOURCES).default('USER_SELECTED'),
   }),
   firstValueType: z.enum(FIRST_VALUE_TYPES).optional(),
+  buyer: BuyerEntryContextSchema.optional(),
   consentContext: z.string().trim().min(1).max(300).nullable().optional(),
   sourceMetadata: z.record(z.string(), z.unknown()).nullable().optional(),
 }).superRefine((value, ctx) => {
@@ -50,6 +62,30 @@ export const EntryContextCaptureSchema = z.object({
       path: ['propertyOrigin'],
       message: 'The existing-home purchase entry path requires EXISTING_HOME property origin.',
     });
+  }
+  if (value.entryPath === 'EXISTING_HOME_PURCHASE' && !value.buyer) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['buyer'],
+      message: 'Existing-home purchase onboarding requires buyer journey context.',
+    });
+  }
+  if (value.entryPath !== 'EXISTING_HOME_PURCHASE' && value.buyer) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['buyer'],
+      message: 'Buyer journey context is only valid for an existing-home purchase.',
+    });
+  }
+  if (value.buyer) {
+    const expectedOwnership = value.buyer.purchaseStage === 'UNDER_CONTRACT' ? 'UNDER_CONTRACT' : 'SHOPPING';
+    if (value.ownershipState !== expectedOwnership) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ownershipState'],
+        message: `${value.buyer.purchaseStage} requires ${expectedOwnership} ownership state.`,
+      });
+    }
   }
   if (value.activeTrigger.type === 'NONE_EXPLORING' && value.entryPath !== 'EXPLORATION') {
     ctx.addIssue({
@@ -307,14 +343,25 @@ export async function captureEntryContext(
       firstValueFeedbackAt: null,
       entryContextVersion: 'phase1-v1',
       entryConsentContext: input.consentContext ?? null,
-      entrySourceMetadata: input.sourceMetadata
-        ? input.sourceMetadata as Prisma.InputJsonValue
+      entrySourceMetadata: input.sourceMetadata || input.buyer
+        ? {
+          ...(input.sourceMetadata ?? {}),
+          ...(input.buyer ? {
+            buyerPurchaseStage: input.buyer.purchaseStage,
+            buyerInspectionStatus: input.buyer.inspectionStatus,
+            buyerImmediateConcern: input.buyer.immediateConcern ?? null,
+          } : {}),
+        } as Prisma.InputJsonValue
         : undefined,
       entryContextCapturedAt: now,
       status: 'IN_PROGRESS',
       dismissedAt: null,
     },
   });
+
+  if (input.entryPath === 'EXISTING_HOME_PURCHASE' && input.buyer) {
+    await HomeBuyerTaskService.initializeFromEntryContext(userId, propertyId, input.buyer);
+  }
 
   emitNorthStarLineageEvent({
     eventType: 'ENTRY_CONTEXT_CAPTURED',
@@ -535,6 +582,21 @@ export type ActivationFirstValue = {
     confidence: 'LOW' | 'MEDIUM' | 'HIGH';
   };
   plan: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', HomeAction[]>;
+  buyer: {
+    planId: string;
+    stage: string;
+    targetCloseDate: string | null;
+    moveInDate: string | null;
+    nextAction: { id: string; title: string; dueAt: string | null; status: string } | null;
+    nearestDeadline: { label: string; dueAt: string } | null;
+    evidenceReadiness: {
+      inspectionStatus: string;
+      documentsRecorded: number;
+    };
+    planHref: string;
+    askHref: string;
+    askPrompt: string;
+  } | null;
 };
 
 export async function getActivationFirstValue(
@@ -548,6 +610,16 @@ export async function getActivationFirstValue(
   if (!entryContext || !onboarding.activeTriggerId || !onboarding.triggerIdentifiedAt) {
     throw new Error('Entry context has not been captured.');
   }
+
+  const [buyerPlan, buyerDocumentCount] = entryContext.entryPath === 'EXISTING_HOME_PURCHASE'
+    ? await Promise.all([
+      prisma.homeBuyerChecklist.findUnique({
+        where: { propertyId },
+        include: { tasks: true, milestones: true },
+      }),
+      prisma.document.count({ where: { propertyId, deletedAt: null } }),
+    ])
+    : [null, 0];
 
   const material = MATERIAL_TRIGGERS.has(entryContext.activeTrigger.type);
   const copy = triggerGuidanceCopy(entryContext.activeTrigger.type);
@@ -749,6 +821,56 @@ export async function getActivationFirstValue(
     lastEvaluatedAt: now.toISOString(),
   }) : null;
 
+  const buyer = buyerPlan ? (() => {
+    const activePhases = new Set(['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP']);
+    const priorityRank: Record<string, number> = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 };
+    const nextTask = buyerPlan.tasks
+      .filter((task) => activePhases.has(task.phase) && ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(task.status))
+      .sort((left, right) => {
+        if (left.status === 'BLOCKED' && right.status !== 'BLOCKED') return -1;
+        if (right.status === 'BLOCKED' && left.status !== 'BLOCKED') return 1;
+        const priorityDifference = (priorityRank[left.priority] ?? 9) - (priorityRank[right.priority] ?? 9);
+        if (priorityDifference !== 0) return priorityDifference;
+        return (left.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER) - (right.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER);
+      })[0] ?? null;
+    const deadlines = [
+      ...buyerPlan.milestones.flatMap((milestone) => milestone.dueAt
+        ? [{ label: milestone.customLabel ?? milestone.type.replace(/_/g, ' ').toLowerCase(), dueAt: milestone.dueAt }]
+        : []),
+      ...buyerPlan.tasks.flatMap((task) => task.dueAt && activePhases.has(task.phase) && task.status !== 'COMPLETED'
+        ? [{ label: task.title, dueAt: task.dueAt }]
+        : []),
+    ].sort((left, right) => left.dueAt.getTime() - right.dueAt.getTime());
+    const inspectionMilestone = buyerPlan.milestones.find((milestone) => milestone.type === 'INSPECTION');
+    const askPrompt = buyerPlan.stage === 'EXPLORING'
+      ? 'What should I compare before making an offer?'
+      : buyerPlan.stage === 'OFFER_CONTRACT'
+        ? 'What should I confirm before accepting a contract?'
+        : 'What should I do next to protect my closing timeline?';
+    return {
+      planId: buyerPlan.id,
+      stage: buyerPlan.stage,
+      targetCloseDate: buyerPlan.targetCloseDate?.toISOString() ?? null,
+      moveInDate: buyerPlan.moveInDate?.toISOString() ?? null,
+      nextAction: nextTask ? {
+        id: nextTask.id,
+        title: nextTask.title,
+        dueAt: nextTask.dueAt?.toISOString() ?? null,
+        status: nextTask.status,
+      } : null,
+      nearestDeadline: deadlines[0]
+        ? { label: deadlines[0].label, dueAt: deadlines[0].dueAt.toISOString() }
+        : null,
+      evidenceReadiness: {
+        inspectionStatus: inspectionMilestone?.status ?? 'NOT_STARTED',
+        documentsRecorded: buyerDocumentCount,
+      },
+      planHref: `/dashboard/properties/${propertyId}/buyer-plan`,
+      askHref: `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}&prompt=${encodeURIComponent(askPrompt)}`,
+      askPrompt,
+    };
+  })() : null;
+
   return {
     entryContext: {
       ...entryContext,
@@ -762,6 +884,7 @@ export async function getActivationFirstValue(
       PLAN: contextAction ? [contextAction] : [],
       CONSIDER: [],
     },
+    buyer,
   };
 }
 

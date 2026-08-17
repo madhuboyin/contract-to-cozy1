@@ -50,7 +50,19 @@ test('entry-context capture keeps purchase and new-construction paths consistent
     entryPath: 'EXISTING_HOME_PURCHASE',
     ownershipState: 'UNDER_CONTRACT',
     propertyOrigin: 'EXISTING_HOME',
+    buyer: {
+      purchaseStage: 'UNDER_CONTRACT',
+      targetCloseDate: '2026-09-15T12:00:00.000Z',
+      inspectionStatus: 'SCHEDULED',
+      moveInDate: null,
+      immediateConcern: 'Inspection contingency',
+    },
   })).success, true);
+  assert.equal(EntryContextCaptureSchema.safeParse(validContext({
+    entryPath: 'EXISTING_HOME_PURCHASE',
+    ownershipState: 'UNDER_CONTRACT',
+    propertyOrigin: 'EXISTING_HOME',
+  })).success, false);
   assert.equal(EntryContextCaptureSchema.safeParse(validContext({
     entryPath: 'NEW_HOME_SETUP',
     ownershipState: 'UNDER_CONTRACT',
@@ -159,11 +171,18 @@ test('trigger-first UI asks the situation before address and renders evidence-bo
     'utf8',
   );
   assert.match(addressPage, /What brought you here\?/);
+  assert.match(addressPage, /Prepare my buyer plan/);
+  assert.match(addressPage, /Target closing date/);
+  assert.match(addressPage, /Inspection status/);
+  assert.match(addressPage, /Unknown dates are fine/);
   assert.match(addressPage, /activeTrigger/);
   assert.match(addressPage, /Continue without public records/);
   assert.match(addressPage, /Unknown home facts will stay unknown/);
   assert.match(confirmPage, /captureEntryContext/);
   assert.match(firstValuePage, /Evidence used/);
+  assert.match(firstValuePage, /Your buyer closing plan is ready/);
+  assert.match(firstValuePage, /Open my buyer plan/);
+  assert.match(firstValuePage, /Ask Cozy closing copilot/);
   assert.match(firstValuePage, /Still unknown/);
   assert.match(firstValuePage, /Already handled/);
   assert.match(firstValuePage, /Remind me later/);
@@ -174,6 +193,24 @@ test('trigger-first UI asks the situation before address and renders evidence-bo
   assert.match(firstValuePage, /Useful and new/);
   assert.match(revealPage, /redirect\('\/onboarding\/confirm'\)/);
   assert.doesNotMatch(revealPage, /Annual Savings|Maintenance Risks|tax appeal window/);
+});
+
+test('buyer entry capture initializes the canonical plan before first value is read', () => {
+  const entryContext = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/entryContext.service.ts'),
+    'utf8',
+  );
+  const buyerPlan = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/HomeBuyerTask.service.ts'),
+    'utf8',
+  );
+  assert.match(entryContext, /HomeBuyerTaskService\.initializeFromEntryContext/);
+  assert.match(entryContext, /homeBuyerChecklist\.findUnique/);
+  assert.match(entryContext, /buyer:\s*\{/);
+  assert.match(buyerPlan, /static async initializeFromEntryContext/);
+  assert.match(buyerPlan, /BUYER_MILESTONE_KEYS\.INSPECTION/);
+  assert.match(buyerPlan, /BUYER_MILESTONE_KEYS\.CLOSING/);
+  assert.match(buyerPlan, /taskAnchorForEntry/);
 });
 
 test('first-value triggers link only to existing specialized route families', () => {

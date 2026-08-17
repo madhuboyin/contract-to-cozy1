@@ -78,7 +78,11 @@ export default function ConfirmOnboardingPage() {
         }
         setSuccess(true);
         await fetch('/api/onboarding-lookup-session', { method: 'DELETE' });
-        toast({ title: "Home added", description: "Your first action is ready." });
+        const buyerJourney = data.activationContext.entryPath === 'EXISTING_HOME_PURCHASE';
+        toast({
+          title: buyerJourney ? 'Buyer plan created' : 'Home added',
+          description: buyerJourney ? 'Your closing journey is ready.' : 'Your first action is ready.',
+        });
 
         track('property_claimed', {
           zipCode: data.zipCode,
@@ -122,6 +126,7 @@ export default function ConfirmOnboardingPage() {
   };
 
   if (!data) return null;
+  const isBuyerJourney = data.activationContext?.entryPath === 'EXISTING_HOME_PURCHASE';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -136,8 +141,12 @@ export default function ConfirmOnboardingPage() {
               <CheckCircle2 className="h-10 w-10 text-emerald-600" />
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-bold text-slate-900">Welcome Home.</h1>
-              <p className="text-slate-500">We saved what brought you here and prepared an evidence-bounded first action.</p>
+              <h1 className="text-2xl font-bold text-slate-900">{isBuyerJourney ? 'Your closing plan is ready.' : 'Welcome Home.'}</h1>
+              <p className="text-slate-500">
+                {isBuyerJourney
+                  ? 'We saved your stage, known dates, and inspection status before preparing your next action.'
+                  : 'We saved what brought you here and prepared an evidence-bounded first action.'}
+              </p>
             </div>
             <Loader2 className="h-6 w-6 animate-spin text-brand-600 mx-auto" />
           </div>
@@ -147,9 +156,11 @@ export default function ConfirmOnboardingPage() {
               <div className="w-12 h-12 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Building className="h-6 w-6 text-brand-600" />
               </div>
-              <h1 className="text-2xl font-bold text-slate-900">Confirm this home</h1>
+              <h1 className="text-2xl font-bold text-slate-900">{isBuyerJourney ? 'Confirm this purchase' : 'Confirm this home'}</h1>
               <p className="text-slate-500">
-                We’ll connect the address to your selected goal and show the next useful action.
+                {isBuyerJourney
+                  ? 'We’ll create the property-scoped closing plan before showing your first action.'
+                  : 'We’ll connect the address to your selected goal and show the next useful action.'}
               </p>
             </div>
 
@@ -182,7 +193,7 @@ export default function ConfirmOnboardingPage() {
                 <Loader2 className="h-6 w-6 animate-spin" />
               ) : (
                 <>
-                  Add home and see first action
+                  {isBuyerJourney ? 'Create my closing plan' : 'Add home and see first action'}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </>
               )}

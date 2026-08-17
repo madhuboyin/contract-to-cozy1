@@ -2,12 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, FileCheck2, FileUp, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, FileUp, ListChecks, Loader2, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
 import type { ActivationFirstValueDTO } from '@/types';
 import { track } from '@/lib/analytics/events';
+
+const BUYER_STAGE_LABELS: Record<string, string> = {
+  EXPLORING: 'Exploring',
+  OFFER_CONTRACT: 'Offer and contract',
+  DUE_DILIGENCE: 'Due diligence',
+  CLOSING_PREP: 'Closing preparation',
+};
+
+function displayDate(value: string | null): string {
+  return value
+    ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(value))
+    : 'Not set yet';
+}
 
 export default function OnboardingFirstValuePage() {
   const router = useRouter();
@@ -152,6 +165,83 @@ export default function OnboardingFirstValuePage() {
         <div className="text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
           <p className="mt-3 font-medium text-slate-600">Preparing a bounded first action…</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (data.buyer) {
+    const { buyer } = data;
+    return (
+      <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 sm:py-12">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <header className="space-y-3 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-100 text-brand-700">
+              <ListChecks className="h-6 w-6" />
+            </div>
+            <p className="text-sm font-bold text-brand-700">Your buyer closing plan is ready</p>
+            <h1 className="text-3xl font-black text-slate-900 sm:text-4xl">
+              {BUYER_STAGE_LABELS[buyer.stage] ?? buyer.stage.replace(/_/g, ' ')}
+            </h1>
+            <p className="mx-auto max-w-2xl text-slate-600">
+              We created the plan before this reveal, using only the dates and transaction context you recorded.
+            </p>
+          </header>
+
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <p className="text-sm font-bold text-brand-700">Next best action</p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-900">
+              {buyer.nextAction?.title ?? 'Review your closing plan'}
+            </h2>
+            <p className="mt-2 text-slate-600">
+              {buyer.nextAction?.dueAt
+                ? `Recorded due date: ${displayDate(buyer.nextAction.dueAt)}`
+                : 'No deadline is required to begin. Add dates when you know them.'}
+            </p>
+            <Button
+              className="mt-6 h-12 w-full rounded-xl text-base font-bold"
+              onClick={() => {
+                track('first_action_started', { propertyId, actionId: buyer.nextAction?.id ?? buyer.planId });
+                router.push(buyer.planHref);
+              }}
+            >
+              Open my buyer plan <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </section>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="flex items-center gap-2 font-bold text-slate-900">
+                <CalendarDays className="h-5 w-5 text-brand-600" /> Known dates
+              </h2>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div><dt className="text-slate-500">Target closing</dt><dd className="font-semibold text-slate-900">{displayDate(buyer.targetCloseDate)}</dd></div>
+                <div><dt className="text-slate-500">Move-in</dt><dd className="font-semibold text-slate-900">{displayDate(buyer.moveInDate)}</dd></div>
+                <div><dt className="text-slate-500">Nearest deadline</dt><dd className="font-semibold text-slate-900">{buyer.nearestDeadline ? `${buyer.nearestDeadline.label} · ${displayDate(buyer.nearestDeadline.dueAt)}` : 'None recorded yet'}</dd></div>
+              </dl>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="flex items-center gap-2 font-bold text-slate-900">
+                <FileCheck2 className="h-5 w-5 text-brand-600" /> Evidence readiness
+              </h2>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div><dt className="text-slate-500">Inspection</dt><dd className="font-semibold text-slate-900">{buyer.evidenceReadiness.inspectionStatus.replace(/_/g, ' ').toLowerCase()}</dd></div>
+                <div><dt className="text-slate-500">Documents recorded</dt><dd className="font-semibold text-slate-900">{buyer.evidenceReadiness.documentsRecorded}</dd></div>
+              </dl>
+              <p className="mt-4 text-xs text-slate-500">These are recorded preparation states, not professional certification of closing readiness.</p>
+            </section>
+          </div>
+
+          <section className="rounded-2xl border border-brand-200 bg-brand-50 p-5">
+            <h2 className="flex items-center gap-2 font-bold text-brand-950">
+              <MessageCircle className="h-5 w-5" /> Ask Cozy closing copilot
+            </h2>
+            <p className="mt-2 text-sm text-brand-900">{buyer.askPrompt}</p>
+            <Button variant="outline" className="mt-4 border-brand-300 bg-white" onClick={() => router.push(buyer.askHref)}>
+              Ask this question
+            </Button>
+          </section>
         </div>
       </main>
     );

@@ -227,6 +227,13 @@ export type ActivationEntryContextInput = {
     entityId?: string | null;
     source: 'USER_SELECTED' | 'CONVERSATION' | 'DOCUMENT' | 'PHOTO' | 'SYSTEM_SIGNAL' | 'OTHER';
   };
+  buyer?: {
+    purchaseStage: 'EXPLORING' | 'OFFER_MADE' | 'UNDER_CONTRACT';
+    targetCloseDate?: string | null;
+    inspectionStatus: 'NOT_SCHEDULED' | 'SCHEDULED' | 'REPORT_AVAILABLE' | 'REVIEWED';
+    moveInDate?: string | null;
+    immediateConcern?: string | null;
+  };
   consentContext?: string | null;
   sourceMetadata?: Record<string, unknown> | null;
 };
@@ -303,6 +310,18 @@ export type ActivationFirstValueDTO = {
     confidence: 'LOW' | 'MEDIUM' | 'HIGH';
   };
   plan: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', ActivationHomeActionDTO[]>;
+  buyer: {
+    planId: string;
+    stage: BuyerJourneyStage;
+    targetCloseDate: string | null;
+    moveInDate: string | null;
+    nextAction: { id: string; title: string; dueAt: string | null; status: HomeBuyerTaskStatus } | null;
+    nearestDeadline: { label: string; dueAt: string } | null;
+    evidenceReadiness: { inspectionStatus: BuyerMilestoneStatus; documentsRecorded: number };
+    planHref: string;
+    askHref: string;
+    askPrompt: string;
+  } | null;
 };
 
 export type ActivationTriggerEvidenceInput = {

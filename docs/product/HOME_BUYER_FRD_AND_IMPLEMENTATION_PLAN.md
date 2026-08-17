@@ -1,8 +1,8 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.7
+**Version:** 1.8
 **Date:** 2026-08-16
-**Status:** Proposed greenfield product consolidation
+**Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
 **Primary routes:** `/onboarding/address`, `/dashboard`, `/dashboard/properties/:propertyId/buyer-plan`, `/dashboard/ask`
 **Related systems:** Unified Home, Plan & Projects, Home Record, Inspection Hub, Ask Cozy, Guidance, Negotiation Shield, Provider Booking, Coverage, Household, Notifications, and Moving Concierge
@@ -2451,6 +2451,19 @@ For every slice that changes shared code, the relevant Section 19.6 homeowner
 functional checks are part of the slice's functional check. Buyer delivery may
 not defer an introduced homeowner regression to a later cleanup slice.
 
+### 21.0 Delivery status
+
+| Slice | Status | Implemented scope | Remaining before slice completion |
+| --- | --- | --- | --- |
+| Slice 0 | Foundation implemented (`5cc65015`) | Direct Prisma schema correction; journey/task/evidence/applicability/milestone/contact types; `PRE_CLOSE` task-phase removal; stable keys; lifecycle transition policy; viewer-safe reads; frontend contract sweep | Complete bounded overview, milestone, contact, batch, evidence, and buyer-tool API response contracts as their vertical UI paths land; retain centralized error mapping |
+| Slice 1 | In progress | Buyer purchase stage, optional closing/move dates, inspection status, and immediate concern in trigger-first onboarding; synchronous property-scoped plan initialization; seeded inspection/closing/move milestones; date-anchored task recalculation; buyer-specific first-value reveal | Rendered end-to-end browser verification, deeper property-fact correction/source presentation, and final onboarding analytics review |
+| Slices 2–8 | Not started | — | Follow the dependency order in Section 22 |
+
+The Slice 0 foundation is complete enough for vertical Slice 1 work, but the
+minimum coherent release in Section 21.1 is not yet satisfied. No current
+increment is a production-ready buyer release. Schema changes continue to be
+made directly without migration files under the greenfield policy in Section 2.
+
 ### 21.1 Minimum coherent release and explicit cut line
 
 The initiative may be implemented incrementally, but the first releasable buyer
@@ -2510,6 +2523,9 @@ This cut line guides sequencing and scope; it is not an approval or rollout gate
 
 ### Slice 0 — Contracts and direct schema correction
 
+**Implementation status:** Foundation implemented; bounded endpoint contracts
+continue to be completed with the vertical slices that consume them.
+
 **Goal:** Establish one canonical buyer target without compatibility scaffolding
 while preserving the existing homeowner contract.
 
@@ -2561,6 +2577,8 @@ Functional check:
   removed `PRE_CLOSE` value.
 
 ### Slice 1 — Zero-friction onboarding and first value
+
+**Implementation status:** In progress.
 
 **Goal:** Create an accurate plan before the buyer reaches Home.
 

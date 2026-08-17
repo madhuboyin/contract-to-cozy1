@@ -14,6 +14,8 @@ import type { ActivationEntryContextInput } from '@/types';
 
 type Situation = 'own' | 'buying' | 'new-build' | 'exploring';
 type TriggerType = ActivationEntryContextInput['activeTrigger']['type'];
+type BuyerPurchaseStage = NonNullable<ActivationEntryContextInput['buyer']>['purchaseStage'];
+type BuyerInspectionStatus = NonNullable<ActivationEntryContextInput['buyer']>['inspectionStatus'];
 
 const TRIGGER_OPTIONS: Array<{ type: TriggerType; label: string }> = [
   { type: 'REPAIR', label: 'Something needs repair' },
@@ -25,6 +27,10 @@ const TRIGGER_OPTIONS: Array<{ type: TriggerType; label: string }> = [
   { type: 'ANTICIPATED_COST', label: 'Prepare for a future cost' },
   { type: 'NONE_EXPLORING', label: 'Just understand my home' },
 ];
+
+function isoFromDateInput(value: string): string | null {
+  return value ? new Date(`${value}T12:00:00.000Z`).toISOString() : null;
+}
 
 /**
  * AddressOnboardingPage is the first "Wow" moment.
@@ -43,6 +49,11 @@ export default function AddressOnboardingPage() {
   const [situation, setSituation] = useState<Situation>('own');
   const [triggerType, setTriggerType] = useState<TriggerType | null>(null);
   const [triggerDetail, setTriggerDetail] = useState('');
+  const [buyerPurchaseStage, setBuyerPurchaseStage] = useState<BuyerPurchaseStage>('UNDER_CONTRACT');
+  const [buyerInspectionStatus, setBuyerInspectionStatus] = useState<BuyerInspectionStatus>('NOT_SCHEDULED');
+  const [targetCloseDate, setTargetCloseDate] = useState('');
+  const [moveInDate, setMoveInDate] = useState('');
+  const [buyerConcern, setBuyerConcern] = useState('');
 
   // Mount tracking
   React.useEffect(() => {
@@ -56,15 +67,43 @@ export default function AddressOnboardingPage() {
 
   const buildActivationContext = (): ActivationEntryContextInput => {
     const selectedTrigger = TRIGGER_OPTIONS.find((option) => option.type === triggerType);
+    if (situation === 'buying') {
+      const buyerLabel = buyerConcern.trim()
+        || (buyerPurchaseStage === 'EXPLORING'
+          ? 'Compare this home before making an offer'
+          : buyerPurchaseStage === 'OFFER_MADE'
+            ? 'Prepare for a possible contract'
+            : 'Prepare for closing');
+      return {
+        entryPath: 'EXISTING_HOME_PURCHASE',
+        ownershipState: buyerPurchaseStage === 'UNDER_CONTRACT' ? 'UNDER_CONTRACT' : 'SHOPPING',
+        propertyOrigin: 'EXISTING_HOME',
+        activeTrigger: {
+          type: ['REPORT_AVAILABLE', 'REVIEWED'].includes(buyerInspectionStatus) ? 'INSPECTION_FINDING' : 'OTHER',
+          label: buyerLabel,
+          detail: buyerConcern.trim() || null,
+          entityType: 'PROPERTY',
+          entityId: null,
+          source: 'USER_SELECTED',
+        },
+        buyer: {
+          purchaseStage: buyerPurchaseStage,
+          targetCloseDate: isoFromDateInput(targetCloseDate),
+          inspectionStatus: buyerInspectionStatus,
+          moveInDate: isoFromDateInput(moveInDate),
+          immediateConcern: buyerConcern.trim() || null,
+        },
+        consentContext: 'User submitted buyer journey context to prepare a property-scoped closing plan.',
+        sourceMetadata: { onboardingSurface: 'address', experienceMode: 'BUYER_CLOSING' },
+      };
+    }
     return {
-          entryPath: situation === 'buying'
-            ? 'EXISTING_HOME_PURCHASE'
-            : situation === 'new-build'
+          entryPath: situation === 'new-build'
               ? 'NEW_HOME_SETUP'
               : situation === 'exploring'
                 ? 'EXPLORATION'
                 : 'EXISTING_OWNER_TRIGGER',
-          ownershipState: situation === 'buying' || situation === 'new-build'
+          ownershipState: situation === 'new-build'
             ? 'UNDER_CONTRACT'
             : situation === 'exploring'
               ? 'SHOPPING'
@@ -101,7 +140,7 @@ export default function AddressOnboardingPage() {
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address.trim() || !triggerType) return;
+    if (!address.trim() || (situation !== 'buying' && !triggerType)) return;
 
     if (manualMode) {
       if (!city.trim() || !/^[A-Za-z]{2}$/.test(state.trim()) || !/^\d{5}$/.test(zipCode.trim())) {
@@ -198,33 +237,6 @@ export default function AddressOnboardingPage() {
 
           {/* Search Experience */}
           <form onSubmit={handleLookup} className="space-y-5 text-left">
-            <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-              <legend className="px-2 text-sm font-bold text-slate-900">What brought you here?</legend>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {TRIGGER_OPTIONS.map((option) => (
-                  <button
-                    key={option.type}
-                    type="button"
-                    onClick={() => setTriggerType(option.type)}
-                    aria-pressed={triggerType === option.type}
-                    className={`min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition-colors ${
-                      triggerType === option.type
-                        ? 'border-brand-600 bg-brand-50 text-brand-800'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <Input
-                value={triggerDetail}
-                onChange={(event) => setTriggerDetail(event.target.value)}
-                placeholder="Optional detail — system, deadline, quote, or concern"
-                maxLength={2000}
-              />
-            </fieldset>
-
             <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
               <legend className="px-2 text-sm font-bold text-slate-900">Where are you in the home journey?</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -255,6 +267,94 @@ export default function AddressOnboardingPage() {
               </div>
             </fieldset>
 
+            {situation === 'buying' ? (
+              <fieldset className="space-y-5 rounded-2xl border border-brand-200 bg-brand-50 p-5 shadow-sm">
+                <legend className="px-2 text-sm font-bold text-brand-950">Prepare my buyer plan</legend>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-brand-950">Purchase stage</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {([
+                      ['EXPLORING', 'Exploring'],
+                      ['OFFER_MADE', 'Offer made'],
+                      ['UNDER_CONTRACT', 'Under contract'],
+                    ] as Array<[BuyerPurchaseStage, string]>).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setBuyerPurchaseStage(value)}
+                        aria-pressed={buyerPurchaseStage === value}
+                        className={`min-h-11 rounded-xl border px-3 text-sm font-semibold ${buyerPurchaseStage === value
+                          ? 'border-brand-600 bg-white text-brand-900'
+                          : 'border-brand-200 bg-brand-50 text-brand-800'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1 text-sm font-semibold text-brand-950">
+                    Target closing date <span className="font-normal text-brand-700">(if known)</span>
+                    <Input type="date" value={targetCloseDate} onChange={(event) => setTargetCloseDate(event.target.value)} />
+                  </label>
+                  <label className="space-y-1 text-sm font-semibold text-brand-950">
+                    Move-in date <span className="font-normal text-brand-700">(optional)</span>
+                    <Input type="date" value={moveInDate} onChange={(event) => setMoveInDate(event.target.value)} />
+                  </label>
+                </div>
+                <label className="block space-y-1 text-sm font-semibold text-brand-950">
+                  Inspection status
+                  <select
+                    value={buyerInspectionStatus}
+                    onChange={(event) => setBuyerInspectionStatus(event.target.value as BuyerInspectionStatus)}
+                    className="h-10 w-full rounded-md border border-brand-200 bg-white px-3 text-sm text-slate-900"
+                  >
+                    <option value="NOT_SCHEDULED">Not scheduled</option>
+                    <option value="SCHEDULED">Scheduled</option>
+                    <option value="REPORT_AVAILABLE">Report available</option>
+                    <option value="REVIEWED">Reviewed</option>
+                  </select>
+                </label>
+                <label className="block space-y-1 text-sm font-semibold text-brand-950">
+                  What matters most right now? <span className="font-normal text-brand-700">(optional)</span>
+                  <Input
+                    value={buyerConcern}
+                    onChange={(event) => setBuyerConcern(event.target.value)}
+                    placeholder="For example: inspection deadline, financing, or insurance"
+                    maxLength={2000}
+                  />
+                </label>
+                <p className="text-xs text-brand-800">Unknown dates are fine. Your plan will still start with the next useful action.</p>
+              </fieldset>
+            ) : (
+              <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                <legend className="px-2 text-sm font-bold text-slate-900">What brought you here?</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {TRIGGER_OPTIONS.map((option) => (
+                    <button
+                      key={option.type}
+                      type="button"
+                      onClick={() => setTriggerType(option.type)}
+                      aria-pressed={triggerType === option.type}
+                      className={`min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                        triggerType === option.type
+                          ? 'border-brand-600 bg-brand-50 text-brand-800'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  value={triggerDetail}
+                  onChange={(event) => setTriggerDetail(event.target.value)}
+                  placeholder="Optional detail — system, deadline, quote, or concern"
+                  maxLength={2000}
+                />
+              </fieldset>
+            )}
+
             <div className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-teal-500 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
               <div className="relative bg-white rounded-2xl shadow-xl border border-slate-100 p-2 flex flex-col sm:flex-row gap-2">
@@ -278,7 +378,7 @@ export default function AddressOnboardingPage() {
               </div>
               <Button 
                 type="submit"
-                disabled={loading || !address.trim() || !triggerType}
+                disabled={loading || !address.trim() || (situation !== 'buying' && !triggerType)}
                 className="h-14 px-8 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-lg group transition-all"
               >
                 {loading ? (
