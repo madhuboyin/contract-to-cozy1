@@ -72,6 +72,8 @@ export const BUYER_CONTACT_ROLES = ['BUYER_AGENT', 'LENDER', 'ATTORNEY', 'TITLE_
 
 export const BUYER_CHECKLIST_TEMPLATE_VERSION = 'buyer-closing-v1';
 export const BUYER_ACTION_KEYS = {
+  CONTRACT_REVISION_CONFIRM: 'buyer:contract:revision-confirm',
+  CONTRACT_CONTINGENCIES_REVIEW: 'buyer:contract:contingencies-review',
   PURCHASE_PATH_CONFIRM: 'buyer:phase:purchase-path-confirm',
   LOAN_APPLICATION: 'buyer:financing:loan-application',
   LOAN_ESTIMATES: 'buyer:financing:loan-estimates',
@@ -175,6 +177,70 @@ export const BuyerJourneyCancelSchema = z.strictObject({
   confirmed: z.literal(true),
   reason: z.string().trim().min(5).max(500),
 });
+
+export const BUYER_CONTRACT_FIELD_KEYS = [
+  'PROPERTY_ADDRESS', 'BUYER_NAMES', 'SELLER_NAMES', 'ACCEPTANCE_DATE',
+  'TARGET_CLOSING_DATE', 'POSSESSION_DATE', 'POSSESSION_TERMS',
+  'EARNEST_MONEY_AMOUNT', 'EARNEST_MONEY_RECIPIENT', 'EARNEST_MONEY_METHOD',
+  'SELLER_CREDITS', 'INCLUDED_ITEMS', 'EXCLUDED_ITEMS', 'AGREED_REPAIRS',
+  'SPECIAL_CONDITIONS',
+] as const;
+export const BUYER_CONTRACT_CONTINGENCY_TYPES = [
+  'EARNEST_MONEY', 'INSPECTION', 'ATTORNEY_REVIEW', 'FINANCING', 'APPRAISAL',
+  'TITLE', 'HOA_DOCUMENTS', 'SALE_OF_HOME', 'OTHER',
+] as const;
+export const BUYER_CONTRACT_CONTINGENCY_STATUSES = ['ACTIVE', 'SATISFIED', 'WAIVED', 'EXPIRED'] as const;
+const BuyerContractDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional();
+const BuyerContractContingencySchema = z.strictObject({
+  contingencyKey: z.string().trim().min(1).max(120),
+  type: z.enum(BUYER_CONTRACT_CONTINGENCY_TYPES),
+  label: z.string().trim().min(1).max(200),
+  status: z.enum(BUYER_CONTRACT_CONTINGENCY_STATUSES).default('ACTIVE'),
+  dueAt: z.string().datetime().nullable().optional(),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  sourceDocumentId: z.string().uuid().nullable().optional(),
+  sourcePage: z.number().int().min(1).max(10_000).nullable().optional(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
+});
+const BuyerContractRevisionFieldsSchema = z.strictObject({
+  sourceType: z.enum(['MANUAL', 'DOCUMENT_EXTRACTION']).default('MANUAL'),
+  sourceDocumentId: z.string().uuid().nullable().optional(),
+  extractionMetadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  propertyAddress: z.string().trim().min(1).max(500).nullable().optional(),
+  buyerNames: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
+  sellerNames: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
+  acceptedAt: BuyerContractDateSchema,
+  targetClosingDate: BuyerContractDateSchema,
+  possessionAt: z.string().datetime().nullable().optional(),
+  possessionTerms: z.string().trim().max(4_000).nullable().optional(),
+  earnestMoneyAmountCents: z.number().int().min(0).nullable().optional(),
+  earnestMoneyRecipient: z.string().trim().max(300).nullable().optional(),
+  earnestMoneyMethod: z.string().trim().max(200).nullable().optional(),
+  sellerCreditsCents: z.number().int().min(0).nullable().optional(),
+  includedItems: z.array(z.string().trim().min(1).max(300)).max(100).default([]),
+  excludedItems: z.array(z.string().trim().min(1).max(300)).max(100).default([]),
+  agreedRepairs: z.array(z.string().trim().min(1).max(500)).max(100).default([]),
+  specialConditions: z.string().trim().max(10_000).nullable().optional(),
+  contingencies: z.array(BuyerContractContingencySchema).max(50).default([]),
+});
+export const BuyerContractRevisionCreateSchema = BuyerContractRevisionFieldsSchema;
+export const BuyerContractRevisionUpdateSchema = z.preprocess(
+  (value) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0 ? null : value,
+  BuyerContractRevisionFieldsSchema.partial(),
+);
+export const BuyerContractRevisionConfirmSchema = z.strictObject({
+  confirmed: z.literal(true),
+  fieldConfirmations: z.array(z.strictObject({
+    fieldKey: z.enum(BUYER_CONTRACT_FIELD_KEYS),
+    sourceDocumentId: z.string().uuid().nullable().optional(),
+    sourcePage: z.number().int().min(1).max(10_000).nullable().optional(),
+    sourceLabel: z.string().trim().max(500).nullable().optional(),
+    confidence: z.number().min(0).max(1).nullable().optional(),
+  })).min(1).max(BUYER_CONTRACT_FIELD_KEYS.length),
+});
+export type BuyerContractRevisionCreateInput = z.infer<typeof BuyerContractRevisionCreateSchema>;
+export type BuyerContractRevisionUpdateInput = z.infer<typeof BuyerContractRevisionUpdateSchema>;
+export type BuyerContractRevisionConfirmInput = z.infer<typeof BuyerContractRevisionConfirmSchema>;
 
 export const BUYER_PURCHASE_PATHS = ['CASH', 'FINANCED'] as const;
 export const BuyerPurchaseFinancingInputSchema = z.strictObject({

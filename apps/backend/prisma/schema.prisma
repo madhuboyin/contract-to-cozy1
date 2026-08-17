@@ -476,6 +476,54 @@ enum BuyerClosingDisclosureSource {
   DOCUMENT_EXTRACTION
 }
 
+enum BuyerContractRevisionStatus {
+  DRAFT
+  CONFIRMED
+  SUPERSEDED
+}
+
+enum BuyerContractRevisionSource {
+  MANUAL
+  DOCUMENT_EXTRACTION
+}
+
+enum BuyerContractFieldKey {
+  PROPERTY_ADDRESS
+  BUYER_NAMES
+  SELLER_NAMES
+  ACCEPTANCE_DATE
+  TARGET_CLOSING_DATE
+  POSSESSION_DATE
+  POSSESSION_TERMS
+  EARNEST_MONEY_AMOUNT
+  EARNEST_MONEY_RECIPIENT
+  EARNEST_MONEY_METHOD
+  SELLER_CREDITS
+  INCLUDED_ITEMS
+  EXCLUDED_ITEMS
+  AGREED_REPAIRS
+  SPECIAL_CONDITIONS
+}
+
+enum BuyerContractContingencyType {
+  EARNEST_MONEY
+  INSPECTION
+  ATTORNEY_REVIEW
+  FINANCING
+  APPRAISAL
+  TITLE
+  HOA_DOCUMENTS
+  SALE_OF_HOME
+  OTHER
+}
+
+enum BuyerContractContingencyStatus {
+  ACTIVE
+  SATISFIED
+  WAIVED
+  EXPIRED
+}
+
 enum BuyerClosingFundsMethod {
   UNKNOWN
   WIRE
@@ -2776,6 +2824,7 @@ model HomeBuyerChecklist {
   insuranceWorkspace BuyerInsuranceWorkspace?
   walkthroughWorkspace BuyerWalkthroughWorkspace?
   closingDayWorkspace BuyerClosingDayWorkspace?
+  contractWorkspace BuyerContractWorkspace?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2812,6 +2861,110 @@ model BuyerPurchaseFinancingPlan {
   @@index([selectedLoanEstimateRevisionId])
   @@index([lenderSelectionRecordedByUserId])
   @@map("buyer_purchase_financing_plans")
+}
+
+model BuyerContractWorkspace {
+  id                String @id @default(uuid())
+  checklistId       String @unique
+  propertyId        String @unique
+  currentRevisionId String?
+
+  checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  property  Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  revisions BuyerContractRevision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([currentRevisionId])
+  @@map("buyer_contract_workspaces")
+}
+
+model BuyerContractRevision {
+  id             String @id @default(uuid())
+  workspaceId    String
+  revisionNumber Int
+  status         BuyerContractRevisionStatus @default(DRAFT)
+  sourceType     BuyerContractRevisionSource @default(MANUAL)
+  sourceDocumentId String?
+  extractionMetadataJson Json?
+
+  propertyAddress       String?
+  buyerNames            String[] @default([])
+  sellerNames           String[] @default([])
+  acceptedAt            DateTime? @db.Date
+  targetClosingDate     DateTime? @db.Date
+  possessionAt          DateTime?
+  possessionTerms       String? @db.Text
+  earnestMoneyAmountCents Int?
+  earnestMoneyRecipient String?
+  earnestMoneyMethod    String?
+  sellerCreditsCents    Int?
+  includedItems         String[] @default([])
+  excludedItems         String[] @default([])
+  agreedRepairs         String[] @default([])
+  specialConditions     String? @db.Text
+  confirmedAt           DateTime?
+  confirmedByUserId     String?
+
+  workspace          BuyerContractWorkspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fieldConfirmations BuyerContractFieldConfirmation[]
+  contingencies      BuyerContractContingency[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, revisionNumber])
+  @@index([workspaceId, status, revisionNumber(sort: Desc)])
+  @@index([sourceDocumentId])
+  @@map("buyer_contract_revisions")
+}
+
+model BuyerContractFieldConfirmation {
+  id               String @id @default(uuid())
+  revisionId       String
+  fieldKey         BuyerContractFieldKey
+  sourceDocumentId String?
+  sourcePage       Int?
+  sourceLabel      String?
+  confidence       Float?
+  confirmedAt      DateTime
+  confirmedByUserId String
+
+  revision BuyerContractRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([revisionId, fieldKey])
+  @@index([sourceDocumentId])
+  @@map("buyer_contract_field_confirmations")
+}
+
+model BuyerContractContingency {
+  id               String @id @default(uuid())
+  revisionId       String
+  propertyId       String
+  contingencyKey   String
+  type             BuyerContractContingencyType
+  label            String
+  status           BuyerContractContingencyStatus @default(ACTIVE)
+  dueAt            DateTime?
+  notes            String? @db.Text
+  sourceDocumentId String?
+  sourcePage       Int?
+  confidence       Float?
+  confirmedAt      DateTime?
+  confirmedByUserId String?
+
+  revision BuyerContractRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([revisionId, contingencyKey])
+  @@index([propertyId, status, dueAt])
+  @@index([sourceDocumentId])
+  @@map("buyer_contract_contingencies")
 }
 
 model BuyerPurchaseLoanOffer {
@@ -3907,6 +4060,7 @@ model Property {
   buyerPurchaseLoanOffers    BuyerPurchaseLoanOffer[]
   buyerClosingDisclosureWorkspace BuyerClosingDisclosureWorkspace?
   buyerClosingDayWorkspace BuyerClosingDayWorkspace?
+  buyerContractWorkspace BuyerContractWorkspace?
   newHomePilotAssessment     NewHomePilotAssessment?
   newHomeSetupPlan           NewHomeSetupPlan?
   newHomeSystemRegistrations NewHomeSystemRegistration[]

@@ -70,6 +70,10 @@ router.get('/properties/:propertyId/purchase-financing/readiness', homeBuyerTask
 router.put('/properties/:propertyId/purchase-financing/readiness', homeBuyerTaskController.handleUpdatePurchaseLenderReadiness);
 router.post('/properties/:propertyId/purchase-financing/readiness/conditions', homeBuyerTaskController.handleCreateBuyerLenderCondition);
 router.patch('/properties/:propertyId/purchase-financing/readiness/conditions/:conditionId', homeBuyerTaskController.handleUpdateBuyerLenderCondition);
+router.get('/properties/:propertyId/contract-contingencies', homeBuyerTaskController.handleGetBuyerContract);
+router.post('/properties/:propertyId/contract-contingencies/revisions', homeBuyerTaskController.handleCreateBuyerContractRevision);
+router.patch('/properties/:propertyId/contract-contingencies/revisions/:revisionId', homeBuyerTaskController.handleUpdateBuyerContractDraft);
+router.post('/properties/:propertyId/contract-contingencies/revisions/:revisionId/confirm', homeBuyerTaskController.handleConfirmBuyerContractRevision);
 router.get('/properties/:propertyId/title-escrow', homeBuyerTaskController.handleGetBuyerTitleEscrow);
 router.put('/properties/:propertyId/title-escrow', homeBuyerTaskController.handleUpdateBuyerTitleEscrow);
 router.post('/properties/:propertyId/title-escrow/issues', homeBuyerTaskController.handleCreateBuyerTitleEscrowIssue);

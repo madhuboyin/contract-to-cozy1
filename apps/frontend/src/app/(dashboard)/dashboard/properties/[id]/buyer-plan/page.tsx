@@ -32,6 +32,7 @@ import { BuyerPurchaseLenderReadinessCenter } from './BuyerPurchaseLenderReadine
 import { BuyerTitleEscrowCenter } from './BuyerTitleEscrowCenter';
 import { BuyerInsuranceCenter } from './BuyerInsuranceCenter';
 import { BuyerWalkthroughCenter } from './BuyerWalkthroughCenter';
+import { BuyerContractContingencyCenter } from './BuyerContractContingencyCenter';
 import RouteStateCard from '@/components/system/RouteStateCard';
 
 const PHASES: Array<{ key: BuyerPlanPhase; label: string }> = [
@@ -431,6 +432,8 @@ export default function BuyerPlanPage() {
             <p className="mt-3 text-xs text-muted-foreground">Ownership begins only after explicit professional-close confirmation in the Closing Day Companion.</p>
           </CardContent>
         </Card>
+
+        <BuyerContractContingencyCenter propertyId={propertyId} readOnly={readOnly} onChanged={() => void refresh()} />
 
         <Card className="border-emerald-200 bg-emerald-50/30">
           <CardHeader><CardTitle className="text-lg">Purchase financing path</CardTitle></CardHeader>

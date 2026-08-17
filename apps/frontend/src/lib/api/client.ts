@@ -3635,6 +3635,33 @@ class APIClient {
     );
   }
 
+  async getBuyerContract(propertyId: string): Promise<APIResponse<import('@/types').BuyerContractWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/contract-contingencies`, { method: 'GET' });
+  }
+
+  async createBuyerContractRevision(
+    propertyId: string,
+    input: import('@/types').BuyerContractRevisionInput,
+  ): Promise<APIResponse<import('@/types').BuyerContractWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/contract-contingencies/revisions`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateBuyerContractDraft(
+    propertyId: string,
+    revisionId: string,
+    input: import('@/types').BuyerContractRevisionInput,
+  ): Promise<APIResponse<import('@/types').BuyerContractWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/contract-contingencies/revisions/${revisionId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async confirmBuyerContractRevision(
+    propertyId: string,
+    revisionId: string,
+    fieldConfirmations: Array<{ fieldKey: import('@/types').BuyerContractFieldKey; sourceDocumentId?: string | null; sourcePage?: number | null; sourceLabel?: string | null; confidence?: number | null }>,
+  ): Promise<APIResponse<import('@/types').BuyerContractWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/contract-contingencies/revisions/${revisionId}/confirm`, { method: 'POST', body: JSON.stringify({ confirmed: true, fieldConfirmations }) });
+  }
+
   async getBuyerPurchaseLoanEstimates(
     propertyId: string,
   ): Promise<APIResponse<BuyerPurchaseLoanEstimateWorkspace>> {

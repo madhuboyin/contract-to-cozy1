@@ -3037,6 +3037,68 @@ export type BuyerPlanPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
 export type BuyerTaskSourceType = 'SYSTEM' | 'USER' | 'INSPECTION_FINDING' | 'DOCUMENT' | 'GUIDANCE_JOURNEY' | 'HOME_ACTION';
 export type BuyerFindingDisposition = 'PENDING_REVIEW' | 'VERIFIED_FACT' | 'PRE_CLOSE_NEGOTIATION' | 'POST_CLOSE_ACTION' | 'DISMISSED';
 
+export type BuyerContractRevisionStatus = 'DRAFT' | 'CONFIRMED' | 'SUPERSEDED';
+export type BuyerContractFieldKey = 'PROPERTY_ADDRESS' | 'BUYER_NAMES' | 'SELLER_NAMES' | 'ACCEPTANCE_DATE' | 'TARGET_CLOSING_DATE' | 'POSSESSION_DATE' | 'POSSESSION_TERMS' | 'EARNEST_MONEY_AMOUNT' | 'EARNEST_MONEY_RECIPIENT' | 'EARNEST_MONEY_METHOD' | 'SELLER_CREDITS' | 'INCLUDED_ITEMS' | 'EXCLUDED_ITEMS' | 'AGREED_REPAIRS' | 'SPECIAL_CONDITIONS';
+export type BuyerContractContingencyType = 'EARNEST_MONEY' | 'INSPECTION' | 'ATTORNEY_REVIEW' | 'FINANCING' | 'APPRAISAL' | 'TITLE' | 'HOA_DOCUMENTS' | 'SALE_OF_HOME' | 'OTHER';
+export type BuyerContractContingencyStatus = 'ACTIVE' | 'SATISFIED' | 'WAIVED' | 'EXPIRED';
+
+export interface BuyerContractContingencyInput {
+  contingencyKey: string;
+  type: BuyerContractContingencyType;
+  label: string;
+  status: BuyerContractContingencyStatus;
+  dueAt?: string | null;
+  notes?: string | null;
+  sourceDocumentId?: string | null;
+  sourcePage?: number | null;
+  confidence?: number | null;
+}
+
+export interface BuyerContractRevisionInput {
+  sourceType?: 'MANUAL' | 'DOCUMENT_EXTRACTION';
+  sourceDocumentId?: string | null;
+  propertyAddress?: string | null;
+  buyerNames?: string[];
+  sellerNames?: string[];
+  acceptedAt?: string | null;
+  targetClosingDate?: string | null;
+  possessionAt?: string | null;
+  possessionTerms?: string | null;
+  earnestMoneyAmountCents?: number | null;
+  earnestMoneyRecipient?: string | null;
+  earnestMoneyMethod?: string | null;
+  sellerCreditsCents?: number | null;
+  includedItems?: string[];
+  excludedItems?: string[];
+  agreedRepairs?: string[];
+  specialConditions?: string | null;
+  contingencies?: BuyerContractContingencyInput[];
+}
+
+export interface BuyerContractRevision extends Required<Omit<BuyerContractRevisionInput, 'sourceDocumentId' | 'possessionAt' | 'acceptedAt' | 'targetClosingDate'>> {
+  id: string;
+  revisionNumber: number;
+  status: BuyerContractRevisionStatus;
+  sourceDocumentId: string | null;
+  acceptedAt: string | null;
+  targetClosingDate: string | null;
+  possessionAt: string | null;
+  confirmedAt: string | null;
+  confirmedByUserId: string | null;
+  fieldConfirmations: Array<{ id: string; fieldKey: BuyerContractFieldKey; sourceDocumentId: string | null; sourcePage: number | null; sourceLabel: string | null; confidence: number | null; confirmedAt: string }>;
+  contingencies: Array<BuyerContractContingencyInput & { id: string; confirmedAt: string | null }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BuyerContractWorkspaceResponse {
+  workspace: null | { id: string; checklistId: string; propertyId: string; currentRevisionId: string | null; revisions: BuyerContractRevision[]; createdAt: string; updatedAt: string };
+  propertyAddress: string;
+  documents: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+  conflicts: string[];
+  disclaimer: string;
+}
+
 export type HomeBuyerTaskServiceCategory =
   | 'INSPECTION'
   | 'MOVING'
