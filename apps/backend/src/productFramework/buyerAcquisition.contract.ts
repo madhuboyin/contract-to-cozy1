@@ -250,6 +250,105 @@ export const BuyerImportReadinessSchema = z.object({
   ]),
 });
 
+export const BuyerDashboardPresentationModeSchema = z.enum([
+  'BUYER_CLOSING',
+  'HOMEOWNER',
+  'NEW_HOME',
+  'CANDIDATE',
+]);
+
+const BuyerClosingHomeTaskSummarySchema = z.strictObject({
+  id: z.string().min(1),
+  actionKey: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().nullable(),
+  status: HomeBuyerTaskStatusSchema,
+  phase: BuyerPlanPhaseSchema,
+  priority: BuyerPlanPrioritySchema,
+  dueAt: z.string().datetime().nullable(),
+  assignedToUserId: z.string().nullable(),
+});
+
+const BuyerClosingHomeMilestoneSchema = z.strictObject({
+  id: z.string().min(1),
+  milestoneKey: z.string().min(1),
+  type: BuyerMilestoneTypeSchema,
+  label: z.string().min(1),
+  status: BuyerMilestoneStatusSchema,
+  dueAt: z.string().datetime().nullable(),
+});
+
+const BuyerClosingHomeReadinessLaneSchema = z.strictObject({
+  key: z.enum(['CONTRACT', 'DUE_DILIGENCE', 'CLOSING', 'MOVE']),
+  label: z.string().min(1),
+  completed: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  blocked: z.number().int().nonnegative(),
+});
+
+export const BuyerClosingHomeOverviewSchema = z.strictObject({
+  property: z.strictObject({
+    id: z.string().min(1),
+    address: z.string().min(1),
+    city: z.string().min(1),
+    state: z.string().min(1),
+    zipCode: z.string().min(1),
+  }),
+  journey: z.strictObject({
+    status: BuyerJourneyStatusSchema,
+    stage: BuyerJourneyStageSchema,
+    targetCloseDate: z.string().datetime().nullable(),
+    moveInDate: z.string().datetime().nullable(),
+    progress: z.strictObject({
+      completed: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
+      percent: z.number().min(0).max(100),
+    }),
+  }),
+  nextAction: BuyerClosingHomeTaskSummarySchema.nullable(),
+  blockers: z.array(BuyerClosingHomeTaskSummarySchema),
+  milestones: z.array(BuyerClosingHomeMilestoneSchema),
+  readinessLanes: z.array(BuyerClosingHomeReadinessLaneSchema),
+  evidence: z.strictObject({
+    inspectionState: z.enum(['NOT_STARTED', 'PROCESSING', 'REVIEW_PENDING', 'CONFIRMED']),
+    inspectionReportCount: z.number().int().nonnegative(),
+    openMaterialFindingCount: z.number().int().nonnegative(),
+    documentCount: z.number().int().nonnegative(),
+    verifiedDocumentCount: z.number().int().nonnegative(),
+    documentsNeedingReviewCount: z.number().int().nonnegative(),
+  }),
+  people: z.strictObject({
+    contactCount: z.number().int().nonnegative(),
+    assignedTaskCount: z.number().int().nonnegative(),
+  }),
+  routes: z.strictObject({
+    plan: z.string().startsWith('/dashboard/properties/'),
+    documents: z.string().startsWith('/dashboard/properties/'),
+    inspection: z.string().startsWith('/dashboard/'),
+    ask: z.string().startsWith('/dashboard/ask'),
+  }),
+});
+
+export const BuyerClosingHomeResponseSchema = z.strictObject({
+  presentationMode: BuyerDashboardPresentationModeSchema,
+  overview: BuyerClosingHomeOverviewSchema.nullable(),
+}).superRefine((value, context) => {
+  if (value.presentationMode === 'BUYER_CLOSING' && !value.overview) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Buyer Closing Home mode requires an overview.',
+      path: ['overview'],
+    });
+  }
+  if (value.presentationMode !== 'BUYER_CLOSING' && value.overview) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Non-buyer presentation modes must not include buyer overview data.',
+      path: ['overview'],
+    });
+  }
+});
+
 export type BuyerPlanTaskInput = z.infer<typeof BuyerPlanTaskInputSchema>;
 export type BuyerImportReadiness = z.infer<typeof BuyerImportReadinessSchema>;
 export type BuyerLifecycleUpdate = z.infer<typeof BuyerLifecycleUpdateSchema>;
@@ -259,3 +358,6 @@ export type BuyerContactInput = z.infer<typeof BuyerContactInputSchema>;
 export type BuyerTaskCompletionInput = z.infer<typeof BuyerTaskCompletionInputSchema>;
 export type BuyerTaskBatchUpdate = z.infer<typeof BuyerTaskBatchUpdateSchema>;
 export type BuyerChecklistApplicability = z.infer<typeof BuyerChecklistApplicabilitySchema>;
+export type BuyerDashboardPresentationMode = z.infer<typeof BuyerDashboardPresentationModeSchema>;
+export type BuyerClosingHomeOverview = z.infer<typeof BuyerClosingHomeOverviewSchema>;
+export type BuyerClosingHomeResponse = z.infer<typeof BuyerClosingHomeResponseSchema>;

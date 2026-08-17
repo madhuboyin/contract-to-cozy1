@@ -16,7 +16,7 @@ import {
   ArrowRight,
   CheckCircle2,
 } from 'lucide-react';
-import { Booking, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem } from '@/types';
+import { Booking, BuyerClosingHomeOverview, BuyerDashboardPresentationMode, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'date-fns'; 
 
@@ -69,6 +69,7 @@ import { getStatusBoard, StatusBoardItemDTO } from './properties/[id]/status-boa
 import { IncidentDTO } from '@/types/incidents.types';
 import { calculateStalenessStatus } from '@/lib/incidents/stalenessConfig';
 import { UnifiedHomeSurface } from '@/components/home/UnifiedHomeSurface';
+import { BuyerClosingHome } from '@/components/home/BuyerClosingHome';
 import { usePostLoginTransitionReadiness } from '@/components/system/PostLoginTransitionContext';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -364,6 +365,7 @@ interface DashboardData {
     inventoryCount: number;
     coverageGapExposure: number;
     activeIncidents: IncidentDTO[];
+    buyerClosingHome: BuyerClosingHomeOverview | null;
     isLoading: boolean;
     error: string | null;
 }
@@ -634,12 +636,14 @@ export default function DashboardPage() {
     inventoryCount: 0,
     coverageGapExposure: 0,
     activeIncidents: [],
+    buyerClosingHome: null,
     isLoading: true,
     error: null,
   });
   const lastKnownPropertiesRef = React.useRef<ScoredProperty[]>([]);
   const [isPurchaseMode, setIsPurchaseMode] = useState(false);
   const [isNewHomeMode, setIsNewHomeMode] = useState(false);
+  const [presentationMode, setPresentationMode] = useState<BuyerDashboardPresentationMode | null>(null);
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { celebration, celebrate, dismiss } = useCelebration(
@@ -660,6 +664,8 @@ export default function DashboardPage() {
       data.error ||
       showWelcomeScreen ||
       !effectiveSelectedPropertyId ||
+      presentationMode === 'BUYER_CLOSING' ||
+      presentationMode === 'CANDIDATE' ||
       user?.role === 'ADMIN'
     ) {
       markPostLoginReady();
@@ -669,6 +675,7 @@ export default function DashboardPage() {
     data.isLoading,
     effectiveSelectedPropertyId,
     markPostLoginReady,
+    presentationMode,
     redirectChecked,
     showWelcomeScreen,
     user?.role,
@@ -681,7 +688,7 @@ export default function DashboardPage() {
       if (!effectiveSelectedPropertyId) return null;
       return api.getPropertyScoreSnapshots(effectiveSelectedPropertyId, 16);
     },
-    enabled: Boolean(effectiveSelectedPropertyId),
+    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
     staleTime: 10 * 60 * 1000,
   });
 
@@ -692,7 +699,7 @@ export default function DashboardPage() {
       const report = await api.getRiskReportSummary(effectiveSelectedPropertyId);
       return typeof report === 'string' ? null : report;
     },
-    enabled: Boolean(effectiveSelectedPropertyId),
+    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -706,7 +713,7 @@ export default function DashboardPage() {
         limit: 10,
       });
     },
-    enabled: Boolean(effectiveSelectedPropertyId),
+    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -721,7 +728,7 @@ export default function DashboardPage() {
         return null;
       }
     },
-    enabled: Boolean(effectiveSelectedPropertyId),
+    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
     staleTime: 3 * 60 * 1000,
   });
 
@@ -729,6 +736,7 @@ export default function DashboardPage() {
     if (!user) return;
     
     setData(prev => ({ ...prev, isLoading: true, error: null }));
+    setPresentationMode(null);
     setRedirectChecked(false);
     
     try {
@@ -761,34 +769,42 @@ export default function DashboardPage() {
         ? selectedPropertyId
         : scoredProperties[0]?.id;
 
-      let purchaseMode = false;
-      let newHomeMode = false;
+      let resolvedPresentationMode: BuyerDashboardPresentationMode = 'HOMEOWNER';
+      let buyerClosingHome: BuyerClosingHomeOverview | null = null;
       if (propId) {
-        try {
-          const contextResponse = await api.getEntryContext(propId);
-          const context = contextResponse.success && contextResponse.data && typeof contextResponse.data === 'object'
-            ? contextResponse.data as { entryPath?: string; ownershipState?: string; propertyOrigin?: string }
-            : null;
-          newHomeMode = context?.entryPath === 'NEW_HOME_SETUP' && context?.propertyOrigin === 'NEW_CONSTRUCTION';
-          purchaseMode = !newHomeMode && (context?.entryPath === 'EXISTING_HOME_PURCHASE'
-            || (['SHOPPING', 'UNDER_CONTRACT', 'RECENT_OWNER'].includes(context?.ownershipState ?? '')
-              && context?.propertyOrigin !== 'NEW_CONSTRUCTION'));
-        } catch {
-          purchaseMode = false;
-          newHomeMode = false;
+        const presentationResponse = await api.getBuyerClosingHome(propId);
+        if (!presentationResponse.success) {
+          throw new Error(presentationResponse.message || 'Unable to resolve the selected property experience.');
         }
+        resolvedPresentationMode = presentationResponse.data.presentationMode;
+        buyerClosingHome = presentationResponse.data.overview;
       }
-      setIsPurchaseMode(purchaseMode);
-      setIsNewHomeMode(newHomeMode);
+      setPresentationMode(resolvedPresentationMode);
+      setIsPurchaseMode(resolvedPresentationMode === 'BUYER_CLOSING');
+      setIsNewHomeMode(resolvedPresentationMode === 'NEW_HOME');
 
-      const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
+      if (resolvedPresentationMode === 'BUYER_CLOSING' || resolvedPresentationMode === 'CANDIDATE') {
+        if (resolvedPresentationMode === 'BUYER_CLOSING' && !buyerClosingHome) {
+          throw new Error('Buyer Closing Home data is unavailable.');
+        }
+        setData({
+          bookings: [],
+          properties: scoredProperties,
+          checklist: null,
+          urgentActions: [],
+          inventoryCount: 0,
+          coverageGapExposure: 0,
+          activeIncidents: [],
+          buyerClosingHome,
+          isLoading: false,
+          error: null,
+        });
+        return;
+      }
+
+      const [bookingsRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' })
           .catch(() => ({ success: false, data: { bookings: [] } })),
-        purchaseMode
-          ? api.getHomeBuyerChecklist(propId!)
-              .then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null }))
-              .catch(() => ({ success: false, data: null }))
-          : Promise.resolve({ success: false as const, data: null }),
         api.listWarranties()
           .catch(() => ({ success: false, data: { warranties: [] } })),
         api.listInsurancePolicies()
@@ -802,7 +818,6 @@ export default function DashboardPage() {
       ]);
   
       const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
-      const checklist = checklistRes.success ? checklistRes.data : null;
       const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
       const policies = policiesRes.success ? policiesRes.data.policies : [];
       const activeIncidents = (incidentsRes as any).items || [];
@@ -810,7 +825,7 @@ export default function DashboardPage() {
   
       const urgentActions = consolidateUrgentActions(
         scoredProperties,
-        checklist?.tasks || [],
+        [],
         warranties,
         policies,
         activeIncidents,
@@ -824,11 +839,12 @@ export default function DashboardPage() {
       setData({
         bookings,
         properties: scoredProperties,
-        checklist,
+        checklist: null,
         urgentActions,
         inventoryCount: inventoryItems.length,
         coverageGapExposure,
         activeIncidents,
+        buyerClosingHome: null,
         isLoading: false,
         error: null,
       });
@@ -1285,6 +1301,21 @@ export default function DashboardPage() {
 
   if (!effectiveSelectedPropertyId) {
     return <DashboardRouteState state="empty" title="Add your first home" description="Add an address to begin building your Home record and action plan." />;
+  }
+
+  if (presentationMode === 'BUYER_CLOSING' && data.buyerClosingHome) {
+    return <BuyerClosingHome overview={data.buyerClosingHome} />;
+  }
+
+  if (presentationMode === 'CANDIDATE') {
+    return (
+      <DashboardRouteState
+        state="empty"
+        title="This purchase journey is not active"
+        description="Your candidate-property history is preserved, but homeowner tools stay hidden until a purchase is explicitly confirmed closed."
+        action={<Button asChild><Link href="/onboarding/address">Start or resume a purchase</Link></Button>}
+      />
+    );
   }
 
   return (

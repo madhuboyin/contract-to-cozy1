@@ -62,6 +62,7 @@ import {
   VaultShareLinkResponse,
 
   HomeBuyerChecklist,
+  BuyerClosingHomeResponse,
   HomeBuyerTask,
   HomeBuyerTaskStats,
   BuyerImportReadiness,
@@ -3519,6 +3520,13 @@ class APIClient {
     return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/checklist`, {
       method: 'GET',
     });
+  }
+
+  async getBuyerClosingHome(propertyId: string): Promise<APIResponse<BuyerClosingHomeResponse>> {
+    return this.request<BuyerClosingHomeResponse>(
+      `/api/home-buyer-tasks/properties/${propertyId}/closing-home`,
+      { method: 'GET' },
+    );
   }
 
   /**

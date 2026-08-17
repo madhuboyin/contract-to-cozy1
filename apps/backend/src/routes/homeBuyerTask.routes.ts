@@ -9,6 +9,12 @@ const router = Router();
 router.use(authenticate);
 
 /**
+ * GET /api/home-buyer-tasks/properties/:propertyId/closing-home
+ * Read-only dashboard presentation dispatcher and Buyer Closing Home overview.
+ */
+router.get('/properties/:propertyId/closing-home', homeBuyerTaskController.handleGetClosingHome);
+
+/**
  * GET /api/home-buyer-tasks/properties/:propertyId/checklist
  * Get or create a property-scoped 90-day ownership plan
  */

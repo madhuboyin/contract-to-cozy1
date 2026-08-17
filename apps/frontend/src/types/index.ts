@@ -3146,6 +3146,77 @@ export interface HomeBuyerChecklist {
   updatedAt: Date;
 }
 
+export type BuyerDashboardPresentationMode = 'BUYER_CLOSING' | 'HOMEOWNER' | 'NEW_HOME' | 'CANDIDATE';
+
+export interface BuyerClosingHomeTaskSummary {
+  id: string;
+  actionKey: string;
+  title: string;
+  description: string | null;
+  status: HomeBuyerTaskStatus;
+  phase: BuyerPlanPhase;
+  priority: BuyerPlanPriority;
+  dueAt: string | null;
+  assignedToUserId: string | null;
+}
+
+export interface BuyerClosingHomeOverview {
+  property: {
+    id: string;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  journey: {
+    status: BuyerJourneyStatus;
+    stage: BuyerJourneyStage;
+    targetCloseDate: string | null;
+    moveInDate: string | null;
+    progress: { completed: number; total: number; percent: number };
+  };
+  nextAction: BuyerClosingHomeTaskSummary | null;
+  blockers: BuyerClosingHomeTaskSummary[];
+  milestones: Array<{
+    id: string;
+    milestoneKey: string;
+    type: BuyerMilestoneType;
+    label: string;
+    status: BuyerMilestoneStatus;
+    dueAt: string | null;
+  }>;
+  readinessLanes: Array<{
+    key: 'CONTRACT' | 'DUE_DILIGENCE' | 'CLOSING' | 'MOVE';
+    label: string;
+    completed: number;
+    total: number;
+    blocked: number;
+  }>;
+  evidence: {
+    inspectionState: 'NOT_STARTED' | 'PROCESSING' | 'REVIEW_PENDING' | 'CONFIRMED';
+    inspectionReportCount: number;
+    openMaterialFindingCount: number;
+    documentCount: number;
+    verifiedDocumentCount: number;
+    documentsNeedingReviewCount: number;
+  };
+  people: {
+    contactCount: number;
+    assignedTaskCount: number;
+  };
+  routes: {
+    plan: string;
+    documents: string;
+    inspection: string;
+    ask: string;
+  };
+}
+
+export interface BuyerClosingHomeResponse {
+  presentationMode: BuyerDashboardPresentationMode;
+  overview: BuyerClosingHomeOverview | null;
+}
+
 export interface HomeBuyerTaskStats {
   total: number;
   pending: number;

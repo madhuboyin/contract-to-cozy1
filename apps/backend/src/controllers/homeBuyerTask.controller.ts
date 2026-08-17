@@ -58,6 +58,30 @@ const handleGetChecklist = async (
 };
 
 /**
+ * GET /api/home-buyer-tasks/properties/:propertyId/closing-home
+ * Resolves the dashboard presentation mode and returns a bounded buyer payload.
+ */
+const handleGetClosingHome = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+
+    const data = await HomeBuyerTaskService.getClosingHomePresentation(
+      req.user.userId,
+      req.params.propertyId,
+    );
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /api/home-buyer-tasks/tasks
  * Gets all tasks for the property plan
  */
@@ -480,6 +504,7 @@ const handleGetAcceptanceStatus = async (req: AuthRequest, res: Response, next: 
 };
 
 export const homeBuyerTaskController = {
+  handleGetClosingHome,
   handleGetChecklist,
   handleGetTasks,
   handleGetTask,

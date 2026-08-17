@@ -14,6 +14,7 @@ import {
   BUYER_ACTION_KEYS,
   BUYER_CHECKLIST_TEMPLATE_VERSION,
   BUYER_MILESTONE_KEYS,
+  BuyerClosingHomeResponseSchema,
   BuyerImportReadinessSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
@@ -71,6 +72,35 @@ function taskAnchorForEntry(
   return plan.planStartDate;
 }
 
+const CLOSING_HOME_LANES = [
+  { key: 'CONTRACT' as const, label: 'Contract', phases: ['OFFER_CONTRACT'] as BuyerPlanPhase[] },
+  { key: 'DUE_DILIGENCE' as const, label: 'Due diligence', phases: ['DUE_DILIGENCE'] as BuyerPlanPhase[] },
+  { key: 'CLOSING' as const, label: 'Closing readiness', phases: ['CLOSING_PREP'] as BuyerPlanPhase[] },
+  { key: 'MOVE' as const, label: 'Move & possession', phases: ['MOVE_IN'] as BuyerPlanPhase[] },
+];
+
+function milestoneLabel(type: string, customLabel: string | null): string {
+  if (customLabel) return customLabel;
+  return type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function closingTaskSummary(task: {
+  id: string;
+  actionKey: string;
+  title: string;
+  description: string | null;
+  status: HomeBuyerTaskStatus;
+  phase: BuyerPlanPhase;
+  priority: BuyerPlanPriority;
+  dueAt: Date | null;
+  assignedToUserId: string | null;
+}) {
+  return {
+    ...task,
+    dueAt: task.dueAt?.toISOString() ?? null,
+  };
+}
+
 /** Property-scoped acquisition and first-90-days ownership plan. */
 export class HomeBuyerTaskService {
   private static async assertAccess(
@@ -103,6 +133,179 @@ export class HomeBuyerTaskService {
       throw new Error('The buyer acquisition plan is only available for a purchase or recent-owner property context.');
     }
     return property;
+  }
+
+  /**
+   * Read-only dashboard dispatcher and bounded Buyer Closing Home payload.
+   * This method never creates a plan or mutates lifecycle state, so an owned
+   * property remains independent of buyer records and buyer failures.
+   */
+  static async getClosingHomePresentation(userId: string, propertyId: string) {
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        OR: [
+          { homeownerProfile: { userId } },
+          { householdMembers: { some: { userId } } },
+        ],
+      },
+      select: {
+        id: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        onboarding: {
+          select: { entryPath: true, propertyOrigin: true },
+        },
+        homeBuyerChecklist: {
+          include: {
+            tasks: {
+              orderBy: [{ dueAt: 'asc' }, { sortOrder: 'asc' }],
+            },
+            milestones: {
+              orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+            },
+            contacts: {
+              select: { id: true },
+            },
+          },
+        },
+        documents: {
+          select: { verificationStatus: true },
+        },
+        inspectionReports: {
+          where: { status: { not: 'ARCHIVED' } },
+          select: {
+            status: true,
+            findings: {
+              where: {
+                severity: { in: ['SAFETY', 'MAJOR'] },
+                status: 'OPEN',
+              },
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+    if (!property) throw new Error('Property not found or user does not have access.');
+
+    const isNewHome = property.onboarding?.entryPath === 'NEW_HOME_SETUP'
+      && property.onboarding.propertyOrigin === 'NEW_CONSTRUCTION';
+    if (isNewHome) {
+      return BuyerClosingHomeResponseSchema.parse({ presentationMode: 'NEW_HOME', overview: null });
+    }
+
+    const plan = property.homeBuyerChecklist;
+    const isClosingJourney = Boolean(
+      plan
+      && ['ACTIVE', 'PAUSED'].includes(plan.status)
+      && !['CLOSED', 'HANDED_OFF'].includes(plan.stage),
+    );
+    const isCandidateProperty = ['CANCELLED', 'ARCHIVED'].includes(plan?.status ?? '')
+      || (!plan && property.onboarding?.entryPath === 'EXISTING_HOME_PURCHASE');
+    if (isCandidateProperty) {
+      return BuyerClosingHomeResponseSchema.parse({ presentationMode: 'CANDIDATE', overview: null });
+    }
+    if (!plan || !isClosingJourney) {
+      return BuyerClosingHomeResponseSchema.parse({ presentationMode: 'HOMEOWNER', overview: null });
+    }
+
+    const visibleTasks = plan.tasks.filter((task) =>
+      task.applicability !== 'NOT_APPLICABLE'
+      && !['FIRST_30_DAYS', 'DAYS_31_TO_90', 'RECURRING_HOME'].includes(task.phase),
+    );
+    const activeTasks = visibleTasks.filter((task) =>
+      !['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status),
+    );
+    const priorityRank: Record<BuyerPlanPriority, number> = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 };
+    const executableTasks = activeTasks
+      .filter((task) => task.status !== 'BLOCKED')
+      .sort((left, right) => {
+        const leftDue = left.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        const rightDue = right.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        return leftDue - rightDue || priorityRank[left.priority] - priorityRank[right.priority] || left.sortOrder - right.sortOrder;
+      });
+    const blockers = activeTasks.filter((task) => task.status === 'BLOCKED' || task.blocking);
+    const completed = visibleTasks.filter((task) => task.status === 'COMPLETED').length;
+    const total = visibleTasks.length;
+    const verifiedDocumentCount = property.documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
+    const reviewPendingReports = property.inspectionReports.filter((report) => report.status === 'REVIEW_PENDING').length;
+    const processingReports = property.inspectionReports.filter((report) => report.status === 'PROCESSING').length;
+    const confirmedReports = property.inspectionReports.filter((report) => report.status === 'CONFIRMED').length;
+    const inspectionState = reviewPendingReports > 0
+      ? 'REVIEW_PENDING'
+      : processingReports > 0
+        ? 'PROCESSING'
+        : confirmedReports > 0
+          ? 'CONFIRMED'
+          : 'NOT_STARTED';
+
+    return BuyerClosingHomeResponseSchema.parse({
+      presentationMode: 'BUYER_CLOSING',
+      overview: {
+        property: {
+          id: property.id,
+          address: property.address,
+          city: property.city,
+          state: property.state,
+          zipCode: property.zipCode,
+        },
+        journey: {
+          status: plan.status,
+          stage: plan.stage,
+          targetCloseDate: plan.targetCloseDate?.toISOString() ?? null,
+          moveInDate: plan.moveInDate?.toISOString() ?? null,
+          progress: {
+            completed,
+            total,
+            percent: total === 0 ? 0 : Math.round((completed / total) * 100),
+          },
+        },
+        nextAction: executableTasks[0] ? closingTaskSummary(executableTasks[0]) : null,
+        blockers: blockers.slice(0, 5).map(closingTaskSummary),
+        milestones: plan.milestones
+          .filter((milestone) => !['CANCELLED', 'WAIVED'].includes(milestone.status))
+          .slice(0, 6)
+          .map((milestone) => ({
+            id: milestone.id,
+            milestoneKey: milestone.milestoneKey,
+            type: milestone.type,
+            label: milestoneLabel(milestone.type, milestone.customLabel),
+            status: milestone.status,
+            dueAt: milestone.dueAt?.toISOString() ?? null,
+          })),
+        readinessLanes: CLOSING_HOME_LANES.map((lane) => {
+          const tasks = visibleTasks.filter((task) => lane.phases.includes(task.phase));
+          return {
+            key: lane.key,
+            label: lane.label,
+            completed: tasks.filter((task) => task.status === 'COMPLETED').length,
+            total: tasks.length,
+            blocked: tasks.filter((task) => task.status === 'BLOCKED' || task.blocking).length,
+          };
+        }),
+        evidence: {
+          inspectionState,
+          inspectionReportCount: property.inspectionReports.length,
+          openMaterialFindingCount: property.inspectionReports.reduce((count, report) => count + report.findings.length, 0),
+          documentCount: property.documents.length,
+          verifiedDocumentCount,
+          documentsNeedingReviewCount: property.documents.length - verifiedDocumentCount,
+        },
+        people: {
+          contactCount: plan.contacts.length,
+          assignedTaskCount: visibleTasks.filter((task) => Boolean(task.assignedToUserId || task.assignedContactId)).length,
+        },
+        routes: {
+          plan: `/dashboard/properties/${property.id}/buyer-plan`,
+          documents: `/dashboard/properties/${property.id}/documents`,
+          inspection: `/dashboard/properties/${property.id}/inspection-hub`,
+          ask: `/dashboard/ask?propertyId=${encodeURIComponent(property.id)}`,
+        },
+      },
+    });
   }
 
   static async getOrCreateChecklist(userId: string, propertyId: string) {
