@@ -448,6 +448,35 @@ enum BuyerPurchasePath {
   FINANCED
 }
 
+enum BuyerPurchaseLoanType {
+  FIXED
+  ARM
+  OTHER
+}
+
+enum BuyerPurchaseLoanEstimateStatus {
+  DRAFT
+  CONFIRMED
+  SUPERSEDED
+}
+
+enum BuyerPurchaseLoanEstimateSource {
+  MANUAL
+  DOCUMENT_EXTRACTION
+}
+
+enum BuyerPurchaseCashDirection {
+  FROM_BORROWER
+  TO_BORROWER
+  UNKNOWN
+}
+
+enum BuyerPurchaseRateLockStatus {
+  LOCKED
+  NOT_LOCKED
+  UNKNOWN
+}
+
 enum BuyerCompletionMethod {
   USER_ATTESTATION
   DOCUMENT
@@ -2589,6 +2618,7 @@ model BuyerPurchaseFinancingPlan {
   checklist   HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   property    Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   confirmedBy User?              @relation("BuyerPurchasePathConfirmer", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  loanOffers  BuyerPurchaseLoanOffer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2596,6 +2626,66 @@ model BuyerPurchaseFinancingPlan {
   @@index([propertyId, purchasePath])
   @@index([confirmedByUserId])
   @@map("buyer_purchase_financing_plans")
+}
+
+model BuyerPurchaseLoanOffer {
+  id         String @id @default(uuid())
+  planId     String
+  propertyId String
+  lenderName String
+
+  plan      BuyerPurchaseFinancingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  property  Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  revisions BuyerPurchaseLoanEstimateRevision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([planId, createdAt(sort: Asc)])
+  @@index([propertyId, lenderName])
+  @@map("buyer_purchase_loan_offers")
+}
+
+model BuyerPurchaseLoanEstimateRevision {
+  id             String @id @default(uuid())
+  offerId        String
+  revisionNumber Int
+  status         BuyerPurchaseLoanEstimateStatus @default(DRAFT)
+  sourceType     BuyerPurchaseLoanEstimateSource @default(MANUAL)
+  sourceDocumentId String?
+
+  loanAmountCents                     Int?
+  loanTermMonths                      Int?
+  loanType                            BuyerPurchaseLoanType?
+  noteRateBps                         Int?
+  aprBps                              Int?
+  monthlyPrincipalAndInterestCents    Int?
+  monthlyMortgageInsuranceCents       Int?
+  estimatedTotalMonthlyPaymentCents   Int?
+  loanCostsCents                      Int?
+  lenderCreditsCents                  Int?
+  discountPointsBps                   Int?
+  discountPointsCents                 Int?
+  prepaidAndEscrowCents               Int?
+  cashToCloseCents                    Int?
+  cashToCloseDirection                BuyerPurchaseCashDirection @default(UNKNOWN)
+  fiveYearTotalPaidCents              Int?
+  fiveYearPrincipalPaidCents          Int?
+  issuedDate                          DateTime? @db.Date
+  rateLockStatus                      BuyerPurchaseRateLockStatus @default(UNKNOWN)
+  rateLockExpirationDate              DateTime? @db.Date
+  confirmedAt                         DateTime?
+
+  offer          BuyerPurchaseLoanOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  sourceDocument Document?              @relation("BuyerPurchaseLoanEstimateSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([offerId, revisionNumber])
+  @@index([offerId, status, revisionNumber(sort: Desc)])
+  @@index([sourceDocumentId])
+  @@map("buyer_purchase_loan_estimate_revisions")
 }
 
 model BuyerInspectionPlan {
@@ -3232,6 +3322,7 @@ model Property {
   homeBuyerChecklist         HomeBuyerChecklist?
   buyerInspectionPlan        BuyerInspectionPlan?
   buyerPurchaseFinancingPlan BuyerPurchaseFinancingPlan?
+  buyerPurchaseLoanOffers    BuyerPurchaseLoanOffer[]
   newHomePilotAssessment     NewHomePilotAssessment?
   newHomeSetupPlan           NewHomeSetupPlan?
   newHomeSystemRegistrations NewHomeSystemRegistration[]
@@ -4146,6 +4237,7 @@ model Document {
   buyerNegotiationOutcomeLinks NegotiationShieldBuyerFinding[] @relation("BuyerNegotiationOutcomeDocument")
   buyerFindingOutcomeLinks     InspectionFinding[]             @relation("BuyerFindingOutcomeDocument")
   buyerInspectionProofLinks    BuyerInspectionPlan[]            @relation("BuyerInspectionReinspectionProof")
+  buyerPurchaseLoanEstimateSources BuyerPurchaseLoanEstimateRevision[] @relation("BuyerPurchaseLoanEstimateSourceDocument")
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]

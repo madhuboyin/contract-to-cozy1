@@ -3478,6 +3478,64 @@ export interface BuyerPurchaseFinancingPlan {
   updatedAt: string;
 }
 
+export interface BuyerPurchaseLoanEstimateInput {
+  sourceDocumentId?: string | null;
+  loanAmountCents?: number | null;
+  loanTermMonths?: number | null;
+  loanType?: 'FIXED' | 'ARM' | 'OTHER' | null;
+  noteRateBps?: number | null;
+  aprBps?: number | null;
+  monthlyPrincipalAndInterestCents?: number | null;
+  monthlyMortgageInsuranceCents?: number | null;
+  estimatedTotalMonthlyPaymentCents?: number | null;
+  loanCostsCents?: number | null;
+  lenderCreditsCents?: number | null;
+  discountPointsBps?: number | null;
+  discountPointsCents?: number | null;
+  prepaidAndEscrowCents?: number | null;
+  cashToCloseCents?: number | null;
+  cashToCloseDirection?: 'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN';
+  fiveYearTotalPaidCents?: number | null;
+  fiveYearPrincipalPaidCents?: number | null;
+  issuedDate?: string | null;
+  rateLockStatus?: 'LOCKED' | 'NOT_LOCKED' | 'UNKNOWN';
+  rateLockExpirationDate?: string | null;
+}
+
+export interface BuyerPurchaseLoanEstimateRevision extends BuyerPurchaseLoanEstimateInput {
+  id: string;
+  offerId: string;
+  revisionNumber: number;
+  status: 'DRAFT' | 'CONFIRMED' | 'SUPERSEDED';
+  sourceType: 'MANUAL' | 'DOCUMENT_EXTRACTION';
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BuyerPurchaseLoanEstimateWorkspace {
+  purchasePath: 'UNKNOWN' | BuyerPurchasePath;
+  offers: Array<{
+    id: string;
+    lenderName: string;
+    revisions: BuyerPurchaseLoanEstimateRevision[];
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  comparison: {
+    offers: Array<{
+      id: string;
+      lenderName: string;
+      netLoanCostsUsd: number;
+      fiveYearBorrowingCostUsd: number | null;
+      bestMetrics: string[];
+      cautions: string[];
+    }>;
+    summary: string[];
+    disclaimer: string;
+  } | null;
+}
+
 export interface BuyerInspectionModuleRecommendation {
   moduleKey: string;
   title: string;

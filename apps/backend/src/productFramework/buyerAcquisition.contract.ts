@@ -171,6 +171,44 @@ export const BuyerPurchaseFinancingInputSchema = z.strictObject({
 });
 export type BuyerPurchaseFinancingInput = z.infer<typeof BuyerPurchaseFinancingInputSchema>;
 
+export const BUYER_PURCHASE_LOAN_TYPES = ['FIXED', 'ARM', 'OTHER'] as const;
+export const BUYER_PURCHASE_CASH_DIRECTIONS = ['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN'] as const;
+export const BUYER_PURCHASE_RATE_LOCK_STATUSES = ['LOCKED', 'NOT_LOCKED', 'UNKNOWN'] as const;
+const BuyerPurchaseLoanEstimateFieldsSchema = z.strictObject({
+  sourceDocumentId: z.string().uuid().nullable().optional(),
+  loanAmountCents: z.number().int().positive().nullable().optional(),
+  loanTermMonths: z.number().int().min(1).max(600).nullable().optional(),
+  loanType: z.enum(BUYER_PURCHASE_LOAN_TYPES).nullable().optional(),
+  noteRateBps: z.number().int().min(0).max(5_000).nullable().optional(),
+  aprBps: z.number().int().min(0).max(5_000).nullable().optional(),
+  monthlyPrincipalAndInterestCents: z.number().int().min(0).nullable().optional(),
+  monthlyMortgageInsuranceCents: z.number().int().min(0).nullable().optional(),
+  estimatedTotalMonthlyPaymentCents: z.number().int().min(0).nullable().optional(),
+  loanCostsCents: z.number().int().min(0).nullable().optional(),
+  lenderCreditsCents: z.number().int().min(0).nullable().optional(),
+  discountPointsBps: z.number().int().min(0).max(10_000).nullable().optional(),
+  discountPointsCents: z.number().int().min(0).nullable().optional(),
+  prepaidAndEscrowCents: z.number().int().min(0).nullable().optional(),
+  cashToCloseCents: z.number().int().min(0).nullable().optional(),
+  cashToCloseDirection: z.enum(BUYER_PURCHASE_CASH_DIRECTIONS).optional(),
+  fiveYearTotalPaidCents: z.number().int().min(0).nullable().optional(),
+  fiveYearPrincipalPaidCents: z.number().int().min(0).nullable().optional(),
+  issuedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  rateLockStatus: z.enum(BUYER_PURCHASE_RATE_LOCK_STATUSES).optional(),
+  rateLockExpirationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+});
+export const BuyerPurchaseLoanEstimateCreateSchema = BuyerPurchaseLoanEstimateFieldsSchema.extend({
+  lenderName: z.string().trim().min(1).max(200),
+});
+export const BuyerPurchaseLoanEstimateRevisionCreateSchema = BuyerPurchaseLoanEstimateFieldsSchema;
+export const BuyerPurchaseLoanEstimateUpdateSchema = BuyerPurchaseLoanEstimateFieldsSchema.refine(
+  (value) => Object.values(value).some((field) => field !== undefined),
+  { message: 'At least one Loan Estimate field must be provided.' },
+);
+export type BuyerPurchaseLoanEstimateCreateInput = z.infer<typeof BuyerPurchaseLoanEstimateCreateSchema>;
+export type BuyerPurchaseLoanEstimateRevisionInput = z.infer<typeof BuyerPurchaseLoanEstimateRevisionCreateSchema>;
+export type BuyerPurchaseLoanEstimateUpdateInput = z.infer<typeof BuyerPurchaseLoanEstimateUpdateSchema>;
+
 export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
   'RADON',
   'SEWER_SEPTIC',

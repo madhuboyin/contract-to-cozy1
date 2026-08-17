@@ -40,6 +40,11 @@ router.get('/properties/:propertyId/inspection-plan', homeBuyerTaskController.ha
 router.put('/properties/:propertyId/inspection-plan', homeBuyerTaskController.handleUpdateInspectionPlan);
 router.get('/properties/:propertyId/purchase-financing', homeBuyerTaskController.handleGetPurchaseFinancingPlan);
 router.put('/properties/:propertyId/purchase-financing', homeBuyerTaskController.handleUpdatePurchaseFinancingPlan);
+router.get('/properties/:propertyId/purchase-financing/loan-estimates', homeBuyerTaskController.handleListPurchaseLoanEstimates);
+router.post('/properties/:propertyId/purchase-financing/loan-estimates', homeBuyerTaskController.handleCreatePurchaseLoanOffer);
+router.post('/properties/:propertyId/purchase-financing/loan-estimates/offers/:offerId/revisions', homeBuyerTaskController.handleAddPurchaseLoanEstimateRevision);
+router.patch('/properties/:propertyId/purchase-financing/loan-estimates/revisions/:revisionId', homeBuyerTaskController.handleUpdatePurchaseLoanEstimateDraft);
+router.post('/properties/:propertyId/purchase-financing/loan-estimates/revisions/:revisionId/confirm', homeBuyerTaskController.handleConfirmPurchaseLoanEstimate);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

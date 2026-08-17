@@ -72,6 +72,8 @@ import {
   BuyerInspectionPlanInput,
   BuyerInspectionPlanResponse,
   BuyerPurchaseFinancingPlan,
+  BuyerPurchaseLoanEstimateInput,
+  BuyerPurchaseLoanEstimateWorkspace,
   BuyerPurchasePath,
   BuyerFindingDisposition,
   BuyerAcceptanceStatus,
@@ -3637,6 +3639,57 @@ class APIClient {
     return this.request<BuyerPurchaseFinancingPlan>(
       `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing`,
       { method: 'PUT', body: JSON.stringify({ purchasePath }) },
+    );
+  }
+
+  async getBuyerPurchaseLoanEstimates(
+    propertyId: string,
+  ): Promise<APIResponse<BuyerPurchaseLoanEstimateWorkspace>> {
+    return this.request<BuyerPurchaseLoanEstimateWorkspace>(
+      `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/loan-estimates`,
+      { method: 'GET' },
+    );
+  }
+
+  async createBuyerPurchaseLoanOffer(
+    propertyId: string,
+    input: BuyerPurchaseLoanEstimateInput & { lenderName: string },
+  ): Promise<APIResponse<BuyerPurchaseLoanEstimateWorkspace>> {
+    return this.request<BuyerPurchaseLoanEstimateWorkspace>(
+      `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/loan-estimates`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+
+  async addBuyerPurchaseLoanEstimateRevision(
+    propertyId: string,
+    offerId: string,
+    input: BuyerPurchaseLoanEstimateInput,
+  ): Promise<APIResponse<BuyerPurchaseLoanEstimateWorkspace>> {
+    return this.request<BuyerPurchaseLoanEstimateWorkspace>(
+      `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/loan-estimates/offers/${offerId}/revisions`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+
+  async updateBuyerPurchaseLoanEstimateDraft(
+    propertyId: string,
+    revisionId: string,
+    input: BuyerPurchaseLoanEstimateInput,
+  ): Promise<APIResponse<BuyerPurchaseLoanEstimateWorkspace>> {
+    return this.request<BuyerPurchaseLoanEstimateWorkspace>(
+      `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/loan-estimates/revisions/${revisionId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+  }
+
+  async confirmBuyerPurchaseLoanEstimate(
+    propertyId: string,
+    revisionId: string,
+  ): Promise<APIResponse<BuyerPurchaseLoanEstimateWorkspace>> {
+    return this.request<BuyerPurchaseLoanEstimateWorkspace>(
+      `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/loan-estimates/revisions/${revisionId}/confirm`,
+      { method: 'POST' },
     );
   }
 

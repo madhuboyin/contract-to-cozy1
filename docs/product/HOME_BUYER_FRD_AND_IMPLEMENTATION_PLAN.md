@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.19
+**Version:** 1.20
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2861,8 +2861,16 @@ it and when, completes the stable purchase-path checklist obligation, and
 idempotently activates or suppresses stable loan-application, official Loan
 Estimate, and lender-appraisal tasks. Cash buyers no longer see lender-only work
 in active progress. The decision surface states that ContractToCozy does not
-approve financing or certify clear-to-close status. Manual purchase Loan
-Estimate revisions and comparison remain the next increment.
+approve financing or certify clear-to-close status. The second increment adds a
+purchase-only Loan Estimate Center with separate lender offers and numbered
+revisions, strict partial manual drafts, resume/update, optional source-document
+lineage, and explicit confirmation. Confirming a revision supersedes the prior
+confirmed revision for that lender. Two current confirmed offers reuse only the
+reviewed standardized comparison calculation to surface APR, payment, net-cost,
+cash-to-close, five-year-cost, rate-lock, and comparability cautions without a
+single-winner recommendation. The stable Loan Estimate checklist task moves to
+in progress after one confirmed offer and completes with evidence after two.
+Document extraction prefill and buyer lender selection remain next.
 
 **Goal:** Give financed and cash buyers the correct conditional preparation
 without rebranding homeowner financial tools.

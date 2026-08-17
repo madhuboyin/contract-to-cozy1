@@ -10,12 +10,16 @@ import {
 } from '../types/task.types';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { BuyerAcquisitionService } from '../services/buyerAcquisition.service';
+import { BuyerPurchaseLoanEstimateService } from '../services/buyerPurchaseLoanEstimate.service';
 import {
   BuyerDocumentVerificationInputSchema,
   BuyerFindingDispositionInputSchema,
   BuyerInspectionPlanInputSchema,
   BuyerLifecycleUpdateSchema,
   BuyerPurchaseFinancingInputSchema,
+  BuyerPurchaseLoanEstimateCreateSchema,
+  BuyerPurchaseLoanEstimateRevisionCreateSchema,
+  BuyerPurchaseLoanEstimateUpdateSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -525,6 +529,63 @@ const handleUpdatePurchaseFinancingPlan = async (req: AuthRequest, res: Response
   } catch (error) { next(error); }
 };
 
+const handleListPurchaseLoanEstimates = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const workspace = await BuyerPurchaseLoanEstimateService.list(req.user.userId, req.params.propertyId);
+    return res.json({ success: true, data: workspace });
+  } catch (error) { next(error); }
+};
+
+const handleCreatePurchaseLoanOffer = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerPurchaseLoanEstimateCreateSchema.parse(req.body);
+    const workspace = await BuyerPurchaseLoanEstimateService.createOffer(req.user.userId, req.params.propertyId, input);
+    return res.status(201).json({ success: true, data: workspace });
+  } catch (error) { next(error); }
+};
+
+const handleAddPurchaseLoanEstimateRevision = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerPurchaseLoanEstimateRevisionCreateSchema.parse(req.body);
+    const workspace = await BuyerPurchaseLoanEstimateService.addRevision(
+      req.user.userId, req.params.propertyId, req.params.offerId, input,
+    );
+    return res.status(201).json({ success: true, data: workspace });
+  } catch (error) { next(error); }
+};
+
+const handleUpdatePurchaseLoanEstimateDraft = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerPurchaseLoanEstimateUpdateSchema.parse(req.body);
+    const workspace = await BuyerPurchaseLoanEstimateService.updateDraft(
+      req.user.userId, req.params.propertyId, req.params.revisionId, input,
+    );
+    return res.json({ success: true, data: workspace });
+  } catch (error) { next(error); }
+};
+
+const handleConfirmPurchaseLoanEstimate = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const workspace = await BuyerPurchaseLoanEstimateService.confirm(
+      req.user.userId, req.params.propertyId, req.params.revisionId,
+    );
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.DECISION_GUIDED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_purchase_loan_estimate_confirmed', revisionId: req.params.revisionId },
+    });
+    return res.json({ success: true, data: workspace });
+  } catch (error) { next(error); }
+};
+
 const handleUpdateInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -638,6 +699,11 @@ export const homeBuyerTaskController = {
   handleUpdateInspectionPlan,
   handleGetPurchaseFinancingPlan,
   handleUpdatePurchaseFinancingPlan,
+  handleListPurchaseLoanEstimates,
+  handleCreatePurchaseLoanOffer,
+  handleAddPurchaseLoanEstimateRevision,
+  handleUpdatePurchaseLoanEstimateDraft,
+  handleConfirmPurchaseLoanEstimate,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,
