@@ -25,7 +25,8 @@ function buyerOverview() {
     },
     nextAction: {
       id: 'task-1', actionKey: 'buyer:inspection:import', title: 'Import inspection', description: null,
-      status: 'PENDING', phase: 'DUE_DILIGENCE', priority: 'NOW', dueAt: null, assignedToUserId: null,
+      status: 'PENDING', phase: 'DUE_DILIGENCE', priority: 'NOW', checklistSection: null,
+      dueAt: null, assignedToUserId: null,
     },
     blockers: [],
     milestones: [],

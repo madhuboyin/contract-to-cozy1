@@ -16,7 +16,7 @@ import {
   ArrowRight,
   CheckCircle2,
 } from 'lucide-react';
-import { Booking, BuyerClosingHomeOverview, BuyerDashboardPresentationMode, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem } from '@/types';
+import { Booking, BuyerClosingHomeOverview, BuyerDashboardPresentationMode, BuyerRecentOwnerTransition, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'date-fns'; 
 
@@ -70,6 +70,7 @@ import { IncidentDTO } from '@/types/incidents.types';
 import { calculateStalenessStatus } from '@/lib/incidents/stalenessConfig';
 import { UnifiedHomeSurface } from '@/components/home/UnifiedHomeSurface';
 import { BuyerClosingHome } from '@/components/home/BuyerClosingHome';
+import { RecentOwnerTransition } from '@/components/home/RecentOwnerTransition';
 import { usePostLoginTransitionReadiness } from '@/components/system/PostLoginTransitionContext';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -366,6 +367,7 @@ interface DashboardData {
     coverageGapExposure: number;
     activeIncidents: IncidentDTO[];
     buyerClosingHome: BuyerClosingHomeOverview | null;
+    recentOwnerTransition: BuyerRecentOwnerTransition | null;
     isLoading: boolean;
     error: string | null;
 }
@@ -637,6 +639,7 @@ export default function DashboardPage() {
     coverageGapExposure: 0,
     activeIncidents: [],
     buyerClosingHome: null,
+    recentOwnerTransition: null,
     isLoading: true,
     error: null,
   });
@@ -654,6 +657,7 @@ export default function DashboardPage() {
     selectedPropertyId && properties.some((property) => property.id === selectedPropertyId)
       ? selectedPropertyId
       : properties[0]?.id;
+  const ownerCapabilityMode = presentationMode === 'HOMEOWNER' || presentationMode === 'RECENT_OWNER';
 
   // Routes that do not proceed to UnifiedHomeSurface must complete the
   // post-login handoff themselves. UnifiedHomeSurface owns the signal for the
@@ -688,7 +692,7 @@ export default function DashboardPage() {
       if (!effectiveSelectedPropertyId) return null;
       return api.getPropertyScoreSnapshots(effectiveSelectedPropertyId, 16);
     },
-    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
+    enabled: Boolean(effectiveSelectedPropertyId) && ownerCapabilityMode,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -699,7 +703,7 @@ export default function DashboardPage() {
       const report = await api.getRiskReportSummary(effectiveSelectedPropertyId);
       return typeof report === 'string' ? null : report;
     },
-    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
+    enabled: Boolean(effectiveSelectedPropertyId) && ownerCapabilityMode,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -713,7 +717,7 @@ export default function DashboardPage() {
         limit: 10,
       });
     },
-    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
+    enabled: Boolean(effectiveSelectedPropertyId) && ownerCapabilityMode,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -728,7 +732,7 @@ export default function DashboardPage() {
         return null;
       }
     },
-    enabled: Boolean(effectiveSelectedPropertyId) && presentationMode === 'HOMEOWNER',
+    enabled: Boolean(effectiveSelectedPropertyId) && ownerCapabilityMode,
     staleTime: 3 * 60 * 1000,
   });
 
@@ -771,6 +775,7 @@ export default function DashboardPage() {
 
       let resolvedPresentationMode: BuyerDashboardPresentationMode = 'HOMEOWNER';
       let buyerClosingHome: BuyerClosingHomeOverview | null = null;
+      let recentOwnerTransition: BuyerRecentOwnerTransition | null = null;
       if (propId) {
         const presentationResponse = await api.getBuyerClosingHome(propId);
         if (!presentationResponse.success) {
@@ -778,6 +783,7 @@ export default function DashboardPage() {
         }
         resolvedPresentationMode = presentationResponse.data.presentationMode;
         buyerClosingHome = presentationResponse.data.overview;
+        recentOwnerTransition = presentationResponse.data.recentOwner;
       }
       setPresentationMode(resolvedPresentationMode);
       setIsPurchaseMode(resolvedPresentationMode === 'BUYER_CLOSING');
@@ -796,6 +802,7 @@ export default function DashboardPage() {
           coverageGapExposure: 0,
           activeIncidents: [],
           buyerClosingHome,
+          recentOwnerTransition: null,
           isLoading: false,
           error: null,
         });
@@ -845,6 +852,7 @@ export default function DashboardPage() {
         coverageGapExposure,
         activeIncidents,
         buyerClosingHome: null,
+        recentOwnerTransition,
         isLoading: false,
         error: null,
       });
@@ -1315,6 +1323,18 @@ export default function DashboardPage() {
         description="Your candidate-property history is preserved, but homeowner tools stay hidden until a purchase is explicitly confirmed closed."
         action={<Button asChild><Link href="/onboarding/address">Start or resume a purchase</Link></Button>}
       />
+    );
+  }
+
+  if (presentationMode === 'RECENT_OWNER' && data.recentOwnerTransition) {
+    return (
+      <div className="space-y-6">
+        <RecentOwnerTransition transition={data.recentOwnerTransition} />
+        <UnifiedHomeSurface
+          propertyId={effectiveSelectedPropertyId}
+          properties={properties.map((property) => ({ id: property.id, address: property.address }))}
+        />
+      </div>
     );
   }
 

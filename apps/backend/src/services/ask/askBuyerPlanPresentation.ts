@@ -17,7 +17,11 @@ function dateLabel(value: string | null): string | null {
 }
 
 export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskOperationResult | null {
-  if (context.presentationMode === 'HOMEOWNER' || context.presentationMode === 'NEW_HOME') return null;
+  if (
+    context.presentationMode === 'HOMEOWNER'
+    || context.presentationMode === 'RECENT_OWNER'
+    || context.presentationMode === 'NEW_HOME'
+  ) return null;
 
   const planHref = `/dashboard/properties/${encodeURIComponent(context.propertyId)}/buyer-plan`;
   if (context.presentationMode === 'CANDIDATE' || !context.overview) {

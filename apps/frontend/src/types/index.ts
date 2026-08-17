@@ -3185,7 +3185,7 @@ export interface BuyerChecklistComposition {
   checklist?: HomeBuyerChecklist;
 }
 
-export type BuyerDashboardPresentationMode = 'BUYER_CLOSING' | 'HOMEOWNER' | 'NEW_HOME' | 'CANDIDATE';
+export type BuyerDashboardPresentationMode = 'BUYER_CLOSING' | 'RECENT_OWNER' | 'HOMEOWNER' | 'NEW_HOME' | 'CANDIDATE';
 
 export interface BuyerClosingHomeTaskSummary {
   id: string;
@@ -3252,9 +3252,39 @@ export interface BuyerClosingHomeOverview {
   };
 }
 
+export interface BuyerRecentOwnerTransition {
+  property: {
+    id: string;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  journey: {
+    stage: 'CLOSED' | 'MOVE_IN' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90';
+    ownershipStartedAt: string;
+    daysSinceOwnershipStart: number;
+    progress: { resolved: number; total: number; percent: number; active: number };
+  };
+  evidence: {
+    documentCount: number;
+    verifiedDocumentCount: number;
+    inspectionReportCount: number;
+    openMaterialFindingCount: number;
+  };
+  routes: {
+    plan: string;
+    timeline: string;
+    homeRecords: string;
+    homeOperations: string;
+    ask: string;
+  };
+}
+
 export interface BuyerClosingHomeResponse {
   presentationMode: BuyerDashboardPresentationMode;
   overview: BuyerClosingHomeOverview | null;
+  recentOwner: BuyerRecentOwnerTransition | null;
 }
 
 export interface BuyerPlanOverviewTask extends BuyerClosingHomeTaskSummary {

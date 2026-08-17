@@ -688,6 +688,7 @@ export const BuyerImportReadinessSchema = z.object({
 
 export const BuyerDashboardPresentationModeSchema = z.enum([
   'BUYER_CLOSING',
+  'RECENT_OWNER',
   'HOMEOWNER',
   'NEW_HOME',
   'CANDIDATE',
@@ -789,9 +790,44 @@ export const BuyerClosingHomeOverviewSchema = z.strictObject({
   }),
 });
 
+export const BuyerRecentOwnerTransitionSchema = z.strictObject({
+  property: z.strictObject({
+    id: z.string().min(1),
+    address: z.string().min(1),
+    city: z.string().min(1),
+    state: z.string().min(1),
+    zipCode: z.string().min(1),
+  }),
+  journey: z.strictObject({
+    stage: z.enum(['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90']),
+    ownershipStartedAt: z.string().datetime(),
+    daysSinceOwnershipStart: z.number().int().nonnegative().max(90),
+    progress: z.strictObject({
+      resolved: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
+      percent: z.number().min(0).max(100),
+      active: z.number().int().nonnegative(),
+    }),
+  }),
+  evidence: z.strictObject({
+    documentCount: z.number().int().nonnegative(),
+    verifiedDocumentCount: z.number().int().nonnegative(),
+    inspectionReportCount: z.number().int().nonnegative(),
+    openMaterialFindingCount: z.number().int().nonnegative(),
+  }),
+  routes: z.strictObject({
+    plan: z.string().startsWith('/dashboard/properties/'),
+    timeline: z.string().startsWith('/dashboard/properties/'),
+    homeRecords: z.string().startsWith('/dashboard/properties/'),
+    homeOperations: z.string().startsWith('/dashboard/properties/'),
+    ask: z.string().startsWith('/dashboard/ask'),
+  }),
+});
+
 export const BuyerClosingHomeResponseSchema = z.strictObject({
   presentationMode: BuyerDashboardPresentationModeSchema,
   overview: BuyerClosingHomeOverviewSchema.nullable(),
+  recentOwner: BuyerRecentOwnerTransitionSchema.nullable().default(null),
 }).superRefine((value, context) => {
   if (value.presentationMode === 'BUYER_CLOSING' && !value.overview) {
     context.addIssue({
@@ -805,6 +841,20 @@ export const BuyerClosingHomeResponseSchema = z.strictObject({
       code: 'custom',
       message: 'Non-buyer presentation modes must not include buyer overview data.',
       path: ['overview'],
+    });
+  }
+  if (value.presentationMode === 'RECENT_OWNER' && !value.recentOwner) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Recent Owner mode requires transition data.',
+      path: ['recentOwner'],
+    });
+  }
+  if (value.presentationMode !== 'RECENT_OWNER' && value.recentOwner) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Non-recent-owner presentation modes must not include transition data.',
+      path: ['recentOwner'],
     });
   }
 });
@@ -883,5 +933,6 @@ export type BuyerTaskBatchUpdate = z.infer<typeof BuyerTaskBatchUpdateSchema>;
 export type BuyerChecklistApplicability = z.infer<typeof BuyerChecklistApplicabilitySchema>;
 export type BuyerDashboardPresentationMode = z.infer<typeof BuyerDashboardPresentationModeSchema>;
 export type BuyerClosingHomeOverview = z.infer<typeof BuyerClosingHomeOverviewSchema>;
+export type BuyerRecentOwnerTransition = z.infer<typeof BuyerRecentOwnerTransitionSchema>;
 export type BuyerClosingHomeResponse = z.infer<typeof BuyerClosingHomeResponseSchema>;
 export type BuyerPlanOverview = z.infer<typeof BuyerPlanOverviewSchema>;

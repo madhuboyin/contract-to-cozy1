@@ -42,6 +42,7 @@ export type CtcEventName =
   | 'task_completed'
   | 'notification_clicked'
   | 'property_onboarded'
+  | 'buyer_recent_owner_transition_viewed'
   // Monetization / Resolution
   | 'provider_searched'
   | 'provider_search_radius_expanded'
@@ -200,6 +201,12 @@ export interface CtcEventProperties {
   task_completed: { priority: string; category: string; propertyId: string; journeyType?: string };
   notification_clicked: { channel: 'PUSH' | 'EMAIL' | 'SMS'; campaignId: string };
   property_onboarded: { propertyId: string; durationSeconds: number };
+  buyer_recent_owner_transition_viewed: {
+    propertyId: string;
+    stage: string;
+    daysSinceOwnershipStart: number;
+    progressPercent: number;
+  };
   
   // Monetization / Resolution
   provider_searched: { category: string; location: string; radiusMiles?: number; resultCount?: number };

@@ -197,7 +197,7 @@ export class HomeBuyerTaskService {
         state: true,
         zipCode: true,
         onboarding: {
-          select: { entryPath: true, propertyOrigin: true },
+          select: { entryPath: true, propertyOrigin: true, ownershipState: true },
         },
         homeBuyerChecklist: {
           include: {
@@ -239,6 +239,13 @@ export class HomeBuyerTaskService {
     }
 
     const plan = property.homeBuyerChecklist;
+    const isRecentOwner = Boolean(
+      plan
+      && ['ACTIVE', 'PAUSED'].includes(plan.status)
+      && plan.ownershipStartedAt
+      && ['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90'].includes(plan.stage)
+      && property.onboarding?.ownershipState === 'RECENT_OWNER',
+    );
     const isClosingJourney = Boolean(
       plan
       && ['ACTIVE', 'PAUSED'].includes(plan.status)
@@ -248,6 +255,62 @@ export class HomeBuyerTaskService {
       || (!plan && property.onboarding?.entryPath === 'EXISTING_HOME_PURCHASE');
     if (isCandidateProperty) {
       return BuyerClosingHomeResponseSchema.parse({ presentationMode: 'CANDIDATE', overview: null });
+    }
+    if (isRecentOwner && plan?.ownershipStartedAt) {
+      const ownershipTasks = plan.tasks.filter((task) =>
+        task.applicability !== 'NOT_APPLICABLE'
+        && ['MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'RECURRING_HOME'].includes(task.phase),
+      );
+      const resolved = ownershipTasks.filter((task) =>
+        ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status),
+      ).length;
+      const active = ownershipTasks.filter((task) =>
+        ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(task.status),
+      ).length;
+      const total = ownershipTasks.length;
+      const daysSinceOwnershipStart = Math.min(
+        90,
+        Math.max(0, Math.floor((Date.now() - plan.ownershipStartedAt.getTime()) / DAY_MS)),
+      );
+      const verifiedDocumentCount = property.documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
+
+      return BuyerClosingHomeResponseSchema.parse({
+        presentationMode: 'RECENT_OWNER',
+        overview: null,
+        recentOwner: {
+          property: {
+            id: property.id,
+            address: property.address,
+            city: property.city,
+            state: property.state,
+            zipCode: property.zipCode,
+          },
+          journey: {
+            stage: plan.stage,
+            ownershipStartedAt: plan.ownershipStartedAt.toISOString(),
+            daysSinceOwnershipStart,
+            progress: {
+              resolved,
+              total,
+              percent: total === 0 ? 0 : Math.round((resolved / total) * 100),
+              active,
+            },
+          },
+          evidence: {
+            documentCount: property.documents.length,
+            verifiedDocumentCount,
+            inspectionReportCount: property.inspectionReports.length,
+            openMaterialFindingCount: property.inspectionReports.reduce((count, report) => count + report.findings.length, 0),
+          },
+          routes: {
+            plan: `/dashboard/properties/${property.id}/buyer-plan`,
+            timeline: `/dashboard/properties/${property.id}/timeline`,
+            homeRecords: `/dashboard/properties/${property.id}/tools/home-records`,
+            homeOperations: `/dashboard/properties/${property.id}/home-operations`,
+            ask: `/dashboard/ask?propertyId=${encodeURIComponent(property.id)}`,
+          },
+        },
+      });
     }
     if (!plan || !isClosingJourney) {
       return BuyerClosingHomeResponseSchema.parse({ presentationMode: 'HOMEOWNER', overview: null });

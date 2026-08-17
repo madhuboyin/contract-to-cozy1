@@ -63,7 +63,8 @@ test('candidate purchases do not fall through to homeowner recommendations', () 
   assert.equal(matchesHomeActionsAnswerContract(result), true);
 });
 
-test('owned and new-home presentations preserve the existing Home Actions path', () => {
+test('owned, recent-owner, and new-home presentations preserve the existing Home Actions path', () => {
   assert.equal(buildBuyerPlanHomeActionsResult(context({ presentationMode: 'HOMEOWNER', overview: null })), null);
+  assert.equal(buildBuyerPlanHomeActionsResult(context({ presentationMode: 'RECENT_OWNER', overview: null })), null);
   assert.equal(buildBuyerPlanHomeActionsResult(context({ presentationMode: 'NEW_HOME', overview: null })), null);
 });
