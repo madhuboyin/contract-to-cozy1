@@ -16,6 +16,7 @@ import type { BuyerClosingHomeOverview, BuyerJourneyStage } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 
 const STAGE_LABELS: Record<BuyerJourneyStage, string> = {
   EXPLORING: 'Exploring',
@@ -79,9 +80,13 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
           <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-teal-100">Closing-plan progress</p>
             <p className="mt-1 font-semibold">{journey.progress.completed} of {journey.progress.total} ready</p>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full rounded-full bg-teal-300" style={{ width: `${journey.progress.percent}%` }} />
-            </div>
+            <Progress
+              value={journey.progress.percent}
+              aria-label="Closing Plan progress"
+              aria-valuetext={`${journey.progress.completed} of ${journey.progress.total} ready`}
+              className="mt-2 h-1.5 bg-white/15"
+              indicatorClassName="bg-teal-300"
+            />
           </div>
         </div>
       </section>
@@ -126,9 +131,21 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
                 <div key={lane.key} className="rounded-2xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-semibold text-slate-900">{lane.label}</p>
-                    {lane.blocked > 0 ? <Badge variant="destructive">{lane.blocked} blocked</Badge> : <CheckCircle2 className="h-5 w-5 text-teal-600" />}
+                    {lane.blocked > 0 ? (
+                      <Badge variant="destructive">{lane.blocked} blocked</Badge>
+                    ) : lane.total === 0 ? (
+                      <Badge variant="secondary">No actions yet</Badge>
+                    ) : lane.completed >= lane.total ? (
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-teal-700">
+                        <CheckCircle2 aria-hidden="true" className="h-5 w-5" /> Complete
+                      </span>
+                    ) : (
+                      <Badge variant="secondary">{lane.total - lane.completed} open</Badge>
+                    )}
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">{lane.completed} of {lane.total} complete</p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {lane.total === 0 ? 'No applicable actions are in this lane yet.' : `${lane.completed} of ${lane.total} complete`}
+                  </p>
                 </div>
               ))}
             </CardContent>
