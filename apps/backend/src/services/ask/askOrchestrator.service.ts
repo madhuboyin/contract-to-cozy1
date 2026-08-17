@@ -27,6 +27,11 @@ import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, 
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { HomeBuyerTaskService } from '../HomeBuyerTask.service';
+import { BuyerPurchaseLenderReadinessService } from '../buyerPurchaseLenderReadiness.service';
+import { BuyerTitleEscrowService } from '../buyerTitleEscrow.service';
+import { BuyerWalkthroughService } from '../buyerWalkthrough.service';
+import { BuyerClosingDisclosureService } from '../buyerClosingDisclosure.service';
+import { BuyerClosingDayService } from '../buyerClosingDay.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
 import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
@@ -4132,6 +4137,232 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
   };
 }
 
+async function buyerFinancingReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s financing readiness right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no financing readiness to review.');
+  }
+  const readinessData = await BuyerPurchaseLenderReadinessService.get(userId, propertyId);
+  if (readinessData.purchasePath === 'CASH') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'BUYER_FINANCING_NOT_APPLICABLE',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-financing-cash', title: 'This purchase is recorded as a cash purchase',
+        body: 'No lender, appraisal, or underwriting steps apply. Financing readiness tracking is for financed purchases only.',
+        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+      }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  if (readinessData.purchasePath === 'UNKNOWN' || !readinessData.readiness) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_FINANCING_NOT_RECORDED',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-financing-unrecorded', title: 'Purchase financing has not been recorded yet',
+        body: 'Record whether this purchase is financed or cash, then select a confirmed Loan Estimate to track appraisal and underwriting readiness.',
+        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+      }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  const readiness = readinessData.readiness as unknown as { appraisalStatus: string; underwritingStatus: string; clearToCloseRecordedAt: string | null; conditions: Array<{ id: string; title: string; notes: string | null; dueAt: string | null; blocking: boolean; status: string }> };
+  const blockingConditions = readiness.conditions.filter((condition) => condition.blocking && !['SATISFIED', 'WAIVED'].includes(condition.status));
+  const blocks: AskOperationResult['blocks'] = [{
+    type: 'SUMMARY', id: 'buyer-financing-summary',
+    title: blockingConditions.length ? `${blockingConditions.length} lender condition${blockingConditions.length === 1 ? '' : 's'} still block closing` : 'No blocking lender condition is currently open',
+    body: `Appraisal: ${readiness.appraisalStatus.toLowerCase().replace(/_/g, ' ')}. Underwriting: ${readiness.underwritingStatus.toLowerCase().replace(/_/g, ' ')}.${readiness.clearToCloseRecordedAt ? ' Clear-to-close is recorded.' : ' Clear-to-close is not yet recorded.'}`,
+    tone: blockingConditions.length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+  }];
+  if (blockingConditions.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'buyer-financing-conditions', title: 'Blocking lender conditions', description: 'From the recorded lender readiness.',
+      sections: [{ id: 'conditions', title: 'Conditions', count: blockingConditions.length, items: blockingConditions.slice(0, 10).map((condition) => ({
+        id: condition.id, title: condition.title, description: condition.notes,
+        meta: [condition.dueAt ? `Due ${humanDate(new Date(condition.dueAt))}` : null].filter((value): value is string => Boolean(value)),
+        status: condition.status, href: planHref,
+      })) }], actions: [],
+    });
+  }
+  blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
+  return {
+    status: blockingConditions.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: blockingConditions.length ? 'BUYER_FINANCING_HAS_BLOCKERS' : undefined,
+    contextVersion: data.contextVersion,
+    blocks,
+    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+  };
+}
+
+async function buyerTitleEscrowReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s title and escrow readiness right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no title or escrow readiness to review.');
+  }
+  const titleData = await BuyerTitleEscrowService.get(userId, propertyId);
+  if (!titleData.workspace) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_TITLE_ESCROW_NOT_RECORDED',
+      blocks: [{ type: 'SUMMARY', id: 'buyer-title-unrecorded', title: 'Title and escrow readiness has not been recorded yet', body: 'Add the responsible title, attorney, or escrow contact to start tracking readiness.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  const workspace = titleData.workspace as unknown as { titleReviewStatus: string; closingAppointmentAt: string | null; issues: Array<{ id: string; title: string; dueAt: string | null; blocking: boolean; status: string }> };
+  const openBlockingIssues = workspace.issues.filter((issue) => issue.blocking && !['RESOLVED', 'WAIVED'].includes(issue.status));
+  const blocks: AskOperationResult['blocks'] = [{
+    type: 'SUMMARY', id: 'buyer-title-summary',
+    title: openBlockingIssues.length ? `${openBlockingIssues.length} title/escrow issue${openBlockingIssues.length === 1 ? '' : 's'} still block closing` : 'No blocking title or escrow issue is currently open',
+    body: `Title review: ${workspace.titleReviewStatus.toLowerCase().replace(/_/g, ' ')}.${workspace.closingAppointmentAt ? ` Closing appointment recorded for ${humanDate(new Date(workspace.closingAppointmentAt))}.` : ' No closing appointment recorded yet.'}`,
+    tone: openBlockingIssues.length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+  }];
+  if (openBlockingIssues.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'buyer-title-issues', title: 'Blocking title/escrow issues', description: 'From the recorded title and escrow workspace.',
+      sections: [{ id: 'issues', title: 'Issues', count: openBlockingIssues.length, items: openBlockingIssues.slice(0, 10).map((issue) => ({
+        id: issue.id, title: issue.title, description: null,
+        meta: [issue.dueAt ? `Due ${humanDate(new Date(issue.dueAt))}` : null].filter((value): value is string => Boolean(value)),
+        status: issue.status, href: planHref,
+      })) }], actions: [],
+    });
+  }
+  blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
+  return {
+    status: openBlockingIssues.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: openBlockingIssues.length ? 'BUYER_TITLE_ESCROW_HAS_BLOCKERS' : undefined,
+    contextVersion: data.contextVersion,
+    blocks,
+    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+  };
+}
+
+async function buyerWalkthroughReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s walkthrough readiness right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no walkthrough to prepare.');
+  }
+  const walkthroughData = await BuyerWalkthroughService.get(userId, propertyId);
+  const workspace = walkthroughData.workspace as unknown as { scheduledAt: string | null; completedAt: string | null; issues: Array<{ id: string; title: string; blocking: boolean; status: string }> } | null;
+  if (!workspace) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_WALKTHROUGH_NOT_SCHEDULED',
+      blocks: [{ type: 'SUMMARY', id: 'buyer-walkthrough-unscheduled', title: 'The final walkthrough has not been scheduled yet', body: 'Schedule the walkthrough close to closing and record attendees before it happens.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  const openIssues = workspace.issues.filter((issue) => !['RESOLVED', 'ROUTED'].includes(issue.status));
+  const blocks: AskOperationResult['blocks'] = [{
+    type: 'SUMMARY', id: 'buyer-walkthrough-summary',
+    title: openIssues.length ? `${openIssues.length} walkthrough issue${openIssues.length === 1 ? '' : 's'} still unresolved` : (workspace.completedAt ? 'The final walkthrough is complete with no open issues' : 'The final walkthrough is scheduled with no issues recorded yet'),
+    body: workspace.scheduledAt ? `Scheduled for ${humanDate(new Date(workspace.scheduledAt))}.` : 'No walkthrough date is recorded yet.',
+    tone: openIssues.length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+  }];
+  if (openIssues.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'buyer-walkthrough-issues', title: 'Unresolved walkthrough issues', description: 'From the recorded walkthrough.',
+      sections: [{ id: 'issues', title: 'Issues', count: openIssues.length, items: openIssues.slice(0, 10).map((issue) => ({
+        id: issue.id, title: issue.title, description: null, meta: issue.blocking ? ['Blocking'] : [], status: issue.status, href: planHref,
+      })) }], actions: [],
+    });
+  }
+  blocks.push({ type: 'BOUNDARY', id: 'buyer-walkthrough-boundary', title: 'Route unresolved issues to your professional', body: 'ContractToCozy does not tell you to close, delay, or withhold funds. Confirm unresolved walkthrough issues with your agent, attorney, or closing professional.', severity: 'INFO', suggestions: [] });
+  return {
+    status: openIssues.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: openIssues.length ? 'BUYER_WALKTHROUGH_HAS_ISSUES' : undefined,
+    contextVersion: data.contextVersion,
+    blocks,
+    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+  };
+}
+
+async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s Closing Disclosure and funds readiness right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no Closing Disclosure to review.');
+  }
+  const disclosureData = await BuyerClosingDisclosureService.get(userId, propertyId);
+  const workspace = disclosureData.workspace as unknown as { fundsReady: boolean; instructionsVerified: boolean; questionsResolved: boolean } | null;
+  if (!workspace) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_DISCLOSURE_NOT_RECORDED',
+      blocks: [{ type: 'SUMMARY', id: 'buyer-disclosure-unrecorded', title: 'No Closing Disclosure has been recorded yet', body: 'Upload or manually enter the latest Closing Disclosure once your lender or closing professional sends it.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  const outstanding: string[] = [];
+  if (!workspace.fundsReady) outstanding.push('funds readiness');
+  if (!workspace.instructionsVerified) outstanding.push('wire-instruction verification');
+  if (!workspace.questionsResolved) outstanding.push('open questions');
+  const blocks: AskOperationResult['blocks'] = [{
+    type: 'SUMMARY', id: 'buyer-disclosure-summary',
+    title: outstanding.length ? `${outstanding.length} item${outstanding.length === 1 ? '' : 's'} still open before funds are ready` : 'Funds and Closing Disclosure review are recorded as ready',
+    body: outstanding.length ? `Still open: ${outstanding.join(', ')}.` : 'Funds method, wire-instruction verification, and questions are all recorded as resolved.',
+    tone: outstanding.length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+  }, {
+    type: 'BOUNDARY', id: 'buyer-disclosure-wire-boundary', title: 'Wire-fraud protection', body: 'Never trust changed emailed wire instructions. Independently verify funds instructions using a known phone number. ContractToCozy never supplies or validates destination account details.', severity: 'CAUTION', suggestions: [],
+  }];
+  return {
+    status: outstanding.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: outstanding.length ? 'BUYER_DISCLOSURE_FUNDS_NOT_READY' : undefined,
+    contextVersion: data.contextVersion,
+    blocks,
+    suggestions: ['What is due before closing?', 'What do I need for closing day?'],
+  };
+}
+
+async function buyerClosingDayReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s closing-day readiness right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no closing-day checklist to review.');
+  }
+  const closingDayData = await BuyerClosingDayService.get(userId, propertyId);
+  const workspace = closingDayData.workspace as unknown as { identificationReady: boolean; requiredDocumentsReady: boolean; fundsReadinessReviewed: boolean; blockersReviewed: boolean; questionsResolved: boolean; professionalClosingConfirmedAt: string | null } | null;
+  const blockers = (closingDayData as { blockers?: Array<{ id: string; title: string; status: string }> }).blockers ?? [];
+  const checklist: Array<boolean> = workspace ? [workspace.identificationReady, workspace.requiredDocumentsReady, workspace.fundsReadinessReviewed, workspace.blockersReviewed, workspace.questionsResolved] : [];
+  const readyCount = checklist.filter(Boolean).length;
+  const professionalConfirmed = Boolean(workspace?.professionalClosingConfirmedAt);
+  const blocks: AskOperationResult['blocks'] = [{
+    type: 'SUMMARY', id: 'buyer-closing-day-summary',
+    title: professionalConfirmed ? 'The professional close is confirmed complete' : blockers.length ? `${blockers.length} blocker${blockers.length === 1 ? '' : 's'} remain before closing day` : `${readyCount} of ${checklist.length || 5} closing-day items ready`,
+    body: professionalConfirmed ? 'This purchase has moved to the first-90-day homeowner experience.' : 'Confirm your appointment, identification, required documents, funds readiness, and questions before closing day.',
+    tone: blockers.length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+  }];
+  if (blockers.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'buyer-closing-day-blockers', title: 'Blockers before closing day', description: 'Open or blocking tasks recorded on the Buyer Plan.',
+      sections: [{ id: 'blockers', title: 'Blockers', count: blockers.length, items: blockers.slice(0, 10).map((blocker) => ({
+        id: blocker.id, title: blocker.title, description: null, meta: [], status: blocker.status, href: planHref,
+      })) }], actions: [],
+    });
+  }
+  blocks.push({ type: 'BOUNDARY', id: 'buyer-closing-day-wire-boundary', title: 'Wire-fraud protection', body: 'Never trust changed emailed wire instructions. Independently verify funds instructions using a known phone number.', severity: 'CAUTION', suggestions: [] });
+  return {
+    status: blockers.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: blockers.length ? 'BUYER_CLOSING_DAY_HAS_BLOCKERS' : undefined,
+    contextVersion: data.contextVersion,
+    blocks,
+    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis] = await Promise.all([
@@ -4899,6 +5130,11 @@ async function dispatchOperationAdapterResult(
     case 'BUYER_TASK_CREATE': return buyerTaskCreateResult(input.userId, input.propertyId!, input.message);
     case 'BUYER_TASK_UPDATE': return buyerTaskUpdateResult(input.userId, input.propertyId!, input.message);
     case 'BUYER_MOVE_STATUS': return buyerMoveStatusResult(input.userId, input.propertyId!);
+    case 'BUYER_FINANCING_READINESS': return buyerFinancingReadinessResult(input.userId, input.propertyId!);
+    case 'BUYER_TITLE_ESCROW_READINESS': return buyerTitleEscrowReadinessResult(input.userId, input.propertyId!);
+    case 'BUYER_WALKTHROUGH_READINESS': return buyerWalkthroughReadinessResult(input.userId, input.propertyId!);
+    case 'BUYER_DISCLOSURE_FUNDS_READINESS': return buyerDisclosureFundsReadinessResult(input.userId, input.propertyId!);
+    case 'BUYER_CLOSING_DAY_READINESS': return buyerClosingDayReadinessResult(input.userId, input.propertyId!);
   }
 }
 

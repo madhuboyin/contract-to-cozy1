@@ -57,6 +57,11 @@ const jobs: Record<AskOperationId, string> = {
   BUYER_TASK_CREATE: 'add a custom task to the closing checklist',
   BUYER_TASK_UPDATE: 'reschedule or reassign a closing checklist item',
   BUYER_MOVE_STATUS: 'review move-in progress for this purchase',
+  BUYER_FINANCING_READINESS: 'review purchase-loan appraisal and underwriting readiness before closing',
+  BUYER_TITLE_ESCROW_READINESS: 'review title, escrow, survey, and HOA readiness before closing',
+  BUYER_WALKTHROUGH_READINESS: 'prepare or review the final walkthrough checklist',
+  BUYER_DISCLOSURE_FUNDS_READINESS: 'review Closing Disclosure changes and funds readiness',
+  BUYER_CLOSING_DAY_READINESS: 'prepare the closing-day appointment, funds, and access checklist',
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
@@ -107,6 +112,11 @@ const positives: Record<AskOperationId, readonly string[]> = {
   BUYER_TASK_CREATE: ['Add final walkthrough photos to my buyer plan', 'Create a buyer plan task for the survey pickup', 'Add a closing plan task for the movers deposit'],
   BUYER_TASK_UPDATE: ['Reschedule the survey closing plan task', 'Assign the utilities buyer plan task to Alex', 'Move the walkthrough buyer plan task to next week'],
   BUYER_MOVE_STATUS: ['What should I do before I move in?', 'Show my move-in readiness for this purchase', 'How is moving progress tracking for this closing?'],
+  BUYER_FINANCING_READINESS: ['What financing item could delay my closing?', 'What is my lender appraisal status?', 'Is underwriting on track for this closing?'],
+  BUYER_TITLE_ESCROW_READINESS: ['What is still open with title or escrow?', 'Show my survey and HOA readiness for closing', 'What title issues could block my closing?'],
+  BUYER_WALKTHROUGH_READINESS: ['Build my final walkthrough checklist', 'Help me prepare for the final walkthrough', 'Is my final walkthrough readiness confirmed?'],
+  BUYER_DISCLOSURE_FUNDS_READINESS: ['What changed in my Closing Disclosure?', 'Is my closing disclosure ready for review?', 'Are my closing funds ready?'],
+  BUYER_CLOSING_DAY_READINESS: ['What do I need for closing day?', 'Is my closing day checklist ready?', 'What should I prepare for closing day?'],
 };
 
 const negatives: Record<AskOperationId, readonly string[]> = {
@@ -157,6 +167,11 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   BUYER_TASK_CREATE: ['Mark the locksmith closing checklist item complete', 'What is due before closing?'],
   BUYER_TASK_UPDATE: ['Add a new closing checklist item', 'Mark the survey task complete'],
   BUYER_MOVE_STATUS: ['What is due before closing?', 'Which inspection findings still need a decision?'],
+  BUYER_FINANCING_READINESS: ['What should I do next for this purchase?', 'Which transaction documents are missing?'],
+  BUYER_TITLE_ESCROW_READINESS: ['What financing item could delay my closing?', 'What is due before closing?'],
+  BUYER_WALKTHROUGH_READINESS: ['What is still open with title or escrow?', 'Which inspection findings still need a decision?'],
+  BUYER_DISCLOSURE_FUNDS_READINESS: ['Build my final walkthrough checklist', 'What is due before closing?'],
+  BUYER_CLOSING_DAY_READINESS: ['What changed in my Closing Disclosure?', 'What should I do next for this purchase?'],
 };
 
 const answerPositives: Record<AskOperationId, readonly string[]> = {
@@ -207,6 +222,11 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   BUYER_TASK_CREATE: ['A custom closing checklist item is ready to be added after confirmation.'],
   BUYER_TASK_UPDATE: ['The selected closing checklist item has an updated due date or assignee.'],
   BUYER_MOVE_STATUS: ['Move-in tasks and their completion progress for this purchase are shown.'],
+  BUYER_FINANCING_READINESS: ['Appraisal, underwriting, and lender-condition status for the selected loan are shown.', 'Underwriting is paused on one lender stipulation before it can clear.'],
+  BUYER_TITLE_ESCROW_READINESS: ['Title, survey, HOA, and closing-appointment readiness are shown with any blocking issues.', 'The title commitment lists one unresolved easement question flagged as blocking.'],
+  BUYER_WALKTHROUGH_READINESS: ['The final walkthrough schedule, agreed-repair checks, and open issues are shown.'],
+  BUYER_DISCLOSURE_FUNDS_READINESS: ['Closing Disclosure revision status and funds/wire readiness are shown.'],
+  BUYER_CLOSING_DAY_READINESS: ['Closing-day appointment, identification, funds, and access readiness are shown.'],
 };
 
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
@@ -257,6 +277,11 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   BUYER_TASK_CREATE: ['The selected closing checklist item is now checked off'],
   BUYER_TASK_UPDATE: ['A custom closing checklist item is ready to be added'],
   BUYER_MOVE_STATUS: ['Two closing-timeline milestones are due before this purchase closes'],
+  BUYER_FINANCING_READINESS: ['The survey-pickup line item is queued on the closing task list'],
+  BUYER_TITLE_ESCROW_READINESS: ['Appraisal and underwriting status for the selected loan are shown'],
+  BUYER_WALKTHROUGH_READINESS: ['Title, survey, and HOA readiness are shown with any blocking issues'],
+  BUYER_DISCLOSURE_FUNDS_READINESS: ['The final walkthrough schedule and open issues are shown'],
+  BUYER_CLOSING_DAY_READINESS: ['Closing Disclosure revision status and funds readiness are shown'],
 };
 
 export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, AskOperationSemanticPackage>> = Object.freeze(

@@ -69,7 +69,12 @@ export type AskOperationId =
   | 'BUYER_TASK_COMPLETE'
   | 'BUYER_TASK_CREATE'
   | 'BUYER_TASK_UPDATE'
-  | 'BUYER_MOVE_STATUS';
+  | 'BUYER_MOVE_STATUS'
+  | 'BUYER_FINANCING_READINESS'
+  | 'BUYER_TITLE_ESCROW_READINESS'
+  | 'BUYER_WALKTHROUGH_READINESS'
+  | 'BUYER_DISCLOSURE_FUNDS_READINESS'
+  | 'BUYER_CLOSING_DAY_READINESS';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -222,6 +227,11 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   BUYER_TASK_CREATE: definition('BUYER_TASK_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   BUYER_TASK_UPDATE: definition('BUYER_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
   BUYER_MOVE_STATUS: definition('BUYER_MOVE_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.move-status', ['SUMMARY', 'GROUPED_LIST']),
+  BUYER_FINANCING_READINESS: definition('BUYER_FINANCING_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.financing-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  BUYER_TITLE_ESCROW_READINESS: definition('BUYER_TITLE_ESCROW_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.title-escrow-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  BUYER_WALKTHROUGH_READINESS: definition('BUYER_WALKTHROUGH_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.walkthrough-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  BUYER_DISCLOSURE_FUNDS_READINESS: definition('BUYER_DISCLOSURE_FUNDS_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.disclosure-funds-readiness', ['SUMMARY', 'BOUNDARY']),
+  BUYER_CLOSING_DAY_READINESS: definition('BUYER_CLOSING_DAY_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.closing-day-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
@@ -260,6 +270,11 @@ const buyerPlanStatusPattern = /\b(?:what should i do next|next step)\b.{0,50}\b
 const buyerTaskCreatePattern = /\b(?:add|create)\b.{0,60}\b(?:to (?:my |the )?(?:buyer plan|closing plan)|as a (?:buyer plan|closing) task)\b|\b(?:add|create) (?:a |an )?(?:buyer plan|closing plan) task\b/i;
 const buyerTaskUpdatePattern = /\b(?:reschedule|move|assign|unassign|reassign)\b.{0,60}\b(?:buyer plan|closing plan) task\b|\b(?:buyer plan|closing plan) task\b.{0,60}\b(?:reschedule|assign|due date)\b/i;
 const buyerMoveStatusPattern = /\bwhat should i do\b.{0,30}\bbefore (?:i )?move[- ]?in\b|\bmov(?:e|ing)[- ](?:in|out) (?:progress|status|readiness)\b.{0,40}\bpurchase\b|\bmoving\b.{0,40}\b(?:progress|status)\b.{0,30}\b(?:closing|purchase|buyer plan)\b/i;
+const buyerFinancingReadinessPattern = /\b(?:financing|lender|loan|underwriting|appraisal)\b.{0,50}\b(?:delay|block|ready|readiness|status)\b.{0,40}\bclosing\b|\bwhat(?:'s| is)\b.{0,30}\b(?:financing|lender|loan|appraisal)\b.{0,30}\bstatus\b/i;
+const buyerTitleEscrowReadinessPattern = /\b(?:title|escrow|survey|hoa)\b.{0,50}\b(?:open|outstanding|status|ready|readiness)\b.{0,40}\b(?:closing|purchase)\b|\bwhat(?:'s| is)\b.{0,30}\bopen\b.{0,30}\b(?:title|escrow)\b/i;
+const buyerWalkthroughReadinessPattern = /\bfinal walkthrough\b.{0,50}\b(?:checklist|ready|readiness|prepare|status)\b|\b(?:prepare|ready)\b.{0,40}\bfinal walkthrough\b/i;
+const buyerDisclosureFundsReadinessPattern = /\bclosing disclosure\b.{0,50}\b(?:change|changes|ready|readiness|review|status)\b|\bwhat changed\b.{0,40}\bclosing disclosure\b|\bfunds\b.{0,30}\bready\b.{0,30}\bclosing\b/i;
+const buyerClosingDayReadinessPattern = /\bclosing day\b.{0,50}\b(?:ready|readiness|need|checklist|prepare)\b|\bwhat do i need\b.{0,40}\bclosing day\b/i;
 
 const emergencyPattern = /\b(smell(?:ing)? gas|gas smell|gas leak|carbon monoxide|\bco (?:alarm|detector)|sparks?\b.{0,25}\b(?:from|at)\b|electrical fire|actively flooding.*electric(?:al)?|fire now)\b/i;
 const unsafeRestrictedPattern = /\b(?:bypass|avoid|evade|skip|work around)\b.{0,60}\b(?:permit|inspection|code|licen[cs]e|hoa|disclosure)\b|\b(?:disable|disconnect|remove|tamper with|cover|block)\b.{0,60}\b(?:smoke|carbon monoxide|co|fire|safety)\s*(?:detector|alarm|device)?\b|\b(?:conceal|hide|omit|misrepresent)\b.{0,80}\b(?:damage|defect|mold|leak|flood|fire|buyer|insurer|inspector|lender)\b|\b(?:remove|alter|cut|demolish|open up)\b.{0,70}\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:wall|beam|column|support)?\b|\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:without|skip|avoid|myself|diy)\b.{0,40}\b(?:inspection|permit|engineer|approval)?\b|\b(?:guarantee|certify|confirm(?: definitively)?|promise|tell me (?:for sure|the exact))\b.{0,100}\b(?:approved|approval|eligible|eligibility|legal|compliant|safe|pass inspection|refinanc|mortgage|loan|insurance claim|tax appeal|damage|loss|claim|covered|coverage|sale price|sell for)\b/i;
@@ -398,6 +413,21 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (buyerMoveStatusPattern.test(message)) {
     return resolved('BUYER_MOVE_STATUS', 0.95);
+  }
+  if (buyerFinancingReadinessPattern.test(message)) {
+    return resolved('BUYER_FINANCING_READINESS', 0.95);
+  }
+  if (buyerTitleEscrowReadinessPattern.test(message)) {
+    return resolved('BUYER_TITLE_ESCROW_READINESS', 0.95);
+  }
+  if (buyerWalkthroughReadinessPattern.test(message)) {
+    return resolved('BUYER_WALKTHROUGH_READINESS', 0.95);
+  }
+  if (buyerDisclosureFundsReadinessPattern.test(message)) {
+    return resolved('BUYER_DISCLOSURE_FUNDS_READINESS', 0.95);
+  }
+  if (buyerClosingDayReadinessPattern.test(message)) {
+    return resolved('BUYER_CLOSING_DAY_READINESS', 0.95);
   }
   // Ask Intelligence FRD Phase 8A: checked ahead of quoteComparisonReviewPattern
   // and replacementPattern below, since both are generic enough to otherwise
