@@ -3455,6 +3455,27 @@ export interface BuyerInspectionPlanResponse {
     safetyFindings: number;
     majorFindings: number;
   } | null;
+  recommendations: {
+    version: string;
+    contextVersion: string;
+    generatedAt: string;
+    modules: BuyerInspectionModuleRecommendation[];
+  };
+}
+
+export interface BuyerInspectionModuleRecommendation {
+  moduleKey: string;
+  title: string;
+  description: string;
+  whyItMatters: string;
+  status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+  reasonCodes: string[];
+  specialistScopes: BuyerInspectionSpecialistScope[];
+  questions: string[];
+  usedFactKeys: string[];
+  missingFactKeys: string[];
+  conflictedFactKeys: string[];
+  correctionPaths: string[];
 }
 
 export interface BuyerAcceptanceStatus {

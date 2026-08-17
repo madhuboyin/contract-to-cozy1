@@ -114,6 +114,10 @@ export const locationAssembler: PropertyContextAssembler = {
           timezone: true,
           latitude: true,
           longitude: true,
+          inHistoricDistrict: true,
+          inHurricaneZone: true,
+          inFloodZone: true,
+          inWildfireZone: true,
           climateSetting: { select: { climateRegion: true } },
         },
       }),
@@ -130,6 +134,10 @@ export const locationAssembler: PropertyContextAssembler = {
       // No canonical coastal-exposure source exists yet. Do not infer it from
       // state or ZIP; consumers must see UNKNOWN until a verified source lands.
       'location.isCoastal': null,
+      'location.inHistoricDistrict': property.inHistoricDistrict,
+      'location.inHurricaneZone': property.inHurricaneZone,
+      'location.inFloodZone': property.inFloodZone,
+      'location.inWildfireZone': property.inWildfireZone,
     };
     return Object.entries(values).map(([key, value]) =>
       withPropertyId(createPropertyFact(key, value, evidence.get(key), now), propertyId),

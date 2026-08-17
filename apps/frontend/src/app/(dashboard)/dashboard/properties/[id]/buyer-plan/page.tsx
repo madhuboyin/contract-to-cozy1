@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import type {
   BuyerFindingDisposition,
   BuyerInspectionPlanInput,
+  BuyerInspectionModuleRecommendation,
   BuyerInspectionSpecialistScope,
   BuyerPlanPhase,
   BuyerPlanOverviewTask,
@@ -250,6 +251,15 @@ export default function BuyerPlanPage() {
   const readiness = readinessQuery.data;
   const evidence = evidenceQuery.data;
   const inspectionPlan = inspectionPlanQuery.data?.plan;
+  const inspectionModules = inspectionPlanQuery.data?.recommendations.modules ?? [];
+  const applicableInspectionModules = inspectionModules.filter((module) => module.status === 'APPLICABLE');
+  const unresolvedInspectionModules = inspectionModules.filter((module) => module.status === 'UNKNOWN');
+  const addInspectionModule = (module: BuyerInspectionModuleRecommendation) => {
+    inspectionPlanMutation.mutate({
+      specialistScopes: [...new Set([...(inspectionPlan?.specialistScopes ?? []), ...module.specialistScopes])],
+      propertyQuestions: [...new Set([...(inspectionPlan?.propertyQuestions ?? []), ...module.questions])],
+    });
+  };
   const acceptance = acceptanceQuery.data;
   const composition = compositionQuery.data;
   const members = overview.workload;
@@ -313,6 +323,15 @@ export default function BuyerPlanPage() {
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">Keep access, attendees, scope, report timing, contingency timing, and any repair verification in one property record.</p>
             {inspectionPlanQuery.data?.latestReport && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><span className="font-medium">Latest pre-purchase report:</span> {new Date(inspectionPlanQuery.data.latestReport.inspectionDate).toLocaleDateString()} · {inspectionPlanQuery.data.latestReport.status.replace(/_/g, ' ').toLowerCase()} · {inspectionPlanQuery.data.latestReport.openFindings} open finding(s)</div>}
+            {applicableInspectionModules.length > 0 && <div className="space-y-3 rounded-lg border border-violet-200 bg-violet-50/40 p-4">
+              <div><p className="font-medium">Property-aware inspection modules</p><p className="text-xs text-muted-foreground">Generated from canonical property facts. Additions require your explicit confirmation and never imply a defect.</p></div>
+              <div className="grid gap-3 md:grid-cols-2">{applicableInspectionModules.map((module) => {
+                const added = module.specialistScopes.every((scope) => inspectionPlan?.specialistScopes.includes(scope))
+                  && module.questions.every((question) => inspectionPlan?.propertyQuestions.includes(question));
+                return <div key={module.moduleKey} className="rounded-lg border bg-background p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-medium">{module.title}</p><p className="mt-1 text-xs text-muted-foreground">{module.description}</p></div><Badge variant="outline">{module.specialistScopes.length} scope</Badge></div><p className="mt-2 text-xs"><strong>Why:</strong> {module.whyItMatters}</p><p className="mt-2 text-xs text-muted-foreground">Based on {module.usedFactKeys.map((key) => key.split('.').pop()).join(', ')}</p><Button type="button" size="sm" variant={added ? 'outline' : 'default'} className="mt-3" disabled={readOnly || added || inspectionPlanMutation.isPending} onClick={() => addInspectionModule(module)}>{added ? 'Added to plan' : 'Add module to plan'}</Button></div>;
+              })}</div>
+            </div>}
+            {unresolvedInspectionModules.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm"><p className="font-medium">{unresolvedInspectionModules.length} module(s) need more property context</p><p className="mt-1 text-xs text-muted-foreground">Unknown or conflicted details stay outside the saved inspection scope. Update the property details when known.</p><div className="mt-2 flex flex-wrap gap-2">{[...new Set(unresolvedInspectionModules.flatMap((module) => module.correctionPaths))].map((path) => <Button key={path} asChild size="sm" variant="outline"><Link href={path}>Update property details</Link></Button>)}</div></div>}
             <form key={inspectionPlan?.updatedAt ?? 'new-inspection-plan'} className="grid gap-4 md:grid-cols-2" onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);

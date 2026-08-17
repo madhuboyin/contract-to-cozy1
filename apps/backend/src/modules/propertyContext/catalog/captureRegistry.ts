@@ -94,6 +94,8 @@ for (const key of [
   'exterior.hasOutdoorFaucets', 'exterior.hasDrainageIssues', 'safety.hasSmokeDetectors',
   'safety.hasCoDetectors', 'safety.hasSecuritySystem', 'safety.hasFireExtinguisher',
   'safety.hasSumpPump', 'safety.hasSumpPumpBackup',
+  'location.inHistoricDistrict', 'location.inHurricaneZone', 'location.inFloodZone',
+  'location.inWildfireZone',
 ]) inputSchemas[key] = booleanSchema;
 
 for (const definition of PROPERTY_FACT_CATALOG.filter(({ key }) => key.startsWith('responsibility.'))) {

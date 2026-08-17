@@ -17,6 +17,8 @@ import {
   BUYER_MILESTONE_KEYS,
   type BuyerInspectionPlanInput,
 } from '../productFramework/buyerAcquisition.contract';
+import { getPropertyContext } from '../modules/propertyContext';
+import { composeBuyerInspectionModules } from './buyerInspectionModuleComposition.service';
 
 const DAY_MS = 86_400_000;
 
@@ -186,7 +188,7 @@ export class BuyerAcquisitionService {
 
   static async getInspectionPlan(userId: string, propertyId: string) {
     await this.assertAccess(userId, propertyId, 'VIEWER');
-    const [plan, latestReport] = await Promise.all([
+    const [plan, latestReport, propertyContext] = await Promise.all([
       prisma.buyerInspectionPlan.findUnique({
         where: { propertyId },
         include: {
@@ -208,8 +210,11 @@ export class BuyerAcquisitionService {
           majorFindings: true,
         },
       }),
+      getPropertyContext(propertyId, { userId }, {
+        scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY'],
+      }),
     ]);
-    return { plan, latestReport };
+    return { plan, latestReport, recommendations: composeBuyerInspectionModules(propertyContext) };
   }
 
   static async updateInspectionPlan(

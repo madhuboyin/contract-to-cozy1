@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.16
+**Version:** 1.17
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2807,7 +2807,15 @@ questions, and optional reinspection or repair proof. Buyer Plan now edits this
 record directly. Saves idempotently synchronize the existing inspection-plan
 task, inspection and contingency milestones, and one stable reinspection task;
 completed or user-edited work remains protected. Property-aware inspection
-module composition and broader obligation deduplication remain next.
+module composition and broader obligation deduplication remain next. The sixth
+increment composes six explainable inspection modules from canonical dwelling,
+ownership responsibility, foundation/space, pool/site, confirmed-system, and
+recorded exposure facts. Existing self-reported flood, hurricane, wildfire, and
+historic-district flags now participate in Property Context with provenance and
+correction paths. Buyer Plan displays only fact-supported recommendations,
+keeps unknown or conflicted modules outside saved scope, and requires an explicit
+deduplicating “Add module to plan” action. Broader obligation deduplication
+remains next.
 
 **Goal:** Turn transaction evidence into one trustworthy plan.
 
@@ -2826,6 +2834,8 @@ module composition and broader obligation deduplication remain next.
    now share one canonical record and synchronize Buyer Plan work.
 9. Add property-aware inspection modules for dwelling, ownership responsibility,
    foundation/spaces, confirmed systems/site features, and exposure context.
+   **Implemented:** six versioned modules now produce explicit scope/questions
+   with used, missing, and conflicted Property Context provenance.
 
 Functional check:
 
