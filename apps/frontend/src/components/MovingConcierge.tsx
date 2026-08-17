@@ -84,6 +84,7 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
 
   // Form fields
   const [closingDate, setClosingDate] = useState('');
@@ -120,25 +121,6 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
 
     loadSavedPlan();
   }, [applyCanonicalPlan, propertyId]);
-
-  // Auto-save completed tasks (debounced)
-  useEffect(() => {
-    if (!plan || saveStatus === 'saving') return;
-
-    const timeoutId = setTimeout(async () => {
-      try {
-        setSaveStatus('saving');
-        await api.updateCompletedTasks(propertyId, Array.from(completedTasks));
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
-      } catch (err) {
-        console.error('Failed to save task completion:', err);
-        setSaveStatus('idle');
-      }
-    }, 1000); // Debounce 1 second
-
-    return () => clearTimeout(timeoutId);
-  }, [completedTasks, propertyId, plan]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,14 +167,42 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
     }
   };
 
-  const toggleTask = (taskId: string) => {
-    const newCompleted = new Set(completedTasks);
-    if (newCompleted.has(taskId)) {
-      newCompleted.delete(taskId);
-    } else {
-      newCompleted.add(taskId);
+  const toggleTask = async (taskId: string) => {
+    if (pendingTaskId) return;
+
+    const wasCompleted = completedTasks.has(taskId);
+    setCompletedTasks((current) => {
+      const next = new Set(current);
+      if (wasCompleted) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+    setPendingTaskId(taskId);
+    setSaveStatus('saving');
+    setError('');
+
+    try {
+      const response = await api.updateHomeBuyerTaskStatus(
+        propertyId,
+        taskId,
+        wasCompleted ? 'PENDING' : 'COMPLETED',
+      );
+      if (!response.success) throw new Error(response.message || 'Failed to update moving task');
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      setCompletedTasks((current) => {
+        const reverted = new Set(current);
+        if (wasCompleted) reverted.add(taskId);
+        else reverted.delete(taskId);
+        return reverted;
+      });
+      console.error('Failed to save task completion:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update moving task');
+      setSaveStatus('idle');
+    } finally {
+      setPendingTaskId(null);
     }
-    setCompletedTasks(newCompleted);
   };
 
   const handleManualSave = async () => {
@@ -268,10 +278,15 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
               >
                 <div className="flex items-start gap-3">
                   <button
+                    type="button"
                     onClick={() => toggleTask(task.id)}
-                    className="mt-1 flex-shrink-0"
+                    disabled={pendingTaskId !== null}
+                    aria-label={`${completedTasks.has(task.id) ? 'Reopen' : 'Complete'} ${task.title}`}
+                    className="mt-1 flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {completedTasks.has(task.id) ? (
+                    {pendingTaskId === task.id ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                    ) : completedTasks.has(task.id) ? (
                       <CheckCircle2 className="w-6 h-6 text-green-600" />
                     ) : (
                       <Circle className="w-6 h-6 text-gray-400" />
@@ -342,6 +357,13 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
 
     return (
       <div className="space-y-6">
+        {error && (
+          <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         <ResultHeroCard
           title="Moving Plan Progress"
           value={`${Math.round(overallProgress)}%`}

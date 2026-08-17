@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import type { MovingPlan, MovingTask } from './movingConcierge.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
@@ -42,6 +41,23 @@ export function flattenMovingTimeline(plan: Pick<MovingPlan, 'timeline'>): Movin
     }
   }
   return refs;
+}
+
+/**
+ * Removes response-only canonical completion projections before persisting the
+ * planning envelope. HomeBuyerTask is the only durable moving execution state.
+ */
+export function movingPlanForStorage(plan: MovingPlan): Record<string, unknown> {
+  const { completedTasks: _completedTasks, ...planWithoutCompletion } = plan;
+  const timeline = Object.fromEntries(MOVING_TIMELINE_PERIODS.map((period) => [
+    period,
+    (plan.timeline[period] ?? []).map((task) => {
+      const { completed: _completed, ...taskWithoutCompletion } = task;
+      return taskWithoutCompletion;
+    }),
+  ]));
+
+  return { ...planWithoutCompletion, timeline };
 }
 
 function buyerPriority(priority: MovingTask['priority']): 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER' {
@@ -149,7 +165,7 @@ export async function reconcileMovingPlanTasks(
   return { ...plan, timeline, completedTasks };
 }
 
-/** Projects completion from HomeBuyerTask; MovingPlan.completedTasks is legacy-only. */
+/** Projects the sole durable completion state from canonical HomeBuyerTask rows. */
 export async function projectCanonicalMovingCompletion(propertyId: string, plan: MovingPlan): Promise<MovingPlan> {
   const refs = flattenMovingTimeline(plan);
   const ids = refs.map(({ task }) => task.id);
@@ -174,44 +190,4 @@ export async function projectCanonicalMovingCompletion(propertyId: string, plan:
     timeline,
     completedTasks: flattenMovingTimeline({ timeline }).filter(({ task }) => task.completed).map(({ task }) => task.id),
   };
-}
-
-/** Updates the same canonical rows used by Buyer Plan and its progress summary. */
-export async function updateCanonicalMovingCompletion(
-  propertyId: string,
-  userId: string,
-  plan: MovingPlan,
-  completedTaskIds: string[],
-): Promise<void> {
-  await assertContributor(userId, propertyId);
-  const canonicalIds = flattenMovingTimeline(plan).map(({ task }) => task.id);
-  const requested = new Set(completedTaskIds);
-  const completedIds = canonicalIds.filter((id) => requested.has(id));
-  const reopenedIds = canonicalIds.filter((id) => !requested.has(id));
-  const now = new Date();
-
-  await prisma.$transaction([
-    prisma.homeBuyerTask.updateMany({
-      where: { id: { in: completedIds }, checklist: { propertyId }, sourceEntityType: MOVING_CONCIERGE_SOURCE_ENTITY },
-      data: {
-        status: 'COMPLETED',
-        userEditedAt: now,
-        completedAt: now,
-        completedByUserId: userId,
-        completionMethod: 'USER_ATTESTATION',
-        completionEvidenceJson: { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: now.toISOString(), source: 'MOVING_CONCIERGE' },
-      },
-    }),
-    prisma.homeBuyerTask.updateMany({
-      where: { id: { in: reopenedIds }, checklist: { propertyId }, sourceEntityType: MOVING_CONCIERGE_SOURCE_ENTITY },
-      data: {
-        status: 'PENDING',
-        userEditedAt: now,
-        completedAt: null,
-        completedByUserId: null,
-        completionMethod: null,
-        completionEvidenceJson: Prisma.JsonNull,
-      },
-    }),
-  ]);
 }

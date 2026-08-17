@@ -5554,7 +5554,6 @@ model MovingPlan {
   planData       Json // Full moving plan (timeline, costs, utilities, etc.)
   // Property Context version at generation; used to reconcile stale plans.
   contextVersion String?
-  completedTasks String[] // Array of completed task IDs
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

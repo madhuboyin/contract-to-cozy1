@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.36
+**Version:** 1.37
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2462,7 +2462,7 @@ not defer an introduced homeowner regression to a later cleanup slice.
 | Slice 4 | In progress | Versioned code-owned entry template for each of the nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys; condo/association responsibility, pool/spa, property-age-plus-location, and HVAC-age example rules; explainable applicability provenance, missing-detail benefit copy/correction paths, exact deltas, and idempotent preservation of user work | Complete the full composition-layer catalog and transaction-path facts; render questions, deltas, applicability, and section progress in Buyer Closing Home/Buyer Plan; build the revision-aware Contract & Contingency Tracker, confirmed milestone write-back, blocker recovery, deep-link return continuity, and phase-aware Ask context |
 | Slices 5–6 | In progress | Buyer-aware Ask context/actions and canonical Moving Concierge task projection are implemented as the first vertical increments | Complete the remaining scope listed in each slice below |
 | Slice 7 | Complete | Explicit professional close plus atomic purchase cancellation; mutually exclusive persisted lifecycle claims; cancellation stops active tasks/milestones while preserving completed work, documents, findings, and evidence; authorized close atomically records an idempotent Home Record milestone with signed evidence and opens a welcome-home first-90-day transition; day-91 handoff requires persisted ownership and resolved pre-close work, materializes incomplete ownership work idempotently, and atomically establishes the owner; persisted Recent Owner state progressively reveals a bounded first-90-day transition above the normal homeowner dashboard; advocacy appears only after canonical progress or verified-record value, is suppressed by buyer/home urgency and safety work, is role-aware, dismissible, frequency-limited, and measured; deterministic desktop/mobile rendered regression coverage verifies homeowner continuity, advocacy behavior, accessibility, and responsive layout | — |
-| Slice 8 | In progress | Removed the orphaned global buyer-checklist card and its only legacy `/dashboard/checklist` redirect; removed the associated duplicate dashboard checklist types; corrected active API, Swagger, and integration comments that described buyer or owner as a global user segment; added a required source-level route/CTA contract covering onboarding, Buyer Closing Home, Buyer Plan, Documents, Inspection, Ask, Recent Owner handoff, Home Record, Household, and Home Operations | Complete the rendered full-journey and protected homeowner traversals; finish site-wide copy/link, legacy helper, duplicate Moving storage/API, responsive, accessibility, and empty/error-state audits |
+| Slice 8 | In progress | Removed the orphaned global buyer-checklist card and its only legacy `/dashboard/checklist` redirect; removed the associated duplicate dashboard checklist types; corrected active API, Swagger, and integration comments that described buyer or owner as a global user segment; added a required source-level route/CTA contract covering onboarding, Buyer Closing Home, Buyer Plan, Documents, Inspection, Ask, Recent Owner handoff, Home Record, Household, and Home Operations; retired the duplicate Moving completion column, persisted JSON completion flags, bulk completion service/route/client, and wired the rich Moving view directly to canonical property-scoped buyer-task status updates | Complete the rendered full-journey and protected homeowner traversals; finish site-wide copy/link, legacy helper, responsive, accessibility, and empty/error-state audits |
 
 The Slice 0 foundation is complete enough for vertical Slice 1 work, but the
 minimum coherent release in Section 21.1 is not yet satisfied. No current
@@ -3072,13 +3072,16 @@ Functional check:
 Moving Concierge timeline generation into idempotent canonical `HomeBuyerTask`
 rows in the `MOVE_IN` phase and `MOVE_POSSESSION` section. The rich Moving view
 now receives canonical task IDs, projects completion from Buyer Plan state, and
-updates those same rows instead of owning an independent completion list.
+updates each row through the same property-scoped buyer-task status command.
 Regeneration preserves task completion, evidence, assignment, notes, and user
 edits; Buyer Plan and Moving Concierge therefore share one task identity and one
-progress count. Moving reads now honor viewer access while generation, saving,
-completion, and deletion require contributor access. Remaining Slice 6 work
-adds move filtering, milestone and booking reconciliation, co-buyer landing,
-and deduplicated lifecycle-aware notifications.
+progress count. The `MovingPlan.completedTasks` column, JSON snapshot completion
+fields, and moving-specific bulk completion API have been removed; persisted
+moving plans now contain generation content while `HomeBuyerTask` solely owns
+execution state. Moving reads now honor viewer access while generation, saving,
+completion, and deletion require contributor access. Remaining Slice 6 work adds
+move filtering, milestone and booking reconciliation, co-buyer landing, and
+deduplicated lifecycle-aware notifications.
 
 **Goal:** Eliminate duplicate coordination systems.
 
@@ -3184,6 +3187,15 @@ route-contract gate now fails if the deleted global checklist path or card
 returns, if a canonical buyer/owner route disappears, or if the onboarding,
 Buyer Closing Home, Recent Owner, or buyer-return CTAs lose their property-
 scoped destinations.
+
+The second cleanup increment removes Moving Concierge's remaining duplicate
+execution state. Saved moving-plan JSON is sanitized of top-level completion
+IDs and per-task completion booleans, the obsolete Prisma completion array and
+moving-specific bulk completion route/service/client are gone, and the rich
+Moving view now completes or reopens the canonical buyer task directly with an
+optimistic rollback on failure. Reopening through the shared status command also
+clears stale completion evidence. Per the greenfield policy, the Prisma schema
+was corrected directly without a migration file.
 
 **Goal:** Remove legacy contradictions and deliver top-tier fit and finish.
 

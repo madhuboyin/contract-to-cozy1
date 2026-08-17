@@ -2630,13 +2630,6 @@ class APIClient {
     });
   }
   
-  async updateCompletedTasks(propertyId: string, completedTaskIds: string[]): Promise<APIResponse<any>> {
-    return this.request('/api/moving-concierge/update-tasks', {
-      method: 'POST',
-      body: JSON.stringify({ propertyId, completedTaskIds }),
-    });
-  }
-  
   async deleteMovingPlan(propertyId: string): Promise<APIResponse<any>> {
     return this.request(`/api/moving-concierge/delete-plan/${propertyId}`, {
       method: 'DELETE',

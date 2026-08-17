@@ -191,47 +191,6 @@ router.get('/get-plan/:propertyId', authenticate, propertyAuthMiddleware, async 
 
 /**
  * @swagger
- * /api/moving-concierge/update-tasks:
- *   post:
- *     summary: Update completed tasks
- *     tags: [Moving Concierge]
- *     security:
- *       - bearerAuth: []
- */
-router.post('/update-tasks', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user!.userId;
-    const { propertyId, completedTaskIds } = req.body;
-
-    if (!propertyId || !Array.isArray(completedTaskIds)) {
-      return res.status(400).json({
-        success: false,
-        message: 'propertyId and completedTaskIds array are required'
-      });
-    }
-
-    await movingConciergeService.updateCompletedTasks(
-      propertyId,
-      userId,
-      completedTaskIds
-    );
-
-    res.json({
-      success: true,
-      message: 'Completed tasks updated successfully'
-    });
-
-  } catch (error: any) {
-    logger.error({ err: error }, '[MOVING-CONCIERGE] Update tasks error');
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to update completed tasks'
-    });
-  }
-});
-
-/**
- * @swagger
  * /api/moving-concierge/delete-plan/{propertyId}:
  *   delete:
  *     summary: Delete moving plan

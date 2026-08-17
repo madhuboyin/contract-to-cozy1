@@ -6,9 +6,9 @@ import { logger } from '../lib/logger';
 import { getPlanningContextDecisions, getPlanningContextEnvelope } from './planningContext/context';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import {
+  movingPlanForStorage,
   projectCanonicalMovingCompletion,
   reconcileMovingPlanTasks,
-  updateCanonicalMovingCompletion,
 } from './movingConciergeTask.service';
 
 export interface MovingPlanInput {
@@ -969,7 +969,7 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
         where: { id: existingPlan.id },
         data: {
           closingDate: new Date(canonicalPlan.closingDate),
-          planData: canonicalPlan as any,
+          planData: movingPlanForStorage(canonicalPlan) as any,
           contextVersion: planning.contextVersion,
           updatedAt: new Date(),
         },
@@ -979,9 +979,8 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
         data: {
           propertyId: propertyId,
           closingDate: new Date(canonicalPlan.closingDate),
-          planData: canonicalPlan as any,
+          planData: movingPlanForStorage(canonicalPlan) as any,
           contextVersion: planning.contextVersion,
-          completedTasks: [],
         },
       });
     }
@@ -1013,29 +1012,6 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       ...(savedPlan.planData as any),
       context: contextEnvelope,
     });
-  }
-  
-  async updateCompletedTasks(
-    propertyId: string,
-    userId: string,
-    completedTaskIds: string[]
-  ): Promise<void> {
-    await this.assertAccess(userId, propertyId, 'CONTRIBUTOR');
-  
-    const existingPlan = await prisma.movingPlan.findFirst({
-      where: { propertyId }
-    });
-
-    if (!existingPlan) {
-      throw new Error('Moving plan not found');
-    }
-
-    await updateCanonicalMovingCompletion(
-      propertyId,
-      userId,
-      existingPlan.planData as unknown as MovingPlan,
-      completedTaskIds,
-    );
   }
   
   async deleteMovingPlan(

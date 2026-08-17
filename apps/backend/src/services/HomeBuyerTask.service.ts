@@ -969,7 +969,7 @@ export class HomeBuyerTaskService {
         completionMethod: status === 'COMPLETED' ? 'USER_ATTESTATION' : null,
         completionEvidenceJson: status === 'COMPLETED'
           ? { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString() }
-          : undefined,
+          : Prisma.JsonNull,
       },
     });
   }

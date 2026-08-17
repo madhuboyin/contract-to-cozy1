@@ -7,6 +7,7 @@ require('ts-node/register');
 
 const {
   flattenMovingTimeline,
+  movingPlanForStorage,
   movingTaskActionKey,
   MOVING_TIMELINE_PERIODS,
 } = require('../../src/services/movingConciergeTask.service.ts');
@@ -42,12 +43,35 @@ test('moving task action keys are deterministic per timeline slot and safe for c
   assert.equal(movingTaskActionKey('movingDay', 'md_1'), movingTaskActionKey('movingDay', 'md_1'));
 });
 
-test('Moving Concierge completion writes canonical buyer tasks instead of the legacy completedTasks column', () => {
+test('moving plan storage strips response-only completion projections', () => {
+  const sourcePlan = { ...plan(), propertyId: 'property-1', completedTasks: ['canonical-task-id'] };
+  const stored = movingPlanForStorage(sourcePlan);
+
+  assert.equal('completedTasks' in stored, false);
+  assert.equal('completed' in stored.timeline.weeks4Before[0], false);
+  assert.equal('completed' in stored.timeline.movingDay[0], false);
+  assert.equal(stored.timeline.movingDay[0].id, 'canonical-task-id');
+  assert.equal(stored.timeline.movingDay[0].sourceTaskId, 'md_1');
+});
+
+test('Moving Concierge completion has one canonical storage and API path', () => {
   const source = readFileSync(resolve(__dirname, '../../src/services/movingConcierge.service.ts'), 'utf8');
   const canonical = readFileSync(resolve(__dirname, '../../src/services/movingConciergeTask.service.ts'), 'utf8');
-  const updateSection = source.slice(source.indexOf('async updateCompletedTasks'), source.indexOf('async deleteMovingPlan'));
-  assert.match(updateSection, /updateCanonicalMovingCompletion/);
-  assert.doesNotMatch(updateSection, /completedTasks:\s*completedTaskIds/);
+  const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
+  const routes = readFileSync(resolve(__dirname, '../../src/routes/movingConcierge.routes.ts'), 'utf8');
+  const buyerTasks = readFileSync(resolve(__dirname, '../../src/services/HomeBuyerTask.service.ts'), 'utf8');
+  const client = readFileSync(resolve(__dirname, '../../../frontend/src/lib/api/client.ts'), 'utf8');
+  const component = readFileSync(resolve(__dirname, '../../../frontend/src/components/MovingConcierge.tsx'), 'utf8');
+  const movingPlanModel = schema.slice(schema.indexOf('model MovingPlan {'), schema.indexOf('model CommunityEvent {'));
+
+  assert.match(source, /movingPlanForStorage\(canonicalPlan\)/);
+  assert.doesNotMatch(source, /async updateCompletedTasks/);
+  assert.doesNotMatch(canonical, /updateCanonicalMovingCompletion/);
+  assert.doesNotMatch(movingPlanModel, /completedTasks/);
+  assert.doesNotMatch(routes, /update-tasks/);
+  assert.doesNotMatch(client, /async updateCompletedTasks/);
+  assert.match(component, /updateHomeBuyerTaskStatus/);
+  assert.match(buyerTasks, /completionEvidenceJson:[\s\S]*?: Prisma\.JsonNull/);
   assert.match(canonical, /phase: 'MOVE_IN'/);
   assert.match(canonical, /checklistSection: 'MOVE_POSSESSION'/);
   assert.match(canonical, /sourceEntityType: MOVING_CONCIERGE_SOURCE_ENTITY/);
