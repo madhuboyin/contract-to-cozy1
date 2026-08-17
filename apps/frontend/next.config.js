@@ -49,7 +49,6 @@ const nextConfig = {
       // /dashboard/maintenance intentionally NOT redirected: it lists PropertyMaintenanceTask
       // records (seasonal "View in Maintenance" deep-links with ?taskId=) which the
       // resolution center does not surface.
-      { source: '/dashboard/checklist', destination: '/dashboard/resolution-center', permanent: false },
       { source: '/dashboard/fix', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
       { source: '/dashboard/emergency', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
       // replace-repair is a standalone tool; keep it accessible from resolution-center cards

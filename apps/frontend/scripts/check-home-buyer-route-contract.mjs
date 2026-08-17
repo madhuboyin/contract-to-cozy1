@@ -17,6 +17,7 @@ const requiredRouteFiles = [
 ];
 
 const removedLegacyFiles = [
+  'src/app/(auth)/login/page copy.tsx',
   'src/app/(dashboard)/dashboard/checklist/page.tsx',
   'src/app/(dashboard)/dashboard/components/HomeBuyerChecklistCard.tsx',
 ];
@@ -31,7 +32,11 @@ for (const path of requiredRouteFiles) {
   if (!existsSync(resolve(frontendRoot, path))) failures.push(`${path}: canonical route is missing`);
 }
 for (const path of removedLegacyFiles) {
-  if (existsSync(resolve(frontendRoot, path))) failures.push(`${path}: obsolete buyer checklist surface still exists`);
+  if (existsSync(resolve(frontendRoot, path))) failures.push(`${path}: obsolete route artifact still exists`);
+}
+
+if (read('next.config.js').includes('/dashboard/checklist')) {
+  failures.push('next.config.js: redirects the removed global checklist route');
 }
 
 function sourceFiles(directory) {
