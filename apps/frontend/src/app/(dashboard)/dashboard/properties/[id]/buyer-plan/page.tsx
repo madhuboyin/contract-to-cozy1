@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, SlidersHorizontal, Users, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, SlidersHorizontal, Users } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { api } from '@/lib/api/client';
 import { Badge } from '@/components/ui/badge';
@@ -33,18 +33,16 @@ import { BuyerTitleEscrowCenter } from './BuyerTitleEscrowCenter';
 import { BuyerInsuranceCenter } from './BuyerInsuranceCenter';
 import { BuyerWalkthroughCenter } from './BuyerWalkthroughCenter';
 import { BuyerContractContingencyCenter } from './BuyerContractContingencyCenter';
+import {
+  BUYER_PLAN_WORKSPACES,
+  BuyerPlanOverviewPanel,
+  BuyerPlanPhaseNavigation,
+  BuyerPlanTool,
+  type BuyerPlanWorkspaceKey,
+  workspaceForStage,
+  workspaceForTask,
+} from './BuyerPlanExperience';
 import RouteStateCard from '@/components/system/RouteStateCard';
-
-const PHASES: Array<{ key: BuyerPlanPhase; label: string }> = [
-  { key: 'EXPLORING', label: 'Exploring' },
-  { key: 'OFFER_CONTRACT', label: 'Offer & contract' },
-  { key: 'DUE_DILIGENCE', label: 'Due diligence' },
-  { key: 'CLOSING_PREP', label: 'Closing preparation' },
-  { key: 'MOVE_IN', label: 'Move-in' },
-  { key: 'FIRST_30_DAYS', label: 'First 30 days' },
-  { key: 'DAYS_31_TO_90', label: 'Days 31–90' },
-  { key: 'RECURRING_HOME', label: 'Recurring Home handoff' },
-];
 
 const PRE_CLOSE_PHASES: BuyerPlanPhase[] = ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'];
 const ACTIVE_TASK_STATUSES: HomeBuyerTaskStatus[] = ['PENDING', 'IN_PROGRESS', 'BLOCKED'];
@@ -98,6 +96,7 @@ export default function BuyerPlanPage() {
   const restoredPositionRef = useRef(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [activeWorkspace, setActiveWorkspace] = useState<BuyerPlanWorkspaceKey | null>(null);
   const [selectedNegotiationFindingIds, setSelectedNegotiationFindingIds] = useState<string[]>([]);
   const [cancellationReason, setCancellationReason] = useState('');
 
@@ -301,13 +300,19 @@ export default function BuyerPlanPage() {
 
   useEffect(() => {
     if (restoredPositionRef.current || (!returnTaskId && !returnSection) || !overviewQuery.data) return;
-    const targetTaskId = returnTaskId
-      ?? overviewQuery.data.tasks.find((task) => task.checklistSection === returnSection)?.id;
+    const targetTask = returnTaskId
+      ? overviewQuery.data.tasks.find((task) => task.id === returnTaskId)
+      : overviewQuery.data.tasks.find((task) => task.checklistSection === returnSection);
+    const targetTaskId = targetTask?.id;
+    if (targetTask && activeWorkspace !== workspaceForTask(targetTask)) {
+      setActiveWorkspace(workspaceForTask(targetTask));
+      return;
+    }
     const target = targetTaskId ? document.getElementById(`buyer-task-${targetTaskId}`) : null;
     if (!target) return;
     restoredPositionRef.current = true;
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [overviewQuery.data, returnSection, returnTaskId]);
+  }, [activeWorkspace, overviewQuery.data, returnSection, returnTaskId]);
 
   if (overviewQuery.isLoading) {
     return (
@@ -383,59 +388,72 @@ export default function BuyerPlanPage() {
   const documentsTask = plan.tasks.find((task) => task.actionKey === 'buyer:closing:documents');
   const restoredTaskId = returnTaskId
     ?? plan.tasks.find((task) => task.checklistSection === returnSection)?.id;
+  const currentWorkspace = workspaceForStage(plan.stage);
+  const selectedWorkspace = activeWorkspace
+    ? BUYER_PLAN_WORKSPACES.find((workspace) => workspace.key === activeWorkspace) ?? null
+    : null;
+  const selectedTasks = activeWorkspace
+    ? plan.tasks.filter((task) => workspaceForTask(task) === activeWorkspace)
+    : [];
+  const openTask = (task: BuyerPlanOverviewTask) => {
+    setActiveWorkspace(workspaceForTask(task));
+    window.setTimeout(() => document.getElementById(`buyer-task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  };
 
   return (
     <DashboardShell>
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-7 pb-12">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Button asChild variant="ghost" className="mb-2 -ml-3"><Link href={`/dashboard/properties/${propertyId}`}><ArrowLeft className="mr-2 h-4 w-4" />Back to Home</Link></Button>
-            <div className="flex flex-wrap items-center gap-2"><h1 className="text-3xl font-bold">Closing Plan</h1><Badge variant="outline">{plan.stage.replace(/_/g, ' ')}</Badge></div>
-            <p className="mt-1 text-muted-foreground">{overview.property.address}, {overview.property.city}, {overview.property.state} · one canonical plan from contract through handoff.</p>
+            <Button asChild variant="ghost" size="sm" className="mb-3 -ml-3 text-slate-500"><Link href={`/dashboard/properties/${propertyId}`}><ArrowLeft className="mr-2 h-4 w-4" />Back to property</Link></Button>
+            <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Your closing plan</h1><Badge variant="secondary" className="rounded-full px-3 py-1 font-medium">{plan.stage.replace(/_/g, ' ').toLowerCase()}</Badge></div>
+            <p className="mt-2 text-sm text-slate-500 sm:text-base"><span className="font-medium text-slate-700">{overview.property.address}</span> · {overview.property.city}, {overview.property.state}</p>
           </div>
-          <Badge variant={plan.status === 'ACTIVE' ? 'default' : 'secondary'}>{plan.status === 'HANDED_OFF' ? 'Handed off to Home' : plan.status === 'CANCELLED' ? 'Purchase cancelled' : `${completed} of ${overview.summary.total} complete`}</Badge>
-        </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div className="text-right"><p className="text-xs text-slate-400">Plan progress</p><p className="text-sm font-semibold text-slate-900">{plan.status === 'HANDED_OFF' ? 'Handoff complete' : plan.status === 'CANCELLED' ? 'Purchase cancelled' : `${completed} of ${overview.summary.total} resolved`}</p></div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-teal-50 text-sm font-semibold text-teal-700">{overview.summary.progressPercent}%</div>
+          </div>
+        </header>
 
         {plan.status === 'CANCELLED' && <Card className="border-amber-200 bg-amber-50/60"><CardContent className="py-4 text-sm text-amber-950"><strong>This purchase journey is closed.</strong> Active tasks and milestones were cancelled, while completed work, documents, findings, and evidence remain available for reference.{plan.cancellationReason ? ` Reason: ${plan.cancellationReason}` : ''}</CardContent></Card>}
         {overview.accessRole === 'VIEWER' && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="py-4 text-sm text-blue-950"><strong>View-only access.</strong> You can review tasks, milestones, contacts, evidence, and history, but only an owner or contributor can change this plan.</CardContent></Card>}
 
-        {composition && <Card className="border-violet-200 bg-violet-50/40">
-          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><SlidersHorizontal className="h-5 w-5" />Property-aware closing checklist</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-sm font-medium">Preview: {composition.delta.added} add, {composition.delta.removed} remove, {composition.delta.unchanged} unchanged</p><p className="text-xs text-muted-foreground">Based on canonical property facts · {composition.templateVersion}. Unknown details stay outside active progress.</p></div>
-              <Button disabled={readOnly || compositionMutation.isPending || (composition.delta.added === 0 && composition.delta.removed === 0)} onClick={() => compositionMutation.mutate()}>{compositionMutation.isPending ? 'Updating…' : 'Apply checklist changes'}</Button>
-            </div>
-            {composition.delta.addedItems.length > 0 && <div className="rounded-lg border bg-background p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Items this will add</p><ul className="mt-2 space-y-1 text-sm">{composition.delta.addedItems.slice(0, 5).map((item) => <li key={item.actionKey}>+ {item.title}</li>)}</ul>{composition.delta.addedItems.length > 5 && <p className="mt-2 text-xs text-muted-foreground">+ {composition.delta.addedItems.length - 5} more</p>}</div>}
-            {composition.questions.length > 0 && <div><p className="text-sm font-medium">Details that could improve this checklist</p><div className="mt-2 grid gap-2 md:grid-cols-2">{composition.questions.slice(0, 4).map((question) => <div key={question.factKey} className="rounded-lg border bg-background p-3"><p className="text-sm font-medium">{question.prompt}</p><p className="mt-1 text-xs text-muted-foreground"><strong>Why we ask:</strong> {question.whyWeAsk}</p>{question.correctionPath && <Button asChild variant="link" className="h-auto p-0 pt-2 text-xs"><Link href={question.correctionPath}>Update property detail</Link></Button>}</div>)}</div></div>}
-          </CardContent>
-        </Card>}
+        <BuyerPlanPhaseNavigation active={activeWorkspace} current={currentWorkspace} tasks={plan.tasks} onChange={setActiveWorkspace} />
 
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Card><CardContent className="py-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Progress</p><p className="mt-1 text-2xl font-semibold">{overview.summary.progressPercent}%</p></CardContent></Card>
-          <Card><CardContent className="py-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">In progress</p><p className="mt-1 text-2xl font-semibold">{overview.summary.inProgress}</p></CardContent></Card>
-          <Card><CardContent className="py-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Blocked</p><p className="mt-1 text-2xl font-semibold">{overview.summary.blocked}</p></CardContent></Card>
-          <Card><CardContent className="py-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Next move</p><p className="mt-1 line-clamp-2 text-sm font-semibold">{overview.nextAction?.title ?? 'Review closing readiness'}</p></CardContent></Card>
-        </div>
+        {!activeWorkspace && <BuyerPlanOverviewPanel
+          progressPercent={overview.summary.progressPercent}
+          completed={completed}
+          total={overview.summary.total}
+          targetCloseDate={plan.targetCloseDate}
+          nextAction={overview.nextAction}
+          milestones={overview.milestones}
+          blockedCount={overview.summary.blocked}
+          currentWorkspace={currentWorkspace}
+          onOpenWorkspace={setActiveWorkspace}
+          onOpenTask={openTask}
+        />}
 
-        <Card>
-          <CardHeader><CardTitle className="text-lg">Purchase and ownership timeline</CardTitle></CardHeader>
-          <CardContent>
-            <form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => {
+        {selectedWorkspace && <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">{selectedWorkspace.eyebrow}</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{selectedWorkspace.label}</h2><p className="mt-1 text-sm text-slate-500">{selectedWorkspace.description}. Open only the details you need right now.</p></div><Button type="button" variant="outline" onClick={() => setActiveWorkspace(null)}>Back to overview</Button></div>}
+
+        {activeWorkspace === 'CONTRACT' && <div className="space-y-4">
+          <BuyerPlanTool title="Closing date" description="Set the working target date used to calculate eligible Buyer Plan reminders." meta={plan.targetCloseDate ? new Date(plan.targetCloseDate).toLocaleDateString() : 'Optional'}>
+            <Card className="border-0 shadow-none"><CardContent className="pt-6"><form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
               lifecycleMutation.mutate({ targetCloseDate: isoFromDateInput(String(form.get('targetCloseDate') ?? '')) });
-            }}>
-              <label className="space-y-1 text-sm"><span>Target closing date</span><Input name="targetCloseDate" type="date" defaultValue={dateInputValue(plan.targetCloseDate)} disabled={readOnly} /></label>
-              <div className="flex items-end"><Button type="submit" disabled={readOnly || lifecycleMutation.isPending}>Recalculate plan</Button></div>
-            </form>
-            <p className="mt-3 text-xs text-muted-foreground">Ownership begins only after explicit professional-close confirmation in the Closing Day Companion.</p>
-          </CardContent>
-        </Card>
+            }}><label className="space-y-1 text-sm"><span>Target closing date</span><Input name="targetCloseDate" type="date" defaultValue={dateInputValue(plan.targetCloseDate)} disabled={readOnly} /></label><div className="flex items-end"><Button type="submit" disabled={readOnly || lifecycleMutation.isPending}>Update timeline</Button></div></form><p className="mt-3 text-xs text-muted-foreground">Ownership begins only after explicit professional-close confirmation in the Closing Day Companion.</p></CardContent></Card>
+          </BuyerPlanTool>
 
-        <BuyerContractContingencyCenter propertyId={propertyId} readOnly={readOnly} onChanged={() => void refresh()} />
+          {composition && <BuyerPlanTool title="Plan tailoring" description="Review optional property details only when they materially improve the closing checklist." meta={composition.delta.added || composition.delta.removed ? `${composition.delta.added + composition.delta.removed} suggested changes` : 'Up to date'}>
+            <Card className="border-0 shadow-none"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><SlidersHorizontal className="h-5 w-5" />Property-aware checklist</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-medium">{composition.delta.added} add, {composition.delta.removed} remove, {composition.delta.unchanged} unchanged</p><p className="text-xs text-muted-foreground">Unknown details remain optional and outside active progress.</p></div><Button disabled={readOnly || compositionMutation.isPending || (composition.delta.added === 0 && composition.delta.removed === 0)} onClick={() => compositionMutation.mutate()}>{compositionMutation.isPending ? 'Updating…' : 'Apply suggested changes'}</Button></div>{composition.questions.length > 0 && <div className="grid gap-2 md:grid-cols-2">{composition.questions.slice(0, 4).map((question) => <div key={question.factKey} className="rounded-2xl border bg-white p-4"><p className="text-sm font-medium">{question.prompt}</p><p className="mt-1 text-xs text-muted-foreground">{question.whyWeAsk}</p>{question.correctionPath && <Button asChild variant="link" className="h-auto p-0 pt-2 text-xs"><Link href={question.correctionPath}>Add when known</Link></Button>}</div>)}</div>}</CardContent></Card>
+          </BuyerPlanTool>}
 
-        <Card className="border-emerald-200 bg-emerald-50/30">
+          <BuyerPlanTool title="Contract & contingencies" description="Record or confirm the signed contract, important terms and time-sensitive contingency dates." meta="Optional until confirmed">
+            <BuyerContractContingencyCenter propertyId={propertyId} readOnly={readOnly} onChanged={() => void refresh()} />
+          </BuyerPlanTool>
+
+          <BuyerPlanTool title="Purchase method" description="Tell the plan whether lender-only work applies. You can change this later." meta={purchaseFinancingPlan?.purchasePath === 'CASH' ? 'Cash' : purchaseFinancingPlan?.purchasePath === 'FINANCED' ? 'Financed' : 'Not confirmed'}>
+        <Card className="border-0 shadow-none">
           <CardHeader><CardTitle className="text-lg">Purchase financing path</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -464,15 +482,30 @@ export default function BuyerPlanPage() {
             </p>
           </CardContent>
         </Card>
+          </BuyerPlanTool>
+        </div>}
 
-        {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <><BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} /><BuyerPurchaseLenderReadinessCenter propertyId={propertyId} readOnly={readOnly} /><BuyerClosingDisclosureCenter propertyId={propertyId} readOnly={readOnly} /></>}
+        {activeWorkspace === 'FINANCING_PROTECTION' && <div className="space-y-4">
+          {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <>
+            <BuyerPlanTool title="Loan Estimates" description="Compare official lender disclosures and keep the selected estimate current."><BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+            <BuyerPlanTool title="Lender readiness" description="Track the lender, application status, conditions and appraisal work."><BuyerPurchaseLenderReadinessCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+          </>}
+          {purchaseFinancingPlan?.purchasePath !== 'FINANCED' && <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Financing tools remain hidden until you select a financed purchase in the Contract phase.</div>}
+          <BuyerPlanTool title="Title, escrow & HOA" description="Keep the responsible professional, document status and questions together."><BuyerTitleEscrowCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+          <BuyerPlanTool title="Homeowners insurance" description="Prepare proof of coverage and record insurer or lender follow-up."><BuyerInsuranceCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+        </div>}
 
-        <BuyerTitleEscrowCenter propertyId={propertyId} readOnly={readOnly} />
-        <BuyerInsuranceCenter propertyId={propertyId} readOnly={readOnly} />
-        <BuyerWalkthroughCenter propertyId={propertyId} readOnly={readOnly} />
-        <BuyerClosingDayCenter propertyId={propertyId} readOnly={readOnly} />
+        {activeWorkspace === 'CLOSING_PREP' && <div className="space-y-4">
+          {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <BuyerPlanTool title="Closing Disclosure & funds" description="Review the latest disclosure revision and record funds-readiness evidence."><BuyerClosingDisclosureCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>}
+          <BuyerPlanTool title="Final walkthrough" description="Prepare the appointment, record observations and route material issues."><BuyerWalkthroughCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+        </div>}
 
-        <Card>
+        {activeWorkspace === 'CLOSE_MOVE_IN' && <div className="space-y-4">
+          <BuyerPlanTool title="Closing day" description="Confirm the appointment, professional close and possession handoff."><BuyerClosingDayCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+        </div>}
+
+        {activeWorkspace === 'DUE_DILIGENCE' && <div className="space-y-4"><BuyerPlanTool title="Inspection schedule & scope" description="Add appointment details, deadlines or specialist scope only when known.">
+        <Card className="border-0 shadow-none">
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5" />Inspection scheduling and reinspection</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">Keep access, attendees, scope, report timing, contingency timing, and any repair verification in one property record.</p>
@@ -530,16 +563,11 @@ export default function BuyerPlanPage() {
             </form>
           </CardContent>
         </Card>
+        </BuyerPlanTool>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5" />Milestones</CardTitle></CardHeader><CardContent className="space-y-2">{overview.milestones.slice(0, 6).map((milestone) => <div key={milestone.id} className="flex items-center justify-between gap-3 rounded-lg border p-3"><div><p className="text-sm font-medium">{milestone.label}</p><p className="text-xs text-muted-foreground">{milestone.dueAt ? new Date(milestone.dueAt).toLocaleDateString() : 'Date not set'}</p></div><Badge variant="outline">{milestone.status.replace(/_/g, ' ')}</Badge></div>)}{overview.milestones.length === 0 && <p className="text-sm text-muted-foreground">No milestones recorded yet.</p>}</CardContent></Card>
-          <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Users className="h-5 w-5" />Workload & contacts</CardTitle></CardHeader><CardContent className="space-y-3">{overview.workload.map((member) => <div key={member.userId} className="flex items-center justify-between text-sm"><span>{member.displayName || `${member.firstName} ${member.lastName}`}</span><Badge variant="secondary">{member.assignedTaskCount} assigned</Badge></div>)}<div className="border-t pt-3">{overview.contacts.map((contact) => <p key={contact.id} className="text-sm"><span className="font-medium">{contact.name}</span> <span className="text-muted-foreground">· {contact.role.replace(/_/g, ' ')}</span></p>)}{overview.contacts.length === 0 && <p className="text-sm text-muted-foreground">No transaction contacts saved yet.</p>}</div></CardContent></Card>
-          <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><History className="h-5 w-5" />Recent plan history</CardTitle></CardHeader><CardContent className="space-y-3">{overview.history.slice(0, 6).map((item) => <div key={item.id}><p className="text-sm font-medium">{item.label}</p><p className="text-xs text-muted-foreground">{item.status.replace(/_/g, ' ')} · {new Date(item.occurredAt).toLocaleDateString()}</p></div>)}</CardContent></Card>
-        </div>
+        {readiness && <BuyerPlanTool title="Reports & documents" description="Import evidence when it becomes available; empty records do not count against progress." meta={`${readiness.documents.verified}/${readiness.documents.total} verified`}><Card className="border-0 shadow-none"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileSearch className="h-5 w-5" />Evidence readiness</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-4"><div className="text-sm"><p className="font-medium">Next: {NEXT_STEP_LABELS[readiness.nextRecommendedStep]}</p><p className="text-muted-foreground">{readiness.inspectionReports.total} report(s), {readiness.inspectionReports.openMaterialFindings} open material finding(s), {readiness.documents.verified}/{readiness.documents.total} documents verified</p></div><div className="flex gap-2"><Button asChild variant="outline"><Link href={appendBuyerPlanReturnContext(`/dashboard/properties/${propertyId}/inspection-hub`, { taskId: inspectionTask?.id, section: 'INSPECTION_DUE_DILIGENCE' })}>Import inspection</Link></Button><Button asChild variant="outline"><Link href={appendBuyerPlanReturnContext(`/dashboard/properties/${propertyId}/documents?action=upload`, { taskId: documentsTask?.id, section: 'CLOSING_DISCLOSURE_FUNDS' })}>Import documents</Link></Button></div></CardContent></Card></BuyerPlanTool>}
 
-        {readiness && <Card className="border-blue-200 bg-blue-50/60"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileSearch className="h-5 w-5" />Evidence readiness</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-4"><div className="text-sm"><p className="font-medium">Next: {NEXT_STEP_LABELS[readiness.nextRecommendedStep]}</p><p className="text-muted-foreground">{readiness.inspectionReports.total} report(s), {readiness.inspectionReports.openMaterialFindings} open material finding(s), {readiness.documents.verified}/{readiness.documents.total} documents verified</p></div><div className="flex gap-2"><Button asChild variant="outline"><Link href={appendBuyerPlanReturnContext(`/dashboard/properties/${propertyId}/inspection-hub`, { taskId: inspectionTask?.id, section: 'INSPECTION_DUE_DILIGENCE' })}>Import inspection</Link></Button><Button asChild variant="outline"><Link href={appendBuyerPlanReturnContext(`/dashboard/properties/${propertyId}/documents?action=upload`, { taskId: documentsTask?.id, section: 'CLOSING_DISCLOSURE_FUNDS' })}>Import documents</Link></Button></div></CardContent></Card>}
-
-        <Card>
+        <BuyerPlanTool title="Evidence decisions" description="Review confirmed findings and route only the decisions that require attention." meta={evidence?.reports.length ? `${evidence.reports.length} report(s)` : 'No reports'}><Card className="border-0 shadow-none">
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Users className="h-5 w-5" />Evidence and decisions</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             {selectedNegotiationFindingIds.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/60 p-3"><p className="text-sm font-medium">{selectedNegotiationFindingIds.length} finding(s) selected for one negotiation request</p><Button disabled={negotiationMutation.isPending} onClick={() => negotiationMutation.mutate({ findingIds: selectedNegotiationFindingIds })}>{negotiationMutation.isPending ? 'Opening…' : 'Open grouped negotiation'}</Button></div>}
@@ -548,11 +576,12 @@ export default function BuyerPlanPage() {
             <div className="border-t pt-4"><p className="mb-3 font-semibold">Property documents</p><div className="space-y-2">{evidence?.documents.map((document) => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{document.name}</p><p className="text-xs text-muted-foreground">{document.type.replace(/_/g, ' ')} · {document.verificationStatus}</p></div><div className="flex gap-2"><Button size="sm" variant={document.verificationStatus === 'VERIFIED' ? 'default' : 'outline'} disabled={readOnly} onClick={() => documentMutation.mutate({ documentId: document.id, status: 'VERIFIED' })}>Verify</Button><Button size="sm" variant="outline" disabled={readOnly} onClick={() => documentMutation.mutate({ documentId: document.id, status: 'REJECTED' })}>Reject</Button></div></div>)}{!evidence?.documents.length && <p className="text-sm text-muted-foreground">No transaction, disclosure, or warranty documents imported yet.</p>}</div></div>
           </CardContent>
         </Card>
+        </BuyerPlanTool>
+        </div>}
 
-        {PHASES.map((phase) => <Card key={phase.key}>
-          <CardHeader><CardTitle>{phase.label}</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {plan.tasks.filter((task) => task.phase === phase.key).map((task) => {
+        {activeWorkspace && <BuyerPlanTool title={`${selectedWorkspace?.label ?? 'Phase'} actions`} description="These are the actions currently associated with this phase. Resolved items remain available for reference." meta={`${selectedTasks.length} item${selectedTasks.length === 1 ? '' : 's'}`} defaultOpen>
+          <Card className="border-0 shadow-none"><CardContent className="space-y-3 pt-6">
+            {selectedTasks.map((task) => {
               const done = task.status === 'COMPLETED';
               const resolvedWithoutCompletion = ['NOT_NEEDED', 'CANCELLED'].includes(task.status);
               const stranded = strandedPreCloseTasks.some((candidate) => candidate.id === task.id);
@@ -574,21 +603,20 @@ export default function BuyerPlanPage() {
                 </div>
               </div>;
             })}
-          </CardContent>
-        </Card>)}
+            {selectedTasks.length === 0 && <p className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">No actions are assigned to this phase yet. You can still open the phase tools above and add details when known.</p>}
+          </CardContent></Card>
+        </BuyerPlanTool>}
 
-        <Card className={acceptance?.acceptanceReady ? 'border-green-300' : strandedPreCloseTasks.length ? 'border-amber-300' : ''}>
+        {activeWorkspace === 'CLOSE_MOVE_IN' && <BuyerPlanTool title="Continuity & handoff" description="Move unresolved ownership work into recurring Home only after the professional close is confirmed." meta={acceptance?.acceptanceReady ? 'Ready' : 'Not ready'}><Card className={`border-0 shadow-none ${acceptance?.acceptanceReady ? 'bg-green-50/50' : strandedPreCloseTasks.length ? 'bg-amber-50/50' : ''}`}>
           <CardHeader><CardTitle className="text-lg">Continuity status</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="grid gap-2 sm:grid-cols-4"><p>Findings reviewed: {acceptance?.findings.reviewed ?? 0}/{acceptance?.findings.total ?? 0}</p><p>Material journeys: {acceptance?.findings.materialBranched ?? 0}/{acceptance?.findings.material ?? 0}</p><p>Documents verified: {acceptance?.documents.verified ?? 0}/{acceptance?.documents.total ?? 0}</p><p>Tasks assigned: {acceptance?.tasks.assigned ?? 0}/{acceptance?.tasks.total ?? 0}</p></div>
             {strandedPreCloseTasks.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3"><div><p className="font-medium text-amber-950">{strandedPreCloseTasks.length} pre-close item(s) need a final decision</p><p className="text-amber-900">Complete each item or mark it not needed so nothing disappears during recurring Home handoff.</p></div><Button asChild size="sm" variant="outline"><a href={`#buyer-task-${strandedPreCloseTasks[0].id}`}>Review first item</a></Button></div>}
             <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-muted-foreground">Day-91 handoff is checked from the persisted ownership start—not the scheduled closing date—and promotes this property to Established Owner only after all pre-close work is resolved.</p><Button variant="outline" onClick={() => handoffMutation.mutate()} disabled={readOnly || handoffMutation.isPending || plan.status === 'HANDED_OFF'}>{plan.status === 'HANDED_OFF' ? 'Handoff complete' : 'Check handoff now'}</Button></div>
           </CardContent>
-        </Card>
+        </Card></BuyerPlanTool>}
 
-        {canCancel && <Card className="border-destructive/30">
-          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><XCircle className="h-5 w-5" />Cancel this purchase journey</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+        {canCancel && !activeWorkspace && <details className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500"><summary className="cursor-pointer font-medium text-slate-700">Purchase no longer proceeding?</summary><div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
             <p className="text-sm text-muted-foreground">Use this only when this property purchase is no longer proceeding. Active tasks and milestones will stop; completed work, documents, findings, and evidence will be preserved.</p>
             <Textarea aria-label="Purchase cancellation reason" value={cancellationReason} onChange={(event) => setCancellationReason(event.target.value)} placeholder="Why is this purchase no longer proceeding?" maxLength={500} />
             <Button
@@ -598,8 +626,7 @@ export default function BuyerPlanPage() {
                 if (window.confirm('Cancel this purchase journey? This stops all active purchase tasks and cannot be undone from this screen.')) cancellationMutation.mutate();
               }}
             >{cancellationMutation.isPending ? 'Cancelling…' : 'Cancel purchase journey'}</Button>
-          </CardContent>
-        </Card>}
+          </div></details>}
       </div>
     </DashboardShell>
   );
