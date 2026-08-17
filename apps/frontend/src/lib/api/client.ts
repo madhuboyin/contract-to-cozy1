@@ -3922,6 +3922,18 @@ class APIClient {
     });
   }
 
+  async pauseBuyerJourney(propertyId: string): Promise<APIResponse<HomeBuyerChecklist>> {
+    return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/pause`, {
+      method: 'POST', body: JSON.stringify({ confirmed: true }),
+    });
+  }
+
+  async resumeBuyerJourney(propertyId: string): Promise<APIResponse<HomeBuyerChecklist>> {
+    return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/resume`, {
+      method: 'POST', body: JSON.stringify({ confirmed: true }),
+    });
+  }
+
   async dispositionBuyerFinding(propertyId: string, findingId: string, input: {
     disposition: Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>;
     notes?: string | null;

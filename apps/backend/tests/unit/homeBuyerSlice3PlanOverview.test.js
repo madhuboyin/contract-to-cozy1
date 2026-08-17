@@ -30,7 +30,8 @@ function overview() {
     plan: {
       id: 'plan-1', propertyId: 'property-1', status: 'ACTIVE', stage: 'DUE_DILIGENCE',
       planStartDate: '2026-08-01T12:00:00.000Z', targetCloseDate: null, moveInDate: null,
-      ownershipStartedAt: null, generationVersion: 'buyer-closing-v1', handoffCompletedAt: null,
+      ownershipStartedAt: null, pausedAt: null, cancelledAt: null, cancellationReason: null,
+      generationVersion: 'buyer-closing-v1', handoffCompletedAt: null,
     },
     tasks: [task()],
     milestones: [],

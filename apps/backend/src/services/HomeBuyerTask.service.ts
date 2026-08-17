@@ -486,7 +486,7 @@ export class HomeBuyerTaskService {
       && !['COMPLETED', 'NOT_NEEDED', 'CANCELLED', 'BLOCKED'].includes(task.status),
     );
     const priorityRank: Record<BuyerPlanPriority, number> = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 };
-    const nextAction = [...activeTasks].sort((left, right) => {
+    const nextAction = plan.status === 'PAUSED' ? null : [...activeTasks].sort((left, right) => {
       const leftDue = left.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
       const rightDue = right.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
       return leftDue - rightDue || priorityRank[left.priority] - priorityRank[right.priority] || left.sortOrder - right.sortOrder;
@@ -533,6 +533,7 @@ export class HomeBuyerTaskService {
         targetCloseDate: plan.targetCloseDate?.toISOString() ?? null,
         moveInDate: plan.moveInDate?.toISOString() ?? null,
         ownershipStartedAt: plan.ownershipStartedAt?.toISOString() ?? null,
+        pausedAt: plan.pausedAt?.toISOString() ?? null,
         cancelledAt: plan.cancelledAt?.toISOString() ?? null,
         cancellationReason: plan.cancellationReason,
         generationVersion: plan.generationVersion,

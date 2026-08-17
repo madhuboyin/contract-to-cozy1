@@ -24,6 +24,8 @@ import {
   BuyerInspectionPlanInputSchema,
   BuyerLifecycleUpdateSchema,
   BuyerJourneyCancelSchema,
+  BuyerJourneyPauseSchema,
+  BuyerJourneyResumeSchema,
   BuyerPurchaseFinancingInputSchema,
   BuyerPurchaseLoanEstimateCreateSchema,
   BuyerPurchaseLoanEstimateRevisionCreateSchema,
@@ -530,6 +532,40 @@ const handleCancelBuyerJourney = async (req: AuthRequest, res: Response, next: N
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
       metadataJson: { actionType: 'buyer_journey_cancelled' },
+    });
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
+const handlePauseBuyerJourney = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerJourneyPauseSchema.parse(req.body);
+    const plan = await BuyerAcquisitionService.pauseJourney(req.user.userId, req.params.propertyId, input);
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_journey_paused' },
+    });
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
+const handleResumeBuyerJourney = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerJourneyResumeSchema.parse(req.body);
+    const plan = await BuyerAcquisitionService.resumeJourney(req.user.userId, req.params.propertyId, input);
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_journey_resumed' },
     });
     return res.json({ success: true, data: plan });
   } catch (error) { next(error); }
@@ -1073,6 +1109,8 @@ export const homeBuyerTaskController = {
   handleGetStats,
   handleGetImportReadiness,
   handleUpdateLifecycle,
+  handlePauseBuyerJourney,
+  handleResumeBuyerJourney,
   handleCancelBuyerJourney,
   handleGetEvidenceReview,
   handleGetInspectionPlan,

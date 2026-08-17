@@ -181,6 +181,26 @@ export default function BuyerPlanPage() {
       api.updateBuyerLifecycle(propertyId, input),
     onSuccess: () => { void refresh(); toast({ title: 'Timeline updated', description: 'Plan due dates were recalculated from the new lifecycle anchors.' }); },
   });
+  const journeyStatusMutation = useMutation({
+    mutationFn: async (action: 'pause' | 'resume') => {
+      const response = action === 'pause'
+        ? await api.pauseBuyerJourney(propertyId)
+        : await api.resumeBuyerJourney(propertyId);
+      if (!response.success) throw new Error(response.message || `Unable to ${action} this purchase journey.`);
+      return response;
+    },
+    onSuccess: (_response, action) => {
+      void refresh();
+      toast(action === 'pause'
+        ? { title: 'Closing plan paused', description: 'Deadline and task reminders are stopped. Your tasks, notes, documents, and evidence are preserved.' }
+        : { title: 'Closing plan resumed', description: 'Your saved closing work is active again from the same place.' });
+    },
+    onError: (error, action) => toast({
+      title: `Unable to ${action} closing plan`,
+      description: error instanceof Error ? error.message : 'Refresh the plan and try again.',
+      variant: 'destructive',
+    }),
+  });
   const cancellationMutation = useMutation({
     mutationFn: () => api.cancelBuyerJourney(propertyId, { confirmed: true, reason: cancellationReason.trim() }),
     onSuccess: () => {
@@ -377,7 +397,10 @@ export default function BuyerPlanPage() {
   const members = overview.workload;
   const completed = overview.summary.completed;
   const journeyLocked = ['CANCELLED', 'HANDED_OFF', 'ARCHIVED'].includes(plan.status);
-  const readOnly = overview.accessRole === 'VIEWER' || journeyLocked;
+  const readOnly = overview.accessRole === 'VIEWER' || journeyLocked || plan.status === 'PAUSED';
+  const canPauseResume = overview.accessRole === 'OWNER'
+    && ['ACTIVE', 'PAUSED'].includes(plan.status)
+    && ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(plan.stage);
   const canCancel = overview.accessRole !== 'VIEWER'
     && ['ACTIVE', 'PAUSED'].includes(plan.status)
     && ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(plan.stage);
@@ -409,13 +432,26 @@ export default function BuyerPlanPage() {
             <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Your closing plan</h1><Badge variant="secondary" className="rounded-full px-3 py-1 font-medium">{plan.stage.replace(/_/g, ' ').toLowerCase()}</Badge></div>
             <p className="mt-2 text-sm text-slate-500 sm:text-base"><span className="font-medium text-slate-700">{overview.property.address}</span> · {overview.property.city}, {overview.property.state}</p>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <div className="text-right"><p className="text-xs text-slate-400">Plan progress</p><p className="text-sm font-semibold text-slate-900">{plan.status === 'HANDED_OFF' ? 'Handoff complete' : plan.status === 'CANCELLED' ? 'Purchase cancelled' : `${completed} of ${overview.summary.total} resolved`}</p></div>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            {canPauseResume && <Button
+              variant="outline"
+              size="sm"
+              disabled={journeyStatusMutation.isPending}
+              onClick={() => {
+                const action = plan.status === 'PAUSED' ? 'resume' : 'pause';
+                const prompt = action === 'pause'
+                  ? 'Pause this closing plan? Reminders will stop, but all saved work will remain.'
+                  : 'Resume this closing plan and its reminders?';
+                if (window.confirm(prompt)) journeyStatusMutation.mutate(action);
+              }}
+            >{journeyStatusMutation.isPending ? 'Saving…' : plan.status === 'PAUSED' ? 'Resume plan' : 'Pause plan'}</Button>}
+            <div className="text-right"><p className="text-xs text-slate-400">Plan progress</p><p className="text-sm font-semibold text-slate-900">{plan.status === 'HANDED_OFF' ? 'Handoff complete' : plan.status === 'CANCELLED' ? 'Purchase cancelled' : plan.status === 'PAUSED' ? 'Plan paused' : `${completed} of ${overview.summary.total} resolved`}</p></div>
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-teal-50 text-sm font-semibold text-teal-700">{overview.summary.progressPercent}%</div>
           </div>
         </header>
 
         {plan.status === 'CANCELLED' && <Card className="border-amber-200 bg-amber-50/60"><CardContent className="py-4 text-sm text-amber-950"><strong>This purchase journey is closed.</strong> Active tasks and milestones were cancelled, while completed work, documents, findings, and evidence remain available for reference.{plan.cancellationReason ? ` Reason: ${plan.cancellationReason}` : ''}</CardContent></Card>}
+        {plan.status === 'PAUSED' && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-blue-950"><div><strong>This closing plan is paused.</strong> Deadline and task reminders are stopped. Your tasks, notes, documents, and evidence remain saved and can be reviewed below.</div>{canPauseResume && <Button size="sm" onClick={() => journeyStatusMutation.mutate('resume')} disabled={journeyStatusMutation.isPending}>{journeyStatusMutation.isPending ? 'Resuming…' : 'Resume closing plan'}</Button>}</CardContent></Card>}
         {overview.accessRole === 'VIEWER' && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="py-4 text-sm text-blue-950"><strong>View-only access.</strong> You can review tasks, milestones, contacts, evidence, and history, but only an owner or contributor can change this plan.</CardContent></Card>}
 
         <BuyerPlanPhaseNavigation active={activeWorkspace} current={currentWorkspace} tasks={plan.tasks} onChange={setActiveWorkspace} />

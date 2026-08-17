@@ -20,6 +20,8 @@ import {
   BUYER_MILESTONE_KEYS,
   type BuyerInspectionPlanInput,
   type BuyerJourneyCancelInput,
+  type BuyerJourneyPauseInput,
+  type BuyerJourneyResumeInput,
   type BuyerPurchaseFinancingInput,
 } from '../productFramework/buyerAcquisition.contract';
 import { getPropertyContext } from '../modules/propertyContext';
@@ -87,7 +89,7 @@ function taskAnchor(phase: BuyerPlanPhase, plan: {
 }
 
 export class BuyerAcquisitionService {
-  private static async assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR') {
+  private static async assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' = 'CONTRIBUTOR') {
     const access = await resolvePropertyAccess(userId, propertyId);
     if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
       throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
@@ -386,6 +388,69 @@ export class BuyerAcquisitionService {
       });
     });
 
+    return HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
+  }
+
+  static async pauseJourney(
+    userId: string,
+    propertyId: string,
+    _input: BuyerJourneyPauseInput,
+  ) {
+    await this.assertAccess(userId, propertyId, 'OWNER');
+    const plan = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
+    if (plan.status === 'PAUSED') return plan;
+    if (!['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'].includes(plan.stage) || plan.ownershipStartedAt) {
+      throw new APIError('A purchase journey cannot be paused after ownership has started.', 409, 'BUYER_PAUSE_AFTER_CLOSE');
+    }
+    try {
+      assertBuyerJourneyStatusTransition(plan.status, 'PAUSED');
+    } catch {
+      throw new APIError('This purchase journey can no longer be paused.', 409, 'BUYER_PAUSE_TRANSITION_UNAVAILABLE');
+    }
+
+    const paused = await prisma.homeBuyerChecklist.updateMany({
+      where: {
+        id: plan.id,
+        status: 'ACTIVE',
+        stage: { in: ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'] },
+        ownershipStartedAt: null,
+        cancelledAt: null,
+      },
+      data: { status: 'PAUSED', pausedAt: new Date() },
+    });
+    if (paused.count !== 1) {
+      throw new APIError('This purchase journey changed before it could be paused.', 409, 'BUYER_PAUSE_TRANSITION_CONFLICT');
+    }
+    return HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
+  }
+
+  static async resumeJourney(
+    userId: string,
+    propertyId: string,
+    _input: BuyerJourneyResumeInput,
+  ) {
+    await this.assertAccess(userId, propertyId, 'OWNER');
+    const plan = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
+    if (plan.status === 'ACTIVE') return plan;
+    try {
+      assertBuyerJourneyStatusTransition(plan.status, 'ACTIVE');
+    } catch {
+      throw new APIError('This purchase journey can no longer be resumed.', 409, 'BUYER_RESUME_TRANSITION_UNAVAILABLE');
+    }
+
+    const resumed = await prisma.homeBuyerChecklist.updateMany({
+      where: {
+        id: plan.id,
+        status: 'PAUSED',
+        stage: { in: ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'] },
+        ownershipStartedAt: null,
+        cancelledAt: null,
+      },
+      data: { status: 'ACTIVE', pausedAt: null },
+    });
+    if (resumed.count !== 1) {
+      throw new APIError('This purchase journey changed before it could be resumed.', 409, 'BUYER_RESUME_TRANSITION_CONFLICT');
+    }
     return HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
   }
 

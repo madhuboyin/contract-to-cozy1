@@ -103,6 +103,8 @@ router.put('/properties/:propertyId/closing-day', homeBuyerTaskController.handle
 router.post('/properties/:propertyId/closing-day/confirm-professional-close', homeBuyerTaskController.handleConfirmBuyerProfessionalClose);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
+router.post('/properties/:propertyId/pause', homeBuyerTaskController.handlePauseBuyerJourney);
+router.post('/properties/:propertyId/resume', homeBuyerTaskController.handleResumeBuyerJourney);
 router.post('/properties/:propertyId/cancel', homeBuyerTaskController.handleCancelBuyerJourney);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);
 router.post('/properties/:propertyId/findings/:findingId/disposition', homeBuyerTaskController.handleDispositionFinding);

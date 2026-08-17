@@ -3390,6 +3390,7 @@ export interface BuyerPlanOverview {
     targetCloseDate: string | null;
     moveInDate: string | null;
     ownershipStartedAt: string | null;
+    pausedAt: string | null;
     cancelledAt: string | null;
     cancellationReason: string | null;
     generationVersion: string | null;
