@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { MobileStickyActionBar } from '@/components/mobile/dashboard/MobilePrimitives';
 
 const STAGE_LABELS: Record<BuyerJourneyStage, string> = {
   EXPLORING: 'Exploring',
@@ -46,6 +47,17 @@ function dueLabel(value: string | null): string {
 export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverview }) {
   const { journey, nextAction, blockers, readinessLanes, evidence, people, routes } = overview;
   const paused = journey.status === 'PAUSED';
+  const stageLabel = paused ? 'Paused' : STAGE_LABELS[journey.stage];
+  const mobileActionLabel = paused
+    ? 'Review paused Closing Plan'
+    : nextAction
+      ? `Continue Closing Plan: ${nextAction.title}`
+      : 'Review Closing Plan';
+  const mobileActionHelp = paused
+    ? 'Your dates, evidence, and completed work are preserved.'
+    : nextAction
+      ? `${nextAction.title} · ${dueLabel(nextAction.dueAt)}`
+      : 'Review milestones, evidence, and upcoming preparation.';
 
   return (
     <main className="mx-auto w-full max-w-[1180px] space-y-6 px-4 py-6 sm:px-6 lg:py-8">
@@ -55,7 +67,7 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="border-white/20 bg-white/10 text-white hover:bg-white/10">Closing journey</Badge>
               <Badge className={paused ? 'bg-amber-300 text-amber-950' : 'bg-teal-300 text-teal-950'}>
-                {paused ? 'Paused' : STAGE_LABELS[journey.stage]}
+                {stageLabel}
               </Badge>
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Your path to closing</h1>
@@ -192,9 +204,19 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
         </aside>
       </div>
 
-      <div className="sticky bottom-4 z-20 lg:hidden">
-        <Button asChild size="lg" className="w-full shadow-xl"><Link href={routes.plan}>Continue Closing Plan <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
-      </div>
+      <MobileStickyActionBar
+        label={`Closing journey · ${stageLabel}`}
+        helpText={mobileActionHelp}
+        reserveSize="floatingAction"
+        action={(
+          <Button asChild size="lg" className="w-full shadow-xl">
+            <Link href={routes.plan} aria-label={mobileActionLabel}>
+              {paused ? 'Review paused plan' : nextAction ? 'Continue next action' : 'Review Closing Plan'}
+              <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        )}
+      />
     </main>
   );
 }

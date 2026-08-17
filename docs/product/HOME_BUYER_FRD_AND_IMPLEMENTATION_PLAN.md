@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.40
+**Version:** 1.41
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2462,7 +2462,7 @@ not defer an introduced homeowner regression to a later cleanup slice.
 | Slice 4 | In progress | Versioned code-owned entry template for each of the nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys; condo/association responsibility, pool/spa, property-age-plus-location, and HVAC-age example rules; explainable applicability provenance, missing-detail benefit copy/correction paths, exact deltas, and idempotent preservation of user work | Complete the full composition-layer catalog and transaction-path facts; render questions, deltas, applicability, and section progress in Buyer Closing Home/Buyer Plan; build the revision-aware Contract & Contingency Tracker, confirmed milestone write-back, blocker recovery, deep-link return continuity, and phase-aware Ask context |
 | Slices 5–6 | In progress | Buyer-aware Ask context/actions and canonical Moving Concierge task projection are implemented as the first vertical increments | Complete the remaining scope listed in each slice below |
 | Slice 7 | Complete | Explicit professional close plus atomic purchase cancellation; mutually exclusive persisted lifecycle claims; cancellation stops active tasks/milestones while preserving completed work, documents, findings, and evidence; authorized close atomically records an idempotent Home Record milestone with signed evidence and opens a welcome-home first-90-day transition; day-91 handoff requires persisted ownership and resolved pre-close work, materializes incomplete ownership work idempotently, and atomically establishes the owner; persisted Recent Owner state progressively reveals a bounded first-90-day transition above the normal homeowner dashboard; advocacy appears only after canonical progress or verified-record value, is suppressed by buyer/home urgency and safety work, is role-aware, dismissible, frequency-limited, and measured; deterministic desktop/mobile rendered regression coverage verifies homeowner continuity, advocacy behavior, accessibility, and responsive layout | — |
-| Slice 8 | In progress | Removed the orphaned global buyer-checklist card, route, and framework redirect; removed associated duplicate types and an obsolete pre-MFA login-page copy; corrected user-segment terminology; expanded the route/CTA contract across the buyer-to-owner journey; retired duplicate Moving execution state and APIs; added accessible Buyer Plan loading and recoverable error states; corrected Buyer Closing Home readiness so complete, open, blocked, and no-action lanes are distinct and overall progress is exposed semantically | Complete the rendered full-journey and protected homeowner traversals; finish site-wide copy/link, legacy helper, responsive, accessibility, and remaining empty/error-state audits |
+| Slice 8 | In progress | Removed the orphaned global buyer-checklist card, route, and framework redirect; removed associated duplicate types and an obsolete pre-MFA login-page copy; corrected user-segment terminology; expanded the route/CTA contract across the buyer-to-owner journey; retired duplicate Moving execution state and APIs; added accessible Buyer Plan loading and recoverable error states; corrected Buyer Closing Home readiness semantics; moved its mobile continuation into the governed bottom-safe collision zone with buyer-stage, next-action, and paused-recovery context | Complete the rendered full-journey and protected homeowner traversals; finish site-wide copy/link, legacy helper, responsive, accessibility, and remaining empty/error-state audits |
 
 The Slice 0 foundation is complete enough for vertical Slice 1 work, but the
 minimum coherent release in Section 21.1 is not yet satisfied. No current
@@ -3221,6 +3221,14 @@ exists yet instead of presenting `0 of 0` beside a green check. The overall
 closing-plan bar now uses semantic progress values and text for assistive
 technology. Rendered component tests cover all four lane states and the progress
 contract.
+
+The sixth cleanup increment replaces Buyer Closing Home's hand-rolled sticky
+mobile button with the shared mobile action bar. The continuation now reserves
+bottom-safe space, participates in the dashboard chat-collision contract, and
+keeps the current buyer stage plus ranked next-action deadline visible without
+scrolling. Paused journeys switch to explicit recovery copy rather than implying
+that execution is still active. Rendered tests cover both active and paused
+mobile continuation contracts and their property-scoped Closing Plan link.
 
 **Goal:** Remove legacy contradictions and deliver top-tier fit and finish.
 
