@@ -75,17 +75,6 @@ const STATUS_CONFIG: Record<HomeBuyerTaskStatus, {
   },
 };
 
-const DEFAULT_TASK_TITLES = [
-  'Schedule home inspection',
-  'Obtain homeowners insurance',
-  'Hire real estate attorney',
-  'Arrange for movers',
-  'Schedule locksmith for re-keying',
-  'Set up utilities',
-  'Deep cleaning service',
-  'HVAC system check',
-];
-
 export function HomeBuyerChecklist({
   propertyId,
   onCreateTask,
@@ -208,9 +197,8 @@ export function HomeBuyerChecklist({
     deleteMutation.mutate(task.id);
   };
 
-  const isDefaultTask = (title: string) => {
-    return DEFAULT_TASK_TITLES.includes(title);
-  };
+  const isDefaultTask = (task: HomeBuyerTask) =>
+    task.sourceType === 'SYSTEM' || Boolean(task.templateKey);
 
   // Loading state
   if (isLoading) {
@@ -239,10 +227,10 @@ export function HomeBuyerChecklist({
 
   // Separate default and custom tasks
   const defaultTasks = tasks
-    .filter((task: HomeBuyerTask) => isDefaultTask(task.title))
+    .filter((task: HomeBuyerTask) => isDefaultTask(task))
     .sort((a: HomeBuyerTask, b: HomeBuyerTask) => a.sortOrder - b.sortOrder);
   const customTasks = tasks
-    .filter((task: HomeBuyerTask) => !isDefaultTask(task.title))
+    .filter((task: HomeBuyerTask) => !isDefaultTask(task))
     .sort((a: HomeBuyerTask, b: HomeBuyerTask) => a.sortOrder - b.sortOrder);
 
   return (

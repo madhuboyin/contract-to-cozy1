@@ -269,6 +269,28 @@ const BuyerClosingHomeTaskSummarySchema = z.strictObject({
   assignedToUserId: z.string().nullable(),
 });
 
+export const BuyerPlanOverviewTaskSchema = BuyerClosingHomeTaskSummarySchema.extend({
+  taskType: BuyerTaskTypeSchema,
+  checklistSection: BuyerChecklistSectionSchema.nullable(),
+  templateKey: z.string().nullable(),
+  evidenceRequirement: BuyerEvidenceRequirementSchema,
+  applicability: BuyerTaskApplicabilitySchema,
+  blocking: z.boolean(),
+  required: z.boolean(),
+  statusReason: z.string().nullable(),
+  notes: z.string().nullable(),
+  assignedContactId: z.string().nullable(),
+  sourceType: BuyerTaskSourceTypeSchema,
+  estimatedCostCents: z.number().int().nonnegative().nullable(),
+  bookingId: z.string().nullable(),
+  sortOrder: z.number().int().nonnegative(),
+  completedAt: z.string().datetime().nullable(),
+  completionMethod: BuyerCompletionMethodSchema.nullable(),
+  completionDocumentId: z.string().nullable(),
+  handedOffMaintenanceTaskId: z.string().nullable(),
+  updatedAt: z.string().datetime(),
+});
+
 const BuyerClosingHomeMilestoneSchema = z.strictObject({
   id: z.string().min(1),
   milestoneKey: z.string().min(1),
@@ -349,6 +371,66 @@ export const BuyerClosingHomeResponseSchema = z.strictObject({
   }
 });
 
+export const BuyerPlanOverviewSchema = z.strictObject({
+  property: z.strictObject({
+    id: z.string().min(1),
+    address: z.string().min(1),
+    city: z.string().min(1),
+    state: z.string().min(1),
+    zipCode: z.string().min(1),
+  }),
+  accessRole: z.enum(['OWNER', 'CONTRIBUTOR', 'VIEWER']),
+  plan: z.strictObject({
+    id: z.string().min(1),
+    propertyId: z.string().min(1),
+    status: BuyerJourneyStatusSchema,
+    stage: BuyerJourneyStageSchema,
+    planStartDate: z.string().datetime(),
+    targetCloseDate: z.string().datetime().nullable(),
+    moveInDate: z.string().datetime().nullable(),
+    ownershipStartedAt: z.string().datetime().nullable(),
+    generationVersion: z.string().nullable(),
+    handoffCompletedAt: z.string().datetime().nullable(),
+  }),
+  tasks: z.array(BuyerPlanOverviewTaskSchema),
+  milestones: z.array(BuyerClosingHomeMilestoneSchema),
+  contacts: z.array(z.strictObject({
+    id: z.string().min(1),
+    role: BuyerContactRoleSchema,
+    name: z.string().min(1),
+    company: z.string().nullable(),
+    email: z.string().nullable(),
+    phone: z.string().nullable(),
+    notes: z.string().nullable(),
+  })),
+  summary: z.strictObject({
+    total: z.number().int().nonnegative(),
+    pending: z.number().int().nonnegative(),
+    inProgress: z.number().int().nonnegative(),
+    blocked: z.number().int().nonnegative(),
+    completed: z.number().int().nonnegative(),
+    notNeeded: z.number().int().nonnegative(),
+    cancelled: z.number().int().nonnegative(),
+    progressPercent: z.number().min(0).max(100),
+  }),
+  nextAction: BuyerPlanOverviewTaskSchema.nullable(),
+  workload: z.array(z.strictObject({
+    userId: z.string().min(1),
+    displayName: z.string().nullable(),
+    firstName: z.string().min(1),
+    lastName: z.string().min(1),
+    role: z.enum(['OWNER', 'CONTRIBUTOR', 'VIEWER']),
+    assignedTaskCount: z.number().int().nonnegative(),
+  })),
+  history: z.array(z.strictObject({
+    id: z.string().min(1),
+    kind: z.enum(['TASK', 'MILESTONE']),
+    label: z.string().min(1),
+    status: z.string().min(1),
+    occurredAt: z.string().datetime(),
+  })),
+});
+
 export type BuyerPlanTaskInput = z.infer<typeof BuyerPlanTaskInputSchema>;
 export type BuyerImportReadiness = z.infer<typeof BuyerImportReadinessSchema>;
 export type BuyerLifecycleUpdate = z.infer<typeof BuyerLifecycleUpdateSchema>;
@@ -361,3 +443,4 @@ export type BuyerChecklistApplicability = z.infer<typeof BuyerChecklistApplicabi
 export type BuyerDashboardPresentationMode = z.infer<typeof BuyerDashboardPresentationModeSchema>;
 export type BuyerClosingHomeOverview = z.infer<typeof BuyerClosingHomeOverviewSchema>;
 export type BuyerClosingHomeResponse = z.infer<typeof BuyerClosingHomeResponseSchema>;
+export type BuyerPlanOverview = z.infer<typeof BuyerPlanOverviewSchema>;

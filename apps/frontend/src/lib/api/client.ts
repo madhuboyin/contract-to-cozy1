@@ -63,6 +63,7 @@ import {
 
   HomeBuyerChecklist,
   BuyerClosingHomeResponse,
+  BuyerPlanOverview,
   HomeBuyerTask,
   HomeBuyerTaskStats,
   BuyerImportReadiness,
@@ -3525,6 +3526,13 @@ class APIClient {
   async getBuyerClosingHome(propertyId: string): Promise<APIResponse<BuyerClosingHomeResponse>> {
     return this.request<BuyerClosingHomeResponse>(
       `/api/home-buyer-tasks/properties/${propertyId}/closing-home`,
+      { method: 'GET' },
+    );
+  }
+
+  async getBuyerPlanOverview(propertyId: string): Promise<APIResponse<BuyerPlanOverview>> {
+    return this.request<BuyerPlanOverview>(
+      `/api/home-buyer-tasks/properties/${propertyId}/overview`,
       { method: 'GET' },
     );
   }

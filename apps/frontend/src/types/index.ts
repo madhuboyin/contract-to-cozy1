@@ -3217,6 +3217,66 @@ export interface BuyerClosingHomeResponse {
   overview: BuyerClosingHomeOverview | null;
 }
 
+export interface BuyerPlanOverviewTask extends BuyerClosingHomeTaskSummary {
+  taskType: BuyerTaskType;
+  checklistSection: BuyerChecklistSection | null;
+  templateKey: string | null;
+  evidenceRequirement: BuyerEvidenceRequirement;
+  applicability: BuyerTaskApplicability;
+  blocking: boolean;
+  required: boolean;
+  statusReason: string | null;
+  notes: string | null;
+  assignedContactId: string | null;
+  sourceType: BuyerTaskSourceType;
+  estimatedCostCents: number | null;
+  bookingId: string | null;
+  sortOrder: number;
+  completedAt: string | null;
+  completionMethod: BuyerCompletionMethod | null;
+  completionDocumentId: string | null;
+  handedOffMaintenanceTaskId: string | null;
+  updatedAt: string;
+}
+
+export interface BuyerPlanOverview {
+  property: { id: string; address: string; city: string; state: string; zipCode: string };
+  accessRole: HouseholdRole;
+  plan: {
+    id: string;
+    propertyId: string;
+    status: BuyerJourneyStatus;
+    stage: BuyerJourneyStage;
+    planStartDate: string;
+    targetCloseDate: string | null;
+    moveInDate: string | null;
+    ownershipStartedAt: string | null;
+    generationVersion: string | null;
+    handoffCompletedAt: string | null;
+  };
+  tasks: BuyerPlanOverviewTask[];
+  milestones: Array<{
+    id: string; milestoneKey: string; type: BuyerMilestoneType; label: string;
+    status: BuyerMilestoneStatus; dueAt: string | null;
+  }>;
+  contacts: Array<{
+    id: string; role: BuyerContactRole; name: string; company: string | null;
+    email: string | null; phone: string | null; notes: string | null;
+  }>;
+  summary: {
+    total: number; pending: number; inProgress: number; blocked: number;
+    completed: number; notNeeded: number; cancelled: number; progressPercent: number;
+  };
+  nextAction: BuyerPlanOverviewTask | null;
+  workload: Array<{
+    userId: string; displayName: string | null; firstName: string; lastName: string;
+    role: HouseholdRole; assignedTaskCount: number;
+  }>;
+  history: Array<{
+    id: string; kind: 'TASK' | 'MILESTONE'; label: string; status: string; occurredAt: string;
+  }>;
+}
+
 export interface HomeBuyerTaskStats {
   total: number;
   pending: number;

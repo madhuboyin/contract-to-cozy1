@@ -16,6 +16,7 @@ import {
   BUYER_MILESTONE_KEYS,
   BuyerClosingHomeResponseSchema,
   BuyerImportReadinessSchema,
+  BuyerPlanOverviewSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 type TaskInput = {
@@ -98,6 +99,39 @@ function closingTaskSummary(task: {
   return {
     ...task,
     dueAt: task.dueAt?.toISOString() ?? null,
+  };
+}
+
+function planOverviewTask(task: HomeBuyerTask) {
+  return {
+    id: task.id,
+    actionKey: task.actionKey,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    phase: task.phase,
+    priority: task.priority,
+    dueAt: task.dueAt?.toISOString() ?? null,
+    assignedToUserId: task.assignedToUserId,
+    taskType: task.taskType,
+    checklistSection: task.checklistSection,
+    templateKey: task.templateKey,
+    evidenceRequirement: task.evidenceRequirement,
+    applicability: task.applicability,
+    blocking: task.blocking,
+    required: task.required,
+    statusReason: task.statusReason,
+    notes: task.notes,
+    assignedContactId: task.assignedContactId,
+    sourceType: task.sourceType,
+    estimatedCostCents: task.estimatedCostCents,
+    bookingId: task.bookingId,
+    sortOrder: task.sortOrder,
+    completedAt: task.completedAt?.toISOString() ?? null,
+    completionMethod: task.completionMethod,
+    completionDocumentId: task.completionDocumentId,
+    handedOffMaintenanceTaskId: task.handedOffMaintenanceTaskId,
+    updatedAt: task.updatedAt.toISOString(),
   };
 }
 
@@ -305,6 +339,143 @@ export class HomeBuyerTaskService {
           ask: `/dashboard/ask?propertyId=${encodeURIComponent(property.id)}`,
         },
       },
+    });
+  }
+
+  /** Read-only, one-query core Buyer Plan workspace overview. */
+  static async getPlanOverview(userId: string, propertyId: string) {
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        OR: [
+          { homeownerProfile: { userId } },
+          { householdMembers: { some: { userId } } },
+        ],
+      },
+      select: {
+        id: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        homeownerProfile: { select: { userId: true } },
+        householdMembers: {
+          select: {
+            userId: true,
+            role: true,
+            displayName: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+          orderBy: [{ isPrimaryOwner: 'desc' }, { joinedAt: 'asc' }],
+        },
+        homeBuyerChecklist: {
+          include: {
+            tasks: { orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }] },
+            milestones: { orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }] },
+            contacts: { orderBy: [{ role: 'asc' }, { createdAt: 'asc' }] },
+          },
+        },
+      },
+    });
+    if (!property) throw new Error('Property not found or user does not have access.');
+    const plan = property.homeBuyerChecklist;
+    if (!plan) throw new Error('Buyer plan not found.');
+
+    const member = property.householdMembers.find((candidate) => candidate.userId === userId);
+    const accessRole = property.homeownerProfile.userId === userId ? 'OWNER' : member?.role ?? 'VIEWER';
+    const activeTasks = plan.tasks.filter((task) =>
+      task.applicability !== 'NOT_APPLICABLE'
+      && !['COMPLETED', 'NOT_NEEDED', 'CANCELLED', 'BLOCKED'].includes(task.status),
+    );
+    const priorityRank: Record<BuyerPlanPriority, number> = { NOW: 0, SOON: 1, PLAN: 2, CONSIDER: 3 };
+    const nextAction = [...activeTasks].sort((left, right) => {
+      const leftDue = left.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const rightDue = right.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return leftDue - rightDue || priorityRank[left.priority] - priorityRank[right.priority] || left.sortOrder - right.sortOrder;
+    })[0] ?? null;
+    const count = (status: HomeBuyerTaskStatus) => plan.tasks.filter((task) => task.status === status).length;
+    const completed = count('COMPLETED');
+    const total = plan.tasks.length;
+    const assignedCount = new Map<string, number>();
+    for (const task of plan.tasks) {
+      if (task.assignedToUserId) assignedCount.set(task.assignedToUserId, (assignedCount.get(task.assignedToUserId) ?? 0) + 1);
+    }
+    const history = [
+      ...plan.tasks.map((task) => ({
+        id: `task:${task.id}`,
+        kind: 'TASK' as const,
+        label: task.title,
+        status: task.status,
+        occurredAt: task.updatedAt.toISOString(),
+      })),
+      ...plan.milestones.map((milestone) => ({
+        id: `milestone:${milestone.id}`,
+        kind: 'MILESTONE' as const,
+        label: milestoneLabel(milestone.type, milestone.customLabel),
+        status: milestone.status,
+        occurredAt: milestone.updatedAt.toISOString(),
+      })),
+    ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)).slice(0, 12);
+
+    return BuyerPlanOverviewSchema.parse({
+      property: {
+        id: property.id,
+        address: property.address,
+        city: property.city,
+        state: property.state,
+        zipCode: property.zipCode,
+      },
+      accessRole,
+      plan: {
+        id: plan.id,
+        propertyId: plan.propertyId,
+        status: plan.status,
+        stage: plan.stage,
+        planStartDate: plan.planStartDate.toISOString(),
+        targetCloseDate: plan.targetCloseDate?.toISOString() ?? null,
+        moveInDate: plan.moveInDate?.toISOString() ?? null,
+        ownershipStartedAt: plan.ownershipStartedAt?.toISOString() ?? null,
+        generationVersion: plan.generationVersion,
+        handoffCompletedAt: plan.handoffCompletedAt?.toISOString() ?? null,
+      },
+      tasks: plan.tasks.map(planOverviewTask),
+      milestones: plan.milestones.map((milestone) => ({
+        id: milestone.id,
+        milestoneKey: milestone.milestoneKey,
+        type: milestone.type,
+        label: milestoneLabel(milestone.type, milestone.customLabel),
+        status: milestone.status,
+        dueAt: milestone.dueAt?.toISOString() ?? null,
+      })),
+      contacts: plan.contacts.map((contact) => ({
+        id: contact.id,
+        role: contact.role,
+        name: contact.name,
+        company: contact.company,
+        email: contact.email,
+        phone: contact.phone,
+        notes: contact.notes,
+      })),
+      summary: {
+        total,
+        pending: count('PENDING'),
+        inProgress: count('IN_PROGRESS'),
+        blocked: count('BLOCKED'),
+        completed,
+        notNeeded: count('NOT_NEEDED'),
+        cancelled: count('CANCELLED'),
+        progressPercent: total === 0 ? 0 : Math.round((completed / total) * 100),
+      },
+      nextAction: nextAction ? planOverviewTask(nextAction) : null,
+      workload: property.householdMembers.map((householdMember) => ({
+        userId: householdMember.userId,
+        displayName: householdMember.displayName,
+        firstName: householdMember.user.firstName,
+        lastName: householdMember.user.lastName,
+        role: householdMember.role,
+        assignedTaskCount: assignedCount.get(householdMember.userId) ?? 0,
+      })),
+      history,
     });
   }
 

@@ -81,6 +81,25 @@ const handleGetClosingHome = async (
   }
 };
 
+/** GET /api/home-buyer-tasks/properties/:propertyId/overview */
+const handleGetOverview = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const data = await HomeBuyerTaskService.getPlanOverview(req.user.userId, req.params.propertyId);
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_plan_overview_opened', planStatus: data.plan.status },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * GET /api/home-buyer-tasks/tasks
  * Gets all tasks for the property plan
@@ -505,6 +524,7 @@ const handleGetAcceptanceStatus = async (req: AuthRequest, res: Response, next: 
 
 export const homeBuyerTaskController = {
   handleGetClosingHome,
+  handleGetOverview,
   handleGetChecklist,
   handleGetTasks,
   handleGetTask,

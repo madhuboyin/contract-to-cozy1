@@ -13,6 +13,7 @@ router.use(authenticate);
  * Read-only dashboard presentation dispatcher and Buyer Closing Home overview.
  */
 router.get('/properties/:propertyId/closing-home', homeBuyerTaskController.handleGetClosingHome);
+router.get('/properties/:propertyId/overview', homeBuyerTaskController.handleGetOverview);
 
 /**
  * GET /api/home-buyer-tasks/properties/:propertyId/checklist
