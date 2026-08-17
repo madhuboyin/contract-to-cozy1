@@ -3716,6 +3716,34 @@ class APIClient {
     );
   }
 
+  async getBuyerClosingDisclosure(propertyId: string): Promise<APIResponse<import('@/types').BuyerClosingDisclosureWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-disclosure`, { method: 'GET' });
+  }
+
+  async createBuyerClosingDisclosureRevision(propertyId: string, input: import('@/types').BuyerClosingDisclosureInput): Promise<APIResponse<import('@/types').BuyerClosingDisclosureWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-disclosure/revisions`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateBuyerClosingDisclosureDraft(propertyId: string, revisionId: string, input: import('@/types').BuyerClosingDisclosureInput): Promise<APIResponse<import('@/types').BuyerClosingDisclosureWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-disclosure/revisions/${revisionId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async confirmBuyerClosingDisclosure(propertyId: string, revisionId: string): Promise<APIResponse<import('@/types').BuyerClosingDisclosureWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-disclosure/revisions/${revisionId}/confirm`, { method: 'POST' });
+  }
+
+  async updateBuyerClosingFundsReadiness(propertyId: string, input: {
+    fundsMethod?: 'UNKNOWN' | 'WIRE' | 'CASHIERS_CHECK' | 'OTHER';
+    fundsExpectedAt?: string | null;
+    fundsReady?: boolean;
+    instructionsVerified?: boolean;
+    verificationChannel?: 'UNKNOWN' | 'KNOWN_PHONE' | 'IN_PERSON' | 'SECURE_PORTAL' | 'OTHER';
+    questions?: string[];
+    questionsResolved?: boolean;
+  }): Promise<APIResponse<import('@/types').BuyerClosingDisclosureWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-disclosure/funds-readiness`, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
   async getBuyerPurchaseLenderReadiness(
     propertyId: string,
   ): Promise<APIResponse<import('@/types').BuyerPurchaseLenderReadinessWorkspace>> {

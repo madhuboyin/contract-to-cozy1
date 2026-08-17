@@ -25,6 +25,7 @@ import type {
 import { appendBuyerPlanReturnContext } from '@/lib/navigation/buyerReturnContext';
 import { startBuyerNegotiationCase } from '../tools/negotiation-shield/negotiationShieldApi';
 import { BuyerPurchaseLoanEstimateCenter } from './BuyerPurchaseLoanEstimateCenter';
+import { BuyerClosingDisclosureCenter } from './BuyerClosingDisclosureCenter';
 import { BuyerPurchaseLenderReadinessCenter } from './BuyerPurchaseLenderReadinessCenter';
 import { BuyerTitleEscrowCenter } from './BuyerTitleEscrowCenter';
 import { BuyerInsuranceCenter } from './BuyerInsuranceCenter';
@@ -386,7 +387,7 @@ export default function BuyerPlanPage() {
           </CardContent>
         </Card>
 
-        {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <><BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} /><BuyerPurchaseLenderReadinessCenter propertyId={propertyId} readOnly={readOnly} /></>}
+        {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <><BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} /><BuyerPurchaseLenderReadinessCenter propertyId={propertyId} readOnly={readOnly} /><BuyerClosingDisclosureCenter propertyId={propertyId} readOnly={readOnly} /></>}
 
         <BuyerTitleEscrowCenter propertyId={propertyId} readOnly={readOnly} />
         <BuyerInsuranceCenter propertyId={propertyId} readOnly={readOnly} />

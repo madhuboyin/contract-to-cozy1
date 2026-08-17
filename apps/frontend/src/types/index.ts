@@ -3565,6 +3565,74 @@ export interface BuyerPurchaseLoanEstimateExtractionProposal {
   };
 }
 
+export interface BuyerClosingDisclosureInput {
+  sourceType?: 'MANUAL' | 'DOCUMENT_EXTRACTION';
+  sourceDocumentId?: string | null;
+  extractionMetadata?: Record<string, unknown> | null;
+  issuedDate?: string | null;
+  loanAmountCents?: number | null;
+  noteRateBps?: number | null;
+  aprBps?: number | null;
+  estimatedTotalMonthlyPaymentCents?: number | null;
+  loanCostsCents?: number | null;
+  lenderCreditsCents?: number | null;
+  prepaidAndEscrowCents?: number | null;
+  sellerCreditsCents?: number | null;
+  cashToCloseCents?: number | null;
+  cashToCloseDirection?: 'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN';
+  changeExplanation?: string | null;
+}
+
+export interface BuyerClosingDisclosureRevision extends BuyerClosingDisclosureInput {
+  id: string;
+  workspaceId: string;
+  revisionNumber: number;
+  status: 'DRAFT' | 'CONFIRMED' | 'SUPERSEDED';
+  sourceType: 'MANUAL' | 'DOCUMENT_EXTRACTION';
+  confirmedAt: string | null;
+  confirmedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BuyerClosingDisclosureWorkspaceResponse {
+  workspace: {
+    id: string;
+    propertyId: string;
+    currentRevisionId: string | null;
+    fundsMethod: 'UNKNOWN' | 'WIRE' | 'CASHIERS_CHECK' | 'OTHER';
+    fundsExpectedAt: string | null;
+    fundsReady: boolean;
+    instructionsVerified: boolean;
+    verificationChannel: 'UNKNOWN' | 'KNOWN_PHONE' | 'IN_PERSON' | 'SECURE_PORTAL' | 'OTHER';
+    instructionsVerifiedAt: string | null;
+    instructionsVerifiedByUserId: string | null;
+    questions: string[];
+    questionsResolved: boolean;
+    revisions: BuyerClosingDisclosureRevision[];
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  selectedLoanEstimate: {
+    id: string;
+    lenderName: string;
+    revisionNumber: number;
+    issuedDate: string | null;
+    loanAmountCents: number | null;
+    noteRateBps: number | null;
+    aprBps: number | null;
+    estimatedTotalMonthlyPaymentCents: number | null;
+    loanCostsCents: number | null;
+    lenderCreditsCents: number | null;
+    prepaidAndEscrowCents: number | null;
+    cashToCloseCents: number | null;
+  };
+  comparison: Array<{ field: string; loanEstimateValue: number | null; closingDisclosureValue: number | null; delta: number | null }>;
+  contractCredits: { totalCents: number; outcomes: Array<{ id: string; agreedCreditCents: number | null; outcome: string; outcomeNotes: string | null }> };
+  sellerCreditDeltaCents: number | null;
+  disclaimer: string;
+}
+
 export type BuyerPurchaseAppraisalStatus = 'NOT_ORDERED' | 'ORDERED' | 'SCHEDULED' | 'COMPLETED' | 'ISSUE_REPORTED' | 'RESOLVED';
 export type BuyerPurchaseUnderwritingStatus = 'NOT_STARTED' | 'IN_REVIEW' | 'CONDITIONAL' | 'USER_RECORDED_CLEAR_TO_CLOSE';
 export type BuyerLenderConditionCategory = 'INCOME_ASSET' | 'CREDIT' | 'APPRAISAL' | 'INSURANCE_PROOF' | 'TITLE' | 'FINAL_VERIFICATION' | 'OTHER';

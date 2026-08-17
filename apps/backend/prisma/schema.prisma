@@ -465,6 +465,32 @@ enum BuyerPurchaseLoanEstimateSource {
   DOCUMENT_EXTRACTION
 }
 
+enum BuyerClosingDisclosureStatus {
+  DRAFT
+  CONFIRMED
+  SUPERSEDED
+}
+
+enum BuyerClosingDisclosureSource {
+  MANUAL
+  DOCUMENT_EXTRACTION
+}
+
+enum BuyerClosingFundsMethod {
+  UNKNOWN
+  WIRE
+  CASHIERS_CHECK
+  OTHER
+}
+
+enum BuyerClosingInstructionsVerificationChannel {
+  UNKNOWN
+  KNOWN_PHONE
+  IN_PERSON
+  SECURE_PORTAL
+  OTHER
+}
+
 enum BuyerPurchaseCashDirection {
   FROM_BORROWER
   TO_BORROWER
@@ -2842,6 +2868,67 @@ model BuyerPurchaseLoanEstimateRevision {
   @@map("buyer_purchase_loan_estimate_revisions")
 }
 
+model BuyerClosingDisclosureWorkspace {
+  id         String @id @default(uuid())
+  propertyId String @unique
+
+  currentRevisionId String?
+  fundsMethod BuyerClosingFundsMethod @default(UNKNOWN)
+  fundsExpectedAt DateTime?
+  fundsReady Boolean @default(false)
+  instructionsVerified Boolean @default(false)
+  verificationChannel BuyerClosingInstructionsVerificationChannel @default(UNKNOWN)
+  instructionsVerifiedAt DateTime?
+  instructionsVerifiedByUserId String?
+  questionsJson Json?
+  questionsResolved Boolean @default(false)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  revisions BuyerClosingDisclosureRevision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([currentRevisionId])
+  @@map("buyer_closing_disclosure_workspaces")
+}
+
+model BuyerClosingDisclosureRevision {
+  id             String @id @default(uuid())
+  workspaceId    String
+  revisionNumber Int
+  status         BuyerClosingDisclosureStatus @default(DRAFT)
+  sourceType     BuyerClosingDisclosureSource @default(MANUAL)
+  sourceDocumentId String?
+  extractionMetadataJson Json?
+
+  issuedDate DateTime? @db.Date
+  loanAmountCents Int?
+  noteRateBps Int?
+  aprBps Int?
+  estimatedTotalMonthlyPaymentCents Int?
+  loanCostsCents Int?
+  lenderCreditsCents Int?
+  prepaidAndEscrowCents Int?
+  sellerCreditsCents Int?
+  cashToCloseCents Int?
+  cashToCloseDirection BuyerPurchaseCashDirection @default(UNKNOWN)
+  changeExplanation String? @db.Text
+  confirmedAt DateTime?
+  confirmedByUserId String?
+
+  workspace BuyerClosingDisclosureWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceDocument Document? @relation("BuyerClosingDisclosureSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, revisionNumber])
+  @@index([workspaceId, status, revisionNumber(sort: Desc)])
+  @@index([sourceDocumentId])
+  @@map("buyer_closing_disclosure_revisions")
+}
+
 model BuyerPurchaseLenderReadiness {
   id         String @id @default(uuid())
   planId     String @unique
@@ -3769,6 +3856,7 @@ model Property {
   buyerInspectionPlan        BuyerInspectionPlan?
   buyerPurchaseFinancingPlan BuyerPurchaseFinancingPlan?
   buyerPurchaseLoanOffers    BuyerPurchaseLoanOffer[]
+  buyerClosingDisclosureWorkspace BuyerClosingDisclosureWorkspace?
   newHomePilotAssessment     NewHomePilotAssessment?
   newHomeSetupPlan           NewHomeSetupPlan?
   newHomeSystemRegistrations NewHomeSystemRegistration[]
@@ -4684,6 +4772,7 @@ model Document {
   buyerFindingOutcomeLinks     InspectionFinding[]             @relation("BuyerFindingOutcomeDocument")
   buyerInspectionProofLinks    BuyerInspectionPlan[]            @relation("BuyerInspectionReinspectionProof")
   buyerPurchaseLoanEstimateSources BuyerPurchaseLoanEstimateRevision[] @relation("BuyerPurchaseLoanEstimateSourceDocument")
+  buyerClosingDisclosureSources BuyerClosingDisclosureRevision[] @relation("BuyerClosingDisclosureSourceDocument")
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]

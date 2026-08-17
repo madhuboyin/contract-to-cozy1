@@ -89,6 +89,11 @@ router.patch('/properties/:propertyId/final-walkthrough/observations/:observatio
 router.post('/properties/:propertyId/final-walkthrough/issues', homeBuyerTaskController.handleCreateBuyerWalkthroughIssue);
 router.patch('/properties/:propertyId/final-walkthrough/issues/:issueId', homeBuyerTaskController.handleUpdateBuyerWalkthroughIssue);
 router.post('/properties/:propertyId/final-walkthrough/complete', homeBuyerTaskController.handleCompleteBuyerWalkthrough);
+router.get('/properties/:propertyId/closing-disclosure', homeBuyerTaskController.handleGetBuyerClosingDisclosure);
+router.post('/properties/:propertyId/closing-disclosure/revisions', homeBuyerTaskController.handleCreateBuyerClosingDisclosureRevision);
+router.patch('/properties/:propertyId/closing-disclosure/revisions/:revisionId', homeBuyerTaskController.handleUpdateBuyerClosingDisclosureDraft);
+router.post('/properties/:propertyId/closing-disclosure/revisions/:revisionId/confirm', homeBuyerTaskController.handleConfirmBuyerClosingDisclosure);
+router.put('/properties/:propertyId/closing-disclosure/funds-readiness', homeBuyerTaskController.handleUpdateBuyerClosingFundsReadiness);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

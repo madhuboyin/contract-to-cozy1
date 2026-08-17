@@ -87,6 +87,8 @@ export const BUYER_ACTION_KEYS = {
   COVERAGE_BIND: 'buyer:coverage:bind',
   WALKTHROUGH_PREP: 'buyer:phase:walkthrough-prepare',
   WALKTHROUGH_ISSUES: 'buyer:walkthrough:issue-resolution',
+  CLOSING_DISCLOSURE_REVIEW: 'buyer:closing:disclosure-review',
+  FUNDS_READINESS_CONFIRM: 'buyer:phase:funds-readiness-confirm',
   CLOSING_DOCUMENTS: 'buyer:closing:documents',
   SAFETY_ACCESS: 'buyer:safety:access',
   UTILITIES_SETUP: 'buyer:utilities:setup',
@@ -220,6 +222,45 @@ export const BuyerPurchaseLoanSelectionSchema = z.strictObject({
   intentToProceed: z.boolean(),
 });
 export type BuyerPurchaseLoanSelectionInput = z.infer<typeof BuyerPurchaseLoanSelectionSchema>;
+
+export const BUYER_CLOSING_FUNDS_METHODS = ['UNKNOWN', 'WIRE', 'CASHIERS_CHECK', 'OTHER'] as const;
+export const BUYER_CLOSING_VERIFICATION_CHANNELS = ['UNKNOWN', 'KNOWN_PHONE', 'IN_PERSON', 'SECURE_PORTAL', 'OTHER'] as const;
+const BuyerClosingDisclosureFieldsSchema = z.strictObject({
+  sourceType: z.enum(['MANUAL', 'DOCUMENT_EXTRACTION']).optional(),
+  sourceDocumentId: z.string().uuid().nullable().optional(),
+  extractionMetadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  issuedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  loanAmountCents: z.number().int().positive().nullable().optional(),
+  noteRateBps: z.number().int().min(0).max(5_000).nullable().optional(),
+  aprBps: z.number().int().min(0).max(5_000).nullable().optional(),
+  estimatedTotalMonthlyPaymentCents: z.number().int().min(0).nullable().optional(),
+  loanCostsCents: z.number().int().min(0).nullable().optional(),
+  lenderCreditsCents: z.number().int().min(0).nullable().optional(),
+  prepaidAndEscrowCents: z.number().int().min(0).nullable().optional(),
+  sellerCreditsCents: z.number().int().min(0).nullable().optional(),
+  cashToCloseCents: z.number().int().min(0).nullable().optional(),
+  cashToCloseDirection: z.enum(BUYER_PURCHASE_CASH_DIRECTIONS).optional(),
+  changeExplanation: z.string().trim().max(4_000).nullable().optional(),
+});
+export const BuyerClosingDisclosureCreateSchema = BuyerClosingDisclosureFieldsSchema;
+export const BuyerClosingDisclosureUpdateSchema = BuyerClosingDisclosureFieldsSchema.refine(
+  (value) => Object.values(value).some((field) => field !== undefined),
+  { message: 'At least one Closing Disclosure field must be provided.' },
+);
+export const BuyerClosingFundsReadinessUpdateSchema = z.strictObject({
+  fundsMethod: z.enum(BUYER_CLOSING_FUNDS_METHODS).optional(),
+  fundsExpectedAt: z.string().datetime().nullable().optional(),
+  fundsReady: z.boolean().optional(),
+  instructionsVerified: z.boolean().optional(),
+  verificationChannel: z.enum(BUYER_CLOSING_VERIFICATION_CHANNELS).optional(),
+  questions: z.array(z.string().trim().min(1).max(500)).max(25).optional(),
+  questionsResolved: z.boolean().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one funds-readiness field must be provided.',
+});
+export type BuyerClosingDisclosureInput = z.infer<typeof BuyerClosingDisclosureCreateSchema>;
+export type BuyerClosingDisclosureUpdateInput = z.infer<typeof BuyerClosingDisclosureUpdateSchema>;
+export type BuyerClosingFundsReadinessUpdateInput = z.infer<typeof BuyerClosingFundsReadinessUpdateSchema>;
 
 export const BUYER_PURCHASE_APPRAISAL_STATUSES = [
   'NOT_ORDERED', 'ORDERED', 'SCHEDULED', 'COMPLETED', 'ISSUE_REPORTED', 'RESOLVED',

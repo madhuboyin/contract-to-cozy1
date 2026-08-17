@@ -15,6 +15,7 @@ import { BuyerPurchaseLenderReadinessService } from '../services/buyerPurchaseLe
 import { BuyerTitleEscrowService } from '../services/buyerTitleEscrow.service';
 import { BuyerInsuranceService } from '../services/buyerInsurance.service';
 import { BuyerWalkthroughService } from '../services/buyerWalkthrough.service';
+import { BuyerClosingDisclosureService } from '../services/buyerClosingDisclosure.service';
 import {
   BuyerDocumentVerificationInputSchema,
   BuyerFindingDispositionInputSchema,
@@ -42,6 +43,9 @@ import {
   BuyerWalkthroughObservationUpdateSchema,
   BuyerWalkthroughIssueCreateSchema,
   BuyerWalkthroughIssueUpdateSchema,
+  BuyerClosingDisclosureCreateSchema,
+  BuyerClosingDisclosureUpdateSchema,
+  BuyerClosingFundsReadinessUpdateSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -902,6 +906,49 @@ const handleDispositionFinding = async (req: AuthRequest, res: Response, next: N
   } catch (error) { next(error); }
 };
 
+const handleGetBuyerClosingDisclosure = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    return res.json({ success: true, data: await BuyerClosingDisclosureService.get(req.user.userId, req.params.propertyId) });
+  } catch (error) { next(error); }
+};
+
+const handleCreateBuyerClosingDisclosureRevision = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerClosingDisclosureCreateSchema.parse(req.body);
+    const data = await BuyerClosingDisclosureService.createRevision(req.user.userId, req.params.propertyId, input);
+    return res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerClosingDisclosureDraft = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerClosingDisclosureUpdateSchema.parse(req.body);
+    const data = await BuyerClosingDisclosureService.updateDraft(req.user.userId, req.params.propertyId, req.params.revisionId, input);
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+const handleConfirmBuyerClosingDisclosure = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const data = await BuyerClosingDisclosureService.confirm(req.user.userId, req.params.propertyId, req.params.revisionId);
+    analyticsEmitter.track({ eventType: AnalyticsEvent.DECISION_GUIDED, userId: req.user.userId, propertyId: req.params.propertyId, moduleKey: AnalyticsModule.HOME_BUYER, featureKey: AnalyticsFeature.HOME_BUYER_TASK, metadataJson: { actionType: 'buyer_closing_disclosure_confirmed', revisionId: req.params.revisionId } });
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerClosingFundsReadiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerClosingFundsReadinessUpdateSchema.parse(req.body);
+    const data = await BuyerClosingDisclosureService.updateFundsReadiness(req.user.userId, req.params.propertyId, input);
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
 const handleHandoff = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -979,6 +1026,11 @@ export const homeBuyerTaskController = {
   handleCreateBuyerWalkthroughIssue,
   handleUpdateBuyerWalkthroughIssue,
   handleCompleteBuyerWalkthrough,
+  handleGetBuyerClosingDisclosure,
+  handleCreateBuyerClosingDisclosureRevision,
+  handleUpdateBuyerClosingDisclosureDraft,
+  handleConfirmBuyerClosingDisclosure,
+  handleUpdateBuyerClosingFundsReadiness,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

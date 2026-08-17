@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.25
+**Version:** 1.26
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2962,7 +2962,20 @@ Routed unresolved material issues remain on a separate blocking Buyer Plan task
 even after the walkthrough record itself is complete. The stable walkthrough
 task and canonical `FINAL_WALKTHROUGH` milestone reconcile idempotently with
 bounded evidence that explicitly disclaims condition, repair, safety, and legal
-certification. Closing Disclosure/funds and closing-day increments remain next.
+certification. The second increment adds a property-scoped Closing Disclosure
+& Cash-to-Close Review for financed purchases after a current confirmed Loan
+Estimate is selected. It owns numbered draft/confirmed/superseded disclosure
+revisions, complete manual entry and partial-save/resume, source attribution,
+required-field confirmation, field-level deltas against the selected Loan
+Estimate, and a separate comparison of seller credits with canonical accepted
+negotiation outcomes. Funds readiness records only method, timing, readiness,
+questions, and trusted-channel verification metadata; strict API contracts and
+the UI prohibit full account, routing, wire-instruction, password, or security
+credential storage. Confirmation reconciles a stable disclosure-review task,
+the existing universal funds-readiness task, and the canonical
+`CLOSING_DISCLOSURE` milestone with bounded user-attestation evidence. Optional
+document extraction remains a future accelerator and cannot be required for
+completion. The closing-day increment remains next.
 
 **Goal:** Make the final days before closing calm, mobile, evidence-backed, and
 safe.
