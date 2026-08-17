@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.6
+**Version:** 1.7
 **Date:** 2026-08-16
 **Status:** Proposed greenfield product consolidation
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -1336,10 +1336,10 @@ catalog the user must browse.
 | Buyer-only tool | Purpose and minimum output | Why an existing tool is insufficient |
 | --- | --- | --- |
 | **Contract & Contingency Tracker** | Extract or manually record accepted-contract dates; produce a user-confirmed timeline for earnest money, inspection, attorney review, financing, appraisal, title, HOA/document, sale-of-home, closing, and possession conditions | Current Buyer Plan has a target close date but no contract revision, source citation, date confirmation, or contingency lifecycle |
-| **Purchase Financing & Loan Estimate Center** | Track application/underwriting/appraisal/rate-lock milestones; compare official purchase Loan Estimates; record the buyer's selected offer and remaining lender conditions | Current Financing Center is owner equity/project financing; Refinance Radar has refinance assumptions and conclusions that must not be reused as purchase guidance |
+| **Purchase Financing & Loan Estimate Center** | Track application/underwriting/appraisal/rate-lock milestones; upload/extract or manually enter official purchase Loan Estimates; compare confirmed fields; record the buyer's selected offer and remaining lender conditions | Current Financing Center is owner equity/project financing; Refinance Radar has refinance assumptions and conclusions that must not be reused as purchase guidance |
 | **Title, Escrow & Closing Document Center** | Track title/attorney/escrow contacts, title commitment and exceptions, survey/HOA requirements, deed/vesting questions, closing location, document readiness, and user-recorded professional review | Home Records stores files but does not manage buyer-specific title/escrow readiness or professional follow-up |
 | **Final Walkthrough Companion** | Provide a mobile room/system checklist, agreed-repair verification, included-item verification, photo/video evidence, issue list, and agent/attorney escalation handoff | Inspection Hub is report-centered and does not own the time-sensitive final walkthrough or compare current condition with seller commitments |
-| **Closing Disclosure & Cash-to-Close Review** | Ingest or manually record the latest Closing Disclosure, compare it with the selected Loan Estimate and contract credits, explain changes, track questions, and record user-confirmed final funds readiness | Document storage alone does not compare revisions or organize discrepancies; refinance comparison is the wrong transaction contract |
+| **Closing Disclosure & Cash-to-Close Review** | Upload/extract or manually enter the latest Closing Disclosure, compare confirmed fields with the selected Loan Estimate and contract credits, explain changes, track questions, and record user-confirmed final funds readiness | Document storage alone does not compare revisions or organize discrepancies; refinance comparison is the wrong transaction contract |
 | **Closing Day Companion** | Provide time/place/participants, identification and funds-readiness checklist, wire-fraud safeguards, final questions, keys/access/possession checklist, signed-copy capture, and explicit close confirmation | No current tool owns the closing-day sequence or the authoritative transition from buyer to recent owner |
 
 These tools provide preparation, organization, comparison, and evidence capture.
@@ -1348,6 +1348,13 @@ title, validate wiring instructions, certify a walkthrough, approve a Closing
 Disclosure, or declare that legal closing occurred. Material status remains
 “user recorded” or “professional confirmed by user” unless a governed external
 source is later integrated.
+
+Loan Estimate and Closing Disclosure extraction are optional accelerators, not
+prerequisites. Both tools shall support complete manual entry, partial save and
+resume, field-level document/revision source, validation, and explicit user
+confirmation before canonical write-back. OCR, PDF parsing, or external AI
+failure shall never prevent the buyer from recording readiness, questions, or a
+closing blocker.
 
 Appraisal, insurance, inspection, moving, and repair-estimate experiences do
 not need additional standalone buyer tools. They need buyer modes and the phase
@@ -1874,6 +1881,25 @@ enum BuyerContactRole {
 }
 ```
 
+`BuyerJourneyStage` and `BuyerPlanPhase` are intentionally different concepts
+despite overlapping labels:
+
+- **Journey stage** is the buyer plan's single current lifecycle position. It
+  controls Closing Journey Mode, Buyer Closing Home presentation, featured Ask
+  Cozy prompts, lifecycle transitions, and which checklist section is emphasized.
+- **Plan phase** is an individual task's target execution bucket. One plan may
+  contain tasks from several phases simultaneously; future-phase tasks can be
+  generated early and remain collapsed, non-promotional, or inactive until
+  relevant.
+
+Completing every task in a phase shall not automatically advance the journey
+stage. Stage changes use the centralized transition policy and explicit
+lifecycle evidence/confirmation. `CLOSED` and `HANDED_OFF` are journey stages,
+not task phases. `RECURRING_HOME` is a task/handoff phase, not an active buyer
+journey stage. Where both enums contain the same label, code shall not cast or
+substitute one enum for the other; read models expose them with distinct field
+names such as `currentJourneyStage` and `task.phase`.
+
 ### 15.3 `HomeBuyerChecklist` additions
 
 ```prisma
@@ -2247,7 +2273,7 @@ to update that canonical obligation rather than create a duplicate.
 | Disposition findings | No | Yes | Yes |
 | Start/link bookings | No | Yes | Yes |
 | Add/update contacts | No | Yes | Yes |
-| Change lifecycle anchors | No | Yes | Yes |
+| Edit target closing and move-in dates | No | Yes | Yes |
 | Pause/cancel/archive/close journey | No | No | Yes |
 | Invite members/change roles | No | No | Yes |
 
@@ -2425,6 +2451,63 @@ For every slice that changes shared code, the relevant Section 19.6 homeowner
 functional checks are part of the slice's functional check. Buyer delivery may
 not defer an introduced homeowner regression to a later cleanup slice.
 
+### 21.1 Minimum coherent release and explicit cut line
+
+The initiative may be implemented incrementally, but the first releasable buyer
+experience must remain coherent from onboarding through explicit closing. It is
+not sufficient to ship onboarding, Buyer Closing Home, Buyer Plan, and Ask Cozy
+without the checklist data those surfaces depend on or without a safe transition
+out of Closing Journey Mode.
+
+The **minimum coherent release** includes:
+
+1. **Slices 0–3 in full:** canonical schema/contracts, onboarding/first value,
+   dedicated Buyer Closing Home/navigation, and a fully operable Buyer Plan.
+2. **Slice 4 in full:** dynamic property-aware phase checklists plus Contract &
+   Contingency Tracker with manual fallback and confirmed deadline write-back.
+3. **Slice 4A core continuity:** inspection import/review, finding disposition,
+   buyer Negotiation Shield mode, property Documents, evidence, and one
+   canonical obligation per finding.
+4. **Slice 5 core Ask operations only:** plan status, next action, deadlines,
+   contract timeline, inspection, document readiness, checklist explanation,
+   and confirmed task create/update/complete. Ask operations for a deferred
+   specialized tool remain unavailable rather than simulating that tool.
+5. **A minimal Slice 7 lifecycle subset delivered with the release:** pause,
+   resume, cancel, explicit close confirmation, persisted switch from
+   `BUYER_CLOSING` to homeowner mode, preservation of transaction evidence, and
+   additive carry-forward of accepted work.
+6. **Manual guidance for every closing phase:** financing/appraisal,
+   title/escrow/HOA, insurance, walkthrough, Closing Disclosure/funds,
+   closing-day, and move/possession remain usable as conditional checklist,
+   milestone, contact, document, note, blocker, and assignment workflows even
+   when their advanced tool workspace is deferred.
+7. **P0 homeowner preservation and included-path polish:** the Section 19.6 and
+   24.1 homeowner checks plus responsive, accessible, recoverable behavior for
+   every included buyer path.
+
+The following are **deferrable enhancements** after that release:
+
+- Slice 4B's automated purchase Loan Estimate extraction/comparison and richer
+  title/escrow workspace, provided manual financing/title/insurance checklist
+  and document workflows remain complete;
+- Slice 4C's rich Final Walkthrough Companion, automated Closing Disclosure
+  extraction/comparison, and full Closing Day Companion, provided mobile manual
+  checklists, evidence upload, blocker capture, wire-fraud guidance, and explicit
+  close confirmation remain complete;
+- advanced Ask Cozy operations that depend on those deferred tool contracts;
+- Slice 6's richer Moving Concierge consolidation, provider reconciliation,
+  notification breadth, and collaboration refinements beyond the canonical
+  manual checklist needed for closing;
+- Slice 7's day-90 automation, full recurring handoff refinement, celebration,
+  retention, and advocacy beyond the minimal safe close transition; and
+- Slice 8 legacy removal that is unrelated to included-path correctness. Buyer
+  copy, navigation, accessibility, responsive behavior, and homeowner
+  non-regression for shipped paths are not deferrable.
+
+If implementation stops before every minimum-release item is functional, the
+result is an internal development increment, not a releasable buyer product.
+This cut line guides sequencing and scope; it is not an approval or rollout gate.
+
 ### Slice 0 — Contracts and direct schema correction
 
 **Goal:** Establish one canonical buyer target without compatibility scaffolding
@@ -2443,6 +2526,14 @@ Backend/schema:
 6. Do not create a migration script.
 7. Make buyer-only fields nullable or safely defaulted and verify an existing
    owned property requires no buyer records.
+8. Treat the `BuyerPlanPhase` expansion as an explicit code-contract sweep.
+   Replace every phase use of legacy `PRE_CLOSE` across Prisma, backend buyer
+   contracts/services, task types, admin analytics, frontend shared types, and
+   Buyer Plan rendering/grouping. Update comparisons, defaults, serialization,
+   filters, fixtures, and generated clients together.
+9. Do not change the separate `PRE_CLOSE_NEGOTIATION` finding disposition while
+   replacing the `PRE_CLOSE` task phase, and do not leave a compatibility alias
+   that permits old and new task phases to coexist.
 
 Contracts/services:
 
@@ -2465,6 +2556,9 @@ Functional check:
 - A viewer can read an existing plan without triggering a write.
 - Existing homeowner reads/writes produce the same response meaning and create
   no buyer data.
+- Type generation/build and a repository phase-reference sweep confirm that no
+  task-phase call site still reads, writes, compares, defaults, or renders the
+  removed `PRE_CLOSE` value.
 
 ### Slice 1 — Zero-friction onboarding and first value
 
@@ -2660,9 +2754,11 @@ Functional check:
 without rebranding homeowner financial tools.
 
 1. Build Purchase Financing & Loan Estimate Center with a separate purchase
-   contract and reuse only reviewed document-extraction/math primitives.
+   contract, complete manual-entry/partial-save path, and reuse only reviewed
+   document-extraction/math primitives.
 2. Implement purchase Loan Estimate revision comparison, user selection, and
-   financing/appraisal checklist write-back.
+   financing/appraisal checklist write-back. Extraction pre-fills proposed
+   fields but is never required to compare confirmed manual values.
 3. Build Title, Escrow & Closing Document Center over canonical milestones,
    contacts, documents, and checklist tasks.
 4. Add buyer insurance mode to Coverage with bind/effective-date/proof checklist
@@ -2678,6 +2774,9 @@ Functional check:
 - A financed buyer compares two current purchase Loan Estimates and sees lender,
   appraisal, title, and insurance blockers; a cash buyer sees none of the lender
   workflow and keeps the same closing timeline.
+- With OCR/AI unavailable, the financed buyer manually records both offers,
+  saves partial work, resumes, confirms field sources, and completes the same
+  comparison/checklist write-back.
 
 ### Slice 4C — Walkthrough, disclosure, funds, and closing day
 
@@ -2688,7 +2787,9 @@ safe.
    and included-item linkage, photo evidence, unresolved issues, and professional
    escalation handoff.
 2. Build Closing Disclosure & Cash-to-Close Review with revision-aware
-   comparison to the selected purchase Loan Estimate and contract credits.
+   comparison to the selected purchase Loan Estimate and contract credits plus
+   complete manual-entry/partial-save fallback. Extraction remains optional and
+   proposed fields require confirmation.
 3. Add persistent wire-fraud safeguards and prohibit storage/display of full
    destination account or wire credentials.
 4. Build Closing Day Companion with appointment, ID/document, funds-readiness,
@@ -2703,6 +2804,9 @@ Functional check:
   reviews a changed Closing Disclosure, prepares for closing day, and remains in
   Closing Journey Mode until explicit professional-close confirmation is
   recorded by the user.
+- With document extraction unavailable, the buyer can manually enter the latest
+  Closing Disclosure revision, record questions/funds readiness, and continue
+  the closing checklist without losing source or revision context.
 
 ### Slice 5 — Ask Cozy buyer copilot
 
@@ -2839,6 +2943,9 @@ contracts stabilize. Slice 4C depends on the selected purchase-loan and contract
 records from Slices 4 and 4B. Slice 5 may begin after Slice 4 and add operations
 incrementally as 4A–4C land. Slice 6 depends on the canonical task model from
 Slice 3. Slice 7 depends on lifecycle and handoff semantics from Slices 0–4C.
+The minimal close-transition subset defined in Section 21.1 may ship before the
+full 4B/4C workspaces, but it depends on Slice 4's canonical checklist/timeline
+contracts and the manual closing-phase continuity required by that cut line.
 
 ---
 
@@ -2862,8 +2969,13 @@ condition must be true:
 Failure of any P0 condition means the initiative is not done even if all buyer
 flows work.
 
-The home-buyer initiative is functionally complete when all of the following
-are true:
+The full home-buyer initiative is functionally complete when all of the
+following are true. A first production release may use the narrower minimum
+coherent release in Section 21.1, but it is not releasable unless that entire
+cut line—including dynamic checklists, core buyer Ask Cozy, and the minimal
+explicit close transition—is present. Deferred capabilities must have the
+manual guidance or manual-entry behavior required by Section 21.1; an internal
+increment is not a production release.
 
 1. A buyer signs up as a homeowner and selects a purchase journey without a
    separate role or approval.
@@ -2894,9 +3006,14 @@ are true:
 10. Inspection findings flow into negotiation or post-close work without
    duplication.
 11. Purchase Financing & Loan Estimate Center is distinct from owner financing
-    and refinance, and cash buyers do not receive lender workflow.
+    and refinance, cash buyers do not receive lender workflow, and financed
+    buyers can manually enter, save, resume, compare, and confirm Loan Estimate
+    data when extraction is unavailable or incomplete.
 12. Title/Escrow, insurance, Final Walkthrough, Closing Disclosure/Funds, and
     Closing Day tools reconcile with the same canonical checklist and timeline.
+    Closing Disclosure/Funds supports complete manual entry, partial save,
+    revision comparison, source attribution, and confirmation without depending
+    on AI, OCR, or PDF extraction.
 13. The mobile walkthrough supports agreed-item linkage, evidence, unresolved
     issues, and professional handoff without claiming inspection authority.
 14. Wire-fraud safeguards are persistent and no buyer tool stores or displays
@@ -3008,6 +3125,9 @@ source contract check.
    phase rather than duplicating.
 13. Upload two purchase Loan Estimates, compare aligned fields, record a user
     selection, and verify appraisal/lender checklist write-back.
+    Repeat with document extraction disabled: manually enter two estimates,
+    partially save and resume one, confirm source/revision details, compare the
+    aligned fields, and verify the same checklist write-back.
 14. Record title/escrow contact and readiness, then bind and upload proof of
     insurance through buyer Coverage mode.
 15. Complete a mobile final walkthrough with one agreed repair, photos, and one
@@ -3015,6 +3135,9 @@ source contract check.
 16. Upload a revised Closing Disclosure, review changes against the selected
     Loan Estimate and contract credits, and record funds readiness without
     entering full wire credentials.
+    Repeat with document extraction disabled: manually enter and partially save
+    the disclosure, resume it, record a revision, generate buyer questions, and
+    reach the same funds-readiness outcome without AI/OCR/PDF availability.
 17. Ask Cozy: “What is blocking me before closing?” and verify its featured
     prompts do not promote homeowner scenarios.
 18. Use Ask Cozy to explain the next checklist item and confirm assignment of
@@ -3091,6 +3214,7 @@ contracts and canonical ownership defined by this FRD.
 
 | ID | Requirement | Primary sections |
 | --- | --- | --- |
+| `HB-SCOPE-001` | The first production release is the complete minimum coherent cut line; smaller combinations are internal increments and deferred automation retains manual guidance or entry | 21.1, 23 |
 | `HB-IDENT-001` | Buyer remains a full `HOMEOWNER` account and a property-scoped journey | 3, 18 |
 | `HB-IDENT-002` | One user may own one property and buy another without global-segment conflicts | 3, 8 |
 | `HB-OWNER-001` | Existing homeowner functionality is a P0 protected contract and any regression blocks buyer completion | 1, 2, 5.10, 19.6, 23 |
@@ -3131,14 +3255,18 @@ contracts and canonical ownership defined by this FRD.
 | `HB-TOOL-004` | Title/Escrow Center and buyer Coverage mode track professional/document/insurance preparation without certifying approval | 14.13, 14.15D–E, Slice 4B |
 | `HB-TOOL-005` | Final Walkthrough Companion provides mobile checklist, evidence, commitment linkage, and unresolved-issue professional handoff | 14.13, 14.15F, Slice 4C |
 | `HB-TOOL-006` | Closing Disclosure/Funds and Closing Day tools provide revision-aware preparation, wire safeguards, and explicit close confirmation | 14.13, 14.15G–H, Slice 4C |
+| `HB-TOOL-007` | Loan Estimate and Closing Disclosure workflows remain complete through manual entry, partial save/resume, source/revision tracking, validation, and confirmation when extraction is unavailable | 14.13, Slice 4B–4C, 23–24 |
 | `HB-ASK-001` | Ask Cozy receives bounded canonical buyer context | 13.2 |
 | `HB-ASK-002` | Ask Cozy supports buyer-specific read and confirmed-write operations | 13.3 |
 | `HB-ASK-003` | Ask Cozy prompts vary by exact buyer stage and current entity context | 13.4–13.7 |
 | `HB-SITE-001` | Buyer-aware copy and actions are consistent across all major site surfaces | 14 |
 | `HB-DATA-001` | Schema directly supports stage, milestones, contacts, task states, and evidence | 15 |
 | `HB-DATA-002` | No migration, backfill, dual-read, or permanent buyer-role model is introduced | 2, 15.9 |
+| `HB-DATA-003` | Journey stage is the single lifecycle position while task phase is a per-task execution bucket; neither substitutes for or automatically advances the other | 15.2, Slice 0 |
+| `HB-DATA-004` | Renaming task phase `PRE_CLOSE` updates every persisted enum, generated client, API contract, default, comparison, serializer, filter, fixture, analytics, and UI call site while preserving distinct `PRE_CLOSE_NEGOTIATION` semantics | 15.2, Slice 0 |
 | `HB-API-001` | One buyer overview read model prevents query races and fragmented page loading | 16.1 |
 | `HB-PERM-001` | Viewer, contributor, and owner behavior is consistent across buyer features | 18 |
+| `HB-PERM-002` | Contributors may edit target closing and move-in dates but only owners may pause, resume, cancel, confirm closing, or otherwise change lifecycle state | 18 |
 | `HB-LIFE-001` | Pause/cancel stops reminders and prevents recurring handoff | 7.9, 16.2 |
 | `HB-LIFE-002` | Closing and day-90 handoff preserve history and strand no unresolved obligation | 7.7–7.8, Slice 7 |
 | `HB-LIFE-003` | Closing Journey Mode ends only after an explicit persisted close transition, never from a scheduled date | 7.7, 8.7, Slice 7 |
