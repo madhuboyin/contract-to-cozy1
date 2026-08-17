@@ -580,6 +580,44 @@ enum BuyerInsuranceRequirementStatus {
   WAIVED
 }
 
+enum BuyerWalkthroughObservationCategory {
+  OVERALL_CONDITION
+  INCLUDED_ITEMS
+  AGREED_REPAIRS
+  NEW_DAMAGE
+  LIGHTING_ELECTRICAL
+  PLUMBING
+  HVAC_APPLIANCES
+  DOORS_WINDOWS
+  GARAGE_ACCESS
+  SMOKE_CO
+  OTHER
+}
+
+enum BuyerWalkthroughObservationStatus {
+  NOT_REVIEWED
+  ACCEPTABLE
+  ISSUE
+  NOT_APPLICABLE
+}
+
+enum BuyerWalkthroughIssueCategory {
+  REPAIR_COMMITMENT
+  INCLUDED_ITEM
+  NEW_DAMAGE
+  ACCESS_UTILITY
+  SYSTEM_SAFETY
+  CLEANLINESS
+  OTHER
+}
+
+enum BuyerWalkthroughIssueStatus {
+  OPEN
+  ROUTED_TO_PROFESSIONAL
+  RESOLVED
+  ACCEPTED_AS_IS
+}
+
 enum BuyerCompletionMethod {
   USER_ATTESTATION
   DOCUMENT
@@ -2704,6 +2742,7 @@ model HomeBuyerChecklist {
   purchaseFinancingPlan BuyerPurchaseFinancingPlan?
   titleEscrowWorkspace BuyerTitleEscrowWorkspace?
   insuranceWorkspace BuyerInsuranceWorkspace?
+  walkthroughWorkspace BuyerWalkthroughWorkspace?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3007,6 +3046,92 @@ model BuyerInsuranceRequirement {
   @@index([workspaceId, status, dueAt])
   @@index([propertyId, blocking, status])
   @@map("buyer_insurance_requirements")
+}
+
+model BuyerWalkthroughWorkspace {
+  id          String @id @default(uuid())
+  checklistId String @unique
+  propertyId  String @unique
+
+  scheduledAt             DateTime?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  attendees               String[] @default([])
+  accessConfirmedAt       DateTime?
+  utilitiesConfirmedAt    DateTime?
+  generalNotes            String? @db.Text
+  completedByUserId       String?
+  lastUpdatedByUserId     String?
+
+  checklist    HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  observations BuyerWalkthroughObservation[]
+  issues       BuyerWalkthroughIssue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, scheduledAt])
+  @@map("buyer_walkthrough_workspaces")
+}
+
+model BuyerWalkthroughObservation {
+  id          String @id @default(uuid())
+  workspaceId String
+  propertyId  String
+
+  area               String
+  category           BuyerWalkthroughObservationCategory
+  status             BuyerWalkthroughObservationStatus @default(NOT_REVIEWED)
+  notes              String? @db.Text
+  evidenceDocumentId String?
+  recordedByUserId   String?
+  lastUpdatedByUserId String?
+
+  workspace BuyerWalkthroughWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issues    BuyerWalkthroughIssue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, status, category])
+  @@index([propertyId, area])
+  @@index([evidenceDocumentId])
+  @@map("buyer_walkthrough_observations")
+}
+
+model BuyerWalkthroughIssue {
+  id          String @id @default(uuid())
+  workspaceId String
+  propertyId  String
+
+  sourceObservationId String?
+  inspectionFindingId String?
+  negotiationFindingId String?
+  category    BuyerWalkthroughIssueCategory
+  status      BuyerWalkthroughIssueStatus @default(OPEN)
+  title       String
+  notes       String? @db.Text
+  evidenceDocumentId String?
+  blocking    Boolean @default(false)
+  routedToRole BuyerContactRole?
+  routedAt    DateTime?
+  resolvedAt  DateTime?
+  recordedByUserId    String?
+  lastUpdatedByUserId String?
+
+  workspace         BuyerWalkthroughWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceObservation BuyerWalkthroughObservation? @relation(fields: [sourceObservationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, status, blocking])
+  @@index([propertyId, status])
+  @@index([sourceObservationId])
+  @@index([inspectionFindingId])
+  @@index([negotiationFindingId])
+  @@index([evidenceDocumentId])
+  @@map("buyer_walkthrough_issues")
 }
 
 model BuyerInspectionPlan {

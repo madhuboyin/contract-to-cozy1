@@ -3816,6 +3816,34 @@ class APIClient {
     return this.request(`/api/home-buyer-tasks/properties/${propertyId}/buyer-insurance/requirements/${requirementId}`, { method: 'PATCH', body: JSON.stringify(input) });
   }
 
+  async getBuyerWalkthrough(propertyId: string): Promise<APIResponse<import('@/types').BuyerWalkthroughWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/final-walkthrough`, { method: 'GET' });
+  }
+
+  async updateBuyerWalkthrough(propertyId: string, input: { scheduledAt?: string | null; attendees?: string[]; accessConfirmed?: boolean; utilitiesConfirmed?: boolean; started?: boolean; generalNotes?: string | null }): Promise<APIResponse<import('@/types').BuyerWalkthroughWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/final-walkthrough`, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  async createBuyerWalkthroughObservation(propertyId: string, input: { area: string; category: import('@/types').BuyerWalkthroughObservationCategory; status: import('@/types').BuyerWalkthroughObservationStatus; notes?: string | null; evidenceDocumentId?: string | null }): Promise<APIResponse<import('@/types').BuyerWalkthroughWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/final-walkthrough/observations`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateBuyerWalkthroughObservation(propertyId: string, observationId: string, input: { area?: string; category?: import('@/types').BuyerWalkthroughObservationCategory; status?: import('@/types').BuyerWalkthroughObservationStatus; notes?: string | null; evidenceDocumentId?: string | null }): Promise<APIResponse<import('@/types').BuyerWalkthroughWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/final-walkthrough/observations/${observationId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async createBuyerWalkthroughIssue(propertyId: string, input: { sourceObservationId?: string | null; inspectionFindingId?: string | null; negotiationFindingId?: string | null; category: import('@/types').BuyerWalkthroughIssueCategory; title: string; notes?: string | null; evidenceDocumentId?: string | null; blocking: boolean }): Promise<APIResponse<import('@/types').BuyerWalkthroughWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/final-walkthrough/issues`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateBuyerWalkthroughIssue(propertyId: string, issueId: string, input: { status?: import('@/types').BuyerWalkthroughIssueStatus; title?: string; notes?: string | null; evidenceDocumentId?: string | null; blocking?: boolean; routedToRole?: 'BUYER_AGENT' | 'ATTORNEY' | 'TITLE_ESCROW' | 'OTHER' | null }): Promise<APIResponse<import('@/types').BuyerWalkthroughWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/final-walkthrough/issues/${issueId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async completeBuyerWalkthrough(propertyId: string): Promise<APIResponse<import('@/types').BuyerWalkthroughWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/final-walkthrough/complete`, { method: 'POST' });
+  }
+
   async updateBuyerLifecycle(propertyId: string, input: {
     targetCloseDate?: string | null;
     ownershipStartedAt?: string | null;

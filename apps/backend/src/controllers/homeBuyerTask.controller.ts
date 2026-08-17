@@ -14,6 +14,7 @@ import { BuyerPurchaseLoanEstimateService } from '../services/buyerPurchaseLoanE
 import { BuyerPurchaseLenderReadinessService } from '../services/buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../services/buyerTitleEscrow.service';
 import { BuyerInsuranceService } from '../services/buyerInsurance.service';
+import { BuyerWalkthroughService } from '../services/buyerWalkthrough.service';
 import {
   BuyerDocumentVerificationInputSchema,
   BuyerFindingDispositionInputSchema,
@@ -36,6 +37,11 @@ import {
   BuyerInsuranceBindSchema,
   BuyerInsuranceRequirementCreateSchema,
   BuyerInsuranceRequirementUpdateSchema,
+  BuyerWalkthroughWorkspaceUpdateSchema,
+  BuyerWalkthroughObservationCreateSchema,
+  BuyerWalkthroughObservationUpdateSchema,
+  BuyerWalkthroughIssueCreateSchema,
+  BuyerWalkthroughIssueUpdateSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -776,6 +782,60 @@ const handleUpdateBuyerInsuranceRequirement = async (req: AuthRequest, res: Resp
   } catch (error) { next(error); }
 };
 
+const handleGetBuyerWalkthrough = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    return res.json({ success: true, data: await BuyerWalkthroughService.get(req.user.userId, req.params.propertyId) });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerWalkthrough = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerWalkthroughWorkspaceUpdateSchema.parse(req.body);
+    return res.json({ success: true, data: await BuyerWalkthroughService.update(req.user.userId, req.params.propertyId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleCreateBuyerWalkthroughObservation = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerWalkthroughObservationCreateSchema.parse(req.body);
+    return res.status(201).json({ success: true, data: await BuyerWalkthroughService.createObservation(req.user.userId, req.params.propertyId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerWalkthroughObservation = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerWalkthroughObservationUpdateSchema.parse(req.body);
+    return res.json({ success: true, data: await BuyerWalkthroughService.updateObservation(req.user.userId, req.params.propertyId, req.params.observationId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleCreateBuyerWalkthroughIssue = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerWalkthroughIssueCreateSchema.parse(req.body);
+    return res.status(201).json({ success: true, data: await BuyerWalkthroughService.createIssue(req.user.userId, req.params.propertyId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerWalkthroughIssue = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerWalkthroughIssueUpdateSchema.parse(req.body);
+    return res.json({ success: true, data: await BuyerWalkthroughService.updateIssue(req.user.userId, req.params.propertyId, req.params.issueId, input) });
+  } catch (error) { next(error); }
+};
+
+const handleCompleteBuyerWalkthrough = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    return res.json({ success: true, data: await BuyerWalkthroughService.complete(req.user.userId, req.params.propertyId) });
+  } catch (error) { next(error); }
+};
+
 const handleUpdateInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -912,6 +972,13 @@ export const homeBuyerTaskController = {
   handleBindBuyerInsurance,
   handleCreateBuyerInsuranceRequirement,
   handleUpdateBuyerInsuranceRequirement,
+  handleGetBuyerWalkthrough,
+  handleUpdateBuyerWalkthrough,
+  handleCreateBuyerWalkthroughObservation,
+  handleUpdateBuyerWalkthroughObservation,
+  handleCreateBuyerWalkthroughIssue,
+  handleUpdateBuyerWalkthroughIssue,
+  handleCompleteBuyerWalkthrough,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

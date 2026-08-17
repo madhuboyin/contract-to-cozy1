@@ -82,6 +82,13 @@ router.post('/properties/:propertyId/buyer-insurance/quotes/:quoteId/select', ho
 router.post('/properties/:propertyId/buyer-insurance/bind', homeBuyerTaskController.handleBindBuyerInsurance);
 router.post('/properties/:propertyId/buyer-insurance/requirements', homeBuyerTaskController.handleCreateBuyerInsuranceRequirement);
 router.patch('/properties/:propertyId/buyer-insurance/requirements/:requirementId', homeBuyerTaskController.handleUpdateBuyerInsuranceRequirement);
+router.get('/properties/:propertyId/final-walkthrough', homeBuyerTaskController.handleGetBuyerWalkthrough);
+router.put('/properties/:propertyId/final-walkthrough', homeBuyerTaskController.handleUpdateBuyerWalkthrough);
+router.post('/properties/:propertyId/final-walkthrough/observations', homeBuyerTaskController.handleCreateBuyerWalkthroughObservation);
+router.patch('/properties/:propertyId/final-walkthrough/observations/:observationId', homeBuyerTaskController.handleUpdateBuyerWalkthroughObservation);
+router.post('/properties/:propertyId/final-walkthrough/issues', homeBuyerTaskController.handleCreateBuyerWalkthroughIssue);
+router.patch('/properties/:propertyId/final-walkthrough/issues/:issueId', homeBuyerTaskController.handleUpdateBuyerWalkthroughIssue);
+router.post('/properties/:propertyId/final-walkthrough/complete', homeBuyerTaskController.handleCompleteBuyerWalkthrough);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

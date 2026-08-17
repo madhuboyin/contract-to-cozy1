@@ -85,6 +85,8 @@ export const BUYER_ACTION_KEYS = {
   INSPECTION_REINSPECTION: 'buyer:inspection:reinspection',
   NEGOTIATION_SEPARATE: 'buyer:negotiation:separate',
   COVERAGE_BIND: 'buyer:coverage:bind',
+  WALKTHROUGH_PREP: 'buyer:phase:walkthrough-prepare',
+  WALKTHROUGH_ISSUES: 'buyer:walkthrough:issue-resolution',
   CLOSING_DOCUMENTS: 'buyer:closing:documents',
   SAFETY_ACCESS: 'buyer:safety:access',
   UTILITIES_SETUP: 'buyer:utilities:setup',
@@ -408,6 +410,74 @@ export type BuyerInsuranceQuoteUpdateInput = z.infer<typeof BuyerInsuranceQuoteU
 export type BuyerInsuranceBindInput = z.infer<typeof BuyerInsuranceBindSchema>;
 export type BuyerInsuranceRequirementCreateInput = z.infer<typeof BuyerInsuranceRequirementCreateSchema>;
 export type BuyerInsuranceRequirementUpdateInput = z.infer<typeof BuyerInsuranceRequirementUpdateSchema>;
+
+export const BUYER_WALKTHROUGH_OBSERVATION_CATEGORIES = [
+  'OVERALL_CONDITION', 'INCLUDED_ITEMS', 'AGREED_REPAIRS', 'NEW_DAMAGE', 'LIGHTING_ELECTRICAL',
+  'PLUMBING', 'HVAC_APPLIANCES', 'DOORS_WINDOWS', 'GARAGE_ACCESS', 'SMOKE_CO', 'OTHER',
+] as const;
+export const BUYER_WALKTHROUGH_OBSERVATION_STATUSES = ['NOT_REVIEWED', 'ACCEPTABLE', 'ISSUE', 'NOT_APPLICABLE'] as const;
+export const BUYER_WALKTHROUGH_ISSUE_CATEGORIES = [
+  'REPAIR_COMMITMENT', 'INCLUDED_ITEM', 'NEW_DAMAGE', 'ACCESS_UTILITY', 'SYSTEM_SAFETY', 'CLEANLINESS', 'OTHER',
+] as const;
+export const BUYER_WALKTHROUGH_ISSUE_STATUSES = ['OPEN', 'ROUTED_TO_PROFESSIONAL', 'RESOLVED', 'ACCEPTED_AS_IS'] as const;
+
+export const BuyerWalkthroughWorkspaceUpdateSchema = z.strictObject({
+  scheduledAt: z.string().datetime().nullable().optional(),
+  attendees: z.array(z.string().trim().min(1).max(160)).max(30).optional(),
+  accessConfirmed: z.boolean().optional(),
+  utilitiesConfirmed: z.boolean().optional(),
+  started: z.boolean().optional(),
+  generalNotes: z.string().trim().max(4_000).nullable().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one walkthrough field must be provided.',
+});
+
+export const BuyerWalkthroughObservationCreateSchema = z.strictObject({
+  area: z.string().trim().min(1).max(160),
+  category: z.enum(BUYER_WALKTHROUGH_OBSERVATION_CATEGORIES),
+  status: z.enum(BUYER_WALKTHROUGH_OBSERVATION_STATUSES).default('NOT_REVIEWED'),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  evidenceDocumentId: z.string().uuid().nullable().optional(),
+});
+export const BuyerWalkthroughObservationUpdateSchema = z.strictObject({
+  area: z.string().trim().min(1).max(160).optional(),
+  category: z.enum(BUYER_WALKTHROUGH_OBSERVATION_CATEGORIES).optional(),
+  status: z.enum(BUYER_WALKTHROUGH_OBSERVATION_STATUSES).optional(),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  evidenceDocumentId: z.string().uuid().nullable().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one walkthrough observation field must be provided.',
+});
+
+export const BuyerWalkthroughIssueCreateSchema = z.strictObject({
+  sourceObservationId: z.string().uuid().nullable().optional(),
+  inspectionFindingId: z.string().uuid().nullable().optional(),
+  negotiationFindingId: z.string().uuid().nullable().optional(),
+  category: z.enum(BUYER_WALKTHROUGH_ISSUE_CATEGORIES),
+  title: z.string().trim().min(1).max(200),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  evidenceDocumentId: z.string().uuid().nullable().optional(),
+  blocking: z.boolean().default(false),
+});
+export const BuyerWalkthroughIssueUpdateSchema = z.strictObject({
+  status: z.enum(BUYER_WALKTHROUGH_ISSUE_STATUSES).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  evidenceDocumentId: z.string().uuid().nullable().optional(),
+  blocking: z.boolean().optional(),
+  routedToRole: z.enum(['BUYER_AGENT', 'ATTORNEY', 'TITLE_ESCROW', 'OTHER']).nullable().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one walkthrough issue field must be provided.',
+}).refine((value) => value.status !== 'ROUTED_TO_PROFESSIONAL' || Boolean(value.routedToRole), {
+  message: 'Choose the professional role receiving the issue.',
+  path: ['routedToRole'],
+});
+
+export type BuyerWalkthroughWorkspaceUpdateInput = z.infer<typeof BuyerWalkthroughWorkspaceUpdateSchema>;
+export type BuyerWalkthroughObservationCreateInput = z.infer<typeof BuyerWalkthroughObservationCreateSchema>;
+export type BuyerWalkthroughObservationUpdateInput = z.infer<typeof BuyerWalkthroughObservationUpdateSchema>;
+export type BuyerWalkthroughIssueCreateInput = z.infer<typeof BuyerWalkthroughIssueCreateSchema>;
+export type BuyerWalkthroughIssueUpdateInput = z.infer<typeof BuyerWalkthroughIssueUpdateSchema>;
 
 export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
   'RADON',

@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.24
+**Version:** 1.25
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2947,6 +2947,22 @@ Functional check:
   comparison/checklist write-back.
 
 ### Slice 4C — Walkthrough, disclosure, funds, and closing day
+
+**Implementation status:** In progress. The first increment adds a
+property-scoped Final Walkthrough Companion. It schedules the appointment,
+records access, utility readiness, attendees, room/area observations, safe
+visible checks, photo/document evidence, and issues without representing a
+professional inspection or condition certification. The workspace reads the
+canonical property contract documents, pre-close inspection findings, seller
+responses, negotiation outcomes, credits, and completion evidence rather than
+copying them into a second transaction record. An observation marked as an
+issue must have a corresponding escalation item, and completion requires every
+observation to be reviewed and every issue to be routed or dispositioned.
+Routed unresolved material issues remain on a separate blocking Buyer Plan task
+even after the walkthrough record itself is complete. The stable walkthrough
+task and canonical `FINAL_WALKTHROUGH` milestone reconcile idempotently with
+bounded evidence that explicitly disclaims condition, repair, safety, and legal
+certification. Closing Disclosure/funds and closing-day increments remain next.
 
 **Goal:** Make the final days before closing calm, mobile, evidence-backed, and
 safe.

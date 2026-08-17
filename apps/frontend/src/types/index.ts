@@ -3782,6 +3782,82 @@ export interface BuyerInsuranceWorkspaceResponse {
   documents: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
 }
 
+export type BuyerWalkthroughObservationCategory = 'OVERALL_CONDITION' | 'INCLUDED_ITEMS' | 'AGREED_REPAIRS' | 'NEW_DAMAGE' | 'LIGHTING_ELECTRICAL' | 'PLUMBING' | 'HVAC_APPLIANCES' | 'DOORS_WINDOWS' | 'GARAGE_ACCESS' | 'SMOKE_CO' | 'OTHER';
+export type BuyerWalkthroughObservationStatus = 'NOT_REVIEWED' | 'ACCEPTABLE' | 'ISSUE' | 'NOT_APPLICABLE';
+export type BuyerWalkthroughIssueCategory = 'REPAIR_COMMITMENT' | 'INCLUDED_ITEM' | 'NEW_DAMAGE' | 'ACCESS_UTILITY' | 'SYSTEM_SAFETY' | 'CLEANLINESS' | 'OTHER';
+export type BuyerWalkthroughIssueStatus = 'OPEN' | 'ROUTED_TO_PROFESSIONAL' | 'RESOLVED' | 'ACCEPTED_AS_IS';
+
+export interface BuyerWalkthroughWorkspaceResponse {
+  workspace: null | {
+    id: string;
+    propertyId: string;
+    scheduledAt: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    attendees: string[];
+    accessConfirmedAt: string | null;
+    utilitiesConfirmedAt: string | null;
+    generalNotes: string | null;
+    createdAt: string;
+    updatedAt: string;
+    observations: Array<{
+      id: string;
+      area: string;
+      category: BuyerWalkthroughObservationCategory;
+      status: BuyerWalkthroughObservationStatus;
+      notes: string | null;
+      evidenceDocumentId: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+    issues: Array<{
+      id: string;
+      sourceObservationId: string | null;
+      inspectionFindingId: string | null;
+      negotiationFindingId: string | null;
+      category: BuyerWalkthroughIssueCategory;
+      status: BuyerWalkthroughIssueStatus;
+      title: string;
+      notes: string | null;
+      evidenceDocumentId: string | null;
+      blocking: boolean;
+      routedToRole: 'BUYER_AGENT' | 'ATTORNEY' | 'TITLE_ESCROW' | 'OTHER' | null;
+      routedAt: string | null;
+      resolvedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  };
+  context: {
+    findings: Array<{
+      id: string;
+      homeSystem: string;
+      subsystem: string | null;
+      location: string | null;
+      severity: string;
+      inspectorDescription: string;
+      status: string;
+      resolutionMethod: string | null;
+      resolutionNotes: string | null;
+      buyerDisposition: string;
+      buyerOutcomeDocumentId: string | null;
+      negotiationCaseLinks: Array<{
+        id: string;
+        sellerResponse: string;
+        sellerResponseNotes: string | null;
+        outcome: string;
+        outcomeNotes: string | null;
+        agreedCreditCents: number | null;
+        outcomeDocumentId: string | null;
+        outcomeDocument: { id: string; name: string; verificationStatus: string } | null;
+        negotiationCase: { id: string };
+      }>;
+    }>;
+    contractDocuments: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+  };
+  evidenceDocuments: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+}
+
 export interface BuyerInspectionModuleRecommendation {
   moduleKey: string;
   title: string;
