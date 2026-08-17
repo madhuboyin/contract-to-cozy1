@@ -142,11 +142,12 @@ router.post('/save-plan', authenticate, async (req: AuthRequest, res: Response) 
       });
     }
 
-    await movingConciergeService.saveMovingPlan(propertyId, userId, planData);
+    const plan = await movingConciergeService.saveMovingPlan(propertyId, userId, planData);
 
     res.json({
       success: true,
-      message: 'Moving plan saved successfully'
+      message: 'Moving plan saved successfully',
+      data: plan,
     });
 
   } catch (error: any) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { 
   Truck, 
   CheckCircle2,
@@ -43,6 +43,7 @@ interface MovingTask {
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   estimatedTime: string;
   completed: boolean;
+  sourceTaskId?: string;
   tips: string[];
 }
 
@@ -68,6 +69,7 @@ interface MovingPlan {
   changeOfAddressChecklist: any[];
   aiRecommendations: string[];
   generatedAt: string;
+  completedTasks?: string[];
 }
 
 interface MovingConciergeProps {
@@ -96,17 +98,18 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
 
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
 
+  const applyCanonicalPlan = useCallback((nextPlan: MovingPlan) => {
+    setPlan(nextPlan);
+    setCompletedTasks(new Set(nextPlan.completedTasks ?? []));
+  }, []);
+
   // Load saved plan on mount
   useEffect(() => {
     const loadSavedPlan = async () => {
       try {
         const response = await api.getMovingPlan(propertyId);
         if (response.success && response.data) {
-          setPlan(response.data);
-          // Restore completed tasks from saved plan
-          if (response.data.completedTasks && Array.isArray(response.data.completedTasks)) {
-            setCompletedTasks(new Set(response.data.completedTasks));
-          }
+          applyCanonicalPlan(response.data as MovingPlan);
         }
       } catch (err) {
         console.log('No saved plan found or error loading:', err);
@@ -116,7 +119,7 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
     };
 
     loadSavedPlan();
-  }, [propertyId]);
+  }, [applyCanonicalPlan, propertyId]);
 
   // Auto-save completed tasks (debounced)
   useEffect(() => {
@@ -159,12 +162,13 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
 
       if (response.success && response.data) {
         const newPlan = response.data as MovingPlan;
-        setPlan(newPlan);
+        applyCanonicalPlan(newPlan);
         
         // Auto-save to database
         try {
           setSaveStatus('saving');
-          await api.saveMovingPlan(propertyId, newPlan);
+          const saved = await api.saveMovingPlan(propertyId, newPlan);
+          if (saved.success && saved.data) applyCanonicalPlan(saved.data as MovingPlan);
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus('idle'), 2000);
         } catch (saveErr) {
@@ -196,7 +200,8 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
     
     try {
       setSaveStatus('saving');
-      await api.saveMovingPlan(propertyId, plan);
+      const saved = await api.saveMovingPlan(propertyId, plan);
+      if (saved.success && saved.data) applyCanonicalPlan(saved.data as MovingPlan);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {

@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.28
+**Version:** 1.29
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -3065,6 +3065,18 @@ Functional check:
   the same canonical finding/task after confirmation.
 
 ### Slice 6 — Moving, services, household, and notifications
+
+**Implementation status:** In progress. The first vertical increment converts
+Moving Concierge timeline generation into idempotent canonical `HomeBuyerTask`
+rows in the `MOVE_IN` phase and `MOVE_POSSESSION` section. The rich Moving view
+now receives canonical task IDs, projects completion from Buyer Plan state, and
+updates those same rows instead of owning an independent completion list.
+Regeneration preserves task completion, evidence, assignment, notes, and user
+edits; Buyer Plan and Moving Concierge therefore share one task identity and one
+progress count. Moving reads now honor viewer access while generation, saving,
+completion, and deletion require contributor access. Remaining Slice 6 work
+adds move filtering, milestone and booking reconciliation, co-buyer landing,
+and deduplicated lifecycle-aware notifications.
 
 **Goal:** Eliminate duplicate coordination systems.
 

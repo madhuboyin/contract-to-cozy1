@@ -4,8 +4,14 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 import { getPlanningContextDecisions, getPlanningContextEnvelope } from './planningContext/context';
+import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import {
+  projectCanonicalMovingCompletion,
+  reconcileMovingPlanTasks,
+  updateCanonicalMovingCompletion,
+} from './movingConciergeTask.service';
 
-interface MovingPlanInput {
+export interface MovingPlanInput {
   closingDate: string;
   currentAddress: string;
   newAddress: string;
@@ -18,7 +24,7 @@ interface MovingPlanInput {
   specialRequirements?: string;
 }
 
-interface MovingTask {
+export interface MovingTask {
   id: string;
   title: string;
   description: string;
@@ -27,6 +33,7 @@ interface MovingTask {
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   estimatedTime: string; // "30 min", "2 hours", etc.
   completed: boolean;
+  sourceTaskId?: string;
   tips: string[];
 }
 
@@ -47,7 +54,7 @@ interface MovingCostEstimate {
   notes: string;
 }
 
-interface MovingPlan {
+export interface MovingPlan {
   propertyId: string;
   closingDate: string;
   daysUntilMove: number;
@@ -83,6 +90,9 @@ interface MovingPlan {
   aiRecommendations: string[];
 
   generatedAt: Date;
+
+  /** Derived from canonical HomeBuyerTask rows; never an independent completion source. */
+  completedTasks?: string[];
 
   // Property Context decision envelope attached when reading a saved plan.
   context?: Awaited<ReturnType<typeof getPlanningContextEnvelope>>;
@@ -177,22 +187,20 @@ export class MovingConciergeService {
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
 
+  private async assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'VIEWER') {
+    const access = await resolvePropertyAccess(userId, propertyId);
+    if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
+      throw new Error(`Property not found or ${minimum.toLowerCase()} access is required.`);
+    }
+    return access;
+  }
+
   async generateMovingPlan(
     propertyId: string,
     userId: string,
     input: MovingPlanInput
   ): Promise<MovingPlan> {
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId }
-      },
-      select: { id: true }
-    });
-
-    if (!property) {
-      throw new Error('Property not found');
-    }
+    await this.assertAccess(userId, propertyId, 'CONTRIBUTOR');
 
     // Evaluate the authoritative moving-planning decision before generating.
     const planning = await getPlanningContextEnvelope(propertyId, userId, 'MOVING_PLAN');
@@ -219,7 +227,7 @@ export class MovingConciergeService {
     // AI recommendations
     const aiRecommendations = await this.getAIRecommendations(input, daysUntilMove);
 
-    return {
+    const plan: MovingPlan = {
       propertyId,
       closingDate: input.closingDate,
       daysUntilMove,
@@ -232,6 +240,7 @@ export class MovingConciergeService {
       generatedAt: new Date(),
       context: planning,
     };
+    return reconcileMovingPlanTasks(propertyId, userId, plan);
   }
 
   private async generateTimeline(
@@ -944,18 +953,9 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
     propertyId: string,
     userId: string,
     planData: MovingPlan
-  ): Promise<void> {
-    // Verify property belongs to user
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId }
-      }
-    });
-  
-    if (!property) {
-      throw new Error('Property not found');
-    }
+  ): Promise<MovingPlan> {
+    await this.assertAccess(userId, propertyId, 'CONTRIBUTOR');
+    const canonicalPlan = await reconcileMovingPlanTasks(propertyId, userId, planData);
   
     // Save or update plan
     const existingPlan = await prisma.movingPlan.findFirst({
@@ -968,8 +968,8 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       await prisma.movingPlan.update({
         where: { id: existingPlan.id },
         data: {
-          closingDate: new Date(planData.closingDate),
-          planData: planData as any,
+          closingDate: new Date(canonicalPlan.closingDate),
+          planData: canonicalPlan as any,
           contextVersion: planning.contextVersion,
           updatedAt: new Date(),
         },
@@ -978,30 +978,21 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       await prisma.movingPlan.create({
         data: {
           propertyId: propertyId,
-          closingDate: new Date(planData.closingDate),
-          planData: planData as any,
+          closingDate: new Date(canonicalPlan.closingDate),
+          planData: canonicalPlan as any,
           contextVersion: planning.contextVersion,
           completedTasks: [],
         },
       });
     }
+    return canonicalPlan;
   }
   
   async getMovingPlan(
     propertyId: string,
     userId: string
   ): Promise<MovingPlan | null> {
-    // Verify property belongs to user
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId }
-      }
-    });
-  
-    if (!property) {
-      throw new Error('Property not found');
-    }
+    await this.assertAccess(userId, propertyId, 'VIEWER');
   
     const savedPlan = await prisma.movingPlan.findFirst({
       where: { propertyId }
@@ -1018,11 +1009,10 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       savedPlan.contextVersion,
     );
 
-    return {
+    return projectCanonicalMovingCompletion(propertyId, {
       ...(savedPlan.planData as any),
-      completedTasks: savedPlan.completedTasks || [],
       context: contextEnvelope,
-    };
+    });
   }
   
   async updateCompletedTasks(
@@ -1030,17 +1020,7 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
     userId: string,
     completedTaskIds: string[]
   ): Promise<void> {
-    // Verify property belongs to user
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId }
-      }
-    });
-  
-    if (!property) {
-      throw new Error('Property not found');
-    }
+    await this.assertAccess(userId, propertyId, 'CONTRIBUTOR');
   
     const existingPlan = await prisma.movingPlan.findFirst({
       where: { propertyId }
@@ -1050,30 +1030,19 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       throw new Error('Moving plan not found');
     }
 
-    await prisma.movingPlan.update({
-      where: { id: existingPlan.id },
-      data: {
-        completedTasks: completedTaskIds,
-        updatedAt: new Date(),
-      },
-    });
+    await updateCanonicalMovingCompletion(
+      propertyId,
+      userId,
+      existingPlan.planData as unknown as MovingPlan,
+      completedTaskIds,
+    );
   }
   
   async deleteMovingPlan(
     propertyId: string,
     userId: string
   ): Promise<void> {
-    // Verify property belongs to user
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId }
-      }
-    });
-  
-    if (!property) {
-      throw new Error('Property not found');
-    }
+    await this.assertAccess(userId, propertyId, 'CONTRIBUTOR');
   
     // Find the moving plan first, then delete by id
     const existingPlan = await prisma.movingPlan.findFirst({
