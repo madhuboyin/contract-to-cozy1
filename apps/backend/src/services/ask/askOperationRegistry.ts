@@ -74,7 +74,12 @@ export type AskOperationId =
   | 'BUYER_TITLE_ESCROW_READINESS'
   | 'BUYER_WALKTHROUGH_READINESS'
   | 'BUYER_DISCLOSURE_FUNDS_READINESS'
-  | 'BUYER_CLOSING_DAY_READINESS';
+  | 'BUYER_CLOSING_DAY_READINESS'
+  | 'BUYER_CONTRACT_TIMELINE'
+  | 'BUYER_NEGOTIATION_READINESS'
+  | 'BUYER_COST_READINESS'
+  | 'BUYER_FINDING_DISPOSITION'
+  | 'BUYER_LIFECYCLE_UPDATE';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -232,6 +237,21 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   BUYER_WALKTHROUGH_READINESS: definition('BUYER_WALKTHROUGH_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.walkthrough-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_DISCLOSURE_FUNDS_READINESS: definition('BUYER_DISCLOSURE_FUNDS_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.disclosure-funds-readiness', ['SUMMARY', 'BOUNDARY']),
   BUYER_CLOSING_DAY_READINESS: definition('BUYER_CLOSING_DAY_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.closing-day-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  BUYER_CONTRACT_TIMELINE: definition('BUYER_CONTRACT_TIMELINE', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.contract-timeline', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  BUYER_NEGOTIATION_READINESS: definition('BUYER_NEGOTIATION_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.negotiation-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  BUYER_COST_READINESS: definition('BUYER_COST_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.cost-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  // Reclassification is a canonical, transactional obligation change (FRD
+  // §10.2), not a routine edit -- CONTRIBUTOR floor with explicit confirmation,
+  // matching the domain command registry entry below.
+  BUYER_FINDING_DISPOSITION: definition('BUYER_FINDING_DISPOSITION', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer.finding.disposition', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // Scoped to cancellation and lifecycle-date changes only. The close
+  // transition itself is deliberately NOT exposed here -- FRD §14.13/§21.1
+  // require the dedicated Closing Day Companion's own wire-fraud/ID/funds
+  // checklist and explicit confirmation before RECENT_OWNER; a chat command
+  // must not bypass that. Pause is not yet backed by a real lifecycle
+  // transition in the service layer, so it is intentionally unavailable
+  // rather than simulated (FRD §21.1).
+  BUYER_LIFECYCLE_UPDATE: definition('BUYER_LIFECYCLE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer.lifecycle.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
@@ -275,6 +295,11 @@ const buyerTitleEscrowReadinessPattern = /\b(?:title|escrow|survey|hoa)\b.{0,50}
 const buyerWalkthroughReadinessPattern = /\bfinal walkthrough\b.{0,50}\b(?:checklist|ready|readiness|prepare|status)\b|\b(?:prepare|ready)\b.{0,40}\bfinal walkthrough\b/i;
 const buyerDisclosureFundsReadinessPattern = /\bclosing disclosure\b.{0,50}\b(?:change|changes|ready|readiness|review|status)\b|\bwhat changed\b.{0,40}\bclosing disclosure\b|\bfunds\b.{0,30}\bready\b.{0,30}\bclosing\b/i;
 const buyerClosingDayReadinessPattern = /\bclosing day\b.{0,50}\b(?:ready|readiness|need|checklist|prepare)\b|\bwhat do i need\b.{0,40}\bclosing day\b/i;
+const buyerContractTimelinePattern = /\bcontract\b.{0,50}\b(?:dates?|terms?|timeline|contingenc(?:y|ies))\b.{0,40}\b(?:confirm|need|still|closing)\b|\bwhich contract dates?\b.{0,40}\bconfirm\b/i;
+const buyerNegotiationReadinessPattern = /\bwhat should i discuss\b.{0,40}\b(?:my )?agent\b.{0,40}\binspection\b|\bnegotiation\b.{0,40}\b(?:readiness|status|discuss)\b.{0,40}\b(?:closing|purchase|inspection)\b|\bseller (?:response|negotiation)\b.{0,40}\bstatus\b/i;
+const buyerCostReadinessPattern = /\bwhat could cost me money\b.{0,40}\b(?:first 90 days|closing|move[- ]in)\b|\bnear[- ]term costs?\b.{0,40}\bpurchase\b|\bwhat (?:will|could)\b.{0,30}\bcost\b.{0,40}\bthis (?:purchase|closing)\b/i;
+const buyerFindingDispositionPattern = /\b(?:move|classify|mark)\b.{0,50}\bfinding\b.{0,50}\b(?:post[- ]close|negotiation|dismiss|verified)\b|\bfinding\b.{0,50}\binto (?:my )?post[- ]close plan\b/i;
+const buyerLifecycleUpdatePattern = /\bcancel\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|closing)\b|\bwe closed today\b|\b(?:change|update|move)\b.{0,40}\b(?:target )?closing date\b.{0,40}\bto\b|\bpause\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|deal)\b/i;
 
 const emergencyPattern = /\b(smell(?:ing)? gas|gas smell|gas leak|carbon monoxide|\bco (?:alarm|detector)|sparks?\b.{0,25}\b(?:from|at)\b|electrical fire|actively flooding.*electric(?:al)?|fire now)\b/i;
 const unsafeRestrictedPattern = /\b(?:bypass|avoid|evade|skip|work around)\b.{0,60}\b(?:permit|inspection|code|licen[cs]e|hoa|disclosure)\b|\b(?:disable|disconnect|remove|tamper with|cover|block)\b.{0,60}\b(?:smoke|carbon monoxide|co|fire|safety)\s*(?:detector|alarm|device)?\b|\b(?:conceal|hide|omit|misrepresent)\b.{0,80}\b(?:damage|defect|mold|leak|flood|fire|buyer|insurer|inspector|lender)\b|\b(?:remove|alter|cut|demolish|open up)\b.{0,70}\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:wall|beam|column|support)?\b|\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:without|skip|avoid|myself|diy)\b.{0,40}\b(?:inspection|permit|engineer|approval)?\b|\b(?:guarantee|certify|confirm(?: definitively)?|promise|tell me (?:for sure|the exact))\b.{0,100}\b(?:approved|approval|eligible|eligibility|legal|compliant|safe|pass inspection|refinanc|mortgage|loan|insurance claim|tax appeal|damage|loss|claim|covered|coverage|sale price|sell for)\b/i;
@@ -428,6 +453,21 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (buyerClosingDayReadinessPattern.test(message)) {
     return resolved('BUYER_CLOSING_DAY_READINESS', 0.95);
+  }
+  if (buyerFindingDispositionPattern.test(message)) {
+    return resolved('BUYER_FINDING_DISPOSITION', 0.96);
+  }
+  if (buyerLifecycleUpdatePattern.test(message)) {
+    return resolved('BUYER_LIFECYCLE_UPDATE', 0.96);
+  }
+  if (buyerContractTimelinePattern.test(message)) {
+    return resolved('BUYER_CONTRACT_TIMELINE', 0.95);
+  }
+  if (buyerNegotiationReadinessPattern.test(message)) {
+    return resolved('BUYER_NEGOTIATION_READINESS', 0.95);
+  }
+  if (buyerCostReadinessPattern.test(message)) {
+    return resolved('BUYER_COST_READINESS', 0.95);
   }
   // Ask Intelligence FRD Phase 8A: checked ahead of quoteComparisonReviewPattern
   // and replacementPattern below, since both are generic enough to otherwise

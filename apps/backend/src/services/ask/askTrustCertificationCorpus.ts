@@ -66,6 +66,11 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'BUYER_WALKTHROUGH_READINESS', message: 'Help me get ready for the final walkthrough', category: 'PARAPHRASE' },
   { operationId: 'BUYER_DISCLOSURE_FUNDS_READINESS', message: 'What changed in my closing disclosure paperwork?', category: 'PARAPHRASE' },
   { operationId: 'BUYER_CLOSING_DAY_READINESS', message: 'What do I need to bring on closing day?', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_CONTRACT_TIMELINE', message: 'Which dates in my purchase contract still need confirming?', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_NEGOTIATION_READINESS', message: 'What is the seller saying about my repair requests?', category: 'COLLOQUIAL' },
+  { operationId: 'BUYER_COST_READINESS', message: 'What near-term expenses should I expect from buying this home?', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_FINDING_DISPOSITION', message: 'Classify the water-heater finding as post-close work', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_LIFECYCLE_UPDATE', message: 'Cancel my buyer plan: we lost financing approval', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -169,7 +174,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   HVAC_DECISION_OUTCOME_REPORT: 'The newly installed heater can be recorded as the decision outcome.',
   HVAC_DECISION_OUTCOME_VIEW: 'The recorded HVAC decision outcome shows that the heating review ended with replacement of the old unit.',
   HVAC_DECISION_OUTCOME_UNLINK: 'The incorrect furnace-replacement outcome can be unlinked after confirmation.',
-  BUYER_PLAN_STATUS: 'Confirming the closing attorney’s contact information is this purchase’s exact next Buyer Plan item, with four out of five applicable steps already checked off.',
+  BUYER_PLAN_STATUS: 'This purchase’s Buyer Plan is eighty percent complete, and the recorded next action has not yet been marked done.',
   BUYER_DEADLINES: 'Two closing-timeline milestones are due before this purchase closes, and one blocking item still needs to be resolved.',
   BUYER_DOCUMENT_READINESS: 'Two transaction documents for this closing are verified, but one still needs a second look before it counts as received.',
   BUYER_INSPECTION_REVIEW: 'The roof-leak finding from this purchase still awaits a seller-negotiation, acceptance, or dismissal decision.',
@@ -182,6 +187,11 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   BUYER_WALKTHROUGH_READINESS: 'The scheduled walkthrough checklist covers agreed repairs, included fixtures, and utility access confirmation.',
   BUYER_DISCLOSURE_FUNDS_READINESS: 'The latest disclosure revision raised the cash-to-close total by four hundred dollars versus the selected Loan Estimate.',
   BUYER_CLOSING_DAY_READINESS: 'The signing appointment is confirmed for Thursday at the title company, with certified funds and photo ID both marked ready.',
+  BUYER_CONTRACT_TIMELINE: 'The attorney-review deadline in the confirmed contract has not yet been checked against the current addendum.',
+  BUYER_NEGOTIATION_READINESS: 'The seller countered the roof-repair request with a partial credit that has not yet been accepted.',
+  BUYER_COST_READINESS: 'Two open Buyer Plan tasks carry a recorded price tag, totaling twelve hundred dollars in near-term buyer expense.',
+  BUYER_FINDING_DISPOSITION: 'The water-heater finding can be reclassified as post-close work after confirmation.',
+  BUYER_LIFECYCLE_UPDATE: 'This purchase can be cancelled after confirmation, preserving completed work and uploaded evidence.',
 });
 
 export const ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES = Object.freeze(

@@ -62,6 +62,11 @@ const jobs: Record<AskOperationId, string> = {
   BUYER_WALKTHROUGH_READINESS: 'prepare or review the final walkthrough checklist',
   BUYER_DISCLOSURE_FUNDS_READINESS: 'review Closing Disclosure changes and funds readiness',
   BUYER_CLOSING_DAY_READINESS: 'prepare the closing-day appointment, funds, and access checklist',
+  BUYER_CONTRACT_TIMELINE: 'confirm accepted-contract dates, terms, and contingency deadlines',
+  BUYER_NEGOTIATION_READINESS: 'organize inspection negotiation inputs for the agent or seller',
+  BUYER_COST_READINESS: 'explain recorded near-term purchase costs',
+  BUYER_FINDING_DISPOSITION: 'classify an inspection finding as negotiation, post-close work, verified fact, or dismissed',
+  BUYER_LIFECYCLE_UPDATE: 'cancel this purchase or change its recorded closing/move-in dates',
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
@@ -117,6 +122,11 @@ const positives: Record<AskOperationId, readonly string[]> = {
   BUYER_WALKTHROUGH_READINESS: ['Build my final walkthrough checklist', 'Help me prepare for the final walkthrough', 'Is my final walkthrough readiness confirmed?'],
   BUYER_DISCLOSURE_FUNDS_READINESS: ['What changed in my Closing Disclosure?', 'Is my closing disclosure ready for review?', 'Are my closing funds ready?'],
   BUYER_CLOSING_DAY_READINESS: ['What do I need for closing day?', 'Is my closing day checklist ready?', 'What should I prepare for closing day?'],
+  BUYER_CONTRACT_TIMELINE: ['Which contract dates still need my confirmation?', 'Show my confirmed contract timeline', 'What contingency deadlines are recorded in my contract?'],
+  BUYER_NEGOTIATION_READINESS: ['What should I discuss with my agent about the inspection?', 'Show my negotiation readiness for this closing', 'What is the seller response status on my requests?'],
+  BUYER_COST_READINESS: ['What could cost me money in the first 90 days?', 'What are the near-term costs for this purchase?', 'What will this purchase cost me before closing?'],
+  BUYER_FINDING_DISPOSITION: ['Move the roof finding into my post-close plan', 'Classify the electrical finding as a negotiation item', 'Mark the paint finding as a verified fact'],
+  BUYER_LIFECYCLE_UPDATE: ['Cancel this purchase', 'We closed today', 'Change my target closing date to next month'],
 };
 
 const negatives: Record<AskOperationId, readonly string[]> = {
@@ -172,6 +182,11 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   BUYER_WALKTHROUGH_READINESS: ['What is still open with title or escrow?', 'Which inspection findings still need a decision?'],
   BUYER_DISCLOSURE_FUNDS_READINESS: ['Build my final walkthrough checklist', 'What is due before closing?'],
   BUYER_CLOSING_DAY_READINESS: ['What changed in my Closing Disclosure?', 'What should I do next for this purchase?'],
+  BUYER_CONTRACT_TIMELINE: ['What do I need for closing day?', 'What should I do next for this purchase?'],
+  BUYER_NEGOTIATION_READINESS: ['Which contract dates still need my confirmation?', 'What is due before closing?'],
+  BUYER_FINDING_DISPOSITION: ['What should I discuss with my agent about the inspection?', 'What could cost me money in the first 90 days?'],
+  BUYER_COST_READINESS: ['Cancel this purchase', 'Move the roof finding into my post-close plan'],
+  BUYER_LIFECYCLE_UPDATE: ['What could cost me money in the first 90 days?', 'What should I do next for this purchase?'],
 };
 
 const answerPositives: Record<AskOperationId, readonly string[]> = {
@@ -227,6 +242,11 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   BUYER_WALKTHROUGH_READINESS: ['The final walkthrough schedule, agreed-repair checks, and open issues are shown.'],
   BUYER_DISCLOSURE_FUNDS_READINESS: ['Closing Disclosure revision status and funds/wire readiness are shown.'],
   BUYER_CLOSING_DAY_READINESS: ['Closing-day appointment, identification, funds, and access readiness are shown.'],
+  BUYER_CONTRACT_TIMELINE: ['Confirmed contract dates, terms, and open contingency deadlines are shown.'],
+  BUYER_NEGOTIATION_READINESS: ['Inspection findings under negotiation and their seller response status are organized.', 'The seller countered the repair request with a partial credit that has not yet been accepted.'],
+  BUYER_COST_READINESS: ['Recorded near-term purchase costs are summarized as a modelled estimate.'],
+  BUYER_FINDING_DISPOSITION: ['The selected finding can be reclassified after confirmation.'],
+  BUYER_LIFECYCLE_UPDATE: ['This purchase can be cancelled or its recorded dates updated after confirmation.'],
 };
 
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
@@ -282,6 +302,11 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   BUYER_WALKTHROUGH_READINESS: ['Title, survey, and HOA readiness are shown with any blocking issues'],
   BUYER_DISCLOSURE_FUNDS_READINESS: ['The final walkthrough schedule and open issues are shown'],
   BUYER_CLOSING_DAY_READINESS: ['Closing Disclosure revision status and funds readiness are shown'],
+  BUYER_CONTRACT_TIMELINE: ['Closing-day appointment and identification readiness are shown'],
+  BUYER_NEGOTIATION_READINESS: ['Confirmed contract dates and contingency deadlines are shown'],
+  BUYER_COST_READINESS: ['Inspection findings under negotiation are organized by seller response'],
+  BUYER_FINDING_DISPOSITION: ['This purchase can be cancelled after confirmation'],
+  BUYER_LIFECYCLE_UPDATE: ['The selected finding is reclassified as a verified fact'],
 };
 
 export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, AskOperationSemanticPackage>> = Object.freeze(

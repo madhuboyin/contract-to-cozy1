@@ -17,6 +17,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'BUYER_TASK_COMPLETE',
   'BUYER_TASK_CREATE',
   'BUYER_TASK_UPDATE',
+  'BUYER_FINDING_DISPOSITION',
+  'BUYER_LIFECYCLE_UPDATE',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -77,6 +79,8 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   BUYER_TASK_COMPLETE: command('BUYER_TASK_COMPLETE', 'BUYER_TASK_COMPLETE', 'buyer.task.complete', 'CONTRIBUTOR', 'HOME_BUYER_TASK', ['REOPEN'], { title: 'Buyer Plan task not completed', body: 'Task status and closing readiness were not changed.', suggestion: 'What should I do next for this purchase?' }),
   BUYER_TASK_CREATE: command('BUYER_TASK_CREATE', 'BUYER_TASK_CREATE', 'buyer.task.create', 'CONTRIBUTOR', 'HOME_BUYER_TASK', ['EDIT', 'STOP'], { title: 'Closing checklist item not created', body: 'No task or shared Buyer Plan record was changed.', suggestion: 'What should I do next for this purchase?' }),
   BUYER_TASK_UPDATE: command('BUYER_TASK_UPDATE', 'BUYER_TASK_UPDATE', 'buyer.task.update', 'CONTRIBUTOR', 'HOME_BUYER_TASK', ['EDIT', 'STOP'], { title: 'Closing checklist item not updated', body: 'The task, due date, and assignment were not changed.', suggestion: 'What should I do next for this purchase?' }),
+  BUYER_FINDING_DISPOSITION: command('BUYER_FINDING_DISPOSITION', 'BUYER_FINDING_DISPOSITION', 'buyer.finding.disposition', 'CONTRIBUTOR', 'INSPECTION_FINDING', ['EDIT'], { title: 'Finding not reclassified', body: 'The finding disposition, linked task, and journey were not changed.', suggestion: 'Which inspection findings still need a decision?' }),
+  BUYER_LIFECYCLE_UPDATE: command('BUYER_LIFECYCLE_UPDATE', 'BUYER_LIFECYCLE_UPDATE', 'buyer.lifecycle.update', 'CONTRIBUTOR', 'HOME_BUYER_CHECKLIST', ['EDIT'], { title: 'Purchase lifecycle not changed', body: 'No cancellation or date change was recorded.', suggestion: 'What should I do next for this purchase?' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));
