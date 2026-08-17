@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, Search, Sparkles, ArrowRight, Zap, Loader2, PenLine } from 'lucide-react';
+import { Home, Sparkles, ArrowRight, Zap, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
@@ -11,6 +11,14 @@ import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import type { ActivationEntryContextInput } from '@/types';
+import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
+import {
+  addressOnlyPropertyData,
+  normalizeOnboardingAddress,
+  onboardingAddressError,
+  reconcilePropertyLookup,
+  type OnboardingAddressSource,
+} from '@/lib/onboarding/addressIntegrity';
 
 type Situation = 'own' | 'buying' | 'new-build' | 'exploring';
 type TriggerType = ActivationEntryContextInput['activeTrigger']['type'];
@@ -45,7 +53,7 @@ export default function AddressOnboardingPage() {
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [manualMode, setManualMode] = useState(false);
+  const [addressResolved, setAddressResolved] = useState(false);
   const [situation, setSituation] = useState<Situation | null>(null);
   const [triggerType, setTriggerType] = useState<TriggerType | null>(null);
   const [triggerDetail, setTriggerDetail] = useState('');
@@ -127,7 +135,7 @@ export default function AddressOnboardingPage() {
     };
   };
 
-  const prepareConfirmation = async (propertyData: Record<string, unknown>, source: 'LOOKUP' | 'MANUAL') => {
+  const prepareConfirmation = async (propertyData: Record<string, unknown>, source: OnboardingAddressSource) => {
     const selectedSituation = situation;
     if (!selectedSituation) throw new Error('Choose where you are in the home journey.');
     const activationContext = buildActivationContext();
@@ -143,52 +151,51 @@ export default function AddressOnboardingPage() {
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address.trim() || !situation || (situation !== 'buying' && !triggerType)) return;
-
-    if (manualMode) {
-      if (!city.trim() || !/^[A-Za-z]{2}$/.test(state.trim()) || !/^\d{5}$/.test(zipCode.trim())) {
-        toast({
-          title: 'Complete the address',
-          description: 'Enter a city, two-letter state, and five-digit ZIP code.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      setLoading(true);
-      try {
-        await prepareConfirmation({
-          address: address.trim(),
-          city: city.trim(),
-          state: state.trim().toUpperCase(),
-          zipCode: zipCode.trim(),
-          yearBuilt: null,
-          propertySize: null,
-          dwellingType: null,
-        }, 'MANUAL');
-        track('address_entered_manually', { source: 'onboarding_page' });
-      } catch (error) {
-        console.error('Manual address error:', error);
-        toast({ title: 'Unable to continue', description: 'Please try again.', variant: 'destructive' });
-      } finally {
-        setLoading(false);
-      }
+    if (!situation || (situation !== 'buying' && !triggerType)) return;
+    const submittedAddress = normalizeOnboardingAddress({ address, city, state, zipCode });
+    const validationError = onboardingAddressError(submittedAddress);
+    if (validationError) {
+      toast({ title: 'Complete the address', description: validationError, variant: 'destructive' });
       return;
     }
 
     setLoading(true);
     track('address_lookup_started', { source: 'onboarding_page' });
 
+    let propertyData: Record<string, unknown> = addressOnlyPropertyData(submittedAddress);
+    let addressSource: OnboardingAddressSource = addressResolved ? 'AUTOCOMPLETE' : 'MANUAL';
     try {
-      const response = await api.lookupProperty(address, zipCode);
+      const response = await api.lookupProperty(submittedAddress.address, submittedAddress.zipCode);
       if (!response.success || !response.data) throw new Error('No usable public record');
-      await prepareConfirmation(response.data, 'LOOKUP');
+      const reconciled = reconcilePropertyLookup(submittedAddress, response.data as unknown as Record<string, unknown>);
+      if (!reconciled) {
+        track('api_error_encountered', {
+          endpoint: '/api/properties/lookup',
+          statusCode: 422,
+          message: 'Property lookup location did not match submitted state and ZIP',
+        });
+        toast({
+          title: 'Public record did not match',
+          description: 'We kept the address you entered and discarded the conflicting property result.',
+        });
+      } else {
+        propertyData = reconciled;
+        addressSource = 'LOOKUP';
+      }
     } catch (error) {
       console.error('Lookup error:', error);
-      setManualMode(true);
+      if (!addressResolved) track('address_entered_manually', { source: 'onboarding_page' });
       toast({
         title: 'Public record unavailable',
-        description: 'No problem—complete the address manually. Unknown home facts will stay unknown.',
+        description: 'Your address is saved. Unknown property facts will stay unknown.',
       });
+    }
+
+    try {
+      await prepareConfirmation(propertyData, addressSource);
+    } catch (error) {
+      console.error('Onboarding session error:', error);
+      toast({ title: 'Unable to continue', description: 'Please try again.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -211,16 +218,16 @@ export default function AddressOnboardingPage() {
         </div>
       }
     >
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 sm:p-12">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center px-4 py-7 sm:px-6 sm:py-10">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-xl space-y-10 text-center"
+          className="w-full max-w-2xl space-y-6 text-center"
         >
           {/* Branding */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 bg-brand-600 rounded-3xl shadow-xl shadow-brand-200 flex items-center justify-center rotate-3">
-              <Home className="h-8 w-8 text-white" />
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 bg-brand-600 rounded-2xl shadow-lg shadow-brand-200 flex items-center justify-center rotate-3">
+              <Home className="h-6 w-6 text-white" />
             </div>
             <h2 className="text-sm font-bold tracking-normal text-brand-600">
               ContractToCozy
@@ -229,11 +236,10 @@ export default function AddressOnboardingPage() {
 
           {/* Hero Copy */}
           <div className="space-y-4">
-            <h1 className="text-4xl sm:text-5xl font-black text-slate-900 leading-tight">
-              Start with what your <br />
-              <span className="text-brand-600">home needs now.</span>
+            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 leading-tight">
+              Start with what your <span className="text-brand-600">home needs now.</span>
             </h1>
-            <p className="text-lg text-slate-500 max-w-md mx-auto leading-relaxed">
+            <p className="text-base text-slate-500 max-w-lg mx-auto leading-relaxed">
               Tell us what brought you here, then add your address. We’ll give you a useful first action without requiring an inspection report.
             </p>
           </div>
@@ -362,80 +368,69 @@ export default function AddressOnboardingPage() {
               </p>
             )}
 
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-teal-500 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
-              <div className="relative bg-white rounded-2xl shadow-xl border border-slate-100 p-2 flex flex-col sm:flex-row gap-2">
-              <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <Input 
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street Address" 
-                  className="h-14 pl-12 border-none text-lg placeholder:text-slate-300 focus-visible:ring-0 focus-visible:ring-offset-0"
-                  autoFocus
-                />
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-lg space-y-4">
+              <div>
+                <h2 className="font-bold text-slate-900">Home address</h2>
+                <p className="mt-1 text-sm text-slate-500">Choose a suggestion or enter the complete address yourself.</p>
               </div>
-              <div className="w-full sm:w-32 border-t sm:border-t-0 sm:border-l border-slate-100">
-                <Input 
-                  value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value)}
-                  placeholder="Zip" 
-                  className="h-14 border-none text-lg placeholder:text-slate-300 text-center focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
+              <AddressAutocomplete
+                value={{ address, city, state, zipCode }}
+                onChange={(next) => {
+                  setAddress(next.address);
+                  setCity(next.city);
+                  setState(next.state);
+                  setZipCode(next.zipCode);
+                  setAddressResolved(false);
+                }}
+                onResolved={() => setAddressResolved(true)}
+                inputClassName="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                label="Street address"
+                placeholder="94 Ashford Drive"
+                autoFocus
+              />
+              <div className="grid gap-3 sm:grid-cols-[1fr_96px_128px]">
+                <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                  City <span className="text-red-500">*</span>
+                  <Input value={city} onChange={(event) => { setCity(event.target.value); setAddressResolved(false); }} autoComplete="address-level2" />
+                </label>
+                <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                  State <span className="text-red-500">*</span>
+                  <Input
+                    value={state}
+                    onChange={(event) => { setState(event.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2)); setAddressResolved(false); }}
+                    autoComplete="address-level1"
+                    aria-label="Two-letter state"
+                  />
+                </label>
+                <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                  ZIP code <span className="text-red-500">*</span>
+                  <Input
+                    value={zipCode}
+                    onChange={(event) => { setZipCode(event.target.value.replace(/\D/g, '').slice(0, 5)); setAddressResolved(false); }}
+                    autoComplete="postal-code"
+                    inputMode="numeric"
+                  />
+                </label>
               </div>
               <Button 
                 type="submit"
-                disabled={loading || !address.trim() || !situation || (situation !== 'buying' && !triggerType)}
-                className="h-14 px-8 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-lg group transition-all"
+                disabled={loading || !address.trim() || !city.trim() || !state.trim() || !zipCode.trim() || !situation || (situation !== 'buying' && !triggerType)}
+                className="h-11 w-full rounded-xl bg-slate-900 px-6 text-white font-bold group transition-all"
               >
                 {loading ? (
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
                   <>
-                    {manualMode ? 'Continue without public records' : 'Find My Home'}
+                    Review this address
                     <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </Button>
-              </div>
             </div>
-
-            {manualMode && (
-              <div className="rounded-2xl border border-brand-200 bg-brand-50 p-5">
-                <div className="mb-4 flex items-start gap-3">
-                  <PenLine className="mt-0.5 h-5 w-5 shrink-0 text-brand-700" />
-                  <div>
-                    <p className="font-bold text-brand-950">Add the address manually</p>
-                    <p className="text-sm text-brand-800">Public records are optional. We will preserve missing property facts as unknown.</p>
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_96px_120px]">
-                  <Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="City" />
-                  <Input
-                    value={state}
-                    onChange={(event) => setState(event.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2))}
-                    placeholder="State"
-                    aria-label="Two-letter state"
-                  />
-                  <Input
-                    value={zipCode}
-                    onChange={(event) => setZipCode(event.target.value.replace(/\D/g, '').slice(0, 5))}
-                    placeholder="ZIP"
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="mt-4 text-sm font-semibold text-brand-800 underline underline-offset-4"
-                  onClick={() => setManualMode(false)}
-                >
-                  Try public-record lookup again
-                </button>
-              </div>
-            )}
           </form>
 
           {/* Trust Signals */}
-          <div className="flex flex-wrap items-center justify-center gap-6 pt-6 opacity-60">
+          <div className="flex flex-wrap items-center justify-center gap-6 pt-2 opacity-60">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
               <Zap className="h-4 w-4 text-brand-600 fill-brand-600" />
               Evidence-bounded guidance

@@ -6,7 +6,7 @@ const MAX_AGE_SECONDS = 15 * 60;
 
 type OnboardingLookupPayload = {
   address: string;
-  addressSource?: 'LOOKUP' | 'MANUAL';
+  addressSource?: 'LOOKUP' | 'AUTOCOMPLETE' | 'MANUAL';
   city?: string;
   state?: string;
   zipCode?: string;
@@ -27,6 +27,14 @@ const TRIGGER_TYPES = new Set([
   'RENEWAL_DEADLINE', 'PROJECT', 'ANTICIPATED_COST', 'INSPECTION_FINDING', 'PUNCH_LIST_WARRANTY',
   'CLAIM_DAMAGE', 'SELLING_TRANSFER', 'OTHER', 'NONE_EXPLORING',
 ]);
+const BUYER_PURCHASE_STAGES = new Set(['EXPLORING', 'OFFER_MADE', 'UNDER_CONTRACT']);
+const BUYER_INSPECTION_STATUSES = new Set(['NOT_SCHEDULED', 'SCHEDULED', 'REPORT_AVAILABLE', 'REVIEWED']);
+
+function normalizeOptionalIsoDate(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return null;
+  return new Date(value).toISOString();
+}
 
 function sanitizeActivationContext(value: unknown): ActivationEntryContextInput | undefined {
   if (!value || typeof value !== 'object') return undefined;
@@ -42,6 +50,20 @@ function sanitizeActivationContext(value: unknown): ActivationEntryContextInput 
   }
   const label = normalizeString(trigger.label);
   if (!label) return undefined;
+  const buyerSource = source.buyer && typeof source.buyer === 'object'
+    ? source.buyer as Record<string, unknown>
+    : null;
+  const buyer = buyerSource &&
+    BUYER_PURCHASE_STAGES.has(String(buyerSource.purchaseStage)) &&
+    BUYER_INSPECTION_STATUSES.has(String(buyerSource.inspectionStatus))
+    ? {
+        purchaseStage: buyerSource.purchaseStage as NonNullable<ActivationEntryContextInput['buyer']>['purchaseStage'],
+        inspectionStatus: buyerSource.inspectionStatus as NonNullable<ActivationEntryContextInput['buyer']>['inspectionStatus'],
+        targetCloseDate: normalizeOptionalIsoDate(buyerSource.targetCloseDate),
+        moveInDate: normalizeOptionalIsoDate(buyerSource.moveInDate),
+        immediateConcern: normalizeString(buyerSource.immediateConcern) ?? null,
+      }
+    : undefined;
   return {
     entryPath: source.entryPath as ActivationEntryContextInput['entryPath'],
     ownershipState: source.ownershipState as ActivationEntryContextInput['ownershipState'],
@@ -54,8 +76,13 @@ function sanitizeActivationContext(value: unknown): ActivationEntryContextInput 
       entityId: null,
       source: 'USER_SELECTED',
     },
-    consentContext: 'User submitted this trigger to receive property-specific onboarding guidance.',
-    sourceMetadata: { onboardingSurface: 'address' },
+    buyer,
+    consentContext: normalizeString(source.consentContext)
+      ?? 'User submitted this trigger to receive property-specific onboarding guidance.',
+    sourceMetadata: {
+      onboardingSurface: 'address',
+      experienceMode: buyer ? 'BUYER_CLOSING' : undefined,
+    },
   };
 }
 
@@ -72,11 +99,15 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
   const source = input as Record<string, unknown>;
   const address = normalizeString(source.address);
   if (!address) return null;
-  const addressSource = source.addressSource === 'MANUAL' ? 'MANUAL' : 'LOOKUP';
+  const addressSource = source.addressSource === 'MANUAL'
+    ? 'MANUAL'
+    : source.addressSource === 'AUTOCOMPLETE'
+      ? 'AUTOCOMPLETE'
+      : 'LOOKUP';
   const city = normalizeString(source.city);
   const state = normalizeString(source.state)?.toUpperCase();
   const zipCode = normalizeString(source.zipCode);
-  if (addressSource === 'MANUAL' && (!city || !state?.match(/^[A-Z]{2}$/) || !zipCode?.match(/^\d{5}$/))) {
+  if (!city || !state?.match(/^[A-Z]{2}$/) || !zipCode?.match(/^\d{5}$/)) {
     return null;
   }
 

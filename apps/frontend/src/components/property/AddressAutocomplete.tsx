@@ -10,6 +10,7 @@ type Suggestion = { placeId: string; label: string };
 interface AddressAutocompleteProps {
   value: AddressValue;
   onChange: (next: AddressValue) => void;
+  onResolved?: (next: AddressValue) => void;
   inputClassName: string;
   label?: string;
   placeholder?: string;
@@ -25,6 +26,7 @@ function newSessionToken() {
 export function AddressAutocomplete({
   value,
   onChange,
+  onResolved,
   inputClassName,
   label = 'Street Address',
   placeholder = '123 Main St',
@@ -80,7 +82,10 @@ export function AddressAutocomplete({
     requestSequence.current += 1;
     try {
       const response = await api.getAddressDetails(suggestion.placeId, sessionToken.current);
-      if (response.success && response.data) onChange(response.data);
+      if (response.success && response.data) {
+        onChange(response.data);
+        onResolved?.(response.data);
+      }
       sessionToken.current = newSessionToken();
       setSuggestions([]);
     } catch {

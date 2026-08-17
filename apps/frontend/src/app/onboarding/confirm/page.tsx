@@ -8,13 +8,16 @@ import {
   ArrowRight, 
   Sparkles,
   ShieldCheck,
-  Building
+  Building,
+  PencilLine,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
+import { addressOnlyPropertyData, onboardingAddressError } from '@/lib/onboarding/addressIntegrity';
 
 /**
  * ConfirmOnboardingPage handles the final conversion.
@@ -27,6 +30,9 @@ export default function ConfirmOnboardingPage() {
   const [data, setData] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressDraft, setAddressDraft] = useState({ address: '', city: '', state: '', zipCode: '' });
 
   useEffect(() => {
     (async () => {
@@ -41,11 +47,46 @@ export default function ConfirmOnboardingPage() {
         }
         const payload = await res.json();
         setData(payload.data);
+        setAddressDraft({
+          address: payload.data.address ?? '',
+          city: payload.data.city ?? '',
+          state: payload.data.state ?? '',
+          zipCode: payload.data.zipCode ?? '',
+        });
       } catch {
         router.push('/onboarding/address');
       }
     })();
   }, [router]);
+
+  const saveAddressCorrection = async () => {
+    const validationError = onboardingAddressError(addressDraft);
+    if (validationError) {
+      toast({ title: 'Complete the address', description: validationError, variant: 'destructive' });
+      return;
+    }
+    const correctedData = {
+      ...data,
+      ...addressOnlyPropertyData(addressDraft),
+      addressSource: 'MANUAL',
+    };
+    setSavingAddress(true);
+    try {
+      const response = await fetch('/api/onboarding-lookup-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: correctedData }),
+      });
+      if (!response.ok) throw new Error('Unable to save corrected address');
+      setData(correctedData);
+      setEditingAddress(false);
+      toast({ title: 'Address updated', description: 'Public property facts were cleared so they cannot be applied to the wrong home.' });
+    } catch {
+      toast({ title: 'Unable to update address', description: 'Please try again.', variant: 'destructive' });
+    } finally {
+      setSavingAddress(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!data) return;
@@ -165,11 +206,56 @@ export default function ConfirmOnboardingPage() {
             </div>
 
             <div className="bg-slate-50 rounded-2xl p-4 text-left border border-slate-100">
-              <p className="text-xs font-bold text-slate-400 tracking-normal mb-1">Property Address</p>
-              <p className="font-bold text-slate-900">{data.address}</p>
-              <p className="text-sm text-slate-600">{data.city}, {data.state} {data.zipCode}</p>
-              {data.addressSource === 'MANUAL' && (
-                <p className="mt-2 text-xs font-medium text-brand-700">Entered manually · public property facts will remain unknown</p>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-slate-500 tracking-normal">Property Address</p>
+                {!editingAddress && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingAddress(true)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 underline underline-offset-4"
+                  >
+                    <PencilLine className="h-3.5 w-3.5" /> Edit address
+                  </button>
+                )}
+              </div>
+              {editingAddress ? (
+                <div className="space-y-3">
+                  <label className="block space-y-1 text-xs font-semibold text-slate-600">
+                    Street address
+                    <Input value={addressDraft.address} onChange={(event) => setAddressDraft((current) => ({ ...current, address: event.target.value }))} autoComplete="street-address" />
+                  </label>
+                  <label className="block space-y-1 text-xs font-semibold text-slate-600">
+                    City
+                    <Input value={addressDraft.city} onChange={(event) => setAddressDraft((current) => ({ ...current, city: event.target.value }))} autoComplete="address-level2" />
+                  </label>
+                  <div className="grid grid-cols-[96px_1fr] gap-3">
+                    <label className="block space-y-1 text-xs font-semibold text-slate-600">
+                      State
+                      <Input value={addressDraft.state} onChange={(event) => setAddressDraft((current) => ({ ...current, state: event.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2) }))} autoComplete="address-level1" />
+                    </label>
+                    <label className="block space-y-1 text-xs font-semibold text-slate-600">
+                      ZIP code
+                      <Input value={addressDraft.zipCode} onChange={(event) => setAddressDraft((current) => ({ ...current, zipCode: event.target.value.replace(/\D/g, '').slice(0, 5) }))} autoComplete="postal-code" inputMode="numeric" />
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={() => void saveAddressCorrection()} disabled={savingAddress}>
+                      {savingAddress ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save address'}
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => {
+                      setAddressDraft({ address: data.address, city: data.city, state: data.state, zipCode: data.zipCode });
+                      setEditingAddress(false);
+                    }} disabled={savingAddress}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="font-bold text-slate-900">{data.address}</p>
+                  <p className="text-sm text-slate-600">{data.city}, {data.state} {data.zipCode}</p>
+                  {data.addressSource !== 'LOOKUP' && (
+                    <p className="mt-2 text-xs font-medium text-brand-700">Address confirmed · public property facts remain unknown</p>
+                  )}
+                </>
               )}
             </div>
 
@@ -187,7 +273,7 @@ export default function ConfirmOnboardingPage() {
             <Button 
               className="w-full h-14 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-lg transition-all"
               onClick={handleConfirm}
-              disabled={submitting}
+              disabled={submitting || editingAddress}
             >
               {submitting ? (
                 <Loader2 className="h-6 w-6 animate-spin" />
