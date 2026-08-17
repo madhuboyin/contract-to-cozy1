@@ -2614,6 +2614,11 @@ model BuyerPurchaseFinancingPlan {
   purchasePath      BuyerPurchasePath @default(UNKNOWN)
   pathConfirmedAt   DateTime?
   confirmedByUserId String?
+  selectedLoanOfferId             String?
+  selectedLoanEstimateRevisionId  String?
+  intentToProceedAt               DateTime?
+  lenderSelectionRecordedAt       DateTime?
+  lenderSelectionRecordedByUserId String?
 
   checklist   HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   property    Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -2625,6 +2630,9 @@ model BuyerPurchaseFinancingPlan {
 
   @@index([propertyId, purchasePath])
   @@index([confirmedByUserId])
+  @@index([selectedLoanOfferId])
+  @@index([selectedLoanEstimateRevisionId])
+  @@index([lenderSelectionRecordedByUserId])
   @@map("buyer_purchase_financing_plans")
 }
 
@@ -2653,6 +2661,7 @@ model BuyerPurchaseLoanEstimateRevision {
   status         BuyerPurchaseLoanEstimateStatus @default(DRAFT)
   sourceType     BuyerPurchaseLoanEstimateSource @default(MANUAL)
   sourceDocumentId String?
+  extractionMetadataJson Json?
 
   loanAmountCents                     Int?
   loanTermMonths                      Int?

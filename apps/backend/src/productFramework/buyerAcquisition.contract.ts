@@ -175,7 +175,9 @@ export const BUYER_PURCHASE_LOAN_TYPES = ['FIXED', 'ARM', 'OTHER'] as const;
 export const BUYER_PURCHASE_CASH_DIRECTIONS = ['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN'] as const;
 export const BUYER_PURCHASE_RATE_LOCK_STATUSES = ['LOCKED', 'NOT_LOCKED', 'UNKNOWN'] as const;
 const BuyerPurchaseLoanEstimateFieldsSchema = z.strictObject({
+  sourceType: z.enum(['MANUAL', 'DOCUMENT_EXTRACTION']).optional(),
   sourceDocumentId: z.string().uuid().nullable().optional(),
+  extractionMetadata: z.record(z.string(), z.unknown()).nullable().optional(),
   loanAmountCents: z.number().int().positive().nullable().optional(),
   loanTermMonths: z.number().int().min(1).max(600).nullable().optional(),
   loanType: z.enum(BUYER_PURCHASE_LOAN_TYPES).nullable().optional(),
@@ -208,6 +210,11 @@ export const BuyerPurchaseLoanEstimateUpdateSchema = BuyerPurchaseLoanEstimateFi
 export type BuyerPurchaseLoanEstimateCreateInput = z.infer<typeof BuyerPurchaseLoanEstimateCreateSchema>;
 export type BuyerPurchaseLoanEstimateRevisionInput = z.infer<typeof BuyerPurchaseLoanEstimateRevisionCreateSchema>;
 export type BuyerPurchaseLoanEstimateUpdateInput = z.infer<typeof BuyerPurchaseLoanEstimateUpdateSchema>;
+export const BuyerPurchaseLoanSelectionSchema = z.strictObject({
+  revisionId: z.string().uuid(),
+  intentToProceed: z.boolean(),
+});
+export type BuyerPurchaseLoanSelectionInput = z.infer<typeof BuyerPurchaseLoanSelectionSchema>;
 
 export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
   'RADON',

@@ -8,6 +8,7 @@ require('ts-node/register');
 const {
   BuyerPurchaseLoanEstimateCreateSchema,
   BuyerPurchaseLoanEstimateUpdateSchema,
+  BuyerPurchaseLoanSelectionSchema,
 } = require('../../src/productFramework/buyerAcquisition.contract.ts');
 
 const backendRoot = path.resolve(__dirname, '../..');
@@ -55,4 +56,34 @@ test('property-scoped APIs and Buyer Plan expose save, resume, revision, and con
   assert.match(center, /Add revision/);
   assert.match(center, /Confirm/);
   assert.match(center, /do not recommend a lender or determine eligibility/);
+});
+
+test('document extraction remains a review-required proposal with field provenance', () => {
+  const extractedDraft = BuyerPurchaseLoanEstimateCreateSchema.parse({
+    lenderName: 'Community Bank',
+    sourceType: 'DOCUMENT_EXTRACTION',
+    loanAmountCents: 42500000,
+    extractionMetadata: { method: 'PDF_TEXT', warnings: ['Review every field.'] },
+  });
+  assert.equal(extractedDraft.sourceType, 'DOCUMENT_EXTRACTION');
+  assert.match(service, /mapPurchaseLoanEstimateExtraction/);
+  assert.match(service, /fieldConfidence/);
+  assert.match(service, /required: true as const/);
+  assert.match(routes, /purchase-financing\/loan-estimates\/extract/);
+  assert.match(center, /Extraction never confirms or saves values for you/);
+  assert.match(center, /Review required/);
+});
+
+test('buyer lender selection requires a confirmed revision and advances appraisal follow-up without approval claims', () => {
+  assert.equal(BuyerPurchaseLoanSelectionSchema.safeParse({ revisionId: 'not-a-uuid', intentToProceed: true }).success, false);
+  assert.equal(BuyerPurchaseLoanSelectionSchema.safeParse({ revisionId: '123e4567-e89b-12d3-a456-426614174000', intentToProceed: true }).success, true);
+  assert.match(schema, /selectedLoanEstimateRevisionId/);
+  assert.match(service, /status: 'CONFIRMED'/);
+  assert.match(service, /PURCHASE_LOAN_SELECTION_REQUIRES_CONFIRMED_REVISION/);
+  assert.match(service, /actionKey: BUYER_ACTION_KEYS\.APPRAISAL_TRACKING/);
+  assert.match(service, /status: 'IN_PROGRESS'/);
+  assert.match(routes, /purchase-financing\/loan-estimates\/select/);
+  assert.match(center, /Select for planning/);
+  assert.match(center, /Record intent to proceed/);
+  assert.doesNotMatch(center, /recommended lender|approved lender/);
 });

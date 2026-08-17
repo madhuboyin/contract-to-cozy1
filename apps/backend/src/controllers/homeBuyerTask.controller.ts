@@ -20,6 +20,7 @@ import {
   BuyerPurchaseLoanEstimateCreateSchema,
   BuyerPurchaseLoanEstimateRevisionCreateSchema,
   BuyerPurchaseLoanEstimateUpdateSchema,
+  BuyerPurchaseLoanSelectionSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -586,6 +587,44 @@ const handleConfirmPurchaseLoanEstimate = async (req: AuthRequest, res: Response
   } catch (error) { next(error); }
 };
 
+const handleExtractPurchaseLoanEstimate = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
+    const proposal = await BuyerPurchaseLoanEstimateService.extractPrefill(
+      req.user.userId,
+      req.params.propertyId,
+      files,
+    );
+    return res.json({ success: true, data: proposal });
+  } catch (error) { next(error); }
+};
+
+const handleSelectPurchaseLoanOffer = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerPurchaseLoanSelectionSchema.parse(req.body);
+    const workspace = await BuyerPurchaseLoanEstimateService.selectOffer(
+      req.user.userId,
+      req.params.propertyId,
+      input,
+    );
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.DECISION_GUIDED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: {
+        actionType: 'buyer_purchase_lender_selection_recorded',
+        revisionId: input.revisionId,
+        intentToProceed: input.intentToProceed,
+      },
+    });
+    return res.json({ success: true, data: workspace });
+  } catch (error) { next(error); }
+};
+
 const handleUpdateInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -704,6 +743,8 @@ export const homeBuyerTaskController = {
   handleAddPurchaseLoanEstimateRevision,
   handleUpdatePurchaseLoanEstimateDraft,
   handleConfirmPurchaseLoanEstimate,
+  handleExtractPurchaseLoanEstimate,
+  handleSelectPurchaseLoanOffer,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

@@ -1,6 +1,6 @@
-import type {
-  BuyerPurchaseLoanEstimateRevision,
+import {
   Prisma,
+  type BuyerPurchaseLoanEstimateRevision,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
@@ -8,6 +8,7 @@ import {
   type BuyerPurchaseLoanEstimateCreateInput,
   type BuyerPurchaseLoanEstimateRevisionInput,
   type BuyerPurchaseLoanEstimateUpdateInput,
+  type BuyerPurchaseLoanSelectionInput,
   BUYER_ACTION_KEYS,
 } from '../productFramework/buyerAcquisition.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
@@ -15,6 +16,11 @@ import {
   compareRefinanceLoanEstimates,
   type RefinanceLoanEstimateInput,
 } from '../refinanceRadar/refinanceLoanEstimateComparison';
+import {
+  combineLoanEstimateExtractions,
+  extractLoanEstimateFromUpload,
+  type RefinanceLoanEstimateExtraction,
+} from '../refinanceRadar/refinanceLoanEstimateExtraction.service';
 
 type LoanEstimateFields = BuyerPurchaseLoanEstimateRevisionInput;
 
@@ -30,10 +36,65 @@ const dateValue = (value: string | null | undefined) => value ? new Date(`${valu
 function revisionData(
   input: LoanEstimateFields,
 ): Omit<Prisma.BuyerPurchaseLoanEstimateRevisionUncheckedCreateInput, 'offerId' | 'revisionNumber'> {
+  const { extractionMetadata, ...fields } = input;
   return {
-    ...input,
+    ...fields,
+    extractionMetadataJson: extractionMetadata === null
+      ? Prisma.JsonNull
+      : extractionMetadata as Prisma.InputJsonValue | undefined,
     issuedDate: dateValue(input.issuedDate),
     rateLockExpirationDate: dateValue(input.rateLockExpirationDate),
+  };
+}
+
+const cents = (value: number | null) => value == null ? null : Math.round(value * 100);
+const bps = (value: number | null) => value == null ? null : Math.round(value * 100);
+
+export function mapPurchaseLoanEstimateExtraction(extraction: RefinanceLoanEstimateExtraction) {
+  const fieldConfidence = Object.fromEntries(
+    Object.entries(extraction.fields).map(([key, field]) => [key, {
+      confidence: field.confidence,
+      sourceLabel: field.sourceLabel,
+    }]),
+  );
+  return {
+    proposedInput: {
+      sourceType: 'DOCUMENT_EXTRACTION' as const,
+      loanAmountCents: cents(extraction.fields.loanAmountUsd.value),
+      loanTermMonths: extraction.fields.loanTermYears.value == null ? null : Math.round(extraction.fields.loanTermYears.value * 12),
+      loanType: extraction.fields.loanType.value,
+      noteRateBps: bps(extraction.fields.noteRatePct.value),
+      aprBps: bps(extraction.fields.aprPct.value),
+      monthlyPrincipalAndInterestCents: cents(extraction.fields.monthlyPrincipalAndInterestUsd.value),
+      monthlyMortgageInsuranceCents: cents(extraction.fields.monthlyMortgageInsuranceUsd.value),
+      estimatedTotalMonthlyPaymentCents: cents(extraction.fields.estimatedTotalMonthlyPaymentUsd.value),
+      loanCostsCents: cents(extraction.fields.loanCostsUsd.value),
+      lenderCreditsCents: cents(extraction.fields.lenderCreditsUsd.value),
+      discountPointsBps: bps(extraction.fields.discountPointsPct.value),
+      discountPointsCents: cents(extraction.fields.discountPointsUsd.value),
+      cashToCloseCents: cents(extraction.fields.cashToCloseUsd.value),
+      cashToCloseDirection: extraction.fields.cashToCloseDirection.value ?? 'UNKNOWN' as const,
+      fiveYearTotalPaidCents: cents(extraction.fields.fiveYearTotalPaidUsd.value),
+      fiveYearPrincipalPaidCents: cents(extraction.fields.fiveYearPrincipalPaidUsd.value),
+      issuedDate: extraction.fields.issuedDate.value,
+      extractionMetadata: {
+        method: extraction.extractionMethod,
+        fieldConfidence,
+        documentConfidencePct: extraction.documentConfidencePct,
+        pageIntegrity: extraction.pageIntegrity,
+        warnings: extraction.warnings,
+      },
+    },
+    review: {
+      required: true as const,
+      extractedFieldCount: extraction.extractedFieldCount,
+      requiredFieldCount: extraction.requiredFieldCount,
+      requiredFieldsFound: extraction.requiredFieldsFound,
+      extractionMethod: extraction.extractionMethod,
+      pageIntegrity: extraction.pageIntegrity,
+      warnings: extraction.warnings,
+      fieldConfidence,
+    },
   };
 }
 
@@ -109,6 +170,13 @@ export class BuyerPurchaseLoanEstimateService {
     });
     return {
       purchasePath: plan?.purchasePath ?? 'UNKNOWN',
+      selection: plan?.selectedLoanOfferId && plan.selectedLoanEstimateRevisionId ? {
+        offerId: plan.selectedLoanOfferId,
+        revisionId: plan.selectedLoanEstimateRevisionId,
+        intentToProceedAt: plan.intentToProceedAt?.toISOString() ?? null,
+        recordedAt: plan.lenderSelectionRecordedAt?.toISOString() ?? null,
+        recordedByUserId: plan.lenderSelectionRecordedByUserId,
+      } : null,
       offers: (plan?.loanOffers ?? []).map((offer) => ({
         id: offer.id,
         lenderName: offer.lenderName,
@@ -206,6 +274,20 @@ export class BuyerPurchaseLoanEstimateService {
         where: { id: revision.id },
         data: { status: 'CONFIRMED', confirmedAt: now },
       });
+      await tx.buyerPurchaseFinancingPlan.updateMany({
+        where: {
+          id: revision.offer.planId,
+          selectedLoanOfferId: revision.offerId,
+          selectedLoanEstimateRevisionId: { not: revision.id },
+        },
+        data: {
+          selectedLoanOfferId: null,
+          selectedLoanEstimateRevisionId: null,
+          intentToProceedAt: null,
+          lenderSelectionRecordedAt: null,
+          lenderSelectionRecordedByUserId: null,
+        },
+      });
       const confirmed = await tx.buyerPurchaseLoanEstimateRevision.findMany({
         where: { offer: { planId: revision.offer.planId }, status: 'CONFIRMED' },
         select: { id: true },
@@ -221,6 +303,87 @@ export class BuyerPurchaseLoanEstimateService {
         } : {
           status: 'IN_PROGRESS',
           statusReason: 'One confirmed Loan Estimate is saved; add another current offer to compare.',
+        },
+      });
+    });
+    return this.list(userId, propertyId);
+  }
+
+  static async extractPrefill(
+    userId: string,
+    propertyId: string,
+    files: Array<{ buffer: Buffer; mimetype: string }>,
+  ) {
+    await assertAccess(userId, propertyId);
+    const plan = await prisma.buyerPurchaseFinancingPlan.findUnique({ where: { propertyId } });
+    if (!plan || plan.purchasePath !== 'FINANCED') {
+      throw new APIError('Confirm purchase financing before extracting a Loan Estimate.', 409, 'PURCHASE_FINANCING_REQUIRED');
+    }
+    if (!files.length) throw new APIError('At least one Loan Estimate file is required.', 400, 'LOAN_ESTIMATE_FILE_REQUIRED');
+    if (files.some((file) => file.mimetype === 'application/pdf') && files.length > 1) {
+      throw new APIError('Upload one PDF or up to three image pages, not a mixed batch.', 400, 'LOAN_ESTIMATE_MIXED_UPLOAD');
+    }
+    const extractions = [];
+    for (const file of files) extractions.push(await extractLoanEstimateFromUpload(file.buffer, file.mimetype));
+    return mapPurchaseLoanEstimateExtraction(combineLoanEstimateExtractions(extractions));
+  }
+
+  static async selectOffer(
+    userId: string,
+    propertyId: string,
+    input: BuyerPurchaseLoanSelectionInput,
+  ) {
+    await assertAccess(userId, propertyId);
+    const revision = await prisma.buyerPurchaseLoanEstimateRevision.findFirst({
+      where: {
+        id: input.revisionId,
+        status: 'CONFIRMED',
+        offer: { propertyId, plan: { purchasePath: 'FINANCED' } },
+      },
+      include: { offer: { include: { plan: true } } },
+    });
+    if (!revision) {
+      throw new APIError('Select a current confirmed Loan Estimate.', 409, 'PURCHASE_LOAN_SELECTION_REQUIRES_CONFIRMED_REVISION');
+    }
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      await tx.buyerPurchaseFinancingPlan.update({
+        where: { id: revision.offer.planId },
+        data: {
+          selectedLoanOfferId: revision.offerId,
+          selectedLoanEstimateRevisionId: revision.id,
+          intentToProceedAt: input.intentToProceed ? now : null,
+          lenderSelectionRecordedAt: now,
+          lenderSelectionRecordedByUserId: userId,
+        },
+      });
+      await tx.homeBuyerTask.updateMany({
+        where: { checklistId: revision.offer.plan.checklistId, actionKey: BUYER_ACTION_KEYS.LOAN_ESTIMATES },
+        data: {
+          status: 'COMPLETED',
+          completedAt: now,
+          completedByUserId: userId,
+          completionMethod: 'USER_ATTESTATION',
+          statusReason: input.intentToProceed
+            ? 'Buyer recorded an intent to proceed with a confirmed lender offer.'
+            : 'Buyer recorded a selected offer for planning without recording intent to proceed.',
+          completionEvidenceJson: {
+            selectedOfferId: revision.offerId,
+            selectedRevisionId: revision.id,
+            intentToProceed: input.intentToProceed,
+            recordedAt: now.toISOString(),
+          },
+        },
+      });
+      await tx.homeBuyerTask.updateMany({
+        where: {
+          checklistId: revision.offer.plan.checklistId,
+          actionKey: BUYER_ACTION_KEYS.APPRAISAL_TRACKING,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'IN_PROGRESS',
+          statusReason: 'A lender offer is selected; record lender appraisal timing and conditions next.',
         },
       });
     });

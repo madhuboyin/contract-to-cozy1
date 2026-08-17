@@ -3693,6 +3693,29 @@ class APIClient {
     );
   }
 
+  async extractBuyerPurchaseLoanEstimate(
+    propertyId: string,
+    files: File[],
+  ): Promise<APIResponse<import('@/types').BuyerPurchaseLoanEstimateExtractionProposal>> {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    return this.postFormData<import('@/types').BuyerPurchaseLoanEstimateExtractionProposal>(
+      `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/loan-estimates/extract`,
+      formData,
+    );
+  }
+
+  async selectBuyerPurchaseLoanOffer(
+    propertyId: string,
+    revisionId: string,
+    intentToProceed: boolean,
+  ): Promise<APIResponse<BuyerPurchaseLoanEstimateWorkspace>> {
+    return this.request<BuyerPurchaseLoanEstimateWorkspace>(
+      `/api/home-buyer-tasks/properties/${propertyId}/purchase-financing/loan-estimates/select`,
+      { method: 'POST', body: JSON.stringify({ revisionId, intentToProceed }) },
+    );
+  }
+
   async updateBuyerLifecycle(propertyId: string, input: {
     targetCloseDate?: string | null;
     ownershipStartedAt?: string | null;

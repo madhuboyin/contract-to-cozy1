@@ -1,9 +1,21 @@
 // apps/backend/src/routes/homeBuyerTask.routes.ts
 import { Router } from 'express';
+import multer from 'multer';
 import { homeBuyerTaskController } from '../controllers/homeBuyerTask.controller';
 import { authenticate } from '../middleware/auth.middleware';
+import { ocrRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
+import { validateDocumentArrayUpload } from '../utils/documentValidator.util';
 
 const router = Router();
+const purchaseLoanEstimateUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    const accepted = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (accepted.includes(file.mimetype)) callback(null, true);
+    else callback(new Error('Only PDF, JPEG, PNG, or WEBP Loan Estimates are accepted.'));
+  },
+});
 
 // All routes require authentication
 router.use(authenticate);
@@ -45,6 +57,15 @@ router.post('/properties/:propertyId/purchase-financing/loan-estimates', homeBuy
 router.post('/properties/:propertyId/purchase-financing/loan-estimates/offers/:offerId/revisions', homeBuyerTaskController.handleAddPurchaseLoanEstimateRevision);
 router.patch('/properties/:propertyId/purchase-financing/loan-estimates/revisions/:revisionId', homeBuyerTaskController.handleUpdatePurchaseLoanEstimateDraft);
 router.post('/properties/:propertyId/purchase-financing/loan-estimates/revisions/:revisionId/confirm', homeBuyerTaskController.handleConfirmPurchaseLoanEstimate);
+router.post(
+  '/properties/:propertyId/purchase-financing/loan-estimates/extract',
+  uploadRateLimiter,
+  ocrRateLimiter,
+  purchaseLoanEstimateUpload.array('files', 3),
+  validateDocumentArrayUpload,
+  homeBuyerTaskController.handleExtractPurchaseLoanEstimate,
+);
+router.post('/properties/:propertyId/purchase-financing/loan-estimates/select', homeBuyerTaskController.handleSelectPurchaseLoanOffer);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

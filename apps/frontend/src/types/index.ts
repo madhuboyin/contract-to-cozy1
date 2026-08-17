@@ -3479,7 +3479,9 @@ export interface BuyerPurchaseFinancingPlan {
 }
 
 export interface BuyerPurchaseLoanEstimateInput {
+  sourceType?: 'MANUAL' | 'DOCUMENT_EXTRACTION';
   sourceDocumentId?: string | null;
+  extractionMetadata?: Record<string, unknown> | null;
   loanAmountCents?: number | null;
   loanTermMonths?: number | null;
   loanType?: 'FIXED' | 'ARM' | 'OTHER' | null;
@@ -3515,6 +3517,13 @@ export interface BuyerPurchaseLoanEstimateRevision extends BuyerPurchaseLoanEsti
 
 export interface BuyerPurchaseLoanEstimateWorkspace {
   purchasePath: 'UNKNOWN' | BuyerPurchasePath;
+  selection: {
+    offerId: string;
+    revisionId: string;
+    intentToProceedAt: string | null;
+    recordedAt: string | null;
+    recordedByUserId: string | null;
+  } | null;
   offers: Array<{
     id: string;
     lenderName: string;
@@ -3534,6 +3543,26 @@ export interface BuyerPurchaseLoanEstimateWorkspace {
     summary: string[];
     disclaimer: string;
   } | null;
+}
+
+export interface BuyerPurchaseLoanEstimateExtractionProposal {
+  proposedInput: BuyerPurchaseLoanEstimateInput;
+  review: {
+    required: true;
+    extractedFieldCount: number;
+    requiredFieldCount: number;
+    requiredFieldsFound: number;
+    extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR' | 'PDF_OCR';
+    pageIntegrity: {
+      status: 'COMPLETE' | 'PARTIAL' | 'DUPLICATE' | 'OUT_OF_ORDER' | 'UNVERIFIED';
+      detectedPages: number[];
+      missingPages: number[];
+      duplicatePages: number[];
+      outOfOrder: boolean;
+    };
+    warnings: string[];
+    fieldConfidence: Record<string, { confidence: 'HIGH' | 'MEDIUM' | 'MISSING'; sourceLabel: string }>;
+  };
 }
 
 export interface BuyerInspectionModuleRecommendation {

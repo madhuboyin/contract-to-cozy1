@@ -308,6 +308,13 @@ export class BuyerAcquisitionService {
           purchasePath: input.purchasePath,
           pathConfirmedAt: now,
           confirmedByUserId: userId,
+          ...(financed ? {} : {
+            selectedLoanOfferId: null,
+            selectedLoanEstimateRevisionId: null,
+            intentToProceedAt: null,
+            lenderSelectionRecordedAt: null,
+            lenderSelectionRecordedByUserId: null,
+          }),
         },
       });
 

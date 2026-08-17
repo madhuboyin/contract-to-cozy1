@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.20
+**Version:** 1.21
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2870,7 +2870,17 @@ reviewed standardized comparison calculation to surface APR, payment, net-cost,
 cash-to-close, five-year-cost, rate-lock, and comparability cautions without a
 single-winner recommendation. The stable Loan Estimate checklist task moves to
 in progress after one confirmed offer and completes with evidence after two.
-Document extraction prefill and buyer lender selection remain next.
+The third increment reuses the reviewed Loan Estimate PDF/image parser only as
+an optional, transient prefill: every proposed field retains confidence and
+source-label metadata, page-set warnings remain visible, and no value is saved
+or confirmed until the buyer reviews and submits the draft. It also records the
+buyer-selected confirmed revision and separately records intent to proceed as a
+buyer decision, never as a platform recommendation or approval. Selection
+writes the exact offer/revision into the stable Loan Estimate task and advances
+the lender-appraisal task to in progress; confirming a newer revision for the
+same selected offer clears the stale selection for renewed buyer review.
+Detailed appraisal/underwriting condition tracking, Title/Escrow Center, and
+buyer Coverage mode remain next.
 
 **Goal:** Give financed and cash buyers the correct conditional preparation
 without rebranding homeowner financial tools.
