@@ -76,6 +76,9 @@ export const BUYER_ACTION_KEYS = {
   LOAN_APPLICATION: 'buyer:financing:loan-application',
   LOAN_ESTIMATES: 'buyer:financing:loan-estimates',
   APPRAISAL_TRACKING: 'buyer:financing:appraisal',
+  TITLE_CONTACT_CONFIRM: 'buyer:phase:title-closing-contact-confirm',
+  TITLE_DOCUMENT_REVIEW: 'buyer:title:document-review',
+  TITLE_ISSUE_RESOLUTION: 'buyer:title:issue-resolution',
   INSPECTION_PLAN_CONFIRM: 'buyer:phase:inspection-plan-confirm',
   INSPECTION_IMPORT: 'buyer:inspection:import',
   INSPECTION_VERIFY: 'buyer:inspection:verify',
@@ -261,6 +264,65 @@ export const BuyerLenderConditionUpdateSchema = z.strictObject({
 export type BuyerPurchaseLenderReadinessUpdateInput = z.infer<typeof BuyerPurchaseLenderReadinessUpdateSchema>;
 export type BuyerLenderConditionCreateInput = z.infer<typeof BuyerLenderConditionCreateSchema>;
 export type BuyerLenderConditionUpdateInput = z.infer<typeof BuyerLenderConditionUpdateSchema>;
+
+export const BUYER_TITLE_REVIEW_STATUSES = ['NOT_RECEIVED', 'RECEIVED', 'QUESTIONS_OPEN', 'REVIEWED_WITH_PROFESSIONAL'] as const;
+export const BUYER_TITLE_REQUIREMENT_STATUSES = ['UNKNOWN', 'REQUIRED', 'NOT_REQUIRED'] as const;
+export const BUYER_CLOSING_APPOINTMENT_FORMATS = ['UNKNOWN', 'IN_PERSON', 'REMOTE', 'HYBRID'] as const;
+export const BUYER_TITLE_ISSUE_CATEGORIES = [
+  'TITLE_EXCEPTION', 'LIEN_JUDGMENT', 'EASEMENT', 'VESTING_DEED_NAME', 'LEGAL_DESCRIPTION',
+  'SURVEY', 'ASSOCIATION', 'MUNICIPAL_PERMIT_COO', 'SEPTIC_WELL', 'OTHER',
+] as const;
+export const BUYER_TITLE_ISSUE_STATUSES = ['OPEN', 'PROFESSIONAL_REVIEW', 'RESOLVED', 'WAIVED'] as const;
+
+const BuyerTitleEscrowContactSchema = z.strictObject({
+  role: z.enum(['ATTORNEY', 'TITLE_ESCROW']),
+  name: z.string().trim().min(1).max(200),
+  company: z.string().trim().max(200).nullable().optional(),
+  email: z.string().trim().email().max(320).nullable().optional(),
+  phone: z.string().trim().max(40).nullable().optional(),
+  notes: z.string().trim().max(2_000).nullable().optional(),
+});
+
+export const BuyerTitleEscrowWorkspaceUpdateSchema = z.strictObject({
+  contact: BuyerTitleEscrowContactSchema.nullable().optional(),
+  earnestMoneyConfirmed: z.boolean().optional(),
+  titleCommitmentDocumentId: z.string().uuid().nullable().optional(),
+  titleReviewStatus: z.enum(BUYER_TITLE_REVIEW_STATUSES).optional(),
+  surveyRequirement: z.enum(BUYER_TITLE_REQUIREMENT_STATUSES).optional(),
+  surveyDocumentId: z.string().uuid().nullable().optional(),
+  associationRequirement: z.enum(BUYER_TITLE_REQUIREMENT_STATUSES).optional(),
+  associationDocumentId: z.string().uuid().nullable().optional(),
+  associationReviewed: z.boolean().optional(),
+  localRequirementsNotes: z.string().trim().max(4_000).nullable().optional(),
+  closingAppointmentAt: z.string().datetime().nullable().optional(),
+  closingAppointmentFormat: z.enum(BUYER_CLOSING_APPOINTMENT_FORMATS).optional(),
+  closingLocation: z.string().trim().max(500).nullable().optional(),
+  possessionAt: z.string().datetime().nullable().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one title or escrow field must be provided.',
+});
+
+export const BuyerTitleEscrowIssueCreateSchema = z.strictObject({
+  category: z.enum(BUYER_TITLE_ISSUE_CATEGORIES),
+  title: z.string().trim().min(1).max(200),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  blocking: z.boolean().default(false),
+});
+
+export const BuyerTitleEscrowIssueUpdateSchema = z.strictObject({
+  status: z.enum(BUYER_TITLE_ISSUE_STATUSES).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  notes: z.string().trim().max(4_000).nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  blocking: z.boolean().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one title-issue field must be provided.',
+});
+
+export type BuyerTitleEscrowWorkspaceUpdateInput = z.infer<typeof BuyerTitleEscrowWorkspaceUpdateSchema>;
+export type BuyerTitleEscrowIssueCreateInput = z.infer<typeof BuyerTitleEscrowIssueCreateSchema>;
+export type BuyerTitleEscrowIssueUpdateInput = z.infer<typeof BuyerTitleEscrowIssueUpdateSchema>;
 
 export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
   'RADON',

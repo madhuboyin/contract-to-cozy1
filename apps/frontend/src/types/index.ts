@@ -3625,6 +3625,96 @@ export interface BuyerPurchaseLenderReadinessWorkspace {
   }) | null;
 }
 
+export type BuyerTitleReviewStatus = 'NOT_RECEIVED' | 'RECEIVED' | 'QUESTIONS_OPEN' | 'REVIEWED_WITH_PROFESSIONAL';
+export type BuyerTitleRequirementStatus = 'UNKNOWN' | 'REQUIRED' | 'NOT_REQUIRED';
+export type BuyerClosingAppointmentFormat = 'UNKNOWN' | 'IN_PERSON' | 'REMOTE' | 'HYBRID';
+export type BuyerTitleIssueCategory = 'TITLE_EXCEPTION' | 'LIEN_JUDGMENT' | 'EASEMENT' | 'VESTING_DEED_NAME' | 'LEGAL_DESCRIPTION' | 'SURVEY' | 'ASSOCIATION' | 'MUNICIPAL_PERMIT_COO' | 'SEPTIC_WELL' | 'OTHER';
+export type BuyerTitleIssueStatus = 'OPEN' | 'PROFESSIONAL_REVIEW' | 'RESOLVED' | 'WAIVED';
+
+export interface BuyerTitleEscrowWorkspaceInput {
+  contact?: null | {
+    role: 'ATTORNEY' | 'TITLE_ESCROW';
+    name: string;
+    company?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    notes?: string | null;
+  };
+  earnestMoneyConfirmed?: boolean;
+  titleCommitmentDocumentId?: string | null;
+  titleReviewStatus?: BuyerTitleReviewStatus;
+  surveyRequirement?: BuyerTitleRequirementStatus;
+  surveyDocumentId?: string | null;
+  associationRequirement?: BuyerTitleRequirementStatus;
+  associationDocumentId?: string | null;
+  associationReviewed?: boolean;
+  localRequirementsNotes?: string | null;
+  closingAppointmentAt?: string | null;
+  closingAppointmentFormat?: BuyerClosingAppointmentFormat;
+  closingLocation?: string | null;
+  possessionAt?: string | null;
+}
+
+export interface BuyerTitleEscrowIssueInput {
+  category: BuyerTitleIssueCategory;
+  title: string;
+  notes?: string | null;
+  dueAt?: string | null;
+  blocking: boolean;
+}
+
+export interface BuyerTitleEscrowWorkspaceResponse {
+  workspace: null | {
+    id: string;
+    checklistId: string;
+    propertyId: string;
+    responsibleContactId: string | null;
+    earnestMoneyConfirmedAt: string | null;
+    titleCommitmentDocumentId: string | null;
+    titleReviewStatus: BuyerTitleReviewStatus;
+    surveyRequirement: BuyerTitleRequirementStatus;
+    surveyDocumentId: string | null;
+    associationRequirement: BuyerTitleRequirementStatus;
+    associationDocumentId: string | null;
+    associationReviewedAt: string | null;
+    localRequirementsNotes: string | null;
+    closingAppointmentAt: string | null;
+    closingAppointmentFormat: BuyerClosingAppointmentFormat;
+    closingLocation: string | null;
+    possessionAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    issues: Array<{
+      id: string;
+      category: BuyerTitleIssueCategory;
+      status: BuyerTitleIssueStatus;
+      title: string;
+      notes: string | null;
+      dueAt: string | null;
+      blocking: boolean;
+      resolvedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  };
+  contact: null | {
+    id: string;
+    role: 'ATTORNEY' | 'TITLE_ESCROW';
+    name: string;
+    company: string | null;
+    email: string | null;
+    phone: string | null;
+    notes: string | null;
+  };
+  documents: Array<{
+    id: string;
+    name: string;
+    type: string;
+    verificationStatus: string;
+    createdAt: string;
+  }>;
+}
+
 export interface BuyerInspectionModuleRecommendation {
   moduleKey: string;
   title: string;

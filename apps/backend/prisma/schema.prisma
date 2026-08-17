@@ -510,6 +510,46 @@ enum BuyerLenderConditionStatus {
   WAIVED
 }
 
+enum BuyerTitleReviewStatus {
+  NOT_RECEIVED
+  RECEIVED
+  QUESTIONS_OPEN
+  REVIEWED_WITH_PROFESSIONAL
+}
+
+enum BuyerTitleRequirementStatus {
+  UNKNOWN
+  REQUIRED
+  NOT_REQUIRED
+}
+
+enum BuyerClosingAppointmentFormat {
+  UNKNOWN
+  IN_PERSON
+  REMOTE
+  HYBRID
+}
+
+enum BuyerTitleIssueCategory {
+  TITLE_EXCEPTION
+  LIEN_JUDGMENT
+  EASEMENT
+  VESTING_DEED_NAME
+  LEGAL_DESCRIPTION
+  SURVEY
+  ASSOCIATION
+  MUNICIPAL_PERMIT_COO
+  SEPTIC_WELL
+  OTHER
+}
+
+enum BuyerTitleIssueStatus {
+  OPEN
+  PROFESSIONAL_REVIEW
+  RESOLVED
+  WAIVED
+}
+
 enum BuyerCompletionMethod {
   USER_ATTESTATION
   DOCUMENT
@@ -2632,6 +2672,7 @@ model HomeBuyerChecklist {
   contacts   BuyerJourneyContact[]
   inspectionPlan BuyerInspectionPlan?
   purchaseFinancingPlan BuyerPurchaseFinancingPlan?
+  titleEscrowWorkspace BuyerTitleEscrowWorkspace?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2784,6 +2825,66 @@ model BuyerPurchaseLenderCondition {
   @@index([readinessId, status, dueAt])
   @@index([propertyId, blocking, status])
   @@map("buyer_purchase_lender_conditions")
+}
+
+model BuyerTitleEscrowWorkspace {
+  id          String @id @default(uuid())
+  checklistId String @unique
+  propertyId  String @unique
+
+  responsibleContactId        String?
+  earnestMoneyConfirmedAt     DateTime?
+  titleCommitmentDocumentId   String?
+  titleReviewStatus           BuyerTitleReviewStatus @default(NOT_RECEIVED)
+  surveyRequirement           BuyerTitleRequirementStatus @default(UNKNOWN)
+  surveyDocumentId            String?
+  associationRequirement      BuyerTitleRequirementStatus @default(UNKNOWN)
+  associationDocumentId       String?
+  associationReviewedAt       DateTime?
+  localRequirementsNotes      String? @db.Text
+  closingAppointmentAt        DateTime?
+  closingAppointmentFormat    BuyerClosingAppointmentFormat @default(UNKNOWN)
+  closingLocation             String?
+  possessionAt                DateTime?
+  lastUpdatedByUserId         String?
+
+  checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  issues    BuyerTitleEscrowIssue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, titleReviewStatus])
+  @@index([responsibleContactId])
+  @@index([titleCommitmentDocumentId])
+  @@index([surveyDocumentId])
+  @@index([associationDocumentId])
+  @@map("buyer_title_escrow_workspaces")
+}
+
+model BuyerTitleEscrowIssue {
+  id          String @id @default(uuid())
+  workspaceId String
+  propertyId  String
+
+  category BuyerTitleIssueCategory
+  status   BuyerTitleIssueStatus @default(OPEN)
+  title    String
+  notes    String? @db.Text
+  dueAt    DateTime?
+  blocking Boolean @default(false)
+  resolvedAt DateTime?
+  recordedByUserId String?
+  lastUpdatedByUserId String?
+
+  workspace BuyerTitleEscrowWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, status, dueAt])
+  @@index([propertyId, blocking, status])
+  @@map("buyer_title_escrow_issues")
 }
 
 model BuyerInspectionPlan {

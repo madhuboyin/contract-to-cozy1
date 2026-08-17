@@ -3750,6 +3750,40 @@ class APIClient {
     });
   }
 
+  async getBuyerTitleEscrow(
+    propertyId: string,
+  ): Promise<APIResponse<import('@/types').BuyerTitleEscrowWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/title-escrow`, { method: 'GET' });
+  }
+
+  async updateBuyerTitleEscrow(
+    propertyId: string,
+    input: import('@/types').BuyerTitleEscrowWorkspaceInput,
+  ): Promise<APIResponse<import('@/types').BuyerTitleEscrowWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/title-escrow`, {
+      method: 'PUT', body: JSON.stringify(input),
+    });
+  }
+
+  async createBuyerTitleEscrowIssue(
+    propertyId: string,
+    input: import('@/types').BuyerTitleEscrowIssueInput,
+  ): Promise<APIResponse<import('@/types').BuyerTitleEscrowWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/title-escrow/issues`, {
+      method: 'POST', body: JSON.stringify(input),
+    });
+  }
+
+  async updateBuyerTitleEscrowIssue(
+    propertyId: string,
+    issueId: string,
+    input: { status?: import('@/types').BuyerTitleIssueStatus; title?: string; notes?: string | null; dueAt?: string | null; blocking?: boolean },
+  ): Promise<APIResponse<import('@/types').BuyerTitleEscrowWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/title-escrow/issues/${issueId}`, {
+      method: 'PATCH', body: JSON.stringify(input),
+    });
+  }
+
   async updateBuyerLifecycle(propertyId: string, input: {
     targetCloseDate?: string | null;
     ownershipStartedAt?: string | null;

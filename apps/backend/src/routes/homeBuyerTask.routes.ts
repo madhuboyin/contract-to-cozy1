@@ -70,6 +70,10 @@ router.get('/properties/:propertyId/purchase-financing/readiness', homeBuyerTask
 router.put('/properties/:propertyId/purchase-financing/readiness', homeBuyerTaskController.handleUpdatePurchaseLenderReadiness);
 router.post('/properties/:propertyId/purchase-financing/readiness/conditions', homeBuyerTaskController.handleCreateBuyerLenderCondition);
 router.patch('/properties/:propertyId/purchase-financing/readiness/conditions/:conditionId', homeBuyerTaskController.handleUpdateBuyerLenderCondition);
+router.get('/properties/:propertyId/title-escrow', homeBuyerTaskController.handleGetBuyerTitleEscrow);
+router.put('/properties/:propertyId/title-escrow', homeBuyerTaskController.handleUpdateBuyerTitleEscrow);
+router.post('/properties/:propertyId/title-escrow/issues', homeBuyerTaskController.handleCreateBuyerTitleEscrowIssue);
+router.patch('/properties/:propertyId/title-escrow/issues/:issueId', homeBuyerTaskController.handleUpdateBuyerTitleEscrowIssue);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

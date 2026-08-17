@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.22
+**Version:** 1.23
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2892,7 +2892,18 @@ issues or blocking lender conditions block readiness, while completion requires
 a completed/resolved appraisal, every condition dispositioned, and an explicit
 user record that the lender communicated clear-to-close. The product continues
 to state that it does not perform appraisals, approve underwriting, or certify
-clear-to-close status. Title/Escrow Center and buyer Coverage mode remain next.
+clear-to-close status. The fifth increment adds a property-scoped Title, Escrow
+& Closing Document Center for cash and financed buyers. It reuses canonical
+buyer-journey contacts and property documents while recording title-report
+receipt/professional-review state, survey and association applicability,
+earnest-money confirmation, closing/possession logistics, local requirements,
+and user-recorded issues with due dates and blocking impact. Those facts
+idempotently reconcile stable title-contact, document-review, issue-resolution,
+association-records, and closing-document work plus the canonical title/survey
+milestone. Completion means the buyer recorded professional review and
+dispositioned applicable preparation; it never represents platform legal
+review, title clearance, or wire-instruction validation. Buyer Coverage mode
+remains next.
 
 **Goal:** Give financed and cash buyers the correct conditional preparation
 without rebranding homeowner financial tools.
