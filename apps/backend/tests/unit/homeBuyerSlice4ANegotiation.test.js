@@ -109,13 +109,13 @@ test('negotiation completion evidence is idempotently propagated to the canonica
   assert.match(buyerPlan, /buyerOutcomeDocument\.verificationStatus/);
 });
 
-test('closing lifecycle immediately hands transferred findings to the canonical maintenance queue', () => {
+test('closing lifecycle immediately hands transferred findings to canonical operational execution', () => {
   const service = fs.readFileSync(path.resolve(__dirname, '../../src/services/buyerAcquisition.service.ts'), 'utf8');
 
   assert.match(service, /ensureClosingRepairHandoff/);
   assert.match(service, /BUYER_CLOSING_REPAIR_HANDOFF/);
   assert.match(service, /buyer-handoff:\$\{task\.actionKey\}/);
   assert.match(service, /propertyMaintenanceTask\.upsert/);
-  assert.match(service, /buyerMaintenanceTaskId: maintenance\.id/);
+  assert.match(service, /buyerMaintenanceTaskId: maintenanceId/);
   assert.match(service, /\['CLOSED', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'HANDED_OFF'\]/);
 });

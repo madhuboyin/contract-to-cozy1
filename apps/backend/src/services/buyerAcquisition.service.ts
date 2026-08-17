@@ -19,6 +19,9 @@ import {
 } from '../productFramework/buyerAcquisition.contract';
 import { getPropertyContext } from '../modules/propertyContext';
 import { composeBuyerInspectionModules } from './buyerInspectionModuleComposition.service';
+import { inspectionFindingSourceAdapter } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
+import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 
 const DAY_MS = 86_400_000;
 
@@ -79,42 +82,106 @@ export class BuyerAcquisitionService {
       },
     });
     for (const task of tasks) {
-      const actionKey = `buyer-handoff:${task.actionKey}`;
-      const maintenance = await tx.propertyMaintenanceTask.upsert({
-        where: { propertyId_actionKey: { propertyId, actionKey } },
-        create: {
-          propertyId,
-          title: task.title,
-          description: task.description,
-          status: task.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'PENDING',
-          source: 'ACTION_CENTER',
-          actionKey,
-          assetType: 'BUYER_CLOSING_REPAIR_HANDOFF',
-          category: task.phase,
-          priority: maintenancePriority(task.priority),
-          serviceCategory: task.serviceCategory,
-          nextDueDate: task.dueAt ?? now,
-          estimatedCost: task.estimatedCostCents == null ? null : task.estimatedCostCents / 100,
-          assignedToUserId: task.assignedToUserId,
-          completionMetadata: {
-            sourceType: 'BUYER_CLOSING_REPAIR_HANDOFF',
-            buyerTaskId: task.id,
-            sourceEntityType: task.sourceEntityType,
-            sourceEntityId: task.sourceEntityId,
-            guidanceJourneyId: task.guidanceJourneyId,
-          },
-        },
-        update: {},
-      });
+      const maintenanceId = await this.materializeHandoffTask(
+        tx, propertyId, task, now, 'BUYER_CLOSING_REPAIR_HANDOFF', 'BUYER_CLOSING_REPAIR_HANDOFF',
+      );
       await tx.homeBuyerTask.update({
         where: { id: task.id },
-        data: { handedOffMaintenanceTaskId: maintenance.id },
+        data: { handedOffMaintenanceTaskId: maintenanceId },
       });
-      await tx.inspectionFinding.updateMany({
-        where: { id: task.sourceEntityId as string, propertyId },
-        data: { buyerMaintenanceTaskId: maintenance.id },
+      if (maintenanceId) {
+        await tx.inspectionFinding.updateMany({
+          where: { id: task.sourceEntityId as string, propertyId },
+          data: { buyerMaintenanceTaskId: maintenanceId },
+        });
+      }
+    }
+  }
+
+  private static async materializeHandoffTask(
+    tx: Prisma.TransactionClient,
+    propertyId: string,
+    task: {
+      id: string;
+      actionKey: string;
+      title: string;
+      description: string | null;
+      status: import('@prisma/client').HomeBuyerTaskStatus;
+      phase: BuyerPlanPhase;
+      priority: BuyerPlanPriority;
+      serviceCategory: import('@prisma/client').ServiceCategory | null;
+      dueAt: Date | null;
+      estimatedCostCents: number | null;
+      assignedToUserId: string | null;
+      sourceEntityType: string | null;
+      sourceEntityId: string | null;
+      guidanceJourneyId: string | null;
+      canonicalWorkItemId: string | null;
+    },
+    now: Date,
+    assetType: string,
+    sourceType: string,
+  ): Promise<string | null> {
+    if (task.canonicalWorkItemId) {
+      const executions = await tx.operationalWorkExecution.findMany({
+        where: { workItemId: task.canonicalWorkItemId },
+        orderBy: { createdAt: 'asc' },
+      });
+      const existingMaintenance = executions.find((execution) => execution.executionType === 'MAINTENANCE_TASK');
+      if (existingMaintenance) return existingMaintenance.executionEntityId;
+      // A project or guidance journey already carries this finding-resolution
+      // obligation. Do not create a parallel maintenance item at handoff.
+      if (executions.some((execution) => ['PROJECT', 'GUIDANCE'].includes(execution.executionType))) return null;
+    }
+
+    const actionKey = `buyer-handoff:${task.actionKey}`;
+    const maintenance = await tx.propertyMaintenanceTask.upsert({
+      where: { propertyId_actionKey: { propertyId, actionKey } },
+      create: {
+        propertyId,
+        title: task.title,
+        description: task.description,
+        status: task.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'PENDING',
+        source: 'ACTION_CENTER',
+        actionKey,
+        assetType,
+        category: task.phase,
+        priority: maintenancePriority(task.priority),
+        serviceCategory: task.serviceCategory,
+        nextDueDate: task.dueAt ?? now,
+        estimatedCost: task.estimatedCostCents == null ? null : task.estimatedCostCents / 100,
+        assignedToUserId: task.assignedToUserId,
+        completionMetadata: {
+          sourceType,
+          buyerTaskId: task.id,
+          sourceEntityType: task.sourceEntityType,
+          sourceEntityId: task.sourceEntityId,
+          guidanceJourneyId: task.guidanceJourneyId,
+          canonicalWorkItemId: task.canonicalWorkItemId,
+        },
+      },
+      update: {},
+    });
+    if (task.canonicalWorkItemId) {
+      await tx.operationalWorkExecution.upsert({
+        where: {
+          workItemId_executionType_executionEntityId: {
+            workItemId: task.canonicalWorkItemId,
+            executionType: 'MAINTENANCE_TASK',
+            executionEntityId: maintenance.id,
+          },
+        },
+        create: {
+          workItemId: task.canonicalWorkItemId,
+          executionType: 'MAINTENANCE_TASK',
+          executionEntityId: maintenance.id,
+          role: 'PRIMARY',
+          responsibleParty: 'HOUSEHOLD',
+        },
+        update: { role: 'PRIMARY' },
       });
     }
+    return maintenance.id;
   }
 
   static async updateLifecycle(userId: string, propertyId: string, input: {
@@ -522,11 +589,29 @@ export class BuyerAcquisitionService {
     let taskId: string | null = finding.buyerTaskId;
     let journeyId: string | null = finding.buyerGuidanceJourneyId;
     let repairJourneyId: string | null = finding.buyerRepairJourneyId;
+    let canonicalWorkItemId: string | null = null;
     let checklistId: string | null = null;
     const createsTask = input.disposition === 'PRE_CLOSE_NEGOTIATION' || input.disposition === 'POST_CLOSE_ACTION';
     if (createsTask) {
       const plan = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
       checklistId = plan.id;
+
+      // The buyer's actionable disposition reopens a previously dismissed or
+      // accepted-as-is finding, so resolve identity from the post-write state.
+      const proposal = inspectionFindingSourceAdapter.propose({ ...finding, status: 'OPEN' }, propertyId);
+      if (proposal) {
+        let workItem = await resolveAndUpsertWorkItem(proposal);
+        if (workItem.state === 'CANDIDATE') {
+          workItem = await transitionWorkItem({
+            workItemId: workItem.id,
+            to: 'ACCEPTED',
+            actorType: 'USER',
+            actorUserId: userId,
+            idempotencyKey: `buyer-finding-accepted:${workItem.id}`,
+          });
+        }
+        canonicalWorkItemId = workItem.id;
+      }
 
       if (finding.severity === 'SAFETY' || finding.severity === 'MAJOR') {
         const result = await guidanceJourneyService.ingestSignal({
@@ -608,7 +693,7 @@ export class BuyerAcquisitionService {
         const title = `${input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'Negotiate' : 'Address'} ${finding.homeSystem.toLowerCase().replace(/_/g, ' ')} finding`;
         const canonicalTaskData: Pick<Prisma.HomeBuyerTaskUncheckedCreateInput,
           'title' | 'description' | 'phase' | 'priority' | 'sourceType' | 'sourceEntityType' |
-          'sourceEntityId' | 'homeActionKey' | 'guidanceJourneyId'> = {
+          'sourceEntityId' | 'homeActionKey' | 'guidanceJourneyId' | 'canonicalWorkItemId'> = {
           title,
           description: finding.inspectorDescription,
           phase,
@@ -618,6 +703,7 @@ export class BuyerAcquisitionService {
           sourceEntityId: finding.id,
           homeActionKey: `inspection:${finding.id}`,
           guidanceJourneyId: repairJourneyId ?? journeyId,
+          canonicalWorkItemId,
         };
         const task = existing
           ? await tx.homeBuyerTask.update({
@@ -642,6 +728,31 @@ export class BuyerAcquisitionService {
             },
           });
         taskId = task.id;
+
+        if (canonicalWorkItemId) {
+          const guidanceExecutions = new Map<string, 'PRIMARY' | 'SUPPORTING'>();
+          if (journeyId) guidanceExecutions.set(journeyId, 'SUPPORTING');
+          if (repairJourneyId) guidanceExecutions.set(repairJourneyId, 'PRIMARY');
+          for (const [executionEntityId, role] of guidanceExecutions) {
+            await tx.operationalWorkExecution.upsert({
+              where: {
+                workItemId_executionType_executionEntityId: {
+                  workItemId: canonicalWorkItemId,
+                  executionType: 'GUIDANCE',
+                  executionEntityId,
+                },
+              },
+              create: {
+                workItemId: canonicalWorkItemId,
+                executionType: 'GUIDANCE',
+                executionEntityId,
+                role,
+                responsibleParty: 'UNKNOWN',
+              },
+              update: { role },
+            });
+          }
+        }
 
         if (linkedJourneyIds.length) {
           const linkedJourneys = await tx.guidanceJourney.findMany({
@@ -746,41 +857,17 @@ export class BuyerAcquisitionService {
     let taskCount = 0;
     await prisma.$transaction(async (tx) => {
       for (const task of plan.tasks) {
-        const actionKey = `buyer-handoff:${task.actionKey}`;
-        const maintenance = await tx.propertyMaintenanceTask.upsert({
-          where: { propertyId_actionKey: { propertyId, actionKey } },
-          create: {
-            propertyId,
-            title: task.title,
-            description: task.description,
-            status: task.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'PENDING',
-            source: 'ACTION_CENTER',
-            actionKey,
-            assetType: 'BUYER_90_DAY_HANDOFF',
-            category: task.phase,
-            priority: maintenancePriority(task.priority),
-            serviceCategory: task.serviceCategory,
-            nextDueDate: task.dueAt ?? now,
-            estimatedCost: task.estimatedCostCents == null ? null : task.estimatedCostCents / 100,
-            assignedToUserId: task.assignedToUserId,
-            completionMetadata: {
-              sourceType: 'BUYER_90_DAY_PLAN',
-              buyerTaskId: task.id,
-              sourceEntityType: task.sourceEntityType,
-              sourceEntityId: task.sourceEntityId,
-              guidanceJourneyId: task.guidanceJourneyId,
-            },
-          },
-          update: {},
-        });
+        const maintenanceId = await this.materializeHandoffTask(
+          tx, propertyId, task, now, 'BUYER_90_DAY_HANDOFF', 'BUYER_90_DAY_PLAN',
+        );
         await tx.homeBuyerTask.update({
           where: { id: task.id },
-          data: { handedOffMaintenanceTaskId: maintenance.id },
+          data: { handedOffMaintenanceTaskId: maintenanceId },
         });
-        if (task.sourceEntityType === 'INSPECTION_FINDING' && task.sourceEntityId) {
+        if (maintenanceId && task.sourceEntityType === 'INSPECTION_FINDING' && task.sourceEntityId) {
           await tx.inspectionFinding.updateMany({
             where: { id: task.sourceEntityId, propertyId },
-            data: { buyerMaintenanceTaskId: maintenance.id },
+            data: { buyerMaintenanceTaskId: maintenanceId },
           });
         }
         taskCount += 1;

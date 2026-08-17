@@ -326,6 +326,7 @@ export const BuyerPlanOverviewTaskSchema = BuyerClosingHomeTaskSummarySchema.ext
   completedAt: z.string().datetime().nullable(),
   completionMethod: BuyerCompletionMethodSchema.nullable(),
   completionDocumentId: z.string().nullable(),
+  canonicalWorkItemId: z.string().nullable(),
   handedOffMaintenanceTaskId: z.string().nullable(),
   updatedAt: z.string().datetime(),
 });

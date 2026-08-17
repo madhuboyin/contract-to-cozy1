@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.17
+**Version:** 1.18
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2814,8 +2814,15 @@ recorded exposure facts. Existing self-reported flood, hurricane, wildfire, and
 historic-district flags now participate in Property Context with provenance and
 correction paths. Buyer Plan displays only fact-supported recommendations,
 keeps unknown or conflicted modules outside saved scope, and requires an explicit
-deduplicating “Add module to plan” action. Broader obligation deduplication
-remains next.
+deduplicating “Add module to plan” action. The seventh increment establishes
+one durable Home Operations identity for every actionable inspection finding.
+Buyer tasks now retain the canonical `OperationalWorkItem`; primary repair and
+supporting follow-up guidance are registered as executions of that same
+obligation. Closing and day-91 handoff reuse an existing guidance, project, or
+maintenance execution before considering a new maintenance task, and any new
+maintenance execution is linked back to the same work item. This prevents the
+Buyer Plan, Guidance, Home Actions, and recurring Home feed from independently
+materializing the same finding-resolution obligation.
 
 **Goal:** Turn transaction evidence into one trustworthy plan.
 
@@ -2828,6 +2835,8 @@ remains next.
 6. Attach completion evidence to findings, tasks, Home Record, and repair
    journeys.
 7. Deduplicate finding, guidance, Home Action, and buyer-plan obligations.
+   **Implemented:** actionable findings resolve through the stable
+   `FINDING_RESOLUTION` work key and all downstream executions reuse it.
 8. Implement the inspection checklist before/schedule/review/negotiate/
    reinspection flow and context-relevant specialist items. **In progress:**
    scheduling, scope/questions, report/contingency timing, and reinspection proof

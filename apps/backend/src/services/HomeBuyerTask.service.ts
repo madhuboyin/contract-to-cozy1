@@ -135,6 +135,7 @@ function planOverviewTask(task: HomeBuyerTask) {
     completedAt: task.completedAt?.toISOString() ?? null,
     completionMethod: task.completionMethod,
     completionDocumentId: task.completionDocumentId,
+    canonicalWorkItemId: task.canonicalWorkItemId,
     handedOffMaintenanceTaskId: task.handedOffMaintenanceTaskId,
     updatedAt: task.updatedAt.toISOString(),
   };

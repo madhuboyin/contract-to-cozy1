@@ -3092,6 +3092,7 @@ export interface HomeBuyerTask {
   completionVerifiedAt: Date | null;
   completionVerifiedById: string | null;
   completionEvidenceJson: Record<string, unknown> | null;
+  canonicalWorkItemId: string | null;
   handedOffMaintenanceTaskId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -3273,6 +3274,7 @@ export interface BuyerPlanOverviewTask extends BuyerClosingHomeTaskSummary {
   completedAt: string | null;
   completionMethod: BuyerCompletionMethod | null;
   completionDocumentId: string | null;
+  canonicalWorkItemId: string | null;
   handedOffMaintenanceTaskId: string | null;
   updatedAt: string;
 }
