@@ -16,6 +16,7 @@ import {
   BUYER_ACTION_KEYS,
   BUYER_MILESTONE_KEYS,
   type BuyerInspectionPlanInput,
+  type BuyerPurchaseFinancingInput,
 } from '../productFramework/buyerAcquisition.contract';
 import { getPropertyContext } from '../modules/propertyContext';
 import { composeBuyerInspectionModules } from './buyerInspectionModuleComposition.service';
@@ -24,6 +25,30 @@ import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 
 const DAY_MS = 86_400_000;
+
+const PURCHASE_FINANCING_TASKS = [
+  {
+    actionKey: BUYER_ACTION_KEYS.LOAN_APPLICATION,
+    title: 'Track the purchase loan application',
+    description: 'Record application submission and lender-requested documents without treating platform status as lender approval.',
+    taskType: 'ACTION',
+    anchorOffsetDays: -25,
+  },
+  {
+    actionKey: BUYER_ACTION_KEYS.LOAN_ESTIMATES,
+    title: 'Compare current official Loan Estimates',
+    description: 'Compare confirmed offer terms and record the buyer’s selected lender or intent to proceed as a buyer decision.',
+    taskType: 'DOCUMENT',
+    anchorOffsetDays: -20,
+  },
+  {
+    actionKey: BUYER_ACTION_KEYS.APPRAISAL_TRACKING,
+    title: 'Track lender appraisal and conditions',
+    description: 'Record appraisal timing and user-reported conditions without presenting platform valuation as the lender appraisal.',
+    taskType: 'MILESTONE_SUPPORT',
+    anchorOffsetDays: -14,
+  },
+] as const;
 
 function severityPriority(severity: InspectionFindingSeverity): BuyerPlanPriority {
   if (severity === 'SAFETY') return 'NOW';
@@ -251,6 +276,144 @@ export class BuyerAcquisitionService {
     });
 
     return HomeBuyerTaskService.getOrCreateChecklist(userId, updated.propertyId);
+  }
+
+  static async getPurchaseFinancingPlan(userId: string, propertyId: string) {
+    await this.assertAccess(userId, propertyId, 'VIEWER');
+    return prisma.buyerPurchaseFinancingPlan.findUnique({ where: { propertyId } });
+  }
+
+  static async updatePurchaseFinancingPlan(
+    userId: string,
+    propertyId: string,
+    input: BuyerPurchaseFinancingInput,
+  ) {
+    await this.assertAccess(userId, propertyId);
+    const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
+    const financed = input.purchasePath === 'FINANCED';
+    const now = new Date();
+    const anchor = checklist.targetCloseDate ?? checklist.planStartDate;
+
+    await prisma.$transaction(async (tx) => {
+      const savedPlan = await tx.buyerPurchaseFinancingPlan.upsert({
+        where: { propertyId },
+        create: {
+          checklistId: checklist.id,
+          propertyId,
+          purchasePath: input.purchasePath,
+          pathConfirmedAt: now,
+          confirmedByUserId: userId,
+        },
+        update: {
+          purchasePath: input.purchasePath,
+          pathConfirmedAt: now,
+          confirmedByUserId: userId,
+        },
+      });
+
+      const purchasePathTask = await tx.homeBuyerTask.findUnique({
+        where: {
+          checklistId_actionKey: {
+            checklistId: checklist.id,
+            actionKey: BUYER_ACTION_KEYS.PURCHASE_PATH_CONFIRM,
+          },
+        },
+      });
+      const purchasePathTaskData = {
+        status: 'COMPLETED' as const,
+        applicability: 'APPLICABLE' as const,
+        completedAt: now,
+        completedByUserId: userId,
+        completionMethod: 'USER_ATTESTATION' as const,
+        completionEvidenceJson: {
+          purchaseFinancingPlanId: savedPlan.id,
+          purchasePath: input.purchasePath,
+          confirmedAt: now.toISOString(),
+        },
+        statusReason: input.purchasePath === 'CASH'
+          ? 'Cash purchase confirmed; lender and appraisal tasks are not applicable.'
+          : 'Purchase financing confirmed; lender and appraisal tasks are active.',
+        sourceEntityType: 'BUYER_PURCHASE_FINANCING_PLAN',
+        sourceEntityId: savedPlan.id,
+      };
+      if (purchasePathTask) {
+        await tx.homeBuyerTask.update({ where: { id: purchasePathTask.id }, data: purchasePathTaskData });
+      } else {
+        await tx.homeBuyerTask.create({
+          data: {
+            checklistId: checklist.id,
+            actionKey: BUYER_ACTION_KEYS.PURCHASE_PATH_CONFIRM,
+            templateKey: BUYER_ACTION_KEYS.PURCHASE_PATH_CONFIRM,
+            title: 'Confirm cash or purchase-financing path',
+            description: 'Record whether this purchase is cash or financed before lender and appraisal work is composed.',
+            phase: 'OFFER_CONTRACT',
+            priority: 'NOW',
+            taskType: 'DECISION',
+            checklistSection: 'FINANCING_APPRAISAL',
+            evidenceRequirement: 'NONE',
+            required: true,
+            blocking: false,
+            assignedToUserId: userId,
+            sourceType: 'SYSTEM',
+            ...purchasePathTaskData,
+          },
+        });
+      }
+
+      for (const [index, taskDefinition] of PURCHASE_FINANCING_TASKS.entries()) {
+        const existing = await tx.homeBuyerTask.findUnique({
+          where: {
+            checklistId_actionKey: {
+              checklistId: checklist.id,
+              actionKey: taskDefinition.actionKey,
+            },
+          },
+        });
+        const applicabilityData = {
+          applicability: financed ? 'APPLICABLE' as const : 'NOT_APPLICABLE' as const,
+          applicabilityReasonCodes: [financed ? 'PURCHASE_FINANCING_CONFIRMED' : 'CASH_PURCHASE_CONFIRMED'],
+          applicabilityMissingFactKeys: [],
+          applicabilityConflictedFactKeys: [],
+          applicabilityEvaluatedAt: now,
+          status: financed
+            ? existing && !['NOT_NEEDED', 'CANCELLED'].includes(existing.status) ? existing.status : 'PENDING' as const
+            : existing?.status === 'COMPLETED' ? 'COMPLETED' as const : 'NOT_NEEDED' as const,
+          statusReason: financed
+            ? 'Applies because purchase financing is confirmed.'
+            : 'Not applicable because a cash purchase is confirmed.',
+          sourceEntityType: 'BUYER_PURCHASE_FINANCING_PLAN',
+          sourceEntityId: savedPlan.id,
+        };
+        if (existing) {
+          await tx.homeBuyerTask.update({ where: { id: existing.id }, data: applicabilityData });
+        } else {
+          await tx.homeBuyerTask.create({
+            data: {
+              checklistId: checklist.id,
+              actionKey: taskDefinition.actionKey,
+              templateKey: taskDefinition.actionKey,
+              title: taskDefinition.title,
+              description: taskDefinition.description,
+              phase: 'DUE_DILIGENCE',
+              priority: index === 0 ? 'NOW' : 'SOON',
+              taskType: taskDefinition.taskType,
+              checklistSection: 'FINANCING_APPRAISAL',
+              evidenceRequirement: taskDefinition.taskType === 'DOCUMENT' ? 'REQUIRED' : 'NONE',
+              required: true,
+              blocking: true,
+              dueAt: new Date(anchor.getTime() + taskDefinition.anchorOffsetDays * DAY_MS),
+              anchorOffsetDays: taskDefinition.anchorOffsetDays,
+              assignedToUserId: userId,
+              sourceType: 'SYSTEM',
+              sortOrder: 30 + index,
+              ...applicabilityData,
+            },
+          });
+        }
+      }
+    });
+
+    return this.getPurchaseFinancingPlan(userId, propertyId);
   }
 
   static async getInspectionPlan(userId: string, propertyId: string) {

@@ -38,6 +38,8 @@ router.get('/properties/:propertyId/import-readiness', homeBuyerTaskController.h
 router.get('/properties/:propertyId/evidence-review', homeBuyerTaskController.handleGetEvidenceReview);
 router.get('/properties/:propertyId/inspection-plan', homeBuyerTaskController.handleGetInspectionPlan);
 router.put('/properties/:propertyId/inspection-plan', homeBuyerTaskController.handleUpdateInspectionPlan);
+router.get('/properties/:propertyId/purchase-financing', homeBuyerTaskController.handleGetPurchaseFinancingPlan);
+router.put('/properties/:propertyId/purchase-financing', homeBuyerTaskController.handleUpdatePurchaseFinancingPlan);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

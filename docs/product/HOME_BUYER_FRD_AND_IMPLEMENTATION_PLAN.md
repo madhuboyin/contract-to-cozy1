@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.18
+**Version:** 1.19
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2852,6 +2852,17 @@ Functional check:
   carried into repair/ownership without duplicate tasks or stale phase data.
 
 ### Slice 4B — Purchase financing, appraisal, title, escrow, and insurance
+
+**Implementation status:** In progress. The first increment introduces a
+property-scoped `BuyerPurchaseFinancingPlan`, deliberately separate from the
+established-owner `PropertyFinancingProfile` and refinance workflows. Buyer
+Plan now requires an explicit cash-or-financed decision, records who confirmed
+it and when, completes the stable purchase-path checklist obligation, and
+idempotently activates or suppresses stable loan-application, official Loan
+Estimate, and lender-appraisal tasks. Cash buyers no longer see lender-only work
+in active progress. The decision surface states that ContractToCozy does not
+approve financing or certify clear-to-close status. Manual purchase Loan
+Estimate revisions and comparison remain the next increment.
 
 **Goal:** Give financed and cash buyers the correct conditional preparation
 without rebranding homeowner financial tools.

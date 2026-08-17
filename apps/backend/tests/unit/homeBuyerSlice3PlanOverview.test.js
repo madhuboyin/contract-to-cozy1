@@ -19,7 +19,7 @@ function task() {
     evidenceRequirement: 'OPTIONAL', applicability: 'APPLICABLE', blocking: false, required: true,
     statusReason: null, notes: null, assignedContactId: null, sourceType: 'SYSTEM', estimatedCostCents: null,
     bookingId: null, sortOrder: 1, completedAt: null, completionMethod: null, completionDocumentId: null,
-    handedOffMaintenanceTaskId: null, updatedAt: '2026-08-17T12:00:00.000Z',
+    canonicalWorkItemId: null, handedOffMaintenanceTaskId: null, updatedAt: '2026-08-17T12:00:00.000Z',
   };
 }
 

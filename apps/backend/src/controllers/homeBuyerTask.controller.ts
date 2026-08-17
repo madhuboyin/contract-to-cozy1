@@ -15,6 +15,7 @@ import {
   BuyerFindingDispositionInputSchema,
   BuyerInspectionPlanInputSchema,
   BuyerLifecycleUpdateSchema,
+  BuyerPurchaseFinancingInputSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -495,6 +496,35 @@ const handleGetInspectionPlan = async (req: AuthRequest, res: Response, next: Ne
   } catch (error) { next(error); }
 };
 
+const handleGetPurchaseFinancingPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const plan = await BuyerAcquisitionService.getPurchaseFinancingPlan(req.user.userId, req.params.propertyId);
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
+const handleUpdatePurchaseFinancingPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerPurchaseFinancingInputSchema.parse(req.body);
+    const plan = await BuyerAcquisitionService.updatePurchaseFinancingPlan(
+      req.user.userId,
+      req.params.propertyId,
+      input,
+    );
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.DECISION_GUIDED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_purchase_path_confirmed', purchasePath: input.purchasePath },
+    });
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
 const handleUpdateInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -606,6 +636,8 @@ export const homeBuyerTaskController = {
   handleGetEvidenceReview,
   handleGetInspectionPlan,
   handleUpdateInspectionPlan,
+  handleGetPurchaseFinancingPlan,
+  handleUpdatePurchaseFinancingPlan,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

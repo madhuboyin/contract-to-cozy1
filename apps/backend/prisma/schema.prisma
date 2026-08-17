@@ -442,6 +442,12 @@ enum BuyerTaskApplicability {
   NOT_APPLICABLE
 }
 
+enum BuyerPurchasePath {
+  UNKNOWN
+  CASH
+  FINANCED
+}
+
 enum BuyerCompletionMethod {
   USER_ATTESTATION
   DOCUMENT
@@ -2203,6 +2209,7 @@ model User {
   homeBuyerTasksCompleted        HomeBuyerTask[]           @relation("HomeBuyerTaskCompletedBy")
   homeBuyerTasksVerified         HomeBuyerTask[]           @relation("HomeBuyerTaskCompletionVerifier")
   buyerMilestonesResponsible     BuyerJourneyMilestone[]   @relation("BuyerMilestoneResponsibleUser")
+  buyerPurchasePathsConfirmed    BuyerPurchaseFinancingPlan[] @relation("BuyerPurchasePathConfirmer")
 
   // Home Operations — durable operational work identity (Slice 1)
   operationalWorkItemsOwned   OperationalWorkItem[]        @relation("OperationalWorkItemOwner")
@@ -2562,11 +2569,33 @@ model HomeBuyerChecklist {
   milestones BuyerJourneyMilestone[]
   contacts   BuyerJourneyContact[]
   inspectionPlan BuyerInspectionPlan?
+  purchaseFinancingPlan BuyerPurchaseFinancingPlan?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("home_buyer_checklists")
+}
+
+model BuyerPurchaseFinancingPlan {
+  id          String @id @default(uuid())
+  checklistId String @unique
+  propertyId  String @unique
+
+  purchasePath      BuyerPurchasePath @default(UNKNOWN)
+  pathConfirmedAt   DateTime?
+  confirmedByUserId String?
+
+  checklist   HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  property    Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  confirmedBy User?              @relation("BuyerPurchasePathConfirmer", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, purchasePath])
+  @@index([confirmedByUserId])
+  @@map("buyer_purchase_financing_plans")
 }
 
 model BuyerInspectionPlan {
@@ -3202,6 +3231,7 @@ model Property {
   maintenanceTasks           PropertyMaintenanceTask[]
   homeBuyerChecklist         HomeBuyerChecklist?
   buyerInspectionPlan        BuyerInspectionPlan?
+  buyerPurchaseFinancingPlan BuyerPurchaseFinancingPlan?
   newHomePilotAssessment     NewHomePilotAssessment?
   newHomeSetupPlan           NewHomeSetupPlan?
   newHomeSystemRegistrations NewHomeSystemRegistration[]

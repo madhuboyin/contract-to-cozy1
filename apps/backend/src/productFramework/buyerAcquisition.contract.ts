@@ -72,6 +72,10 @@ export const BUYER_CONTACT_ROLES = ['BUYER_AGENT', 'LENDER', 'ATTORNEY', 'TITLE_
 
 export const BUYER_CHECKLIST_TEMPLATE_VERSION = 'buyer-closing-v1';
 export const BUYER_ACTION_KEYS = {
+  PURCHASE_PATH_CONFIRM: 'buyer:phase:purchase-path-confirm',
+  LOAN_APPLICATION: 'buyer:financing:loan-application',
+  LOAN_ESTIMATES: 'buyer:financing:loan-estimates',
+  APPRAISAL_TRACKING: 'buyer:financing:appraisal',
   INSPECTION_PLAN_CONFIRM: 'buyer:phase:inspection-plan-confirm',
   INSPECTION_IMPORT: 'buyer:inspection:import',
   INSPECTION_VERIFY: 'buyer:inspection:verify',
@@ -160,6 +164,12 @@ export const BuyerLifecycleUpdateSchema = z.strictObject({
 }).refine((value) => Object.values(value).some((field) => field !== undefined), {
   message: 'At least one lifecycle anchor must be provided.',
 });
+
+export const BUYER_PURCHASE_PATHS = ['CASH', 'FINANCED'] as const;
+export const BuyerPurchaseFinancingInputSchema = z.strictObject({
+  purchasePath: z.enum(BUYER_PURCHASE_PATHS),
+});
+export type BuyerPurchaseFinancingInput = z.infer<typeof BuyerPurchaseFinancingInputSchema>;
 
 export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
   'RADON',

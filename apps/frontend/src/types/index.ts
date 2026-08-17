@@ -3465,6 +3465,19 @@ export interface BuyerInspectionPlanResponse {
   };
 }
 
+export type BuyerPurchasePath = 'CASH' | 'FINANCED';
+
+export interface BuyerPurchaseFinancingPlan {
+  id: string;
+  checklistId: string;
+  propertyId: string;
+  purchasePath: 'UNKNOWN' | BuyerPurchasePath;
+  pathConfirmedAt: string | null;
+  confirmedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BuyerInspectionModuleRecommendation {
   moduleKey: string;
   title: string;

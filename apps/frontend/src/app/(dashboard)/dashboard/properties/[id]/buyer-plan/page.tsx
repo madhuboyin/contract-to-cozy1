@@ -19,6 +19,7 @@ import type {
   BuyerInspectionSpecialistScope,
   BuyerPlanPhase,
   BuyerPlanOverviewTask,
+  BuyerPurchasePath,
   HomeBuyerTaskStatus,
 } from '@/types';
 import { appendBuyerPlanReturnContext } from '@/lib/navigation/buyerReturnContext';
@@ -92,6 +93,7 @@ export default function BuyerPlanPage() {
       queryClient.invalidateQueries({ queryKey: ['buyer-import-readiness', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-evidence-review', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-inspection-plan', propertyId] }),
+      queryClient.invalidateQueries({ queryKey: ['buyer-purchase-financing', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-acceptance', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-checklist-composition', propertyId] }),
     ]);
@@ -129,6 +131,15 @@ export default function BuyerPlanPage() {
     queryFn: async () => {
       const response = await api.getBuyerInspectionPlan(propertyId);
       if (!response.success) throw new Error(response.message || 'Unable to load the inspection plan.');
+      return response.data;
+    },
+    enabled: Boolean(propertyId),
+  });
+  const purchaseFinancingQuery = useQuery({
+    queryKey: ['buyer-purchase-financing', propertyId],
+    queryFn: async () => {
+      const response = await api.getBuyerPurchaseFinancingPlan(propertyId);
+      if (!response.success) throw new Error(response.message || 'Unable to load the purchase path.');
       return response.data;
     },
     enabled: Boolean(propertyId),
@@ -194,6 +205,24 @@ export default function BuyerPlanPage() {
       variant: 'destructive',
     }),
   });
+  const purchaseFinancingMutation = useMutation({
+    mutationFn: (purchasePath: BuyerPurchasePath) =>
+      api.updateBuyerPurchaseFinancingPlan(propertyId, purchasePath),
+    onSuccess: (_, purchasePath) => {
+      void refresh();
+      toast({
+        title: 'Purchase path confirmed',
+        description: purchasePath === 'CASH'
+          ? 'Lender and appraisal work is now excluded from active closing progress.'
+          : 'Purchase loan, Loan Estimate, and appraisal work is now active.',
+      });
+    },
+    onError: (error) => toast({
+      title: 'Unable to confirm purchase path',
+      description: error instanceof Error ? error.message : 'Try again.',
+      variant: 'destructive',
+    }),
+  });
   const negotiationMutation = useMutation({
     mutationFn: ({ findingIds }: { findingIds: string[] }) => startBuyerNegotiationCase(propertyId, {
       findingIds,
@@ -247,10 +276,14 @@ export default function BuyerPlanPage() {
   if (overviewQuery.isError || !overviewQuery.data) return <DashboardShell><Card><CardContent className="py-8 text-sm text-destructive">{overviewQuery.error instanceof Error ? overviewQuery.error.message : 'Unable to load the buyer plan.'}</CardContent></Card></DashboardShell>;
 
   const overview = overviewQuery.data;
-  const plan = { ...overview.plan, tasks: overview.tasks };
+  const plan = {
+    ...overview.plan,
+    tasks: overview.tasks.filter((task) => task.applicability !== 'NOT_APPLICABLE'),
+  };
   const readiness = readinessQuery.data;
   const evidence = evidenceQuery.data;
   const inspectionPlan = inspectionPlanQuery.data?.plan;
+  const purchaseFinancingPlan = purchaseFinancingQuery.data;
   const inspectionModules = inspectionPlanQuery.data?.recommendations.modules ?? [];
   const applicableInspectionModules = inspectionModules.filter((module) => module.status === 'APPLICABLE');
   const unresolvedInspectionModules = inspectionModules.filter((module) => module.status === 'UNKNOWN');
@@ -315,6 +348,36 @@ export default function BuyerPlanPage() {
               <label className="space-y-1 text-sm"><span>Ownership started</span><Input name="ownershipStartedAt" type="date" defaultValue={dateInputValue(plan.ownershipStartedAt)} disabled={readOnly} /></label>
               <div className="flex items-end"><Button type="submit" disabled={readOnly || lifecycleMutation.isPending}>Recalculate plan</Button></div>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border-emerald-200 bg-emerald-50/30">
+          <CardHeader><CardTitle className="text-lg">Purchase financing path</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm font-medium">Is this purchase cash or financed?</p>
+              <p className="mt-1 text-sm text-muted-foreground">This decision controls checklist applicability only. ContractToCozy does not approve financing or certify clear-to-close status.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(['CASH', 'FINANCED'] as BuyerPurchasePath[]).map((purchasePath) => (
+                <Button
+                  key={purchasePath}
+                  type="button"
+                  variant={purchaseFinancingPlan?.purchasePath === purchasePath ? 'default' : 'outline'}
+                  disabled={readOnly || purchaseFinancingMutation.isPending}
+                  onClick={() => purchaseFinancingMutation.mutate(purchasePath)}
+                >
+                  {purchasePath === 'CASH' ? 'Cash purchase' : 'Purchase financing'}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {purchaseFinancingPlan?.purchasePath === 'CASH'
+                ? 'Lender, Loan Estimate, and appraisal tasks are excluded from active progress.'
+                : purchaseFinancingPlan?.purchasePath === 'FINANCED'
+                  ? 'Loan application, official Loan Estimate, and lender appraisal tasks are active.'
+                  : 'Confirm a path to keep lender-only work from appearing for a cash buyer.'}
+            </p>
           </CardContent>
         </Card>
 
