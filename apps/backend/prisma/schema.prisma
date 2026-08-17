@@ -2561,11 +2561,44 @@ model HomeBuyerChecklist {
   tasks      HomeBuyerTask[]
   milestones BuyerJourneyMilestone[]
   contacts   BuyerJourneyContact[]
+  inspectionPlan BuyerInspectionPlan?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("home_buyer_checklists")
+}
+
+model BuyerInspectionPlan {
+  id          String @id @default(uuid())
+  checklistId String @unique
+  propertyId  String @unique
+
+  scheduledAt            DateTime?
+  appointmentCompletedAt DateTime?
+  accessNotes             String?  @db.Text
+  attendees               String[] @default([])
+  reportDueAt             DateTime?
+  contingencyDueAt        DateTime?
+  scopeNotes              String?  @db.Text
+  specialistScopes        String[] @default([])
+  propertyQuestions       String[] @default([])
+
+  reinspectionRequired        Boolean @default(false)
+  reinspectionScheduledAt     DateTime?
+  reinspectionCompletedAt     DateTime?
+  reinspectionProofDocumentId String?
+  reinspectionNotes           String? @db.Text
+
+  checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  property  Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reinspectionProofDocument Document? @relation("BuyerInspectionReinspectionProof", fields: [reinspectionProofDocumentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, scheduledAt])
+  @@map("buyer_inspection_plans")
 }
 
 model HomeBuyerTask {
@@ -3165,6 +3198,7 @@ model Property {
   checklistItems             ChecklistItem[]
   maintenanceTasks           PropertyMaintenanceTask[]
   homeBuyerChecklist         HomeBuyerChecklist?
+  buyerInspectionPlan        BuyerInspectionPlan?
   newHomePilotAssessment     NewHomePilotAssessment?
   newHomeSetupPlan           NewHomeSetupPlan?
   newHomeSystemRegistrations NewHomeSystemRegistration[]
@@ -4078,6 +4112,7 @@ model Document {
   negotiationShieldDocuments NegotiationShieldDocument[]
   buyerNegotiationOutcomeLinks NegotiationShieldBuyerFinding[] @relation("BuyerNegotiationOutcomeDocument")
   buyerFindingOutcomeLinks     InspectionFinding[]             @relation("BuyerFindingOutcomeDocument")
+  buyerInspectionProofLinks    BuyerInspectionPlan[]            @relation("BuyerInspectionReinspectionProof")
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]

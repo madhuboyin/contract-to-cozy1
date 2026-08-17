@@ -72,8 +72,10 @@ export const BUYER_CONTACT_ROLES = ['BUYER_AGENT', 'LENDER', 'ATTORNEY', 'TITLE_
 
 export const BUYER_CHECKLIST_TEMPLATE_VERSION = 'buyer-closing-v1';
 export const BUYER_ACTION_KEYS = {
+  INSPECTION_PLAN_CONFIRM: 'buyer:phase:inspection-plan-confirm',
   INSPECTION_IMPORT: 'buyer:inspection:import',
   INSPECTION_VERIFY: 'buyer:inspection:verify',
+  INSPECTION_REINSPECTION: 'buyer:inspection:reinspection',
   NEGOTIATION_SEPARATE: 'buyer:negotiation:separate',
   COVERAGE_BIND: 'buyer:coverage:bind',
   CLOSING_DOCUMENTS: 'buyer:closing:documents',
@@ -158,6 +160,43 @@ export const BuyerLifecycleUpdateSchema = z.strictObject({
 }).refine((value) => Object.values(value).some((field) => field !== undefined), {
   message: 'At least one lifecycle anchor must be provided.',
 });
+
+export const BUYER_INSPECTION_SPECIALIST_SCOPES = [
+  'RADON',
+  'SEWER_SEPTIC',
+  'WELL_WATER',
+  'PEST',
+  'CHIMNEY',
+  'ROOF',
+  'STRUCTURAL',
+  'ELECTRICAL',
+  'HVAC',
+  'POOL_SPA',
+  'OIL_TANK',
+  'MOLD',
+  'ENVIRONMENTAL',
+  'OTHER',
+] as const;
+
+export const BuyerInspectionPlanInputSchema = z.strictObject({
+  scheduledAt: z.string().datetime().nullable().optional(),
+  appointmentCompletedAt: z.string().datetime().nullable().optional(),
+  accessNotes: z.string().trim().max(4_000).nullable().optional(),
+  attendees: z.array(z.string().trim().min(1).max(160)).max(30).optional(),
+  reportDueAt: z.string().datetime().nullable().optional(),
+  contingencyDueAt: z.string().datetime().nullable().optional(),
+  scopeNotes: z.string().trim().max(4_000).nullable().optional(),
+  specialistScopes: z.array(z.enum(BUYER_INSPECTION_SPECIALIST_SCOPES)).max(20).optional(),
+  propertyQuestions: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+  reinspectionRequired: z.boolean().optional(),
+  reinspectionScheduledAt: z.string().datetime().nullable().optional(),
+  reinspectionCompletedAt: z.string().datetime().nullable().optional(),
+  reinspectionProofDocumentId: z.string().uuid().nullable().optional(),
+  reinspectionNotes: z.string().trim().max(4_000).nullable().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one inspection-plan field must be provided.',
+});
+export type BuyerInspectionPlanInput = z.infer<typeof BuyerInspectionPlanInputSchema>;
 
 export const BuyerMilestoneInputSchema = z.strictObject({
   milestoneKey: z.string().trim().min(1).max(200).regex(/^buyer:milestone:[a-z0-9][a-z0-9:-]*$/),

@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import type {
   BuyerFindingDisposition,
+  BuyerInspectionPlanInput,
+  BuyerInspectionSpecialistScope,
   BuyerPlanPhase,
   BuyerPlanOverviewTask,
   HomeBuyerTaskStatus,
@@ -55,6 +57,22 @@ function isoFromDateInput(value: string) {
   return value ? new Date(`${value}T12:00:00.000Z`).toISOString() : null;
 }
 
+function datetimeInputValue(value: string | null | undefined) {
+  if (!value) return '';
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function isoFromDatetimeInput(value: FormDataEntryValue | null) {
+  const text = String(value ?? '');
+  return text ? new Date(text).toISOString() : null;
+}
+
+function listFromInput(value: FormDataEntryValue | null) {
+  return String(value ?? '').split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+}
+
 export default function BuyerPlanPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -72,6 +90,7 @@ export default function BuyerPlanPage() {
       queryClient.invalidateQueries({ queryKey: ['buyer-plan-overview', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-import-readiness', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-evidence-review', propertyId] }),
+      queryClient.invalidateQueries({ queryKey: ['buyer-inspection-plan', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-acceptance', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-checklist-composition', propertyId] }),
     ]);
@@ -100,6 +119,15 @@ export default function BuyerPlanPage() {
     queryFn: async () => {
       const response = await api.getBuyerEvidenceReview(propertyId);
       if (!response.success) throw new Error(response.message);
+      return response.data;
+    },
+    enabled: Boolean(propertyId),
+  });
+  const inspectionPlanQuery = useQuery({
+    queryKey: ['buyer-inspection-plan', propertyId],
+    queryFn: async () => {
+      const response = await api.getBuyerInspectionPlan(propertyId);
+      if (!response.success) throw new Error(response.message || 'Unable to load the inspection plan.');
       return response.data;
     },
     enabled: Boolean(propertyId),
@@ -152,6 +180,18 @@ export default function BuyerPlanPage() {
     mutationFn: ({ documentId, status }: { documentId: string; status: 'VERIFIED' | 'REJECTED' }) =>
       api.verifyBuyerDocument(propertyId, documentId, status),
     onSuccess: () => void refresh(),
+  });
+  const inspectionPlanMutation = useMutation({
+    mutationFn: (input: BuyerInspectionPlanInput) => api.updateBuyerInspectionPlan(propertyId, input),
+    onSuccess: () => {
+      void refresh();
+      toast({ title: 'Inspection plan updated', description: 'Appointment, milestones, and reinspection work are synchronized with the Closing Plan.' });
+    },
+    onError: (error) => toast({
+      title: 'Unable to update inspection plan',
+      description: error instanceof Error ? error.message : 'Review the inspection dates and try again.',
+      variant: 'destructive',
+    }),
   });
   const negotiationMutation = useMutation({
     mutationFn: ({ findingIds }: { findingIds: string[] }) => startBuyerNegotiationCase(propertyId, {
@@ -209,6 +249,7 @@ export default function BuyerPlanPage() {
   const plan = { ...overview.plan, tasks: overview.tasks };
   const readiness = readinessQuery.data;
   const evidence = evidenceQuery.data;
+  const inspectionPlan = inspectionPlanQuery.data?.plan;
   const acceptance = acceptanceQuery.data;
   const composition = compositionQuery.data;
   const members = overview.workload;
@@ -263,6 +304,56 @@ export default function BuyerPlanPage() {
               <label className="space-y-1 text-sm"><span>Target closing date</span><Input name="targetCloseDate" type="date" defaultValue={dateInputValue(plan.targetCloseDate)} disabled={readOnly} /></label>
               <label className="space-y-1 text-sm"><span>Ownership started</span><Input name="ownershipStartedAt" type="date" defaultValue={dateInputValue(plan.ownershipStartedAt)} disabled={readOnly} /></label>
               <div className="flex items-end"><Button type="submit" disabled={readOnly || lifecycleMutation.isPending}>Recalculate plan</Button></div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5" />Inspection scheduling and reinspection</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">Keep access, attendees, scope, report timing, contingency timing, and any repair verification in one property record.</p>
+            {inspectionPlanQuery.data?.latestReport && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><span className="font-medium">Latest pre-purchase report:</span> {new Date(inspectionPlanQuery.data.latestReport.inspectionDate).toLocaleDateString()} · {inspectionPlanQuery.data.latestReport.status.replace(/_/g, ' ').toLowerCase()} · {inspectionPlanQuery.data.latestReport.openFindings} open finding(s)</div>}
+            <form key={inspectionPlan?.updatedAt ?? 'new-inspection-plan'} className="grid gap-4 md:grid-cols-2" onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const appointmentCompleted = form.has('appointmentCompleted');
+              const reinspectionCompleted = form.has('reinspectionCompleted');
+              inspectionPlanMutation.mutate({
+                scheduledAt: isoFromDatetimeInput(form.get('scheduledAt')),
+                appointmentCompletedAt: appointmentCompleted ? (inspectionPlan?.appointmentCompletedAt ?? new Date().toISOString()) : null,
+                accessNotes: String(form.get('accessNotes') ?? '').trim() || null,
+                attendees: listFromInput(form.get('attendees')),
+                reportDueAt: isoFromDatetimeInput(form.get('reportDueAt')),
+                contingencyDueAt: isoFromDatetimeInput(form.get('contingencyDueAt')),
+                scopeNotes: String(form.get('scopeNotes') ?? '').trim() || null,
+                specialistScopes: listFromInput(form.get('specialistScopes')).map((item) => item.toUpperCase().replace(/[ -]/g, '_')) as BuyerInspectionSpecialistScope[],
+                propertyQuestions: listFromInput(form.get('propertyQuestions')),
+                reinspectionRequired: form.has('reinspectionRequired'),
+                reinspectionScheduledAt: isoFromDatetimeInput(form.get('reinspectionScheduledAt')),
+                reinspectionCompletedAt: reinspectionCompleted ? (inspectionPlan?.reinspectionCompletedAt ?? new Date().toISOString()) : null,
+                reinspectionProofDocumentId: String(form.get('reinspectionProofDocumentId') ?? '') || null,
+                reinspectionNotes: String(form.get('reinspectionNotes') ?? '').trim() || null,
+              });
+            }}>
+              <label className="space-y-1 text-sm"><span>Inspection appointment</span><Input name="scheduledAt" type="datetime-local" defaultValue={datetimeInputValue(inspectionPlan?.scheduledAt)} disabled={readOnly} /></label>
+              <label className="space-y-1 text-sm"><span>Report due</span><Input name="reportDueAt" type="datetime-local" defaultValue={datetimeInputValue(inspectionPlan?.reportDueAt)} disabled={readOnly} /></label>
+              <label className="space-y-1 text-sm"><span>Inspection contingency deadline</span><Input name="contingencyDueAt" type="datetime-local" defaultValue={datetimeInputValue(inspectionPlan?.contingencyDueAt)} disabled={readOnly} /></label>
+              <label className="flex items-center gap-2 self-end pb-2 text-sm"><input name="appointmentCompleted" type="checkbox" defaultChecked={Boolean(inspectionPlan?.appointmentCompletedAt)} disabled={readOnly} />Inspection appointment completed</label>
+              <label className="space-y-1 text-sm"><span>Access instructions</span><textarea name="accessNotes" defaultValue={inspectionPlan?.accessNotes ?? ''} disabled={readOnly} className="min-h-24 w-full rounded-md border bg-background px-3 py-2" placeholder="Lockbox, seller access, utilities, pets…" /></label>
+              <label className="space-y-1 text-sm"><span>Attendees</span><textarea name="attendees" defaultValue={inspectionPlan?.attendees.join('\n') ?? ''} disabled={readOnly} className="min-h-24 w-full rounded-md border bg-background px-3 py-2" placeholder="One person per line" /></label>
+              <label className="space-y-1 text-sm"><span>Scope notes</span><textarea name="scopeNotes" defaultValue={inspectionPlan?.scopeNotes ?? ''} disabled={readOnly} className="min-h-24 w-full rounded-md border bg-background px-3 py-2" placeholder="General inspection scope and exclusions" /></label>
+              <label className="space-y-1 text-sm"><span>Specialist scopes</span><textarea name="specialistScopes" defaultValue={inspectionPlan?.specialistScopes.join('\n') ?? ''} disabled={readOnly} className="min-h-24 w-full rounded-md border bg-background px-3 py-2" placeholder="RADON, SEWER_SEPTIC, ROOF, STRUCTURAL…" /><span className="block text-xs text-muted-foreground">Use comma-separated or one per line.</span></label>
+              <label className="space-y-1 text-sm md:col-span-2"><span>Property-specific questions</span><textarea name="propertyQuestions" defaultValue={inspectionPlan?.propertyQuestions.join('\n') ?? ''} disabled={readOnly} className="min-h-24 w-full rounded-md border bg-background px-3 py-2" placeholder="One disclosure or property question per line" /></label>
+              <div className="space-y-3 rounded-lg border p-4 md:col-span-2">
+                <label className="flex items-center gap-2 text-sm font-medium"><input name="reinspectionRequired" type="checkbox" defaultChecked={inspectionPlan?.reinspectionRequired ?? false} disabled={readOnly} />Reinspection or documentary repair proof is required</label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-1 text-sm"><span>Reinspection appointment</span><Input name="reinspectionScheduledAt" type="datetime-local" defaultValue={datetimeInputValue(inspectionPlan?.reinspectionScheduledAt)} disabled={readOnly} /></label>
+                  <label className="flex items-center gap-2 self-end pb-2 text-sm"><input name="reinspectionCompleted" type="checkbox" defaultChecked={Boolean(inspectionPlan?.reinspectionCompletedAt)} disabled={readOnly} />Repair verification completed</label>
+                  <label className="space-y-1 text-sm"><span>Repair proof document</span><select name="reinspectionProofDocumentId" defaultValue={inspectionPlan?.reinspectionProofDocumentId ?? ''} disabled={readOnly} className="h-10 w-full rounded-md border bg-background px-3"><option value="">No document selected</option>{evidence?.documents.map((document) => <option key={document.id} value={document.id}>{document.name}</option>)}</select></label>
+                  <label className="space-y-1 text-sm"><span>Reinspection notes</span><Input name="reinspectionNotes" defaultValue={inspectionPlan?.reinspectionNotes ?? ''} disabled={readOnly} placeholder="Repairs checked, exceptions, follow-up…" /></label>
+                </div>
+              </div>
+              <div className="md:col-span-2"><Button type="submit" disabled={readOnly || inspectionPlanMutation.isPending}>{inspectionPlanMutation.isPending ? 'Saving…' : 'Save inspection plan'}</Button></div>
             </form>
           </CardContent>
         </Card>

@@ -1,7 +1,7 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.15
-**Date:** 2026-08-16
+**Version:** 1.16
+**Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
 **Primary routes:** `/onboarding/address`, `/dashboard`, `/dashboard/properties/:propertyId/buyer-plan`, `/dashboard/ask`
@@ -2800,9 +2800,14 @@ repair step. Seller-repair evidence attaches to outcome verification; accepted
 credit evidence attaches to price finalization, with negotiation preparation as
 a legacy-template fallback. Document verification state is preserved, a unique
 evidence key makes retries converge on one artifact, and Buyer Plan finding cards
-show the linked evidence and verification state. The full inspection
-scheduling/reinspection checklist, property-aware inspection modules, and
-broader obligation deduplication remain next.
+show the linked evidence and verification state. The fifth increment adds one
+property-scoped inspection coordination record for the appointment, access,
+attendees, report and contingency deadlines, specialist scope, property-specific
+questions, and optional reinspection or repair proof. Buyer Plan now edits this
+record directly. Saves idempotently synchronize the existing inspection-plan
+task, inspection and contingency milestones, and one stable reinspection task;
+completed or user-edited work remains protected. Property-aware inspection
+module composition and broader obligation deduplication remain next.
 
 **Goal:** Turn transaction evidence into one trustworthy plan.
 
@@ -2816,7 +2821,9 @@ broader obligation deduplication remain next.
    journeys.
 7. Deduplicate finding, guidance, Home Action, and buyer-plan obligations.
 8. Implement the inspection checklist before/schedule/review/negotiate/
-   reinspection flow and context-relevant specialist items.
+   reinspection flow and context-relevant specialist items. **In progress:**
+   scheduling, scope/questions, report/contingency timing, and reinspection proof
+   now share one canonical record and synchronize Buyer Plan work.
 9. Add property-aware inspection modules for dwelling, ownership responsibility,
    foundation/spaces, confirmed systems/site features, and exposure context.
 

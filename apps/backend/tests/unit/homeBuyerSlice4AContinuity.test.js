@@ -10,6 +10,9 @@ const {
   buyerPlanReturnHref,
   buyerPlanReturnQuery,
 } = require('../../../frontend/src/lib/navigation/buyerReturnContext.ts');
+const {
+  BuyerInspectionPlanInputSchema,
+} = require('../../src/productFramework/buyerAcquisition.contract.ts');
 
 test('Slice 4A buyer return context is property-scoped and allowlisted', () => {
   const launch = buyerPlanLaunchQuery({
@@ -65,4 +68,35 @@ test('finding reclassification synchronizes canonical lineage inside one transac
   assert.match(transaction, /\['NOT_NEEDED', 'CANCELLED'\]\.includes\(existing\.status\)/);
   assert.match(source, /status: \{ notIn: \['COMPLETED', 'NOT_NEEDED', 'CANCELLED'\] \},\s+userEditedAt: null/);
   assert.match(transaction, /input\.dueAt !== undefined/);
+});
+
+test('inspection coordination accepts bounded schedules, scope, and reinspection proof', () => {
+  const parsed = BuyerInspectionPlanInputSchema.parse({
+    scheduledAt: '2026-08-20T14:00:00.000Z',
+    attendees: ['Buyer', 'Inspector'],
+    specialistScopes: ['RADON', 'SEWER_SEPTIC'],
+    propertyQuestions: ['Is the disclosed basement moisture still visible?'],
+    contingencyDueAt: '2026-08-27T21:00:00.000Z',
+    reinspectionRequired: true,
+    reinspectionProofDocumentId: 'ef331c04-a57d-4d3a-adc0-52cf7694992a',
+  });
+  assert.deepEqual(parsed.specialistScopes, ['RADON', 'SEWER_SEPTIC']);
+  assert.equal(BuyerInspectionPlanInputSchema.safeParse({}).success, false);
+  assert.equal(BuyerInspectionPlanInputSchema.safeParse({ specialistScopes: ['MADE_UP_SCOPE'] }).success, false);
+});
+
+test('inspection plan writes synchronize canonical tasks and milestone anchors', () => {
+  const service = fs.readFileSync(path.resolve(__dirname, '../../src/services/buyerAcquisition.service.ts'), 'utf8');
+  const method = service.slice(service.indexOf('static async updateInspectionPlan'), service.indexOf('static async getEvidenceReview'));
+  const page = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/page.tsx'), 'utf8');
+
+  assert.match(method, /tx\.buyerInspectionPlan\.upsert/);
+  assert.match(method, /BUYER_ACTION_KEYS\.INSPECTION_PLAN_CONFIRM/);
+  assert.match(method, /BUYER_ACTION_KEYS\.INSPECTION_REINSPECTION/);
+  assert.match(method, /BUYER_MILESTONE_KEYS\.INSPECTION/);
+  assert.match(method, /BUYER_MILESTONE_KEYS\.INSPECTION_CONTINGENCY/);
+  assert.match(method, /reinspectionProofDocumentId \? 'DOCUMENT'/);
+  assert.match(page, /Inspection scheduling and reinspection/);
+  assert.match(page, /api\.updateBuyerInspectionPlan/);
+  assert.match(page, /reinspectionProofDocumentId/);
 });

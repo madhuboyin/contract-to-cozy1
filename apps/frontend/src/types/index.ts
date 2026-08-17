@@ -3406,6 +3406,57 @@ export interface BuyerEvidenceReview {
   }>;
 }
 
+export type BuyerInspectionSpecialistScope =
+  | 'RADON' | 'SEWER_SEPTIC' | 'WELL_WATER' | 'PEST' | 'CHIMNEY' | 'ROOF'
+  | 'STRUCTURAL' | 'ELECTRICAL' | 'HVAC' | 'POOL_SPA' | 'OIL_TANK' | 'MOLD'
+  | 'ENVIRONMENTAL' | 'OTHER';
+
+export interface BuyerInspectionPlanInput {
+  scheduledAt?: string | null;
+  appointmentCompletedAt?: string | null;
+  accessNotes?: string | null;
+  attendees?: string[];
+  reportDueAt?: string | null;
+  contingencyDueAt?: string | null;
+  scopeNotes?: string | null;
+  specialistScopes?: BuyerInspectionSpecialistScope[];
+  propertyQuestions?: string[];
+  reinspectionRequired?: boolean;
+  reinspectionScheduledAt?: string | null;
+  reinspectionCompletedAt?: string | null;
+  reinspectionProofDocumentId?: string | null;
+  reinspectionNotes?: string | null;
+}
+
+export interface BuyerInspectionPlanResponse {
+  plan: (BuyerInspectionPlanInput & {
+    id: string;
+    checklistId: string;
+    propertyId: string;
+    reinspectionRequired: boolean;
+    attendees: string[];
+    specialistScopes: BuyerInspectionSpecialistScope[];
+    propertyQuestions: string[];
+    reinspectionProofDocument: {
+      id: string;
+      name: string;
+      verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+      createdAt: string;
+    } | null;
+    createdAt: string;
+    updatedAt: string;
+  }) | null;
+  latestReport: {
+    id: string;
+    status: 'PROCESSING' | 'REVIEW_PENDING' | 'CONFIRMED' | 'ARCHIVED';
+    inspectionDate: string;
+    totalFindings: number;
+    openFindings: number;
+    safetyFindings: number;
+    majorFindings: number;
+  } | null;
+}
+
 export interface BuyerAcceptanceStatus {
   propertyId: string;
   planStatus: 'ACTIVE' | 'HANDED_OFF' | 'ARCHIVED';

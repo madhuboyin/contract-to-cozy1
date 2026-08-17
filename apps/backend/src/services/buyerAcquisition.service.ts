@@ -12,6 +12,11 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { assertBuyerJourneyStageTransition } from '../productFramework/buyerJourneyLifecycle.contract';
+import {
+  BUYER_ACTION_KEYS,
+  BUYER_MILESTONE_KEYS,
+  type BuyerInspectionPlanInput,
+} from '../productFramework/buyerAcquisition.contract';
 
 const DAY_MS = 86_400_000;
 
@@ -177,6 +182,237 @@ export class BuyerAcquisitionService {
     });
 
     return HomeBuyerTaskService.getOrCreateChecklist(userId, updated.propertyId);
+  }
+
+  static async getInspectionPlan(userId: string, propertyId: string) {
+    await this.assertAccess(userId, propertyId, 'VIEWER');
+    const [plan, latestReport] = await Promise.all([
+      prisma.buyerInspectionPlan.findUnique({
+        where: { propertyId },
+        include: {
+          reinspectionProofDocument: {
+            select: { id: true, name: true, verificationStatus: true, createdAt: true },
+          },
+        },
+      }),
+      prisma.inspectionReport.findFirst({
+        where: { propertyId, reportType: 'PRE_PURCHASE' },
+        orderBy: [{ inspectionDate: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          status: true,
+          inspectionDate: true,
+          totalFindings: true,
+          openFindings: true,
+          safetyFindings: true,
+          majorFindings: true,
+        },
+      }),
+    ]);
+    return { plan, latestReport };
+  }
+
+  static async updateInspectionPlan(
+    userId: string,
+    propertyId: string,
+    input: BuyerInspectionPlanInput,
+  ) {
+    await this.assertAccess(userId, propertyId);
+    const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
+    const existing = await prisma.buyerInspectionPlan.findUnique({ where: { propertyId } });
+
+    if (input.reinspectionProofDocumentId) {
+      const proof = await prisma.document.findFirst({
+        where: { id: input.reinspectionProofDocumentId, propertyId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!proof) throw new APIError('Reinspection proof document not found.', 404, 'DOCUMENT_NOT_FOUND');
+    }
+
+    const date = (value: string | null | undefined, fallback: Date | null = null) =>
+      value === undefined ? fallback : value ? new Date(value) : null;
+    const scheduledAt = date(input.scheduledAt, existing?.scheduledAt ?? null);
+    const appointmentCompletedAt = date(input.appointmentCompletedAt, existing?.appointmentCompletedAt ?? null);
+    const reportDueAt = date(input.reportDueAt, existing?.reportDueAt ?? null);
+    const contingencyDueAt = date(input.contingencyDueAt, existing?.contingencyDueAt ?? null);
+    const reinspectionRequired = input.reinspectionRequired ?? existing?.reinspectionRequired ?? false;
+    const reinspectionScheduledAt = date(input.reinspectionScheduledAt, existing?.reinspectionScheduledAt ?? null);
+    const reinspectionCompletedAt = date(input.reinspectionCompletedAt, existing?.reinspectionCompletedAt ?? null);
+    const reinspectionProofDocumentId = input.reinspectionProofDocumentId === undefined
+      ? existing?.reinspectionProofDocumentId ?? null
+      : input.reinspectionProofDocumentId;
+    await prisma.$transaction(async (tx) => {
+      const savedPlan = await tx.buyerInspectionPlan.upsert({
+        where: { propertyId },
+        create: {
+          checklistId: checklist.id,
+          propertyId,
+          scheduledAt,
+          appointmentCompletedAt,
+          accessNotes: input.accessNotes,
+          attendees: input.attendees ?? [],
+          reportDueAt,
+          contingencyDueAt,
+          scopeNotes: input.scopeNotes,
+          specialistScopes: input.specialistScopes ?? [],
+          propertyQuestions: input.propertyQuestions ?? [],
+          reinspectionRequired,
+          reinspectionScheduledAt,
+          reinspectionCompletedAt,
+          reinspectionProofDocumentId,
+          reinspectionNotes: input.reinspectionNotes,
+        },
+        update: {
+          scheduledAt,
+          appointmentCompletedAt,
+          accessNotes: input.accessNotes,
+          attendees: input.attendees,
+          reportDueAt,
+          contingencyDueAt,
+          scopeNotes: input.scopeNotes,
+          specialistScopes: input.specialistScopes,
+          propertyQuestions: input.propertyQuestions,
+          reinspectionRequired,
+          reinspectionScheduledAt,
+          reinspectionCompletedAt,
+          reinspectionProofDocumentId,
+          reinspectionNotes: input.reinspectionNotes,
+        },
+      });
+
+      const inspectionTask = await tx.homeBuyerTask.findUnique({
+        where: { checklistId_actionKey: { checklistId: checklist.id, actionKey: BUYER_ACTION_KEYS.INSPECTION_PLAN_CONFIRM } },
+      });
+      const inspectionTaskStatus = appointmentCompletedAt
+        ? 'COMPLETED' as const
+        : scheduledAt ? 'IN_PROGRESS' as const : 'PENDING' as const;
+      const inspectionTaskData = {
+        status: inspectionTask && ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(inspectionTask.status)
+          ? inspectionTask.status
+          : inspectionTaskStatus,
+        dueAt: inspectionTask?.userEditedAt ? inspectionTask.dueAt : scheduledAt,
+        statusReason: scheduledAt ? `Inspection scheduled for ${scheduledAt.toISOString()}.` : null,
+        ...(appointmentCompletedAt ? {
+          completedAt: appointmentCompletedAt,
+          completedByUserId: userId,
+          completionMethod: 'INSPECTION_CONFIRMATION' as const,
+          completionEvidenceJson: { inspectionPlanId: savedPlan.id, completedAt: appointmentCompletedAt.toISOString() },
+        } : {}),
+      };
+      if (inspectionTask) {
+        await tx.homeBuyerTask.update({ where: { id: inspectionTask.id }, data: inspectionTaskData });
+      } else {
+        await tx.homeBuyerTask.create({
+          data: {
+            checklistId: checklist.id,
+            actionKey: BUYER_ACTION_KEYS.INSPECTION_PLAN_CONFIRM,
+            title: 'Confirm the inspection and due-diligence plan',
+            description: 'Record inspection timing, access, scope, attendees, report timing, and contingency deadline.',
+            phase: 'DUE_DILIGENCE',
+            priority: 'NOW',
+            taskType: 'SERVICE',
+            checklistSection: 'INSPECTION_DUE_DILIGENCE',
+            evidenceRequirement: 'OPTIONAL',
+            required: true,
+            sourceType: 'SYSTEM',
+            assignedToUserId: userId,
+            ...inspectionTaskData,
+          },
+        });
+      }
+
+      const reinspectionTask = await tx.homeBuyerTask.findUnique({
+        where: { checklistId_actionKey: { checklistId: checklist.id, actionKey: BUYER_ACTION_KEYS.INSPECTION_REINSPECTION } },
+      });
+      if (reinspectionRequired) {
+        const reinspectionStatus = reinspectionCompletedAt
+          ? 'COMPLETED' as const
+          : reinspectionScheduledAt ? 'IN_PROGRESS' as const : 'PENDING' as const;
+        const reinspectionData = {
+          status: reinspectionTask && ['COMPLETED', 'CANCELLED'].includes(reinspectionTask.status)
+            ? reinspectionTask.status
+            : reinspectionStatus,
+          dueAt: reinspectionTask?.userEditedAt ? reinspectionTask.dueAt : (reinspectionScheduledAt ?? contingencyDueAt),
+          statusReason: reinspectionScheduledAt ? `Reinspection scheduled for ${reinspectionScheduledAt.toISOString()}.` : 'Reinspection or documentary repair proof is required.',
+          ...(reinspectionCompletedAt ? {
+            completedAt: reinspectionCompletedAt,
+            completedByUserId: userId,
+            completionMethod: reinspectionProofDocumentId ? 'DOCUMENT' as const : 'INSPECTION_CONFIRMATION' as const,
+            completionDocumentId: reinspectionProofDocumentId,
+            completionEvidenceJson: {
+              completedAt: reinspectionCompletedAt.toISOString(),
+              proofDocumentId: reinspectionProofDocumentId,
+            },
+          } : {}),
+        };
+        if (reinspectionTask) {
+          await tx.homeBuyerTask.update({ where: { id: reinspectionTask.id }, data: reinspectionData });
+        } else {
+          await tx.homeBuyerTask.create({
+            data: {
+              checklistId: checklist.id,
+              actionKey: BUYER_ACTION_KEYS.INSPECTION_REINSPECTION,
+              title: 'Confirm agreed repairs before the contingency deadline',
+              description: 'Schedule reinspection or attach documentary proof for agreed seller repairs.',
+              phase: 'DUE_DILIGENCE',
+              priority: 'NOW',
+              taskType: 'SERVICE',
+              checklistSection: 'INSPECTION_DUE_DILIGENCE',
+              evidenceRequirement: 'REQUIRED',
+              required: true,
+              blocking: true,
+              sourceType: 'SYSTEM',
+              assignedToUserId: userId,
+              ...reinspectionData,
+            },
+          });
+        }
+      } else if (reinspectionTask && !['COMPLETED', 'CANCELLED'].includes(reinspectionTask.status)) {
+        await tx.homeBuyerTask.update({
+          where: { id: reinspectionTask.id },
+          data: { status: 'NOT_NEEDED', statusReason: 'No reinspection or repair proof is currently required.' },
+        });
+      }
+
+      await tx.buyerJourneyMilestone.upsert({
+        where: { checklistId_milestoneKey: { checklistId: checklist.id, milestoneKey: BUYER_MILESTONE_KEYS.INSPECTION } },
+        create: {
+          checklistId: checklist.id,
+          milestoneKey: BUYER_MILESTONE_KEYS.INSPECTION,
+          type: 'INSPECTION',
+          status: appointmentCompletedAt ? 'COMPLETED' : scheduledAt ? 'IN_PROGRESS' : 'NOT_STARTED',
+          dueAt: scheduledAt,
+          completedAt: appointmentCompletedAt,
+          sourceType: 'BUYER_INSPECTION_PLAN',
+          confidence: scheduledAt ? 1 : null,
+        },
+        update: {
+          status: appointmentCompletedAt ? 'COMPLETED' : scheduledAt ? 'IN_PROGRESS' : 'NOT_STARTED',
+          dueAt: scheduledAt,
+          completedAt: appointmentCompletedAt,
+          sourceType: 'BUYER_INSPECTION_PLAN',
+          confidence: scheduledAt ? 1 : null,
+        },
+      });
+      await tx.buyerJourneyMilestone.upsert({
+        where: { checklistId_milestoneKey: { checklistId: checklist.id, milestoneKey: BUYER_MILESTONE_KEYS.INSPECTION_CONTINGENCY } },
+        create: {
+          checklistId: checklist.id,
+          milestoneKey: BUYER_MILESTONE_KEYS.INSPECTION_CONTINGENCY,
+          type: 'INSPECTION_CONTINGENCY',
+          dueAt: contingencyDueAt,
+          sourceType: 'BUYER_INSPECTION_PLAN',
+          confidence: contingencyDueAt ? 1 : null,
+        },
+        update: {
+          dueAt: contingencyDueAt,
+          sourceType: 'BUYER_INSPECTION_PLAN',
+          confidence: contingencyDueAt ? 1 : null,
+        },
+      });
+    });
+
+    return this.getInspectionPlan(userId, propertyId);
   }
 
   static async getEvidenceReview(userId: string, propertyId: string) {

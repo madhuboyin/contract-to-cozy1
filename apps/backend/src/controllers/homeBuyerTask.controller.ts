@@ -13,6 +13,7 @@ import { BuyerAcquisitionService } from '../services/buyerAcquisition.service';
 import {
   BuyerDocumentVerificationInputSchema,
   BuyerFindingDispositionInputSchema,
+  BuyerInspectionPlanInputSchema,
   BuyerLifecycleUpdateSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
@@ -486,6 +487,35 @@ const handleGetEvidenceReview = async (req: AuthRequest, res: Response, next: Ne
   } catch (error) { next(error); }
 };
 
+const handleGetInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const plan = await BuyerAcquisitionService.getInspectionPlan(req.user.userId, req.params.propertyId);
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateInspectionPlan = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerInspectionPlanInputSchema.parse(req.body);
+    const plan = await BuyerAcquisitionService.updateInspectionPlan(req.user.userId, req.params.propertyId, input);
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: {
+        actionType: 'buyer_inspection_plan_updated',
+        scheduled: Boolean(plan.plan?.scheduledAt),
+        reinspectionRequired: plan.plan?.reinspectionRequired ?? false,
+      },
+    });
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
 const handleVerifyDocument = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -574,6 +604,8 @@ export const homeBuyerTaskController = {
   handleGetImportReadiness,
   handleUpdateLifecycle,
   handleGetEvidenceReview,
+  handleGetInspectionPlan,
+  handleUpdateInspectionPlan,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

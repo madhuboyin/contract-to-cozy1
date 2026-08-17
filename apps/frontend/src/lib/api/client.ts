@@ -69,6 +69,8 @@ import {
   HomeBuyerTaskStats,
   BuyerImportReadiness,
   BuyerEvidenceReview,
+  BuyerInspectionPlanInput,
+  BuyerInspectionPlanResponse,
   BuyerFindingDisposition,
   BuyerAcceptanceStatus,
   NewHomeDocumentAvailability,
@@ -3597,6 +3599,23 @@ class APIClient {
     return this.request<BuyerEvidenceReview>(
       `/api/home-buyer-tasks/properties/${propertyId}/evidence-review`,
       { method: 'GET' },
+    );
+  }
+
+  async getBuyerInspectionPlan(propertyId: string): Promise<APIResponse<BuyerInspectionPlanResponse>> {
+    return this.request<BuyerInspectionPlanResponse>(
+      `/api/home-buyer-tasks/properties/${propertyId}/inspection-plan`,
+      { method: 'GET' },
+    );
+  }
+
+  async updateBuyerInspectionPlan(
+    propertyId: string,
+    input: BuyerInspectionPlanInput,
+  ): Promise<APIResponse<BuyerInspectionPlanResponse>> {
+    return this.request<BuyerInspectionPlanResponse>(
+      `/api/home-buyer-tasks/properties/${propertyId}/inspection-plan`,
+      { method: 'PUT', body: JSON.stringify(input) },
     );
   }
 
