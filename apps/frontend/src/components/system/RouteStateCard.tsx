@@ -50,6 +50,10 @@ export default function RouteStateCard({
 }: RouteStateCardProps) {
   return (
     <section
+      role={state === 'error' ? 'alert' : 'status'}
+      aria-live={state === 'error' ? 'assertive' : 'polite'}
+      aria-atomic="true"
+      aria-busy={state === 'loading' ? 'true' : undefined}
       className={cn(
         CTC_TEMPLATE_SURFACES_V1.card,
         'p-6 text-center',
@@ -57,7 +61,7 @@ export default function RouteStateCard({
         className
       )}
     >
-      <div className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm">
+      <div aria-hidden="true" className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm">
         {STATE_ICON[state]}
       </div>
       <h2 className="mt-4 text-2xl font-semibold text-slate-900">{title}</h2>
@@ -71,4 +75,3 @@ export default function RouteStateCard({
     </section>
   );
 }
-

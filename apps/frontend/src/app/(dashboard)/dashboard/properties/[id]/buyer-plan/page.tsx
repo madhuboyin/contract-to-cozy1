@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, Loader2, SlidersHorizontal, Users, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, SlidersHorizontal, Users, XCircle } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { api } from '@/lib/api/client';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +32,7 @@ import { BuyerPurchaseLenderReadinessCenter } from './BuyerPurchaseLenderReadine
 import { BuyerTitleEscrowCenter } from './BuyerTitleEscrowCenter';
 import { BuyerInsuranceCenter } from './BuyerInsuranceCenter';
 import { BuyerWalkthroughCenter } from './BuyerWalkthroughCenter';
+import RouteStateCard from '@/components/system/RouteStateCard';
 
 const PHASES: Array<{ key: BuyerPlanPhase; label: string }> = [
   { key: 'EXPLORING', label: 'Exploring' },
@@ -307,8 +308,45 @@ export default function BuyerPlanPage() {
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [overviewQuery.data, returnSection, returnTaskId]);
 
-  if (overviewQuery.isLoading) return <DashboardShell><div className="flex min-h-64 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin" /></div></DashboardShell>;
-  if (overviewQuery.isError || !overviewQuery.data) return <DashboardShell><Card><CardContent className="py-8 text-sm text-destructive">{overviewQuery.error instanceof Error ? overviewQuery.error.message : 'Unable to load the buyer plan.'}</CardContent></Card></DashboardShell>;
+  if (overviewQuery.isLoading) {
+    return (
+      <DashboardShell className="pt-8">
+        <RouteStateCard
+          state="loading"
+          title="Loading your Closing Plan"
+          description="We’re gathering this property’s deadlines, tasks, evidence, and people."
+        />
+      </DashboardShell>
+    );
+  }
+  if (overviewQuery.isError || !overviewQuery.data) {
+    const errorMessage = overviewQuery.error instanceof Error
+      ? overviewQuery.error.message
+      : 'Unable to load the buyer plan.';
+    return (
+      <DashboardShell className="pt-8">
+        <RouteStateCard
+          state="error"
+          title="Your Closing Plan couldn’t load"
+          description={`${errorMessage} Your property record is still safe.`}
+          action={(
+            <Button
+              type="button"
+              disabled={overviewQuery.isFetching}
+              onClick={() => { void overviewQuery.refetch(); }}
+            >
+              {overviewQuery.isFetching ? 'Trying again…' : 'Try again'}
+            </Button>
+          )}
+          secondaryAction={(
+            <Button asChild variant="outline">
+              <Link href={`/dashboard/properties/${propertyId}`}>Back to property</Link>
+            </Button>
+          )}
+        />
+      </DashboardShell>
+    );
+  }
 
   const overview = overviewQuery.data;
   const plan = {

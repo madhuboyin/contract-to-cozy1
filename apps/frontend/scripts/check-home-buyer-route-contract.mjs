@@ -91,6 +91,11 @@ requireMatch(
   /dashboard\/properties\/\$\{encodeURIComponent\(propertyId\)\}\/buyer-plan/,
   'buyer return context is not property-scoped to Buyer Plan',
 );
+requireMatch(
+  'src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/page.tsx',
+  /<RouteStateCard[\s\S]*state="loading"[\s\S]*state="error"[\s\S]*overviewQuery\.refetch\(\)[\s\S]*Back to property/,
+  'Buyer Plan is missing accessible loading and recoverable error states',
+);
 
 const apiClient = read('src/lib/api/client.ts');
 if (/\bHOME_BUYER\b/.test(apiClient)) {
