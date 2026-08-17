@@ -64,6 +64,7 @@ import {
   HomeBuyerChecklist,
   BuyerClosingHomeResponse,
   BuyerPlanOverview,
+  BuyerChecklistComposition,
   HomeBuyerTask,
   HomeBuyerTaskStats,
   BuyerImportReadiness,
@@ -3534,6 +3535,20 @@ class APIClient {
     return this.request<BuyerPlanOverview>(
       `/api/home-buyer-tasks/properties/${propertyId}/overview`,
       { method: 'GET' },
+    );
+  }
+
+  async getBuyerChecklistComposition(propertyId: string): Promise<APIResponse<BuyerChecklistComposition>> {
+    return this.request<BuyerChecklistComposition>(
+      `/api/home-buyer-tasks/properties/${propertyId}/checklist-composition`,
+      { method: 'GET' },
+    );
+  }
+
+  async applyBuyerChecklistComposition(propertyId: string): Promise<APIResponse<BuyerChecklistComposition>> {
+    return this.request<BuyerChecklistComposition>(
+      `/api/home-buyer-tasks/properties/${propertyId}/checklist-composition/apply`,
+      { method: 'POST' },
     );
   }
 

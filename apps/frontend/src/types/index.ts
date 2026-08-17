@@ -3146,6 +3146,44 @@ export interface HomeBuyerChecklist {
   updatedAt: Date;
 }
 
+export interface BuyerChecklistComposition {
+  templateVersion: string;
+  contextVersion: string;
+  evaluatedAt: string;
+  items: Array<{
+    actionKey: string;
+    templateKey: string;
+    title: string;
+    description: string;
+    checklistSection: BuyerChecklistSection;
+    applicability: {
+      result: BuyerTaskApplicability;
+      reasonCodes: string[];
+      usedFactKeys: string[];
+      missingFactKeys: string[];
+      conflictedFactKeys: string[];
+      basisHash: string;
+      evaluatedAt: string;
+    };
+  }>;
+  questions: Array<{
+    factKey: string;
+    prompt: string;
+    whyWeAsk: string;
+    correctionPath: string | null;
+    affectedTemplateKeys: string[];
+  }>;
+  delta: {
+    added: number;
+    removed: number;
+    unchanged: number;
+    addedItems: Array<{ actionKey: string; title: string; reasonCodes: string[] }>;
+    removedItems: Array<{ actionKey: string }>;
+  };
+  applied?: boolean;
+  checklist?: HomeBuyerChecklist;
+}
+
 export type BuyerDashboardPresentationMode = 'BUYER_CLOSING' | 'HOMEOWNER' | 'NEW_HOME' | 'CANDIDATE';
 
 export interface BuyerClosingHomeTaskSummary {

@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.10
+**Version:** 1.11
 **Date:** 2026-08-16
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2458,8 +2458,9 @@ not defer an introduced homeowner regression to a later cleanup slice.
 | Slice 0 | Foundation implemented (`5cc65015`) | Direct Prisma schema correction; journey/task/evidence/applicability/milestone/contact types; `PRE_CLOSE` task-phase removal; stable keys; lifecycle transition policy; viewer-safe reads; frontend contract sweep | Complete bounded overview, milestone, contact, batch, evidence, and buyer-tool API response contracts as their vertical UI paths land; retain centralized error mapping |
 | Slice 1 | In progress | Buyer purchase stage, optional closing/move dates, inspection status, and immediate concern in trigger-first onboarding; synchronous property-scoped plan initialization; seeded inspection/closing/move milestones; date-anchored task recalculation; buyer-specific first-value reveal | Rendered end-to-end browser verification, deeper property-fact correction/source presentation, and final onboarding analytics review |
 | Slice 2 | In progress | Read-only server-derived dashboard presentation mode; strict bounded Buyer Closing Home overview; dedicated dashboard dispatcher and separate responsive closing surface; intentional neutral candidate state for cancelled/archived purchases; next action, blockers, milestones, readiness lanes, evidence/documents, contacts/assignments, Ask, direct property-scoped routes, mobile continue action; homeowner signal-query gating | Complete persistent navigation/journey-chip integration, buyer stage labels in property switching, canonical buyer-aware discovery policy and catalog filtering, paused/resume commands, richer empty/error recovery, and rendered desktop/mobile end-to-end verification |
-| Slice 3 | In progress | Strict read-only one-query core Buyer Plan overview; plan/stage/progress/next-action loading; milestones, workload, contacts, and recent history; property-scoped access role with clear viewer-only presentation; canonical source/template-key default-task identity | Complete create/edit/status/not-needed/cancel/delete/restore UI, explicit evidence completion, milestone/contact mutations, filters, batch operations, booking/cost/note controls, applicability regeneration, checklist delta presentation, and rendered end-to-end verification |
-| Slices 4–8 | Not started | — | Follow the dependency order in Section 22 |
+| Slice 3 | In progress | Strict read-only one-query core Buyer Plan overview; plan/stage/progress/next-action loading; milestones, workload, contacts, and recent history; property-scoped access role with clear viewer-only presentation; canonical source/template-key default-task identity; lifecycle date recalculation now preserves user-edited tasks | Complete create/edit/status/not-needed/cancel/delete/restore UI, explicit evidence completion, milestone/contact mutations, filters, batch operations, booking/cost/note controls, checklist delta presentation, and rendered end-to-end verification |
+| Slice 4 | In progress | Versioned code-owned entry template for each of the nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys; condo/association responsibility, pool/spa, property-age-plus-location, and HVAC-age example rules; explainable applicability provenance, missing-detail benefit copy/correction paths, exact deltas, and idempotent preservation of user work | Complete the full composition-layer catalog and transaction-path facts; render questions, deltas, applicability, and section progress in Buyer Closing Home/Buyer Plan; build the revision-aware Contract & Contingency Tracker, confirmed milestone write-back, blocker recovery, deep-link return continuity, and phase-aware Ask context |
+| Slices 5–8 | Not started | — | Follow the dependency order in Section 22 |
 
 The Slice 0 foundation is complete enough for vertical Slice 1 work, but the
 minimum coherent release in Section 21.1 is not yet satisfied. No current
@@ -2729,6 +2730,17 @@ Functional check:
   applicable checklists without duplicate obligations.
 
 ### Slice 4 — Phase checklists and Contract & Contingency Tracker
+
+**Implementation status:** In progress. The first foundation increment adds a
+versioned entry template for each required phase checklist and an explicit
+preview/apply composition path over canonical Property Context. Initial rules
+cover condo/association records, roof/exterior responsibility, confirmed
+pool/spa context, property age combined with confirmed location, and recorded
+HVAC age. Unknown or conflicting inputs remain outside the active delta and
+produce benefit-explained correction questions. Applying a preview persists
+rule/version/reason/fact/basis provenance and preserves completion, evidence,
+assignment, notes, status decisions, and user-edited dates. The Contract &
+Contingency Tracker and rendered checklist customization remain next.
 
 **Goal:** Replace the flat checklist with deadline-aware guidance and establish
 the buyer's authoritative closing timeline.

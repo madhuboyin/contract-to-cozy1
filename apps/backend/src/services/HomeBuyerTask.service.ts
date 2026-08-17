@@ -18,6 +18,11 @@ import {
   BuyerImportReadinessSchema,
   BuyerPlanOverviewSchema,
 } from '../productFramework/buyerAcquisition.contract';
+import { getPropertyContext } from '../modules/propertyContext';
+import {
+  BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION,
+  composeBuyerChecklist,
+} from './buyerChecklistComposition.service';
 
 type TaskInput = {
   title: string;
@@ -504,6 +509,135 @@ export class HomeBuyerTaskService {
     return checklist;
   }
 
+  /** Read-only applicability evaluation and exact before/after checklist delta. */
+  static async previewChecklistComposition(userId: string, propertyId: string) {
+    const checklist = await this.getChecklist(userId, propertyId);
+    const context = await getPropertyContext(
+      propertyId,
+      { userId },
+      { scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS'] },
+    );
+    return composeBuyerChecklist(context, checklist.tasks.map((task) => ({
+      actionKey: task.actionKey,
+      applicability: task.applicability,
+      generationVersion: task.generationVersion,
+    })));
+  }
+
+  /** Apply a preview without resetting completion, evidence, assignments, notes, or user edits. */
+  static async applyChecklistComposition(userId: string, propertyId: string) {
+    await this.assertAccess(userId, propertyId, 'CONTRIBUTOR');
+    const checklist = await this.getChecklist(userId, propertyId);
+    const composition = await this.previewChecklistComposition(userId, propertyId);
+    const existingByActionKey = new Map(checklist.tasks.map((task) => [task.actionKey, task]));
+
+    await prisma.$transaction(async (tx) => {
+      for (const [index, item] of composition.items.entries()) {
+        const existing = existingByActionKey.get(item.actionKey);
+        const applicabilityData = {
+          applicability: item.applicability.result,
+          applicabilityRuleKey: item.ruleKey,
+          applicabilityReasonCodes: item.applicability.reasonCodes,
+          applicabilityUsedFactKeys: item.applicability.usedFactKeys,
+          applicabilityMissingFactKeys: item.applicability.missingFactKeys,
+          applicabilityConflictedFactKeys: item.applicability.conflictedFactKeys,
+          applicabilityBasisHash: item.applicability.basisHash,
+          applicabilityEvaluatedAt: new Date(item.applicability.evaluatedAt),
+        } as const;
+
+        // A user-confirmed not-applicable decision outranks later template
+        // evaluation until the user explicitly changes that decision.
+        if (existing?.userEditedAt && existing.applicability === 'NOT_APPLICABLE') {
+          continue;
+        }
+
+        if (item.applicability.result !== 'APPLICABLE') {
+          if (existing?.generationVersion?.startsWith('buyer-phase-checklists-')) {
+            await tx.homeBuyerTask.update({ where: { id: existing.id }, data: applicabilityData });
+          }
+          continue;
+        }
+
+        if (!existing) {
+          const anchor = taskAnchorForEntry(item.phase, checklist);
+          await tx.homeBuyerTask.create({
+            data: {
+              checklistId: checklist.id,
+              actionKey: item.actionKey,
+              templateKey: item.templateKey,
+              templateVersion: item.templateVersion,
+              generatedBy: 'SYSTEM_TEMPLATE',
+              generationVersion: BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION,
+              title: item.title,
+              description: item.description,
+              whyMatters: item.whyMatters,
+              completionCriteria: item.completionCriteria,
+              blockedGuidance: item.blockedGuidance,
+              phase: item.phase,
+              priority: item.priority,
+              taskType: item.taskType,
+              checklistSection: item.checklistSection,
+              evidenceRequirement: item.evidenceRequirement,
+              required: item.required,
+              blocking: item.blocking,
+              dueAt: item.anchorOffsetDays === null ? null : offsetDate(anchor, item.anchorOffsetDays),
+              anchorOffsetDays: item.anchorOffsetDays,
+              assignedToUserId: userId,
+              sourceType: 'SYSTEM',
+              sortOrder: index + 1,
+              ...applicabilityData,
+            },
+          });
+          continue;
+        }
+
+        const preservesUserWork = Boolean(
+          existing.userEditedAt
+          || ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(existing.status)
+          || existing.completionEvidenceJson
+          || existing.notes,
+        );
+        const anchor = taskAnchorForEntry(item.phase, checklist);
+        await tx.homeBuyerTask.update({
+          where: { id: existing.id },
+          data: {
+            ...applicabilityData,
+            templateKey: item.templateKey,
+            templateVersion: item.templateVersion,
+            generationVersion: BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION,
+            generatedBy: existing.generatedBy ?? 'SYSTEM_TEMPLATE',
+            ...(preservesUserWork ? {} : {
+              title: item.title,
+              description: item.description,
+              whyMatters: item.whyMatters,
+              completionCriteria: item.completionCriteria,
+              blockedGuidance: item.blockedGuidance,
+              phase: item.phase,
+              priority: item.priority,
+              taskType: item.taskType,
+              checklistSection: item.checklistSection,
+              evidenceRequirement: item.evidenceRequirement,
+              required: item.required,
+              blocking: item.blocking,
+              anchorOffsetDays: item.anchorOffsetDays,
+              dueAt: item.anchorOffsetDays === null ? null : offsetDate(anchor, item.anchorOffsetDays),
+            }),
+          },
+        });
+      }
+      await tx.homeBuyerChecklist.update({
+        where: { id: checklist.id },
+        data: { generationVersion: BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION },
+      });
+    });
+
+    return {
+      ...composition,
+      applied: true as const,
+      checklist: await this.getChecklist(userId, propertyId),
+    };
+  }
+
   static async initializeFromEntryContext(
     userId: string,
     propertyId: string,
@@ -536,6 +670,7 @@ export class HomeBuyerTaskService {
           checklistId: plan.id,
           anchorOffsetDays: { not: null },
           status: { notIn: ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'] },
+          userEditedAt: null,
         },
         select: { id: true, phase: true, anchorOffsetDays: true },
       });
@@ -733,6 +868,7 @@ export class HomeBuyerTaskService {
       where: { id: taskId },
       data: {
         status,
+        userEditedAt: new Date(),
         completedAt: status === 'COMPLETED' ? new Date() : null,
         completedByUserId: status === 'COMPLETED' ? userId : null,
         completionMethod: status === 'COMPLETED' ? 'USER_ATTESTATION' : null,
@@ -765,6 +901,7 @@ export class HomeBuyerTaskService {
       where: { id: taskId },
       data: {
         ...data,
+        userEditedAt: new Date(),
         dueAt: data.dueAt === undefined ? undefined : data.dueAt === null ? null : new Date(data.dueAt),
         completedAt: data.status === undefined ? undefined : data.status === 'COMPLETED' ? new Date() : null,
         completedByUserId: data.status === undefined ? undefined : data.status === 'COMPLETED' ? userId : null,

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, Loader2, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Circle, FileSearch, History, Loader2, SlidersHorizontal, Users } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { api } from '@/lib/api/client';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +64,7 @@ export default function BuyerPlanPage() {
       queryClient.invalidateQueries({ queryKey: ['buyer-import-readiness', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-evidence-review', propertyId] }),
       queryClient.invalidateQueries({ queryKey: ['buyer-acceptance', propertyId] }),
+      queryClient.invalidateQueries({ queryKey: ['buyer-checklist-composition', propertyId] }),
     ]);
   };
 
@@ -99,6 +100,15 @@ export default function BuyerPlanPage() {
     queryFn: async () => {
       const response = await api.getBuyerAcceptanceStatus(propertyId);
       if (!response.success) throw new Error(response.message);
+      return response.data;
+    },
+    enabled: Boolean(propertyId),
+  });
+  const compositionQuery = useQuery({
+    queryKey: ['buyer-checklist-composition', propertyId],
+    queryFn: async () => {
+      const response = await api.getBuyerChecklistComposition(propertyId);
+      if (!response.success) throw new Error(response.message || 'Unable to tailor the closing checklist.');
       return response.data;
     },
     enabled: Boolean(propertyId),
@@ -142,6 +152,17 @@ export default function BuyerPlanPage() {
       toast({ title: result?.handedOff ? 'Recurring Home handoff complete' : 'Handoff is not due yet', description: result?.handedOff ? `${result.taskCount} unresolved item(s) moved into recurring Home care.` : 'The plan will hand off on day 91 or when ownership becomes established.' });
     },
   });
+  const compositionMutation = useMutation({
+    mutationFn: () => api.applyBuyerChecklistComposition(propertyId),
+    onSuccess: (response) => {
+      void refresh();
+      if (!response.success) return;
+      toast({
+        title: 'Closing checklist updated',
+        description: `${response.data.delta.added} item(s) added and ${response.data.delta.removed} item(s) removed from active progress. Your existing work was preserved.`,
+      });
+    },
+  });
 
   if (overviewQuery.isLoading) return <DashboardShell><div className="flex min-h-64 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin" /></div></DashboardShell>;
   if (overviewQuery.isError || !overviewQuery.data) return <DashboardShell><Card><CardContent className="py-8 text-sm text-destructive">{overviewQuery.error instanceof Error ? overviewQuery.error.message : 'Unable to load the buyer plan.'}</CardContent></Card></DashboardShell>;
@@ -151,6 +172,7 @@ export default function BuyerPlanPage() {
   const readiness = readinessQuery.data;
   const evidence = evidenceQuery.data;
   const acceptance = acceptanceQuery.data;
+  const composition = compositionQuery.data;
   const members = overview.workload;
   const completed = overview.summary.completed;
   const readOnly = overview.accessRole === 'VIEWER';
@@ -168,6 +190,18 @@ export default function BuyerPlanPage() {
         </div>
 
         {readOnly && <Card className="border-blue-200 bg-blue-50/60"><CardContent className="py-4 text-sm text-blue-950"><strong>View-only access.</strong> You can review tasks, milestones, contacts, evidence, and history, but only an owner or contributor can change this plan.</CardContent></Card>}
+
+        {composition && <Card className="border-violet-200 bg-violet-50/40">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><SlidersHorizontal className="h-5 w-5" />Property-aware closing checklist</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div><p className="text-sm font-medium">Preview: {composition.delta.added} add, {composition.delta.removed} remove, {composition.delta.unchanged} unchanged</p><p className="text-xs text-muted-foreground">Based on canonical property facts · {composition.templateVersion}. Unknown details stay outside active progress.</p></div>
+              <Button disabled={readOnly || compositionMutation.isPending || (composition.delta.added === 0 && composition.delta.removed === 0)} onClick={() => compositionMutation.mutate()}>{compositionMutation.isPending ? 'Updating…' : 'Apply checklist changes'}</Button>
+            </div>
+            {composition.delta.addedItems.length > 0 && <div className="rounded-lg border bg-background p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Items this will add</p><ul className="mt-2 space-y-1 text-sm">{composition.delta.addedItems.slice(0, 5).map((item) => <li key={item.actionKey}>+ {item.title}</li>)}</ul>{composition.delta.addedItems.length > 5 && <p className="mt-2 text-xs text-muted-foreground">+ {composition.delta.addedItems.length - 5} more</p>}</div>}
+            {composition.questions.length > 0 && <div><p className="text-sm font-medium">Details that could improve this checklist</p><div className="mt-2 grid gap-2 md:grid-cols-2">{composition.questions.slice(0, 4).map((question) => <div key={question.factKey} className="rounded-lg border bg-background p-3"><p className="text-sm font-medium">{question.prompt}</p><p className="mt-1 text-xs text-muted-foreground"><strong>Why we ask:</strong> {question.whyWeAsk}</p>{question.correctionPath && <Button asChild variant="link" className="h-auto p-0 pt-2 text-xs"><Link href={question.correctionPath}>Update property detail</Link></Button>}</div>)}</div></div>}
+          </CardContent>
+        </Card>}
 
         <div className="grid gap-3 sm:grid-cols-4">
           <Card><CardContent className="py-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Progress</p><p className="mt-1 text-2xl font-semibold">{overview.summary.progressPercent}%</p></CardContent></Card>

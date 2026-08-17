@@ -100,6 +100,41 @@ const handleGetOverview = async (req: AuthRequest, res: Response, next: NextFunc
   }
 };
 
+/** GET /api/home-buyer-tasks/properties/:propertyId/checklist-composition */
+const handlePreviewChecklistComposition = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const data = await HomeBuyerTaskService.previewChecklistComposition(req.user.userId, req.params.propertyId);
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** POST /api/home-buyer-tasks/properties/:propertyId/checklist-composition/apply */
+const handleApplyChecklistComposition = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const data = await HomeBuyerTaskService.applyChecklistComposition(req.user.userId, req.params.propertyId);
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: {
+        actionType: 'buyer_checklist_composition_applied',
+        templateVersion: data.templateVersion,
+        added: data.delta.added,
+        removed: data.delta.removed,
+      },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * GET /api/home-buyer-tasks/tasks
  * Gets all tasks for the property plan
@@ -525,6 +560,8 @@ const handleGetAcceptanceStatus = async (req: AuthRequest, res: Response, next: 
 export const homeBuyerTaskController = {
   handleGetClosingHome,
   handleGetOverview,
+  handlePreviewChecklistComposition,
+  handleApplyChecklistComposition,
   handleGetChecklist,
   handleGetTasks,
   handleGetTask,

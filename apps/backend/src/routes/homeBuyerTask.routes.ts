@@ -14,6 +14,8 @@ router.use(authenticate);
  */
 router.get('/properties/:propertyId/closing-home', homeBuyerTaskController.handleGetClosingHome);
 router.get('/properties/:propertyId/overview', homeBuyerTaskController.handleGetOverview);
+router.get('/properties/:propertyId/checklist-composition', homeBuyerTaskController.handlePreviewChecklistComposition);
+router.post('/properties/:propertyId/checklist-composition/apply', homeBuyerTaskController.handleApplyChecklistComposition);
 
 /**
  * GET /api/home-buyer-tasks/properties/:propertyId/checklist
