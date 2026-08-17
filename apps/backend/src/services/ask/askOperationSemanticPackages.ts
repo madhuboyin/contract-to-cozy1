@@ -49,6 +49,11 @@ const jobs: Record<AskOperationId, string> = {
   HVAC_DECISION_OUTCOME_REPORT: 'report what happened after an HVAC decision',
   HVAC_DECISION_OUTCOME_VIEW: 'review a recorded HVAC decision outcome',
   HVAC_DECISION_OUTCOME_UNLINK: 'correct or unlink an HVAC decision outcome',
+  BUYER_PLAN_STATUS: 'review the Buyer Plan status and next closing action',
+  BUYER_DEADLINES: 'review upcoming deadlines and closing blockers',
+  BUYER_DOCUMENT_READINESS: 'review which transaction documents are missing or unverified before closing',
+  BUYER_INSPECTION_REVIEW: 'review inspection findings that still need a decision before closing',
+  BUYER_TASK_COMPLETE: 'check off a closing checklist item',
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
@@ -91,6 +96,11 @@ const positives: Record<AskOperationId, readonly string[]> = {
   HVAC_DECISION_OUTCOME_REPORT: ['I replaced the furnace after our decision', 'Record that we repaired the heating system', 'The HVAC replacement is now finished', 'We installed a new heating unit following the recommendation'],
   HVAC_DECISION_OUTCOME_VIEW: ['What was the outcome of my furnace decision?', 'Show what happened after the HVAC recommendation', 'Did we end up repairing or replacing the heater?', 'Show how the furnace choice concluded', 'What ultimately happened after the furnace recommendation?'],
   HVAC_DECISION_OUTCOME_UNLINK: ['Retract what I reported about replacing the furnace', 'That HVAC outcome is wrong; remove it', 'Undo the recorded heating-system outcome', 'Take back the result I logged for the heater'],
+  BUYER_PLAN_STATUS: ['What should I do next for this purchase?', 'What is the status of my home purchase?', 'How close am I to closing?', 'Give me my closing plan status'],
+  BUYER_DEADLINES: ['What is due before closing?', 'What is my next deadline before closing?', 'What could delay or block my closing?', 'Show upcoming deadlines for this purchase'],
+  BUYER_DOCUMENT_READINESS: ['Which transaction documents are missing before closing?', 'Which closing documents am I still missing?', 'Show document readiness for this closing'],
+  BUYER_INSPECTION_REVIEW: ['Which inspection findings still need a decision?', 'Review my inspection findings before closing', 'What inspection findings are still undecided?'],
+  BUYER_TASK_COMPLETE: ['Check off the locksmith closing checklist item', 'Complete this closing checklist item', 'I finished the rekey checklist item'],
 };
 
 const negatives: Record<AskOperationId, readonly string[]> = {
@@ -133,6 +143,11 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   PROPERTY_TAX_APPEAL_READINESS: ['Show the current property tax bill', 'Check renovation permit readiness'],
   RENOVATION_PERMIT_READINESS: ['Appeal my property tax assessment', 'Show an active project status'],
   MAJOR_EVENT_ENTRY: ['Compare selling versus renting financially', 'Show recent changes to the home record'],
+  BUYER_PLAN_STATUS: ['What maintenance is pending?', 'What is due before closing?'],
+  BUYER_DEADLINES: ['What should I do next for this purchase?', 'Which transaction documents are missing?'],
+  BUYER_DOCUMENT_READINESS: ['What is my next deadline before closing?', 'Show my recorded home inventory'],
+  BUYER_INSPECTION_REVIEW: ['What should I do next for this purchase?', 'Should I repair or replace my furnace?'],
+  BUYER_TASK_COMPLETE: ['Create a new maintenance task', 'What should I do next for this purchase?'],
 };
 
 const answerPositives: Record<AskOperationId, readonly string[]> = {
@@ -175,6 +190,11 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   HVAC_DECISION_OUTCOME_REPORT: ['A completed HVAC repair or replacement can be recorded as the decision outcome.'],
   HVAC_DECISION_OUTCOME_VIEW: ['The recorded HVAC outcome shows whether the system was repaired or replaced.'],
   HVAC_DECISION_OUTCOME_UNLINK: ['An incorrect recorded HVAC outcome can be unlinked after confirmation.'],
+  BUYER_PLAN_STATUS: ['The canonical Buyer Plan next action, progress, and closing blockers are shown.'],
+  BUYER_DEADLINES: ['Upcoming Buyer Plan milestones and blocking tasks are shown with their due dates.'],
+  BUYER_DOCUMENT_READINESS: ['Expected, received, and unverified transaction document counts are shown.'],
+  BUYER_INSPECTION_REVIEW: ['Inspection report status and open material findings still needing a decision are shown.'],
+  BUYER_TASK_COMPLETE: ['The locksmith closing checklist item is now checked off and its assignee cleared.'],
 };
 
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
@@ -217,6 +237,11 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   HVAC_DECISION_OUTCOME_REPORT: ['The active heating decision can be stopped after confirmation'],
   HVAC_DECISION_OUTCOME_VIEW: ['The active heating decision can be stopped after confirmation', 'A newly installed heater can be recorded as the decision outcome'],
   HVAC_DECISION_OUTCOME_UNLINK: ['A newly installed heater can be recorded as the decision outcome'],
+  BUYER_PLAN_STATUS: ['Pending, completed, and overdue maintenance tasks are listed'],
+  BUYER_DEADLINES: ['The canonical Buyer Plan next action and progress are shown'],
+  BUYER_DOCUMENT_READINESS: ['The Buyer Plan next action and closing blockers are shown'],
+  BUYER_INSPECTION_REVIEW: ['Expected and missing transaction document counts are shown'],
+  BUYER_TASK_COMPLETE: ['A new maintenance task is ready to be created'],
 };
 
 export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, AskOperationSemanticPackage>> = Object.freeze(

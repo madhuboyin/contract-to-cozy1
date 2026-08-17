@@ -55,7 +55,18 @@ export type AskOperationId =
   | 'HOME_CHANGE_SUMMARY'
   | 'HVAC_DECISION_OUTCOME_REPORT'
   | 'HVAC_DECISION_OUTCOME_VIEW'
-  | 'HVAC_DECISION_OUTCOME_UNLINK';
+  | 'HVAC_DECISION_OUTCOME_UNLINK'
+  // Home Buyer FRD §13.3 — buyer closing copilot operations. Distinct from
+  // HOME_ACTIONS/COVERAGE_GAPS/OWNERSHIP_COSTS/PROPERTY_SUMMARY: those remain
+  // the homeowner-facing operations, while these read and operate the
+  // canonical Buyer Plan (HomeBuyerChecklist/HomeBuyerTask) for a pre-close
+  // purchase property. A non-buyer property gracefully explains that instead
+  // of pretending to answer (see buyerPlanContextProvider gating).
+  | 'BUYER_PLAN_STATUS'
+  | 'BUYER_DEADLINES'
+  | 'BUYER_DOCUMENT_READINESS'
+  | 'BUYER_INSPECTION_REVIEW'
+  | 'BUYER_TASK_COMPLETE';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -197,6 +208,14 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HVAC_DECISION_OUTCOME_REPORT: definition('HVAC_DECISION_OUTCOME_REPORT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.outcome.report', ['SUMMARY', 'OUTCOME_SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE']),
   HVAC_DECISION_OUTCOME_VIEW: definition('HVAC_DECISION_OUTCOME_VIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'decision-platform.hvac.outcome.view', ['OUTCOME_SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE']),
   HVAC_DECISION_OUTCOME_UNLINK: definition('HVAC_DECISION_OUTCOME_UNLINK', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.outcome.unlink', ['SUMMARY', 'WORKFLOW_PROGRESS', 'GROUPED_LIST', 'EMPTY_STATE']),
+  // Home Buyer FRD §13.3. Reads are VIEWER-floor STATUS_SUMMARY/RECORD_QUERY
+  // operations grounded in the canonical Buyer Plan overview; the completion
+  // command mirrors MAINTENANCE_TASK_COMPLETE's CONTRIBUTOR-floor COMMAND shape.
+  BUYER_PLAN_STATUS: definition('BUYER_PLAN_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.plan.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
+  BUYER_DEADLINES: definition('BUYER_DEADLINES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.deadlines', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  BUYER_DOCUMENT_READINESS: definition('BUYER_DOCUMENT_READINESS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.document-readiness', ['SUMMARY', 'EVIDENCE']),
+  BUYER_INSPECTION_REVIEW: definition('BUYER_INSPECTION_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.inspection-review', ['SUMMARY', 'EVIDENCE', 'BOUNDARY']),
+  BUYER_TASK_COMPLETE: definition('BUYER_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
@@ -219,6 +238,19 @@ export function validateAskOperationDefinitions(): string[] {
   issues.push(...validateAskOperationSemanticPackages(Object.keys(ASK_OPERATION_DEFINITIONS) as AskOperationId[]));
   return issues;
 }
+
+// Home Buyer FRD §13.3/§13.4. Deliberately keyed on closing/purchase/"buyer
+// plan" phrasing so these never shadow the equivalent homeowner operations
+// (HOME_ACTIONS, MAINTENANCE_TASK_COMPLETE, etc.) for a plain maintenance or
+// ownership question -- the adapters themselves also gracefully decline when
+// the selected property has no active buyer journey (see
+// buyerPlanContextProvider). Checked ahead of maintenanceCompletePattern
+// since "task ... complete" would otherwise match generically.
+const buyerTaskCompletePattern = /\b(?:mark|complete|finish)\b.{0,60}\b(?:buyer (?:plan )?task|closing (?:plan )?task)\b|\b(?:buyer (?:plan )?task|closing (?:plan )?task)\b.{0,60}\b(?:complete|completed|done)\b|\bi(?:'ve| have)?\s+(?:completed|finished)\b.{0,60}\b(?:buyer plan|closing plan) task\b/i;
+const buyerDeadlinesPattern = /\b(?:next deadline|what'?s due|what is due|upcoming deadlines?)\b.{0,40}\b(?:before closing|for closing|closing)\b|\bdeadlines?\b.{0,40}\b(?:before closing|for (?:this|my) (?:purchase|closing))\b|\bwhat could (?:delay|block)\b.{0,40}\b(?:my )?closing\b/i;
+const buyerDocumentReadinessPattern = /\b(?:transaction|closing)\b.{0,40}\bdocuments?\b.{0,50}\b(?:missing|still need|readiness|received)\b|\bwhich (?:transaction |closing )?documents?\b.{0,50}\b(?:missing|before closing|for (?:this|my) closing)\b/i;
+const buyerInspectionReviewPattern = /\b(?:inspection )?findings?\b.{0,50}\b(?:need(?:s)? a decision|still need(?:s)? a decision|undecided|need(?:s)? classif(?:y|ication))\b|\breview (?:my |the )?(?:inspection )?findings?\b.{0,30}\b(?:before closing|for (?:this|my) (?:purchase|closing))\b/i;
+const buyerPlanStatusPattern = /\b(?:what should i do next|next step)\b.{0,50}\b(?:this purchase|my closing|buying this home|closing plan|buyer plan)\b|\bstatus of (?:my |this )?(?:home )?purchase\b|\bhow close am i\b.{0,40}\bclosing\b|\b(?:closing plan|buyer plan) status\b/i;
 
 const emergencyPattern = /\b(smell(?:ing)? gas|gas smell|gas leak|carbon monoxide|\bco (?:alarm|detector)|sparks?\b.{0,25}\b(?:from|at)\b|electrical fire|actively flooding.*electric(?:al)?|fire now)\b/i;
 const unsafeRestrictedPattern = /\b(?:bypass|avoid|evade|skip|work around)\b.{0,60}\b(?:permit|inspection|code|licen[cs]e|hoa|disclosure)\b|\b(?:disable|disconnect|remove|tamper with|cover|block)\b.{0,60}\b(?:smoke|carbon monoxide|co|fire|safety)\s*(?:detector|alarm|device)?\b|\b(?:conceal|hide|omit|misrepresent)\b.{0,80}\b(?:damage|defect|mold|leak|flood|fire|buyer|insurer|inspector|lender)\b|\b(?:remove|alter|cut|demolish|open up)\b.{0,70}\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:wall|beam|column|support)?\b|\b(?:load[- ]bearing|structural)\b.{0,70}\b(?:without|skip|avoid|myself|diy)\b.{0,40}\b(?:inspection|permit|engineer|approval)?\b|\b(?:guarantee|certify|confirm(?: definitively)?|promise|tell me (?:for sure|the exact))\b.{0,100}\b(?:approved|approval|eligible|eligibility|legal|compliant|safe|pass inspection|refinanc|mortgage|loan|insurance claim|tax appeal|damage|loss|claim|covered|coverage|sale price|sell for)\b/i;
@@ -329,6 +361,25 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (outOfScopePattern.test(message)) {
     return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99);
+  }
+  // Home Buyer FRD §13.3: checked ahead of every generic pattern below (incl.
+  // maintenanceCompletePattern and homeActionsPattern) since buyer phrasing
+  // like "closing task ... complete" or "closing plan status" would otherwise
+  // be captured by their broader keyword sets.
+  if (buyerTaskCompletePattern.test(message)) {
+    return resolved('BUYER_TASK_COMPLETE', 0.97);
+  }
+  if (buyerDeadlinesPattern.test(message)) {
+    return resolved('BUYER_DEADLINES', 0.96);
+  }
+  if (buyerDocumentReadinessPattern.test(message)) {
+    return resolved('BUYER_DOCUMENT_READINESS', 0.96);
+  }
+  if (buyerInspectionReviewPattern.test(message)) {
+    return resolved('BUYER_INSPECTION_REVIEW', 0.95);
+  }
+  if (buyerPlanStatusPattern.test(message)) {
+    return resolved('BUYER_PLAN_STATUS', 0.95);
   }
   // Ask Intelligence FRD Phase 8A: checked ahead of quoteComparisonReviewPattern
   // and replacementPattern below, since both are generic enough to otherwise

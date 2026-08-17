@@ -11,11 +11,16 @@ export interface AskLifecyclePromptDefinition {
   question: string;
 }
 
+// Home Buyer FRD §13.4/§13.7 — before confirmed closing, featured prompts
+// lead with the buyer closing copilot operations grounded in the canonical
+// Buyer Plan (§13.3) rather than generic homeowner operations. HOME_ACTIONS,
+// OWNERSHIP_COSTS, and COVERAGE_GAPS no longer crowd out active buyer-plan
+// deadlines, finding decisions, or document readiness for this stage.
 const BUYING_PROMPTS: readonly AskLifecyclePromptDefinition[] = Object.freeze([
-  { id: 'buying-record-summary', operationId: 'PROPERTY_SUMMARY', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Summarize this home record before closing.' },
-  { id: 'buying-attention', operationId: 'HOME_ACTIONS', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'What should I do before closing?' },
-  { id: 'buying-costs', operationId: 'OWNERSHIP_COSTS', categoryId: 'SAVE', categoryLabel: 'Save', question: 'What are the ownership costs for this home after purchase?' },
-  { id: 'buying-coverage-records', operationId: 'COVERAGE_GAPS', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage records?' },
+  { id: 'buying-plan-status', operationId: 'BUYER_PLAN_STATUS', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'What should I do next for this purchase?' },
+  { id: 'buying-deadlines', operationId: 'BUYER_DEADLINES', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'What is due before closing?' },
+  { id: 'buying-documents', operationId: 'BUYER_DOCUMENT_READINESS', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Which transaction documents are missing before closing?' },
+  { id: 'buying-inspection', operationId: 'BUYER_INSPECTION_REVIEW', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Which inspection findings still need a decision?' },
 ]);
 
 const RECENT_OWNER_PROMPTS: readonly AskLifecyclePromptDefinition[] = Object.freeze([

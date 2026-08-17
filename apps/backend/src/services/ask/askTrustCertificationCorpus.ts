@@ -53,6 +53,11 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'HVAC_DECISION_OUTCOME_REPORT', message: 'We ended up installing a new heater after the review', category: 'PARAPHRASE' },
   { operationId: 'HVAC_DECISION_OUTCOME_VIEW', message: 'How did the heating repair-or-new-unit choice turn out?', category: 'PARAPHRASE' },
   { operationId: 'HVAC_DECISION_OUTCOME_UNLINK', message: 'Retract what I said about replacing the furnace', category: 'COLLOQUIAL' },
+  { operationId: 'BUYER_PLAN_STATUS', message: 'Where do things stand with getting this purchase to closing?', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_DEADLINES', message: 'What is coming due before we close on this home?', category: 'COLLOQUIAL' },
+  { operationId: 'BUYER_DOCUMENT_READINESS', message: 'Which paperwork for this closing is still outstanding?', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_INSPECTION_REVIEW', message: 'Which inspection issues on this purchase are still undecided?', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_TASK_COMPLETE', message: 'Please complete the locksmith buyer task now', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -156,6 +161,11 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   HVAC_DECISION_OUTCOME_REPORT: 'The newly installed heater can be recorded as the decision outcome.',
   HVAC_DECISION_OUTCOME_VIEW: 'The recorded HVAC decision outcome shows that the heating review ended with replacement of the old unit.',
   HVAC_DECISION_OUTCOME_UNLINK: 'The incorrect furnace-replacement outcome can be unlinked after confirmation.',
+  BUYER_PLAN_STATUS: 'Confirming the final walkthrough appointment is this purchase’s exact next Buyer Plan item, with four out of five applicable steps already checked off.',
+  BUYER_DEADLINES: 'Two closing-timeline milestones are due before this purchase closes, and one blocking item still needs to be resolved.',
+  BUYER_DOCUMENT_READINESS: 'Two transaction documents for this closing are verified, but one still needs a second look before it counts as received.',
+  BUYER_INSPECTION_REVIEW: 'The roof-leak finding from this purchase still awaits a seller-negotiation, acceptance, or dismissal decision.',
+  BUYER_TASK_COMPLETE: 'The locksmith closing checklist item is now checked off, with its assignee cleared automatically.',
 });
 
 export const ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES = Object.freeze(

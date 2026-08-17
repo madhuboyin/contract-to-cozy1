@@ -1,4 +1,4 @@
-import { AskExecution, AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
+import { AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -26,6 +26,7 @@ import { readAskOperationalControls } from '../../config/askOperationalControls'
 import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
+import { HomeBuyerTaskService } from '../HomeBuyerTask.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
 import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
@@ -3655,6 +3656,294 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
   };
 }
 
+// Home Buyer FRD §13 — buyer closing copilot operations. Each read loads the
+// same canonical Buyer Plan overview used by Buyer Closing Home
+// (HomeBuyerTaskService.getClosingHomePresentation, via buyerPlanContextProvider
+// so contextVersion/freshness stay consistent) and gracefully declines instead
+// of guessing when the selected property has no active pre-close journey —
+// mirroring buildBuyerPlanHomeActionsResult's CANDIDATE-state nudge above.
+async function loadBuyerPlanContext(userId: string, propertyId: string) {
+  return buyerPlanContextProvider.load({
+    userId,
+    propertyId,
+    operationId: 'HOME_ACTIONS',
+    signal: new AbortController().signal,
+  });
+}
+
+function buyerPlanHref(propertyId: string): string {
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}/buyer-plan`;
+}
+
+function buyerNotActiveResult(propertyId: string, contextVersion: string | null, body: string): AskOperationResult {
+  return {
+    status: 'NOT_APPLICABLE',
+    reasonCode: 'BUYER_PLAN_NOT_ACTIVE',
+    contextVersion,
+    blocks: [{
+      type: 'SUMMARY',
+      id: 'buyer-plan-not-active',
+      title: 'This property has no active Buyer Plan',
+      body,
+      tone: 'DEFAULT',
+      actions: [{ id: 'open-home', label: 'Open Home', href: `/dashboard?propertyId=${encodeURIComponent(propertyId)}`, style: 'PRIMARY' }],
+    }],
+    suggestions: ['What should I do next for this home?'],
+  };
+}
+
+const BUYER_PROFESSIONAL_BOUNDARY: AskPresentationBlock = {
+  type: 'BOUNDARY',
+  id: 'buyer-professional-boundary',
+  title: 'Confirm transaction decisions with your professionals',
+  body: 'Ask is summarizing recorded plan state. Confirm legal, lending, title, insurance, inspection, funds, and settlement decisions with the responsible licensed or transaction professional.',
+  severity: 'INFO',
+  suggestions: [],
+};
+
+async function buyerPlanStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s Buyer Plan status right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet. Start it to get a closing status.');
+  }
+  const { overview } = data;
+  const remaining = Math.max(overview.journey.progress.total - overview.journey.progress.completed, 0);
+  const nextHref = overview.nextAction
+    ? `${planHref}?${new URLSearchParams({ taskId: overview.nextAction.id, ...(overview.nextAction.checklistSection ? { section: overview.nextAction.checklistSection } : {}) }).toString()}`
+    : planHref;
+  return {
+    status: overview.blockers.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: overview.blockers.length ? 'BUYER_PLAN_HAS_BLOCKERS' : undefined,
+    contextVersion: data.contextVersion,
+    blocks: [
+      {
+        type: 'SUMMARY',
+        id: 'buyer-plan-status-summary',
+        title: overview.nextAction ? `Next before closing: ${overview.nextAction.title}` : 'No open next task is currently recorded',
+        body: overview.nextAction
+          ? `The Closing Plan is ${overview.journey.progress.percent}% complete with ${remaining} of ${overview.journey.progress.total} applicable pre-close tasks remaining.${overview.blockers.length ? ` ${overview.blockers.length} item${overview.blockers.length === 1 ? ' is' : 's are'} blocked.` : ''}`
+          : `The canonical Buyer Plan has no executable pre-close task right now. It is ${overview.journey.progress.percent}% complete.`,
+        tone: overview.blockers.length ? 'CAUTION' : 'DEFAULT',
+        actions: [{ id: overview.nextAction ? 'open-next-buyer-task' : 'open-buyer-plan', label: overview.nextAction ? 'Open exact next task' : 'Open Buyer Plan', href: nextHref, style: 'PRIMARY' }],
+      },
+      BUYER_PROFESSIONAL_BOUNDARY,
+    ],
+    suggestions: ['What is due before closing?', 'Which transaction documents are missing?'],
+  };
+}
+
+async function buyerDeadlinesResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s deadlines right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there are no recorded closing deadlines.');
+  }
+  const { overview } = data;
+  const upcomingMilestones = overview.milestones.filter((milestone) => milestone.status !== 'COMPLETED');
+  const sections = [];
+  if (upcomingMilestones.length) {
+    sections.push({
+      id: 'milestones', title: 'Upcoming milestones', count: upcomingMilestones.length,
+      items: upcomingMilestones.map((milestone) => ({
+        id: milestone.id, title: milestone.label, description: null,
+        meta: [humanDate(milestone.dueAt ? new Date(milestone.dueAt) : null) ? `Due ${humanDate(new Date(milestone.dueAt!))}` : 'No date recorded'],
+        status: milestone.status, href: planHref,
+      })),
+    });
+  }
+  if (overview.blockers.length) {
+    sections.push({
+      id: 'blockers', title: 'Blocking before closing', count: overview.blockers.length,
+      items: overview.blockers.map((task) => ({
+        id: task.id, title: task.title, description: task.description,
+        meta: [task.priority === 'NOW' ? 'Now' : task.priority, humanDate(task.dueAt ? new Date(task.dueAt) : null) ? `Due ${humanDate(new Date(task.dueAt!))}` : null].filter((value): value is string => Boolean(value)),
+        status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
+      })),
+    });
+  }
+  const blocks: AskOperationResult['blocks'] = [{
+    type: 'SUMMARY',
+    id: 'buyer-deadlines-summary',
+    title: sections.length ? 'Recorded deadlines before closing' : 'No recorded deadlines are open right now',
+    body: sections.length
+      ? `${upcomingMilestones.length} milestone${upcomingMilestones.length === 1 ? '' : 's'} and ${overview.blockers.length} blocking task${overview.blockers.length === 1 ? '' : 's'} are open. Dates reflect what you or your professionals recorded, not a certified closing date.`
+      : 'No milestone or blocking task is currently open. This does not guarantee no deadline exists — only recorded ones are shown.',
+    tone: overview.blockers.length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+  }];
+  if (sections.length) {
+    blocks.push({ type: 'GROUPED_LIST', id: 'buyer-deadlines-list', title: 'Deadlines and blockers', description: 'From the canonical Buyer Plan.', sections, actions: [] });
+  }
+  blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
+  return {
+    status: overview.blockers.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: overview.blockers.length ? 'BUYER_PLAN_HAS_BLOCKERS' : undefined,
+    contextVersion: data.contextVersion,
+    blocks,
+    suggestions: ['What should I do next for this purchase?', 'Which transaction documents are missing?'],
+  };
+}
+
+async function buyerDocumentReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s document readiness right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no transaction document readiness to review.');
+  }
+  const { overview } = data;
+  const documentsHref = overview.routes.documents;
+  const needingReview = overview.evidence.documentsNeedingReviewCount;
+  return {
+    status: needingReview > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: needingReview > 0 ? 'BUYER_DOCUMENTS_NEED_REVIEW' : undefined,
+    contextVersion: data.contextVersion,
+    blocks: [
+      {
+        type: 'SUMMARY',
+        id: 'buyer-document-readiness-summary',
+        title: needingReview > 0 ? `${needingReview} transaction document${needingReview === 1 ? '' : 's'} still need review` : 'Recorded transaction documents are verified',
+        body: `${overview.evidence.documentCount} document${overview.evidence.documentCount === 1 ? '' : 's'} recorded, ${overview.evidence.verifiedDocumentCount} verified, ${needingReview} needing review. This reflects only what has been uploaded — it is not a guarantee that every closing document has been requested.`,
+        tone: needingReview > 0 ? 'CAUTION' : 'DEFAULT',
+        actions: [{ id: 'open-documents', label: 'Open Documents', href: documentsHref, style: 'PRIMARY' }],
+      },
+      {
+        type: 'EVIDENCE',
+        id: 'buyer-document-readiness-evidence',
+        title: 'Document readiness',
+        items: [
+          { label: 'Recorded documents', source: 'Transaction Documents', observedAt: new Date().toISOString() },
+          { label: 'Verified', source: `${overview.evidence.verifiedDocumentCount} of ${overview.evidence.documentCount}`, observedAt: new Date().toISOString() },
+        ],
+      },
+    ],
+    suggestions: ['What is due before closing?', 'Which inspection findings still need a decision?'],
+  };
+}
+
+async function buyerInspectionReviewResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s inspection status right now.');
+  const { data } = context;
+  const planHref = buyerPlanHref(propertyId);
+  if (data.presentationMode === 'CANDIDATE' || !data.overview) {
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no inspection to review.');
+  }
+  const { overview } = data;
+  const inspectionHref = overview.routes.inspection;
+  const openFindings = overview.evidence.openMaterialFindingCount;
+  const stateLabel: Record<string, string> = {
+    NOT_STARTED: 'No inspection report has been imported yet',
+    PROCESSING: 'The inspection report is still processing',
+    REVIEW_PENDING: 'The inspection report is imported and awaiting review',
+    CONFIRMED: 'The inspection report has been confirmed',
+  };
+  return {
+    status: openFindings > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: openFindings > 0 ? 'BUYER_INSPECTION_FINDINGS_OPEN' : undefined,
+    contextVersion: data.contextVersion,
+    blocks: [
+      {
+        type: 'SUMMARY',
+        id: 'buyer-inspection-review-summary',
+        title: openFindings > 0 ? `${openFindings} safety or major finding${openFindings === 1 ? '' : 's'} still need a decision` : (stateLabel[overview.evidence.inspectionState] ?? 'No open safety or major finding is recorded'),
+        body: openFindings > 0
+          ? 'Each finding needs a decision: seller negotiation, accepted post-close work, verified fact, or dismissed with reason. Ask can draft a decision, but confirming it happens in Inspection Hub or with your explicit confirmation.'
+          : `${overview.evidence.inspectionReportCount} inspection report${overview.evidence.inspectionReportCount === 1 ? '' : 's'} recorded for this purchase.`,
+        tone: openFindings > 0 ? 'CAUTION' : 'DEFAULT',
+        actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }],
+      },
+      BUYER_PROFESSIONAL_BOUNDARY,
+    ],
+    suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+  };
+}
+
+function buyerTaskVersion(task: { id: string; status: HomeBuyerTaskStatus; userEditedAt: Date | null }): string {
+  return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, userEditedAt: task.userEditedAt })).digest('hex');
+}
+
+async function buyerTaskCompleteResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const planHref = buyerPlanHref(propertyId);
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-task-complete-permission', title: 'A contributor or owner needs to complete this task',
+        body: 'Completing a Buyer Plan task changes the shared closing record. Viewers can review the plan but cannot change it.',
+        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+
+  const allTasks = await HomeBuyerTaskService.getTasks(userId, propertyId);
+  const openTasks = allTasks.filter((task) => !['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status) && task.applicability !== 'NOT_APPLICABLE');
+  if (!openTasks.length) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'NO_OPEN_BUYER_TASKS',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-task-complete-empty', title: 'No open Buyer Plan task is available to complete',
+        body: 'No pending, in-progress, or blocked task is recorded for this purchase. Ask will not create a completion without a canonical task.',
+        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+      }],
+      suggestions: ['What should I do next for this purchase?'],
+    };
+  }
+  const matched = maintenanceCompletionMatch(message, openTasks) ?? (openTasks.length === 1 ? openTasks[0] : null);
+  if (!matched) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'BUYER_TASK_SELECTION_REQUIRED',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-task-complete-select', title: 'Choose the Buyer Plan task to complete',
+        body: 'Ask could not identify one open task with enough confidence. Name the exact task, or open the plan and complete it directly.',
+        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan instead', href: planHref, style: 'SECONDARY' }],
+      }],
+      suggestions: openTasks.slice(0, 3).map((task) => `Mark the ${task.title} buyer plan task complete`),
+    };
+  }
+
+  const confirmationVersion = 1;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'BUYER_TASK_COMPLETION_CONFIRMATION_REQUIRED', contextVersion: buyerTaskVersion(matched),
+    parameters: {
+      buyerTaskId: matched.id,
+      buyerTaskTitle: matched.title,
+      buyerTaskVersion: buyerTaskVersion(matched),
+      confirmationVersion,
+      confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{
+      type: 'SUMMARY', id: 'buyer-task-complete-review', title: `Review completion for ${matched.title}`,
+      body: 'No status has changed yet. Confirming records a user attestation on this Buyer Plan task.',
+      tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${planHref}?${new URLSearchParams({ taskId: matched.id }).toString()}`, style: 'SECONDARY' }],
+    }],
+    confirmation: {
+      confirmationId: `buyer-task-complete-${matched.id}-${confirmationVersion}`,
+      version: confirmationVersion,
+      title: 'Mark this Buyer Plan task complete?',
+      description: 'This records completion in the canonical Buyer Plan and updates closing readiness.',
+      fields: [
+        { label: 'Task', value: matched.title },
+        { label: 'Current status', value: matched.status.toLowerCase().replace(/_/g, ' ') },
+        { label: 'Completion method', value: 'User attestation' },
+      ],
+      confirmLabel: 'Mark complete',
+      consentText: 'I confirm this task was completed and authorize updating the shared Buyer Plan.',
+      expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis] = await Promise.all([
@@ -4414,6 +4703,11 @@ async function dispatchOperationAdapterResult(
     case 'HVAC_DECISION_OUTCOME_REPORT': return hvacDecisionOutcomeReportResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_DECISION_OUTCOME_VIEW': return hvacDecisionOutcomeViewResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_DECISION_OUTCOME_UNLINK': return hvacDecisionOutcomeUnlinkResult(input.userId, input.propertyId!, input.message);
+    case 'BUYER_PLAN_STATUS': return buyerPlanStatusResult(input.userId, input.propertyId!);
+    case 'BUYER_DEADLINES': return buyerDeadlinesResult(input.userId, input.propertyId!);
+    case 'BUYER_DOCUMENT_READINESS': return buyerDocumentReadinessResult(input.userId, input.propertyId!);
+    case 'BUYER_INSPECTION_REVIEW': return buyerInspectionReviewResult(input.userId, input.propertyId!);
+    case 'BUYER_TASK_COMPLETE': return buyerTaskCompleteResult(input.userId, input.propertyId!, input.message);
   }
 }
 
@@ -6554,6 +6848,60 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       suggestions: ['What maintenance is still pending?', 'Show maintenance completed this year'],
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK_COMPLETION';
+    artifactId = updated.id;
+  } else if (execution.operationId === 'BUYER_TASK_COMPLETE') {
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to complete Buyer Plan tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const taskId = parameters.buyerTaskId;
+    if (typeof taskId !== 'string') {
+      const error = new Error('The Buyer Plan task selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } } });
+    if (!task) {
+      const error = new Error('The selected Buyer Plan task is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const completionIdempotencyKey = `ask:${execution.id}:buyer-task-completion`;
+    const completionEvidence = task.completionEvidenceJson && typeof task.completionEvidenceJson === 'object' && !Array.isArray(task.completionEvidenceJson)
+      ? task.completionEvidenceJson as Record<string, unknown>
+      : {};
+    const completedByThisExecution = task.status === 'COMPLETED' && completionEvidence.completionIdempotencyKey === completionIdempotencyKey;
+    if (!completedByThisExecution && (task.status === 'COMPLETED'
+      || task.status === 'CANCELLED'
+      || task.status === 'NOT_NEEDED'
+      || parameters.buyerTaskVersion !== buyerTaskVersion(task))) {
+      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const updated = completedByThisExecution
+      ? task
+      : await HomeBuyerTaskService.updateTask(userId, execution.propertyId, task.id, {
+        status: 'COMPLETED',
+        completionEvidenceJson: { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString(), completionIdempotencyKey },
+      });
+    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'BUYER_TASK_COMPLETED', contextVersion: buyerTaskVersion(updated),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `buyer-task-completed-${updated.id}`, title: 'Buyer Plan task completed', status: 'COMPLETED',
+        description: 'Completion is recorded in this purchase’s canonical Buyer Plan and closing readiness is updated.',
+        details: [
+          { label: 'Task', value: updated.title },
+          { label: 'Completion method', value: 'User attestation' },
+        ],
+        actions: [{ id: 'open-task', label: 'Open completed task', href: buyerTaskHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+    };
+    artifactType = 'HOME_BUYER_TASK';
     artifactId = updated.id;
   } else if (execution.operationId === 'MAINTENANCE_TASK_CREATE') {
     if (access.role === HouseholdRole.VIEWER) {
