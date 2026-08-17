@@ -2462,7 +2462,7 @@ not defer an introduced homeowner regression to a later cleanup slice.
 | Slice 4 | In progress | Versioned code-owned entry template for each of the nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys; condo/association responsibility, pool/spa, property-age-plus-location, and HVAC-age example rules; explainable applicability provenance, missing-detail benefit copy/correction paths, exact deltas, and idempotent preservation of user work | Complete the full composition-layer catalog and transaction-path facts; render questions, deltas, applicability, and section progress in Buyer Closing Home/Buyer Plan; build the revision-aware Contract & Contingency Tracker, confirmed milestone write-back, blocker recovery, deep-link return continuity, and phase-aware Ask context |
 | Slices 5–6 | In progress | Buyer-aware Ask context/actions and canonical Moving Concierge task projection are implemented as the first vertical increments | Complete the remaining scope listed in each slice below |
 | Slice 7 | Complete | Explicit professional close plus atomic purchase cancellation; mutually exclusive persisted lifecycle claims; cancellation stops active tasks/milestones while preserving completed work, documents, findings, and evidence; authorized close atomically records an idempotent Home Record milestone with signed evidence and opens a welcome-home first-90-day transition; day-91 handoff requires persisted ownership and resolved pre-close work, materializes incomplete ownership work idempotently, and atomically establishes the owner; persisted Recent Owner state progressively reveals a bounded first-90-day transition above the normal homeowner dashboard; advocacy appears only after canonical progress or verified-record value, is suppressed by buyer/home urgency and safety work, is role-aware, dismissible, frequency-limited, and measured; deterministic desktop/mobile rendered regression coverage verifies homeowner continuity, advocacy behavior, accessibility, and responsive layout | — |
-| Slice 8 | In progress | Removed the orphaned global buyer-checklist card, route, and framework redirect; removed associated duplicate types and obsolete authentication copy; corrected user-segment terminology; expanded the route/CTA contract across the buyer-to-owner journey; retired duplicate Moving execution state and APIs; added accessible Buyer Plan loading and recoverable error states; corrected Buyer Closing Home readiness and mobile-continuation semantics; repaired zero-property account entry so neutral signup/welcome copy and an explicit owner/buyer journey choice lead into trigger-first onboarding instead of the generic property form | Complete the rendered full-journey and protected homeowner traversals; finish site-wide copy/link, legacy helper, responsive, accessibility, and remaining empty/error-state audits |
+| Slice 8 | In progress | Removed the orphaned global buyer-checklist card, route, and framework redirect; removed associated duplicate types and obsolete authentication copy; corrected user-segment terminology; expanded the route/CTA contract across the buyer-to-owner journey; retired duplicate Moving execution state and APIs; added accessible Buyer Plan loading and recoverable error states; corrected Buyer Closing Home readiness and mobile-continuation semantics; repaired zero-property account entry so neutral signup/welcome copy and an explicit owner/buyer journey choice lead into trigger-first onboarding instead of the generic property form; added deterministic rendered buyer-to-recent-owner and two-owner-plus-active-purchase isolation traversals with desktop accessibility and mobile overflow coverage | Extend the rendered baselines through the Section 24 mutation, persistence, deep-link, permission, and database non-creation checks; finish site-wide copy/link, legacy helper, responsive, accessibility, and remaining empty/error-state audits |
 
 The Slice 0 foundation is complete enough for vertical Slice 1 work, but the
 minimum coherent release in Section 21.1 is not yet satisfied. No current
@@ -3238,6 +3238,23 @@ requires an explicit journey choice instead of silently defaulting to owner.
 Selecting **Buying existing** preserves the existing property creation, buyer
 entry-context capture, and Closing Plan initialization sequence. A rendered
 welcome regression and the route/CTA contract guard the handoff.
+
+The eighth cleanup increment adds the first dedicated rendered Slice 8
+traversals. A deterministic buyer scenario now clicks through neutral account
+welcome, explicit **Buying existing** selection, address/dates/inspection
+context, Buyer Closing Home, property-scoped Documents, Inspection, Ask, and
+Closing Plan destinations, and an explicit professional-close confirmation
+before Recent Owner and the standard Home renderer appear. Its elapsed target
+date deliberately remains in Closing Journey Mode until confirmation. A second
+scenario repeatedly switches between two established owned properties and an
+active purchase, exercises browser-back continuity, proves exact homeowner
+versus Buyer Closing Home renderer isolation, and verifies that owner reads do
+not call buyer endpoints. Desktop coverage includes serious/critical automated
+accessibility checks, while mobile coverage checks the journey choice, sticky
+buyer continuation, property switcher, and horizontal overflow. These are
+deterministic rendered regression baselines; the deeper mutation, persistence,
+and database non-creation steps in Section 24 remain required before Slice 8 is
+complete.
 
 **Goal:** Remove legacy contradictions and deliver top-tier fit and finish.
 

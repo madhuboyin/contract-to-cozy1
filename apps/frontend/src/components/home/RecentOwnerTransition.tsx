@@ -60,7 +60,10 @@ export function RecentOwnerTransition({ transition }: { transition: BuyerRecentO
         </div>
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-teal-100">Records carried forward</p>
-          <p className="mt-1 font-semibold text-white">{evidence.documentCount} documents · {evidence.inspectionReportCount} inspections</p>
+          <p className="mt-1 font-semibold text-white">
+            {evidence.documentCount} document{evidence.documentCount === 1 ? '' : 's'} ·{' '}
+            {evidence.inspectionReportCount} inspection{evidence.inspectionReportCount === 1 ? '' : 's'}
+          </p>
           <p className="mt-2 text-xs text-teal-100">{evidence.verifiedDocumentCount} verified · {evidence.openMaterialFindingCount} material findings open</p>
         </div>
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">

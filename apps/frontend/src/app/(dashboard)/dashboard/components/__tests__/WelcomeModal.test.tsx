@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { WelcomeModal } from '../WelcomeModal';
 
 describe('WelcomeModal journey entry', () => {
@@ -12,5 +12,15 @@ describe('WelcomeModal journey entry', () => {
       'href',
       '/onboarding/address',
     );
+  });
+
+  it('supports the rendered acceptance traversal without changing the production destination', () => {
+    const onStart = jest.fn();
+    render(<WelcomeModal userFirstName="Jordan" onStart={onStart} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose my home journey' }));
+
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('link', { name: 'Choose my home journey' })).not.toBeInTheDocument();
   });
 });

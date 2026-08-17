@@ -7,6 +7,7 @@ import { ClipboardCheck, Home, ShieldCheck, Sparkles } from 'lucide-react';
 
 interface WelcomeModalProps {
     userFirstName: string;
+    onStart?: () => void;
 }
 
 interface FeatureBlockProps {
@@ -27,7 +28,7 @@ const FeatureBlock = ({ icon: Icon, title, description }: FeatureBlockProps) => 
 /**
  * Full-screen journey entry for new owner and buyer accounts with no properties.
  */
-export function WelcomeModal({ userFirstName }: WelcomeModalProps) {
+export function WelcomeModal({ userFirstName, onStart }: WelcomeModalProps) {
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (e.key === 'Escape') {
             // Focus the CTA button so the user knows how to proceed
@@ -86,11 +87,22 @@ export function WelcomeModal({ userFirstName }: WelcomeModalProps) {
                     </div>
 
                     <div className="pt-4">
-                        <Link href="/onboarding/address">
-                            <Button id="welcome-modal-cta" size="lg" className="text-lg w-full font-bold">
+                        {onStart ? (
+                            <Button
+                                id="welcome-modal-cta"
+                                size="lg"
+                                className="text-lg w-full font-bold"
+                                onClick={onStart}
+                            >
                                 Choose my home journey
                             </Button>
-                        </Link>
+                        ) : (
+                            <Link href="/onboarding/address">
+                                <Button id="welcome-modal-cta" size="lg" className="text-lg w-full font-bold">
+                                    Choose my home journey
+                                </Button>
+                            </Link>
+                        )}
                     </div>
                 </CardContent>
             </Card>
