@@ -207,6 +207,10 @@ export class BuyerAcquisitionService {
               buyerTaskId: true,
               buyerGuidanceJourneyId: true,
               buyerRepairJourneyId: true,
+              buyerOutcomeDocumentId: true,
+              buyerOutcomeDocument: {
+                select: { name: true, verificationStatus: true },
+              },
             },
           },
         },

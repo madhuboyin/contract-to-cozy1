@@ -3377,6 +3377,11 @@ export interface BuyerEvidenceFinding {
   buyerTaskId: string | null;
   buyerGuidanceJourneyId: string | null;
   buyerRepairJourneyId: string | null;
+  buyerOutcomeDocumentId: string | null;
+  buyerOutcomeDocument: {
+    name: string;
+    verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+  } | null;
 }
 
 export interface BuyerEvidenceReview {

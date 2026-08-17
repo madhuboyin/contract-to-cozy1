@@ -451,6 +451,9 @@ export class GuidanceJourneyService {
     journey: any;
     step: any;
     resolvedStepKey: string;
+    dedupeKey?: string | null;
+    statusOverride?: GuidanceEvidenceStatus | null;
+    sourceTypeOverride?: GuidanceEvidenceSourceType | null;
   }) {
     const { guidanceStepEvidence } = getGuidanceModels();
     if (!guidanceStepEvidence) return null;
@@ -533,12 +536,12 @@ export class GuidanceJourneyService {
       sourceEntityType: evidenceRefType,
       proofType,
     });
-    const sourceType = inferEvidenceSourceType({
+    const sourceType = args.sourceTypeOverride ?? inferEvidenceSourceType({
       sourceToolKey: args.input.sourceToolKey ?? null,
       sourceEntityType: evidenceRefType,
       actorUserId: args.input.actorUserId ?? null,
     });
-    const status = inferEvidenceStatus({
+    const status = args.statusOverride ?? inferEvidenceStatus({
       stepStatus: args.input.status,
       proofType,
       sourceToolKey: args.input.sourceToolKey ?? null,
@@ -547,6 +550,7 @@ export class GuidanceJourneyService {
     try {
       return await guidanceStepEvidence.create({
         data: {
+          dedupeKey: args.dedupeKey ?? null,
           propertyId: args.input.propertyId,
           journeyId: args.journey.id,
           stepId: args.step.id,
@@ -587,6 +591,9 @@ export class GuidanceJourneyService {
       });
     } catch (error: any) {
       const code = typeof error?.code === 'string' ? error.code : '';
+      if (code === 'P2002' && args.dedupeKey) {
+        return guidanceStepEvidence.findUnique({ where: { dedupeKey: args.dedupeKey } });
+      }
       if (code === 'P2021' || code === 'P2022') {
         logger.warn({
           propertyId: args.input.propertyId,
@@ -1078,6 +1085,72 @@ export class GuidanceJourneyService {
       signal,
       journey,
     };
+  }
+
+  async recordJourneyEvidence(input: {
+    propertyId: string;
+    journeyId: string;
+    actorUserId?: string | null;
+    preferredStepKeys: string[];
+    sourceToolKey: string;
+    sourceEntityType: string;
+    sourceEntityId: string;
+    proofType: string;
+    proofId: string;
+    dedupeKey: string;
+    status: GuidanceEvidenceStatus;
+    sourceType: GuidanceEvidenceSourceType;
+    producedData?: Record<string, unknown> | null;
+    metadata?: Record<string, unknown> | null;
+  }) {
+    const { guidanceJourney, guidanceStepEvidence } = getGuidanceModels();
+    const existing = await guidanceStepEvidence.findUnique({ where: { dedupeKey: input.dedupeKey } });
+    if (existing) return existing;
+
+    const journey = await guidanceJourney.findFirst({
+      where: { id: input.journeyId, propertyId: input.propertyId },
+      include: {
+        primarySignal: true,
+        steps: { orderBy: { stepOrder: 'asc' } },
+      },
+    });
+    if (!journey) {
+      throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    }
+    const step = input.preferredStepKeys
+      .map((stepKey) => journey.steps.find((candidate: any) => candidate.stepKey === stepKey))
+      .find(Boolean);
+    if (!step) {
+      throw new APIError('Guidance journey evidence step not found.', 409, 'GUIDANCE_EVIDENCE_STEP_NOT_FOUND');
+    }
+
+    return this.captureStepEvidence({
+      input: {
+        propertyId: input.propertyId,
+        journeyId: input.journeyId,
+        actorUserId: input.actorUserId ?? null,
+        sourceToolKey: input.sourceToolKey,
+        sourceEntityType: input.sourceEntityType,
+        sourceEntityId: input.sourceEntityId,
+        stepKey: step.stepKey,
+        status: input.status === 'VERIFIED' ? 'COMPLETED' : 'IN_PROGRESS',
+        producedData: {
+          ...(input.producedData ?? {}),
+          proofType: input.proofType,
+          proofId: input.proofId,
+          sourceEntityType: input.sourceEntityType,
+          sourceEntityId: input.sourceEntityId,
+        },
+        metadata: input.metadata ?? null,
+      },
+      signal: journey.primarySignal ?? null,
+      journey,
+      step,
+      resolvedStepKey: step.stepKey,
+      dedupeKey: input.dedupeKey,
+      statusOverride: input.status,
+      sourceTypeOverride: input.sourceType,
+    });
   }
 
   async recordToolCompletion(input: GuidanceToolCompletionInput) {

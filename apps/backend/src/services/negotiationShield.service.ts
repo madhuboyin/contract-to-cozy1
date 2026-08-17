@@ -30,6 +30,8 @@ import { parseNegotiationShieldDocument } from './negotiationShieldDocumentParsi
 import { generateInsuranceClaimSettlementAnalysis } from './negotiationShieldInsuranceClaimSettlement.service';
 import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldInsurancePremium.service';
 import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
+import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
 
@@ -1485,20 +1487,27 @@ export class NegotiationShieldService {
       throw new APIError('Buyer negotiation finding not found.', 404, 'BUYER_NEGOTIATION_FINDING_NOT_FOUND');
     }
 
-    if (input.completionDocumentId) {
-      const evidence = await prisma.negotiationShieldDocument.findFirst({
-        where: { caseId, documentId: input.completionDocumentId, negotiationShieldCase: { propertyId } },
-        select: { id: true },
-      });
-      if (!evidence) {
-        throw new APIError('Completion evidence must be attached to this negotiation case.', 409, 'BUYER_NEGOTIATION_EVIDENCE_NOT_ATTACHED');
-      }
-    }
     const effectiveCompletionDocumentId = input.completionDocumentId === undefined
       ? linked.outcomeDocumentId
       : input.completionDocumentId;
+    const completionDocument = effectiveCompletionDocumentId
+      ? input.completionDocumentId === undefined
+        ? await prisma.document.findFirst({
+          where: { id: effectiveCompletionDocumentId, propertyId },
+          select: { id: true, name: true, verificationStatus: true },
+        })
+        : (await prisma.negotiationShieldDocument.findFirst({
+          where: { caseId, documentId: effectiveCompletionDocumentId, negotiationShieldCase: { propertyId } },
+          select: { document: { select: { id: true, name: true, verificationStatus: true } } },
+        }))?.document ?? null
+      : null;
+    if (effectiveCompletionDocumentId && !completionDocument) {
+      throw new APIError('Completion evidence must be attached to this negotiation case.', 409, 'BUYER_NEGOTIATION_EVIDENCE_NOT_ATTACHED');
+    }
 
     const now = new Date();
+    const closesPreCloseWork = input.outcome === 'ACCEPTED_CREDIT' || input.outcome === 'SELLER_REPAIRED';
+    const transfersToBuyer = input.outcome === 'TRANSFERRED_TO_BUYER';
     await prisma.$transaction(async (tx) => {
       await tx.negotiationShieldBuyerFinding.update({
         where: { id: linked.id },
@@ -1515,8 +1524,6 @@ export class NegotiationShieldService {
         },
       });
 
-      const closesPreCloseWork = input.outcome === 'ACCEPTED_CREDIT' || input.outcome === 'SELLER_REPAIRED';
-      const transfersToBuyer = input.outcome === 'TRANSFERRED_TO_BUYER';
       await tx.inspectionFinding.update({
         where: { id: linked.findingId },
         data: {
@@ -1596,6 +1603,51 @@ export class NegotiationShieldService {
         }
       }
     });
+
+    if (
+      closesPreCloseWork
+      && completionDocument
+      && linked.finding.buyerRepairJourneyId
+    ) {
+      try {
+        await guidanceJourneyService.recordJourneyEvidence({
+          propertyId,
+          journeyId: linked.finding.buyerRepairJourneyId,
+          actorUserId,
+          preferredStepKeys: input.outcome === 'SELLER_REPAIRED'
+            ? ['verify_outcome', 'prepare_negotiation']
+            : ['finalize_price', 'prepare_negotiation'],
+          sourceToolKey: 'negotiation-shield',
+          sourceEntityType: 'DOCUMENT',
+          sourceEntityId: completionDocument.id,
+          proofType: 'buyer_negotiation_outcome_document',
+          proofId: completionDocument.id,
+          dedupeKey: `buyer-negotiation-outcome:${caseId}:${linked.findingId}:${completionDocument.id}`,
+          status: completionDocument.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'CAPTURED',
+          sourceType: 'USER_INPUT',
+          producedData: {
+            negotiationCaseId: caseId,
+            findingId: linked.findingId,
+            outcome: input.outcome,
+            sellerResponse: input.sellerResponse,
+            documentId: completionDocument.id,
+            documentName: completionDocument.name,
+          },
+          metadata: {
+            sourceFeatureKey: 'buyer_acquisition_plan',
+            resultContextLabel: 'Buyer negotiation completion evidence',
+          },
+        });
+      } catch (guidanceError) {
+        logger.warn({
+          guidanceError,
+          propertyId,
+          caseId,
+          findingId: linked.findingId,
+          journeyId: linked.finding.buyerRepairJourneyId,
+        }, '[GUIDANCE] buyer negotiation evidence propagation failed');
+      }
+    }
 
     return this.getCaseDetail(propertyId, caseId);
   }

@@ -6168,6 +6168,7 @@ model GuidanceJourneyEvent {
 
 model GuidanceStepEvidence {
   id String @id @default(uuid())
+  dedupeKey String? @unique
 
   propertyId String
   journeyId  String

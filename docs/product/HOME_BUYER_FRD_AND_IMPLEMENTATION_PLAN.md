@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.14
+**Version:** 1.15
 **Date:** 2026-08-16
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2794,9 +2794,15 @@ link is persisted on the negotiation outcome, inspection finding, and completed
 buyer task. When the lifecycle reaches closed or a later ownership stage,
 transferred first-30-days inspection work is immediately upserted into the
 canonical maintenance queue with the same stable key used by day-91 handoff.
-Repair-journey evidence propagation, the full inspection scheduling/reinspection
-checklist, property-aware inspection modules, and broader obligation deduplication
-remain next.
+The fourth increment propagates an attached terminal-outcome document into the
+existing major-repair guidance journey without auto-completing or skipping any
+repair step. Seller-repair evidence attaches to outcome verification; accepted
+credit evidence attaches to price finalization, with negotiation preparation as
+a legacy-template fallback. Document verification state is preserved, a unique
+evidence key makes retries converge on one artifact, and Buyer Plan finding cards
+show the linked evidence and verification state. The full inspection
+scheduling/reinspection checklist, property-aware inspection modules, and
+broader obligation deduplication remain next.
 
 **Goal:** Turn transaction evidence into one trustworthy plan.
 

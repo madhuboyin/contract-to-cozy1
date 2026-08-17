@@ -51,7 +51,7 @@ const { runJourneyCompletionHooks } = require('../../src/services/guidanceEngine
 test('a journey with only self-reported (USER_INPUT) evidence does not certify the physical outcome', async () => {
   currentJourney = makeJourney();
   requiredSteps = [
-    { evidences: [{ sourceType: 'USER_INPUT', status: 'CAPTURED' }] },
+    { stepType: 'VALIDATION', evidences: [{ sourceType: 'USER_INPUT', status: 'CAPTURED' }] },
   ];
   inventoryUpdates.length = 0;
   homeEventCreates.length = 0;
@@ -66,7 +66,7 @@ test('a journey with only self-reported (USER_INPUT) evidence does not certify t
 
 test('a journey with no evidence at all also does not certify', async () => {
   currentJourney = makeJourney();
-  requiredSteps = [{ evidences: [] }];
+  requiredSteps = [{ stepType: 'VALIDATION', evidences: [] }];
   inventoryUpdates.length = 0;
   homeEventCreates.length = 0;
 
@@ -79,7 +79,7 @@ test('a journey with no evidence at all also does not certify', async () => {
 test('a journey with tool-sourced evidence certifies the physical outcome as before', async () => {
   currentJourney = makeJourney();
   requiredSteps = [
-    { evidences: [{ sourceType: 'INTERNAL_TOOL', status: 'CAPTURED' }] },
+    { stepType: 'VALIDATION', evidences: [{ sourceType: 'INTERNAL_TOOL', status: 'CAPTURED' }] },
   ];
   inventoryUpdates.length = 0;
   homeEventCreates.length = 0;
@@ -95,7 +95,7 @@ test('a journey with tool-sourced evidence certifies the physical outcome as bef
 test('a journey with user-reported evidence that was independently VERIFIED still certifies', async () => {
   currentJourney = makeJourney();
   requiredSteps = [
-    { evidences: [{ sourceType: 'USER_INPUT', status: 'VERIFIED' }] },
+    { stepType: 'VALIDATION', evidences: [{ sourceType: 'USER_INPUT', status: 'VERIFIED' }] },
   ];
   inventoryUpdates.length = 0;
   homeEventCreates.length = 0;
@@ -108,7 +108,7 @@ test('a journey with user-reported evidence that was independently VERIFIED stil
 
 test('non-user-initiated journeys still short-circuit before any evidence check', async () => {
   currentJourney = makeJourney({ isUserInitiated: false });
-  requiredSteps = [{ evidences: [{ sourceType: 'INTERNAL_TOOL', status: 'CAPTURED' }] }];
+  requiredSteps = [{ stepType: 'VALIDATION', evidences: [{ sourceType: 'INTERNAL_TOOL', status: 'CAPTURED' }] }];
   inventoryUpdates.length = 0;
   homeEventCreates.length = 0;
 

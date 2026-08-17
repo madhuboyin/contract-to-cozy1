@@ -68,6 +68,9 @@ test('buyer negotiation persistence has one canonical finding link and structure
   assert.match(service, /BUYER_NEGOTIATION_CASE_CONFLICT/);
   assert.match(service, /BUYER_NEGOTIATION_EVIDENCE_NOT_ATTACHED/);
   assert.match(service, /effectiveCompletionDocumentId/);
+  assert.match(service, /recordJourneyEvidence/);
+  assert.match(service, /buyer-negotiation-outcome:/);
+  assert.match(service, /buyer_negotiation_outcome_document/);
   assert.match(routes, /negotiation-shield\/buyer-cases/);
   assert.match(routes, /buyer-outcome/);
 });
@@ -87,6 +90,23 @@ test('Buyer Plan launches buyer mode from a pre-close finding and the workspace 
   assert.match(client, /Completion evidence/);
   assert.match(client, /selectedBuyerFindingId/);
   assert.match(client, /not a legal notice or amendment/);
+});
+
+test('negotiation completion evidence is idempotently propagated to the canonical repair journey', () => {
+  const schema = fs.readFileSync(path.resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
+  const guidance = fs.readFileSync(path.resolve(__dirname, '../../src/services/guidanceEngine/guidanceJourney.service.ts'), 'utf8');
+  const buyerService = fs.readFileSync(path.resolve(__dirname, '../../src/services/buyerAcquisition.service.ts'), 'utf8');
+  const buyerPlan = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/page.tsx'), 'utf8');
+
+  assert.match(schema, /model GuidanceStepEvidence[\s\S]*dedupeKey String\? @unique/);
+  assert.match(guidance, /async recordJourneyEvidence/);
+  assert.match(guidance, /statusOverride: input\.status/);
+  assert.match(guidance, /sourceTypeOverride: input\.sourceType/);
+  assert.match(guidance, /code === 'P2002' && args\.dedupeKey/);
+  assert.match(guidance, /GUIDANCE_EVIDENCE_STEP_NOT_FOUND/);
+  assert.match(buyerService, /buyerOutcomeDocument:[\s\S]*verificationStatus: true/);
+  assert.match(buyerPlan, /Outcome evidence:/);
+  assert.match(buyerPlan, /buyerOutcomeDocument\.verificationStatus/);
 });
 
 test('closing lifecycle immediately hands transferred findings to the canonical maintenance queue', () => {
