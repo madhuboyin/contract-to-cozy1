@@ -3744,6 +3744,18 @@ class APIClient {
     return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-disclosure/funds-readiness`, { method: 'PUT', body: JSON.stringify(input) });
   }
 
+  async getBuyerClosingDay(propertyId: string): Promise<APIResponse<import('@/types').BuyerClosingDayWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-day`, { method: 'GET' });
+  }
+
+  async updateBuyerClosingDay(propertyId: string, input: import('@/types').BuyerClosingDayInput): Promise<APIResponse<import('@/types').BuyerClosingDayWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-day`, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  async confirmBuyerProfessionalClose(propertyId: string, input: { professionalClosingComplete: true; closedAt: string; confirmationNotes?: string | null }): Promise<APIResponse<import('@/types').BuyerClosingDayWorkspaceResponse>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/closing-day/confirm-professional-close`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
   async getBuyerPurchaseLenderReadiness(
     propertyId: string,
   ): Promise<APIResponse<import('@/types').BuyerPurchaseLenderReadinessWorkspace>> {
@@ -3874,7 +3886,7 @@ class APIClient {
 
   async updateBuyerLifecycle(propertyId: string, input: {
     targetCloseDate?: string | null;
-    ownershipStartedAt?: string | null;
+    moveInDate?: string | null;
   }): Promise<APIResponse<HomeBuyerChecklist>> {
     return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/lifecycle`, {
       method: 'PATCH', body: JSON.stringify(input),

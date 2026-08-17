@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.26
+**Version:** 1.27
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2975,7 +2975,23 @@ credential storage. Confirmation reconciles a stable disclosure-review task,
 the existing universal funds-readiness task, and the canonical
 `CLOSING_DISCLOSURE` milestone with bounded user-attestation evidence. Optional
 document extraction remains a future accelerator and cannot be required for
-completion. The closing-day increment remains next.
+completion. The third increment completes the first Slice 4C vertical path with
+a property-scoped Closing Day Companion. It reuses canonical Title & Escrow
+appointment, possession, and trusted-contact context; displays canonical funds
+readiness and unresolved blocking tasks; and saves attendees, required-document
+labels, professional questions, identification/document readiness, signing and
+copy receipt, signed-record evidence, access items, warranties/manuals, and
+possession confirmation without storing identity secrets or full wire
+credentials. The generic timeline editor can no longer set ownership or the
+`CLOSED` stage. A separate strict confirmation requires the buyer to explicitly
+report that the professional closing process is complete, requires the complete
+Closing Day checklist and a signed closing record, rejects future completion
+times, reconciles the stable closing-day task and canonical `CLOSING` milestone,
+and atomically transitions the buyer plan to `CLOSED` with the property set to
+`RECENT_OWNER`. Scheduled dates, signing, funds movement, clear-to-close, or
+checklist progress never infer legal closing. Slice 4C is now complete for its
+manual, non-extraction path; optional Closing Disclosure extraction remains a
+future accelerator.
 
 **Goal:** Make the final days before closing calm, mobile, evidence-backed, and
 safe.

@@ -491,6 +491,12 @@ enum BuyerClosingInstructionsVerificationChannel {
   OTHER
 }
 
+enum BuyerClosingChecklistItemStatus {
+  UNKNOWN
+  CONFIRMED
+  NOT_APPLICABLE
+}
+
 enum BuyerPurchaseCashDirection {
   FROM_BORROWER
   TO_BORROWER
@@ -2769,6 +2775,7 @@ model HomeBuyerChecklist {
   titleEscrowWorkspace BuyerTitleEscrowWorkspace?
   insuranceWorkspace BuyerInsuranceWorkspace?
   walkthroughWorkspace BuyerWalkthroughWorkspace?
+  closingDayWorkspace BuyerClosingDayWorkspace?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2927,6 +2934,48 @@ model BuyerClosingDisclosureRevision {
   @@index([workspaceId, status, revisionNumber(sort: Desc)])
   @@index([sourceDocumentId])
   @@map("buyer_closing_disclosure_revisions")
+}
+
+model BuyerClosingDayWorkspace {
+  id          String @id @default(uuid())
+  checklistId String @unique
+  propertyId  String @unique
+
+  attendees String[] @default([])
+  requiredDocuments String[] @default([])
+  questions String[] @default([])
+  identificationReady Boolean @default(false)
+  requiredDocumentsReady Boolean @default(false)
+  fundsReadinessReviewed Boolean @default(false)
+  blockersReviewed Boolean @default(false)
+  questionsResolved Boolean @default(false)
+  signingCompleted Boolean @default(false)
+  copiesReceived Boolean @default(false)
+  signedClosingDocumentId String?
+  keysStatus BuyerClosingChecklistItemStatus @default(UNKNOWN)
+  remotesStatus BuyerClosingChecklistItemStatus @default(UNKNOWN)
+  accessCodesStatus BuyerClosingChecklistItemStatus @default(UNKNOWN)
+  mailboxAccessStatus BuyerClosingChecklistItemStatus @default(UNKNOWN)
+  warrantiesManualsStatus BuyerClosingChecklistItemStatus @default(UNKNOWN)
+  possessionConfirmed Boolean @default(false)
+  preparationNotes String? @db.Text
+
+  professionalClosingConfirmedAt DateTime?
+  professionalClosingConfirmedByUserId String?
+  closeEffectiveAt DateTime?
+  confirmationNotes String? @db.Text
+  lastUpdatedByUserId String?
+
+  checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  signedClosingDocument Document? @relation("BuyerClosingDaySignedDocument", fields: [signedClosingDocumentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([signedClosingDocumentId])
+  @@index([professionalClosingConfirmedAt])
+  @@map("buyer_closing_day_workspaces")
 }
 
 model BuyerPurchaseLenderReadiness {
@@ -3857,6 +3906,7 @@ model Property {
   buyerPurchaseFinancingPlan BuyerPurchaseFinancingPlan?
   buyerPurchaseLoanOffers    BuyerPurchaseLoanOffer[]
   buyerClosingDisclosureWorkspace BuyerClosingDisclosureWorkspace?
+  buyerClosingDayWorkspace BuyerClosingDayWorkspace?
   newHomePilotAssessment     NewHomePilotAssessment?
   newHomeSetupPlan           NewHomeSetupPlan?
   newHomeSystemRegistrations NewHomeSystemRegistration[]
@@ -4773,6 +4823,7 @@ model Document {
   buyerInspectionProofLinks    BuyerInspectionPlan[]            @relation("BuyerInspectionReinspectionProof")
   buyerPurchaseLoanEstimateSources BuyerPurchaseLoanEstimateRevision[] @relation("BuyerPurchaseLoanEstimateSourceDocument")
   buyerClosingDisclosureSources BuyerClosingDisclosureRevision[] @relation("BuyerClosingDisclosureSourceDocument")
+  buyerClosingDaySignedFor BuyerClosingDayWorkspace[] @relation("BuyerClosingDaySignedDocument")
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]

@@ -26,6 +26,7 @@ import { appendBuyerPlanReturnContext } from '@/lib/navigation/buyerReturnContex
 import { startBuyerNegotiationCase } from '../tools/negotiation-shield/negotiationShieldApi';
 import { BuyerPurchaseLoanEstimateCenter } from './BuyerPurchaseLoanEstimateCenter';
 import { BuyerClosingDisclosureCenter } from './BuyerClosingDisclosureCenter';
+import { BuyerClosingDayCenter } from './BuyerClosingDayCenter';
 import { BuyerPurchaseLenderReadinessCenter } from './BuyerPurchaseLenderReadinessCenter';
 import { BuyerTitleEscrowCenter } from './BuyerTitleEscrowCenter';
 import { BuyerInsuranceCenter } from './BuyerInsuranceCenter';
@@ -170,7 +171,7 @@ export default function BuyerPlanPage() {
   });
 
   const lifecycleMutation = useMutation({
-    mutationFn: (input: { targetCloseDate: string | null; ownershipStartedAt: string | null }) =>
+    mutationFn: (input: { targetCloseDate: string | null }) =>
       api.updateBuyerLifecycle(propertyId, input),
     onSuccess: () => { void refresh(); toast({ title: 'Timeline updated', description: 'Plan due dates were recalculated from the new lifecycle anchors.' }); },
   });
@@ -345,15 +346,15 @@ export default function BuyerPlanPage() {
         <Card>
           <CardHeader><CardTitle className="text-lg">Purchase and ownership timeline</CardTitle></CardHeader>
           <CardContent>
-            <form className="grid gap-4 sm:grid-cols-3" onSubmit={(event) => {
+            <form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
-              lifecycleMutation.mutate({ targetCloseDate: isoFromDateInput(String(form.get('targetCloseDate') ?? '')), ownershipStartedAt: isoFromDateInput(String(form.get('ownershipStartedAt') ?? '')) });
+              lifecycleMutation.mutate({ targetCloseDate: isoFromDateInput(String(form.get('targetCloseDate') ?? '')) });
             }}>
               <label className="space-y-1 text-sm"><span>Target closing date</span><Input name="targetCloseDate" type="date" defaultValue={dateInputValue(plan.targetCloseDate)} disabled={readOnly} /></label>
-              <label className="space-y-1 text-sm"><span>Ownership started</span><Input name="ownershipStartedAt" type="date" defaultValue={dateInputValue(plan.ownershipStartedAt)} disabled={readOnly} /></label>
               <div className="flex items-end"><Button type="submit" disabled={readOnly || lifecycleMutation.isPending}>Recalculate plan</Button></div>
             </form>
+            <p className="mt-3 text-xs text-muted-foreground">Ownership begins only after explicit professional-close confirmation in the Closing Day Companion.</p>
           </CardContent>
         </Card>
 
@@ -392,6 +393,7 @@ export default function BuyerPlanPage() {
         <BuyerTitleEscrowCenter propertyId={propertyId} readOnly={readOnly} />
         <BuyerInsuranceCenter propertyId={propertyId} readOnly={readOnly} />
         <BuyerWalkthroughCenter propertyId={propertyId} readOnly={readOnly} />
+        <BuyerClosingDayCenter propertyId={propertyId} readOnly={readOnly} />
 
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5" />Inspection scheduling and reinspection</CardTitle></CardHeader>

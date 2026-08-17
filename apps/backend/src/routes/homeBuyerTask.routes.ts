@@ -94,6 +94,9 @@ router.post('/properties/:propertyId/closing-disclosure/revisions', homeBuyerTas
 router.patch('/properties/:propertyId/closing-disclosure/revisions/:revisionId', homeBuyerTaskController.handleUpdateBuyerClosingDisclosureDraft);
 router.post('/properties/:propertyId/closing-disclosure/revisions/:revisionId/confirm', homeBuyerTaskController.handleConfirmBuyerClosingDisclosure);
 router.put('/properties/:propertyId/closing-disclosure/funds-readiness', homeBuyerTaskController.handleUpdateBuyerClosingFundsReadiness);
+router.get('/properties/:propertyId/closing-day', homeBuyerTaskController.handleGetBuyerClosingDay);
+router.put('/properties/:propertyId/closing-day', homeBuyerTaskController.handleUpdateBuyerClosingDay);
+router.post('/properties/:propertyId/closing-day/confirm-professional-close', homeBuyerTaskController.handleConfirmBuyerProfessionalClose);
 router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
 router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
 router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);

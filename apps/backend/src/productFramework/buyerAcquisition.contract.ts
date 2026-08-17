@@ -89,6 +89,7 @@ export const BUYER_ACTION_KEYS = {
   WALKTHROUGH_ISSUES: 'buyer:walkthrough:issue-resolution',
   CLOSING_DISCLOSURE_REVIEW: 'buyer:closing:disclosure-review',
   FUNDS_READINESS_CONFIRM: 'buyer:phase:funds-readiness-confirm',
+  CLOSING_DAY_CONFIRM: 'buyer:phase:closing-day-confirm',
   CLOSING_DOCUMENTS: 'buyer:closing:documents',
   SAFETY_ACCESS: 'buyer:safety:access',
   UTILITIES_SETUP: 'buyer:utilities:setup',
@@ -166,8 +167,6 @@ export const BuyerPlanTaskInputSchema = z.strictObject({
 export const BuyerLifecycleUpdateSchema = z.strictObject({
   targetCloseDate: z.string().datetime().nullable().optional(),
   moveInDate: z.string().datetime().nullable().optional(),
-  ownershipStartedAt: z.string().datetime().nullable().optional(),
-  stage: BuyerJourneyStageSchema.optional(),
 }).refine((value) => Object.values(value).some((field) => field !== undefined), {
   message: 'At least one lifecycle anchor must be provided.',
 });
@@ -261,6 +260,40 @@ export const BuyerClosingFundsReadinessUpdateSchema = z.strictObject({
 export type BuyerClosingDisclosureInput = z.infer<typeof BuyerClosingDisclosureCreateSchema>;
 export type BuyerClosingDisclosureUpdateInput = z.infer<typeof BuyerClosingDisclosureUpdateSchema>;
 export type BuyerClosingFundsReadinessUpdateInput = z.infer<typeof BuyerClosingFundsReadinessUpdateSchema>;
+
+export const BUYER_CLOSING_CHECKLIST_ITEM_STATUSES = ['UNKNOWN', 'CONFIRMED', 'NOT_APPLICABLE'] as const;
+export const BuyerClosingDayUpdateSchema = z.strictObject({
+  attendees: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
+  requiredDocuments: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
+  questions: z.array(z.string().trim().min(1).max(500)).max(30).optional(),
+  identificationReady: z.boolean().optional(),
+  requiredDocumentsReady: z.boolean().optional(),
+  fundsReadinessReviewed: z.boolean().optional(),
+  blockersReviewed: z.boolean().optional(),
+  questionsResolved: z.boolean().optional(),
+  signingCompleted: z.boolean().optional(),
+  copiesReceived: z.boolean().optional(),
+  signedClosingDocumentId: z.string().uuid().nullable().optional(),
+  keysStatus: z.enum(BUYER_CLOSING_CHECKLIST_ITEM_STATUSES).optional(),
+  remotesStatus: z.enum(BUYER_CLOSING_CHECKLIST_ITEM_STATUSES).optional(),
+  accessCodesStatus: z.enum(BUYER_CLOSING_CHECKLIST_ITEM_STATUSES).optional(),
+  mailboxAccessStatus: z.enum(BUYER_CLOSING_CHECKLIST_ITEM_STATUSES).optional(),
+  warrantiesManualsStatus: z.enum(BUYER_CLOSING_CHECKLIST_ITEM_STATUSES).optional(),
+  possessionConfirmed: z.boolean().optional(),
+  preparationNotes: z.string().trim().max(4_000).nullable().optional(),
+}).refine((value) => Object.values(value).some((field) => field !== undefined), {
+  message: 'At least one Closing Day field must be provided.',
+});
+export const BuyerClosingDayConfirmSchema = z.strictObject({
+  professionalClosingComplete: z.literal(true),
+  closedAt: z.string().datetime(),
+  confirmationNotes: z.string().trim().max(2_000).nullable().optional(),
+}).refine((value) => new Date(value.closedAt).getTime() <= Date.now() + 5 * 60_000, {
+  message: 'Professional closing completion cannot be recorded in the future.',
+  path: ['closedAt'],
+});
+export type BuyerClosingDayUpdateInput = z.infer<typeof BuyerClosingDayUpdateSchema>;
+export type BuyerClosingDayConfirmInput = z.infer<typeof BuyerClosingDayConfirmSchema>;
 
 export const BUYER_PURCHASE_APPRAISAL_STATUSES = [
   'NOT_ORDERED', 'ORDERED', 'SCHEDULED', 'COMPLETED', 'ISSUE_REPORTED', 'RESOLVED',

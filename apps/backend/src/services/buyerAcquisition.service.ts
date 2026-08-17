@@ -123,6 +123,41 @@ export class BuyerAcquisitionService {
     }
   }
 
+  static async applyConfirmedClose(
+    tx: Prisma.TransactionClient,
+    propertyId: string,
+    checklistId: string,
+    closedAt: Date,
+    now = new Date(),
+  ) {
+    const checklist = await tx.homeBuyerChecklist.update({
+      where: { id: checklistId },
+      data: { stage: 'CLOSED', ownershipStartedAt: closedAt, lastStageChangedAt: now },
+    });
+    const tasks = await tx.homeBuyerTask.findMany({
+      where: {
+        checklistId,
+        anchorOffsetDays: { not: null },
+        status: { notIn: ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'] },
+        userEditedAt: null,
+      },
+      select: { id: true, phase: true, anchorOffsetDays: true },
+    });
+    for (const task of tasks) {
+      const anchor = taskAnchor(task.phase, checklist);
+      await tx.homeBuyerTask.update({
+        where: { id: task.id },
+        data: { dueAt: new Date(anchor.getTime() + (task.anchorOffsetDays ?? 0) * DAY_MS) },
+      });
+    }
+    await this.ensureClosingRepairHandoff(tx, propertyId, checklistId, now);
+    await tx.propertyOnboarding.updateMany({
+      where: { propertyId, entryPath: 'EXISTING_HOME_PURCHASE' },
+      data: { ownershipState: 'RECENT_OWNER' },
+    });
+    return checklist;
+  }
+
   private static async materializeHandoffTask(
     tx: Prisma.TransactionClient,
     propertyId: string,

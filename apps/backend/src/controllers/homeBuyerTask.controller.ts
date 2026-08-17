@@ -16,6 +16,7 @@ import { BuyerTitleEscrowService } from '../services/buyerTitleEscrow.service';
 import { BuyerInsuranceService } from '../services/buyerInsurance.service';
 import { BuyerWalkthroughService } from '../services/buyerWalkthrough.service';
 import { BuyerClosingDisclosureService } from '../services/buyerClosingDisclosure.service';
+import { BuyerClosingDayService } from '../services/buyerClosingDay.service';
 import {
   BuyerDocumentVerificationInputSchema,
   BuyerFindingDispositionInputSchema,
@@ -46,6 +47,8 @@ import {
   BuyerClosingDisclosureCreateSchema,
   BuyerClosingDisclosureUpdateSchema,
   BuyerClosingFundsReadinessUpdateSchema,
+  BuyerClosingDayUpdateSchema,
+  BuyerClosingDayConfirmSchema,
 } from '../productFramework/buyerAcquisition.contract';
 
 /**
@@ -913,6 +916,32 @@ const handleGetBuyerClosingDisclosure = async (req: AuthRequest, res: Response, 
   } catch (error) { next(error); }
 };
 
+const handleGetBuyerClosingDay = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    return res.json({ success: true, data: await BuyerClosingDayService.get(req.user.userId, req.params.propertyId) });
+  } catch (error) { next(error); }
+};
+
+const handleUpdateBuyerClosingDay = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerClosingDayUpdateSchema.parse(req.body);
+    const data = await BuyerClosingDayService.update(req.user.userId, req.params.propertyId, input);
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+const handleConfirmBuyerProfessionalClose = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerClosingDayConfirmSchema.parse(req.body);
+    const data = await BuyerClosingDayService.confirmProfessionalClose(req.user.userId, req.params.propertyId, input);
+    analyticsEmitter.track({ eventType: AnalyticsEvent.ACTION_COMPLETED, userId: req.user.userId, propertyId: req.params.propertyId, moduleKey: AnalyticsModule.HOME_BUYER, featureKey: AnalyticsFeature.HOME_BUYER_TASK, metadataJson: { actionType: 'buyer_professional_close_confirmed', closedAt: input.closedAt } });
+    return res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
 const handleCreateBuyerClosingDisclosureRevision = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
@@ -1031,6 +1060,9 @@ export const homeBuyerTaskController = {
   handleUpdateBuyerClosingDisclosureDraft,
   handleConfirmBuyerClosingDisclosure,
   handleUpdateBuyerClosingFundsReadiness,
+  handleGetBuyerClosingDay,
+  handleUpdateBuyerClosingDay,
+  handleConfirmBuyerProfessionalClose,
   handleVerifyDocument,
   handleDispositionFinding,
   handleHandoff,

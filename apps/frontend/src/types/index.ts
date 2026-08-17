@@ -3633,6 +3633,58 @@ export interface BuyerClosingDisclosureWorkspaceResponse {
   disclaimer: string;
 }
 
+export type BuyerClosingChecklistItemStatus = 'UNKNOWN' | 'CONFIRMED' | 'NOT_APPLICABLE';
+export interface BuyerClosingDayInput {
+  attendees?: string[];
+  requiredDocuments?: string[];
+  questions?: string[];
+  identificationReady?: boolean;
+  requiredDocumentsReady?: boolean;
+  fundsReadinessReviewed?: boolean;
+  blockersReviewed?: boolean;
+  questionsResolved?: boolean;
+  signingCompleted?: boolean;
+  copiesReceived?: boolean;
+  signedClosingDocumentId?: string | null;
+  keysStatus?: BuyerClosingChecklistItemStatus;
+  remotesStatus?: BuyerClosingChecklistItemStatus;
+  accessCodesStatus?: BuyerClosingChecklistItemStatus;
+  mailboxAccessStatus?: BuyerClosingChecklistItemStatus;
+  warrantiesManualsStatus?: BuyerClosingChecklistItemStatus;
+  possessionConfirmed?: boolean;
+  preparationNotes?: string | null;
+}
+
+export interface BuyerClosingDayWorkspaceResponse {
+  workspace: null | Required<Omit<BuyerClosingDayInput, 'signedClosingDocumentId' | 'preparationNotes'>> & {
+    id: string;
+    checklistId: string;
+    propertyId: string;
+    signedClosingDocumentId: string | null;
+    preparationNotes: string | null;
+    professionalClosingConfirmedAt: string | null;
+    professionalClosingConfirmedByUserId: string | null;
+    closeEffectiveAt: string | null;
+    confirmationNotes: string | null;
+    lastUpdatedByUserId: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  appointment: null | {
+    scheduledAt: string | null;
+    format: BuyerClosingAppointmentFormat;
+    location: string | null;
+    possessionAt: string | null;
+    trustedContact: null | { id: string; role: BuyerContactRole; name: string; company: string | null; phone: string | null; email: string | null };
+  };
+  titleBlockingIssues: Array<{ id: string; title: string; status: BuyerTitleIssueStatus; notes: string | null }>;
+  fundsReadiness: null | { id: string; status: HomeBuyerTaskStatus; statusReason: string | null };
+  blockers: Array<{ id: string; actionKey: string; title: string; status: HomeBuyerTaskStatus; statusReason: string | null; checklistSection: BuyerChecklistSection | null }>;
+  signedDocument: null | { id: string; name: string; type: string; verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED'; createdAt: string };
+  lifecycle: { stage: BuyerJourneyStage; targetCloseDate: string | null; ownershipStartedAt: string | null };
+  disclaimer: string;
+}
+
 export type BuyerPurchaseAppraisalStatus = 'NOT_ORDERED' | 'ORDERED' | 'SCHEDULED' | 'COMPLETED' | 'ISSUE_REPORTED' | 'RESOLVED';
 export type BuyerPurchaseUnderwritingStatus = 'NOT_STARTED' | 'IN_REVIEW' | 'CONDITIONAL' | 'USER_RECORDED_CLEAR_TO_CLOSE';
 export type BuyerLenderConditionCategory = 'INCOME_ASSET' | 'CREDIT' | 'APPRAISAL' | 'INSURANCE_PROOF' | 'TITLE' | 'FINAL_VERIFICATION' | 'OTHER';
