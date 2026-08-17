@@ -43,6 +43,9 @@ export type CtcEventName =
   | 'notification_clicked'
   | 'property_onboarded'
   | 'buyer_recent_owner_transition_viewed'
+  | 'buyer_advocacy_prompt_viewed'
+  | 'buyer_advocacy_prompt_dismissed'
+  | 'buyer_advocacy_prompt_actioned'
   // Monetization / Resolution
   | 'provider_searched'
   | 'provider_search_radius_expanded'
@@ -206,6 +209,21 @@ export interface CtcEventProperties {
     stage: string;
     daysSinceOwnershipStart: number;
     progressPercent: number;
+  };
+  buyer_advocacy_prompt_viewed: {
+    propertyId: string;
+    successMoment: 'FIRST_90_DAY_PROGRESS' | 'VERIFIED_HOME_RECORD';
+    inviteAvailable: boolean;
+  };
+  buyer_advocacy_prompt_dismissed: {
+    propertyId: string;
+    successMoment: 'FIRST_90_DAY_PROGRESS' | 'VERIFIED_HOME_RECORD';
+  };
+  buyer_advocacy_prompt_actioned: {
+    propertyId: string;
+    successMoment: 'FIRST_90_DAY_PROGRESS' | 'VERIFIED_HOME_RECORD';
+    action: 'INVITE_CO_BUYER' | 'RECOMMEND_BUYER';
+    method: 'PROPERTY_HOUSEHOLD' | 'NATIVE_SHARE' | 'COPY_LINK';
   };
   
   // Monetization / Resolution

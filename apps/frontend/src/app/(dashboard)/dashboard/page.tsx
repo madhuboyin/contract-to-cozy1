@@ -1332,6 +1332,7 @@ export default function DashboardPage() {
         <RecentOwnerTransition transition={data.recentOwnerTransition} />
         <UnifiedHomeSurface
           propertyId={effectiveSelectedPropertyId}
+          recentOwnerTransition={data.recentOwnerTransition}
           properties={properties.map((property) => ({ id: property.id, address: property.address }))}
         />
       </div>

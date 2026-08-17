@@ -199,6 +199,10 @@ export class HomeBuyerTaskService {
         onboarding: {
           select: { entryPath: true, propertyOrigin: true, ownershipState: true },
         },
+        householdMembers: {
+          where: { userId },
+          select: { role: true },
+        },
         homeBuyerChecklist: {
           include: {
             tasks: {
@@ -268,11 +272,29 @@ export class HomeBuyerTaskService {
         ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(task.status),
       ).length;
       const total = ownershipTasks.length;
+      const now = new Date();
       const daysSinceOwnershipStart = Math.min(
         90,
-        Math.max(0, Math.floor((Date.now() - plan.ownershipStartedAt.getTime()) / DAY_MS)),
+        Math.max(0, Math.floor((now.getTime() - plan.ownershipStartedAt.getTime()) / DAY_MS)),
       );
       const verifiedDocumentCount = property.documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
+      const openMaterialFindingCount = property.inspectionReports.reduce((count, report) => count + report.findings.length, 0);
+      const activeBuyerTasks = plan.tasks.filter((task) =>
+        task.applicability !== 'NOT_APPLICABLE'
+        && ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(task.status),
+      );
+      const hasBuyerUrgency = openMaterialFindingCount > 0 || activeBuyerTasks.some((task) =>
+        task.status === 'BLOCKED'
+        || task.blocking
+        || task.priority === 'NOW'
+        || Boolean(task.dueAt && task.dueAt.getTime() <= now.getTime()),
+      );
+      const completedOwnershipTaskCount = ownershipTasks.filter((task) => task.status === 'COMPLETED').length;
+      const successMoment = completedOwnershipTaskCount >= 2
+        ? 'FIRST_90_DAY_PROGRESS'
+        : verifiedDocumentCount >= 2
+          ? 'VERIFIED_HOME_RECORD'
+          : null;
 
       return BuyerClosingHomeResponseSchema.parse({
         presentationMode: 'RECENT_OWNER',
@@ -300,13 +322,19 @@ export class HomeBuyerTaskService {
             documentCount: property.documents.length,
             verifiedDocumentCount,
             inspectionReportCount: property.inspectionReports.length,
-            openMaterialFindingCount: property.inspectionReports.reduce((count, report) => count + report.findings.length, 0),
+            openMaterialFindingCount,
+          },
+          advocacy: {
+            eligible: Boolean(successMoment) && !hasBuyerUrgency,
+            successMoment,
+            inviteAvailable: property.householdMembers.some((member) => member.role === 'OWNER'),
           },
           routes: {
             plan: `/dashboard/properties/${property.id}/buyer-plan`,
             timeline: `/dashboard/properties/${property.id}/timeline`,
             homeRecords: `/dashboard/properties/${property.id}/tools/home-records`,
             homeOperations: `/dashboard/properties/${property.id}/home-operations`,
+            household: `/dashboard/properties/${property.id}/household?invite=1`,
             ask: `/dashboard/ask?propertyId=${encodeURIComponent(property.id)}`,
           },
         },

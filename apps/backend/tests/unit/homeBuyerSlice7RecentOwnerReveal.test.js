@@ -26,11 +26,17 @@ function recentOwner() {
       inspectionReportCount: 1,
       openMaterialFindingCount: 2,
     },
+    advocacy: {
+      eligible: false,
+      successMoment: 'FIRST_90_DAY_PROGRESS',
+      inviteAvailable: true,
+    },
     routes: {
       plan: '/dashboard/properties/property-1/buyer-plan',
       timeline: '/dashboard/properties/property-1/timeline',
       homeRecords: '/dashboard/properties/property-1/tools/home-records',
       homeOperations: '/dashboard/properties/property-1/home-operations',
+      household: '/dashboard/properties/property-1/household?invite=1',
       ask: '/dashboard/ask?propertyId=property-1',
     },
   };

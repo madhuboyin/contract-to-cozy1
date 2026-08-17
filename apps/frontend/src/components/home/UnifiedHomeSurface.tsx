@@ -28,6 +28,7 @@ import type {
   HomeActionCommand,
   HomeFirstValueInsightDTO,
   RankedHomeActionDTO,
+  BuyerRecentOwnerTransition,
   UnifiedHomeDTO,
 } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +46,7 @@ import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigat
 import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLinks';
 import { WorkItemManageDrawer } from '@/components/home/WorkItemManageDrawer';
 import { track } from '@/lib/analytics/events';
+import { RecentOwnerAdvocacyPrompt } from '@/components/home/RecentOwnerAdvocacyPrompt';
 
 /**
  * Home Operations Item #13 (§ launch-review gap): last carried by the
@@ -1092,9 +1094,11 @@ function AttentionEntryCard({
 export function UnifiedHomeSurface({
   propertyId,
   properties = [],
+  recentOwnerTransition = null,
 }: {
   propertyId: string;
   properties?: Array<{ id: string; address: string }>;
+  recentOwnerTransition?: BuyerRecentOwnerTransition | null;
 }) {
   const { markReady: markPostLoginReady } = usePostLoginTransitionReadiness();
   const query = useQuery({
@@ -1141,6 +1145,11 @@ export function UnifiedHomeSurface({
     Boolean(home.attention.firstValueInsight),
     home.attention.actions.filter(action => action.priority === 'NOW' || action.priority === 'SOON').length,
   );
+  const hasUrgentHomeWork = home.attention.actions.some((action) =>
+    action.priority === 'NOW'
+    || action.priority === 'SOON'
+    || action.governance.safetyTier === 'SAFETY_EMERGENCY',
+  ) || Boolean(home.activeMajorMoment?.blocker);
   const setupMessage = home.propertyContext.conflictedFactCount > 0
     ? 'Review conflicting home details so recommendations use the right information.'
     : home.propertyContext.staleFactCount > 0
@@ -1361,6 +1370,13 @@ export function UnifiedHomeSurface({
         home={home}
         propertyId={propertyId}
       />
+
+      {recentOwnerTransition && (
+        <RecentOwnerAdvocacyPrompt
+          transition={recentOwnerTransition}
+          suppressedByUrgentWork={hasUrgentHomeWork}
+        />
+      )}
 
       <Card className="rounded-[24px] border-teal-200 bg-teal-50/50 shadow-sm">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">

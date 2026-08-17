@@ -790,6 +790,20 @@ export const BuyerClosingHomeOverviewSchema = z.strictObject({
   }),
 });
 
+const BuyerRecentOwnerAdvocacySchema = z.strictObject({
+  eligible: z.boolean(),
+  successMoment: z.enum(['FIRST_90_DAY_PROGRESS', 'VERIFIED_HOME_RECORD']).nullable(),
+  inviteAvailable: z.boolean(),
+}).superRefine((value, context) => {
+  if (value.eligible && !value.successMoment) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Eligible advocacy requires a meaningful success moment.',
+      path: ['successMoment'],
+    });
+  }
+});
+
 export const BuyerRecentOwnerTransitionSchema = z.strictObject({
   property: z.strictObject({
     id: z.string().min(1),
@@ -815,11 +829,13 @@ export const BuyerRecentOwnerTransitionSchema = z.strictObject({
     inspectionReportCount: z.number().int().nonnegative(),
     openMaterialFindingCount: z.number().int().nonnegative(),
   }),
+  advocacy: BuyerRecentOwnerAdvocacySchema,
   routes: z.strictObject({
     plan: z.string().startsWith('/dashboard/properties/'),
     timeline: z.string().startsWith('/dashboard/properties/'),
     homeRecords: z.string().startsWith('/dashboard/properties/'),
     homeOperations: z.string().startsWith('/dashboard/properties/'),
+    household: z.string().startsWith('/dashboard/properties/'),
     ask: z.string().startsWith('/dashboard/ask'),
   }),
 });

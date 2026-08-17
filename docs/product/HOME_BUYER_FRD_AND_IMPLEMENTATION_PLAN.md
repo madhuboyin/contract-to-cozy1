@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.33
+**Version:** 1.34
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -2461,7 +2461,7 @@ not defer an introduced homeowner regression to a later cleanup slice.
 | Slice 3 | In progress | Strict read-only one-query core Buyer Plan overview; plan/stage/progress/next-action loading; milestones, workload, contacts, and recent history; property-scoped access role with clear viewer-only presentation; canonical source/template-key default-task identity; lifecycle date recalculation now preserves user-edited tasks | Complete create/edit/status/not-needed/cancel/delete/restore UI, explicit evidence completion, milestone/contact mutations, filters, batch operations, booking/cost/note controls, checklist delta presentation, and rendered end-to-end verification |
 | Slice 4 | In progress | Versioned code-owned entry template for each of the nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys; condo/association responsibility, pool/spa, property-age-plus-location, and HVAC-age example rules; explainable applicability provenance, missing-detail benefit copy/correction paths, exact deltas, and idempotent preservation of user work | Complete the full composition-layer catalog and transaction-path facts; render questions, deltas, applicability, and section progress in Buyer Closing Home/Buyer Plan; build the revision-aware Contract & Contingency Tracker, confirmed milestone write-back, blocker recovery, deep-link return continuity, and phase-aware Ask context |
 | Slices 5–6 | In progress | Buyer-aware Ask context/actions and canonical Moving Concierge task projection are implemented as the first vertical increments | Complete the remaining scope listed in each slice below |
-| Slice 7 | In progress | Explicit professional close plus atomic purchase cancellation; mutually exclusive persisted lifecycle claims; cancellation stops active tasks/milestones while preserving completed work, documents, findings, and evidence; authorized close atomically records an idempotent Home Record milestone with signed evidence and opens a welcome-home first-90-day transition; day-91 handoff requires persisted ownership and resolved pre-close work, materializes incomplete ownership work idempotently, and atomically establishes the owner; persisted Recent Owner state now progressively reveals a bounded first-90-day transition above the normal homeowner dashboard with carried-forward evidence and direct Plan, Home Record, Home Operations, and Ask paths | Complete advocacy prompts and final rendered regression verification |
+| Slice 7 | In progress | Explicit professional close plus atomic purchase cancellation; mutually exclusive persisted lifecycle claims; cancellation stops active tasks/milestones while preserving completed work, documents, findings, and evidence; authorized close atomically records an idempotent Home Record milestone with signed evidence and opens a welcome-home first-90-day transition; day-91 handoff requires persisted ownership and resolved pre-close work, materializes incomplete ownership work idempotently, and atomically establishes the owner; persisted Recent Owner state progressively reveals a bounded first-90-day transition above the normal homeowner dashboard; advocacy now appears only after canonical progress or verified-record value, is suppressed by buyer/home urgency and safety work, is role-aware, dismissible, frequency-limited, and measured | Complete final rendered regression verification |
 | Slice 8 | Not started | — | Follow the dependency order in Section 22 |
 
 The Slice 0 foundation is complete enough for vertical Slice 1 work, but the
@@ -3129,6 +3129,15 @@ Home Timeline, Home Records, Home Operations, and Ask paths above the normal
 `UnifiedHomeSurface`. Recent owners therefore gain the full homeowner capability
 set without re-onboarding, while buyer-specific Ask presentation yields to the
 existing Recent Owner lifecycle prompts.
+The fifth vertical increment adds governed advocacy only after demonstrated
+first-90-day progress or verified Home Record value. Server eligibility blocks
+the prompt for open material findings, blocked or urgent buyer work, and overdue
+buyer deadlines; the homeowner renderer adds a second suppression gate for
+`NOW`, `SOON`, safety-emergency, and blocked major-moment work. Eligible owners
+may deep-link into the canonical household invitation flow or share a
+property-independent recommendation link. The card is dismissible for 90 days,
+limited to three impressions with a 14-day cooldown, and emits typed viewed,
+dismissed, and actioned analytics.
 
 **Goal:** Convert transaction value into durable homeowner value.
 

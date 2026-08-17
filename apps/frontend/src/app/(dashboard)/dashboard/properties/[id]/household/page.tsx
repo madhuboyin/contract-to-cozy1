@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, UserPlus, ChevronDown, ChevronUp, Bell } from 'lucide-react';
 import type { HouseholdInvite, HouseholdMember } from '@/types';
@@ -15,6 +15,7 @@ import { formatRelativeTime, ROLE_LABELS } from '@/components/features/household
 export default function HouseholdPage() {
   const { id: propertyId } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [invites, setInvites] = useState<HouseholdInvite[]>([]);
@@ -47,6 +48,10 @@ export default function HouseholdPage() {
 
   const pendingInvites = invites.filter((i) => i.status === 'PENDING');
   const isOwner = myMembership?.role === 'OWNER';
+
+  useEffect(() => {
+    if (isOwner && searchParams.get('invite') === '1') setInviteSheetOpen(true);
+  }, [isOwner, searchParams]);
 
   const handleRevokeInvite = async (inviteId: string) => {
     try {

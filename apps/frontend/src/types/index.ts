@@ -3272,11 +3272,17 @@ export interface BuyerRecentOwnerTransition {
     inspectionReportCount: number;
     openMaterialFindingCount: number;
   };
+  advocacy: {
+    eligible: boolean;
+    successMoment: 'FIRST_90_DAY_PROGRESS' | 'VERIFIED_HOME_RECORD' | null;
+    inviteAvailable: boolean;
+  };
   routes: {
     plan: string;
     timeline: string;
     homeRecords: string;
     homeOperations: string;
+    household: string;
     ask: string;
   };
 }
