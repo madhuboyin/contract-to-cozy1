@@ -41,27 +41,55 @@ function overview(): BuyerClosingHomeOverview {
   };
 }
 
-describe('BuyerClosingHome guidance-first experience', () => {
-  it('leads with plain-language journey context instead of operational progress', () => {
+describe('BuyerClosingHome closing command center', () => {
+  it('establishes the closing, current status and plain-language journey before task guidance', () => {
     render(<BuyerClosingHome overview={overview()} />);
 
-    expect(screen.getAllByText('Inspection and decisions')).toHaveLength(2);
-    expect(screen.getByRole('heading', { name: 'You’re inspecting and learning about the home' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Your closing at 10 Main St' })).toBeInTheDocument();
+    expect(screen.getByText('Your home closing')).toBeInTheDocument();
+    expect(screen.getAllByText('Inspection and decisions').length).toBeGreaterThan(0);
+    expect(screen.getByText('Current step: Inspection and decisions')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Closing journey' })).toBeInTheDocument();
+    expect(screen.getByText('You are here')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open closing guide/ })).toHaveAttribute(
+      'href',
+      '/dashboard/properties/property-1/buyer-plan',
+    );
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-    expect(screen.queryByText('Closing readiness')).not.toBeInTheDocument();
-    expect(screen.queryByText('People & assignments')).not.toBeInTheDocument();
   });
 
   it('reassures the buyer when there is nothing urgent and keeps records behind the full guide', () => {
     render(<BuyerClosingHome overview={overview()} />);
 
     expect(screen.getByText('No urgent issues recorded')).toBeInTheDocument();
+    expect(screen.getByText('You’re clear to continue')).toBeInTheDocument();
     expect(screen.queryByText('Needs your attention')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /View full closing guide/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Open full closing guide/ })).toHaveAttribute(
       'href',
       '/dashboard/properties/property-1/buyer-plan',
     );
     expect(screen.getByText(/You do not need to enter estimates/)).toBeInTheDocument();
+  });
+
+  it('uses the unified deadline stream and never repeats the selected action as an attention item', () => {
+    const fixture = overview();
+    fixture.nextAction = {
+      id: 'task-1', actionKey: 'buyer:loan', title: 'Send lender documents', description: null,
+      status: 'PENDING', phase: 'DUE_DILIGENCE', priority: 'NOW', checklistSection: null,
+      dueAt: '2026-09-10T12:00:00.000Z', assignedToUserId: null,
+    };
+    fixture.blockers = [fixture.nextAction];
+    fixture.upcomingDeadlines = [
+      { id: 'task:task-2', source: 'TASK', sourceId: 'task-2', label: 'Confirm contract dates', dueAt: '2026-09-05T12:00:00.000Z' },
+      { id: 'milestone:closing', source: 'MILESTONE', sourceId: 'closing', label: 'Closing', dueAt: '2026-09-15T12:00:00.000Z' },
+    ];
+
+    render(<BuyerClosingHome overview={fixture} />);
+
+    expect(screen.getByText('Next confirmed deadline')).toBeInTheDocument();
+    expect(screen.getAllByText('Confirm contract dates').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Needs attention now')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Send lender documents' })).toBeInTheDocument();
   });
 });
 
@@ -101,7 +129,7 @@ describe('BuyerClosingHome mobile continuation', () => {
     const { container } = render(<BuyerClosingHome overview={fixture} />);
     const mobileBar = container.querySelector('[data-chat-collision-zone="true"]');
 
-    expect(within(mobileBar as HTMLElement).getByText('Plan paused')).toBeInTheDocument();
+    expect(within(mobileBar as HTMLElement).getByText('Closing guide paused')).toBeInTheDocument();
     expect(within(mobileBar as HTMLElement).getByText(
       'Your dates, documents, and completed work are preserved.',
     )).toBeInTheDocument();

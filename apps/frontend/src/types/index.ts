@@ -3320,6 +3320,13 @@ export interface BuyerClosingHomeOverview {
     status: BuyerMilestoneStatus;
     dueAt: string | null;
   }>;
+  upcomingDeadlines?: Array<{
+    id: string;
+    source: 'TASK' | 'MILESTONE';
+    sourceId: string;
+    label: string;
+    dueAt: string;
+  }>;
   readinessLanes: Array<{
     key: 'CONTRACT' | 'DUE_DILIGENCE' | 'CLOSING' | 'MOVE';
     label: string;

@@ -502,7 +502,42 @@ export class HomeBuyerTaskService {
       milestones: plan.milestones,
       inspectionReportCount: property.inspectionReports.length,
     });
-    const blockers = activeTasks.filter((task) => task.status === 'BLOCKED' || task.blocking);
+    const now = new Date();
+    const attentionWindowEnd = offsetDate(now, 7);
+    // Attention is intentionally narrower than "incomplete". A buyer should only
+    // see a warning for an actual block, an overdue item, or a blocking item due
+    // within the next week. The selected next action is not repeated here.
+    const blockers = activeTasks.filter((task) => {
+      if (task.id === nextAction?.id) return false;
+      if (task.status === 'BLOCKED') return true;
+      if (task.dueAt && task.dueAt.getTime() < now.getTime()) return true;
+      return Boolean(task.blocking && task.dueAt && task.dueAt.getTime() <= attentionWindowEnd.getTime());
+    });
+    const upcomingDeadlines = [
+      ...activeTasks
+        .filter((task) => task.dueAt)
+        .map((task) => ({
+          id: `task:${task.id}`,
+          source: 'TASK' as const,
+          sourceId: task.id,
+          label: task.title,
+          dueAt: task.dueAt!,
+        })),
+      ...plan.milestones
+        .filter((milestone) => milestone.dueAt && !['COMPLETED', 'CANCELLED', 'WAIVED'].includes(milestone.status))
+        .map((milestone) => ({
+          id: `milestone:${milestone.id}`,
+          source: 'MILESTONE' as const,
+          sourceId: milestone.id,
+          label: milestoneLabel(milestone.type, milestone.customLabel),
+          dueAt: milestone.dueAt!,
+        })),
+    ]
+      .sort((left, right) => left.dueAt.getTime() - right.dueAt.getTime())
+      .filter((deadline, index, deadlines) => deadlines.findIndex((candidate) =>
+        candidate.label === deadline.label && candidate.dueAt.getTime() === deadline.dueAt.getTime(),
+      ) === index)
+      .slice(0, 8);
     const completed = visibleTasks.filter((task) => task.status === 'COMPLETED').length;
     const total = visibleTasks.length;
     const verifiedDocumentCount = property.documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
@@ -553,6 +588,10 @@ export class HomeBuyerTaskService {
             status: milestone.status,
             dueAt: milestone.dueAt?.toISOString() ?? null,
           })),
+        upcomingDeadlines: upcomingDeadlines.map((deadline) => ({
+          ...deadline,
+          dueAt: deadline.dueAt.toISOString(),
+        })),
         readinessLanes: CLOSING_HOME_LANES.map((lane) => {
           const tasks = visibleTasks.filter((task) => lane.phases.includes(task.phase));
           return {

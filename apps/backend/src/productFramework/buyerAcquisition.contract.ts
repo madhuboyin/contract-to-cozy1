@@ -813,6 +813,14 @@ const BuyerClosingHomeMilestoneSchema = z.strictObject({
   dueAt: z.string().datetime().nullable(),
 });
 
+const BuyerClosingHomeDeadlineSchema = z.strictObject({
+  id: z.string().min(1),
+  source: z.enum(['TASK', 'MILESTONE']),
+  sourceId: z.string().min(1),
+  label: z.string().min(1),
+  dueAt: z.string().datetime(),
+});
+
 const BuyerClosingHomeReadinessLaneSchema = z.strictObject({
   key: z.enum(['CONTRACT', 'DUE_DILIGENCE', 'CLOSING', 'MOVE']),
   label: z.string().min(1),
@@ -861,6 +869,7 @@ export const BuyerClosingHomeOverviewSchema = z.strictObject({
   nextActionGuidance: BuyerNextActionGuidanceSchema.nullable(),
   blockers: z.array(BuyerClosingHomeTaskSummarySchema),
   milestones: z.array(BuyerClosingHomeMilestoneSchema),
+  upcomingDeadlines: z.array(BuyerClosingHomeDeadlineSchema).default([]),
   readinessLanes: z.array(BuyerClosingHomeReadinessLaneSchema),
   evidence: z.strictObject({
     inspectionState: z.enum(['NOT_STARTED', 'PROCESSING', 'REVIEW_PENDING', 'CONFIRMED']),

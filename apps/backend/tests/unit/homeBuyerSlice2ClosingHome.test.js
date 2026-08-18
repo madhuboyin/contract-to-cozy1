@@ -23,6 +23,7 @@ function buyerOverview() {
       moveInDate: null,
       progress: { completed: 2, total: 8, percent: 25 },
     },
+    personalization: { setupStatus: 'PERSONALIZED', questionsRemaining: 0 },
     nextAction: {
       id: 'task-1', actionKey: 'buyer:inspection:import', title: 'Import inspection', description: null,
       status: 'PENDING', phase: 'DUE_DILIGENCE', priority: 'NOW', checklistSection: null,
@@ -110,6 +111,7 @@ test('dashboard dispatches to a separate Buyer Closing Home and gates homeowner 
   assert.match(dashboard, /presentationMode === 'CANDIDATE'/);
   assert.match(dashboard, /return \(\s*<UnifiedHomeSurface/);
   assert.doesNotMatch(buyerHome, /UnifiedHomeSurface|PropertyRiskScoreCard|HomeSavingsCheck/);
-  assert.match(buyerHome, /Open Closing Plan/);
-  assert.match(buyerHome, /Continue Closing Plan/);
+  assert.match(buyerHome, /Your closing at/);
+  assert.match(buyerHome, /Open closing guide/);
+  assert.match(buyerHome, /Closing journey/);
 });
