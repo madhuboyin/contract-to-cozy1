@@ -1,6 +1,6 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.44
+**Version:** 1.45
 **Date:** 2026-08-17
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
@@ -1465,7 +1465,10 @@ Checklist requirements:
 - template version and provenance so regeneration adds newly applicable items
   without overwriting user edits or completed work;
 - no phase may show dozens of equal-priority items at once: show **Next**,
-  **Blocking**, and **Coming up**, with the complete checklist expandable;
+  **Blocking**, and **Coming up**, with the complete checklist expandable. This
+  is enforced with a hard visible-item cap (see §19.1), not left to editorial
+  judgment alone, since a soft rule with no structural backstop is the surest
+  way for this experience to drift back into a dense intake form;
 - Ask Cozy may explain, locate, draft, assign, or update an item, but material
   completion and lifecycle transitions require explicit confirmation; and
 - checklist completion is preparation progress, never a guarantee of legal,
@@ -1947,9 +1950,19 @@ guides scheduling, preparation, scope, and deadline protection.
 #### 14.17.5 Authoritative next-action selection
 
 Buyer Closing Home and Buyer Plan shall consume the same property-scoped next-
-action result. Ranking shall consider current phase, confirmed deadlines,
-prerequisites, completed/blocked work, purchase method, property facts,
-available documents, inspection status, and time remaining, in this order:
+action result. Before any task-level ranking runs, the selector shall first
+check whether "Make this plan fit my home" (§9.2 item 1, §14.17.2 item 2) is
+still incomplete for this property; if so, that one-time gate is the entire
+result and no phase task is offered, per §9.2's requirement that it appear
+before the closing phases. This gate is a status check against the checklist
+composition's `setupStatus`, not a `HomeBuyerTask` row — it must never be
+implemented as a phase-ordered task, since §14.17.2 explicitly prohibits
+treating it as a permanent transaction phase.
+
+Once personalization is complete, ranking shall consider current phase,
+confirmed deadlines, prerequisites, completed/blocked work, purchase method,
+property facts, available documents, inspection status, and time remaining, in
+this order:
 
 1. overdue or immediately risky confirmed deadline;
 2. required prerequisite for the current phase;
@@ -2532,8 +2545,19 @@ workflows and recipient scopes.
 - No primary Buyer section presents more than one dominant CTA.
 - Every opened phase leads with what matters, one next action, one nearest known
   deadline, and useful professional questions before forms or complete lists.
+- No open phase's action list shows more than a small, fixed number of items at
+  once (6, per the reference implementation); any remainder stays behind an
+  explicit "Show more" disclosure. This is a hard structural limit, not an
+  editorial expectation, so a phase with many applicable checklist items can
+  never read as a dense intake form.
 - Primary phase experiences use plain language and explain unavoidable terms in
-  context; internal phase, composition, and persistence vocabulary is hidden.
+  context using a maintained closing-term glossary (contingency, escrow, earnest
+  money, appraisal, underwriting, closing disclosure, title search/commitment,
+  HOA, disclosure, walkthrough, possession, clear to close, binder, lien,
+  encumbrance, and future additions as buyer confusion is observed); a term is
+  explained inline the first time it appears in a given block of guidance copy,
+  not on every repetition. Internal phase, composition, and persistence
+  vocabulary is hidden.
 - Detailed forms and advanced transaction fields are collapsed by default and
   may not count against primary progress merely because they are empty.
 - Known canonical values are prefilled or reused; document upload is preferred
@@ -2710,10 +2734,10 @@ not defer an introduced homeowner regression to a later cleanup slice.
 | Slice | Status | Implemented scope | Remaining before slice completion |
 | --- | --- | --- | --- |
 | Slice 0 | Foundation implemented (`5cc65015`) | Direct Prisma schema correction; journey/task/evidence/applicability/milestone/contact types; `PRE_CLOSE` task-phase removal; stable keys; lifecycle transition policy; viewer-safe reads; frontend contract sweep | Complete bounded overview, milestone, contact, batch, evidence, and buyer-tool API response contracts as their vertical UI paths land; retain centralized error mapping |
-| Slice 1 | In progress | Buyer purchase stage, optional closing/move dates, inspection status, and immediate concern in trigger-first onboarding; compact home-profile confirmation for home type, approximate year built, and optional bedroom/bathroom counts with lookup prefill and safe unknown handling; canonical Property persistence; synchronous property-scoped plan initialization; seeded inspection/closing/move milestones; date-anchored task recalculation; buyer-specific first-value reveal | Add the approved basement and pool/spa home-snapshot inputs, derive property age from year built, show the immediate personalized-guidance payoff, complete rendered end-to-end browser verification, deepen property-fact correction/source presentation, and finish onboarding analytics review |
+| Slice 1 | In progress | Buyer purchase stage, optional closing/move dates, inspection status, and immediate concern in trigger-first onboarding; compact home-profile confirmation for familiar home type, approximate year built, and optional bedroom/bathroom counts with lookup prefill and safe unknown handling; derived property age in Buyer Plan context; canonical Property persistence; synchronous property-scoped plan initialization; seeded inspection/closing/move milestones; date-anchored task recalculation; buyer-specific first-value reveal | Move the approved basement and pool/spa questions fully into the upfront address flow if product validation confirms they belong there rather than in conditional personalization; show the immediate guidance that changed after snapshot save; complete rendered end-to-end browser verification, deepen property-fact correction/source presentation, and finish onboarding analytics review |
 | Slice 2 | In progress | Read-only server-derived dashboard presentation mode; strict bounded Buyer Closing Home overview; dedicated dashboard dispatcher and separate responsive closing surface; intentional neutral candidate state for cancelled/archived purchases; next action, blockers, milestones, readiness lanes, evidence/documents, contacts/assignments, Ask, direct property-scoped routes, mobile continue action; homeowner signal-query gating; owner-only pause/resume controls and preserved paused state | Complete persistent navigation/journey-chip integration, buyer stage labels in property switching, canonical buyer-aware discovery policy and catalog filtering, richer empty/error recovery, and rendered desktop/mobile end-to-end verification |
-| Slice 3 | In progress | Strict one-query Buyer Plan overview; stage/progress/next-action loading; milestones, workload, contacts, recent history, and viewer-only state; canonical source/template-key task identity; lifecycle date recalculation preserves user-edited tasks; five plain-language phase outcomes; guidance-first overview and phase cards with one next action, nearest deadline, professional questions, optional collapsed records, and exact task reveal/focus | Complete create/edit/not-needed/cancel/delete/restore UI, explicit evidence completion, milestone/contact mutations, filters, batch operations, booking/cost/note controls, and rendered end-to-end verification |
-| Slice 4 | In progress | Versioned templates for all nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys and explainable applicability; rendered composition questions/deltas; revision-aware Contract & Contingency Tracker with resumable manual or linked-document drafts, field-level source confirmation, superseded revisions, canonical milestone/task reconciliation, guarded closing-date write-back, and overdue contingency blocking | Implement Section 14.17: replace technical tailoring with the one-time automatic/plain-language personalization flow; rank questions by buyer impact; provide upload-first concise contract/date confirmation with advanced fields hidden; remove inactive empty contingency presentation; complete the remaining composition-layer catalog, blocker recovery, return continuity, and phase-aware Ask entry context |
+| Slice 3 | In progress | Strict one-query Buyer Plan overview; stage/progress/next-action loading; milestones, workload, contacts, recent history, and viewer-only state; canonical source/template-key task identity; lifecycle date recalculation preserves user-edited tasks; five plain-language phase outcomes; guidance-first overview and phase cards that explain what matters, one shared next action, rationale, delay consequence, responsible professional, nearest deadline, suggested question, what can safely wait, and one focused CTA; report-dependent actions are prerequisite-gated; optional records remain collapsed | Complete create/edit/not-needed/cancel/delete/restore UI, explicit evidence completion, milestone/contact mutations, filters, batch operations, booking/cost/note controls, and rendered end-to-end verification |
+| Slice 4 | In progress | Versioned templates for all nine Section 14.15 checklists; deterministic Property Context composition preview/apply APIs; stable task keys and explainable applicability; one-time **Make this plan fit my home** personalization with known-fact summary, impact-ranked conditional questions, familiar language, safe automatic additions, explicit removal review, and collapsed completion; pool/spa and basement guidance; revision-aware Contract & Contingency Tracker redesigned around signed-source selection/upload, concise consequential-date review, conditional contingency presentation, field-level **Confirm / Correct / Not sure / Ask a professional** decisions, advanced-detail disclosure, superseded revisions, canonical reconciliation, and confirmed-field-only deadline write-back | Complete automated contract extraction and extraction-failure recovery, the remaining composition-layer catalog, blocker recovery, return continuity, phase-aware Ask entry context, and rendered end-to-end verification |
 | Slices 5–6 | In progress | Buyer Ask reads plan status, next action, deadlines, contract timeline, inspection/document readiness, negotiation, costs, financing/title/insurance/walkthrough/disclosure/closing-day readiness, and supports confirmation-gated task, finding-disposition, move-status, lifecycle, closing-date, cancellation, pause, and resume commands; Moving Concierge projects canonical buyer tasks | Complete the remaining contextual Ask entry/presentation work and the remaining Slice 6 milestone, booking, collaboration, and notification scope |
 | Slice 7 | Complete | Owner-only pause/resume with reminder suppression and preserved work; explicit professional close plus atomic purchase cancellation; mutually exclusive persisted lifecycle claims; cancellation stops active tasks/milestones while preserving completed work, documents, findings, and evidence; authorized close records an idempotent Home Record milestone with signed evidence and opens a first-90-day transition; day-91 handoff requires persisted ownership and resolved pre-close work; Recent Owner progressive reveal, governed advocacy, and deterministic desktop/mobile homeowner-continuity coverage | — |
 | Slice 8 | In progress | Removed the orphaned global buyer-checklist card, route, and framework redirect; removed associated duplicate types and obsolete authentication copy; corrected user-segment terminology; expanded the route/CTA contract across the buyer-to-owner journey; retired duplicate Moving execution state and APIs; added accessible Buyer Plan loading and recoverable error states; corrected Buyer Closing Home readiness and mobile-continuation semantics; repaired zero-property account entry so neutral signup/welcome copy and an explicit owner/buyer journey choice lead into trigger-first onboarding instead of the generic property form; hardened that onboarding with compact full-address entry/autocomplete, synthetic-data removal, lookup location matching, and confirmation correction; added deterministic rendered buyer-to-recent-owner and two-owner-plus-active-purchase isolation traversals with desktop accessibility and mobile overflow coverage | Extend the rendered baselines through the Section 24 mutation, persistence, deep-link, permission, and database non-creation checks; finish site-wide copy/link, legacy helper, responsive, accessibility, and remaining empty/error-state audits |
@@ -2730,7 +2754,12 @@ Recent implementation evidence incorporated into this revision:
 - `48c8ab7f` — five buyer-facing phase outcomes, guidance-first overview and
   opened-phase experience, nearest-deadline selection, professional questions,
   collapsed optional records, exact task reveal/focus, focused component tests,
-  TypeScript validation, lint, and production build verification.
+  TypeScript validation, lint, and production build verification; and
+- `0e26d548` — impact-ranked home personalization, pool/spa and basement
+  guidance, concise contract-and-date confirmation, partial confirmed-field
+  reconciliation, guidance-first phase detail, one prerequisite-aware
+  next-action selector shared by Buyer Closing Home and Buyer Plan, and focused
+  continuity regression coverage with backend/frontend build verification.
 
 #### 21.0.1 Buyer Experience Redesign delivery plan
 
@@ -2761,6 +2790,31 @@ landing an unused schema or service layer.
    extraction failure, and paused/cancelled/closed lifecycle states; add bounded
    analytics for completion, correction, skip, recommendation acceptance, and
    abandonment.
+
+#### 21.0.2 Buyer Experience Redesign implementation status
+
+Status as of `0e26d548`:
+
+| Increment | Status | Delivered | Remaining |
+| --- | --- | --- | --- |
+| 1. Upfront home snapshot | In progress | Familiar home type, approximate year built, optional bedrooms/bathrooms, lookup reuse, safe unknown handling, canonical persistence, and derived age are available. Basement and pool/spa now drive conditional personalization and inspection guidance. | Decide through product validation whether basement and pool/spa must also appear in address onboarding; show an immediate before/after guidance payoff after snapshot save; complete rendered onboarding, persistence, and analytics checks. |
+| 2. Make this plan fit my home | Core increment implemented | The technical tailoring grid is replaced by a one-time guided flow that summarizes known facts, asks the highest-impact unanswered question in familiar language, allows **Not sure**, explains the benefit, automatically applies safe additions, requires review before removals, and collapses to **Plan personalized**. | Expand the consequential-question catalog, add richer recovery/return continuity and phase-aware Ask entry, and complete rendered desktop/mobile verification. |
+| 3. Contract and deadlines | Core manual/linked-source increment implemented | The primary experience starts from the signed source, emphasizes only supported consequential dates, omits empty unsupported contingencies, hides administrative detail, supports per-field **Confirm / Correct / Not sure / Ask a professional**, preserves revision/provenance controls, and writes back only explicitly confirmed fields. | Implement automated extraction/population with clear extraction-failure recovery and complete the remaining rendered revision, correction, and write-back acceptance scenarios. |
+| 4. Guidance-first phases | Core increment implemented | Every opened phase leads with what matters now, one recommended action, why it matters, delay consequence, responsible professional, nearest reliable deadline, a suggested question, what can safely wait, and one focused CTA. Supporting records stay collapsed until requested. | Complete the remaining operational forms and full rendered phase-by-phase acceptance coverage. |
+| 5. Shared next-action continuity and verification | Core selector, prerequisite gate, and personalization gate implemented; rendered verification still outstanding | Buyer Closing Home and Buyer Plan consume the same server-selected action and guidance payload. Ranking prioritizes overdue and current-phase work; inspection-report actions cannot rank until the report or completed-inspection prerequisite exists; and — closing a gap this section previously specified but the selector did not enforce — an incomplete **Make this plan fit my home** now gates the entire next-action result ahead of any phase task, per §14.17.5. Focused continuity regressions, backend/frontend tests, and production builds pass. | Verify sign-out/browser restart, property switching, desktop/mobile rendering, missing data, extraction failure, paused/cancelled/closed states, deep-link return continuity, and bounded analytics — including the personalization gate itself, which has not yet been exercised in a running environment. |
+
+A subsequent audit against this FRD's own guidance-first principles (§5.11,
+§14.17, §19.1) also found and closed two structural gaps that were previously
+enforced only by editorial expectation: the plain-language term glossary (§19.1)
+is now a maintained term list with an inline first-occurrence explainer, and the
+"no dozens of items" rule (§14.14, §19.1) is now a hard visible-item cap with a
+"Show more" disclosure rather than a convention that could silently regress.
+
+This implementation did not remove database tables or columns. Contract
+revision, provenance, confirmation, contingency, and milestone records remain
+intentional supporting infrastructure hidden behind the calm primary
+experience. Any schema removal remains a separate cleanup exercise under
+Section 15.10 and requires an independent ownership and read/write audit.
 
 This delivery plan does not authorize removal of contract revision,
 confirmation, provenance, contingency, or milestone models merely because
@@ -2807,7 +2861,7 @@ The **minimum coherent release** includes:
    24.1 homeowner checks plus responsive, accessible, recoverable behavior for
    every included buyer path.
 
-As of Version 1.44, the Contract & Contingency Tracker and its confirmed
+As of Version 1.45, the Contract & Contingency Tracker and its confirmed
 deadline write-back are implemented, the minimum Slice 7 pause/resume/cancel/
 close/preservation transition is implemented, and every Buyer Plan phase has a
 manual guidance-first entry experience. These completed blockers do not by
@@ -2999,15 +3053,18 @@ Functional check:
 
 **Implementation status:** In progress. The first vertical increment establishes
 a strict, read-only overview endpoint and replaces separate core plan/member
-loading with one property-scoped query. The workspace now renders stage,
-progress, next action, milestones, workload, contacts, recent history, and a
-viewer-only state. The current frontend adds five plain-language closing phases
-and makes every opened phase lead with **What matters now**, one recommended
-task, the nearest known deadline, and two questions for the responsible
-professional. Full phase actions and operational forms remain collapsed until
-the buyer requests them; selecting the recommended task opens and focuses the
-exact record. Remaining task, evidence, batch, contact/milestone mutation, and
-rendered acceptance work continues in this slice.
+loading with one property-scoped query. The workspace renders stage, progress,
+milestones, workload, contacts, recent history, and a viewer-only state. One
+server selector now provides Buyer Closing Home and Buyer Plan with the same
+recommended action and structured guidance. Every opened phase leads with
+**What matters now**, why the action matters, the consequence of delay, the
+responsible professional, the nearest known deadline, a suggested question,
+what can safely wait, and one focused CTA. Report-import, finding review, and
+negotiation work cannot rank before inspection/report prerequisites exist.
+Operational records remain collapsed until requested, and selecting the
+recommendation opens the exact supporting record. Remaining task, evidence,
+batch, contact/milestone mutation, and rendered acceptance work continues in
+this slice.
 
 **Goal:** Make the plan fully operable without hidden API-only capabilities.
 
@@ -3056,20 +3113,27 @@ preview/apply composition path over canonical Property Context. Initial rules
 cover condo/association records, roof/exterior responsibility, confirmed
 pool/spa context, property age combined with confirmed location, and recorded
 HVAC age. Unknown or conflicting inputs remain outside the active delta and
-produce benefit-explained correction questions. Applying a preview persists
+produce benefit-explained correction questions. Buyer Plan now presents these
+questions as the one-time **Make this plan fit my home** flow: it summarizes
+known facts, asks the most consequential unanswered question in plain language,
+allows **Not sure**, explains the guidance benefit, automatically applies safe
+additions, and requires review before removing work. Pool/spa and basement
+answers contribute direct inspection guidance. Applying a preview persists
 rule/version/reason/fact/basis provenance and preserves completion, evidence,
-assignment, notes, status decisions, and user-edited dates. Buyer Plan renders
-the composition preview and correction questions. A property-scoped Contract &
-Contingency Tracker now owns normalized workspaces, numbered revisions,
-field-level confirmations, and contingency records. Buyers may resume a manual
-draft or link a canonical contract document, save a newer revision without
-changing the active timeline, and explicitly confirm every populated field
-against the signed source. Confirmation supersedes the previous revision and
-idempotently reconciles eligible contract/closing/possession/contingency
-milestones plus stable Buyer Plan work. Existing user-edited dates are guarded,
-and overdue active contingencies block the contract-review obligation. Optional
-document extraction and a shorter buyer-facing critical-deadline summary remain
-future refinements; the safe manual/link-document path is implemented.
+assignment, notes, status decisions, and user-edited dates. A property-scoped
+Contract & Contingency Tracker now owns normalized workspaces, numbered revisions,
+field-level confirmations, and contingency records. The primary UI now starts
+from the signed source, shows a concise summary of consequential dates, omits
+empty unsupported contingencies, and keeps administrative terms under an
+explicit detail disclosure. Buyers may resume a manual draft or link a
+canonical contract document, save a newer revision without changing the active
+timeline, and decide **Confirm / Correct / Not sure / Ask a professional** for
+each displayed date. Confirmation supersedes the previous revision and
+idempotently reconciles only explicitly confirmed contract, closing,
+possession, and contingency fields. Existing user-edited dates are guarded,
+and overdue confirmed active contingencies block the contract-review
+obligation. Automated document extraction and its failure-recovery experience
+remain future refinements; the safe manual/link-document path is implemented.
 
 **Goal:** Replace the flat checklist with deadline-aware guidance and establish
 the buyer's authoritative closing timeline.
