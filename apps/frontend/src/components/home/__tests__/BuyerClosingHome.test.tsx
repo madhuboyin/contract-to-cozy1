@@ -41,23 +41,27 @@ function overview(): BuyerClosingHomeOverview {
   };
 }
 
-describe('BuyerClosingHome readiness semantics', () => {
-  it('exposes overall progress to assistive technology', () => {
+describe('BuyerClosingHome guidance-first experience', () => {
+  it('leads with plain-language journey context instead of operational progress', () => {
     render(<BuyerClosingHome overview={overview()} />);
 
-    const progress = screen.getByRole('progressbar', { name: 'Closing Plan progress' });
-    expect(progress).toHaveAttribute('aria-valuenow', '25');
-    expect(progress).toHaveAttribute('aria-valuetext', '2 of 8 ready');
+    expect(screen.getAllByText('Inspection and decisions')).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'You’re inspecting and learning about the home' })).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByText('Closing readiness')).not.toBeInTheDocument();
+    expect(screen.queryByText('People & assignments')).not.toBeInTheDocument();
   });
 
-  it('distinguishes complete, open, blocked, and no-action readiness lanes', () => {
+  it('reassures the buyer when there is nothing urgent and keeps records behind the full guide', () => {
     render(<BuyerClosingHome overview={overview()} />);
 
-    expect(screen.getByText('Complete')).toBeInTheDocument();
-    expect(screen.getByText('2 open')).toBeInTheDocument();
-    expect(screen.getByText('1 blocked')).toBeInTheDocument();
-    expect(screen.getByText('No actions yet')).toBeInTheDocument();
-    expect(screen.getByText('No applicable actions are in this lane yet.')).toBeInTheDocument();
+    expect(screen.getByText('No urgent issues recorded')).toBeInTheDocument();
+    expect(screen.queryByText('Needs your attention')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /View full closing guide/ })).toHaveAttribute(
+      'href',
+      '/dashboard/properties/property-1/buyer-plan',
+    );
+    expect(screen.getByText(/You do not need to enter estimates/)).toBeInTheDocument();
   });
 });
 
@@ -83,10 +87,10 @@ describe('BuyerClosingHome mobile continuation', () => {
     expect(mobileBar).toBeInTheDocument();
     expect(mobileBar).toHaveClass('fixed');
     expect(mobileBar?.className).toContain('env(safe-area-inset-bottom)');
-    expect(within(mobileBar as HTMLElement).getByText('Closing journey · Due diligence')).toBeInTheDocument();
-    expect(within(mobileBar as HTMLElement).getByText('Upload earnest money receipt · No deadline recorded')).toBeInTheDocument();
+    expect(within(mobileBar as HTMLElement).getByText('Inspection and decisions')).toBeInTheDocument();
+    expect(within(mobileBar as HTMLElement).getByText('Upload earnest money receipt · No confirmed deadline')).toBeInTheDocument();
     expect(within(mobileBar as HTMLElement).getByRole('link', {
-      name: 'Continue Closing Plan: Upload earnest money receipt',
+      name: 'Continue: Upload earnest money receipt',
     })).toHaveAttribute('href', fixture.routes.plan);
   });
 
@@ -97,12 +101,12 @@ describe('BuyerClosingHome mobile continuation', () => {
     const { container } = render(<BuyerClosingHome overview={fixture} />);
     const mobileBar = container.querySelector('[data-chat-collision-zone="true"]');
 
-    expect(within(mobileBar as HTMLElement).getByText('Closing journey · Paused')).toBeInTheDocument();
+    expect(within(mobileBar as HTMLElement).getByText('Plan paused')).toBeInTheDocument();
     expect(within(mobileBar as HTMLElement).getByText(
-      'Your dates, evidence, and completed work are preserved.',
+      'Your dates, documents, and completed work are preserved.',
     )).toBeInTheDocument();
     expect(within(mobileBar as HTMLElement).getByRole('link', {
-      name: 'Review paused Closing Plan',
+      name: 'Review paused Closing Guide',
     })).toHaveAttribute('href', fixture.routes.plan);
   });
 });
