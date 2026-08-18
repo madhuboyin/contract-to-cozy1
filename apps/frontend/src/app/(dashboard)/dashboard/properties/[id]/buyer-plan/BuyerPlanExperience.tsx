@@ -13,11 +13,12 @@ import {
   Landmark,
   Sparkles,
   ShieldCheck,
+  Users,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { GlossaryText } from '@/components/buyer/GlossaryText';
-import type { BuyerJourneyStage, BuyerNextActionGuidance, BuyerPlanOverviewTask } from '@/types';
+import type { BuyerJourneyStage, BuyerNextActionGuidance, BuyerPlanOverview, BuyerPlanOverviewTask } from '@/types';
 
 export type BuyerPlanWorkspaceKey = 'CONTRACT' | 'DUE_DILIGENCE' | 'FINANCING_PROTECTION' | 'CLOSING_PREP' | 'CLOSE_MOVE_IN';
 
@@ -96,6 +97,54 @@ export function workspaceForTask(task: Pick<BuyerPlanOverviewTask, 'checklistSec
 }
 
 const resolved = (task: BuyerPlanOverviewTask) => ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status);
+
+export function BuyerTaskAssigneeControl({
+  members,
+  assignedToUserId,
+  disabled = false,
+  onAssign,
+}: {
+  members: BuyerPlanOverview['workload'];
+  assignedToUserId: string | null;
+  disabled?: boolean;
+  onAssign: (userId: string | null) => void;
+}) {
+  // Assignment is household collaboration, not a required buyer-plan field.
+  // A single buyer has nobody to delegate to, so showing their own name on
+  // every task only adds project-management noise.
+  if (members.length < 2) return null;
+
+  const assignedMember = members.find((member) => member.userId === assignedToUserId);
+  const assignedName = assignedMember
+    ? assignedMember.displayName || `${assignedMember.firstName} ${assignedMember.lastName}`.trim()
+    : 'No one yet';
+
+  return (
+    <details className="group relative">
+      <summary
+        className={`flex h-9 max-w-full cursor-pointer list-none items-center rounded-xl px-3 text-xs font-normal text-slate-500 transition-colors hover:bg-slate-100/80 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+        aria-label={`Change who is handling this action. Currently ${assignedName}`}
+        aria-disabled={disabled}
+      >
+          <Users className="mr-1.5 h-4 w-4" />
+          <span className="truncate">Handled by {assignedName}</span>
+          <ChevronDown className="ml-1.5 h-4 w-4 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="absolute right-0 z-30 mt-1 w-64 rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg">
+        <p className="px-2 py-1.5 text-sm font-semibold">Who’s handling this?</p>
+        <p className="border-b px-2 pb-2 text-xs leading-5 text-muted-foreground">Choose a buyer or household member—not your lender, agent or attorney.</p>
+        <div className="pt-1">
+          {members.map((member) => {
+            const name = member.displayName || `${member.firstName} ${member.lastName}`.trim();
+            const selected = member.userId === assignedToUserId;
+            return <button key={member.userId} type="button" role="menuitemradio" aria-checked={selected} className="flex w-full items-center rounded-md px-2 py-2 text-left text-sm hover:bg-accent" onClick={(event) => { onAssign(member.userId); const details = event.currentTarget.closest('details'); if (details) details.open = false; }}><Check className={`mr-2 h-4 w-4 ${selected ? 'opacity-100' : 'opacity-0'}`} />{name}</button>;
+          })}
+          <button type="button" role="menuitemradio" aria-checked={!assignedToUserId} className="flex w-full items-center rounded-md px-2 py-2 text-left text-sm hover:bg-accent" onClick={(event) => { onAssign(null); const details = event.currentTarget.closest('details'); if (details) details.open = false; }}><Check className={`mr-2 h-4 w-4 ${assignedToUserId ? 'opacity-0' : 'opacity-100'}`} />No one yet</button>
+        </div>
+      </div>
+    </details>
+  );
+}
 
 export function BuyerPlanPhaseNavigation({
   active,

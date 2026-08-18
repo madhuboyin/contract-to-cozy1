@@ -36,6 +36,7 @@ import {
   BuyerPlanOverviewPanel,
   BuyerPlanPhaseGuidance,
   BuyerPlanPhaseNavigation,
+  BuyerTaskAssigneeControl,
   BuyerPlanTool,
   type BuyerPlanWorkspaceKey,
   workspaceForStage,
@@ -217,13 +218,32 @@ export default function BuyerPlanPage() {
     }),
   });
   const taskMutation = useMutation({
-    mutationFn: ({ task, status, assignedToUserId }: { task: BuyerPlanOverviewTask; status?: HomeBuyerTaskStatus; assignedToUserId?: string | null }) =>
+    mutationFn: ({ task, status }: { task: BuyerPlanOverviewTask; status: HomeBuyerTaskStatus }) =>
       api.updateHomeBuyerTask(propertyId, task.id, {
-        ...(status ? { status } : {}),
-        ...(assignedToUserId !== undefined ? { assignedToUserId } : {}),
+        status,
         ...(status === 'COMPLETED' ? { completionEvidenceJson: { proofType: 'USER_ATTESTATION', confirmedAt: new Date().toISOString() } } : {}),
       }),
     onSuccess: () => void refresh(),
+  });
+  const assignmentMutation = useMutation({
+    mutationFn: ({ task, assignedToUserId }: { task: BuyerPlanOverviewTask; assignedToUserId: string | null }) =>
+      api.assignTask(propertyId, task.id, 'BUYER', assignedToUserId),
+    onSuccess: (_response, variables) => {
+      void refresh();
+      const assignee = members.find((member) => member.userId === variables.assignedToUserId);
+      const name = assignee
+        ? assignee.displayName || `${assignee.firstName} ${assignee.lastName}`.trim()
+        : null;
+      toast({
+        title: name ? `Action assigned to ${name}` : 'Household assignment removed',
+        description: name ? 'This responsibility is now clear to everyone sharing the home.' : 'Anyone in the household can take this action.',
+      });
+    },
+    onError: (error) => toast({
+      title: 'Unable to update who is handling this',
+      description: error instanceof Error ? error.message : 'Refresh the closing guide and try again.',
+      variant: 'destructive',
+    }),
   });
   const findingMutation = useMutation({
     mutationFn: ({ findingId, disposition }: { findingId: string; disposition: Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'> }) =>
@@ -664,7 +684,12 @@ export default function BuyerPlanPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{task.priority}</Badge>
-                  <select aria-label={`Assign ${task.title}`} className="h-9 rounded-md border bg-background px-2 text-sm" value={task.assignedToUserId ?? ''} disabled={readOnly} onChange={(event) => taskMutation.mutate({ task, assignedToUserId: event.target.value || null })}><option value="">Unassigned</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || `${member.firstName} ${member.lastName}`}</option>)}</select>
+                  <BuyerTaskAssigneeControl
+                    members={members}
+                    assignedToUserId={task.assignedToUserId}
+                    disabled={readOnly || assignmentMutation.isPending}
+                    onAssign={(assignedToUserId) => assignmentMutation.mutate({ task, assignedToUserId })}
+                  />
                   <Button size="sm" variant={done || resolvedWithoutCompletion ? 'outline' : 'default'} disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: done || resolvedWithoutCompletion ? 'PENDING' : 'COMPLETED' })}>{done ? 'Reopen' : resolvedWithoutCompletion ? 'Restore' : 'Mark complete'}</Button>
                   {stranded && <Button size="sm" variant="outline" disabled={readOnly || taskMutation.isPending} onClick={() => taskMutation.mutate({ task, status: 'NOT_NEEDED' })}>Not needed after close</Button>}
                 </div>

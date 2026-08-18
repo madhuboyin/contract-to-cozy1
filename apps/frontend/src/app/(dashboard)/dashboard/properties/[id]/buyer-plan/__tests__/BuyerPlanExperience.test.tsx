@@ -4,6 +4,7 @@ import {
   BuyerPlanPhaseNavigation,
   BuyerPlanPhaseGuidance,
   BuyerPlanTool,
+  BuyerTaskAssigneeControl,
   workspaceForStage,
   workspaceForTask,
 } from '../BuyerPlanExperience';
@@ -42,6 +43,35 @@ const task = (overrides: Partial<BuyerPlanOverviewTask>): BuyerPlanOverviewTask 
 });
 
 describe('Buyer Plan progressive disclosure', () => {
+  const member = (userId: string, firstName: string) => ({
+    userId,
+    displayName: null,
+    firstName,
+    lastName: 'Buyer',
+    role: 'OWNER' as const,
+    assignedTaskCount: 0,
+  });
+
+  it('hides household assignment when there is nobody to delegate to', () => {
+    render(<BuyerTaskAssigneeControl members={[member('buyer-1', 'Alex')]} assignedToUserId="buyer-1" onAssign={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: /change who is handling/i })).not.toBeInTheDocument();
+  });
+
+  it('reveals plain-language household delegation only for shared homes', () => {
+    const onAssign = jest.fn();
+    render(<BuyerTaskAssigneeControl
+      members={[member('buyer-1', 'Alex'), member('buyer-2', 'Sam')]}
+      assignedToUserId="buyer-1"
+      onAssign={onAssign}
+    />);
+
+    fireEvent.click(screen.getByLabelText(/currently Alex Buyer/i));
+    expect(screen.getByText('Who’s handling this?')).toBeInTheDocument();
+    expect(screen.getByText(/not your lender, agent or attorney/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Sam Buyer' }));
+    expect(onAssign).toHaveBeenCalledWith('buyer-2');
+  });
+
   it('maps canonical stages and checklist sections into five customer-facing phases', () => {
     expect(workspaceForStage('OFFER_CONTRACT')).toBe('CONTRACT');
     expect(workspaceForStage('DUE_DILIGENCE')).toBe('DUE_DILIGENCE');
