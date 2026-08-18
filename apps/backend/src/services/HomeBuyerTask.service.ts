@@ -479,6 +479,23 @@ export class HomeBuyerTaskService {
     const activeTasks = visibleTasks.filter((task) =>
       !['COMPLETED', 'NOT_NEEDED', 'CANCELLED'].includes(task.status),
     );
+    // "Make this plan fit my home" is a one-time gate before the phase-ordered
+    // plan (FRD §9.2), not a HomeBuyerTask itself, so it must be checked here
+    // rather than left to selectBuyerNextAction's task-only ranking.
+    const propertyContext = await getPropertyContext(
+      propertyId,
+      { userId },
+      { scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS'] },
+    );
+    const composition = composeBuyerChecklist(propertyContext, plan.tasks.map((task) => ({
+      actionKey: task.actionKey,
+      applicability: task.applicability,
+      generationVersion: task.generationVersion,
+    })));
+    const personalization = {
+      setupStatus: composition.setupStatus,
+      questionsRemaining: composition.questions.length,
+    };
     const nextAction = plan.status === 'PAUSED' ? null : selectBuyerNextAction({
       tasks: visibleTasks,
       stage: plan.stage,
@@ -521,6 +538,7 @@ export class HomeBuyerTaskService {
             percent: total === 0 ? 0 : Math.round((completed / total) * 100),
           },
         },
+        personalization,
         nextAction: nextAction ? closingTaskSummary(nextAction) : null,
         nextActionGuidance: nextAction ? buyerNextActionGuidance(nextAction, property.id) : null,
         blockers: blockers.slice(0, 5).map(closingTaskSummary),

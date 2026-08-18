@@ -12,6 +12,7 @@ function overview(): BuyerClosingHomeOverview {
       moveInDate: null,
       progress: { completed: 2, total: 8, percent: 25 },
     },
+    personalization: { setupStatus: 'PERSONALIZED', questionsRemaining: 0 },
     nextAction: null,
     nextActionGuidance: null,
     blockers: [],

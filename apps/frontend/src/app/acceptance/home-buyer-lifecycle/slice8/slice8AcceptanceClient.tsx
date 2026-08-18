@@ -98,6 +98,7 @@ function buyerOverview(mode: 'buyer' | 'protected'): BuyerClosingHomeOverview {
       moveInDate: '2026-08-22T12:00:00.000Z',
       progress: { completed: 3, total: 9, percent: 33 },
     },
+    personalization: { setupStatus: 'PERSONALIZED', questionsRemaining: 0 },
     nextAction: {
       id: 'slice8-contract-review',
       actionKey: 'REVIEW_ACCEPTED_CONTRACT',

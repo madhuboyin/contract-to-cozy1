@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { GlossaryText } from '@/components/buyer/GlossaryText';
 import type { BuyerJourneyStage, BuyerNextActionGuidance, BuyerPlanOverviewTask } from '@/types';
 
 export type BuyerPlanWorkspaceKey = 'CONTRACT' | 'DUE_DILIGENCE' | 'FINANCING_PROTECTION' | 'CLOSING_PREP' | 'CLOSE_MOVE_IN';
@@ -177,7 +178,7 @@ export function BuyerPlanOverviewPanel({
             <div>
               <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700"><Sparkles className="h-4 w-4" />Your next move</p>
               <h2 className="mt-3 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{nextAction?.title ?? 'Review what matters in your current phase'}</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">{nextActionGuidance?.rationale ?? nextAction?.description ?? 'We will keep the detailed records out of the way and guide you to the next useful decision.'}</p>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600"><GlossaryText text={nextActionGuidance?.rationale ?? nextAction?.description ?? 'We will keep the detailed records out of the way and guide you to the next useful decision.'} /></p>
             </div>
             {blockedCount > 0 && <Badge className="border border-amber-200 bg-amber-50 text-amber-800">{blockedCount} need help</Badge>}
           </div>
@@ -250,9 +251,9 @@ export function BuyerPlanPhaseGuidance({
           <div className="mt-6 rounded-2xl border border-teal-100 bg-white p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Recommended next action</p>
             <h3 className="mt-2 text-lg font-semibold text-slate-950">{nextTask?.title ?? 'No action is waiting for you in this phase'}</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-600">{nextActionGuidance?.rationale ?? nextTask?.description ?? 'You can review the questions below or return to the current phase when something changes.'}</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600"><GlossaryText text={nextActionGuidance?.rationale ?? nextTask?.description ?? 'You can review the questions below or return to the current phase when something changes.'} /></p>
             {nextTask && nextActionGuidance && <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-              <div className="rounded-xl bg-amber-50 p-3 text-amber-950"><span className="font-semibold">If you delay: </span>{nextActionGuidance.consequenceOfDelay}</div>
+              <div className="rounded-xl bg-amber-50 p-3 text-amber-950"><span className="font-semibold">If you delay: </span><GlossaryText text={nextActionGuidance.consequenceOfDelay} /></div>
               <div className="rounded-xl bg-slate-50 p-3 text-slate-700"><span className="font-semibold">Who can help: </span>{nextActionGuidance.responsibleParty}</div>
             </div>}
             {nextTask && <Button type="button" className="mt-4" onClick={() => onOpenTask(nextTask)}>{nextActionGuidance?.ctaLabel ?? 'Do this next'}<ArrowRight className="ml-2 h-4 w-4" /></Button>}
@@ -268,7 +269,7 @@ export function BuyerPlanPhaseGuidance({
       <div className="border-t border-teal-100 bg-white/70 p-5 sm:p-7">
         <div className="flex items-center gap-2"><HelpCircle className="h-5 w-5 text-teal-600" /><h3 className="font-semibold text-slate-950">Helpful questions to ask</h3></div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {[nextActionGuidance?.suggestedQuestion, ...guidance.questions].filter((question, index, values): question is string => Boolean(question) && values.indexOf(question) === index).slice(0, 2).map((question) => <div key={question} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">“{question}”</div>)}
+          {[nextActionGuidance?.suggestedQuestion, ...guidance.questions].filter((question, index, values): question is string => Boolean(question) && values.indexOf(question) === index).slice(0, 2).map((question) => <div key={question} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">“<GlossaryText text={question} />”</div>)}
         </div>
         <div className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">What can safely wait</p>

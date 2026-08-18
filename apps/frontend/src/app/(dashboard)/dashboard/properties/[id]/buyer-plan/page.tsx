@@ -48,6 +48,10 @@ import { BuyerPlanPersonalization } from './BuyerPlanPersonalization';
 
 const PRE_CLOSE_PHASES: BuyerPlanPhase[] = ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP'];
 const ACTIVE_TASK_STATUSES: HomeBuyerTaskStatus[] = ['PENDING', 'IN_PROGRESS', 'BLOCKED'];
+// Hard structural cap so a phase with many applicable checklist items never
+// reads as "complete 20 fields" — the recommended action already surfaces
+// above this list, so this is a record, not the primary decision surface.
+const MAX_VISIBLE_PHASE_TASKS = 6;
 
 const FINDING_DECISIONS: Array<{ value: Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>; label: string }> = [
   { value: 'VERIFIED_FACT', label: 'Verified fact' },
@@ -95,6 +99,11 @@ export default function BuyerPlanPage() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [selectedNegotiationFindingIds, setSelectedNegotiationFindingIds] = useState<string[]>([]);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [showAllPhaseTasks, setShowAllPhaseTasks] = useState(false);
+
+  useEffect(() => {
+    setShowAllPhaseTasks(false);
+  }, [activeWorkspace]);
 
   const refresh = async () => {
     await Promise.all([
@@ -635,7 +644,7 @@ export default function BuyerPlanPage() {
 
         {activeWorkspace && <BuyerPlanTool title="All phase actions" description="Optional checklist and record of completed work. Your recommended next action appears at the top of this phase." meta={`${selectedTasks.length} item${selectedTasks.length === 1 ? '' : 's'}`} openSignal={focusedTaskId ?? restoredTaskId}>
           <Card className="border-0 shadow-none"><CardContent className="space-y-3 pt-6">
-            {selectedTasks.map((task) => {
+            {(showAllPhaseTasks ? selectedTasks : selectedTasks.slice(0, MAX_VISIBLE_PHASE_TASKS)).map((task) => {
               const done = task.status === 'COMPLETED';
               const resolvedWithoutCompletion = ['NOT_NEEDED', 'CANCELLED'].includes(task.status);
               const stranded = strandedPreCloseTasks.some((candidate) => candidate.id === task.id);
@@ -658,6 +667,11 @@ export default function BuyerPlanPage() {
               </div>;
             })}
             {selectedTasks.length === 0 && <p className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">No actions are assigned to this phase yet. You can still open the phase tools above and add details when known.</p>}
+            {!showAllPhaseTasks && selectedTasks.length > MAX_VISIBLE_PHASE_TASKS && (
+              <Button type="button" variant="ghost" className="w-full text-slate-600" onClick={() => setShowAllPhaseTasks(true)}>
+                Show {selectedTasks.length - MAX_VISIBLE_PHASE_TASKS} more item{selectedTasks.length - MAX_VISIBLE_PHASE_TASKS === 1 ? '' : 's'}
+              </Button>
+            )}
           </CardContent></Card>
         </BuyerPlanTool>}
 

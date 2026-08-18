@@ -9,6 +9,7 @@ import {
   CircleDashed,
   FileCheck2,
   MessageCircle,
+  Sparkles,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { MobileStickyActionBar } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GlossaryText } from '@/components/buyer/GlossaryText';
 
 const STAGE_LABELS: Record<BuyerJourneyStage, string> = {
   EXPLORING: 'Exploring',
@@ -45,20 +47,25 @@ function dueLabel(value: string | null): string {
 }
 
 export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverview }) {
-  const { journey, nextAction, nextActionGuidance, blockers, readinessLanes, evidence, people, routes } = overview;
-  const nextActionHref = nextActionGuidance?.ctaHref ?? routes.plan;
+  const { journey, personalization, nextAction, nextActionGuidance, blockers, readinessLanes, evidence, people, routes } = overview;
+  const needsPersonalization = personalization.setupStatus === 'NEEDS_INPUT';
+  const nextActionHref = needsPersonalization ? routes.plan : nextActionGuidance?.ctaHref ?? routes.plan;
   const paused = journey.status === 'PAUSED';
   const stageLabel = paused ? 'Paused' : STAGE_LABELS[journey.stage];
   const mobileActionLabel = paused
     ? 'Review paused Closing Plan'
-    : nextAction
-      ? `Continue Closing Plan: ${nextAction.title}`
-      : 'Review Closing Plan';
+    : needsPersonalization
+      ? 'Make this plan fit my home'
+      : nextAction
+        ? `Continue Closing Plan: ${nextAction.title}`
+        : 'Review Closing Plan';
   const mobileActionHelp = paused
     ? 'Your dates, evidence, and completed work are preserved.'
-    : nextAction
-      ? `${nextAction.title} · ${dueLabel(nextAction.dueAt)}`
-      : 'Review milestones, evidence, and upcoming preparation.';
+    : needsPersonalization
+      ? `${personalization.questionsRemaining} quick question${personalization.questionsRemaining === 1 ? '' : 's'} left to personalize your guidance`
+      : nextAction
+        ? `${nextAction.title} · ${dueLabel(nextAction.dueAt)}`
+        : 'Review milestones, evidence, and upcoming preparation.';
 
   return (
     <main className="mx-auto w-full max-w-[1180px] space-y-6 px-4 py-6 sm:px-6 lg:py-8">
@@ -118,16 +125,31 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
           <Card className="border-teal-200 shadow-sm">
             <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CircleDashed className="h-5 w-5 text-teal-700" />Next best move</CardTitle></CardHeader>
             <CardContent>
-              {nextAction ? (
+              {needsPersonalization ? (
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+                  <div>
+                    <p className="flex items-center gap-2 text-xl font-semibold text-slate-950">
+                      <Sparkles className="h-5 w-5 text-teal-700" /> Make this plan fit my home
+                    </p>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                      Answer a few quick questions so the rest of your closing guidance — what to ask, what to watch for, what can wait — is tailored to this home before we walk you through the closing phases.
+                    </p>
+                    <p className="mt-3 text-sm font-medium text-teal-800">
+                      {personalization.questionsRemaining} quick question{personalization.questionsRemaining === 1 ? '' : 's'} left
+                    </p>
+                  </div>
+                  <Button asChild><Link href={routes.plan}>Personalize my plan <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                </div>
+              ) : nextAction ? (
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                   <div>
                     <p className="text-xl font-semibold text-slate-950">{nextAction.title}</p>
-                    <p className="mt-1 max-w-2xl text-sm text-slate-600">{nextActionGuidance?.rationale ?? nextAction.description}</p>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-600"><GlossaryText text={nextActionGuidance?.rationale ?? nextAction.description ?? ''} /></p>
                     <p className="mt-3 text-sm font-medium text-teal-800">{dueLabel(nextAction.dueAt)}</p>
                     {nextActionGuidance ? <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-                      <p className="rounded-xl bg-amber-50 p-3 text-amber-950"><span className="font-semibold">If you delay: </span>{nextActionGuidance.consequenceOfDelay}</p>
+                      <p className="rounded-xl bg-amber-50 p-3 text-amber-950"><span className="font-semibold">If you delay: </span><GlossaryText text={nextActionGuidance.consequenceOfDelay} /></p>
                       <p className="rounded-xl bg-slate-50 p-3 text-slate-700"><span className="font-semibold">Who can help: </span>{nextActionGuidance.responsibleParty}</p>
-                      <p className="rounded-xl bg-teal-50 p-3 text-teal-950 sm:col-span-2"><span className="font-semibold">Ask: </span>“{nextActionGuidance.suggestedQuestion}”</p>
+                      <p className="rounded-xl bg-teal-50 p-3 text-teal-950 sm:col-span-2"><span className="font-semibold">Ask: </span>“<GlossaryText text={nextActionGuidance.suggestedQuestion} />”</p>
                     </div> : null}
                   </div>
                   <Button asChild><Link href={nextActionHref}>{nextActionGuidance?.ctaLabel ?? 'Continue'} <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
@@ -217,7 +239,7 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
         action={(
           <Button asChild size="lg" className="w-full shadow-xl">
             <Link href={nextActionHref} aria-label={mobileActionLabel}>
-              {paused ? 'Review paused plan' : nextAction ? 'Continue next action' : 'Review Closing Plan'}
+              {paused ? 'Review paused plan' : needsPersonalization ? 'Personalize my plan' : nextAction ? 'Continue next action' : 'Review Closing Plan'}
               <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
             </Link>
           </Button>

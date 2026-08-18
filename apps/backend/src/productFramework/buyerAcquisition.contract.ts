@@ -831,6 +831,12 @@ export const BuyerNextActionGuidanceSchema = z.strictObject({
   ctaHref: z.string().startsWith('/dashboard/properties/'),
 });
 
+export const BUYER_PERSONALIZATION_SETUP_STATUSES = ['PERSONALIZED', 'NEEDS_INPUT'] as const;
+export const BuyerPersonalizationStatusSchema = z.strictObject({
+  setupStatus: z.enum(BUYER_PERSONALIZATION_SETUP_STATUSES),
+  questionsRemaining: z.number().int().nonnegative(),
+});
+
 export const BuyerClosingHomeOverviewSchema = z.strictObject({
   property: z.strictObject({
     id: z.string().min(1),
@@ -850,6 +856,7 @@ export const BuyerClosingHomeOverviewSchema = z.strictObject({
       percent: z.number().min(0).max(100),
     }),
   }),
+  personalization: BuyerPersonalizationStatusSchema,
   nextAction: BuyerClosingHomeTaskSummarySchema.nullable(),
   nextActionGuidance: BuyerNextActionGuidanceSchema.nullable(),
   blockers: z.array(BuyerClosingHomeTaskSummarySchema),
@@ -1038,6 +1045,7 @@ export type BuyerTaskBatchUpdate = z.infer<typeof BuyerTaskBatchUpdateSchema>;
 export type BuyerChecklistApplicability = z.infer<typeof BuyerChecklistApplicabilitySchema>;
 export type BuyerDashboardPresentationMode = z.infer<typeof BuyerDashboardPresentationModeSchema>;
 export type BuyerClosingHomeOverview = z.infer<typeof BuyerClosingHomeOverviewSchema>;
+export type BuyerPersonalizationStatus = z.infer<typeof BuyerPersonalizationStatusSchema>;
 export type BuyerRecentOwnerTransition = z.infer<typeof BuyerRecentOwnerTransitionSchema>;
 export type BuyerClosingHomeResponse = z.infer<typeof BuyerClosingHomeResponseSchema>;
 export type BuyerPlanOverview = z.infer<typeof BuyerPlanOverviewSchema>;

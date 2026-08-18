@@ -3305,6 +3305,10 @@ export interface BuyerClosingHomeOverview {
     moveInDate: string | null;
     progress: { completed: number; total: number; percent: number };
   };
+  personalization: {
+    setupStatus: 'PERSONALIZED' | 'NEEDS_INPUT';
+    questionsRemaining: number;
+  };
   nextAction: BuyerClosingHomeTaskSummary | null;
   nextActionGuidance: BuyerNextActionGuidance | null;
   blockers: BuyerClosingHomeTaskSummary[];
