@@ -64,11 +64,11 @@ describe('BuyerClosingHome closing command center', () => {
     expect(screen.getByText('No urgent issues recorded')).toBeInTheDocument();
     expect(screen.getByText('You’re clear to continue')).toBeInTheDocument();
     expect(screen.queryByText('Needs your attention')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open full closing guide/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /View full timeline/ })).toHaveAttribute(
       'href',
       '/dashboard/properties/property-1/buyer-plan',
     );
-    expect(screen.getByText(/You do not need to enter estimates/)).toBeInTheDocument();
+    expect(screen.getByText('No other confirmed dates are coming up.')).toBeInTheDocument();
   });
 
   it('uses the unified deadline stream and never repeats the selected action as an attention item', () => {
@@ -90,6 +90,21 @@ describe('BuyerClosingHome closing command center', () => {
     expect(screen.getAllByText('Confirm contract dates').length).toBeGreaterThan(0);
     expect(screen.queryByText('Needs attention now')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Send lender documents' })).toBeInTheDocument();
+  });
+
+  it('shows deadline urgency and flags dates that fall after closing', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-29T12:00:00.000Z'));
+    const fixture = overview();
+    fixture.upcomingDeadlines = [
+      { id: 'task:urgent', source: 'TASK', sourceId: 'urgent', label: 'Confirm contract dates', dueAt: '2026-08-31T12:00:00.000Z' },
+      { id: 'task:after-close', source: 'TASK', sourceId: 'after-close', label: 'Late document review', dueAt: '2026-09-16T12:00:00.000Z' },
+    ];
+
+    render(<BuyerClosingHome overview={fixture} />);
+
+    expect(screen.getByText('Due in 2 days')).toBeInTheDocument();
+    expect(screen.getByText('Date needs review')).toBeInTheDocument();
+    jest.useRealTimers();
   });
 });
 

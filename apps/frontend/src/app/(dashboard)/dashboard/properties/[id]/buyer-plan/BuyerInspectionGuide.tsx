@@ -106,6 +106,8 @@ interface BuyerInspectionGuideProps {
   decisionDeadline?: string | null;
   modules: BuyerInspectionModuleRecommendation[];
   unresolvedModules: BuyerInspectionModuleRecommendation[];
+  printHref?: string;
+  presentation?: 'embedded' | 'print';
 }
 
 export function BuyerInspectionGuide({
@@ -114,24 +116,15 @@ export function BuyerInspectionGuide({
   decisionDeadline,
   modules,
   unresolvedModules,
+  printHref,
+  presentation = 'embedded',
 }: BuyerInspectionGuideProps) {
-  const [showChecklist, setShowChecklist] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(presentation === 'print');
   const specialistSuggestions = [...new Set(modules.flatMap((module) => module.specialistScopes))];
   const correctionPath = unresolvedModules.flatMap((module) => module.correctionPaths)[0];
 
   return (
-    <section className="buyer-inspection-print space-y-5 rounded-2xl border border-teal-200 bg-white p-5 sm:p-6">
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .buyer-inspection-print, .buyer-inspection-print * { visibility: visible !important; }
-          .buyer-inspection-print { position: absolute; inset: 0; width: 100%; border: 0 !important; padding: 24px !important; }
-          .buyer-inspection-print-hide { display: none !important; }
-          .buyer-inspection-print-show { display: grid !important; }
-          .buyer-inspection-print-section { break-inside: avoid; }
-        }
-      `}</style>
-
+    <section className={`buyer-inspection-print space-y-5 bg-white ${presentation === 'print' ? 'p-0' : 'rounded-2xl border border-teal-200 p-5 sm:p-6'}`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-teal-700">
@@ -142,12 +135,14 @@ export function BuyerInspectionGuide({
             Bring these questions to your inspection. The list combines whole-home essentials with the details you have shared about this property.
           </p>
         </div>
-        <div className="buyer-inspection-print-hide flex flex-wrap gap-2">
+        {presentation === 'embedded' ? <div className="buyer-inspection-print-hide flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => setShowChecklist((value) => !value)}>
             {showChecklist ? 'Hide full checklist' : 'View full checklist'}
           </Button>
-          <Button type="button" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />Print checklist</Button>
-        </div>
+          {printHref ? (
+            <Button asChild type="button"><Link href={printHref} target="_blank"><Printer className="mr-2 h-4 w-4" />Print checklist</Link></Button>
+          ) : null}
+        </div> : null}
       </div>
 
       <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
@@ -177,7 +172,7 @@ export function BuyerInspectionGuide({
         </div>)}
       </div>
 
-      {!showChecklist && <p className="buyer-inspection-print-hide text-sm text-slate-500">The full printable checklist contains {STANDARD_CHECKLIST.reduce((total, section) => total + section.items.length, 0)} whole-home review prompts.</p>}
+      {!showChecklist && presentation === 'embedded' && <p className="buyer-inspection-print-hide text-sm text-slate-500">The full printable checklist contains {STANDARD_CHECKLIST.reduce((total, section) => total + section.items.length, 0)} whole-home review prompts.</p>}
 
       {correctionPath && <div className="buyer-inspection-print-hide flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 p-4 text-sm">
         <div><p className="font-medium text-slate-900">Want a more specific checklist?</p><p className="text-slate-500">Add any home details you know. Unknown details will never block the inspection guide.</p></div>

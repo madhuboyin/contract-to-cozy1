@@ -44,6 +44,14 @@ function formatDate(value: string | null): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
 }
 
+function formatMonthDay(value: string): { month: string; day: string } {
+  const date = new Date(value);
+  return {
+    month: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date).toUpperCase(),
+    day: new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(date),
+  };
+}
+
 function daysFromNow(value: string | null): number | null {
   if (!value) return null;
   return Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000);
@@ -63,6 +71,29 @@ function closingCountdown(value: string | null): string {
   if (days < 0) return 'Closing date needs review';
   if (days === 0) return 'Closing is today';
   return `${days} day${days === 1 ? '' : 's'} until closing`;
+}
+
+function deadlineUrgency(dueAt: string, targetCloseDate: string | null) {
+  const days = daysFromNow(dueAt) ?? Number.POSITIVE_INFINITY;
+  const fallsAfterClosing = Boolean(
+    targetCloseDate && new Date(dueAt).getTime() > new Date(targetCloseDate).getTime(),
+  );
+  if (fallsAfterClosing) {
+    return { label: 'Date needs review', tile: 'border-rose-200 bg-rose-50 text-rose-800', badge: 'bg-rose-100 text-rose-800 hover:bg-rose-100' };
+  }
+  if (days < 0) {
+    return { label: dueLabel(dueAt), tile: 'border-rose-200 bg-rose-50 text-rose-800', badge: 'bg-rose-100 text-rose-800 hover:bg-rose-100' };
+  }
+  if (days <= 3) {
+    return { label: dueLabel(dueAt), tile: 'border-rose-200 bg-rose-50 text-rose-800', badge: 'bg-rose-100 text-rose-800 hover:bg-rose-100' };
+  }
+  if (days <= 7) {
+    return { label: dueLabel(dueAt), tile: 'border-amber-200 bg-amber-50 text-amber-800', badge: 'bg-amber-100 text-amber-900 hover:bg-amber-100' };
+  }
+  if (days <= 14) {
+    return { label: dueLabel(dueAt), tile: 'border-teal-200 bg-teal-50 text-teal-800', badge: 'bg-teal-100 text-teal-900 hover:bg-teal-100' };
+  }
+  return { label: dueLabel(dueAt), tile: 'border-slate-200 bg-slate-50 text-slate-700', badge: 'bg-slate-100 text-slate-700 hover:bg-slate-100' };
 }
 
 function askHref(baseHref: string, question: string): string {
@@ -280,26 +311,39 @@ export function BuyerClosingHome({ overview }: { overview: BuyerClosingHomeOverv
 
       <div className="grid gap-6 lg:grid-cols-[1.45fr_0.75fr]">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
             <CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5 text-teal-700" />Coming up</CardTitle>
+            <Button asChild variant="ghost" size="sm"><Link href={routes.plan}>View full timeline <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
           </CardHeader>
           <CardContent>
             {comingUp.length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-3">
-                {comingUp.map((deadline, index) => (
-                  <div key={deadline.id} className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{index === 0 ? 'Next' : index === 1 ? 'Soon' : 'Later'}</p>
-                    <p className="mt-3 font-semibold text-slate-950">{deadline.label}</p>
-                    <p className="mt-1 text-sm text-slate-600">{formatDate(deadline.dueAt)}</p>
-                  </div>
-                ))}
+              <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
+                {comingUp.map((deadline) => {
+                  const date = formatMonthDay(deadline.dueAt);
+                  const urgency = deadlineUrgency(deadline.dueAt, journey.targetCloseDate);
+                  return (
+                    <div key={deadline.id} className="grid gap-3 p-3 sm:grid-cols-[64px_1fr_auto] sm:items-center sm:p-4">
+                      <div className={`flex h-14 w-16 flex-col items-center justify-center rounded-xl border ${urgency.tile}`}>
+                        <span className="text-[10px] font-semibold tracking-[0.12em]">{date.month}</span>
+                        <span className="text-xl font-semibold leading-5">{date.day}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-950">{deadline.label}</p>
+                        <p className="mt-1 text-xs text-slate-500">{formatDate(deadline.dueAt)}</p>
+                      </div>
+                      <Badge className={`w-fit shrink-0 border-0 ${urgency.badge}`}>{urgency.label}</Badge>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-600">No other confirmed dates are coming up. You do not need to enter estimates—add a date when your signed contract or professional confirms it.</div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-600">No other confirmed dates are coming up.</div>
             )}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
-              <p className="text-sm text-slate-500">Documents, contacts, history and the complete timeline are in your guide.</p>
-              <Button asChild variant="outline"><Link href={routes.plan}>Open full closing guide <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+              <Clock3 className="h-4 w-4 text-teal-700" />
+              <span>Target closing: <strong className="font-semibold text-slate-900">{formatDate(journey.targetCloseDate)}</strong></span>
+              <span aria-hidden="true">·</span>
+              <span>{closingCountdown(journey.targetCloseDate)}</span>
             </div>
           </CardContent>
         </Card>

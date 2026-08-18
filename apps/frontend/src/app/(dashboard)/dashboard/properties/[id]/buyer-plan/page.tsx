@@ -569,6 +569,7 @@ export default function BuyerPlanPage() {
               decisionDeadline={inspectionPlan?.contingencyDueAt}
               modules={applicableInspectionModules}
               unresolvedModules={unresolvedInspectionModules}
+              printHref={`/dashboard/properties/${propertyId}/buyer-plan/inspection-checklist/print`}
             />
 
             <Card className="border-slate-200">

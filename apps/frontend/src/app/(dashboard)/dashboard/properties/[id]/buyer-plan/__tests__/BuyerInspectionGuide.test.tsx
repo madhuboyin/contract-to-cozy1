@@ -27,14 +27,37 @@ describe('BuyerInspectionGuide', () => {
     expect(screen.queryByText(/add module/i)).not.toBeInTheDocument();
   });
 
-  it('reveals the comprehensive checklist and supports printing', () => {
-    const print = jest.spyOn(window, 'print').mockImplementation(() => undefined);
-    render(<BuyerInspectionGuide address="10 Main St" modules={[]} unresolvedModules={[]} />);
+  it('reveals the comprehensive checklist and opens the checklist-only print view', () => {
+    render(
+      <BuyerInspectionGuide
+        address="10 Main St"
+        modules={[]}
+        unresolvedModules={[]}
+        printHref="/dashboard/properties/property-1/buyer-plan/inspection-checklist/print"
+      />,
+    );
     expect(screen.getByText(/full printable checklist contains 18/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /view full checklist/i }));
     expect(screen.getByText('Structure, foundation and water')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /print checklist/i }));
-    expect(print).toHaveBeenCalledTimes(1);
-    print.mockRestore();
+    expect(screen.getByRole('link', { name: /print checklist/i })).toHaveAttribute(
+      'href',
+      '/dashboard/properties/property-1/buyer-plan/inspection-checklist/print',
+    );
+    expect(screen.getByRole('link', { name: /print checklist/i })).toHaveAttribute('target', '_blank');
+  });
+
+  it('renders only the expanded inspection document in print presentation', () => {
+    render(
+      <BuyerInspectionGuide
+        address="10 Main St"
+        modules={[]}
+        unresolvedModules={[]}
+        presentation="print"
+      />,
+    );
+
+    expect(screen.getByText('Structure, foundation and water')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /view full checklist/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /print checklist/i })).not.toBeInTheDocument();
   });
 });

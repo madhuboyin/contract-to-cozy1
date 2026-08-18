@@ -536,6 +536,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isPropertyRecordOverview = /^\/dashboard\/properties\/[0-9a-f-]{36}\/?$/i.test(pathname || '');
   const isAskWorkspace = isAskWorkspacePath(pathname);
+  const isBuyerInspectionPrint = /\/buyer-plan\/inspection-checklist\/print\/?$/.test(pathname || '');
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const { showWarning: showIdleWarning, secondsRemaining: idleSecondsRemaining, stayActive: stayIdleActive } = useIdleTimeout();
@@ -695,6 +696,13 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (user?.role === 'PROVIDER') return null;
   if (isAskWorkspace && user && !isAskAccountRoleEligible(user.role)) return null;
+
+  // Printable documents deliberately bypass the application shell. Keeping the
+  // shell mounted here causes browser print to paginate the hidden closing plan,
+  // navigation and floating controls even when only the checklist is visible.
+  if (isBuyerInspectionPrint) {
+    return !loading && user ? <>{children}</> : null;
+  }
 
   return (
     <PostLoginTransitionProvider
