@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { BuyerWorkspaceDetails, BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
 import type {
   BuyerLenderConditionCategory,
   BuyerLenderConditionStatus,
@@ -78,10 +79,28 @@ export function BuyerPurchaseLenderReadinessCenter({ propertyId, readOnly }: { p
     return <Card><CardHeader><CardTitle className="text-lg">Appraisal & lender readiness</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">Select a current confirmed Loan Estimate above before recording appraisal or underwriting follow-up.</p></CardContent></Card>;
   }
 
+  const openConditions = readiness?.conditions.filter((condition) => ['OPEN', 'SUBMITTED'].includes(condition.status)) ?? [];
+  const appraisalStarted = Boolean(readiness && readiness.appraisalStatus !== 'NOT_ORDERED');
+  const appraisalComplete = Boolean(readiness && ['COMPLETED', 'RESOLVED'].includes(readiness.appraisalStatus));
+  const lenderReady = readiness?.underwritingStatus === 'USER_RECORDED_CLEAR_TO_CLOSE';
+
   return <Card>
     <CardHeader><CardTitle className="text-lg">Appraisal & lender readiness</CardTitle></CardHeader>
     <CardContent className="space-y-5">
+      <BuyerWorkspaceGuidance
+        eyebrow="What matters now"
+        title={openConditions.length ? 'Respond to the lender requests that could delay closing' : !appraisalStarted ? 'Ask when the appraisal will be ordered' : !appraisalComplete ? 'Keep the appraisal moving' : !lenderReady ? 'Confirm what the lender still needs' : 'Lender readiness is recorded'}
+        description="C2C turns lender-reported dates and requests into an appraisal milestone, due items and blockers. Record only what your lender or professional actually told you."
+        status={openConditions.length ? `${openConditions.length} request${openConditions.length === 1 ? '' : 's'} open` : lenderReady ? 'Buyer-recorded clear to close' : 'In progress'}
+        steps={[
+          { label: 'Track the appraisal', complete: appraisalComplete, detail: appraisalStarted ? `Current status: ${readiness!.appraisalStatus.replace(/_/g, ' ').toLowerCase()}.` : 'No appraisal activity recorded yet.' },
+          { label: 'Answer lender requests', complete: openConditions.length === 0 && Boolean(readiness), detail: 'Overdue or blocking requests rise in your plan.' },
+          { label: 'Confirm the latest lender status', complete: lenderReady, detail: 'C2C records what you were told; it does not approve the loan.' },
+        ]}
+      />
       <p className="text-sm text-muted-foreground">Record what the lender or professional told you. ContractToCozy does not perform the appraisal, approve underwriting, or certify clear-to-close status.</p>
+      <BuyerWorkspaceDetails summary="Appraisal dates, underwriting status and new lender-request entry stay available when you receive an update.">
+      <div className="space-y-5">
       <form key={readiness?.updatedAt ?? 'new-readiness'} className="grid gap-3 md:grid-cols-3" onSubmit={(event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -123,6 +142,8 @@ export function BuyerPurchaseLenderReadinessCenter({ propertyId, readOnly }: { p
         <label className="space-y-1 text-sm md:col-span-2"><span>Notes</span><Input name="notes" disabled={readOnly} /></label>
         <div className="flex items-end justify-between gap-2"><label className="flex items-center gap-2 text-sm"><input name="blocking" type="checkbox" disabled={readOnly} /> Blocks closing readiness</label><Button type="submit" variant="outline" disabled={readOnly || conditionMutation.isPending}>Add condition</Button></div>
       </form>
+      </div>
+      </BuyerWorkspaceDetails>
 
       <div className="space-y-2">
         {readiness?.conditions.map((condition) => {

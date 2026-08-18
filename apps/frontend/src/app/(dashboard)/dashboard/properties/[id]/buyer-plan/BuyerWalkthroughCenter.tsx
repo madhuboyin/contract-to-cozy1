@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
 import type {
   BuyerWalkthroughIssueCategory,
   BuyerWalkthroughIssueStatus,
@@ -104,10 +105,22 @@ export function BuyerWalkthroughCenter({ propertyId, readOnly }: { propertyId: s
   const data = query.data;
   const workspace = data?.workspace;
   const evidenceName = (id: string | null) => data?.evidenceDocuments.find((document) => document.id === id)?.name;
+  const openIssues = workspace?.issues.filter((item) => ['OPEN', 'ROUTED_TO_PROFESSIONAL'].includes(item.status)) ?? [];
 
   return <Card className="border-teal-200 bg-teal-50/20">
     <CardHeader><CardTitle className="text-lg">Final Walkthrough Companion</CardTitle></CardHeader>
     <CardContent className="space-y-5">
+      <BuyerWorkspaceGuidance
+        eyebrow="What matters now"
+        title={!workspace?.scheduledAt ? 'Schedule the final walkthrough close to closing' : !workspace.startedAt ? 'Prepare the contract and inspection context' : openIssues.length ? 'Route new or unresolved issues before closing' : workspace.completedAt ? 'Your walkthrough record is complete' : 'Check for meaningful changes—not every inspection item again'}
+        description="C2C carries contract items, inspection findings and seller outcomes into the walkthrough so you can focus on changes, agreed repairs and possession concerns."
+        status={openIssues.length ? `${openIssues.length} issue${openIssues.length === 1 ? '' : 's'} open` : workspace?.completedAt ? 'Complete' : 'Preparation'}
+        steps={[
+          { label: 'Confirm appointment and access', complete: Boolean(workspace?.scheduledAt && workspace.accessConfirmedAt), detail: 'Make sure needed utilities are available.' },
+          { label: 'Observe and document changes', complete: Boolean(workspace?.startedAt && workspace.observations.length), detail: 'Attach evidence only when it helps explain an issue.' },
+          { label: 'Route material issues', complete: Boolean(workspace?.completedAt), detail: 'A professional—not C2C—advises what the issue means for closing.' },
+        ]}
+      />
       <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950"><p className="font-medium">Observe, document, and escalate—do not self-certify.</p><p className="mt-1 text-xs">Record only what you can safely observe. ContractToCozy does not certify condition, repair quality, code compliance, safety, or legal remedies. Stop unsafe testing and route material changes to your buyer representative, attorney, inspector, or closing professional.</p></div>
 
       <form key={workspace?.updatedAt ?? 'walkthrough'} className="grid gap-3 md:grid-cols-3" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); workspaceMutation.mutate({ scheduledAt: datetimeIso(form.get('scheduledAt')), attendees: lines(form.get('attendees')), accessConfirmed: form.has('accessConfirmed'), utilitiesConfirmed: form.has('utilitiesConfirmed'), started: form.has('started'), generalNotes: String(form.get('generalNotes') ?? '').trim() || null }); }}>

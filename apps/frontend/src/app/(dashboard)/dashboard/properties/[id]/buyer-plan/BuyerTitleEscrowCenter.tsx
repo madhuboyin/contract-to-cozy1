@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { BuyerWorkspaceDetails, BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
 import type {
   BuyerClosingAppointmentFormat,
   BuyerTitleEscrowIssueInput,
@@ -109,15 +110,31 @@ export function BuyerTitleEscrowCenter({ propertyId, readOnly }: { propertyId: s
   const workspace = data?.workspace;
   const contact = data?.contact;
   const documentName = (id: string | null | undefined) => data?.documents.find((document) => document.id === id)?.name;
+  const openIssues = workspace?.issues.filter((issue) => ['OPEN', 'PROFESSIONAL_REVIEW'].includes(issue.status)) ?? [];
+  const titleReceived = Boolean(workspace?.titleCommitmentDocumentId || (workspace && workspace.titleReviewStatus !== 'NOT_RECEIVED'));
+  const titleReviewed = workspace?.titleReviewStatus === 'REVIEWED_WITH_PROFESSIONAL';
 
   return <Card className="border-sky-200 bg-sky-50/20">
-    <CardHeader><CardTitle className="text-lg">Title, escrow & closing documents</CardTitle></CardHeader>
+    <CardHeader><CardTitle className="text-lg">Get title and closing details ready</CardTitle></CardHeader>
     <CardContent className="space-y-5">
+      <BuyerWorkspaceGuidance
+        eyebrow="What matters now"
+        title={!contact ? 'Confirm who is handling title and closing' : !titleReceived ? 'Upload the title report when it arrives' : openIssues.length ? 'Route the open questions to your professional' : !titleReviewed ? 'Review the title report with your professional' : 'Title preparation is recorded'}
+        description="C2C uses the responsible professional, received documents, appointment and open questions to organize readiness and surface blockers. It does not interpret title exceptions or decide that title is clear."
+        status={openIssues.length ? `${openIssues.length} question${openIssues.length === 1 ? '' : 's'} open` : titleReviewed ? 'Professional review recorded' : 'Preparation needed'}
+        steps={[
+          { label: 'Know who handles closing', complete: Boolean(contact), detail: 'This is the person to ask about title, survey and local requirements.' },
+          { label: 'Upload the title report', complete: titleReceived, detail: 'Keep the source document with this property.' },
+          { label: 'Resolve consequential questions', complete: titleReviewed && openIssues.length === 0, detail: 'Only buyer-recorded questions and blockers appear here.' },
+        ]}
+      />
       <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950">
         <p className="font-medium">Preparation organizer—not legal or title review.</p>
         <p className="mt-1 text-xs">ContractToCozy does not interpret exceptions, give legal advice, certify clear title, or validate wiring instructions. Confirm every payment instruction using a trusted phone number you obtained independently; never store wire instructions here.</p>
       </div>
 
+      <BuyerWorkspaceDetails summary="Contact metadata, survey and HOA applicability, appointment logistics, documents and question entry are available when they affect your next step.">
+      <div className="space-y-5">
       <form key={workspace?.updatedAt ?? 'new-title-workspace'} className="space-y-5" onSubmit={(event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -200,6 +217,8 @@ export function BuyerTitleEscrowCenter({ propertyId, readOnly }: { propertyId: s
         <label className="space-y-1 text-sm md:col-span-2"><span>Notes for the professional</span><Input name="notes" maxLength={2000} disabled={readOnly} /></label>
         <div className="flex items-end justify-between gap-2"><label className="flex items-center gap-2 text-sm"><input name="blocking" type="checkbox" disabled={readOnly} />Blocks closing preparation</label><Button type="submit" variant="outline" disabled={readOnly || issueMutation.isPending}>Add question</Button></div>
       </form>
+      </div>
+      </BuyerWorkspaceDetails>
 
       <div className="space-y-2">
         {workspace?.issues.map((issue) => {

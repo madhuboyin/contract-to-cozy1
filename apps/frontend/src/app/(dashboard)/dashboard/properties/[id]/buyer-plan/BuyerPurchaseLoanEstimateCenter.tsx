@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { BuyerWorkspaceDetails, BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
 import type {
   BuyerPurchaseLoanEstimateInput,
   BuyerPurchaseLoanEstimateRevision,
@@ -61,6 +62,7 @@ export function BuyerPurchaseLoanEstimateCenter({ propertyId, readOnly }: { prop
   const { toast } = useToast();
   const [editTarget, setEditTarget] = useState<EditTarget>({});
   const [extractionProposal, setExtractionProposal] = useState<import('@/types').BuyerPurchaseLoanEstimateExtractionProposal | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const queryKey = ['buyer-purchase-loan-estimates', propertyId];
   const workspaceQuery = useQuery({
     queryKey,
@@ -84,6 +86,7 @@ export function BuyerPurchaseLoanEstimateCenter({ propertyId, readOnly }: { prop
     onSuccess: (proposal) => {
       setEditTarget({});
       setExtractionProposal(proposal);
+      setShowDetails(true);
       toast({ title: 'Review extracted values', description: 'Every populated value is proposed only. Check it against the official disclosure before saving.' });
     },
     onError: (error) => toast({ title: 'Extraction unavailable', description: error instanceof Error ? error.message : 'Enter the values manually instead.', variant: 'destructive' }),
@@ -133,20 +136,37 @@ export function BuyerPurchaseLoanEstimateCenter({ propertyId, readOnly }: { prop
   const revision = editTarget.revision;
   const draft = revision ?? extractionProposal?.proposedInput;
   const formKey = revision?.id ?? editTarget.offerId ?? (extractionProposal ? 'extracted-offer' : 'new-offer');
+  const confirmedCount = workspace?.offers.reduce((count, offer) => count + offer.revisions.filter((item) => item.status === 'CONFIRMED').length, 0) ?? 0;
+  const selectedOffer = workspace?.offers.flatMap((offer) => offer.revisions.map((item) => ({ offer, item }))).find(({ item }) => item.id === workspace.selection?.revisionId);
 
   return <Card>
-    <CardHeader><CardTitle className="text-lg">Purchase Loan Estimate Center</CardTitle></CardHeader>
+    <CardHeader><CardTitle className="text-lg">Compare your Loan Estimates</CardTitle></CardHeader>
     <CardContent className="space-y-5">
-      <div><p className="text-sm text-muted-foreground">Manually save partial official Loan Estimate terms, resume later, and confirm only after checking the lender disclosure. Comparisons organize entered figures; they do not recommend a lender or determine eligibility.</p></div>
-      <div className="space-y-2 rounded-lg border border-dashed p-3">
-        <p className="text-sm font-medium">Optional document prefill</p>
-        <p className="text-xs text-muted-foreground">Upload one PDF or up to three page images. Extraction never confirms or saves values for you.</p>
+      <BuyerWorkspaceGuidance
+        eyebrow="What C2C does with this information"
+        title={selectedOffer ? `${selectedOffer.offer.lenderName} is selected for planning` : confirmedCount > 1 ? 'Your confirmed offers are ready to compare' : 'Start with the official lender document'}
+        description="C2C extracts the figures that affect monthly payment, cash needed at closing, lender costs and rate-lock timing. Comparisons organize recorded figures; they do not recommend a lender or determine eligibility."
+        status={selectedOffer ? 'Selection recorded' : confirmedCount ? `${confirmedCount} confirmed` : 'No estimate confirmed'}
+        steps={[
+          { label: 'Upload the official Loan Estimate', complete: Boolean(workspace?.offers.length), detail: 'A PDF or clear page images reduce manual typing.' },
+          { label: 'Check extracted figures against the disclosure', complete: confirmedCount > 0, detail: 'Nothing becomes confirmed automatically.' },
+          { label: 'Compare costs and record your decision', complete: Boolean(workspace?.selection), detail: 'C2C keeps appraisal and lender follow-up connected.' },
+        ]}
+      />
+      <div className="space-y-2 rounded-xl border-2 border-dashed border-teal-200 bg-white p-4">
+        <p className="text-sm font-semibold text-slate-900">Upload a Loan Estimate</p>
+        <p className="text-xs leading-5 text-muted-foreground">Upload one PDF or up to three page images. Extraction never confirms or saves values for you.</p>
         <Input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple disabled={readOnly || extractionMutation.isPending} onChange={(event) => {
           const files = Array.from(event.target.files ?? []).slice(0, 3);
           if (files.length) extractionMutation.mutate(files);
         }} />
         {extractionProposal && <div className="space-y-1 rounded bg-amber-50 p-3 text-xs text-amber-950"><p className="font-medium">Review required · {extractionProposal.review.extractedFieldCount} fields proposed · page set {extractionProposal.review.pageIntegrity.status.toLowerCase()}</p>{extractionProposal.review.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div>}
       </div>
+      <BuyerWorkspaceDetails
+        summary="Manual entry, revisions, rate-lock fields and five-year figures stay here when the document cannot be read or needs correction."
+        open={showDetails || Boolean(editTarget.offerId) || Boolean(extractionProposal)}
+        onOpenChange={setShowDetails}
+      >
       <form key={formKey} className="grid gap-3 md:grid-cols-3" onSubmit={(event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -183,6 +203,7 @@ export function BuyerPurchaseLoanEstimateCenter({ propertyId, readOnly }: { prop
         <label className="space-y-1 text-sm"><span>Lock expiration</span><Input name="rateLockExpirationDate" type="date" defaultValue={draft?.rateLockExpirationDate ?? ''} disabled={readOnly} /></label>
         <div className="flex items-end gap-2 md:col-span-3"><Button type="submit" disabled={readOnly || saveMutation.isPending}>{saveMutation.isPending ? 'Saving…' : 'Save draft'}</Button>{(editTarget.offerId || revision) && <Button type="button" variant="outline" onClick={() => setEditTarget({})}>Cancel</Button>}</div>
       </form>
+      </BuyerWorkspaceDetails>
 
       <div className="space-y-3 border-t pt-4">
         {workspace?.offers.map((offer) => <div key={offer.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{offer.lenderName}</p><Button size="sm" variant="outline" disabled={readOnly} onClick={() => { setExtractionProposal(null); setEditTarget({ offerId: offer.id, lenderName: offer.lenderName }); }}>Add revision</Button></div><div className="mt-2 space-y-2">{offer.revisions.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>Revision {item.revisionNumber} · {item.issuedDate ?? 'date unknown'}</span><div className="flex flex-wrap gap-2"><Badge variant={item.status === 'CONFIRMED' ? 'default' : 'secondary'}>{item.status}</Badge>{workspace.selection?.revisionId === item.id && <Badge variant="outline">Buyer selected{workspace.selection.intentToProceedAt ? ' · intent recorded' : ''}</Badge>}{item.status === 'DRAFT' && <><Button size="sm" variant="outline" disabled={readOnly} onClick={() => { setExtractionProposal(null); setEditTarget({ offerId: offer.id, lenderName: offer.lenderName, revision: item }); }}>Resume</Button><Button size="sm" disabled={readOnly || confirmMutation.isPending} onClick={() => confirmMutation.mutate(item.id)}>Confirm</Button></>}{item.status === 'CONFIRMED' && workspace.selection?.revisionId !== item.id && <><Button size="sm" variant="outline" disabled={readOnly || selectionMutation.isPending} onClick={() => selectionMutation.mutate({ revisionId: item.id, intentToProceed: false })}>Select for planning</Button><Button size="sm" disabled={readOnly || selectionMutation.isPending} onClick={() => selectionMutation.mutate({ revisionId: item.id, intentToProceed: true })}>Record intent to proceed</Button></>}</div></div>)}</div></div>)}

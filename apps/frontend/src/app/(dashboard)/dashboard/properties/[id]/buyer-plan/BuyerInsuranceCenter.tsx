@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { BuyerWorkspaceDetails, BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
 import type {
   BuyerInsuranceProofStatus,
   BuyerInsuranceQuoteInput,
@@ -108,12 +109,27 @@ export function BuyerInsuranceCenter({ propertyId, readOnly }: { propertyId: str
   const workspace = data?.workspace;
   const selectedQuote = workspace?.quotes.find((quote) => quote.id === workspace.selectedQuoteId);
   const currentBinder = data?.documents.find((document) => document.id === workspace?.binderDocumentId)?.name;
+  const openRequirements = workspace?.requirements.filter((item) => ['OPEN', 'SUBMITTED'].includes(item.status)) ?? [];
+  const proofReady = Boolean(workspace && workspace.lenderProofStatus !== 'PENDING' && workspace.closingProofStatus !== 'PENDING');
 
   return <Card className="border-indigo-200 bg-indigo-50/20">
-    <CardHeader><CardTitle className="text-lg">Buyer Coverage preparation</CardTitle></CardHeader>
+    <CardHeader><CardTitle className="text-lg">Get homeowners insurance ready</CardTitle></CardHeader>
     <CardContent className="space-y-5">
+      <BuyerWorkspaceGuidance
+        eyebrow="What matters now"
+        title={data?.policy ? 'Your bound policy is recorded' : selectedQuote ? 'Confirm binding with your insurer or agent' : workspace?.quotes.length ? 'Choose which quote you are taking forward' : 'Start with a quote or your insurance contact'}
+        description="C2C uses the effective date, binder, proof delivery and open insurer requests to show readiness, deadlines and blockers. Detailed limits remain a reference for your conversation with a licensed professional."
+        status={openRequirements.length ? `${openRequirements.length} request${openRequirements.length === 1 ? '' : 's'} open` : data?.policy ? 'Policy recorded' : 'Preparation needed'}
+        steps={[
+          { label: 'Record your agent or quote', complete: Boolean(data?.contact || workspace?.quotes.length), detail: 'Use the official document when possible.' },
+          { label: 'Confirm the effective date and binding', complete: Boolean(data?.policy), detail: workspace?.requiredEffectiveAt ? `Needed by ${dateInput(workspace.requiredEffectiveAt)}.` : 'Add a date only from a reliable source.' },
+          { label: 'Deliver proof where required', complete: proofReady, detail: 'C2C flags unresolved or overdue requests.' },
+        ]}
+      />
       <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950"><p className="font-medium">Decision support—not insurance advice or binding.</p><p className="mt-1 text-xs">ContractToCozy records the facts you provide. It does not recommend coverage, determine adequacy, quote premiums, or bind a policy. Confirm limits, exclusions, effective dates, and binding directly with a licensed insurer or agent.</p></div>
 
+      <BuyerWorkspaceDetails summary="Contact information, proof status, quote assumptions and insurer requests are hidden until you need to add or correct them.">
+      <div className="space-y-5">
       <form key={workspace?.updatedAt ?? 'buyer-insurance'} className="grid gap-3 md:grid-cols-3" onSubmit={(event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -166,6 +182,12 @@ export function BuyerInsuranceCenter({ propertyId, readOnly }: { propertyId: str
         <div className="flex items-end"><Button type="submit" variant="outline" disabled={readOnly || quoteMutation.isPending}>Add quote</Button></div>
       </form>
 
+      <form className="grid gap-3 border-t pt-4 md:grid-cols-3" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); requirementMutation.mutate({ category: String(form.get('category')) as BuyerInsuranceRequirementCategory, title: String(form.get('title') ?? '').trim(), notes: String(form.get('notes') ?? '').trim() || null, dueAt: dateIso(form.get('dueAt')), blocking: form.has('blocking') }); event.currentTarget.reset(); }}>
+        <label className="space-y-1 text-sm"><span>Insurer / lender requirement</span><select name="category" defaultValue="PROPERTY_CONDITION" disabled={readOnly} className="h-10 w-full rounded-md border bg-background px-3"><option value="PROPERTY_CONDITION">Property condition</option><option value="ROOF">Roof</option><option value="ELECTRICAL">Electrical</option><option value="PLUMBING">Plumbing</option><option value="PRIOR_LOSS">Prior loss</option><option value="LENDER">Lender</option><option value="OTHER">Other</option></select></label><label className="space-y-1 text-sm"><span>Requested item</span><Input name="title" required disabled={readOnly} /></label><label className="space-y-1 text-sm"><span>Due date</span><Input name="dueAt" type="date" disabled={readOnly} /></label><label className="space-y-1 text-sm md:col-span-2"><span>Notes</span><Input name="notes" disabled={readOnly} /></label><div className="flex items-end justify-between gap-2"><label className="flex items-center gap-2 text-sm"><input name="blocking" type="checkbox" disabled={readOnly} />Blocks binding</label><Button type="submit" variant="outline" disabled={readOnly || requirementMutation.isPending}>Add requirement</Button></div>
+      </form>
+      </div>
+      </BuyerWorkspaceDetails>
+
       <div className="grid gap-3 lg:grid-cols-2">{workspace?.quotes.map((quote) => <div key={quote.id} className="rounded-lg border bg-background p-3 text-sm"><div className="flex items-center justify-between gap-2"><p className="font-medium">{quote.carrierName}</p><Badge variant={quote.status === 'SELECTED' ? 'default' : 'secondary'}>{quote.status}</Badge></div><div className="mt-2 grid grid-cols-2 gap-1 text-xs text-muted-foreground"><span>Annual: {money(quote.annualPremiumCents)}</span><span>Deductible: {money(quote.deductibleCents)}</span><span>Dwelling: {money(quote.dwellingLimitCents)}</span><span>Liability: {money(quote.liabilityLimitCents)}</span></div>{quote.status !== 'SELECTED' && <Button size="sm" className="mt-3" variant="outline" disabled={readOnly || selectMutation.isPending} onClick={() => selectMutation.mutate(quote.id)}>Record buyer selection</Button>}</div>)}</div>
       {!workspace?.quotes.length && <p className="text-sm text-muted-foreground">No purchase insurance quotes recorded yet.</p>}
 
@@ -175,9 +197,6 @@ export function BuyerInsuranceCenter({ propertyId, readOnly }: { propertyId: str
       }}><div className="md:col-span-4"><p className="font-medium">Record binding confirmed by the insurer or agent</p><p className="text-xs text-muted-foreground">Selected quote: {selectedQuote.carrierName}. This action creates the canonical Coverage policy.</p></div><label className="space-y-1 text-sm"><span>Policy number</span><Input name="policyNumber" required disabled={readOnly} /></label><label className="space-y-1 text-sm"><span>Effective date</span><Input name="effectiveAt" type="date" required defaultValue={dateInput(workspace?.requiredEffectiveAt)} disabled={readOnly} /></label><label className="space-y-1 text-sm"><span>Expiration date</span><Input name="expiresAt" type="date" required disabled={readOnly} /></label><div className="flex items-end"><Button type="submit" disabled={readOnly || bindMutation.isPending}>{bindMutation.isPending ? 'Recording…' : 'I confirmed binding'}</Button></div></form>}
       {data?.policy && <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 text-sm"><p className="font-medium">Canonical policy recorded: {data.policy.carrierName}</p><p className="mt-1 text-xs text-muted-foreground">Policy {data.policy.policyNumber} · effective {dateInput(data.policy.startDate)} through {dateInput(data.policy.expiryDate)} · annual premium {data.policy.premiumAmount ? `$${Number(data.policy.premiumAmount).toLocaleString()}` : 'not recorded'}</p></div>}
 
-      <form className="grid gap-3 border-t pt-4 md:grid-cols-3" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); requirementMutation.mutate({ category: String(form.get('category')) as BuyerInsuranceRequirementCategory, title: String(form.get('title') ?? '').trim(), notes: String(form.get('notes') ?? '').trim() || null, dueAt: dateIso(form.get('dueAt')), blocking: form.has('blocking') }); event.currentTarget.reset(); }}>
-        <label className="space-y-1 text-sm"><span>Insurer / lender requirement</span><select name="category" defaultValue="PROPERTY_CONDITION" disabled={readOnly} className="h-10 w-full rounded-md border bg-background px-3"><option value="PROPERTY_CONDITION">Property condition</option><option value="ROOF">Roof</option><option value="ELECTRICAL">Electrical</option><option value="PLUMBING">Plumbing</option><option value="PRIOR_LOSS">Prior loss</option><option value="LENDER">Lender</option><option value="OTHER">Other</option></select></label><label className="space-y-1 text-sm"><span>Requested item</span><Input name="title" required disabled={readOnly} /></label><label className="space-y-1 text-sm"><span>Due date</span><Input name="dueAt" type="date" disabled={readOnly} /></label><label className="space-y-1 text-sm md:col-span-2"><span>Notes</span><Input name="notes" disabled={readOnly} /></label><div className="flex items-end justify-between gap-2"><label className="flex items-center gap-2 text-sm"><input name="blocking" type="checkbox" disabled={readOnly} />Blocks binding</label><Button type="submit" variant="outline" disabled={readOnly || requirementMutation.isPending}>Add requirement</Button></div>
-      </form>
       <div className="space-y-2">{workspace?.requirements.map((item) => { const open = ['OPEN', 'SUBMITTED'].includes(item.status); return <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background p-3 text-sm"><div><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.category.replace(/_/g, ' ').toLowerCase()}{item.dueAt ? ` · due ${dateInput(item.dueAt)}` : ''}</p></div><div className="flex gap-2"><Badge variant={item.blocking && open ? 'destructive' : 'secondary'}>{item.status}</Badge>{open && <><Button size="sm" variant="outline" disabled={readOnly} onClick={() => requirementStatusMutation.mutate({ requirementId: item.id, status: 'SUBMITTED' })}>Submitted</Button><Button size="sm" disabled={readOnly} onClick={() => requirementStatusMutation.mutate({ requirementId: item.id, status: 'RESOLVED' })}>Resolved</Button><Button size="sm" variant="ghost" disabled={readOnly} onClick={() => requirementStatusMutation.mutate({ requirementId: item.id, status: 'WAIVED' })}>Waived</Button></>}</div></div>; })}{!workspace?.requirements.length && <p className="text-sm text-muted-foreground">No insurer or lender requirements recorded.</p>}</div>
     </CardContent>
   </Card>;

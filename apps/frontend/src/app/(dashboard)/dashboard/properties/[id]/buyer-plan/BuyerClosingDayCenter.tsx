@@ -12,6 +12,7 @@ import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
 import { useToast } from '@/components/ui/use-toast';
 import { useCelebration } from '@/hooks/useCelebration';
 import { api } from '@/lib/api/client';
+import { BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
 import type { BuyerClosingChecklistItemStatus, BuyerClosingDayInput, BuyerClosingDayWorkspaceResponse } from '@/types';
 
 const lines = (value: FormDataEntryValue | null) => String(value ?? '').split('\n').map((item) => item.trim()).filter(Boolean);
@@ -91,6 +92,17 @@ export function BuyerClosingDayCenter({ propertyId, readOnly }: { propertyId: st
   return <><Card className={closed ? 'border-emerald-300 bg-emerald-50/30' : 'border-blue-200 bg-blue-50/20'}>
     <CardHeader><CardTitle className="flex flex-wrap items-center justify-between gap-2 text-lg"><span>Closing Day Companion</span><Badge variant={closed ? 'default' : 'secondary'}>{closed ? 'Professional close recorded' : 'Preparation in progress'}</Badge></CardTitle></CardHeader>
     <CardContent className="space-y-5">
+      <BuyerWorkspaceGuidance
+        eyebrow="What matters now"
+        title={closed ? 'Your professional close is recorded' : data.blockers.length ? 'Review the recorded blockers with your closing professional' : !data.appointment?.scheduledAt ? 'Confirm the closing appointment' : 'Prepare only what you need for closing day'}
+        description="C2C brings the appointment, trusted contact, funds readiness, blockers and possession timing together. The closing professional remains the source of truth for whether closing is complete."
+        status={closed ? 'Welcome home' : data.blockers.length ? `${data.blockers.length} blocker${data.blockers.length === 1 ? '' : 's'}` : 'Closing preparation'}
+        steps={[
+          { label: 'Confirm appointment and trusted contact', complete: Boolean(data.appointment?.scheduledAt && data.appointment?.trustedContact), detail: 'Use a known number if payment instructions change.' },
+          { label: 'Review funds, documents and questions', complete: Boolean(workspace?.fundsReadinessReviewed && workspace.requiredDocumentsReady && workspace.questionsResolved), detail: 'Sensitive account information never belongs here.' },
+          { label: 'Record professional close', complete: closed, detail: 'A scheduled date or signing alone does not complete the purchase.' },
+        ]}
+      />
       <p className="text-sm text-muted-foreground">Prepare the appointment, record what you received, and preserve signed copies. This workflow never tells you whether to close or interprets the legal effect of a document.</p>
 
       <div className="grid gap-3 rounded-lg border bg-background p-3 text-sm md:grid-cols-2">

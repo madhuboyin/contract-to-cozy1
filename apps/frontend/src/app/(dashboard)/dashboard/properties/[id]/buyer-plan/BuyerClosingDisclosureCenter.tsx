@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { BuyerWorkspaceDetails, BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
 import type { BuyerClosingDisclosureInput, BuyerClosingDisclosureWorkspaceResponse } from '@/types';
 
 const dollars = (value: number | null | undefined) => value == null ? '' : String(value / 100);
@@ -96,13 +97,25 @@ export function BuyerClosingDisclosureCenter({ propertyId, readOnly }: { propert
   const draft = workspace?.revisions.find((item) => item.status === 'DRAFT');
   const current = workspace?.revisions.find((item) => item.id === workspace.currentRevisionId);
   const displayed = draft ?? current;
+  const fundsReady = Boolean(workspace?.fundsReady && workspace.instructionsVerified && workspace.questionsResolved);
 
   return <Card className="border-indigo-200 bg-indigo-50/20">
-    <CardHeader><CardTitle className="text-lg">Closing Disclosure & Cash-to-Close Review</CardTitle></CardHeader>
+    <CardHeader><CardTitle className="text-lg">Review your final numbers</CardTitle></CardHeader>
     <CardContent className="space-y-5">
-      <p className="text-sm text-muted-foreground">Enter the official disclosure manually, save partial work, and confirm only after checking it. This comparison organizes recorded numbers; it does not approve the loan, validate settlement charges, or provide legal advice.</p>
+      <BuyerWorkspaceGuidance
+        eyebrow="What matters now"
+        title={!current ? 'Use the latest Closing Disclosure from your lender' : data?.comparison.length ? 'Review the changes from your Loan Estimate' : fundsReady ? 'Your funds-readiness checks are recorded' : 'Confirm the amount and safe delivery method'}
+        description="C2C compares the recorded disclosure with your selected Loan Estimate and contract credits, then highlights changed figures for professional follow-up. It does not approve charges or tell you whether to close."
+        status={current ? `Revision ${current.revisionNumber} confirmed` : draft ? 'Draft in progress' : 'Disclosure not recorded'}
+        steps={[
+          { label: 'Record the latest disclosure', complete: Boolean(current), detail: 'Automated document extraction is not available here yet; manual entry stays optional and hidden.' },
+          { label: 'Review changed figures', complete: Boolean(current && data?.comparison.length), detail: 'Ask the lender or closing professional about unexpected differences.' },
+          { label: 'Verify funds instructions safely', complete: fundsReady, detail: 'Never store account or routing numbers in C2C.' },
+        ]}
+      />
       {data && <div className="rounded-lg border bg-background p-3 text-sm"><p className="font-medium">Selected Loan Estimate · {data.selectedLoanEstimate.lenderName} · revision {data.selectedLoanEstimate.revisionNumber}</p><p className="mt-1 text-xs text-muted-foreground">Recorded contract credits: {money(data.contractCredits.totalCents)}. Confirm any difference with the closing professional.</p></div>}
 
+      <BuyerWorkspaceDetails summary="Manual disclosure figures and revision controls are available only when you need to record or correct the official document.">
       <form key={displayed?.id ?? 'new-closing-disclosure'} className="grid gap-3 md:grid-cols-3" onSubmit={(event) => {
         event.preventDefault();
         saveMutation.mutate({ revisionId: draft?.id, input: inputFromForm(new FormData(event.currentTarget)) });
@@ -122,6 +135,7 @@ export function BuyerClosingDisclosureCenter({ propertyId, readOnly }: { propert
         <label className="space-y-1 text-sm md:col-span-3"><span>Change explanation or professional follow-up</span><textarea name="changeExplanation" defaultValue={draft?.changeExplanation ?? ''} disabled={readOnly} rows={3} className="w-full rounded-md border bg-background p-2" /></label>
         <div className="flex gap-2 md:col-span-3"><Button type="submit" disabled={readOnly || saveMutation.isPending}>{draft ? 'Save partial draft' : 'Start new revision'}</Button>{draft && <Button type="button" disabled={readOnly || confirmMutation.isPending} onClick={() => confirmMutation.mutate(draft.id)}>Confirm revision</Button>}</div>
       </form>
+      </BuyerWorkspaceDetails>
 
       {data && data.comparison.length > 0 && <div className="space-y-2 border-t pt-4"><p className="font-medium">Selected Loan Estimate → current disclosure</p><div className="grid gap-2 md:grid-cols-2">{data.comparison.map((item) => {
         const rate = item.field === 'noteRateBps' || item.field === 'aprBps';

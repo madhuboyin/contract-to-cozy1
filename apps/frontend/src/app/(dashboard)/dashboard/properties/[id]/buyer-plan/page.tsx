@@ -550,21 +550,21 @@ export default function BuyerPlanPage() {
 
         {activeWorkspace === 'FINANCING_PROTECTION' && <div className="space-y-4">
           {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <>
-            <BuyerPlanTool title="Loan Estimates" description="Compare official lender disclosures and keep the selected estimate current."><BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
-            <BuyerPlanTool title="Lender readiness" description="Track the lender, application status, conditions and appraisal work."><BuyerPurchaseLenderReadinessCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+            <BuyerPlanTool title="Loan Estimates" description="Upload official lender disclosures so C2C can organize payment, closing-cash and timing differences."><BuyerPurchaseLoanEstimateCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+            <BuyerPlanTool title="Lender readiness" description="See what the lender still needs, what could delay closing and who to contact next."><BuyerPurchaseLenderReadinessCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
           </>}
           {purchaseFinancingPlan?.purchasePath !== 'FINANCED' && <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Financing tools remain hidden until you select a financed purchase in the Contract phase.</div>}
-          <BuyerPlanTool title="Title, escrow & HOA" description="Keep the responsible professional, document status and questions together."><BuyerTitleEscrowCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
-          <BuyerPlanTool title="Homeowners insurance" description="Prepare proof of coverage and record insurer or lender follow-up."><BuyerInsuranceCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+          <BuyerPlanTool title="Title, escrow & HOA" description="Know who is handling closing, which documents are pending and which questions need professional help."><BuyerTitleEscrowCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+          <BuyerPlanTool title="Homeowners insurance" description="Know when coverage must begin, what proof is still needed and which follow-up could hold up closing."><BuyerInsuranceCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
         </div>}
 
         {activeWorkspace === 'CLOSING_PREP' && <div className="space-y-4">
-          {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <BuyerPlanTool title="Closing Disclosure & funds" description="Review the latest disclosure revision and record funds-readiness evidence."><BuyerClosingDisclosureCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>}
-          <BuyerPlanTool title="Final walkthrough" description="Prepare the appointment, record observations and route material issues."><BuyerWalkthroughCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+          {purchaseFinancingPlan?.purchasePath === 'FINANCED' && <BuyerPlanTool title="Closing Disclosure & funds" description="See what changed from the Loan Estimate and prepare the verified amount needed for closing."><BuyerClosingDisclosureCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>}
+          <BuyerPlanTool title="Final walkthrough" description="Focus on meaningful changes, document concerns and know when to contact your professional before closing."><BuyerWalkthroughCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
         </div>}
 
         {activeWorkspace === 'CLOSE_MOVE_IN' && <div className="space-y-4">
-          <BuyerPlanTool title="Closing day" description="Confirm the appointment, professional close and possession handoff."><BuyerClosingDayCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
+          <BuyerPlanTool title="Closing day" description="Know what to bring, what to verify and when the professional close and key handoff are complete."><BuyerClosingDayCenter propertyId={propertyId} readOnly={readOnly} /></BuyerPlanTool>
         </div>}
 
         {activeWorkspace === 'DUE_DILIGENCE' && <div className="space-y-4"><BuyerPlanTool title="Inspection schedule & scope" description="Add appointment details, deadlines or specialist scope only when known.">
