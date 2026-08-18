@@ -35,6 +35,7 @@ function context(overrides = {}) {
     'structure.foundationType': 'BASEMENT',
     'exterior.hasPoolOrSpa': true,
     'exterior.hasDrainageIssues': true,
+    'core.yearBuilt': 1975,
     'structure.roofType': 'SHINGLE',
     'structure.electricalPanelAgeYears': 25,
     'systems.heatingType': 'FURNACE',
@@ -62,11 +63,12 @@ test('property-aware inspection modules produce explainable scope without diagno
   const modules = new Map(result.modules.map((module) => [module.moduleKey, module]));
 
   assert.equal(result.version, BUYER_INSPECTION_MODULE_VERSION);
-  assert.equal(result.modules.length, 6);
+  assert.equal(result.modules.length, 7);
   assert.deepEqual(modules.get('buyer.inspection.foundation-spaces').specialistScopes, ['STRUCTURAL', 'RADON']);
   assert.deepEqual(modules.get('buyer.inspection.pool-spa').specialistScopes, ['POOL_SPA']);
   assert.ok(modules.get('buyer.inspection.confirmed-systems').specialistScopes.includes('CHIMNEY'));
   assert.ok(modules.get('buyer.inspection.exposure-context').questions.some((question) => question.includes('flood-zone')));
+  assert.ok(modules.get('buyer.inspection.home-age').questions.some((question) => question.includes('older electrical')));
   assert.ok(result.modules.every((module) => module.usedFactKeys.length > 0));
   assert.ok(result.modules.every((module) => !/defect exists/i.test(module.description)));
 });
@@ -96,13 +98,17 @@ test('existing self-reported exposure fields are available through canonical Pro
   }
 });
 
-test('Buyer Plan requires explicit module acceptance and merges rather than replacing saved scope', () => {
+test('Buyer Plan presents applicable modules automatically as a printable buyer checklist', () => {
   const page = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/page.tsx'), 'utf8');
+  const guide = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/BuyerInspectionGuide.tsx'), 'utf8');
   const service = fs.readFileSync(path.resolve(__dirname, '../../src/services/buyerAcquisition.service.ts'), 'utf8');
 
   assert.match(service, /composeBuyerInspectionModules\(propertyContext\)/);
-  assert.match(page, /Add module to plan/);
-  assert.match(page, /new Set\(\[\.\.\.\(inspectionPlan\?\.specialistScopes/);
+  assert.match(page, /BuyerInspectionGuide/);
+  assert.doesNotMatch(page, /Add module to plan/);
+  assert.match(guide, /Print checklist/);
+  assert.match(guide, /STANDARD_CHECKLIST/);
+  assert.match(guide, /window\.print\(\)/);
   assert.match(page, /module\.status === 'APPLICABLE'/);
   assert.match(page, /module\.status === 'UNKNOWN'/);
 });

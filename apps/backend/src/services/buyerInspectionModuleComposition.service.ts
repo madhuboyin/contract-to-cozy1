@@ -88,6 +88,18 @@ export function composeBuyerInspectionModules(context: PropertyContextSnapshot) 
   const hasPoolOrSpa = known(context, 'exterior.hasPoolOrSpa');
   const hasDrainageIssues = known(context, 'exterior.hasDrainageIssues');
 
+  const yearBuilt = Number(known(context, 'core.yearBuilt'));
+  const homeAge = Number.isInteger(yearBuilt) ? Math.max(0, new Date().getUTCFullYear() - yearBuilt) : null;
+  const ageQuestions = homeAge === null ? [] : homeAge >= 45 ? [
+    'Which older electrical, plumbing, heating, insulation, window, roofing, or other major components should be discussed for condition, updates, and remaining service life?',
+    'Are any age-related materials or concealed conditions outside a visual inspection and better addressed through records or qualified testing?',
+  ] : homeAge >= 20 ? [
+    'Which original or older major systems should be discussed for maintenance history, observed condition, and remaining service life?',
+    'Which replacements or renovations should be checked against available permits, invoices, or warranties?',
+  ] : [
+    'Which major systems, builder-installed components, alterations, maintenance records, or warranties should be reviewed for this home?',
+  ];
+
   const systemKeys = [
     'structure.roofType',
     'structure.electricalPanelAgeYears',
@@ -158,6 +170,16 @@ export function composeBuyerInspectionModules(context: PropertyContextSnapshot) 
       specialistScopes: hasDrainageIssues === true ? ['ENVIRONMENTAL'] : [],
       questions: ['Where should grading, drainage paths, downspouts, standing water, and visible water-entry evidence be observed and photographed?'],
     }, ['exterior.hasDrainageIssues'], hasDrainageIssues === true, 'DRAINAGE_CONTEXT_CONFIRMED', 'DRAINAGE_CONTEXT_NOT_REPORTED'),
+    moduleResult(context, {
+      moduleKey: 'buyer.inspection.home-age',
+      title: 'Home age and major systems',
+      description: homeAge === null
+        ? 'Use the build year to focus questions about major systems, earlier updates, maintenance records, and remaining service life.'
+        : `Use the home’s approximate ${homeAge}-year age to focus questions about major systems, earlier updates, maintenance records, and remaining service life.`,
+      whyItMatters: 'Build year can help focus inspection questions without predicting a defect or replacing observed condition and professional judgment.',
+      specialistScopes: [],
+      questions: ageQuestions,
+    }, ['core.yearBuilt'], Number.isInteger(yearBuilt), 'BUILD_YEAR_AVAILABLE', 'BUILD_YEAR_NOT_AVAILABLE'),
     moduleResult(context, {
       moduleKey: 'buyer.inspection.confirmed-systems',
       title: 'Confirmed systems and site components',

@@ -96,7 +96,9 @@ test('inspection plan writes synchronize canonical tasks and milestone anchors',
   assert.match(method, /BUYER_MILESTONE_KEYS\.INSPECTION/);
   assert.match(method, /BUYER_MILESTONE_KEYS\.INSPECTION_CONTINGENCY/);
   assert.match(method, /reinspectionProofDocumentId \? 'DOCUMENT'/);
-  assert.match(page, /Inspection scheduling and reinspection/);
+  assert.match(page, /Your home inspection guide/);
+  assert.match(page, /Last day to raise inspection concerns/);
+  assert.doesNotMatch(page, /Inspection contingency deadline/);
   assert.match(page, /api\.updateBuyerInspectionPlan/);
   assert.match(page, /reinspectionProofDocumentId/);
 });
