@@ -229,7 +229,7 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   HVAC_DECISION_OUTCOME_REPORT: ['A completed HVAC repair or replacement can be recorded as the decision outcome.'],
   HVAC_DECISION_OUTCOME_VIEW: ['The recorded HVAC outcome shows whether the system was repaired or replaced.'],
   HVAC_DECISION_OUTCOME_UNLINK: ['An incorrect recorded HVAC outcome can be unlinked after confirmation.'],
-  BUYER_PLAN_STATUS: ['The canonical Buyer Plan next action, progress, and closing blockers are shown.'],
+  BUYER_PLAN_STATUS: ['The canonical Buyer Plan next action, progress, and closing blockers are shown.', 'Next before closing: schedule the final walkthrough. The Closing Plan is 80% complete with 2 of 10 applicable pre-close tasks remaining.', 'The canonical Buyer Plan has no executable pre-close task right now. It is 80% complete.'],
   BUYER_DEADLINES: ['Upcoming Buyer Plan milestones and blocking tasks are shown with their due dates.'],
   BUYER_DOCUMENT_READINESS: ['Expected, received, and unverified transaction document counts are shown.'],
   BUYER_INSPECTION_REVIEW: ['Inspection report status and open material findings still needing a decision are shown.'],

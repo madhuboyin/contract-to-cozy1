@@ -237,6 +237,27 @@ test('TA5 semantic relevance passes direct answers and detects a different-opera
   assert.ok(mismatched.result.clarification.options.some((option) => option.operationId === 'MAINTENANCE_STATUS'));
 });
 
+test('buyer "focus on this week for my closing" answer passes the semantic trust pipeline instead of clarifying against MAINTENANCE_TASK_COMPLETE', () => {
+  const question = 'What should I focus on this week for my closing?';
+  const result = validateAskAnswerTrustPipeline({
+    question,
+    operationId: 'BUYER_PLAN_STATUS',
+    semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-plan-status',
+        title: 'Next before closing: Schedule final walkthrough',
+        body: 'The Closing Plan is 80% complete with 2 of 10 applicable pre-close tasks remaining.',
+        tone: 'CAUTION', actions: [],
+      }],
+      suggestions: [],
+    }, 'BUYER_PLAN_STATUS'),
+  });
+  assert.equal(result.semantic.outcome, 'PASS');
+  assert.equal(result.result.status, 'ANSWERED');
+});
+
 test('seasonal maintenance rich responses pass the complete semantic trust pipeline', () => {
   const question = 'list pending seasonal tasks';
   const result = buildSeasonalMaintenanceResult({
