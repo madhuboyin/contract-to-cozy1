@@ -420,7 +420,7 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
             </div>
           ))}
         </div>
-        {block.id === 'focused-home-action-guidance' && block.actions.length > 0 && (
+        {block.actions.length > 0 && (
           <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
             {block.actions.map((action) => <ActionLink key={action.id} action={action} />)}
           </div>
@@ -753,10 +753,12 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
       <div className="mt-3 hidden overflow-x-auto sm:block">
         <table className="min-w-full text-left text-sm"><thead><tr>{block.columns.map((column) => <th key={column.key} className="border-b px-2 py-2 text-xs text-slate-500">{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr key={row.id}>{block.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-2 py-2 text-slate-700">{row.values[column.key]}</td>)}</tr>)}</tbody></table>
       </div>
-      {block.totalCount != null && block.totalCount > block.rows.length && (
+      {block.totalCount != null && block.totalCount > block.rows.length ? (
         block.actions[0]?.href
           ? <AskContextLink href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{block.totalCount - block.rows.length} more · {block.actions[0].label}</AskContextLink>
           : <p className="mt-3 text-sm text-slate-500">+{block.totalCount - block.rows.length} more not shown here.</p>
+      ) : block.actions.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>
       )}
     </section>
   );
