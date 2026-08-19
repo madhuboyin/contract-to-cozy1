@@ -42,6 +42,13 @@ test('the buying lifecycle features the buyer closing copilot operations, not ge
   assert.equal(prompts.some((prompt) => prompt.operationId === 'HOME_ACTIONS'), false);
 });
 
+test('"focus on" closing phrasing routes to BUYER_PLAN_STATUS instead of falling through to a clarification prompt', () => {
+  assert.equal(
+    resolveAskRoutingCascade('What should I focus on this week for my closing?').operation.operationId,
+    'BUYER_PLAN_STATUS',
+  );
+});
+
 test('buyer Home Actions reads the canonical next task and links its exact plan section', () => {
   const result = buildBuyerPlanHomeActionsResult(context());
   assert.equal(result.status, 'ANSWERED');
