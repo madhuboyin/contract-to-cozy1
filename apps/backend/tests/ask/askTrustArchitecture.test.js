@@ -258,6 +258,41 @@ test('buyer "focus on this week for my closing" answer passes the semantic trust
   assert.equal(result.result.status, 'ANSWERED');
 });
 
+test('every BUYER_* operation keeps its navigation action and professional boundary through the trust filter', () => {
+  const cases = [
+    { operationId: 'BUYER_PLAN_STATUS', actionId: 'open-next-buyer-task', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan?taskId=t1' },
+    { operationId: 'BUYER_DEADLINES', actionId: 'open-buyer-plan', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_DOCUMENT_READINESS', actionId: 'open-documents', boundaryId: null, href: '/dashboard/properties/property-1/documents' },
+    { operationId: 'BUYER_INSPECTION_REVIEW', actionId: 'open-inspection-hub', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/inspection-hub' },
+    { operationId: 'BUYER_MOVE_STATUS', actionId: 'open-buyer-plan', boundaryId: null, href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_FINANCING_READINESS', actionId: 'open-buyer-plan', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_TITLE_ESCROW_READINESS', actionId: 'open-buyer-plan', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_WALKTHROUGH_READINESS', actionId: 'open-buyer-plan', boundaryId: 'buyer-walkthrough-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_DISCLOSURE_FUNDS_READINESS', actionId: 'open-buyer-plan', boundaryId: 'buyer-disclosure-wire-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_CLOSING_DAY_READINESS', actionId: 'open-buyer-plan', boundaryId: 'buyer-closing-day-wire-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_CONTRACT_TIMELINE', actionId: 'open-buyer-plan', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+    { operationId: 'BUYER_NEGOTIATION_READINESS', actionId: 'open-negotiation', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/inspection-hub' },
+    { operationId: 'BUYER_COST_READINESS', actionId: 'open-buyer-plan', boundaryId: 'buyer-cost-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
+  ];
+  for (const { operationId, actionId, boundaryId, href } of cases) {
+    const blocks = [{
+      type: 'SUMMARY', id: 'summary', title: 'Title', body: 'Body', tone: 'DEFAULT',
+      actions: [{ id: actionId, label: 'Open', href, style: 'PRIMARY' }],
+    }];
+    if (boundaryId) blocks.push({ type: 'BOUNDARY', id: boundaryId, title: 'Boundary', body: 'Boundary body', severity: 'INFO', suggestions: [] });
+    const result = validateAskAnswerTrustPipeline({
+      question: 'test question', operationId, semanticEnabled: false, propertyId: 'property-1',
+      result: attachAskAuthoritativeSourceEvidence({ status: 'ANSWERED', blocks, suggestions: [] }, operationId),
+    });
+    assert.equal(result.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'), false, `${operationId}: action ${actionId} was stripped`);
+    assert.equal(result.result.blocks[0].actions.length, 1, `${operationId}: expected the navigation action to survive`);
+    if (boundaryId) {
+      assert.equal(result.trust.reasonCodes.includes('INAPPLICABLE_BOUNDARY_REMOVED'), false, `${operationId}: boundary ${boundaryId} was stripped`);
+      assert.equal(result.result.blocks.some((block) => block.type === 'BOUNDARY'), true, `${operationId}: expected the boundary block to survive`);
+    }
+  }
+});
+
 test('seasonal maintenance rich responses pass the complete semantic trust pipeline', () => {
   const question = 'list pending seasonal tasks';
   const result = buildSeasonalMaintenanceResult({

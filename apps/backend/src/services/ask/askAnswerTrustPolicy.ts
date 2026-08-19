@@ -26,6 +26,17 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   GROUNDED_GUIDANCE: new Set(['grounded-professional-boundary']),
   HVAC_DECISION_START: new Set(['repair-replace-boundary']),
   HVAC_DECISION_SCENARIO: new Set(['repair-replace-boundary']),
+  BUYER_PLAN_STATUS: new Set(['buyer-professional-boundary']),
+  BUYER_DEADLINES: new Set(['buyer-professional-boundary']),
+  BUYER_INSPECTION_REVIEW: new Set(['buyer-professional-boundary']),
+  BUYER_FINANCING_READINESS: new Set(['buyer-professional-boundary']),
+  BUYER_TITLE_ESCROW_READINESS: new Set(['buyer-professional-boundary']),
+  BUYER_WALKTHROUGH_READINESS: new Set(['buyer-walkthrough-boundary']),
+  BUYER_DISCLOSURE_FUNDS_READINESS: new Set(['buyer-disclosure-wire-boundary']),
+  BUYER_CLOSING_DAY_READINESS: new Set(['buyer-closing-day-wire-boundary']),
+  BUYER_CONTRACT_TIMELINE: new Set(['buyer-professional-boundary']),
+  BUYER_NEGOTIATION_READINESS: new Set(['buyer-professional-boundary']),
+  BUYER_COST_READINESS: new Set(['buyer-cost-boundary']),
 };
 
 const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<string>>>> = {
@@ -55,6 +66,24 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   RENOVATION_PERMIT_READINESS: new Set(['start-renovation', 'open-permits', 'open-case']),
   HVAC_DECISION_START: new Set(['open-inventory']),
   HVAC_DECISION_CONTINUE: new Set(['open-inventory']),
+  BUYER_PLAN_STATUS: new Set(['open-next-buyer-task', 'open-buyer-plan', 'open-home']),
+  BUYER_DEADLINES: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_DOCUMENT_READINESS: new Set(['open-documents', 'open-home']),
+  BUYER_INSPECTION_REVIEW: new Set(['open-inspection-hub', 'open-home']),
+  BUYER_TASK_COMPLETE: new Set(['open-buyer-plan', 'open-task']),
+  BUYER_TASK_CREATE: new Set(['open-buyer-plan', 'open-task']),
+  BUYER_TASK_UPDATE: new Set(['open-buyer-plan', 'open-task']),
+  BUYER_MOVE_STATUS: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_FINANCING_READINESS: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_TITLE_ESCROW_READINESS: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_WALKTHROUGH_READINESS: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_DISCLOSURE_FUNDS_READINESS: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_CLOSING_DAY_READINESS: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_CONTRACT_TIMELINE: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_NEGOTIATION_READINESS: new Set(['open-negotiation', 'open-home']),
+  BUYER_COST_READINESS: new Set(['open-buyer-plan', 'open-home']),
+  BUYER_FINDING_DISPOSITION: new Set(['open-inspection-hub']),
+  BUYER_LIFECYCLE_UPDATE: new Set(['open-buyer-plan']),
 };
 
 /**
