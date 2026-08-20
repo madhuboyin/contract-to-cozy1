@@ -1,7 +1,7 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.46
-**Date:** 2026-08-18
+**Version:** 1.47
+**Date:** 2026-08-19
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
 **Primary routes:** `/onboarding/address`, `/dashboard`, `/dashboard/properties/:propertyId/buyer-plan`, `/dashboard/ask`
@@ -2882,7 +2882,30 @@ Recent implementation evidence incorporated into this revision:
   urgency bands based on due date and days until closing; and
 - `e8afc974` — calm household collaboration that hides assignment for a
   single-member property and exposes **Handled by** only for eligible household
-  members on multi-member properties.
+  members on multi-member properties; and
+- `4207f5b8`, `4b93964c`, `3bb7fe0b`, `e5c26cf1`, `209affad`, `348fc005` —
+  Ask Cozy buyer-answer reliability hardening across all 18 `BUYER_*`
+  operations: broadened intent-classifier phrasing coverage so buyers'
+  natural closing questions (deadline risk, financing/title/document/
+  walkthrough/disclosure/closing-day readiness, contract timeline, cost,
+  and task-completion phrasing) resolve directly instead of falling back to
+  a generic clarification prompt; added answer-copy-matching examples to the
+  semantic answer-trust corpus so real generated answers — including empty
+  and "nothing recorded" states — pass their own operation's relevance check
+  instead of scoring closer to an unrelated operation; registered every
+  `BUYER_*` operation's navigation-action and professional/wire-fraud
+  boundary IDs in the trust-filter allowlists, which had never been extended
+  for buyer operations and were silently stripping every buyer response's
+  CTA and disclaimer; fixed `NOT_APPLICABLE`/`BLOCKED`/`NEEDS_ENTITY`/
+  `NEEDS_CONFIRMATION` buyer results (cash-purchase not-applicable states,
+  viewer-permission states, task-disambiguation states, and the
+  review-before-confirming step on every buyer mutation flow) losing their
+  navigation action because authoritative evidence was only ever attached
+  for `ANSWERED`/`COMPLETED`/`READY_WITH_LIMITATIONS` results; and removed a
+  frontend gap where `GROUPED_LIST` and `TABLE` blocks only rendered their
+  action buttons for one hardcoded block ID. Verified with no regressions
+  across the full `ask/` suite (44 files) and the HVAC decision-routing and
+  governance suites.
 
 #### 21.0.1 Buyer Experience Redesign delivery plan
 
