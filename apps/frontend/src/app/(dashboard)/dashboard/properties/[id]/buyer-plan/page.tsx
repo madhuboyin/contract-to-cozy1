@@ -432,6 +432,12 @@ export default function BuyerPlanPage() {
   const unresolvedInspectionModules = inspectionModules.filter((module) => module.status === 'UNKNOWN');
   const acceptance = acceptanceQuery.data;
   const composition = compositionQuery.data;
+  // FRD §14.17.5: while "Make this plan fit my home" is incomplete, that gate
+  // is the entire next-action result — no phase task is offered here, the same
+  // way BuyerClosingHome suppresses its next action while needsPersonalization.
+  const needsPersonalization = overview.personalization.setupStatus === 'NEEDS_INPUT';
+  const gatedNextAction = needsPersonalization ? null : overview.nextAction;
+  const gatedNextActionGuidance = needsPersonalization ? null : overview.nextActionGuidance;
   const members = overview.workload;
   const completed = overview.summary.completed;
   const journeyLocked = ['CANCELLED', 'HANDED_OFF', 'ARCHIVED'].includes(plan.status);
@@ -505,8 +511,8 @@ export default function BuyerPlanPage() {
 
         {!activeWorkspace && <BuyerPlanOverviewPanel
           targetCloseDate={plan.targetCloseDate}
-          nextAction={overview.nextAction}
-          nextActionGuidance={overview.nextActionGuidance}
+          nextAction={gatedNextAction}
+          nextActionGuidance={gatedNextActionGuidance}
           milestones={overview.milestones}
           blockedCount={overview.summary.blocked}
           currentWorkspace={currentWorkspace}
@@ -519,8 +525,8 @@ export default function BuyerPlanPage() {
         {activeWorkspace && <BuyerPlanPhaseGuidance
           workspace={activeWorkspace}
           tasks={selectedTasks}
-          nextAction={overview.nextAction}
-          nextActionGuidance={overview.nextActionGuidance}
+          nextAction={gatedNextAction}
+          nextActionGuidance={gatedNextActionGuidance}
           milestones={overview.milestones}
           targetCloseDate={plan.targetCloseDate}
           onOpenTask={openTask}

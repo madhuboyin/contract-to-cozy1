@@ -3449,6 +3449,10 @@ export interface BuyerPlanOverview {
     total: number; pending: number; inProgress: number; blocked: number;
     completed: number; notNeeded: number; cancelled: number; progressPercent: number;
   };
+  personalization: {
+    setupStatus: 'PERSONALIZED' | 'NEEDS_INPUT';
+    questionsRemaining: number;
+  };
   nextAction: BuyerPlanOverviewTask | null;
   nextActionGuidance: BuyerNextActionGuidance | null;
   workload: Array<{

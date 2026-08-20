@@ -669,6 +669,24 @@ export class HomeBuyerTaskService {
 
     const member = property.householdMembers.find((candidate) => candidate.userId === userId);
     const accessRole = property.homeownerProfile.userId === userId ? 'OWNER' : member?.role ?? 'VIEWER';
+    // "Make this plan fit my home" is a one-time gate before the phase-ordered
+    // plan (FRD §9.2, §14.17.5), not a HomeBuyerTask itself, so Buyer Plan must
+    // check it the same way getBuyerClosingHome does rather than let this
+    // surface silently show a phase next action while the gate is still open.
+    const propertyContext = await getPropertyContext(
+      propertyId,
+      { userId },
+      { scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS'] },
+    );
+    const composition = composeBuyerChecklist(propertyContext, plan.tasks.map((task) => ({
+      actionKey: task.actionKey,
+      applicability: task.applicability,
+      generationVersion: task.generationVersion,
+    })));
+    const personalization = {
+      setupStatus: composition.setupStatus,
+      questionsRemaining: composition.questions.length,
+    };
     const nextAction = plan.status === 'PAUSED' ? null : selectBuyerNextAction({
       tasks: plan.tasks,
       stage: plan.stage,
@@ -751,6 +769,7 @@ export class HomeBuyerTaskService {
         cancelled: count('CANCELLED'),
         progressPercent: total === 0 ? 0 : Math.round((completed / total) * 100),
       },
+      personalization,
       nextAction: nextAction ? planOverviewTask(nextAction) : null,
       nextActionGuidance: nextAction ? buyerNextActionGuidance(nextAction, property.id) : null,
       workload: property.householdMembers.map((householdMember) => ({

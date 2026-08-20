@@ -37,6 +37,7 @@ function overview() {
     milestones: [],
     contacts: [],
     summary: { total: 1, pending: 1, inProgress: 0, blocked: 0, completed: 0, notNeeded: 0, cancelled: 0, progressPercent: 0 },
+    personalization: { setupStatus: 'PERSONALIZED', questionsRemaining: 0 },
     nextAction: task(),
     nextActionGuidance: {
       actionId: 'task-1', rationale: 'Prepare for the inspection.', consequenceOfDelay: 'Less time remains.',
@@ -80,4 +81,15 @@ test('Buyer Plan consumes one core overview query and renders canonical next-act
   assert.match(page, /BuyerPlanPhaseGuidance/);
   assert.doesNotMatch(checklist, /DEFAULT_TASK_TITLES/);
   assert.match(checklist, /task\.sourceType === 'SYSTEM' \|\| Boolean\(task\.templateKey\)/);
+});
+
+test('FRD §14.17.5: Buyer Plan gates its next action behind "Make this plan fit my home" like Buyer Closing Home', () => {
+  const service = read('../../src/services/HomeBuyerTask.service.ts');
+  const page = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/page.tsx');
+  const method = (service.split('static async getPlanOverview')[1] ?? '').split('  static async getOrCreateChecklist')[0];
+
+  assert.match(method, /composeBuyerChecklist\(propertyContext/);
+  assert.match(method, /personalization,/);
+  assert.match(page, /overview\.personalization\.setupStatus === 'NEEDS_INPUT'/);
+  assert.match(page, /needsPersonalization \? null : overview\.nextAction/);
 });

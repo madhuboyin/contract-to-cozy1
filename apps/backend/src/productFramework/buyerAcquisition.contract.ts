@@ -1021,6 +1021,7 @@ export const BuyerPlanOverviewSchema = z.strictObject({
     cancelled: z.number().int().nonnegative(),
     progressPercent: z.number().min(0).max(100),
   }),
+  personalization: BuyerPersonalizationStatusSchema,
   nextAction: BuyerPlanOverviewTaskSchema.nullable(),
   nextActionGuidance: BuyerNextActionGuidanceSchema.nullable(),
   workload: z.array(z.strictObject({
