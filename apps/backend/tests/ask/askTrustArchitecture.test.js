@@ -332,6 +332,70 @@ test('every BUYER_* operation keeps its navigation action and professional bound
   }
 });
 
+test('every read-oriented BUYER_* operation\'s realistic answer states pass the semantic trust pipeline with a working navigation action', () => {
+  const planHref = '/dashboard/properties/prop-1/buyer-plan';
+  const cases = [
+    { operationId: 'BUYER_DOCUMENT_READINESS', question: 'Which transaction documents are missing before closing?', status: 'READY_WITH_LIMITATIONS', title: '2 transaction documents still need review', body: '5 documents recorded, 3 verified, 2 needing review. This reflects only what has been uploaded — it is not a guarantee that every closing document has been requested.', actionId: 'open-documents', href: '/dashboard/properties/prop-1/documents' },
+    { operationId: 'BUYER_DOCUMENT_READINESS', question: 'Which transaction documents are missing before closing?', status: 'ANSWERED', title: 'Recorded transaction documents are verified', body: '5 documents recorded, 5 verified, 0 needing review. This reflects only what has been uploaded — it is not a guarantee that every closing document has been requested.', actionId: 'open-documents', href: '/dashboard/properties/prop-1/documents' },
+    { operationId: 'BUYER_INSPECTION_REVIEW', question: 'Which inspection findings still need a decision?', status: 'READY_WITH_LIMITATIONS', title: '2 safety or major findings still need a decision', body: 'Each finding needs a decision: seller negotiation, accepted post-close work, verified fact, or dismissed with reason. Ask can draft a decision, but confirming it happens in Inspection Hub or with your explicit confirmation.', actionId: 'open-inspection-hub', href: '/dashboard/properties/prop-1/inspection-hub' },
+    { operationId: 'BUYER_INSPECTION_REVIEW', question: 'Which inspection findings still need a decision?', status: 'ANSWERED', title: 'The inspection report has been confirmed', body: '1 inspection report recorded for this purchase.', actionId: 'open-inspection-hub', href: '/dashboard/properties/prop-1/inspection-hub' },
+    { operationId: 'BUYER_MOVE_STATUS', question: 'What should I do before I move in?', status: 'ANSWERED', title: '3 of 5 move tasks complete', body: '2 move tasks still open for this purchase.', actionId: 'open-buyer-plan', href: `${planHref}?filter=MOVE` },
+    { operationId: 'BUYER_MOVE_STATUS', question: 'What should I do before I move in?', status: 'ANSWERED', title: 'No move tasks are generated yet', body: 'Moving Concierge has not generated move tasks for this purchase yet. Generated tasks appear directly in the canonical Buyer Plan.', actionId: 'open-buyer-plan', href: `${planHref}?filter=MOVE` },
+    { operationId: 'BUYER_FINANCING_READINESS', question: 'Is underwriting on track for this closing?', status: 'NOT_APPLICABLE', title: 'This purchase is recorded as a cash purchase', body: 'No lender, appraisal, or underwriting steps apply. Financing readiness tracking is for financed purchases only.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_FINANCING_READINESS', question: 'Is underwriting on track for this closing?', status: 'READY_WITH_LIMITATIONS', title: 'Purchase financing has not been recorded yet', body: 'Record whether this purchase is financed or cash, then select a confirmed Loan Estimate to track appraisal and underwriting readiness.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_FINANCING_READINESS', question: 'What is my lender appraisal status?', status: 'ANSWERED', title: 'No blocking lender condition is currently open', body: 'Appraisal: completed. Underwriting: clear to close. Clear-to-close is recorded.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_TITLE_ESCROW_READINESS', question: 'What title issues could block my closing?', status: 'READY_WITH_LIMITATIONS', title: '2 title/escrow issues still block closing', body: 'Title review: in review. Closing appointment recorded for August 20, 2026.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_WALKTHROUGH_READINESS', question: 'Help me prepare for the final walkthrough', status: 'READY_WITH_LIMITATIONS', title: 'The final walkthrough has not been scheduled yet', body: 'Schedule the walkthrough close to closing and record attendees before it happens.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_DISCLOSURE_FUNDS_READINESS', question: 'Are my closing funds ready?', status: 'READY_WITH_LIMITATIONS', title: 'No Closing Disclosure has been recorded yet', body: 'Upload or manually enter the latest Closing Disclosure once your lender or closing professional sends it.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_DISCLOSURE_FUNDS_READINESS', question: 'Are my closing funds ready?', status: 'READY_WITH_LIMITATIONS', title: '2 items still open before funds are ready', body: 'Still open: funds readiness, wire-instruction verification.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_CLOSING_DAY_READINESS', question: 'Is my closing day checklist ready?', status: 'ANSWERED', title: 'The professional close is confirmed complete', body: 'This purchase has moved to the first-90-day homeowner experience.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_CONTRACT_TIMELINE', question: 'Show my confirmed contract timeline', status: 'READY_WITH_LIMITATIONS', title: 'No confirmed contract revision is recorded yet', body: 'Upload or record the accepted contract and confirm its extracted dates and terms.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_CONTRACT_TIMELINE', question: 'What contingency deadlines are recorded in my contract?', status: 'READY_WITH_LIMITATIONS', title: '2 contract contingencies are still open', body: 'Accepted August 1, 2026, target closing August 25, 2026.', actionId: 'open-buyer-plan', href: planHref },
+    { operationId: 'BUYER_NEGOTIATION_READINESS', question: 'What should I discuss with my agent about the inspection?', status: 'ANSWERED', title: 'No finding is currently in negotiation', body: 'Classify a material inspection finding as seller negotiation to start tracking it here.', actionId: 'open-negotiation', href: '/dashboard/properties/prop-1/inspection-hub' },
+    { operationId: 'BUYER_COST_READINESS', question: 'What will this purchase cost me before closing?', status: 'ANSWERED', title: 'No near-term cost estimates are recorded yet', body: 'Add an estimated cost to a Buyer Plan task to track near-term purchase costs here.', actionId: 'open-buyer-plan', href: planHref },
+  ];
+  for (const c of cases) {
+    const result = validateAskAnswerTrustPipeline({
+      question: c.question, operationId: c.operationId, semanticEnabled: true, propertyId: 'prop-1',
+      result: attachAskAuthoritativeSourceEvidence({
+        status: c.status,
+        blocks: [{ type: 'SUMMARY', id: 'x', title: c.title, body: c.body, tone: 'DEFAULT', actions: [{ id: c.actionId, label: 'Open', href: c.href, style: 'PRIMARY' }] }],
+        suggestions: [],
+      }, c.operationId),
+    });
+    const label = `${c.operationId} / "${c.title}"`;
+    assert.ok(['PASS', 'REPAIRABLE'].includes(result.trust.outcome), `${label}: expected trust PASS/REPAIRABLE, got ${result.trust.outcome} (${JSON.stringify(result.trust.reasonCodes)})`);
+    assert.equal(result.result.blocks[0].actions.length, 1, `${label}: expected the navigation action to survive`);
+  }
+});
+
+test('NOT_APPLICABLE, BLOCKED, NEEDS_ENTITY, and NEEDS_CONFIRMATION results keep their navigation action once evidence is attached', () => {
+  for (const status of ['NOT_APPLICABLE', 'BLOCKED', 'NEEDS_ENTITY', 'NEEDS_CONFIRMATION']) {
+    const result = validateAskAnswerTrustPipeline({
+      question: 'Complete this closing checklist item', operationId: 'BUYER_TASK_COMPLETE', semanticEnabled: false, propertyId: 'prop-1',
+      result: attachAskAuthoritativeSourceEvidence({
+        status,
+        blocks: [{ type: 'SUMMARY', id: 'x', title: 'Title', body: 'Body', tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: '/dashboard/properties/prop-1/buyer-plan', style: 'SECONDARY' }] }],
+        suggestions: [],
+      }, 'BUYER_TASK_COMPLETE'),
+    });
+    assert.equal(result.result.status, status, `status should pass through unchanged for ${status}`);
+    assert.equal(result.result.blocks[0].actions.length, 1, `${status}: navigation action should survive once evidence is attached`);
+  }
+});
+
+test('UNAVAILABLE results still lose their action, since evidence is genuinely absent', () => {
+  const result = validateAskAnswerTrustPipeline({
+    question: 'Complete this closing checklist item', operationId: 'BUYER_TASK_COMPLETE', semanticEnabled: false, propertyId: 'prop-1',
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'UNAVAILABLE',
+      blocks: [{ type: 'SUMMARY', id: 'x', title: 'Title', body: 'Body', tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: '/dashboard/properties/prop-1/buyer-plan', style: 'SECONDARY' }] }],
+      suggestions: [],
+    }, 'BUYER_TASK_COMPLETE'),
+  });
+  assert.equal(result.result.blocks[0].actions.length, 0);
+});
+
 test('seasonal maintenance rich responses pass the complete semantic trust pipeline', () => {
   const question = 'list pending seasonal tasks';
   const result = buildSeasonalMaintenanceResult({

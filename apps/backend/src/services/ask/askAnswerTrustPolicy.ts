@@ -99,11 +99,27 @@ export function includeAskContextSourceEvidence(
   return entry.status !== 'NOT_APPLICABLE' && (entry.required || entry.status === 'AVAILABLE');
 }
 
+/**
+ * Statuses where the adapter completed a real, confident read against its
+ * canonical source rather than failing, timing out, or lacking a
+ * prerequisite. NOT_APPLICABLE/BLOCKED/NEEDS_ENTITY/NEEDS_CONFIRMATION are
+ * not errors -- they are definite outcomes the adapter determined with full
+ * data (a cash purchase has no financing to track; a viewer lacks
+ * permission; a task needs disambiguation; a mutation is staged and ready).
+ * Excluding them here silently strips every safe navigation action on those
+ * responses downstream, since isAskActionApplicable requires authoritative
+ * evidence. UNAVAILABLE and the terminal failure/pending statuses are
+ * deliberately excluded: those genuinely lack a complete canonical read.
+ */
+const ASK_AUTHORITATIVE_EVIDENCE_STATUSES = new Set([
+  'ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS', 'NOT_APPLICABLE', 'BLOCKED', 'NEEDS_ENTITY', 'NEEDS_CONFIRMATION',
+]);
+
 export function attachAskAuthoritativeSourceEvidence(
   result: AskOperationResult,
   evidence: AskAuthoritativeSourceEvidence[],
 ): AskOperationResult {
-  const successful = ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(result.status);
+  const successful = ASK_AUTHORITATIVE_EVIDENCE_STATUSES.has(result.status);
   if (!successful) return result;
   return {
     ...result,
