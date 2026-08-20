@@ -194,56 +194,58 @@ export class AuthService {
     // Hash password
     const passwordHash = await hashPassword(data.password);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        passwordHash,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-        role: data.role,
-        status: emailVerificationDisabled ? 'ACTIVE' : 'PENDING_VERIFICATION',
-        emailVerified: emailVerificationDisabled,
-        // registerSchema requires acceptedTerms === true, so reaching here
-        // means the user explicitly agreed at signup.
-        tosAcceptedAt: new Date(),
-        tosVersion: TOS_VERSION,
-      },
-    });
-
-    // Auto-create role-specific profile
+    // Create user and role-specific profile atomically — a partial write here
+    // (user row persisted without its profile) leaves a HOMEOWNER/PROVIDER
+    // account that 500s on every profile-scoped route instead of failing at signup.
+    let user;
     try {
-      if (user.role === 'HOMEOWNER') {
-        await prisma.homeownerProfile.create({
+      user = await prisma.$transaction(async (tx) => {
+        const createdUser = await tx.user.create({
           data: {
-            userId: user.id,
-            spentAmount: 0,
+            email: data.email,
+            passwordHash,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone,
+            role: data.role,
+            status: emailVerificationDisabled ? 'ACTIVE' : 'PENDING_VERIFICATION',
+            emailVerified: emailVerificationDisabled,
+            // registerSchema requires acceptedTerms === true, so reaching here
+            // means the user explicitly agreed at signup.
+            tosAcceptedAt: new Date(),
+            tosVersion: TOS_VERSION,
           },
         });
-        logger.info(`✅ Created homeowner profile for user ${user.id}`);
-      } else if (user.role === 'PROVIDER') {
-        // ... (existing provider profile logic)
-        await prisma.providerProfile.create({
-          data: {
-            userId: user.id,
-            businessName: `${data.firstName} ${data.lastName}'s Services`,
-            serviceRadius: 25,
-            status: ProviderStatus.PENDING_APPROVAL,
-            insuranceVerified: false,
-            licenseVerified: false,
-            averageRating: 0,
-            totalReviews: 0,
-            totalCompletedJobs: 0,
-            stripeOnboarded: false,
-          },
-        });
-        logger.info(`✅ Created provider profile for user ${user.id}`);
-      }
+
+        if (createdUser.role === 'HOMEOWNER') {
+          await tx.homeownerProfile.create({
+            data: {
+              userId: createdUser.id,
+              spentAmount: 0,
+            },
+          });
+        } else if (createdUser.role === 'PROVIDER') {
+          await tx.providerProfile.create({
+            data: {
+              userId: createdUser.id,
+              businessName: `${data.firstName} ${data.lastName}'s Services`,
+              serviceRadius: 25,
+              status: ProviderStatus.PENDING_APPROVAL,
+              insuranceVerified: false,
+              licenseVerified: false,
+              averageRating: 0,
+              totalReviews: 0,
+              totalCompletedJobs: 0,
+              stripeOnboarded: false,
+            },
+          });
+        }
+
+        return createdUser;
+      });
+      logger.info(`✅ Created ${user.role} profile for user ${user.id}`);
     } catch (profileError) {
-      // If profile creation fails, delete the user and throw error
-      logger.error({ profileError }, 'Failed to create profile');
-      await prisma.user.delete({ where: { id: user.id } });
+      logger.error({ profileError }, 'Failed to create user and profile');
       throw new APIError(
         'Failed to create user profile. Please try again.',
         500,

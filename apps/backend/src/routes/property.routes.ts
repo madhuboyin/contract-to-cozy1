@@ -1,6 +1,6 @@
 import { Router } from 'express';
 // DELETE: Removed unnecessary local z import
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, restrictToHomeowner } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import * as propertyController from '../controllers/property.controller';
@@ -58,7 +58,7 @@ const router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get('/', authenticate, propertyController.listProperties);
+router.get('/', authenticate, restrictToHomeowner, propertyController.listProperties);
 
 /**
  * @swagger
