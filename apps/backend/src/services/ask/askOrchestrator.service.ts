@@ -3776,10 +3776,10 @@ async function buyerDeadlinesResult(userId: string, propertyId: string): Promise
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY',
     id: 'buyer-deadlines-summary',
-    title: sections.length ? 'Recorded deadlines before closing' : 'No recorded deadlines are open right now',
+    title: sections.length ? 'Recorded deadlines before closing' : 'Nothing recorded is putting closing at risk right now',
     body: sections.length
       ? `${upcomingMilestones.length} milestone${upcomingMilestones.length === 1 ? '' : 's'} and ${overview.blockers.length} blocking task${overview.blockers.length === 1 ? '' : 's'} are open. Dates reflect what you or your professionals recorded, not a certified closing date.`
-      : 'No milestone or blocking task is currently open. This does not guarantee no deadline exists — only recorded ones are shown.',
+      : 'No milestone or blocking task threatens this closing right now. This does not guarantee no deadline exists — only recorded ones are shown.',
     tone: overview.blockers.length ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
   }];

@@ -49,6 +49,17 @@ test('"focus on" closing phrasing routes to BUYER_PLAN_STATUS instead of falling
   );
 });
 
+test('"is anything putting my closing at risk" phrasing routes to BUYER_DEADLINES instead of falling through to a clarification prompt', () => {
+  for (const question of [
+    'Is anything putting my closing date at risk?',
+    'Is anything putting my closing at risk?',
+    'Is my closing date at risk?',
+  ]) {
+    assert.equal(resolveAskRoutingCascade(question).operation.operationId, 'BUYER_DEADLINES', question);
+  }
+  assert.equal(resolveAskRoutingCascade('What could delay or block my closing?').operation.operationId, 'BUYER_DEADLINES');
+});
+
 test('buyer Home Actions reads the canonical next task and links its exact plan section', () => {
   const result = buildBuyerPlanHomeActionsResult(context());
   assert.equal(result.status, 'ANSWERED');

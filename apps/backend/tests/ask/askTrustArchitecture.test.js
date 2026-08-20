@@ -258,6 +258,45 @@ test('buyer "focus on this week for my closing" answer passes the semantic trust
   assert.equal(result.result.status, 'ANSWERED');
 });
 
+test('buyer "is anything putting my closing at risk" answer passes the semantic trust pipeline, with and without recorded blockers', () => {
+  const question = 'Is anything putting my closing date at risk?';
+  const withBlockers = validateAskAnswerTrustPipeline({
+    question,
+    operationId: 'BUYER_DEADLINES',
+    semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'READY_WITH_LIMITATIONS',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-deadlines-summary',
+        title: 'Recorded deadlines before closing',
+        body: '2 milestones and 1 blocking task are open. Dates reflect what you or your professionals recorded, not a certified closing date.',
+        tone: 'CAUTION', actions: [],
+      }],
+      suggestions: [],
+    }, 'BUYER_DEADLINES'),
+  });
+  assert.equal(withBlockers.semantic.outcome, 'PASS');
+  assert.equal(withBlockers.result.status, 'READY_WITH_LIMITATIONS');
+
+  const noBlockers = validateAskAnswerTrustPipeline({
+    question,
+    operationId: 'BUYER_DEADLINES',
+    semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence({
+      status: 'ANSWERED',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-deadlines-summary',
+        title: 'Nothing recorded is putting closing at risk right now',
+        body: 'No milestone or blocking task threatens this closing right now. This does not guarantee no deadline exists — only recorded ones are shown.',
+        tone: 'DEFAULT', actions: [],
+      }],
+      suggestions: [],
+    }, 'BUYER_DEADLINES'),
+  });
+  assert.equal(noBlockers.semantic.outcome, 'PASS');
+  assert.equal(noBlockers.result.status, 'ANSWERED');
+});
+
 test('every BUYER_* operation keeps its navigation action and professional boundary through the trust filter', () => {
   const cases = [
     { operationId: 'BUYER_PLAN_STATUS', actionId: 'open-next-buyer-task', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan?taskId=t1' },
