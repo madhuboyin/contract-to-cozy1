@@ -300,6 +300,10 @@ export const systemsAssembler: PropertyContextAssembler = {
           waterHeaterType: true,
           hvacInstallYear: true,
           waterHeaterInstallYear: true,
+          waterSource: true,
+          sewerSystem: true,
+          hasSolar: true,
+          hasFireplace: true,
           inventoryItems: { select: { category: true, name: true, tags: true } },
         },
       }),
@@ -316,6 +320,10 @@ export const systemsAssembler: PropertyContextAssembler = {
       'systems.waterHeaterType': property.waterHeaterType === 'UNKNOWN' ? null : property.waterHeaterType,
       'systems.hvacInstallYear': property.hvacInstallYear,
       'systems.waterHeaterInstallYear': property.waterHeaterInstallYear,
+      'systems.waterSource': property.waterSource === 'UNKNOWN' ? null : property.waterSource,
+      'systems.sewerSystem': property.sewerSystem === 'UNKNOWN' ? null : property.sewerSystem,
+      'systems.hasSolar': property.hasSolar,
+      'systems.hasFireplace': property.hasFireplace,
       'systems.installedItemTypes': installedItemTypes,
     };
     return Object.entries(values).map(([key, value]) =>

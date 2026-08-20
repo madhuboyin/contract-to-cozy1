@@ -296,6 +296,19 @@ enum BasementConfiguration {
   UNKNOWN
 }
 
+enum WaterSourceType {
+  PUBLIC
+  PRIVATE_WELL
+  SHARED_WELL
+  UNKNOWN
+}
+
+enum SewerSystemType {
+  PUBLIC_SEWER
+  SEPTIC
+  UNKNOWN
+}
+
 // ============================================================================
 // NEW ENUMS FOR RISK ASSESSMENT (PHASE 1)
 // ============================================================================
@@ -4003,6 +4016,12 @@ model Property {
   basementConfiguration  BasementConfiguration @default(UNKNOWN)
   sidingType             String?
   electricalPanelAge     Int?
+  // Buyer Experience Redesign §14.17.2 conditional personalization questions
+  // (water/sewer, septic, well, solar, fireplace/chimney).
+  waterSource            WaterSourceType        @default(UNKNOWN)
+  sewerSystem            SewerSystemType        @default(UNKNOWN)
+  hasSolar               Boolean?
+  hasFireplace           Boolean?
 
   // Exterior & Utilities
   lotSize           Float?

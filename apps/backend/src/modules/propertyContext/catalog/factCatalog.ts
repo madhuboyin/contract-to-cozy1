@@ -66,6 +66,12 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'systems.heatingType', scope: 'SYSTEMS', canonicalOwner: 'Property.heatingType', correctionPath: propertyPath('systems'), writable: true },
   { key: 'systems.coolingType', scope: 'SYSTEMS', canonicalOwner: 'Property.coolingType', correctionPath: propertyPath('systems'), writable: true },
   { key: 'systems.waterHeaterType', scope: 'SYSTEMS', canonicalOwner: 'Property.waterHeaterType', correctionPath: propertyPath('systems'), writable: true },
+  // Buyer Experience Redesign §14.17.2 conditional personalization questions
+  // (water/sewer, septic, well, solar, fireplace/chimney).
+  { key: 'systems.waterSource', scope: 'SYSTEMS', canonicalOwner: 'Property.waterSource', correctionPath: propertyPath('systems'), writable: true },
+  { key: 'systems.sewerSystem', scope: 'SYSTEMS', canonicalOwner: 'Property.sewerSystem', correctionPath: propertyPath('systems'), writable: true },
+  { key: 'systems.hasSolar', scope: 'SYSTEMS', canonicalOwner: 'Property.hasSolar', correctionPath: propertyPath('systems'), writable: true },
+  { key: 'systems.hasFireplace', scope: 'SYSTEMS', canonicalOwner: 'Property.hasFireplace', correctionPath: propertyPath('systems'), writable: true },
   // Sale Readiness Value-Maximization Checklist plan §4.4b/§10 Phase 3: the
   // Property fields already existed (hvacInstallYear, waterHeaterInstallYear)
   // but were never exposed as capturable facts until the mandatory-fact

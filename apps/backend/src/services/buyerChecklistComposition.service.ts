@@ -302,6 +302,58 @@ export const BUYER_PROPERTY_CHECKLIST_TEMPLATES: readonly BuyerChecklistTemplate
       return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'OLDER_PROPERTY_WITH_CONFIRMED_LOCATION' : 'AGE_RECORD_MODULE_NOT_TRIGGERED' };
     }),
   }),
+  base('INSPECTION_DUE_DILIGENCE', 'well-water-questions', {
+    title: 'Ask what the well water inspection covers',
+    description: 'Add well-specific questions about potability testing, flow rate, pump age, and permit records for the confirmed private or shared well.',
+    whyMatters: 'A confirmed well changes the most useful water-quality and equipment questions without treating the well itself as a problem.',
+    completionCriteria: 'Well water questions and any chosen specialist testing are dispositioned.',
+    blockedGuidance: 'Ask the inspector or a qualified well specialist which tests and records are appropriate before closing.',
+    phase: 'DUE_DILIGENCE', priority: 'SOON', taskType: 'SERVICE', evidenceRequirement: 'OPTIONAL', required: false,
+    blocking: false, anchorOffsetDays: -12, ruleKey: 'buyer.rule.property.well-water',
+    evaluate: (context) => factDecision(context, ['systems.waterSource'], (values) => {
+      const applies = values['systems.waterSource'] === 'PRIVATE_WELL' || values['systems.waterSource'] === 'SHARED_WELL';
+      return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'WELL_WATER_CONFIRMED' : 'PUBLIC_WATER_CONFIRMED' };
+    }),
+  }),
+  base('INSPECTION_DUE_DILIGENCE', 'septic-system-questions', {
+    title: 'Ask what the septic inspection covers',
+    description: 'Add septic-specific questions about pumping history, tank and leach-field age, capacity, and permit records for the confirmed septic system.',
+    whyMatters: 'A confirmed septic system changes the most useful inspection and record questions without treating the system itself as a problem.',
+    completionCriteria: 'Septic questions and any chosen specialist inspection are dispositioned.',
+    blockedGuidance: 'Ask the inspector or a qualified septic specialist which tests and records are appropriate before closing.',
+    phase: 'DUE_DILIGENCE', priority: 'SOON', taskType: 'SERVICE', evidenceRequirement: 'OPTIONAL', required: false,
+    blocking: false, anchorOffsetDays: -12, ruleKey: 'buyer.rule.property.septic',
+    evaluate: (context) => factDecision(context, ['systems.sewerSystem'], (values) => {
+      const applies = values['systems.sewerSystem'] === 'SEPTIC';
+      return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'SEPTIC_CONFIRMED' : 'PUBLIC_SEWER_CONFIRMED' };
+    }),
+  }),
+  base('INSPECTION_DUE_DILIGENCE', 'solar-panel-questions', {
+    title: 'Ask about solar panel ownership and transfer',
+    description: 'Confirm whether solar panels are owned or leased, and if leased, whether the lease or power purchase agreement transfers to you at closing.',
+    whyMatters: 'Ownership and transferability change what you sign at closing and what future costs you take on; presence alone is not proof of a problem.',
+    completionCriteria: 'Solar ownership, lease-transfer, and production or warranty questions are dispositioned.',
+    blockedGuidance: 'Ask your agent or closing professional for the solar ownership or lease documents before closing.',
+    phase: 'DUE_DILIGENCE', priority: 'SOON', taskType: 'ACTION', evidenceRequirement: 'OPTIONAL', required: false,
+    blocking: false, anchorOffsetDays: -12, ruleKey: 'buyer.rule.property.solar',
+    evaluate: (context) => factDecision(context, ['systems.hasSolar'], (values) => {
+      const applies = values['systems.hasSolar'] === true;
+      return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'SOLAR_CONFIRMED' : 'SOLAR_ABSENT' };
+    }),
+  }),
+  base('INSPECTION_DUE_DILIGENCE', 'fireplace-chimney-questions', {
+    title: 'Ask what the fireplace or chimney inspection covers',
+    description: 'Add fireplace and chimney-specific questions about sweep history, flue condition, and safety for the confirmed fireplace or wood stove.',
+    whyMatters: 'A confirmed fireplace or chimney changes the most useful safety and service questions without treating the feature itself as a problem.',
+    completionCriteria: 'Fireplace and chimney questions have been discussed with the inspector or a qualified specialist.',
+    blockedGuidance: 'Ask the inspector whether chimney observations are in scope and whether a sweep or specialist review is appropriate.',
+    phase: 'DUE_DILIGENCE', priority: 'SOON', taskType: 'ACTION', evidenceRequirement: 'OPTIONAL', required: false,
+    blocking: false, anchorOffsetDays: -12, ruleKey: 'buyer.rule.property.fireplace',
+    evaluate: (context) => factDecision(context, ['systems.hasFireplace'], (values) => {
+      const applies = values['systems.hasFireplace'] === true;
+      return { result: applies ? 'APPLICABLE' : 'NOT_APPLICABLE', reasonCode: applies ? 'FIREPLACE_CONFIRMED' : 'FIREPLACE_ABSENT' };
+    }),
+  }),
   base('INSPECTION_DUE_DILIGENCE', 'hvac-history-questions', {
     title: 'Ask about heating and cooling service history',
     description: 'Use the recorded installation year to focus service-history, warranty, and inspection questions without inferring condition.',
@@ -404,6 +456,43 @@ const QUESTION_COPY: Record<string, PersonalizationQuestionCopy> = {
     whyWeAsk: 'System age helps focus service and warranty questions without assuming replacement or poor condition.',
     impactRank: 40,
     answerKind: 'YEAR',
+  },
+  'systems.waterSource': {
+    prompt: 'Is the home on public water, or a private or shared well?',
+    whyWeAsk: 'A well adds water-quality and equipment questions the inspector should focus on; public water does not need them.',
+    impactRank: 72,
+    answerKind: 'SINGLE_SELECT',
+    options: [
+      { label: 'Public water', value: 'PUBLIC' },
+      { label: 'Private well', value: 'PRIVATE_WELL' },
+      { label: 'Shared well', value: 'SHARED_WELL' },
+      { label: 'I’m not sure', value: 'UNKNOWN' },
+    ],
+  },
+  'systems.sewerSystem': {
+    prompt: 'Is the home connected to public sewer, or does it have a septic system?',
+    whyWeAsk: 'A septic system adds pumping-history and inspection questions the public sewer connection does not need.',
+    impactRank: 71,
+    answerKind: 'SINGLE_SELECT',
+    options: [
+      { label: 'Public sewer', value: 'PUBLIC_SEWER' },
+      { label: 'Septic system', value: 'SEPTIC' },
+      { label: 'I’m not sure', value: 'UNKNOWN' },
+    ],
+  },
+  'systems.hasSolar': {
+    prompt: 'Does the home have solar panels?',
+    whyWeAsk: 'If yes, we’ll add ownership, lease-transfer, and warranty questions before you sign anything at closing.',
+    impactRank: 55,
+    answerKind: 'SINGLE_SELECT',
+    options: [{ label: 'Yes', value: true }, { label: 'No', value: false }, { label: 'I’m not sure', value: null }],
+  },
+  'systems.hasFireplace': {
+    prompt: 'Does the home have a fireplace, wood stove, or chimney?',
+    whyWeAsk: 'If yes, we’ll add sweep, flue, and safety questions focused on that feature.',
+    impactRank: 50,
+    answerKind: 'SINGLE_SELECT',
+    options: [{ label: 'Yes', value: true }, { label: 'No', value: false }, { label: 'I’m not sure', value: null }],
   },
 };
 

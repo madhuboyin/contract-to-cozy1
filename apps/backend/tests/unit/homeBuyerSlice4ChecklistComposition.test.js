@@ -30,6 +30,10 @@ function context(overrides = {}) {
     'exterior.hasPoolOrSpa': true,
     'structure.basementConfiguration': 'FINISHED',
     'systems.hvacInstallYear': 2005,
+    'systems.waterSource': 'PRIVATE_WELL',
+    'systems.sewerSystem': 'SEPTIC',
+    'systems.hasSolar': true,
+    'systems.hasFireplace': true,
     ...overrides,
   };
   return {
@@ -57,7 +61,7 @@ test('known canonical condo, responsibility, pool, basement, age, location, and 
   const result = composeBuyerChecklist(context());
   const applicable = new Map(result.items.filter((item) => item.applicability.result === 'APPLICABLE').map((item) => [item.actionKey, item]));
 
-  assert.equal(result.delta.added, 15);
+  assert.equal(result.delta.added, 19);
   assert.equal(result.questions.length, 0);
   assert.deepEqual(applicable.get('buyer:phase:association-records-review').applicability.usedFactKeys, [
     'core.dwellingType',
@@ -67,6 +71,10 @@ test('known canonical condo, responsibility, pool, basement, age, location, and 
   ]);
   assert.equal(applicable.get('buyer:phase:hvac-history-questions').applicability.reasonCodes[0], 'SOURCE_QUALIFIED_HVAC_AGE');
   assert.equal(applicable.get('buyer:phase:basement-inspection-focus').applicability.result, 'APPLICABLE');
+  assert.equal(applicable.get('buyer:phase:well-water-questions').applicability.reasonCodes[0], 'WELL_WATER_CONFIRMED');
+  assert.equal(applicable.get('buyer:phase:septic-system-questions').applicability.reasonCodes[0], 'SEPTIC_CONFIRMED');
+  assert.equal(applicable.get('buyer:phase:solar-panel-questions').applicability.reasonCodes[0], 'SOLAR_CONFIRMED');
+  assert.equal(applicable.get('buyer:phase:fireplace-chimney-questions').applicability.reasonCodes[0], 'FIREPLACE_CONFIRMED');
   assert.equal(result.setupStatus, 'PERSONALIZED');
   assert.ok(result.knownFacts.some((item) => item.factKey === 'structure.basementConfiguration'));
 });
@@ -82,15 +90,23 @@ test('unknown facts stay out of the active delta and produce benefit copy plus c
     'exterior.hasPoolOrSpa': null,
     'structure.basementConfiguration': null,
     'systems.hvacInstallYear': null,
+    'systems.waterSource': null,
+    'systems.sewerSystem': null,
+    'systems.hasSolar': null,
+    'systems.hasFireplace': null,
   });
   const result = composeBuyerChecklist(unknown);
 
   assert.equal(result.delta.added, 9);
-  assert.ok(result.questions.length >= 5);
+  assert.ok(result.questions.length >= 9);
   assert.ok(result.questions.every((question) => question.whyWeAsk && question.correctionPath));
   assert.equal(result.questions[0].prompt, 'What type of home are you buying?');
   assert.ok(result.questions.every((question, index) => index === 0 || result.questions[index - 1].impactRank >= question.impactRank));
   assert.equal(result.items.find((item) => item.actionKey === 'buyer:phase:pool-specialist-review').applicability.result, 'UNKNOWN');
+  assert.equal(result.items.find((item) => item.actionKey === 'buyer:phase:well-water-questions').applicability.result, 'UNKNOWN');
+  assert.equal(result.items.find((item) => item.actionKey === 'buyer:phase:septic-system-questions').applicability.result, 'UNKNOWN');
+  assert.equal(result.items.find((item) => item.actionKey === 'buyer:phase:solar-panel-questions').applicability.result, 'UNKNOWN');
+  assert.equal(result.items.find((item) => item.actionKey === 'buyer:phase:fireplace-chimney-questions').applicability.result, 'UNKNOWN');
 });
 
 test('standalone homes do not ask association responsibility questions', () => {
@@ -128,7 +144,7 @@ test('composition is idempotent and reports managed items that leave applicabili
     generationVersion: BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION,
   }));
   const unchanged = composeBuyerChecklist(context(), existing);
-  assert.deepEqual(unchanged.delta, { added: 0, removed: 0, unchanged: 15, addedItems: [], removedItems: [] });
+  assert.deepEqual(unchanged.delta, { added: 0, removed: 0, unchanged: 19, addedItems: [], removedItems: [] });
 
   const noPool = composeBuyerChecklist(context({ 'exterior.hasPoolOrSpa': false }), existing);
   assert.equal(noPool.delta.removed, 1);
