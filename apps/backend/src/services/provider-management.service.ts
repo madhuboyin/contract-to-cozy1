@@ -283,6 +283,33 @@ export class ProviderManagementService {
     });
   }
 
+  /**
+   * Throws if [startDate, endDate] (closed interval) overlaps any other
+   * ProviderAvailability window for this provider. excludeWindowId lets an
+   * update check against everything except itself.
+   */
+  private static async assertNoOverlap(
+    providerProfileId: string,
+    startDate: Date,
+    endDate: Date,
+    excludeWindowId?: string
+  ): Promise<void> {
+    const conflict = await prisma.providerAvailability.findFirst({
+      where: {
+        providerProfileId,
+        ...(excludeWindowId ? { id: { not: excludeWindowId } } : {}),
+        startDate: { lte: endDate },
+        endDate: { gte: startDate },
+      },
+    });
+
+    if (conflict) {
+      throw new Error(
+        `This window overlaps an existing availability window (${conflict.startDate.toISOString()} to ${conflict.endDate.toISOString()})`
+      );
+    }
+  }
+
   static async createAvailabilityWindow(userId: string, data: any) {
     const profile = await prisma.providerProfile.findUnique({
       where: { userId },
@@ -293,11 +320,16 @@ export class ProviderManagementService {
       throw new Error('Provider profile not found');
     }
 
+    const startDate = new Date(data.startDate);
+    const endDate = new Date(data.endDate);
+
+    await this.assertNoOverlap(profile.id, startDate, endDate);
+
     return prisma.providerAvailability.create({
       data: {
         ...data,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        startDate,
+        endDate,
         providerProfileId: profile.id,
       },
     });
@@ -322,8 +354,14 @@ export class ProviderManagementService {
     }
 
     const updateData: any = { ...data };
-    if (data.startDate) updateData.startDate = new Date(data.startDate);
-    if (data.endDate) updateData.endDate = new Date(data.endDate);
+    const effectiveStartDate = data.startDate ? new Date(data.startDate) : window.startDate;
+    const effectiveEndDate = data.endDate ? new Date(data.endDate) : window.endDate;
+    if (data.startDate) updateData.startDate = effectiveStartDate;
+    if (data.endDate) updateData.endDate = effectiveEndDate;
+
+    if (data.startDate || data.endDate) {
+      await this.assertNoOverlap(profile.id, effectiveStartDate, effectiveEndDate, windowId);
+    }
 
     return prisma.providerAvailability.update({
       where: { id: windowId },

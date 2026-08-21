@@ -149,8 +149,8 @@ verify ownership with a `findFirst({ where: { id, providerProfileId } })` before
   `createAvailabilityWindow(userId, data)`, `updateAvailabilityWindow(windowId, userId, data)`,
   `deleteAvailabilityWindow(windowId, userId)`.
 - **Validation:** `endDate > startDate` enforced via Zod `.refine()` in
-  `providerAvailability.validators.ts` on both create and update. Overlap detection **not**
-  implemented — still an application-layer gap, tracked in [Open Decisions](#6-open-decisions).
+  `providerAvailability.validators.ts` on both create and update. Overlap detection also
+  implemented — see [Open Decision #3](#6-open-decisions), now resolved.
 - **Search integration:** `availableOnly` implemented in
   `provider.service.ts::searchProviders` — excludes providers with an `isAvailable: false` window
   whose `[startDate, endDate]` covers `new Date()` at request time. Also added `availableOnly` to
@@ -259,11 +259,17 @@ Homeowner-facing:
    only ever needs exception blocking — the current frontend mock (`workingHours` toggle +
    `blockedDays` grid) actually implies **both** are wanted, which reopens this decision rather
    than resolving it.
-3. **Overlap handling.** No DB constraint, and Phase 1 did **not** add application-layer overlap
-   validation either — `createAvailabilityWindow` will happily create two overlapping windows for
-   the same provider today. Still open; low risk while there are no real users, but should be
-   closed (via an app-layer check, mirroring the same tradeoff already documented on
-   `HouseholdProperty` in `schema.prisma`) before this goes live with real providers.
+3. ~~**Overlap handling.**~~ **Resolved:** `ProviderManagementService.assertNoOverlap()`
+   (`provider-management.service.ts`) rejects any create/update whose `[startDate, endDate]`
+   (closed interval) overlaps an existing window for the same provider — `existing.startDate <=
+   newEndDate AND existing.endDate >= newStartDate`, checked via a single `findFirst` (excluding
+   the window itself on update). Adjacent-day blocks remain allowed (day 1's `endOfDay`
+   millisecond precedes day 2's `startOfDay`, so back-to-back blocked days don't collide). Still
+   no DB-level constraint — this is application-layer only, same tradeoff as
+   `HouseholdProperty` in `schema.prisma`, acceptable since Prisma's schema DSL can't express a
+   partial/exclusion index without raw SQL. Returns a 400 with a message naming the conflicting
+   window's dates; the calendar page's existing error banner surfaces it as-is, no frontend
+   change needed.
 
 ## 7. Rollout Phases
 
@@ -280,7 +286,7 @@ Homeowner-facing:
 - `apps/backend/prisma/schema.prisma` — added `ProviderPortfolio.updatedAt`
 - `apps/backend/src/routes/provider.routes.ts` — 8 new routes (Section 3.3)
 - `apps/backend/src/controllers/provider.controller.ts` — 8 new controller methods
-- `apps/backend/src/services/provider-management.service.ts` — Portfolio + Availability CRUD, `presignPortfolioImageUrl()` (Section 3.1, 3.2)
+- `apps/backend/src/services/provider-management.service.ts` — Portfolio + Availability CRUD, `presignPortfolioImageUrl()`, `assertNoOverlap()` (Section 3.1, 3.2, Open Decision #3)
 - `apps/backend/src/services/provider.service.ts` — `getProviderById` now presigns `portfolioImages`; `searchProviders` implements `availableOnly`
 - `apps/backend/src/types/provider.types.ts` — added `availableOnly` to `providerSearchSchema`
 - `apps/backend/src/validators/providerPortfolio.validators.ts` — new
