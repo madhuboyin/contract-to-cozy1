@@ -1,15 +1,28 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { addMonths, endOfMonth, format, getDate, getDay, isSameDay, isSameMonth, startOfMonth, subMonths } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  addMonths,
+  endOfDay,
+  endOfMonth,
+  format,
+  getDate,
+  getDay,
+  isSameDay,
+  isSameMonth,
+  isWithinInterval,
+  startOfDay,
+  startOfMonth,
+  subMonths,
+} from 'date-fns';
 import { ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
 import DateField from '@/components/shared/DateField';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api/client';
+import { ProviderAvailabilityWindow } from '@/types';
 import {
   BottomSafeAreaReserve,
   MobileCard,
-  MobileSection,
-  MobileSectionHeader,
   ResultHeroCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
@@ -20,10 +33,24 @@ type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'satu
 const DAY_KEYS: DayKey[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function windowCoversDate(window: ProviderAvailabilityWindow, date: Date): boolean {
+  return isWithinInterval(date, {
+    start: startOfDay(new Date(window.startDate)),
+    end: endOfDay(new Date(window.endDate)),
+  });
+}
+
 export default function ProviderCalendarPage() {
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [windows, setWindows] = useState<ProviderAvailabilityWindow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Recurring weekly hours have no backend yet (see Open Decision #2 in
+  // docs/functional/PROVIDER_PORTFOLIO_AVAILABILITY_FRD.md) — this stays
+  // local-only until that's built. Only blocked dates below are persisted.
   const [workingHours, setWorkingHours] = useState<Record<DayKey, { enabled: boolean; start: string; end: string }>>({
     monday: { enabled: true, start: '09:00', end: '17:00' },
     tuesday: { enabled: true, start: '09:00', end: '17:00' },
@@ -34,8 +61,26 @@ export default function ProviderCalendarPage() {
     sunday: { enabled: false, start: '09:00', end: '13:00' },
   });
 
-  const bookedDays = [12, 15, 18];
-  const blockedDays = [20, 21];
+  useEffect(() => {
+    fetchAvailability();
+  }, []);
+
+  const fetchAvailability = async () => {
+    try {
+      setLoading(true);
+      const response = await api.getMyAvailability();
+      if (response.success) {
+        setWindows(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching availability:', err);
+      setError('Failed to load availability');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const blockedWindows = useMemo(() => windows.filter((w) => !w.isAvailable), [windows]);
 
   const calendarCells = useMemo(() => {
     const monthStart = startOfMonth(viewMonth);
@@ -54,9 +99,34 @@ export default function ProviderCalendarPage() {
     });
   }, [viewMonth]);
 
+  const selectedDateBlock = useMemo(
+    () => blockedWindows.find((w) => windowCoversDate(w, selectedDate)),
+    [blockedWindows, selectedDate]
+  );
+
   const enabledDays = DAY_KEYS.filter((day) => workingHours[day].enabled).length;
-  const handleSaveHours = () => {
-    setLastSavedAt(new Date().toISOString());
+
+  const handleToggleBlock = async () => {
+    setError(null);
+    try {
+      setSaving(true);
+      if (selectedDateBlock) {
+        await api.deleteAvailabilityWindow(selectedDateBlock.id);
+      } else {
+        await api.createAvailabilityWindow({
+          startDate: startOfDay(selectedDate).toISOString(),
+          endDate: endOfDay(selectedDate).toISOString(),
+          isAvailable: false,
+          reason: 'Blocked by provider',
+        });
+      }
+      await fetchAvailability();
+    } catch (err: any) {
+      console.error('Error updating availability:', err);
+      setError(err?.message || 'Failed to update availability');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -65,41 +135,56 @@ export default function ProviderCalendarPage() {
       subtitle="Keep your schedule clear and bookable with visible availability signals."
       eyebrow="Provider Availability"
       primaryAction={{
-        title: 'Keep your next 7 days bookable.',
-        description: 'Save working hours early to prevent missed requests and reduce homeowner uncertainty.',
+        title: selectedDateBlock ? 'This date is currently blocked.' : 'Block dates you can\'t take work.',
+        description: 'Blocked dates are excluded from homeowner search when they filter for available providers.',
         primaryAction: (
           <button
             type="button"
-            onClick={handleSaveHours}
-            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+            onClick={handleToggleBlock}
+            disabled={saving}
+            className={cn(
+              'inline-flex min-h-[44px] w-full items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60',
+              selectedDateBlock ? 'bg-rose-600 hover:bg-rose-700' : 'bg-brand-primary hover:bg-brand-primary/90'
+            )}
           >
-            Save working hours
+            {saving ? 'Saving...' : selectedDateBlock ? 'Unblock selected date' : 'Block selected date'}
           </button>
         ),
         impactLabel: enabledDays >= 5 ? 'Healthy availability' : 'Availability risk',
-        confidenceLabel: lastSavedAt ? `Last saved ${format(new Date(lastSavedAt), 'MMM d, h:mm a')}` : 'Not saved this session',
+        confidenceLabel: `${blockedWindows.length} blocked date${blockedWindows.length === 1 ? '' : 's'} saved`,
       }}
       trust={{
-        confidenceLabel: 'Availability confidence is based on active working days and upcoming booking overlap.',
-        freshnessLabel: lastSavedAt ? `Updated ${format(new Date(lastSavedAt), 'MMM d, h:mm a')}` : 'Update after saving working hours',
-        sourceLabel: 'Provider working-hour settings and confirmed booking schedule records.',
+        confidenceLabel: 'Availability confidence is based on active working days and blocked-date coverage.',
+        freshnessLabel: 'Blocked dates update live on save; weekly hours are local-only for now.',
+        sourceLabel: 'Provider-submitted availability windows.',
         rationale: 'Clear availability helps homeowners pick realistic time slots and reduces cancellations.',
       }}
       summary={
         <ResultHeroCard
           eyebrow="Availability"
           title={format(selectedDate, 'EEEE, MMM d')}
-          value={`${enabledDays}/7`}
-          status={<StatusChip tone={enabledDays >= 5 ? 'good' : 'elevated'}>{enabledDays >= 5 ? 'Open week' : 'Limited week'}</StatusChip>}
-          summary="Configured working days this week."
+          value={`${blockedWindows.length}`}
+          status={<StatusChip tone={selectedDateBlock ? 'elevated' : 'good'}>{selectedDateBlock ? 'Blocked' : 'Open'}</StatusChip>}
+          summary="Blocked dates saved to your profile."
           highlights={[
-            `${bookedDays.length} booked dates this month`,
-            `${blockedDays.length} blocked dates set`,
+            `${blockedWindows.length} blocked date${blockedWindows.length === 1 ? '' : 's'} total`,
             `Viewing ${format(viewMonth, 'MMMM yyyy')}`,
           ]}
         />
       }
+      routeState={
+        loading
+          ? { state: 'loading', title: 'Loading availability', description: 'Fetching your saved blocked dates.' }
+          : null
+      }
+      hideContentWhenState={loading}
     >
+      {error ? (
+        <MobileCard variant="compact" className="border-rose-200 bg-rose-50 text-rose-800">
+          {error}
+        </MobileCard>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <MobileCard variant="compact" className="space-y-4 lg:col-span-2">
           <div className="flex items-center justify-between">
@@ -148,8 +233,7 @@ export default function ProviderCalendarPage() {
               const dayNumber = getDate(cell.date);
               const isToday = isSameDay(cell.date, new Date());
               const isSelected = isSameDay(cell.date, selectedDate);
-              const hasBooking = cell.isCurrentMonth && bookedDays.includes(dayNumber);
-              const isBlocked = cell.isCurrentMonth && blockedDays.includes(dayNumber);
+              const isBlocked = cell.isCurrentMonth && blockedWindows.some((w) => windowCoversDate(w, cell.date));
 
               return (
                 <button
@@ -167,7 +251,6 @@ export default function ProviderCalendarPage() {
                   )}
                 >
                   <div className="text-[11px] sm:text-sm font-medium">{dayNumber}</div>
-                  {hasBooking ? <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-brand-primary" /> : null}
                   {isBlocked ? <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-rose-500" /> : null}
                 </button>
               );
@@ -175,10 +258,6 @@ export default function ProviderCalendarPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-brand-primary" />
-              Has booking
-            </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
               Blocked
@@ -191,14 +270,26 @@ export default function ProviderCalendarPage() {
 
           <button
             type="button"
-            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            onClick={handleToggleBlock}
+            disabled={saving}
+            className={cn(
+              'inline-flex min-h-[44px] items-center justify-center rounded-lg border px-4 text-sm font-medium disabled:opacity-60',
+              selectedDateBlock
+                ? 'border-rose-300 bg-white text-rose-700 hover:bg-rose-50'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            )}
           >
-            Block selected date
+            {saving ? 'Saving...' : selectedDateBlock ? 'Unblock selected date' : 'Block selected date'}
           </button>
         </MobileCard>
 
         <MobileCard variant="compact" className="space-y-3">
-          <h2 className="text-base font-semibold text-slate-900">Working Hours</h2>
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Working Hours</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Not saved to your profile yet — only blocked dates on the calendar are. Set your typical hours here for now.
+            </p>
+          </div>
           {DAY_KEYS.map((dayKey) => {
             const hours = workingHours[dayKey];
             const label = dayKey.slice(0, 3).toUpperCase();
@@ -253,36 +344,8 @@ export default function ProviderCalendarPage() {
               </div>
             );
           })}
-
-          <button
-            type="button"
-            onClick={handleSaveHours}
-            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90"
-          >
-            Save working hours
-          </button>
         </MobileCard>
       </div>
-
-      <MobileSection>
-        <MobileSectionHeader title="Upcoming Bookings" subtitle="Quick preview of upcoming appointments." />
-        <MobileCard variant="compact" className="space-y-2.5">
-          <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
-            <div>
-              <p className="mb-0 text-sm font-medium text-slate-900">Home Inspection</p>
-              <p className="mb-0 text-xs text-slate-500">Nov 12, 2025 at 2:00 PM</p>
-            </div>
-            <span className="text-xs font-semibold text-brand-primary">View details</span>
-          </div>
-          <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
-            <div>
-              <p className="mb-0 text-sm font-medium text-slate-900">Minor Repairs</p>
-              <p className="mb-0 text-xs text-slate-500">Nov 15, 2025 at 10:00 AM</p>
-            </div>
-            <span className="text-xs font-semibold text-brand-primary">View details</span>
-          </div>
-        </MobileCard>
-      </MobileSection>
 
       <BottomSafeAreaReserve size="chatAware" />
     </ProviderShellTemplate>

@@ -1678,6 +1678,29 @@ export interface Provider {
   website?: string | null;
   /** Provider Trust & Compliance Verification — categories this provider is currently verified for. */
   verifiedCategories?: ServiceCategory[];
+  /** Presigned, short-lived (1hr) image URLs — do not cache beyond a page load. */
+  portfolioImages?: ProviderPortfolioItem[];
+}
+
+export interface ProviderPortfolioItem {
+  id: string;
+  title: string;
+  description: string | null;
+  /** Presigned S3 URL, short-lived (1hr) — refetch rather than cache. */
+  imageUrl: string;
+  category: ServiceCategory;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProviderAvailabilityWindow {
+  id: string;
+  startDate: string;
+  endDate: string;
+  isAvailable: boolean;
+  reason: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**

@@ -577,6 +577,26 @@ export default function ProviderDetailPage() {
         </div>
       </ScenarioInputCard>
 
+      {provider.portfolioImages && provider.portfolioImages.length > 0 ? (
+        <ScenarioInputCard title={`Portfolio (${provider.portfolioImages.length})`} subtitle="Recent completed work from this provider.">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {provider.portfolioImages.map((item) => (
+              <div key={item.id} className="overflow-hidden rounded-xl border border-[hsl(var(--mobile-border-subtle))]">
+                <div className="relative aspect-square bg-slate-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- presigned,
+                      short-lived S3 URL; see portfolio dashboard page for rationale. */}
+                  <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
+                </div>
+                <div className="p-2">
+                  <p className="mb-0 truncate text-xs font-semibold text-[hsl(var(--mobile-text-primary))]">{item.title}</p>
+                  <p className="mb-0 text-[10px] text-[hsl(var(--mobile-text-secondary))]">{formatEnumLabel(item.category)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScenarioInputCard>
+      ) : null}
+
       <ScenarioInputCard title={`Verified outcome reviews (${reviews.length})`} subtitle="Approved reviews include linked scope, schedule, cost, and verified-result context when available.">
         <div className="space-y-3">
           {reviews.length === 0 ? <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No approved outcome reviews yet.</p> : reviews.map((review) => (

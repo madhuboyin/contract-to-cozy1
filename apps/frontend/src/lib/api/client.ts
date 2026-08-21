@@ -12,6 +12,8 @@ import {
   User,
   Provider,
   Service,
+  ProviderPortfolioItem,
+  ProviderAvailabilityWindow,
   Booking,
   CreateBookingInput,
   PaginationParams,
@@ -1096,6 +1098,7 @@ class APIClient {
     workCategory?: string;
     minRating?: number;
     verifiedOnly?: boolean;
+    availableOnly?: boolean;
     page?: number;
     limit?: number;
   }): Promise<APIResponse<{
@@ -1839,7 +1842,103 @@ class APIClient {
     return this.request<void>(`/api/providers/services/${id}`, {
       method: 'DELETE',
     });
-  }  
+  }
+
+  // ==========================================================================
+  // PROVIDER PORTFOLIO ENDPOINTS (for provider portal)
+  // ==========================================================================
+
+  /**
+   * Get current provider's portfolio items
+   */
+  async getMyPortfolio(): Promise<APIResponse<ProviderPortfolioItem[]>> {
+    return this.request<ProviderPortfolioItem[]>('/api/providers/portfolio');
+  }
+
+  /**
+   * Create a portfolio item (provider only) — multipart image upload
+   */
+  async createPortfolioItem(
+    file: File,
+    data: { title: string; description?: string; category: string }
+  ): Promise<APIResponse<ProviderPortfolioItem>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', data.title);
+    if (data.description) formData.append('description', data.description);
+    formData.append('category', data.category);
+    return this.postFormData<ProviderPortfolioItem>('/api/providers/portfolio', formData);
+  }
+
+  /**
+   * Update a portfolio item (provider only)
+   */
+  async updatePortfolioItem(
+    id: string,
+    data: Partial<{ title: string; description: string; category: string }>
+  ): Promise<APIResponse<ProviderPortfolioItem>> {
+    return this.request<ProviderPortfolioItem>(`/api/providers/portfolio/${id}`, {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
+  /**
+   * Delete a portfolio item (provider only)
+   */
+  async deletePortfolioItem(id: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/providers/portfolio/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ==========================================================================
+  // PROVIDER AVAILABILITY ENDPOINTS (for provider portal)
+  // ==========================================================================
+
+  /**
+   * Get current provider's availability windows
+   */
+  async getMyAvailability(): Promise<APIResponse<ProviderAvailabilityWindow[]>> {
+    return this.request<ProviderAvailabilityWindow[]>('/api/providers/availability');
+  }
+
+  /**
+   * Create an availability window (provider only)
+   */
+  async createAvailabilityWindow(data: {
+    startDate: string;
+    endDate: string;
+    isAvailable?: boolean;
+    reason?: string;
+  }): Promise<APIResponse<ProviderAvailabilityWindow>> {
+    return this.request<ProviderAvailabilityWindow>('/api/providers/availability', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  /**
+   * Update an availability window (provider only)
+   */
+  async updateAvailabilityWindow(
+    id: string,
+    data: Partial<{ startDate: string; endDate: string; isAvailable: boolean; reason: string }>
+  ): Promise<APIResponse<ProviderAvailabilityWindow>> {
+    return this.request<ProviderAvailabilityWindow>(`/api/providers/availability/${id}`, {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
+  /**
+   * Delete an availability window (provider only)
+   */
+  async deleteAvailabilityWindow(id: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/providers/availability/${id}`, {
+      method: 'DELETE',
+    });
+  }
 
   /**
    * Get list of service categories

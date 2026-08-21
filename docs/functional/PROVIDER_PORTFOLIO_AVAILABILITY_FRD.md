@@ -5,10 +5,11 @@
 > database audit in this repo initially flagged both tables as stale-and-droppable; this FRD is
 > the correction and the scope for finishing the work.
 >
-> **Status: Phase 1 (backend CRUD) implemented.** See [Section 3](#3-backend-scope-implemented)
-> for what shipped and [Section 6](#6-open-decisions) for what's still an open call. Phase 2
-> (frontend wiring, Section 5) has not started — both provider-facing pages are still mock data,
-> and the homeowner-facing provider page still doesn't render `portfolioImages`.
+> **Status: Phase 1 (backend CRUD) and Phase 2 (frontend wiring, items 1-3) implemented.** See
+> [Section 3](#3-backend-scope-implemented) and [Section 5](#5-frontend-implemented) for what
+> shipped, and [Section 6](#6-open-decisions) for what's still an open call. Item 4 of Phase 2
+> (surfacing `availableOnly` as a checkbox on the homeowner provider-search page) was deliberately
+> skipped — see Section 5.4.
 
 ## Table of Contents
 
@@ -16,7 +17,7 @@
 2. [Gap Analysis](#2-gap-analysis)
 3. [Backend Scope (Implemented)](#3-backend-scope-implemented)
 4. [API Reference](#4-api-reference)
-5. [Frontend Follow-up (not in this scope, tracked for completeness)](#5-frontend-follow-up-not-in-this-scope-tracked-for-completeness)
+5. [Frontend (Implemented)](#5-frontend-implemented)
 6. [Open Decisions](#6-open-decisions)
 7. [Rollout Phases](#7-rollout-phases)
 8. [File Index](#8-file-index)
@@ -48,13 +49,13 @@ model ProviderPortfolio {
 - **Write:** **implemented in Phase 1** — see [Section 3.1](#31-providerportfolio-1). Previously
   none: no route, controller, or service method created, updated, or deleted a `ProviderPortfolio`
   row anywhere.
-- **Frontend (provider-facing):** `/providers/portfolio` is nav-wired (camera FAB in
-  `(dashboard)/layout.tsx`, "Portfolio" nav item) but the page (`(dashboard)/portfolio/page.tsx`)
-  is 100% local mock state — `useState<PortfolioItem[]>([...hardcoded placeholder items...])`,
-  placeholder image URLs, no `onClick` handlers, no API calls.
-- **Frontend (homeowner-facing):** the public provider detail page
-  (`(dashboard)/dashboard/providers/[id]/page.tsx`) calls `api.getProvider(id)` but never reads
-  `.portfolioImages` off the response — the data the backend already returns is silently dropped.
+- **Frontend (provider-facing):** **implemented in Phase 2** — `(dashboard)/portfolio/page.tsx`
+  now lists/creates/edits/deletes real items via the Phase 1 API. Previously 100% local mock
+  state (`useState<PortfolioItem[]>([...hardcoded placeholder items...])`, no API calls).
+- **Frontend (homeowner-facing):** **implemented in Phase 2** — the public provider detail page
+  (`(dashboard)/dashboard/providers/[id]/page.tsx`) now renders a portfolio gallery from
+  `provider.portfolioImages`. Previously called `api.getProvider(id)` but never read
+  `.portfolioImages` off the response.
 
 ### 1.2 `ProviderAvailability`
 
@@ -79,10 +80,12 @@ model ProviderAvailability {
   (Phase 1). It was previously accepted by the schema and silently ignored — worse, it wasn't
   even in the actual `providerSearchSchema` Zod schema in `provider.types.ts`, only in the
   swagger doc comment.
-- **Frontend:** `/providers/calendar` is nav-wired ("Calendar" nav item) and has a real UI
-  (per-weekday working-hours toggle, a blocked-dates grid) but it's entirely local component
-  state — `blockedDays = [20, 21]` is hardcoded, `workingHours` never leaves the component, no
-  `fetch`/API client call exists in the file.
+- **Frontend:** **partially implemented in Phase 2** — `(dashboard)/calendar/page.tsx`'s
+  blocked-dates grid now reads/writes real `ProviderAvailability` windows (block/unblock the
+  selected date, calendar dots reflect real saved windows). The working-hours toggle panel
+  remains local-only, now with an explicit on-page note that it isn't saved — see
+  [Open Decision #2](#6-open-decisions), unchanged from Phase 1's scope call. Previously the
+  entire page (including blocked dates) was hardcoded mock state.
 
 ### 1.3 A third, competing representation
 
@@ -102,8 +105,8 @@ Nothing in this codebase currently decides between "recurring weekly hours as a 
 | Backend read | ✅ `getProviderById` + new `GET /portfolio` | ✅ new `GET /availability` |
 | Backend write (create/update/delete) | ✅ implemented (Phase 1) | ✅ implemented (Phase 1) |
 | Backend search integration | n/a | ✅ `availableOnly` now filters live |
-| Provider-facing frontend | ⚠️ built, nav-wired, still 100% mock data (Phase 2, not started) | ⚠️ built, nav-wired, still 100% mock data (Phase 2, not started) |
-| Homeowner-facing frontend | ⚠️ receives real `portfolioImages`, still doesn't render it (Phase 2) | n/a |
+| Provider-facing frontend | ✅ wired to real API (Phase 2) | ✅ blocked dates wired to real API (Phase 2); working hours still local-only, see Open Decision #2 |
+| Homeowner-facing frontend | ✅ renders real `portfolioImages` (Phase 2) | ⚠️ `availableOnly` not surfaced as a UI filter — deliberately skipped, Section 5.4 |
 
 ---
 
@@ -202,17 +205,44 @@ Homeowner-facing:
 
 ---
 
-## 5. Frontend follow-up (not in this scope, tracked for completeness)
+## 5. Frontend (Implemented)
 
-Backend work alone doesn't finish this feature — flagging so it isn't lost:
-
-1. `(dashboard)/portfolio/page.tsx` — replace mock `useState` with real list/create/delete calls
-   + file upload UI.
-2. `(dashboard)/calendar/page.tsx` — replace mock `blockedDays`/`workingHours` state with real
-   fetch/save calls against the new availability endpoints.
-3. `(dashboard)/dashboard/providers/[id]/page.tsx` (homeowner-facing) — render
-   `provider.portfolioImages`, which the backend already returns today and always has.
-4. Provider search UI — surface the `availableOnly` filter once it's real.
+1. **`(dashboard)/portfolio/page.tsx`** — real `list`/`create`/`update`/`delete` wiring against
+   the Phase 1 API, following the same add/edit-modal + delete-confirm pattern already
+   established in `(dashboard)/services/page.tsx`. Upload is a native `<input type="file">` →
+   `api.createPortfolioItem(file, data)` (multipart). Image replace on edit isn't supported (the
+   backend `PATCH` only updates title/description/category) — the edit modal says so rather than
+   silently no-opping. Fabricated "Views" and "Featured" KPI numbers from the old mock were
+   removed rather than carried forward — there's no view-tracking behind them, and shipping fake
+   analytics next to real data seemed worse than not showing them.
+2. **`(dashboard)/calendar/page.tsx`** — the blocked-dates grid and "Block/Unblock selected
+   date" action now read/write real `ProviderAvailability` windows (one window per blocked day:
+   `startOfDay`→`endOfDay`, `isAvailable: false`). The old hardcoded "booked dates" (fake
+   `bookedDays = [12, 15, 18]`) and the "Upcoming Bookings" section (hardcoded fake appointments,
+   unrelated to this FRD's scope — real bookings come from the separate `Booking` model) were
+   removed for the same reason as the Portfolio KPI numbers: fabricated data presented as real is
+   worse than omitting it. The working-hours panel is unchanged in function (local-only, per
+   [Open Decision #2](#6-open-decisions)) but now says so on-page instead of implying it's saved.
+3. **`(dashboard)/dashboard/providers/[id]/page.tsx`** (homeowner-facing) — added a "Portfolio"
+   gallery section (reusing the existing `ScenarioInputCard` pattern this page already uses for
+   Services/Reviews) rendering `provider.portfolioImages`, between the Services and Reviews
+   sections. Only rendered when the provider has at least one photo.
+4. **Provider search UI — `availableOnly` — deliberately skipped.** The homeowner-facing search
+   page (`(dashboard)/dashboard/providers/page.tsx`) is a large (~1,100 line), already-working,
+   memoized filter component with its own state/URL-sync/reset logic. Wiring in `availableOnly`
+   properly means touching `ServiceFilterProps`, three separate `onFilterChange` call sites, the
+   parent `ProviderSearchFilters` type, and the reset/summary logic — real surface area on a page
+   with no existing regression coverage, for a lower-priority item (this page doesn't even
+   surface the sibling `verifiedOnly` filter from the Provider Trust & Compliance FRD — Phase 1
+   there shipped the backend and left UI surfacing for later too). Judgment call: not worth the
+   risk to a working page in this pass. `api.searchProviders()` already accepts `availableOnly`
+   (added in Phase 2) for whenever this is picked up.
+5. **Image rendering:** portfolio photos use a plain `<img>` tag, not `next/image`. `imageUrl` is
+   a presigned URL from whatever S3-compatible endpoint `S3_ENDPOINT`/`S3_BUCKET` point to
+   (varies per deployment — see `s3Client.ts`), which `next/image`'s static
+   `remotePatterns` hostname allowlist (`security-headers.js`) can't accommodate without
+   hardcoding a guess at infra this repo doesn't have visibility into. Also means presigned
+   query-string churn wouldn't play well with Next's image optimizer/cache anyway.
 
 ## 6. Open Decisions
 
@@ -240,8 +270,8 @@ Backend work alone doesn't finish this feature — flagging so it isn't lost:
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Backend CRUD for both models (Section 3), decision on image serving made and implemented | ✅ Done |
-| 2 | Frontend wiring (Section 5) — both provider-facing pages, homeowner-facing portfolio render | Not started |
-| 3 | `availableOnly` search filtering live end-to-end; provider search UI surfaces it | Backend done; UI surfacing pending Phase 2 |
+| 2 | Frontend wiring (Section 5) — both provider-facing pages, homeowner-facing portfolio render | ✅ Done (items 1-3); item 4 (search UI checkbox) deliberately skipped, see 5.4 |
+| 3 | `availableOnly` search filtering live end-to-end; provider search UI surfaces it | Backend done, API client done; search-page checkbox still not built (5.4) |
 | 4 (optional) | Recurring weekly-hours (`availabilitySchedule`) implemented or formally dropped | Not started |
 
 ## 8. File Index
@@ -256,8 +286,10 @@ Backend work alone doesn't finish this feature — flagging so it isn't lost:
 - `apps/backend/src/validators/providerPortfolio.validators.ts` — new
 - `apps/backend/src/validators/providerAvailability.validators.ts` — new
 
-### Frontend (Section 5, separate follow-up)
-- `apps/frontend/src/app/providers/(dashboard)/portfolio/page.tsx`
-- `apps/frontend/src/app/providers/(dashboard)/calendar/page.tsx`
-- `apps/frontend/src/app/(dashboard)/dashboard/providers/[id]/page.tsx`
-- `apps/frontend/src/lib/api/client.ts` — add portfolio/availability methods
+### Frontend (Phase 2 — done, except 5.4)
+- `apps/frontend/src/app/providers/(dashboard)/portfolio/page.tsx` — real CRUD + upload
+- `apps/frontend/src/app/providers/(dashboard)/calendar/page.tsx` — real blocked-dates CRUD; fake booked/upcoming-bookings data removed
+- `apps/frontend/src/app/(dashboard)/dashboard/providers/[id]/page.tsx` — portfolio gallery section added
+- `apps/frontend/src/lib/api/client.ts` — 8 new portfolio/availability methods, `availableOnly` added to `searchProviders` params
+- `apps/frontend/src/types/index.ts` — `ProviderPortfolioItem`, `ProviderAvailabilityWindow`, `Provider.portfolioImages`
+- `apps/frontend/src/app/(dashboard)/dashboard/providers/page.tsx` — **not touched**, see 5.4
