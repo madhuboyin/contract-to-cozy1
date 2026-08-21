@@ -4,6 +4,7 @@ import { IncidentSeverity } from '@prisma/client';
 import { getProtectionContextDecisions } from '../../protection/context';
 import type { FeatureDecision } from '../../../modules/propertyContext';
 import { NotificationService } from '../../notification.service';
+import { operatingModeForOwnershipState } from '../../skills/context/propertyJourneyContext.contract';
 
 type GuidanceContextBadge = {
   guidanceJourneyId?: string | null;
@@ -97,6 +98,42 @@ function buildWeatherMetadata(typeKey: string, details: Record<string, unknown>)
     description: asStringOrNull(details.description),
     instruction: asStringOrNull(details.instruction),
   };
+}
+
+type WeatherMetadata = NonNullable<ReturnType<typeof buildWeatherMetadata>>;
+
+/**
+ * A buyer who hasn't closed yet can't act on "monitor your gutters" the way
+ * an owner can — they don't possess the home. But a severe-weather signal is
+ * still useful to them: it's something to flag for their inspector (or, once
+ * the inspection is done, for the closing walkthrough) rather than something
+ * to personally maintain. Reframes the same underlying hazard signal instead
+ * of suppressing it outright, using whatever inspection-scheduling state
+ * already exists on BuyerInspectionPlan.
+ */
+async function resolveBuyerWeatherFraming(
+  propertyId: string,
+  weather: WeatherMetadata,
+): Promise<string | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: {
+      onboarding: { select: { ownershipState: true } },
+      buyerInspectionPlan: { select: { scheduledAt: true, appointmentCompletedAt: true } },
+    },
+  });
+  if (operatingModeForOwnershipState(property?.onboarding?.ownershipState) !== 'BUYING') return null;
+
+  const hazardLabel = weather.headline ?? weather.nwsEvent ?? 'A severe weather event';
+  const inspectionPlan = property?.buyerInspectionPlan;
+
+  if (inspectionPlan?.appointmentCompletedAt) {
+    return `${hazardLabel} was reported near this home. Note it for your closing walkthrough and ask about any related damage before you close.`;
+  }
+  if (inspectionPlan?.scheduledAt) {
+    return `${hazardLabel} was reported near this home. Ask your inspector to check for related issues (drainage, foundation, roof) during the scheduled inspection.`;
+  }
+  return `${hazardLabel} was reported near this home. When you schedule your inspection, flag this so your inspector can check for related issues.`;
 }
 
 function hasGuidanceContext(context: GuidanceContextBadge | null | undefined): context is GuidanceContextBadge {
@@ -293,12 +330,15 @@ export class IncidentNotificationService {
 
     const title = sev === IncidentSeverity.CRITICAL ? `⚠️ ${args.incident.title}` : args.incident.title;
     const weather = buildWeatherMetadata(args.incident.typeKey, asRecord(args.incident.details));
+    const buyerWeatherFraming = weather
+      ? await resolveBuyerWeatherFraming(args.incident.propertyId, weather)
+      : null;
 
     await NotificationService.create({
         userId: recipientUserId,
         type,
         title,
-        message: args.incident.summary ?? 'New incident detected.',
+        message: buyerWeatherFraming ?? args.incident.summary ?? 'New incident detected.',
         actionUrl,
         entityType: 'Incident',
         entityId: args.incident.id,

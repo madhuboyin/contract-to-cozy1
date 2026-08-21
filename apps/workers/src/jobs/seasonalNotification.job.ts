@@ -24,6 +24,7 @@ import { evaluateSeasonalTemplateApplicability } from '@worker-shared/services/s
 import { buildSeasonalPropertyContext } from './seasonalChecklistGeneration.job';
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { areWorkerOutboundNotificationsEnabled } from '@worker-shared/config/workerExecutionPolicy';
+import { operatingModeForOwnershipState } from '@worker-shared/services/skills/context/propertyJourneyContext.contract';
 import { seasonalChecklistUrl } from '../lib/deepLinks';
 
 const SEASON_NAMES: Record<string, string> = {
@@ -75,6 +76,7 @@ export async function sendSeasonalNotifications(deps: SeasonalNotificationDeps =
       property: {
         include: {
           homeownerProfile: { select: { userId: true } },
+          onboarding: { select: { ownershipState: true } },
           exteriorProfile: true,
           responsibilities: true,
           inventoryItems: { select: { category: true, name: true, tags: true } },
@@ -177,6 +179,14 @@ async function notifyForChecklist(
 
   if (await isSeasonalChecklistActionSuppressed(checklist.propertyId, checklist.id, deps)) {
     logger.info(`[SEASONAL-NOTIFY] Skipping checklist ${checklist.id}; canonical Home Action is snoozed or dismissed`);
+    return false;
+  }
+
+  // Pre-close buyers don't yet possess the property, so seasonal upkeep
+  // ("winterize your gutters") doesn't apply until ownership transfers —
+  // same pre-close suppression as maintenanceReminder.service.ts.
+  if (operatingModeForOwnershipState(checklist.property.onboarding?.ownershipState) === 'BUYING') {
+    logger.info(`[SEASONAL-NOTIFY] Skipping checklist ${checklist.id}; property is still in pre-close buyer phase`);
     return false;
   }
 

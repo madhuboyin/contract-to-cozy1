@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { getPropertyById } from './property.service';
 import { detectCoverageGaps, type CoverageGapResult } from './coverageGap.service';
+import { operatingModeForOwnershipState } from './skills/context/propertyJourneyContext.contract';
 import type {
   DecisionInsightDTO,
   ExecutionItemDTO,
@@ -712,6 +713,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     replaceRepairJourneys,
     coverageGaps,
     coverageAnalyses,
+    onboarding,
   ] = await Promise.all([
     prisma.checklistItem.findMany({
       where: { propertyId },
@@ -856,7 +858,13 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       },
       take: 200,
     }),
+    prisma.propertyOnboarding.findUnique({
+      where: { propertyId },
+      select: { ownershipState: true },
+    }),
   ]);
+
+  const isPreCloseBuyer = operatingModeForOwnershipState(onboarding?.ownershipState) === 'BUYING';
 
   const urgentActions: ResolutionActionDTO[] = [];
 
@@ -1068,6 +1076,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     cases,
     decisionInsights,
     executionItems,
+    isPreCloseBuyer,
     counts: {
       openCases: cases.length,
       decisionsReady: allDecisionInsights.length,

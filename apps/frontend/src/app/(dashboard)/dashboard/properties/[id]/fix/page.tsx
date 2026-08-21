@@ -175,10 +175,13 @@ function formatActionDescription(action: UrgentActionItem): string {
   }
 }
 
-function getActionCta(action: UrgentActionItem): string {
+function getActionCta(action: UrgentActionItem, isPreCloseBuyer: boolean): string {
   switch (action.type) {
     case 'INCIDENT':             return 'View Incident';
-    case 'HEALTH_INSIGHT':       return 'Review Options';
+    // A buyer who hasn't closed yet can't act on a health-score finding the
+    // way an owner can — it's something to raise with their inspector, not
+    // to personally resolve.
+    case 'HEALTH_INSIGHT':       return isPreCloseBuyer ? 'Discuss with Inspector' : 'Review Options';
     case 'MAINTENANCE_OVERDUE':  return 'Schedule Now';
     case 'RENEWAL_EXPIRED':      return 'Renew Now';
     case 'RENEWAL_UPCOMING':     return 'Compare Plans';
@@ -256,7 +259,7 @@ function getCaseRankBadgeColor(impact: { dotColor: string }): string {
   return 'bg-emerald-400';
 }
 
-function getCaseCta(caseItem: ResolutionCase): string {
+function getCaseCta(caseItem: ResolutionCase, isPreCloseBuyer: boolean): string {
   if (caseItem.status === 'in_progress') return 'Track Progress';
   switch (caseItem.kind) {
     case 'incident':
@@ -269,8 +272,11 @@ function getCaseCta(caseItem: ResolutionCase): string {
       return 'Review Decision';
     case 'maintenance':
       return 'Schedule Service';
+    // A buyer who hasn't closed yet can't act on a health-score finding the
+    // way an owner can — it's something to raise with their inspector, not
+    // to personally resolve.
     case 'health_insight':
-      return 'Review Options';
+      return isPreCloseBuyer ? 'Discuss with Inspector' : 'Review Options';
     default:
       return 'Open Case';
   }
@@ -348,6 +354,7 @@ export default function ResolutionHubPage() {
     cases: [],
     decisionInsights: [],
     executionItems: [],
+    isPreCloseBuyer: false,
     counts: {
       openCases: 0,
       decisionsReady: 0,
@@ -405,6 +412,7 @@ export default function ResolutionHubPage() {
           cases: [],
           decisionInsights: [],
           executionItems: [],
+          isPreCloseBuyer: false,
           counts: {
             openCases: 0,
             decisionsReady: 0,
@@ -424,6 +432,7 @@ export default function ResolutionHubPage() {
           cases: [],
           decisionInsights: [],
           executionItems: [],
+          isPreCloseBuyer: false,
           counts: {
             openCases: 0,
             decisionsReady: 0,
@@ -865,7 +874,7 @@ export default function ResolutionHubPage() {
                         {creatingJourneyForItemId === caseItem.itemId ? (
                           <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Starting…</>
                         ) : (
-                          <>{getCaseCta(caseItem)}<ChevronRight className="h-4 w-4" /></>
+                          <>{getCaseCta(caseItem, resolutionCenterData.isPreCloseBuyer)}<ChevronRight className="h-4 w-4" /></>
                         )}
                       </Button>
 
@@ -957,7 +966,7 @@ export default function ResolutionHubPage() {
                           )
                         }
                       >
-                        {getActionCta(action)}
+                        {getActionCta(action, resolutionCenterData.isPreCloseBuyer)}
                         <ChevronRight className="h-4 w-4" />
                       </Button>
 

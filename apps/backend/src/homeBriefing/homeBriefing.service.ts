@@ -15,6 +15,7 @@ import type { HomeBriefingTopic } from './homeBriefing.contracts';
 import { NotificationService } from '../services/notification.service';
 import { reconcileCanonicalPropertyChanges } from '../propertyChanges/canonicalChangeReconciliation.service';
 import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
+import { operatingModeForOwnershipState } from '../services/skills/context/propertyJourneyContext.contract';
 
 export const HOME_BRIEFING_BASELINE_VERSION = 'home-briefing-homeowner-v2';
 
@@ -366,6 +367,17 @@ async function notifyHomeBriefingDelivery(input: {
   channels: HomeBriefingChannel[];
 }) {
   if (input.delivery.itemCount === 0) return;
+
+  // Pre-close buyers don't yet possess the property, so a "meaningful home
+  // changes" digest about it doesn't apply until ownership transfers — same
+  // pre-close suppression as maintenanceReminder.service.ts / the seasonal
+  // checklist notification job.
+  const onboarding = await prisma.propertyOnboarding.findUnique({
+    where: { propertyId: input.propertyId },
+    select: { ownershipState: true },
+  });
+  if (operatingModeForOwnershipState(onboarding?.ownershipState) === 'BUYING') return;
+
   const requiredChannels = input.channels.map((channel) =>
     channel as NotificationChannel);
   const hasUrgent = input.delivery.items.some((item) =>

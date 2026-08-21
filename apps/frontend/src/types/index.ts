@@ -5778,6 +5778,10 @@ export interface ResolutionCenterData {
 
 export interface ResolutionCenterPayload extends ResolutionCenterData {
   urgentActions: ResolutionCenterAction[];
+  // True while the property is still pre-close for its buyer — lets the UI
+  // reframe case CTAs as inspection-relevant prompts instead of homeowner
+  // maintenance actions.
+  isPreCloseBuyer: boolean;
 }
 
 // ============================================================================

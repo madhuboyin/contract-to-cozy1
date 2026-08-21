@@ -18,6 +18,7 @@ import { NotificationService } from './notification.service';
 import { areWorkerOutboundNotificationsEnabled } from '../config/workerExecutionPolicy';
 import { logger } from '../lib/logger';
 import { createAskNotificationContinuation } from './ask/askNotificationContinuation.service';
+import { operatingModeForOwnershipState } from './skills/context/propertyJourneyContext.contract';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,7 +50,12 @@ export async function processMaintenanceReminders(options: {
       nextDueDate: { not: null, lte: horizon },
     },
     include: {
-      property: { select: { homeownerProfile: { select: { userId: true } } } },
+      property: {
+        select: {
+          homeownerProfile: { select: { userId: true } },
+          onboarding: { select: { ownershipState: true } },
+        },
+      },
     },
   });
 
@@ -72,6 +78,15 @@ export async function processMaintenanceReminders(options: {
     // retain the established primary-homeowner fallback.
     const userId = task.assignedToUserId ?? task.property.homeownerProfile?.userId;
     if (!userId) {
+      skipped += 1;
+      continue;
+    }
+
+    // Pre-close buyers don't yet possess the property, so "due in N days"
+    // maintenance obligations don't apply — those only make sense once
+    // ownership transfers (see resolutionCenter.service.ts / homeBriefing.service.ts
+    // for the same pre-close suppression on the other homeowner-only surfaces).
+    if (operatingModeForOwnershipState(task.property.onboarding?.ownershipState) === 'BUYING') {
       skipped += 1;
       continue;
     }

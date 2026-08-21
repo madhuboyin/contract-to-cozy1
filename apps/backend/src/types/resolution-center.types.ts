@@ -113,4 +113,8 @@ export interface ResolutionCenterDataDTO {
 
 export interface ResolutionCenterPayloadDTO extends ResolutionCenterDataDTO {
   urgentActions: ResolutionActionDTO[];
+  // True while the property is still pre-close for its buyer (ownershipState
+  // SHOPPING/UNDER_CONTRACT) — lets the client reframe case CTAs as
+  // inspection-relevant prompts instead of homeowner maintenance actions.
+  isPreCloseBuyer: boolean;
 }
