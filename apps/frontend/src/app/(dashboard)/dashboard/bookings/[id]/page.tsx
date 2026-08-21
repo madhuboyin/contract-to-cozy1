@@ -5,9 +5,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
-import { Booking } from '@/types';
+import { Booking, Review } from '@/types';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { StarRating } from '@/components/orchestration/StarRating';
 import { StatusBadge } from '@/components/bookings/StatusBadge';
 import { BookingTimeline } from '@/components/bookings/BookingTimeline';
 import { formatEnumLabel } from '@/lib/utils/formatters';
@@ -80,6 +81,14 @@ export default function BookingDetailsPage() {
     message?: string;
   } | null>(null);
 
+  const [review, setReview] = useState<Review | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewRating, setReviewRating] = useState<number>(0);
+  const [reviewTitle, setReviewTitle] = useState('');
+  const [reviewContent, setReviewContent] = useState('');
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   const fetchBooking = useCallback(async () => {
     try {
       setLoading(true);
@@ -105,6 +114,50 @@ export default function BookingDetailsPage() {
       setLoading(false);
     }
   }, [params.id]);
+
+  useEffect(() => {
+    if (booking?.status !== 'COMPLETED') return;
+    setReviewLoading(true);
+    api
+      .getBookingReview(booking.id)
+      .then((response) => {
+        if (response.success) setReview(response.data);
+      })
+      .catch((error) => console.error('Error fetching review:', error))
+      .finally(() => setReviewLoading(false));
+  }, [booking?.id, booking?.status]);
+
+  const handleSubmitReview = async () => {
+    if (!booking) return;
+    setReviewError(null);
+
+    if (reviewRating < 1) {
+      setReviewError('Please select a star rating.');
+      return;
+    }
+    if (reviewContent.trim().length < 10) {
+      setReviewError('Please write at least 10 characters describing your experience.');
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+      const response = await api.createBookingReview(booking.id, {
+        rating: reviewRating,
+        title: reviewTitle.trim() || undefined,
+        content: reviewContent.trim(),
+      });
+      if (response.success) {
+        setReview(response.data);
+      } else {
+        setReviewError(response.message || 'Failed to submit review');
+      }
+    } catch (error: any) {
+      setReviewError(error?.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   useEffect(() => {
     fetchBooking();
@@ -297,6 +350,59 @@ export default function BookingDetailsPage() {
       {booking.timeline && booking.timeline.length > 0 ? (
         <ScenarioInputCard title="Booking Timeline" subtitle="Progress updates from request to completion.">
           <BookingTimeline currentStatus={booking.status} timeline={booking.timeline} />
+        </ScenarioInputCard>
+      ) : null}
+
+      {booking.status === 'COMPLETED' && !reviewLoading ? (
+        <ScenarioInputCard
+          title="Review"
+          subtitle={review ? 'Your review for this booking.' : `How was your experience with ${booking.provider.businessName}?`}
+        >
+          {review ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <StarRating value={review.rating} onChange={() => {}} readonly />
+                <StatusChip tone={review.status === 'APPROVED' ? 'good' : 'info'}>
+                  {review.status === 'APPROVED' ? 'Published' : 'Pending review'}
+                </StatusChip>
+              </div>
+              {review.title ? <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{review.title}</p> : null}
+              <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">{review.content}</p>
+              {review.status !== 'APPROVED' ? (
+                <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                  Your review is awaiting moderation before it appears on the provider&apos;s public profile.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {reviewError ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">
+                  {reviewError}
+                </div>
+              ) : null}
+              <StarRating value={reviewRating || null} onChange={setReviewRating} />
+              <input
+                type="text"
+                value={reviewTitle}
+                onChange={(e) => setReviewTitle(e.target.value)}
+                maxLength={200}
+                placeholder="Title (optional)"
+                className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+              />
+              <textarea
+                value={reviewContent}
+                onChange={(e) => setReviewContent(e.target.value)}
+                maxLength={2000}
+                rows={4}
+                placeholder="Describe your experience (at least 10 characters)"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+              />
+              <Button className="w-full" onClick={handleSubmitReview} disabled={submittingReview}>
+                {submittingReview ? 'Submitting...' : 'Submit review'}
+              </Button>
+            </div>
+          )}
         </ScenarioInputCard>
       ) : null}
 

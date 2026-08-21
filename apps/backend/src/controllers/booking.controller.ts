@@ -7,11 +7,13 @@ import {
   updateBookingSchema,
   cancelBookingSchema,
   completeBookingSchema,
+  createReviewSchema,
   listBookingsSchema,
   CreateBookingInput,
   UpdateBookingInput,
   CancelBookingInput,
   CompleteBookingInput,
+  CreateReviewInput,
   ListBookingsQuery,
 } from '../types/booking.types';
 import { ZodError } from 'zod';
@@ -586,6 +588,93 @@ export class BookingController {
             success: false,
             message: error.message,
           });
+        }
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Leave a review on a completed booking
+   * POST /api/bookings/:id/review
+   */
+  static async createReview(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId || userRole !== 'HOMEOWNER') {
+        res.status(403).json({
+          success: false,
+          message: 'Only homeowners can leave reviews',
+        });
+        return;
+      }
+
+      const input = createReviewSchema.parse(req.body) as CreateReviewInput;
+      const review = await BookingService.createReview(id, userId, input);
+
+      res.status(201).json({
+        success: true,
+        message: 'Review submitted for moderation',
+        data: review,
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid review data',
+          errors: error.issues,
+        });
+      } else if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          res.status(403).json({ success: false, message: error.message });
+        } else if (error.message.includes('not found')) {
+          res.status(404).json({ success: false, message: error.message });
+        } else {
+          res.status(400).json({ success: false, message: error.message });
+        }
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Get the review for a booking, if one exists
+   * GET /api/bookings/:id/review
+   */
+  static async getReviewForBooking(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId || !userRole) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
+      const review = await BookingService.getReviewForBooking(id, userId, userRole);
+      res.status(200).json({ success: true, data: review });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          res.status(403).json({ success: false, message: error.message });
+        } else if (error.message.includes('not found')) {
+          res.status(404).json({ success: false, message: error.message });
+        } else {
+          res.status(400).json({ success: false, message: error.message });
         }
       } else {
         next(error);

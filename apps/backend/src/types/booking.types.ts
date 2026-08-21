@@ -105,6 +105,25 @@ export const completeBookingSchema = z.object({
 export type CompleteBookingInput = z.infer<typeof completeBookingSchema>;
 
 /**
+ * Create Review Schema — homeowner leaving a review on a COMPLETED booking.
+ * Sub-ratings are optional finer-grained context alongside the required
+ * overall `rating`; scopeSummary/outcomeStatus/verifiedOutcome/variance
+ * fields on the Review model are populated elsewhere (project-outcome
+ * verification), not by the reviewer directly.
+ */
+export const createReviewSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  title: z.string().max(200).optional(),
+  content: z.string().min(10, 'Review must be at least 10 characters').max(2000),
+  qualityRating: z.number().int().min(1).max(5).optional(),
+  communicationRating: z.number().int().min(1).max(5).optional(),
+  valueRating: z.number().int().min(1).max(5).optional(),
+  professionalismRating: z.number().int().min(1).max(5).optional(),
+});
+
+export type CreateReviewInput = z.infer<typeof createReviewSchema>;
+
+/**
  * List Bookings Query Schema
  */
 export const listBookingsSchema = z.object({

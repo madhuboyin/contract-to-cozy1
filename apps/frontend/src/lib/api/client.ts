@@ -17,6 +17,8 @@ import {
   ProviderProfileSelf,
   Booking,
   CreateBookingInput,
+  Review,
+  CreateReviewInput,
   PaginationParams,
   Property,
   MaintenanceTaskTemplate,
@@ -1375,8 +1377,25 @@ class APIClient {
     });
   }
 
+  /**
+   * Leave a review on a completed booking (homeowner only)
+   */
+  async createBookingReview(id: string, data: CreateReviewInput): Promise<APIResponse<Review>> {
+    return this.request<Review>(`/api/bookings/${id}/review`, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  /**
+   * Get the review for a booking, if one exists
+   */
+  async getBookingReview(id: string): Promise<APIResponse<Review | null>> {
+    return this.request<Review | null>(`/api/bookings/${id}/review`);
+  }
+
   // ==========================================================================
-  // PROPERTY ENDPOINTS 
+  // PROPERTY ENDPOINTS
   // ==========================================================================
   async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
     const now = Date.now();

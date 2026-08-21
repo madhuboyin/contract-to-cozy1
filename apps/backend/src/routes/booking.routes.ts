@@ -454,4 +454,92 @@ router.post(
  */
 router.post('/:id/cancel', authenticate, BookingController.cancelBooking);
 
+/**
+ * @swagger
+ * /api/bookings/{id}/review:
+ *   post:
+ *     summary: Leave a review on a completed booking (Homeowner only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - rating
+ *               - content
+ *             properties:
+ *               rating:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 5
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *                 minLength: 10
+ *               qualityRating:
+ *                 type: integer
+ *               communicationRating:
+ *                 type: integer
+ *               valueRating:
+ *                 type: integer
+ *               professionalismRating:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Review submitted for moderation
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       403:
+ *         description: Homeowner only, or not this booking's homeowner, or booking not completed
+ *       404:
+ *         description: Booking not found
+ */
+router.post(
+  '/:id/review',
+  authenticate,
+  requireRole(UserRole.HOMEOWNER),
+  BookingController.createReview,
+);
+
+/**
+ * @swagger
+ * /api/bookings/{id}/review:
+ *   get:
+ *     summary: Get the review for a booking, if one exists
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: The review, or null if none exists yet
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Booking not found
+ */
+router.get('/:id/review', authenticate, BookingController.getReviewForBooking);
+
 export default router;

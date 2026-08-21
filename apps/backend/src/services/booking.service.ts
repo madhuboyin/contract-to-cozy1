@@ -13,6 +13,7 @@ import {
   UpdateBookingInput,
   CancelBookingInput,
   CompleteBookingInput,
+  CreateReviewInput,
   ListBookingsQuery,
   BookingResponse,
   BookingListResponse,
@@ -1142,6 +1143,80 @@ export class BookingService {
     }
     
     return this.formatBookingResponse(updated);
+  }
+
+  /**
+   * Homeowner leaves a review on a completed booking. One review per
+   * booking — Review.bookingId is @unique, so a race is caught by the DB
+   * even though we also check up front for a clean error message.
+   */
+  static async createReview(bookingId: string, userId: string, input: CreateReviewInput) {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, homeownerId: true, providerId: true, status: true },
+    });
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    if (booking.homeownerId !== userId) {
+      throw new Error('You do not have permission to review this booking');
+    }
+
+    if (booking.status !== 'COMPLETED') {
+      throw new Error('You can only review a completed booking');
+    }
+
+    const existing = await prisma.review.findUnique({ where: { bookingId } });
+    if (existing) {
+      throw new Error('This booking already has a review');
+    }
+
+    try {
+      return await prisma.review.create({
+        data: {
+          bookingId,
+          authorId: userId,
+          providerId: booking.providerId,
+          rating: input.rating,
+          title: input.title,
+          content: input.content,
+          qualityRating: input.qualityRating,
+          communicationRating: input.communicationRating,
+          valueRating: input.valueRating,
+          professionalismRating: input.professionalismRating,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new Error('This booking already has a review');
+      }
+      throw error;
+    }
+  }
+
+  /** Returns the review for a booking (or null), scoped to the same access rules as getBookingById. */
+  static async getReviewForBooking(bookingId: string, userId: string, userRole: UserRole) {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, homeownerId: true, providerId: true },
+    });
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    if (userRole !== 'ADMIN') {
+      if (userRole === 'HOMEOWNER' && booking.homeownerId !== userId) {
+        throw new Error('You do not have permission to view this booking');
+      }
+      if (userRole === 'PROVIDER' && booking.providerId !== userId) {
+        throw new Error('You do not have permission to view this booking');
+      }
+    }
+
+    return prisma.review.findUnique({ where: { bookingId } });
   }
 
   private static buildInventorySpecSheet(

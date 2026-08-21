@@ -3,10 +3,12 @@
 // Review Moderation Queue backend (ADMIN_MODULE_FRD.md §10.5, Phase 2 slice).
 // Queue/detail reads plus one governed action: a moderation decision
 // (approve/reject/flag/restore) with required reason and moderator
-// attribution. Public provider-review reads (provider.service.ts) only ever
-// surface APPROVED reviews and compute rating stats live from them, so a
-// moderation transition propagates to the marketplace with no denormalized
-// aggregates to maintain here.
+// attribution. Public review-list reads (provider.service.ts::getProviderReviews)
+// only ever surface APPROVED reviews and compute rating stats live from them.
+// ProviderProfile.averageRating/totalReviews are a separate denormalized
+// aggregate that search results, provider cards, and getProviderById read
+// directly instead — recomputeProviderRatingStats() below keeps that in sync
+// on every moderation transition so those surfaces don't go stale.
 
 import { Request } from 'express';
 import { AdminCaseSeverity, Prisma, ReviewStatus } from '@prisma/client';
@@ -176,6 +178,23 @@ export interface ModerateReviewInput {
   policyVersion?: string;
 }
 
+/** Review.providerId is the provider's User.id, not ProviderProfile.id. */
+async function recomputeProviderRatingStats(providerUserId: string): Promise<void> {
+  const stats = await prisma.review.aggregate({
+    where: { providerId: providerUserId, status: 'APPROVED' },
+    _avg: { rating: true },
+    _count: { _all: true },
+  });
+
+  await prisma.providerProfile.updateMany({
+    where: { userId: providerUserId },
+    data: {
+      averageRating: stats._avg.rating ? Number(stats._avg.rating.toFixed(2)) : 0,
+      totalReviews: stats._count._all,
+    },
+  });
+}
+
 /**
  * Governed moderation decision. Requires reason (enforced by validator) and
  * records moderator attribution on the review itself (moderatedAt/moderatedBy)
@@ -217,6 +236,13 @@ export async function moderateReview(input: ModerateReviewInput, ctx: ActionCont
       moderatedBy: input.actorId,
     },
   });
+
+  // ProviderProfile.averageRating/totalReviews are the only denormalized
+  // aggregate kept anywhere (search results, provider cards, getProviderById
+  // read them directly) — everything else computes rating stats live from
+  // APPROVED reviews. Keep it in sync on every transition in or out of
+  // APPROVED so a moderation decision actually reaches those surfaces.
+  await recomputeProviderRatingStats(review.providerId);
 
   await recordAdminAction({
     actorId: input.actorId,

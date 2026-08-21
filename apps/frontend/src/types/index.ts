@@ -2123,6 +2123,38 @@ export interface Booking {
   } | null;
 }
 
+export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'FLAGGED';
+
+/** A homeowner's review of a completed booking. */
+export interface Review {
+  id: string;
+  bookingId: string;
+  authorId: string;
+  providerId: string;
+  rating: number;
+  title: string | null;
+  content: string;
+  qualityRating: number | null;
+  communicationRating: number | null;
+  valueRating: number | null;
+  professionalismRating: number | null;
+  status: ReviewStatus;
+  response: string | null;
+  respondedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateReviewInput {
+  rating: number;
+  title?: string;
+  content: string;
+  qualityRating?: number;
+  communicationRating?: number;
+  valueRating?: number;
+  professionalismRating?: number;
+}
+
 /**
  * Community Event
  * Represents a single local event or alert associated with a property location
