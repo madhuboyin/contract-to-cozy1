@@ -1703,6 +1703,25 @@ export interface ProviderAvailabilityWindow {
   updatedAt?: string;
 }
 
+/** Editable business-profile fields, plus the verification-controlled fields shown read-only. */
+export interface ProviderProfileSelf {
+  id: string;
+  businessName: string;
+  businessType: string | null;
+  description: string | null;
+  website: string | null;
+  yearsInBusiness: number | null;
+  teamSize: number | null;
+  serviceRadius: number;
+  serviceCategories: ServiceCategory[];
+  status: string;
+  averageRating: number;
+  totalReviews: number;
+  totalCompletedJobs: number;
+  insuranceVerified: boolean;
+  licenseVerified: boolean;
+}
+
 /**
  * Service - Updated to match database schema
  */
@@ -2198,8 +2217,13 @@ export interface RegisterInput {
   password: string;
   firstName: string;
   lastName: string;
+  phone?: string;
   role: UserRole;
   acceptedTerms: boolean;
+  /** Required when role === 'PROVIDER'. */
+  businessName?: string;
+  /** Required when role === 'PROVIDER'. */
+  serviceCategories?: ServiceCategory[];
 }
 
 export interface CreateBookingInput {

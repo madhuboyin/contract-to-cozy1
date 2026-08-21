@@ -14,6 +14,7 @@ import {
   Service,
   ProviderPortfolioItem,
   ProviderAvailabilityWindow,
+  ProviderProfileSelf,
   Booking,
   CreateBookingInput,
   PaginationParams,
@@ -1841,6 +1842,38 @@ class APIClient {
   async deleteService(id: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/providers/services/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  // ==========================================================================
+  // PROVIDER SELF-PROFILE ENDPOINTS (for provider portal)
+  // ==========================================================================
+
+  /**
+   * Get current provider's editable business-profile fields
+   */
+  async getMyProviderProfile(): Promise<APIResponse<ProviderProfileSelf>> {
+    return this.request<ProviderProfileSelf>('/api/providers/profile');
+  }
+
+  /**
+   * Update current provider's editable business-profile fields
+   */
+  async updateMyProviderProfile(
+    data: Partial<{
+      businessName: string;
+      businessType: string | null;
+      description: string | null;
+      website: string | null;
+      yearsInBusiness: number | null;
+      teamSize: number | null;
+      serviceRadius: number;
+      serviceCategories: string[];
+    }>
+  ): Promise<APIResponse<ProviderProfileSelf>> {
+    return this.request<ProviderProfileSelf>('/api/providers/profile', {
+      method: 'PATCH',
+      body: data,
     });
   }
 

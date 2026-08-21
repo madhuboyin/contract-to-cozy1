@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { APIError } from '@/types';
+import { APIError, ServiceCategory } from '@/types';
 
 type JoinField =
   | 'firstName'
@@ -25,20 +25,32 @@ type JoinField =
 
 type JoinErrors = Partial<Record<JoinField, string>>;
 
+// Values must match the real InspectionType/HandymanType Prisma enums —
+// picking any inspection-family item implies the INSPECTION ServiceCategory,
+// any handyman-family item implies HANDYMAN (see deriveServiceCategories below).
 const SERVICE_OPTIONS = [
-  { value: 'HOME_INSPECTION', label: 'Home Inspection' },
-  { value: 'PEST_INSPECTION', label: 'Pest Inspection' },
-  { value: 'RADON_TESTING', label: 'Radon Testing' },
-  { value: 'MOLD_INSPECTION', label: 'Mold Inspection' },
-  { value: 'SEPTIC_INSPECTION', label: 'Septic Inspection' },
-  { value: 'WELL_INSPECTION', label: 'Well Inspection' },
-  { value: 'MINOR_REPAIRS', label: 'Minor Repairs' },
-  { value: 'FIXTURE_INSTALLATION', label: 'Fixture Installation' },
-  { value: 'FURNITURE_ASSEMBLY', label: 'Furniture Assembly' },
-  { value: 'PAINTING', label: 'Painting' },
-  { value: 'DRYWALL_REPAIR', label: 'Drywall Repair' },
-  { value: 'APPLIANCE_INSTALLATION', label: 'Appliance Installation' },
+  { value: 'HOME_INSPECTION', label: 'Home Inspection', family: 'INSPECTION' },
+  { value: 'PEST_INSPECTION', label: 'Pest Inspection', family: 'INSPECTION' },
+  { value: 'RADON_TESTING', label: 'Radon Testing', family: 'INSPECTION' },
+  { value: 'MOLD_INSPECTION', label: 'Mold Inspection', family: 'INSPECTION' },
+  { value: 'WELL_SEPTIC_INSPECTION', label: 'Well/Septic Inspection', family: 'INSPECTION' },
+  { value: 'ROOF_INSPECTION', label: 'Roof Inspection', family: 'INSPECTION' },
+  { value: 'MINOR_REPAIRS', label: 'Minor Repairs', family: 'HANDYMAN' },
+  { value: 'FIXTURE_INSTALLATION', label: 'Fixture Installation', family: 'HANDYMAN' },
+  { value: 'FURNITURE_ASSEMBLY', label: 'Furniture Assembly', family: 'HANDYMAN' },
+  { value: 'PAINTING_TOUCHUP', label: 'Painting', family: 'HANDYMAN' },
+  { value: 'DRYWALL_REPAIR', label: 'Drywall Repair', family: 'HANDYMAN' },
+  { value: 'GENERAL_MAINTENANCE', label: 'General Maintenance', family: 'HANDYMAN' },
 ] as const;
+
+function deriveServiceCategories(selected: string[]): ServiceCategory[] {
+  const families = new Set(
+    selected
+      .map((key) => SERVICE_OPTIONS.find((option) => option.value === key)?.family)
+      .filter((family): family is 'INSPECTION' | 'HANDYMAN' => Boolean(family))
+  );
+  return Array.from(families);
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -149,8 +161,11 @@ export default function ProviderJoinPage() {
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
+        phone: formData.phone,
         role: 'PROVIDER',
         acceptedTerms: formData.acceptedTerms,
+        businessName: formData.businessName,
+        serviceCategories: deriveServiceCategories(formData.serviceCategories),
       });
 
       if (result && result.success) {

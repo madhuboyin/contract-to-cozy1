@@ -504,6 +504,71 @@ export class ProviderController {
   }
 
   // ===========================================================================
+  // Self Profile
+  // ===========================================================================
+
+  /**
+   * Get current provider's editable business-profile fields
+   * GET /api/providers/profile
+   */
+  static async getMyProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const profile = await ProviderManagementService.getMyProfile(userId);
+      res.json({ success: true, data: profile });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({ success: false, message: error.message });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Update current provider's editable business-profile fields
+   * PATCH /api/providers/profile
+   */
+  static async updateMyProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const profile = await ProviderManagementService.updateMyProfile(userId, req.body);
+      res.json({ success: true, data: profile });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(error.message.includes('not found') ? 404 : 400).json({
+          success: false,
+          message: error.message,
+        });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  // ===========================================================================
   // Portfolio
   // ===========================================================================
 

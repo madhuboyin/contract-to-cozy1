@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ServiceCategory } from '@prisma/client';
 
 // ============================================================================
 // PROPERTY ENUMS (Phase 2 Additions)
@@ -117,23 +118,35 @@ const PropertyApplianceInputSchema = z.object({
 // ============================================================================
 
 // Registration schema
-export const registerSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/\d/, 'Password must contain at least one number')
-    .regex(/[!@#$%^&*(),.?":{}|<>]/, 'Password must contain at least one special character'),
-  firstName: z.string().min(1, 'First name is required').max(50, 'First name too long'),
-  lastName: z.string().min(1, 'Last name is required').max(50, 'Last name too long'),
-  phone: z.string().optional(),
-  role: z.enum(['HOMEOWNER', 'PROVIDER']).default('HOMEOWNER'),
-  acceptedTerms: z.literal(true, {
-    message: 'You must agree to the Terms of Service and Privacy Policy to create an account',
-  }),
-});
+export const registerSchema = z
+  .object({
+    email: z.string().email('Invalid email address'),
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+      .regex(/\d/, 'Password must contain at least one number')
+      .regex(/[!@#$%^&*(),.?":{}|<>]/, 'Password must contain at least one special character'),
+    firstName: z.string().min(1, 'First name is required').max(50, 'First name too long'),
+    lastName: z.string().min(1, 'Last name is required').max(50, 'Last name too long'),
+    phone: z.string().optional(),
+    role: z.enum(['HOMEOWNER', 'PROVIDER']).default('HOMEOWNER'),
+    acceptedTerms: z.literal(true, {
+      message: 'You must agree to the Terms of Service and Privacy Policy to create an account',
+    }),
+    // Provider-only — required when role === 'PROVIDER', see .refine below.
+    businessName: z.string().min(1).max(200).optional(),
+    serviceCategories: z.array(z.nativeEnum(ServiceCategory)).optional(),
+  })
+  .refine((data) => data.role !== 'PROVIDER' || Boolean(data.businessName?.trim()), {
+    message: 'Business name is required for provider accounts',
+    path: ['businessName'],
+  })
+  .refine((data) => data.role !== 'PROVIDER' || (data.serviceCategories?.length ?? 0) > 0, {
+    message: 'At least one service category is required for provider accounts',
+    path: ['serviceCategories'],
+  });
 
 // Login schema
 export const loginSchema = z.object({

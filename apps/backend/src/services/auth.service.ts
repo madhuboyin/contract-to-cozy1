@@ -228,7 +228,8 @@ export class AuthService {
           await tx.providerProfile.create({
             data: {
               userId: createdUser.id,
-              businessName: `${data.firstName} ${data.lastName}'s Services`,
+              businessName: data.businessName?.trim() || `${data.firstName} ${data.lastName}'s Services`,
+              serviceCategories: data.serviceCategories ? Array.from(new Set(data.serviceCategories)) : [],
               serviceRadius: 25,
               status: ProviderStatus.PENDING_APPROVAL,
               insuranceVerified: false,

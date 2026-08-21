@@ -159,6 +159,66 @@ export class ProviderManagementService {
   }
 
   // ===========================================================================
+  // Self profile (business info a provider can edit about their own listing —
+  // excludes verification-controlled fields like status/insuranceVerified/
+  // licenseVerified/stripeAccountId, which only credential review or Stripe
+  // Connect onboarding may set)
+  // ===========================================================================
+
+  private static readonly SELF_PROFILE_SELECT = {
+    id: true,
+    businessName: true,
+    businessType: true,
+    description: true,
+    website: true,
+    yearsInBusiness: true,
+    teamSize: true,
+    serviceRadius: true,
+    serviceCategories: true,
+    status: true,
+    averageRating: true,
+    totalReviews: true,
+    totalCompletedJobs: true,
+    insuranceVerified: true,
+    licenseVerified: true,
+  } as const;
+
+  static async getMyProfile(userId: string) {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: this.SELF_PROFILE_SELECT,
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    return profile;
+  }
+
+  static async updateMyProfile(userId: string, data: any) {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    const updateData: any = { ...data };
+    if (data.serviceCategories) {
+      updateData.serviceCategories = Array.from(new Set(data.serviceCategories));
+    }
+
+    return prisma.providerProfile.update({
+      where: { id: profile.id },
+      data: updateData,
+      select: this.SELF_PROFILE_SELECT,
+    });
+  }
+
+  // ===========================================================================
   // Portfolio
   // ===========================================================================
 

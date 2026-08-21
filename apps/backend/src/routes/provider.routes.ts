@@ -16,6 +16,7 @@ import {
   CreateAvailabilityWindowSchema,
   UpdateAvailabilityWindowSchema,
 } from '../validators/providerAvailability.validators';
+import { UpdateProviderProfileSchema } from '../validators/providerProfileSelf.validators';
 
 const router = Router();
 
@@ -239,6 +240,24 @@ router.delete(
   authenticate,
   requireRole(UserRole.PROVIDER, UserRole.ADMIN),
   ProviderController.deleteService,
+);
+
+// =============================================================================
+// SELF PROFILE (authenticated — must also come before /:id routes)
+// =============================================================================
+
+router.get(
+  '/profile',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.getMyProfile,
+);
+router.patch(
+  '/profile',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  validateBody(UpdateProviderProfileSchema),
+  ProviderController.updateMyProfile,
 );
 
 // =============================================================================
