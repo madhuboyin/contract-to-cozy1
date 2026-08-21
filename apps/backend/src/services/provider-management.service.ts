@@ -1,8 +1,31 @@
 // apps/backend/src/services/provider-management.service.ts
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, ProviderPortfolio } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { uploadDocumentBuffer } from './storage/reportStorage';
+import { presignGetObject } from './storage/presign';
 
+/**
+ * ProviderPortfolio.imageUrl stores the S3 object key (not a public URL) —
+ * same convention as ProviderCredential.fileUrl. Presign on every read so
+ * the private bucket stays private while portfolio photos remain viewable.
+ */
+export async function presignPortfolioImageUrl<T extends { imageUrl: string }>(
+  item: T
+): Promise<T> {
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) return item;
+  try {
+    const signedUrl = await presignGetObject({
+      bucket,
+      key: item.imageUrl,
+      expiresInSeconds: 3600,
+    });
+    return { ...item, imageUrl: signedUrl };
+  } catch {
+    return item;
+  }
+}
 
 export class ProviderManagementService {
   /**
@@ -133,5 +156,199 @@ export class ProviderManagementService {
     await prisma.service.delete({
       where: { id: serviceId },
     });
+  }
+
+  // ===========================================================================
+  // Portfolio
+  // ===========================================================================
+
+  static async listPortfolio(userId: string): Promise<ProviderPortfolio[]> {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    const items = await prisma.providerPortfolio.findMany({
+      where: { providerProfileId: profile.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return Promise.all(items.map(presignPortfolioImageUrl));
+  }
+
+  static async createPortfolioItem(
+    userId: string,
+    data: { title: string; description?: string; category: string },
+    file: { buffer: Buffer; originalname: string; mimetype: string }
+  ): Promise<ProviderPortfolio> {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    const { key } = await uploadDocumentBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      userId,
+    });
+
+    const item = await prisma.providerPortfolio.create({
+      data: {
+        ...data,
+        imageUrl: key,
+        providerProfileId: profile.id,
+      } as any,
+    });
+
+    return presignPortfolioImageUrl(item);
+  }
+
+  static async updatePortfolioItem(
+    itemId: string,
+    userId: string,
+    data: any
+  ): Promise<ProviderPortfolio> {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    const item = await prisma.providerPortfolio.findFirst({
+      where: { id: itemId, providerProfileId: profile.id },
+    });
+
+    if (!item) {
+      throw new Error('Portfolio item not found or access denied');
+    }
+
+    const updated = await prisma.providerPortfolio.update({
+      where: { id: itemId },
+      data,
+    });
+
+    return presignPortfolioImageUrl(updated);
+  }
+
+  static async deletePortfolioItem(itemId: string, userId: string): Promise<void> {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    const item = await prisma.providerPortfolio.findFirst({
+      where: { id: itemId, providerProfileId: profile.id },
+    });
+
+    if (!item) {
+      throw new Error('Portfolio item not found or access denied');
+    }
+
+    await prisma.providerPortfolio.delete({ where: { id: itemId } });
+  }
+
+  // ===========================================================================
+  // Availability
+  // ===========================================================================
+
+  static async listAvailability(userId: string) {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    return prisma.providerAvailability.findMany({
+      where: { providerProfileId: profile.id },
+      orderBy: { startDate: 'asc' },
+    });
+  }
+
+  static async createAvailabilityWindow(userId: string, data: any) {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    return prisma.providerAvailability.create({
+      data: {
+        ...data,
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        providerProfileId: profile.id,
+      },
+    });
+  }
+
+  static async updateAvailabilityWindow(windowId: string, userId: string, data: any) {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    const window = await prisma.providerAvailability.findFirst({
+      where: { id: windowId, providerProfileId: profile.id },
+    });
+
+    if (!window) {
+      throw new Error('Availability window not found or access denied');
+    }
+
+    const updateData: any = { ...data };
+    if (data.startDate) updateData.startDate = new Date(data.startDate);
+    if (data.endDate) updateData.endDate = new Date(data.endDate);
+
+    return prisma.providerAvailability.update({
+      where: { id: windowId },
+      data: updateData,
+    });
+  }
+
+  static async deleteAvailabilityWindow(windowId: string, userId: string): Promise<void> {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      throw new Error('Provider profile not found');
+    }
+
+    const window = await prisma.providerAvailability.findFirst({
+      where: { id: windowId, providerProfileId: profile.id },
+    });
+
+    if (!window) {
+      throw new Error('Availability window not found or access denied');
+    }
+
+    await prisma.providerAvailability.delete({ where: { id: windowId } });
   }
 }

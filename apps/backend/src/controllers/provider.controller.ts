@@ -501,6 +501,269 @@ export class ProviderController {
         next(error);
       }
     }
-  }  
+  }
 
+  // ===========================================================================
+  // Portfolio
+  // ===========================================================================
+
+  /**
+   * Get current provider's portfolio items
+   * GET /api/providers/portfolio
+   */
+  static async listPortfolio(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const items = await ProviderManagementService.listPortfolio(userId);
+      res.json({ success: true, data: items });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({ success: false, message: error.message });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Create a portfolio item (multipart: file + title/description/category)
+   * POST /api/providers/portfolio
+   */
+  static async createPortfolioItem(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const file = (req as any).file as
+        | { buffer: Buffer; originalname: string; mimetype: string; size: number }
+        | undefined;
+      if (!file) {
+        res.status(400).json({ success: false, message: 'Image file is required' });
+        return;
+      }
+
+      const item = await ProviderManagementService.createPortfolioItem(userId, req.body, file);
+      res.status(201).json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({ success: false, message: error.message });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Update a portfolio item
+   * PATCH /api/providers/portfolio/:id
+   */
+  static async updatePortfolioItem(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const item = await ProviderManagementService.updatePortfolioItem(id, userId, req.body);
+      res.json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(error.message.includes('not found') ? 404 : 400).json({
+          success: false,
+          message: error.message,
+        });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Delete a portfolio item
+   * DELETE /api/providers/portfolio/:id
+   */
+  static async deletePortfolioItem(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      await ProviderManagementService.deletePortfolioItem(id, userId);
+      res.json({ success: true, message: 'Portfolio item deleted successfully' });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(error.message.includes('not found') ? 404 : 400).json({
+          success: false,
+          message: error.message,
+        });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // Availability
+  // ===========================================================================
+
+  /**
+   * Get current provider's availability windows
+   * GET /api/providers/availability
+   */
+  static async listAvailability(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const windows = await ProviderManagementService.listAvailability(userId);
+      res.json({ success: true, data: windows });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({ success: false, message: error.message });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Create an availability window
+   * POST /api/providers/availability
+   */
+  static async createAvailabilityWindow(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const window = await ProviderManagementService.createAvailabilityWindow(userId, req.body);
+      res.status(201).json({ success: true, data: window });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({ success: false, message: error.message });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Update an availability window
+   * PATCH /api/providers/availability/:id
+   */
+  static async updateAvailabilityWindow(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      const window = await ProviderManagementService.updateAvailabilityWindow(id, userId, req.body);
+      res.json({ success: true, data: window });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(error.message.includes('not found') ? 404 : 400).json({
+          success: false,
+          message: error.message,
+        });
+      } else {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Delete an availability window
+   * DELETE /api/providers/availability/:id
+   */
+  static async deleteAvailabilityWindow(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      if (userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Access denied. Provider role required.' });
+        return;
+      }
+
+      await ProviderManagementService.deleteAvailabilityWindow(id, userId);
+      res.json({ success: true, message: 'Availability window deleted successfully' });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(error.message.includes('not found') ? 404 : 400).json({
+          success: false,
+          message: error.message,
+        });
+      } else {
+        next(error);
+      }
+    }
+  }
 }

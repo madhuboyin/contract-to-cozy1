@@ -4693,6 +4693,7 @@ model ProviderPortfolio {
   providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([providerProfileId])
   @@map("provider_portfolio")

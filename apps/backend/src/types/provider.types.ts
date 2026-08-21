@@ -36,6 +36,9 @@ export const providerSearchSchema = z.object({
   // (ProviderCategoryEligibility.isEligible) for the requested category, or
   // for at least one category if none was specified.
   verifiedOnly: z.coerce.boolean().optional(),
+  // Excludes providers with an active ProviderAvailability window
+  // (isAvailable: false) covering the current date.
+  availableOnly: z.coerce.boolean().optional(),
 
   // Rating & sorting
   minRating: z.coerce.number().min(0).max(5).optional(),

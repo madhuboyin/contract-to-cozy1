@@ -2,13 +2,38 @@
 // Complete working version - copy this entire file
 
 import { Router } from 'express';
+import multer from 'multer';
 import { ProviderController } from '../controllers/provider.controller';
 import { UserRole } from '../types/auth.types';
+import { validateBody } from '../middleware/validate.middleware';
+import { validateImageUpload } from '../utils/documentValidator.util';
+import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
+import {
+  CreatePortfolioItemSchema,
+  UpdatePortfolioItemSchema,
+} from '../validators/providerPortfolio.validators';
+import {
+  CreateAvailabilityWindowSchema,
+  UpdateAvailabilityWindowSchema,
+} from '../validators/providerAvailability.validators';
 
 const router = Router();
 
 // Use require to avoid circular dependency
 const { authenticate, requireRole } = require('../middleware/auth.middleware');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, and WEBP images are allowed.'));
+    }
+  },
+});
 
 // =============================================================================
 // AUTHENTICATED PROVIDER ROUTES (MUST COME BEFORE /:id ROUTES!)
@@ -214,6 +239,71 @@ router.delete(
   authenticate,
   requireRole(UserRole.PROVIDER, UserRole.ADMIN),
   ProviderController.deleteService,
+);
+
+// =============================================================================
+// PORTFOLIO (authenticated — must also come before /:id routes)
+// =============================================================================
+
+router.get(
+  '/portfolio',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.listPortfolio,
+);
+router.post(
+  '/portfolio',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  uploadRateLimiter,
+  upload.single('file'),
+  validateImageUpload,
+  validateBody(CreatePortfolioItemSchema),
+  ProviderController.createPortfolioItem,
+);
+router.patch(
+  '/portfolio/:id',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  validateBody(UpdatePortfolioItemSchema),
+  ProviderController.updatePortfolioItem,
+);
+router.delete(
+  '/portfolio/:id',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.deletePortfolioItem,
+);
+
+// =============================================================================
+// AVAILABILITY (authenticated — must also come before /:id routes)
+// =============================================================================
+
+router.get(
+  '/availability',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.listAvailability,
+);
+router.post(
+  '/availability',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  validateBody(CreateAvailabilityWindowSchema),
+  ProviderController.createAvailabilityWindow,
+);
+router.patch(
+  '/availability/:id',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  validateBody(UpdateAvailabilityWindowSchema),
+  ProviderController.updateAvailabilityWindow,
+);
+router.delete(
+  '/availability/:id',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.deleteAvailabilityWindow,
 );
 
 // =============================================================================

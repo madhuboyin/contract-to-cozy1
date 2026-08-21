@@ -16,6 +16,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { providerCredentialService } from './providerCredential.service';
+import { presignPortfolioImageUrl } from './provider-management.service';
 
 /**
  * Calculate distance between two coordinates using Haversine formula
@@ -148,6 +149,21 @@ export class ProviderService {
           some: query.category
             ? { serviceCategory: query.category, isEligible: true }
             : { isEligible: true },
+        },
+      });
+    }
+
+    // Excludes providers who have blocked themselves out (vacation, fully
+    // booked, etc.) via a ProviderAvailability window covering right now.
+    if (query.availableOnly) {
+      const now = new Date();
+      filters.push({
+        availability: {
+          none: {
+            isAvailable: false,
+            startDate: { lte: now },
+            endDate: { gte: now },
+          },
         },
       });
     }
@@ -382,6 +398,10 @@ export class ProviderService {
       return null;
     }
 
+    const portfolioImages = await Promise.all(
+      provider.portfolioImages.map(presignPortfolioImageUrl)
+    );
+
     return {
       id: provider.id,
       businessName: provider.businessName,
@@ -398,7 +418,7 @@ export class ProviderService {
       status: provider.status,
       user: provider.user,
       credentials: provider.credentials,
-      portfolioImages: provider.portfolioImages,
+      portfolioImages,
     };
   }
 
