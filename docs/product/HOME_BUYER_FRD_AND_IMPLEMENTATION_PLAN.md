@@ -1,7 +1,7 @@
 # Home Buyer Experience — Functional Requirements and Implementation Plan
 
-**Version:** 1.47
-**Date:** 2026-08-19
+**Version:** 1.48
+**Date:** 2026-08-21
 **Status:** Implementation in progress
 **Audience:** Product, design, frontend, backend, workers, data, content, and engineering
 **Primary routes:** `/onboarding/address`, `/dashboard`, `/dashboard/properties/:propertyId/buyer-plan`, `/dashboard/ask`
@@ -1354,6 +1354,21 @@ Notifications shall support:
 Notifications shall deduplicate by property, journey, entity, and due window.
 Cancelled or paused journeys stop future reminders immediately.
 
+Homeowner-lifecycle notifications — maintenance-task reminders, seasonal
+checklist readiness, and the Home Briefing digest — shall not fire while a
+property is pre-close for its buyer (`ownershipState` `SHOPPING` or
+`UNDER_CONTRACT`): these describe obligations the buyer cannot act on until
+ownership transfers, consistent with the "hidden before closing" disposition
+already required for seasonal checklists and Home Briefing in §14.12.
+Suppression is automatic and resumes the next time each job runs once
+ownership state advances; no backfill of missed notifications occurs.
+
+Severe-weather notifications remain in force pre-close but shall reframe
+their guidance toward the buyer's inspection rather than homeowner
+self-maintenance language: flag the hazard for the inspector to check before
+an inspection is scheduled or completed, or note it for the closing
+walkthrough once the inspection itself is done.
+
 ### 14.10 Household and invitations
 
 - “Invite co-buyer” is available from Buyer Plan.
@@ -1420,6 +1435,8 @@ The reviewed disposition is:
 | Home Habit Coach, Seasonal Checklists, Plant Advisor, Appliance Oracle, Energy Audit | Hidden before closing | Ongoing ownership and lifestyle tools appear only after close |
 | Home Briefing / Home Gazette, Home Digital Will, generic Home Records taxonomy | Hidden or simplified before closing | Use transaction-specific documents/status only; reveal the broader ownership framing after close |
 | Coverage/insurance trend, Home Risk Replay beyond due diligence, neighborhood monitoring | Hidden unless transaction-relevant | No generic premium or continuous-monitoring promotion before close |
+| PropertyMaintenanceTask reminders | Hidden before closing | Suppress `MAINTENANCE_TASK_REMINDER` notification delivery pre-close; resume automatically once ownership transfers |
+| Resolution Center / Open Cases (property health-score findings) | Reuse with buyer mode | Keep cases visible pre-close for due-diligence value, but relabel the health-insight case CTA "Discuss with Inspector" instead of a homeowner resolution action |
 
 Legacy aliases and redirect-only routes are not separate tools and shall not
 receive buyer cards. Duplicate catalog entries shall resolve to one canonical
@@ -2905,7 +2922,22 @@ Recent implementation evidence incorporated into this revision:
   frontend gap where `GROUPED_LIST` and `TABLE` blocks only rendered their
   action buttons for one hardcoded block ID. Verified with no regressions
   across the full `ask/` suite (44 files) and the HVAC decision-routing and
-  governance suites.
+  governance suites; and
+- `e26e8500` — closed a gap against §14.12's existing "hidden before
+  closing" disposition for seasonal checklists and Home Briefing: those two
+  notification producers, plus `PropertyMaintenanceTask` reminders, were
+  still firing for pre-close buyer properties with no ownershipState check
+  at all. All three now suppress delivery while `ownershipState` is
+  `SHOPPING`/`UNDER_CONTRACT`, using the existing
+  `operatingModeForOwnershipState` predicate as an explicit allowlist so
+  established homeowners (including legacy properties with a null
+  ownershipState, which was never backfilled) are unaffected. Severe-weather
+  notifications and Resolution Center/Open Cases stay visible pre-close per
+  new §14.9/§14.12 guidance, but reframe toward the buyer's inspection —
+  weather copy now branches on `BuyerInspectionPlan` scheduling state, and
+  health-insight case CTAs read "Discuss with Inspector" instead of "Review
+  Options." No schema changes; typecheck and the affected `node --test`
+  suites pass across backend, workers, and frontend.
 
 #### 21.0.1 Buyer Experience Redesign delivery plan
 
