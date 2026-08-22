@@ -38,7 +38,7 @@ Each page below documents its cluster for both audiences at once — what the fe
 
 These surfaced while grounding every page in live code, and are worth being aware of independent of the wiki content itself:
 
-- **`apps/CLAUDE.md` understates the codebase size**: it's 127 backend route files (not "52") and the Prisma schema has 505 models (not "30+"). Flagged on the [Architecture](02-architecture-and-data-model.md) page.
+- **`apps/CLAUDE.md` understates the codebase size**: it's ~126 backend route files (not "52" — this count drifts by one file from time to time; re-count if precision matters) and the Prisma schema has 505 models (not "30+"). Flagged on the [Architecture](02-architecture-and-data-model.md) page, which also corrects a stale services count and Next.js version.
 - **Two systems are effectively retired but still present in code**: Home Gazette (nearly every route returns `410`, replaced by Home Briefing) and the legacy Composite Home Score / `propertyScoreSnapshot` routes (also `410`, replaced by Property Brief / Status Board).
 - **Some features exist only behind acceptance-test flags**: e.g. `app/acceptance/home-buyer-lifecycle` and `.../mortgage-refinance-radar/home-actions` require an env var fixture to render — the real production surfaces live elsewhere (`/dashboard/properties/[id]/buyer-plan`, `.../tools/mortgage-refinance-radar`).
 - **Naming collisions to watch for**: "Home Event Radar" (hazard feed) vs. `homeEvents.routes.ts` (a property history timeline) are unrelated; `/dashboard/risk-radar` silently redirects into Home Event Radar; two separate quote-comparison surfaces (service quotes vs. insurance quotes) share similar names but different backends.

@@ -65,13 +65,13 @@ A newer convention for complex features: everything for one feature lives under 
 Instead of routes/controllers/services being split across the three top-level flat directories, some features are colocated as their own directory at `src/<feature>/` (mirroring the module pattern but usually flatter — controller+service+routes+types, no separate mapper/dto layers): `community/`, `sellerPrep/`, `localUpdates/`, `homeRenovationAdvisor/`, `refinanceRadar/`, `neighborhoodIntelligence/`, `propertyIntelligence/`, `propertyBrief/`, `homeBriefing/`, `productFramework/` (cross-cutting contracts — capabilities, decision platform, ask registries, recommendation governance), `propertyChanges/`, `feedback/`. Some of these (`sellerPrep/`, `homeRenovationAdvisor/`, `refinanceRadar/`) have grown their own sub-directories for engines, mappers, validators, and provider integrations.
 
 ### Scale
-- **127 route files** in `src/routes/` alone (plus the colocated directories above).
-- **105 controllers**, **298 services**.
+- **126 route files** in `src/routes/` alone (plus the colocated directories above) — this count has drifted by one file since the wiki was first written; treat it as approximate and re-count (`find src/routes -name '*.ts' | wc -l`) if precision matters.
+- **105 controllers**. Services are **256 files directly under `src/services/`**, or **575 files counting the 42 subdirectories underneath it** (`find src/services -name '*.ts' | wc -l`) — a prior version of this page said "298," which matches neither count precisely and appears stale. Use 256 for "how many top-level service modules," 575 for "how much service-layer code total."
 - Key API prefixes actually mounted with a dedicated prefix: `/api/auth` (+ `/api/auth/mfa`), `/api/providers`, `/api/bookings`, `/api/vault`, `/api/weather`, `/api/environment`, `/api/properties`, `/api/users`, `/api/checklist`, `/api/risk`, `/api/gemini`, `/api/inventory` (mounted generically), `/api/documents`, `/api/oracle`, `/api/budget`, `/api/climate`. The large majority of feature routers, though, mount at the bare `/api` and define their own paths (e.g. `homeActionsRoutes`, `guidanceRoutes`, dozens of `admin*Routes`) — there is no one-to-one prefix-per-feature convention beyond the earliest features.
 
 ## 3. Frontend Architecture
 
-Next.js 14, App Router, path alias `@/*` → `./src/*`.
+Next.js **^16.2.6** (per `apps/frontend/package.json` — a prior version of this page said "Next.js 14," which is stale), App Router, path alias `@/*` → `./src/*`.
 
 - **Route groups:** `app/(auth)/` (login, signup, forgot-password, reset-password, verify-email), `app/(dashboard)/` (dashboard, savings — homeowner-authenticated pages), and `app/providers/(dashboard)/` (a parallel authenticated area for the provider role: provider dashboard, bookings). Several top-level routes live outside any group (`gazette`, `home-briefing`, `home-score`, `invite`, `knowledge`, `onboarding`, `property-brief`, `vault`, `reports`, `renovation-closeout`, `acceptance` — internal acceptance-test harness pages).
 - **API client (`src/lib/api/client.ts`):** one large typed `APIClient` class (thousands of lines, ~120+ methods covering every backend feature domain — admin ops, coverage, onboarding, personalization, radar, savings, etc.). Auth is **cookie-based** (`credentials: 'include'` on nearly every call) with CSRF-token fetch/cache built in; `getToken()`/`setToken()` are now no-ops (tokens are httpOnly cookies, not localStorage). It queues requests that hit a 401 and retries them once a refresh completes (`processFailedQueue`).
@@ -148,16 +148,19 @@ From repo root: `make build` (x86 images), `make build-arm` (ARM64 for the Pi), 
 
 ## 8. Key Environment Variables
 
+**Corrected against the real `.env.local.example`** (a prior version of this table omitted several required secrets and listed a client-side Gemini key that doesn't exist anywhere in the codebase — Gemini is server-side only):
+
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_HOST` / `REDIS_PORT` | Redis for BullMQ job queues and rate-limit stores |
-| `JWT_SECRET` / `JWT_REFRESH_SECRET` | Access/refresh token signing |
-| `NEXT_PUBLIC_API_URL` | Backend URL seen by the frontend (default `http://localhost:8080`) |
-| `NEXT_PUBLIC_GEMINI_API_KEY` | Client-visible Google Gemini key for AI features |
-| `GEMINI_API_KEY` | Server-side Gemini key (backend) |
+| `POSTGRES_PASSWORD` / `REDIS_PASSWORD` | Required, no defaults — Postgres and Redis auth |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` / `JWT_MFA_SECRET` | Access/refresh/MFA-challenge token signing |
+| `SESSION_SECRET` / `CSRF_SECRET` | Session and CSRF protection |
+| `MFA_ENCRYPTION_KEY` | AES-256 key encrypting TOTP secrets at rest |
+| `GEMINI_API_KEY` | Server-side Gemini key (backend only, optional) |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowlist — required to boot in production |
+| `SWAGGER_PASSWORD` / `METRICS_BEARER_TOKEN` | Gate `/api/docs` and `/metrics` |
 
-Generate secrets with `openssl rand -hex 32`. Copy `.env.local.example` → `.env.local` at repo root; Docker Compose reads it directly. Additional production-required variables surfaced while reading `src/index.ts`: `ALLOWED_ORIGINS` (comma-separated CORS allowlist — required to boot in production), `SWAGGER_PASSWORD` (gates `/api/docs`), and `METRICS_BEARER_TOKEN` (gates `/metrics`).
+`DATABASE_URL`, `REDIS_HOST`/`REDIS_PORT`, and `NEXT_PUBLIC_API_URL` are not developer-set — Docker Compose hardcodes/derives them (see `docker-compose.yml`). Generate secrets with `openssl rand -hex 32`. Copy `.env.local.example` → `.env.local` at repo root; Docker Compose reads it directly.
 
 ## Related pages
 
