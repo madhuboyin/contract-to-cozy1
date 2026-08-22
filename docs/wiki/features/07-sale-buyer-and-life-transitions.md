@@ -31,7 +31,7 @@ This cluster is C2C's **Job 3** ("guide me through something major") — the lif
 ### Sell-Hold-Rent Decision Tool
 - **What it does:** A financial calculator that projects 5- or 10-year net outcomes for selling now, holding, or renting out the property, using the property's real financial context (home value, mortgage, taxes, insurance) with optional user overrides for each assumption (appreciation rate, selling costs, rent growth, vacancy, management fee, etc.).
 - **User flow:**
-  1. Homeowner opens `/dashboard/properties/[id]/tools/sell-hold-rent` (reachable from the sidebar tools list, mobile tool catalog, the Capital Timeline tool, and the Property Orchestration strip which chains it to/from Break-Even).
+  1. Homeowner opens `/dashboard/properties/[id]/tools/sell-hold-rent` (reachable from the sidebar tools list, the mobile tool catalog, and the Capital Timeline tool). **Correction:** this page previously also credited "the Property Orchestration strip which chains it to/from Break-Even" as a reachable path — a frontend nav audit found `PropertyOrchestrationStrip.tsx` has zero importers anywhere in the frontend; it's dead code, not a real cross-tool chaining surface. See [Introduction](../00-introduction.md#known-implementation-alignment-issues).
   2. Picks a 5 or 10-year horizon.
   3. Reviews the computed comparison (sell vs. hold vs. rent) rendered as comparison bars; can adjust assumption overrides which re-run the calculation client-side against the API.
   4. Can save/name an assumption set for reuse.
