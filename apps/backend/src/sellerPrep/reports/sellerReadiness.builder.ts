@@ -11,37 +11,24 @@ export async function buildSellerReadinessReport(
 
   const plan = await prisma.sellerPrepPlan.findFirst({
     where: { userId, propertyId },
-    include: { items: true },
   });
 
   // Sale readiness is judged against current open-work and coverage context.
   const planning = await getPlanningContextDecisions(propertyId, userId, 'SELLER_PREP');
   const saleReadiness = planning.decisions.saleReadiness;
 
-  const items = plan?.items ?? [];
-  const total = items.length;
-  const completed = items.filter(i => i.status === 'DONE').length;
-  const highRemaining = items.filter(
-    i => i.priority === 'HIGH' && i.status !== 'DONE'
-  ).length;
-
-  // Explicit rank, not a lexical sort — 'HIGH' < 'LOW' < 'MEDIUM'
-  // alphabetically would put LOW ahead of MEDIUM.
-  const PRIORITY_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-  const topActions = [...items]
-    .sort((a, b) => (PRIORITY_RANK[a.priority] ?? 99) - (PRIORITY_RANK[b.priority] ?? 99))
-    .slice(0, 5);
-
+  // The static ROI checklist (SellerPrepPlanItem) this summary/topActions
+  // block used to compute from is retired — see the comment in
+  // sellerPrep.service.ts. PropertySaleCase's SaleReadinessItem projection
+  // is the real governed replacement; this report doesn't consume it yet.
   return {
     propertyId,
     saleIntentConfirmed: Boolean(plan),
     summary: {
-      completionPercent: total
-        ? Math.round((completed / total) * 100)
-        : 0,
-      highPriorityRemaining: highRemaining,
+      completionPercent: 0,
+      highPriorityRemaining: 0,
     },
-    topActions,
+    topActions: [],
     comparables: {
       available: false,
       source: 'PUBLIC_RECORDS / MARKET_TRENDS',

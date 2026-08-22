@@ -206,7 +206,6 @@ export class SellerPrepController {
               updatedAt: new Date().toISOString()
             },
           },
-          include: { items: true },
         });
       }
       res.json({

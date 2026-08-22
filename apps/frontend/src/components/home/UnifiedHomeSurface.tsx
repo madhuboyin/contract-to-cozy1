@@ -15,6 +15,7 @@ import {
   CalendarDays,
   FileCheck2,
   Home,
+  Megaphone,
   MessageCircle,
   Milestone,
   PencilLine,
@@ -24,6 +25,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 import type {
   HomeActionCommand,
   HomeFirstValueInsightDTO,
@@ -88,6 +90,56 @@ function HomeEventRadarTopMatchCard({ propertyId }: { propertyId: string }) {
         <Button asChild size="sm" variant="outline" className="shrink-0 rounded-full">
           <Link href={href}>{newCount > 0 ? `${newCount} new` : 'Open Radar'}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Fully built (backend + component) but never rendered anywhere — a
+ * database audit traced LocalUpdateEvent's zero rows back to this: the
+ * carousel had no live surface generating impressions to track in the
+ * first place. Revived here following the same pattern as
+ * HomeEventRadarTopMatchCard above.
+ */
+function LocalUpdatesSection({ propertyId }: { propertyId: string }) {
+  const query = useQuery({
+    queryKey: ['local-updates', propertyId],
+    queryFn: () => api.getLocalUpdates(propertyId),
+    enabled: Boolean(propertyId),
+    staleTime: 5 * 60 * 1000,
+  });
+  const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(new Set());
+
+  const updates = (query.data?.success ? query.data.data.updates : []).filter(
+    (update) => !dismissedIds.has(update.id)
+  );
+  if (updates.length === 0) return null;
+
+  const handleDismiss = (id: string) => {
+    setDismissedIds((prev) => new Set(prev).add(id));
+    void api.dismissLocalUpdate(id).catch(() => {
+      // Best-effort — worst case the update reappears next session.
+    });
+  };
+
+  const handleCtaClick = (id: string) => {
+    const update = updates.find((u) => u.id === id);
+    if (update?.ctaUrl) {
+      window.open(update.ctaUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  return (
+    <Card className="rounded-[24px] border-slate-200 shadow-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Megaphone className="h-5 w-5 text-teal-600" />Local updates
+        </CardTitle>
+        <CardDescription>Services and alerts relevant to your area.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <LocalUpdatesCarousel updates={updates} onDismiss={handleDismiss} onCtaClick={handleCtaClick} variant="card" />
       </CardContent>
     </Card>
   );
@@ -1314,6 +1366,8 @@ export function UnifiedHomeSurface({
       )}
 
       <HomeEventRadarTopMatchCard propertyId={propertyId} />
+
+      <LocalUpdatesSection propertyId={propertyId} />
 
       {home.decisions.length === 0 && !home.activeMajorMoment ? (
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">

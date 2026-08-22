@@ -9,11 +9,13 @@ import { getPlanningContextEnvelope, getPlanningContextDecisions } from '../serv
 // personalization (personalizeChecklist/generatePersonalizedSummary) were
 // retired — see HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_
 // IMPLEMENTATION_PLAN.md Slice 8's "replace the static checklist" goal.
-// SellerPrepPlan.items is never seeded anymore; PropertySaleCase's
-// SaleReadinessItem projection (propertySaleCase.service.ts) is the real
-// governed replacement. This shape is kept minimal purely so the plan
-// record and its still-live features (agent interviews, comps, leads)
-// keep working.
+// The SellerPrepPlanItem model backing it (SellerPrepPlan.items) was never
+// seeded after that and has since been dropped from the schema entirely.
+// PropertySaleCase's SaleReadinessItem projection
+// (propertySaleCase.service.ts) is the real governed replacement. This
+// response shape keeps an always-empty `items` field only so existing API
+// consumers don't need a shape change; the plan record itself still hosts
+// its still-live features (agent interviews, comps, leads).
 export interface ChecklistItem {
   id?: string;
   code: string;
@@ -51,7 +53,6 @@ export class SellerPrepService {
     let plan = await prisma.sellerPrepPlan.findFirst({
       where: { userId, propertyId },
       include: {
-        items: true,
         interviews: true // NEW: Include agent interviews
       },
     });
@@ -95,7 +96,7 @@ export class SellerPrepService {
           propertyId,
           contextVersion: planning.contextVersion,
         },
-        include: { items: true, interviews: true },
+        include: { interviews: true },
       });
     }
 
