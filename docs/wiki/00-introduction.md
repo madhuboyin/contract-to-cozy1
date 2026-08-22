@@ -6,11 +6,11 @@
 
 > **Contract to Cozy (C2C) is a homeowner decision and action platform that continuously understands the home, identifies what matters, explains what to do, and helps the homeowner execute it.**
 
-That's the product. Everything documented in this wiki — inventory tracking, insurance analysis, the provider marketplace, weather radar, refinance monitoring, life-event workspaces — exists to serve that one system, not as a standalone product in its own right. Read the rest of this page as: three jobs C2C does for a homeowner, one loop it runs to do them, and a map of which capability clusters play which role in that loop.
+That's the product. Every homeowner-facing capability documented in this wiki — inventory tracking, insurance analysis, the provider marketplace, weather radar, refinance monitoring, life-event workspaces — exists to serve that one system, not as a standalone product in its own right. (The admin/platform-operations cluster is the one exception: it's governance infrastructure underneath the loop, not a homeowner-facing capability — see the note at the end of the loop table below.) Read the rest of this page as: three jobs C2C does for a homeowner, one loop it runs to do them, and a map of which capability clusters play which role in that loop.
 
 ## Three homeowner jobs
 
-Every capability in C2C ultimately serves one of three jobs:
+Every homeowner-facing capability in C2C ultimately serves one of three jobs — often more than one at once, since which job a capability is serving depends on the homeowner's intent in the moment, not the capability itself:
 
 | Job | The homeowner's question | Examples |
 |---|---|---|
@@ -18,7 +18,9 @@ Every capability in C2C ultimately serves one of three jobs:
 | **2 — Whenever needed** | "Help me make the right home decision." | Repair vs. replace, DIY vs. hire, is this quote fair, shop for new insurance, refinance now or wait, sell vs. hold vs. rent |
 | **3 — Life events** | "Guide me through something major." | Buying a home, closing, moving, a major repair, a renovation, an insurance claim, preparing to sell, selling |
 
-A homeowner shouldn't have to know which of dozens of tools answers a given question — C2C's job is to route the right context, at the right time, to whichever of these three needs is live.
+A homeowner shouldn't have to know which of dozens of tools answers a given question — C2C's job is to route the right context, at the right time, to whichever of these three needs is live. The same capability can show up under more than one job depending on context: Coverage Intelligence surfacing a protection gap is a Job 1 nudge; a homeowner opening that same tool to decide whether to shop for new insurance is Job 2. Home Event Radar flagging a freeze warning is Job 1; a homeowner using it to decide whether to winterize before a trip is Job 2. The capability doesn't change — the homeowner's intent in the moment determines which job it's serving.
+
+For **Job 1** specifically, the concrete architecture is: **signals (maintenance predictions, radar events, recalls, coverage gaps, savings matches, personalization recommendations) → Home Actions ranking (`homeActions.service.ts`, the orchestration layer) → a single ranked attention feed → execution.** That's the real backend shape behind "tell me what needs my attention" — see [Guidance, Ask Cozy & Personalization](features/03-guidance-ai-concierge-and-personalization.md#orchestration-next-best-action--home-actions) for the ranking/decision-trace detail.
 
 ## The decision & action loop
 
@@ -43,7 +45,7 @@ UNDERSTAND the home
 | **Identify** | Detect signals that could matter | Maintenance predictions & seasonal checklists, [Home Event Radar, recalls, environment reports](features/06-home-events-environment-and-community.md), coverage gaps, savings/benefits matches, refinance opportunities ([Coverage, Risk & Financial Tools](features/04-coverage-risk-and-financial-tools.md)) |
 | **Prioritize** | Rank what deserves attention first | Home Actions / Orchestration ranking + decision trace (see [Guidance, Ask Cozy & Personalization](features/03-guidance-ai-concierge-and-personalization.md)) |
 | **Explain / Recommend / Decide** | Say why it matters and what to do, with confidence and evidence made explicit | Guidance Engine journeys, Ask Cozy, Personalization's "why this home" explanations, Property Brief/Home Briefing, coverage/negotiation/quote-comparison decision tools ([Guidance page](features/03-guidance-ai-concierge-and-personalization.md), [Coverage & Financial Tools](features/04-coverage-risk-and-financial-tools.md)) |
-| **Execute** | Do nothing yet, monitor, DIY, create a task, contact a third party, or book a provider | Tasks, DIY projects, provider bookings ([Marketplace, Providers & Services](features/05-marketplace-providers-and-services.md)) — the marketplace is **one execution path among several**, not the product's center |
+| **Execute** | Do nothing yet, monitor, DIY, create a task, contact a third party, or book a provider | Tasks, DIY projects, provider bookings ([Execution, Providers & Services](features/05-marketplace-providers-and-services.md)) — the provider marketplace is **one execution path among several**, not the product's center |
 | **Record / Learn** | Keep a durable trail of what happened so future guidance improves | Home Records/Documents, Home Digital Will, Outcome tracking on Savings & Benefits and Personalization, Property Brief/Home Briefing |
 | **Life events** | Apply the whole loop inside a major transition | [Sale, Buyer & Life Transitions](features/07-sale-buyer-and-life-transitions.md) — buying, selling, moving, refinancing each run their own version of understand→identify→explain→execute→record |
 
@@ -52,6 +54,13 @@ Platform infrastructure — the [admin console, audit log, capability governance
 ## Trust: how C2C answers "why am I seeing this?"
 
 Where implemented, C2C's recommendations carry their own evidence trail rather than asking the homeowner to take a suggestion on faith: Orchestration's decision trace (`OrchestrationDecisionTrace`, rendered via `DecisionTraceDrawer`), Personalization's context-map (property signals vs. confirmed profile facts vs. active recommendations, with an explicit "your answers changed the order, not the safety rules"), and the `components/trust/` badge library (confidence, source, risk-of-delay, estimated savings) reused across Orchestration, Guidance, and the Resolution Center. This is real, code-verified architecture, not aspirational — see [Guidance, Ask Cozy & Personalization](features/03-guidance-ai-concierge-and-personalization.md#orchestration-next-best-action--home-actions) for the specifics. Not every tool in the wiki has this level of explainability yet; where a tool is a plain calculator or a self-reported record, the relevant feature page says so directly.
+
+## Known implementation alignment issues
+
+These are flagged here because they cut against the one-loop, one-product model this page describes — they're **product/engineering follow-ups, not documentation gaps**. The wiki accurately describes what exists; the code itself has two areas where more than one implementation of the same job is live at once:
+
+- **Three separate property/onboarding entry points** exist for "add or set up a home": the trigger-first wizard (`/onboarding/*`), the per-property Setup Checklist (`/dashboard/properties/[id]/onboarding`), and a longer manual creation form (`/dashboard/properties/new`) reachable from `PropertySetupBanner`. Each is real and reachable, not legacy — see [Onboarding, Auth & Property Setup](features/01-onboarding-and-property-setup.md#property-setup-checklist-5-step-wizard). Having three live paths into "Understand the home" makes it harder for the product to present onboarding as one coherent first-run experience.
+- **Two parallel Home Actions APIs** back the Job 1 ranked-attention feed: `GET /api/orchestration/summary/:propertyId` and the newer canonical `GET /api/properties/:propertyId/home-actions` / `/home` — both live, both wired to controllers, and it wasn't confirmed from code which one is the dashboard's actual primary data source. See [Guidance, Ask Cozy & Personalization](features/03-guidance-ai-concierge-and-personalization.md#orchestration-next-best-action--home-actions). This directly affects whether the Job 1 architecture statement above resolves to one ranked feed in practice or two that could drift apart.
 
 ## Who uses it
 

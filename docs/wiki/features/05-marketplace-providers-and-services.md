@@ -1,6 +1,6 @@
 [← Back to Wiki Home](../README.md)
 
-# Marketplace, Providers & Services
+# Execution, Providers & Services
 
 This page covers **Execute** — the stage of C2C's decision & action loop where a decision made elsewhere (Guidance, Coverage, a recall, a renovation case) actually gets done. Booking a provider is one execution path among several a homeowner can take — alongside doing nothing yet, monitoring, DIY, uploading information, or contacting a third party — not the product's identity; C2C's job is to get the homeowner to the right decision first, and this cluster is what happens after. That said, it's the one part of Contract to Cozy where the `PROVIDER` role is a first-class actor, not just a record homeowners browse, because execution-by-provider is a full two-sided marketplace in its own right: finding and booking a service pro, the whole booking lifecycle from request through review, provider registration/credential verification, price fairness checks, self-guided DIY projects, permit tracking, and the renovation/home-modification advisory pipeline. Wherever a flow has two sides, this page calls out what the `HOMEOWNER` sees versus what the `PROVIDER` sees in their own separate app surface.
 

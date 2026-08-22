@@ -133,6 +133,6 @@ Two related systems live in this cluster's assigned backend directories but are 
 - **`apps/backend/src/propertyBrief/`** (`propertyBrief.routes.ts`, `.service.ts`) and its frontend at `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/property-brief/` plus the public share view `apps/frontend/src/app/property-brief/share/[token]/page.tsx` — a shareable PDF/report generator (`renderPropertyBriefPdf`, share-link creation/revocation/republish) that packages property facts for external sharing (e.g. with a buyer or agent). This is a document/reporting feature, not an environmental-awareness one, and belongs conceptually with onboarding/property setup or the sale/buyer transition flow.
 
 ## Related pages
-- [Marketplace, Providers & Services](05-marketplace-providers-and-services.md)
+- [Execution, Providers & Services](05-marketplace-providers-and-services.md)
 - [Sale, Buyer & Life Transitions](07-sale-buyer-and-life-transitions.md)
 - [← Back to Wiki Home](../README.md)
