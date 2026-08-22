@@ -4,6 +4,8 @@
 
 Every homeowner, household member, and provider who ever uses C2C passes through this cluster first: create an account, verify it, add or claim a home, and (optionally) invite other people to that home. It's the highest-leverage part of the product to keep frictionless — every other feature page in this wiki assumes a verified user with at least one `Property` and a `HouseholdMember` row already exists.
 
+The trigger-first onboarding wizard below (address → confirm → one evidence-bounded "first action") is a live, working instance of C2C's decision & action loop in miniature: it understands just enough about the home to identify one thing that matters for the reason the homeowner said they showed up, explains it, and lets them resolve it — rather than dumping a generic empty dashboard on a brand-new user. See [Introduction](../00-introduction.md#the-decision--action-loop) for the full loop this pattern generalizes into.
+
 ### Registration & Login
 
 - **What it does:** Homeowners and providers create an account with email/password, verify their email, and sign in. Providers use a parallel signup path (see the Provider subsection below) but share the same underlying auth endpoints.

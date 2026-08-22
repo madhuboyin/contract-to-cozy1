@@ -2,7 +2,7 @@
 
 # Admin, Analytics & Platform Operations
 
-C2C runs a dedicated internal console for the `ADMIN` role — roughly two dozen `admin*.routes.ts` files behind a shared authentication/MFA/role gate plus a fine-grained, per-user **capability** system, backed by a matching Next.js console under `/dashboard/admin/*` and a few sibling top-level routes (`/dashboard/analytics-admin`, `/dashboard/worker-jobs`). This page covers that console end to end, the platform's background job/queue system (BullMQ via `apps/workers`), the multi-channel notification pipeline, and the Home Gazette module — which turned out, on reading the code, to be almost entirely retired.
+Unlike the other feature-guide pages, this cluster isn't a homeowner-facing job — it's the governance and trust infrastructure that makes the rest of the product's decision & action loop safe to run at scale: kill-switches on AI/automation, capability-gated access, an audit trail, and the background job system that actually executes ingestion/matching/delivery work behind Home Event Radar, recalls, notifications, and more. C2C runs a dedicated internal console for the `ADMIN` role — roughly two dozen `admin*.routes.ts` files behind a shared authentication/MFA/role gate plus a fine-grained, per-user **capability** system, backed by a matching Next.js console under `/dashboard/admin/*` and a few sibling top-level routes (`/dashboard/analytics-admin`, `/dashboard/worker-jobs`). This page covers that console end to end, the platform's background job/queue system (BullMQ via `apps/workers`), the multi-channel notification pipeline, and the Home Gazette module — which turned out, on reading the code, to be almost entirely retired.
 
 ## Access control model (applies to nearly every section below)
 

@@ -1,12 +1,23 @@
 # Contract to Cozy — Wiki
 
-A ground-truth reference for the Contract to Cozy (C2C) platform: what it does, who uses it, and how it's built. Every feature page was written by reading the current backend routes/controllers/services and frontend pages/components directly — not by trusting the large pile of historical planning docs in `docs/functional/` and `docs/product/`, which are often stale, superseded, or aspirational relative to what's actually shipped. Where a page notes something as "planned" or "not confirmed live," that means the code path couldn't be found wired into a real route, job, or UI.
+> **Contract to Cozy (C2C) is a homeowner decision and action platform that continuously understands the home, identifies what matters, explains what to do, and helps the homeowner execute it.**
+
+It exists for homeowners who don't want to check a dozen separate systems to know what their house needs. C2C does that for them: it builds context on the home, watches for what matters (maintenance, recalls, weather, coverage gaps, savings, deadlines), explains why something matters and what to do about it, and helps them act — whether that's doing nothing yet, doing it themselves, or booking a provider. It does this for three recurring jobs: **daily attention** ("what needs me right now"), **decisions** ("help me choose," whenever one comes up), and **life events** (buying, selling, moving, renovating, refinancing). One repeating loop threads all of it together:
+
+```
+UNDERSTAND the home → IDENTIFY what matters → PRIORITIZE it → EXPLAIN why
+    → RECOMMEND/DECIDE what to do → EXECUTE it → RECORD what happened → understand better next time
+```
+
+The feature clusters below (inventory, insurance, the provider marketplace, weather radar, life-event workspaces, and the rest) are each a slice of that one loop, not standalone products — see **[Introduction](00-introduction.md)** for the full three-jobs/loop breakdown and a map of which cluster plays which role. Provider bookings, in particular, are **one execution path among several** (do nothing / monitor / DIY / contact a third party / book a provider) — not the product's center.
+
+This is also a ground-truth technical reference: every feature page was written by reading the current backend routes/controllers/services and frontend pages/components directly — not by trusting the large pile of historical planning docs in `docs/functional/` and `docs/product/`, which are often stale, superseded, or aspirational relative to what's actually shipped. Where a page notes something as "planned" or "not confirmed live," that means the code path couldn't be found wired into a real route, job, or UI.
 
 Read it roughly in order: orientation first, then the feature clusters in the sequence a homeowner actually encounters them.
 
 ## Orientation
 
-1. **[Introduction](00-introduction.md)** — what C2C is, who uses it (Homeowner / Provider / Admin), and the product's core pillars.
+1. **[Introduction](00-introduction.md)** — the canonical product definition, the three homeowner jobs, the decision & action loop, who uses C2C (Homeowner / Provider / Admin), and how the capability clusters map onto the loop.
 2. **[Getting Started](01-getting-started.md)** — environment setup, running the app locally (Docker or standalone), database/Prisma workflow, seeded test users, tests, lint, and deployment commands.
 3. **[Architecture & Data Model](02-architecture-and-data-model.md)** — monorepo layout, backend (Express) and frontend (Next.js) architecture, the BullMQ workers system, the Prisma data model grouped into ~18 domains, authentication/authorization, and deployment topology (Raspberry Pi k3s).
 

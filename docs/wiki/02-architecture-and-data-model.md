@@ -3,6 +3,8 @@
 # Architecture & Data Model
 
 > Everything below was verified against the code at the time of writing (routes counted with `ls`, models counted with `grep '^model ' prisma/schema.prisma`, etc.), not against `docs/functional/` or `docs/product/`, which are historical planning docs and drift from what's actually implemented. Two concrete drifts found: `apps/CLAUDE.md` says "52 route files / 30+ models" — the real numbers are **127 route files** and **505 Prisma models**. Read counts here as current, not the docs that state otherwise.
+>
+> This page is pure implementation — how the code is organized, not what the product is for. See [Introduction](00-introduction.md) for the canonical product definition and the decision & action loop that the routes/services/jobs below actually implement.
 
 ## 1. Monorepo Layout
 
