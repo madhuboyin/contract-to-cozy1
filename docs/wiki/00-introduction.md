@@ -8,9 +8,12 @@ Contract to Cozy (C2C) is a property management platform that connects homeowner
 
 ## Who uses it
 
+There are three system login roles (`UserRole`: `HOMEOWNER` / `PROVIDER` / `ADMIN`). "Buyer" is **not** a fourth role — it's a `HOMEOWNER` account whose property is in a buying/purchase context, unlocking a distinct set of buyer-side tools. It's called out as its own row below because it's a large enough journey to be a first-class concept in the product, even though technically it's a sub-category of `HOMEOWNER`.
+
 | Role | What they do |
 |---|---|
-| **HOMEOWNER** | Sets up a property profile, tracks inventory/maintenance, gets AI guidance and risk/coverage insights, books services, and manages life events (selling, buying, moving). |
+| **HOMEOWNER** (owner) | Sets up a property profile, tracks inventory/maintenance, gets AI guidance and risk/coverage insights, books services, and manages life events (selling, moving). |
+| **HOMEOWNER → Buyer** | Same `HOMEOWNER` role, in a buying/closing context: home-buyer task tracking, closing-plan checklist, buyer-side inspection negotiation, and mortgage tools. See [Sale, Buyer & Life Transitions](features/07-sale-buyer-and-life-transitions.md). |
 | **PROVIDER** | Registers a service business, manages credentials and service offerings, and fulfills bookings from homeowners. |
 | **ADMIN** | Operates the platform internally — user/provider support, content moderation, analytics, background job monitoring, and platform configuration. |
 
