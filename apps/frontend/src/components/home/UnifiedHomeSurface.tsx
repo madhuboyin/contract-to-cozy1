@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
+import { PersonalizedReadOnlySuggestions } from '@/components/personalization/PersonalizedReadOnlySuggestions';
 import type {
   HomeActionCommand,
   HomeFirstValueInsightDTO,
@@ -1368,6 +1369,22 @@ export function UnifiedHomeSurface({
       <HomeEventRadarTopMatchCard propertyId={propertyId} />
 
       <LocalUpdatesSection propertyId={propertyId} />
+
+      {/*
+        Personalization Engine Phase 2's "Dashboard consumer" was audited
+        Complete (docs/personalization/phase2-implementation-audit.md) but
+        went dark in the same Slice 9 refactor as LocalUpdatesCarousel above
+        — restored here. docs/personalization/07-frontend-experience.md
+        warns against "competing ranks" with the existing attention.actions
+        feed above; the current catalog (HVAC filter, smoke/CO battery,
+        dryer vent, smoke detector, roof age) doesn't overlap with it today,
+        but re-check for duplication if attention.actions' sources expand.
+      */}
+      <PersonalizedReadOnlySuggestions
+        propertyId={propertyId}
+        module="DASHBOARD"
+        title="Suggested for your home"
+      />
 
       {home.decisions.length === 0 && !home.activeMajorMoment ? (
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">

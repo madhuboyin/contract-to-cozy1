@@ -26,6 +26,7 @@ import {
 import { DashboardShell } from "@/components/DashboardShell";
 import { api } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
+import { PersonalizedReadOnlySuggestions } from "@/components/personalization/PersonalizedReadOnlySuggestions";
 import { navigateBackWithDashboardFallback } from "@/lib/navigation/backNavigation";
 import { anchorForHealthFactor, propertyEditHref } from "@/lib/property/editPageAnchors";
 
@@ -1981,6 +1982,12 @@ export default function HealthInsightFocusPage() {
             </Link>
           )}
         </div>
+
+        <PersonalizedReadOnlySuggestions
+          propertyId={propertyId}
+          module="HEALTH"
+          title="More ways to improve this home"
+        />
 
         <p className="text-xs text-slate-400 text-center px-2">
           {propertyName} · Health factor: {displayName}
