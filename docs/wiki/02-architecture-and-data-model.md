@@ -2,7 +2,7 @@
 
 # Architecture & Data Model
 
-> Everything below was verified against the code at the time of writing (routes counted with `ls`, models counted with `grep '^model ' prisma/schema.prisma`, etc.), not against `docs/functional/` or `docs/product/`, which are historical planning docs and drift from what's actually implemented. Two concrete drifts found: `apps/CLAUDE.md` says "52 route files / 30+ models" — the real numbers are **127 route files** and **505 Prisma models**. Read counts here as current, not the docs that state otherwise.
+> Everything below was verified against the code at the time of writing (routes counted with `ls`, models counted with `grep '^model ' prisma/schema.prisma`, etc.), not against `docs/functional/` or `docs/product/`, which are historical planning docs and drift from what's actually implemented. Two concrete drifts found: `apps/CLAUDE.md` says "52 route files / 30+ models" — the real numbers are **~126 route files** and **505 Prisma models**. Read counts here as current, not the docs that state otherwise. (**Self-correction:** this page previously said "127 route files" here, and "127 routes / 298 services / Next.js 14" again in the file-tree diagram and Frontend Architecture section below, even after the Scale/Frontend sections further down were corrected to 126/256/575/^16.2.6 — the same stale numbers were fixed in one place but not all three. Treat the counts in §"Scale" below as authoritative; this line and the diagram are now aligned to match.)
 >
 > This page is pure implementation — how the code is organized, not what the product is for. See [Introduction](00-introduction.md) for the canonical product definition and the decision & action loop that the routes/services/jobs below actually implement.
 
@@ -15,9 +15,9 @@ contract-to-cozy/
 ├── apps/
 │   ├── backend/        # Express REST API (port 8080)
 │   │   ├── src/
-│   │   │   ├── routes/        (127 files)
+│   │   │   ├── routes/        (~126 files)
 │   │   │   ├── controllers/   (105 files)
-│   │   │   ├── services/      (298 files)
+│   │   │   ├── services/      (256 top-level, 575 counting subdirectories — see "Scale" below)
 │   │   │   ├── middleware/    (17 files)
 │   │   │   ├── modules/gazette/   # self-contained module pattern
 │   │   │   └── community/, sellerPrep/, localUpdates/, homeRenovationAdvisor/,
@@ -25,7 +25,7 @@ contract-to-cozy/
 │   │   │       propertyBrief/, homeBriefing/, productFramework/,
 │   │   │       propertyChanges/, feedback/   # colocated feature directories
 │   │   └── prisma/schema.prisma   # 505 models, ~23k lines
-│   ├── frontend/       # Next.js 14 App Router (port 3000)
+│   ├── frontend/       # Next.js ^16.2.6 App Router (port 3000)
 │   ├── workers/        # BullMQ job processors + cron + pollers
 │   └── ios/            # native iOS client
 ├── infrastructure/     # Docker, Kubernetes (k3s), Terraform, Ansible
@@ -66,7 +66,7 @@ Instead of routes/controllers/services being split across the three top-level fl
 
 ### Scale
 - **126 route files** in `src/routes/` alone (plus the colocated directories above) — this count has drifted by one file since the wiki was first written; treat it as approximate and re-count (`find src/routes -name '*.ts' | wc -l`) if precision matters.
-- **105 controllers**. Services are **256 files directly under `src/services/`**, or **575 files counting the 42 subdirectories underneath it** (`find src/services -name '*.ts' | wc -l`) — a prior version of this page said "298," which matches neither count precisely and appears stale. Use 256 for "how many top-level service modules," 575 for "how much service-layer code total."
+- **105 controllers**. Services are **256 files directly under `src/services/`**, or **575 files counting everything underneath it** (`find src/services -name '*.ts' | wc -l`) — a prior version of this page said "298," which matches neither count precisely and appears stale. `src/services/` has **42 immediate subdirectories** (`find src/services -maxdepth 1 -type d`), but several of those nest further subdirectories of their own — the full tree is **63 directories total** (`find src/services -type d | wc -l`, minus the root itself). A prior version of this line said "42 subdirectories" without that distinction; both numbers are real, they're just answering "how many top-level groupings" vs. "how deep does the tree actually go." Use 256 for "how many top-level service modules," 575 for "how much service-layer code total."
 - Key API prefixes actually mounted with a dedicated prefix: `/api/auth` (+ `/api/auth/mfa`), `/api/providers`, `/api/bookings`, `/api/vault`, `/api/weather`, `/api/environment`, `/api/properties`, `/api/users`, `/api/checklist`, `/api/risk`, `/api/gemini`, `/api/inventory` (mounted generically), `/api/documents`, `/api/oracle`, `/api/budget`, `/api/climate`. The large majority of feature routers, though, mount at the bare `/api` and define their own paths (e.g. `homeActionsRoutes`, `guidanceRoutes`, dozens of `admin*Routes`) — there is no one-to-one prefix-per-feature convention beyond the earliest features.
 
 ## 3. Frontend Architecture
@@ -144,7 +144,7 @@ Enums worth knowing: `UserRole` (`HOMEOWNER` / `PROVIDER` / `ADMIN`), `UserStatu
 
 Production targets a **Raspberry Pi ARM64 k3s cluster** — confirmed by the dedicated `overlays/raspberry-pi` Kustomize overlay and by the backend Dockerfile itself, which pins a multi-arch `node:22-bookworm-slim` base (Debian/glibc, not Alpine) specifically because Alpine's musl libc previously truncated the generated Prisma client and mismatched the ARM64 native engine. The backend image is a multi-stage build: `deps` (prod-only npm install, plus build-time sanity checks on the Gemini SDK's CommonJS export and the Prisma WASM schema-builder), `prisma-gen` (isolated `prisma generate`, schema-only), `builder` (TypeScript compile), then a slim runtime stage.
 
-From repo root: `make build` (x86 images), `make build-arm` (ARM64 for the Pi), `make deploy-pi` (deploy to the Pi k3s cluster). See the root `CLAUDE.md` for the full command list. This page is a pointer, not an ops runbook — consult `infrastructure/kubernetes/overlays/raspberry-pi` and the Ansible playbooks directly for cluster specifics.
+From repo root: `make build` (x86 images), `make build-arm` (ARM64 for the Pi), `make deploy-pi` (deploy to the Pi k3s cluster). **Correction: `make build` and `make build-arm` are currently broken** (wrong Docker build context — see [Getting Started](01-getting-started.md#docker-images--deployment) for the confirmed working command and why); this page previously presented them as working without that caveat, inconsistent with Getting Started's own correction. See the root `CLAUDE.md` for the full command list. This page is a pointer, not an ops runbook — consult `infrastructure/kubernetes/overlays/raspberry-pi` and the Ansible playbooks directly for cluster specifics.
 
 ## 8. Key Environment Variables
 
@@ -160,7 +160,7 @@ From repo root: `make build` (x86 images), `make build-arm` (ARM64 for the Pi), 
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist — required to boot in production |
 | `SWAGGER_PASSWORD` / `METRICS_BEARER_TOKEN` | Gate `/api/docs` and `/metrics` |
 
-`DATABASE_URL`, `REDIS_HOST`/`REDIS_PORT`, and `NEXT_PUBLIC_API_URL` are not developer-set — Docker Compose hardcodes/derives them (see `docker-compose.yml`). Generate secrets with `openssl rand -hex 32`. Copy `.env.local.example` → `.env.local` at repo root; Docker Compose reads it directly.
+`DATABASE_URL`, `REDIS_HOST`/`REDIS_PORT`, and `NEXT_PUBLIC_API_URL` aren't developer-set for the Docker Compose path described in this wiki — Compose hardcodes/derives them (see `docker-compose.yml`). **Caveat: this is narrower than "not developer-set" implies.** `client.ts` falls back to `NEXT_PUBLIC_API_URL || 'http://localhost:8080'` — fine by default — but a developer running the frontend standalone (`cd apps/frontend && npm run dev`, per [Getting Started](01-getting-started.md#running-services-individually-without-docker)) against a backend on a different host or port, or building for a non-default deployment target, does need to set this themselves; `NEXT_PUBLIC_*` values are baked in at build/dev-server-start time, not injected by Compose in that path. Generate secrets with `openssl rand -hex 32`. Copy `.env.local.example` → `.env.local` at repo root; Docker Compose reads it directly.
 
 ## Related pages
 

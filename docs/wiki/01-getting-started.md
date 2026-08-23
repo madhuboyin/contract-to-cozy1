@@ -26,7 +26,7 @@ Copy `.env.local.example` → `.env.local` at the repo root and fill in secrets 
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist (defaults to `http://localhost:3000` in dev) |
 | `METRICS_BEARER_TOKEN` / `SWAGGER_PASSWORD` | Optional: gate `/metrics` and `/api/docs` |
 
-`DATABASE_URL`, `REDIS_HOST`/`REDIS_PORT`, and `NEXT_PUBLIC_API_URL` are **not** developer-set values — Docker Compose hardcodes/derives them (`DATABASE_URL` is built from `POSTGRES_PASSWORD`; see `docker-compose.yml`). There is no `NEXT_PUBLIC_GEMINI_API_KEY` anywhere in this codebase — Gemini is called server-side only; a prior version of this table listed one, which was wrong.
+`DATABASE_URL`, `REDIS_HOST`/`REDIS_PORT`, and `NEXT_PUBLIC_API_URL` aren't developer-set for the Docker Compose path this page walks through — Compose hardcodes/derives them (`DATABASE_URL` is built from `POSTGRES_PASSWORD`; see `docker-compose.yml`). **Caveat:** that's narrower than "not developer-set" — `NEXT_PUBLIC_API_URL` falls back to `http://localhost:8080` if unset (`client.ts`), which is fine by default, but if you run the frontend standalone (see "Running services individually" below) against a backend on a different host/port, you do need to set it yourself in `.env.local`; `NEXT_PUBLIC_*` values are baked in at build/dev-start time, not injected by Compose in that path. There is no `NEXT_PUBLIC_GEMINI_API_KEY` anywhere in this codebase — Gemini is called server-side only; a prior version of this table listed one, which was wrong.
 
 ## Running everything with Docker (recommended)
 
@@ -115,7 +115,10 @@ make build-arm     # Build ARM64 images (production runs on a Raspberry Pi k3s c
 make deploy-pi     # Deploy to the Raspberry Pi k3s cluster
 ```
 
-**Correction — `make build` and `make build-arm` are currently broken:** both run `docker build ... ./apps/frontend` and `./apps/backend` with no `-f` flag, which makes Docker look for a Dockerfile at `apps/frontend/Dockerfile` / `apps/backend/Dockerfile` — neither exists. The real Dockerfiles live at `infrastructure/docker/{frontend,backend,workers}/Dockerfile`. Until the `Makefile` is fixed to point `-f` at those paths (or the targets are otherwise updated), build images directly, e.g. `docker build -f infrastructure/docker/backend/Dockerfile .`
+**Correction — `make build` and `make build-arm` are currently broken:** both run `docker build ... ./apps/frontend` and `./apps/backend` with no `-f` flag, which makes Docker look for a Dockerfile at `apps/frontend/Dockerfile` / `apps/backend/Dockerfile` — neither exists. The real Dockerfiles live at `infrastructure/docker/{frontend,backend,workers}/Dockerfile`. **A previous version of this note suggested `docker build -f infrastructure/docker/backend/Dockerfile .` — that's also wrong**, and for the same class of reason (untested command, not read against the actual Dockerfile): building with `.` as context puts the repo root there, but the backend Dockerfile's `COPY package*.json ./`, `COPY src ./src`, and `COPY prisma ./prisma` (confirmed by reading it) all expect `package.json`, `src/`, and `prisma/` at the top of the build context — i.e. the context must be `apps/backend`, not the repo root. The correct command is:
+```bash
+docker build -f infrastructure/docker/backend/Dockerfile apps/backend
+```
 
 See **[Architecture & Data Model](02-architecture-and-data-model.md)** for how these pieces fit together, and the `features/` pages for what each part of the product actually does.
 
