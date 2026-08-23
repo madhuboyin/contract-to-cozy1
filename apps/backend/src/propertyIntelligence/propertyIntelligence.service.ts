@@ -355,6 +355,15 @@ async function matchProperties(
     });
     const homeownerRelevant = match.matchConfidence >= 0.65
       && !['CANCELLED', 'STALE'].includes(observation.lifecycleStatus);
+    // KNOWN GAP (FRD §15 Phase 2 work item 5): every other emitPropertyChange
+    // call site requests an intelligence recompute post-commit via
+    // requestRecomputeForChange (propertyChange.service.ts); this one
+    // (external-source batch ingestion, matchProperties/ingestIntelligenceBatch)
+    // does not yet, because it emits inside an external tx this function
+    // doesn't own the commit boundary of, across a batch of properties —
+    // wiring it correctly needs matchProperties to surface its emitted
+    // changes back to ingestIntelligenceBatch for a real post-commit call,
+    // not a quick addition here. Documented rather than silently missing.
     await emitPropertyChangeWithTransaction(tx, {
       propertyId: property.id,
       sourceType: 'INTELLIGENCE_OBSERVATION',

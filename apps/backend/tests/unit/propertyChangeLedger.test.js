@@ -14,6 +14,7 @@ const {
 } = require('../../src/propertyChanges/propertyChangePolicy.ts');
 const {
   buildPropertyChangeDeduplicationKey,
+  requestRecomputeForChange,
 } = require('../../src/propertyChanges/propertyChange.service.ts');
 
 const backendRoot = path.resolve(__dirname, '../..');
@@ -194,4 +195,44 @@ test('canonical domain events reference their source row without copying payload
   assert.match(producer, /sourceRevisionOrdinal: event\.attempts \* 10 \+ statusOrdinal/);
   assert.doesNotMatch(producer, /payload:/);
   assert.match(producer, /DOMAIN_EVENT_PROPERTY_SCOPE_REQUIRED/);
+});
+
+// FRD §15 Phase 2 work item 5 — requestRecomputeForChange is the mapping
+// from a PropertyChange's changeType to an IntelligenceRecomputeTriggerType,
+// called post-commit from emitPropertyChange. Tested here in isolation with
+// an injected requestRecompute stub (no live DB / DomainEvent write needed),
+// matching this file's existing pure-function testing boundary.
+test('requestRecomputeForChange maps every PropertyChangeType to its IntelligenceRecomputeTriggerType', async () => {
+  const cases = [
+    ['SOURCE_RECORD_CREATED', 'SOURCE_RECORD_CHANGED'],
+    ['SOURCE_RECORD_REVISED', 'SOURCE_RECORD_CHANGED'],
+    ['SOURCE_LIFECYCLE_CHANGED', 'SOURCE_RECORD_CHANGED'],
+    ['PROPERTY_FACT_CHANGED', 'PROPERTY_FACT_CHANGED'],
+    ['ACTION_STATE_CHANGED', 'ACTION_STATE_CHANGED'],
+    ['OUTCOME_CONFIRMED', 'OUTCOME_RECORDED'],
+    ['SOURCE_HEALTH_CHANGED', 'SOURCE_HEALTH_CHANGED'],
+  ];
+  for (const [changeType, expectedTriggerType] of cases) {
+    let received = null;
+    await requestRecomputeForChange(
+      { propertyId: 'prop-1', sourceType: 'HOME_EVENT', sourceEntityId: 'evt-1', changeType },
+      async (input) => { received = input; },
+    );
+    assert.equal(received.triggerType, expectedTriggerType, `${changeType} -> ${expectedTriggerType}`);
+    assert.equal(received.propertyId, 'prop-1');
+    assert.equal(received.triggerEntityType, 'HOME_EVENT');
+    assert.equal(received.triggerEntityId, 'evt-1');
+  }
+});
+
+test('requestRecomputeForChange swallows a requestRecompute failure rather than throwing', async () => {
+  await assert.doesNotReject(requestRecomputeForChange(
+    { propertyId: 'prop-1', sourceType: 'HOME_EVENT', sourceEntityId: 'evt-1', changeType: 'PROPERTY_FACT_CHANGED' },
+    async () => { throw new Error('boom'); },
+  ));
+});
+
+test('emitPropertyChange requests a recompute post-commit only for a genuinely new (non-deduped) change', () => {
+  const service = read('src/propertyChanges/propertyChange.service.ts');
+  assert.match(service, /if \(!result\.deduped\) await requestRecomputeForChange\(result\.change\);/);
 });

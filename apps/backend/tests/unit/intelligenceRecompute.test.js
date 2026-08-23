@@ -246,6 +246,23 @@ test('materializeTargets creates one PROPERTY target for a STATIC consumer and o
   assert.deepEqual(dynamicTargets.map((t) => t.targetKey).sort(), ['Snapshot:1', 'Snapshot:2']);
 });
 
+test('materializeTargets passes triggerEntityType/triggerEntityId through to a DYNAMIC consumer\'s resolveTargets', async () => {
+  const db = makeFakeDb();
+  const run = await createOrClaimRecomputeRun(db, trigger());
+  let received = null;
+  const consumer = dynamicConsumer({
+    resolveTargets: async (input) => { received = input; return []; },
+  });
+  await materializeTargets(
+    db,
+    { id: run.id, propertyId: run.propertyId, changedFactKeys: ['fact.a'], triggerEntityType: 'Incident', triggerEntityId: 'incident-9' },
+    [consumer],
+  );
+  assert.equal(received.triggerEntityType, 'Incident');
+  assert.equal(received.triggerEntityId, 'incident-9');
+  assert.deepEqual(received.changedFactKeys, ['fact.a']);
+});
+
 test('materializeTargets is idempotent — re-materializing the same run/consumer/target does not duplicate or reset', async () => {
   const db = makeFakeDb();
   const run = await createOrClaimRecomputeRun(db, trigger());
@@ -362,6 +379,15 @@ test('processRecomputeRequestedEvent: happy path resolves consumers, materialize
   const targets = await db.intelligenceRecomputeTarget.findMany({ where: { recomputeRunId: run.id } });
   assert.equal(targets.length, 1);
   assert.equal(targets[0].status, 'SUCCEEDED');
+});
+
+test('processRecomputeRequestedEvent: a consumer that only declares relevantSourceEntityTypes is matched via the trigger\'s own entity type', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  const registry = [staticConsumer({ consumerKey: 'entity-type-only', relevantFactKeys: [], relevantSourceEntityTypes: ['Incident'] })];
+  const run = await processRecomputeRequestedEvent(db, trigger({ triggerEntityType: 'Incident', changedFactKeys: ['unrelated.fact'] }), registry, emit);
+  const targets = await db.intelligenceRecomputeTarget.findMany({ where: { recomputeRunId: run.id } });
+  assert.equal(targets.length, 1, 'relevantSourceEntityTypes-only consumer must be selected once triggerEntityType is threaded into resolveApplicableConsumers');
 });
 
 test('processRecomputeRequestedEvent: a trigger matching zero consumers still produces a SUCCEEDED run with zero targets', async () => {

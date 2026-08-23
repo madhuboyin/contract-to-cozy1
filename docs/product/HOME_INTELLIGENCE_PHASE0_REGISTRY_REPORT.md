@@ -18,7 +18,7 @@ Phase 0 ships six registries under `apps/backend/src/services/intelligence/`, ea
 | Home Action adapter ownership (source-kind rollup) | `homeActionAdapterOwnership.ts` | Yes — derived from the producer registry |
 | Capability/skill/guidance bridge | `capabilitySkillGuidanceBridge.registry.ts` | Yes — 33 capabilities bridged; 0 of 23 sourceKinds-claiming capabilities uncovered |
 | Completion evidence policy | `completionEvidencePolicy.registry.ts` | Yes — 4/4 safety tiers |
-| Intelligence consumer registry | `intelligenceConsumerRegistry.ts` | Empty by design — Phase 2 populates it |
+| Intelligence consumer registry | `intelligenceConsumerRegistry.ts` | Populated — 5 entries |
 | Compound rule registry | `compoundRuleRegistry.contract.ts` | Empty by design — Phase 5 populates it |
 
 The last two are contract-only: nothing in the codebase yet invokes recompute handlers or compound rules, so populating them now would be dead code (see each file's header comment).

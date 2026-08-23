@@ -134,7 +134,7 @@ export async function createOrClaimRecomputeRun(db: RecomputeDb, trigger: Recomp
  */
 export async function materializeTargets(
   db: RecomputeDb,
-  run: { id: string; propertyId: string; changedFactKeys: readonly string[] },
+  run: { id: string; propertyId: string; changedFactKeys: readonly string[]; triggerEntityType: string; triggerEntityId: string },
   consumers: readonly IntelligenceConsumerDefinition[],
 ): Promise<MaterializedTarget[]> {
   const result: MaterializedTarget[] = [];
@@ -142,7 +142,12 @@ export async function materializeTargets(
     const handles: IntelligenceRecomputeTargetHandle[] =
       consumer.resolutionMode === 'STATIC'
         ? [{ targetKey: 'PROPERTY', targetType: null, targetId: null, targetVersion: null }]
-        : await consumer.resolveTargets!({ propertyId: run.propertyId, changedFactKeys: run.changedFactKeys });
+        : await consumer.resolveTargets!({
+            propertyId: run.propertyId,
+            changedFactKeys: run.changedFactKeys,
+            triggerEntityType: run.triggerEntityType,
+            triggerEntityId: run.triggerEntityId,
+          });
     for (const handle of handles) {
       const target = await db.intelligenceRecomputeTarget.upsert({
         where: {
@@ -344,10 +349,22 @@ export async function processRecomputeRequestedEvent(
   const consumers = resolveApplicableConsumers(registry, {
     triggerType: trigger.triggerType,
     changedFactKeys: trigger.changedFactKeys,
+    // Previously omitted, which made every registry entry's
+    // relevantSourceEntityTypes dead code — no consumer could ever match on
+    // it since this was never populated. Fixed alongside the first real
+    // consumers that rely on entity-type matching rather than enumerating
+    // every possible changed field as a factKey.
+    sourceEntityTypes: [trigger.triggerEntityType],
   });
   const targets = await materializeTargets(
     db,
-    { id: run.id, propertyId: run.propertyId, changedFactKeys: trigger.changedFactKeys },
+    {
+      id: run.id,
+      propertyId: run.propertyId,
+      changedFactKeys: trigger.changedFactKeys,
+      triggerEntityType: trigger.triggerEntityType,
+      triggerEntityId: trigger.triggerEntityId,
+    },
     consumers,
   );
 

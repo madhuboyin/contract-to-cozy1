@@ -35,8 +35,22 @@ export interface IntelligenceConsumerDefinition {
   timeoutMs: number;
   retryPolicy: { maxAttempts: number; backoffMs: number };
   failureBehavior: IntelligenceRecomputeFailureBehavior;
-  /** Required (and only meaningful) for DYNAMIC consumers. */
-  resolveTargets?: (input: { propertyId: string; changedFactKeys: readonly string[] }) => Promise<IntelligenceRecomputeTargetHandle[]>;
+  /**
+   * Required (and only meaningful) for DYNAMIC consumers. triggerEntityType/
+   * triggerEntityId identify the single record that changed and triggered
+   * this run (e.g. a fact-reference containment query needs to know WHICH
+   * entity changed, not just which fact keys) — added alongside the first
+   * real DYNAMIC consumer (Phase 2 work item 4's Recommendation Snapshot
+   * consumer); prior to that this input only carried changedFactKeys, which
+   * is enough for STATIC consumers and simple key-matching but not for a
+   * resolver that queries by entity identity.
+   */
+  resolveTargets?: (input: {
+    propertyId: string;
+    changedFactKeys: readonly string[];
+    triggerEntityType: string;
+    triggerEntityId: string;
+  }) => Promise<IntelligenceRecomputeTargetHandle[]>;
   recompute: (input: { propertyId: string; target: IntelligenceRecomputeTargetHandle }) => Promise<void>;
 }
 

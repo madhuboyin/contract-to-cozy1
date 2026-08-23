@@ -10,6 +10,8 @@ const {
   CAPABILITY_SKILL_GUIDANCE_BRIDGE,
   COMPLETION_EVIDENCE_POLICY,
   validateCompletionEvidencePolicy,
+  INTELLIGENCE_CONSUMER_REGISTRY,
+  validateIntelligenceConsumerRegistry,
 } = require('../../src/services/intelligence/index.ts');
 const { HOME_ACTION_SOURCE_KINDS } = require('../../src/productFramework/homeAction.contract.ts');
 const { RECOMMENDATION_SAFETY_TIERS } = require('../../src/productFramework/recommendationGovernance.contract.ts');
@@ -26,6 +28,48 @@ test('every HomeAction source kind has exactly one declared adapter-ownership en
 test('every recommendation safety tier has exactly one declared completion evidence policy', () => {
   const tiers = COMPLETION_EVIDENCE_POLICY.map((entry) => entry.safetyTier).sort();
   assert.deepEqual(tiers, [...RECOMMENDATION_SAFETY_TIERS].sort());
+});
+
+// FRD §15 Phase 2 work item 4 — 5 of the 10 "initial high-value consumers"
+// are registered for real this pass; the other 5 are deliberately deferred
+// (see intelligenceConsumerRegistry.ts's header) rather than stubbed.
+test('the intelligence consumer registry has exactly the 5 consumers registered this pass, each with a real recompute handler', () => {
+  const keys = INTELLIGENCE_CONSUMER_REGISTRY.map((entry) => entry.consumerKey).sort();
+  assert.deepEqual(keys, [
+    'compound-radar',
+    'maintenance-prediction',
+    'personalization',
+    'recommendation-snapshots',
+    'risk-assessment',
+  ]);
+  for (const entry of INTELLIGENCE_CONSUMER_REGISTRY) {
+    assert.equal(typeof entry.recompute, 'function', `${entry.consumerKey} must declare a recompute handler`);
+  }
+});
+
+test('the one DYNAMIC consumer (recommendation-snapshots) declares a resolveTargets resolver; every STATIC consumer does not', () => {
+  for (const entry of INTELLIGENCE_CONSUMER_REGISTRY) {
+    if (entry.consumerKey === 'recommendation-snapshots') {
+      assert.equal(entry.resolutionMode, 'DYNAMIC');
+      assert.equal(typeof entry.resolveTargets, 'function');
+    } else {
+      assert.equal(entry.resolutionMode, 'STATIC');
+      assert.equal(entry.resolveTargets, undefined);
+    }
+  }
+});
+
+test('validateIntelligenceConsumerRegistry fails fast on a duplicate consumerKey', () => {
+  const dup = [...INTELLIGENCE_CONSUMER_REGISTRY, INTELLIGENCE_CONSUMER_REGISTRY[0]];
+  const issues = validateIntelligenceConsumerRegistry(dup);
+  assert.ok(issues.some((issue) => issue.includes('Duplicate intelligenceConsumerRegistry entry')));
+});
+
+test('validateIntelligenceConsumerRegistry fails fast on a STATIC consumer that declares resolveTargets', () => {
+  const bad = INTELLIGENCE_CONSUMER_REGISTRY.map((entry) =>
+    entry.consumerKey === 'risk-assessment' ? { ...entry, resolveTargets: async () => [] } : entry);
+  const issues = validateIntelligenceConsumerRegistry(bad);
+  assert.ok(issues.some((issue) => issue.includes('risk-assessment') && issue.includes('STATIC but declares a resolveTargets resolver')));
 });
 
 test('the capability/skill/guidance bridge is non-empty and every entry declares an execution owner', () => {

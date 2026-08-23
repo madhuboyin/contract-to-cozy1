@@ -3,14 +3,17 @@ import {
   Prisma,
   PropertyChangeBriefingEligibility,
   PropertyChangeType,
+  type IntelligenceRecomputeTriggerType,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import type { PropertyChangeEmissionInput } from './propertyChange.contracts';
 import {
   deriveBriefingEligibility,
   derivePropertyChangeMateriality,
 } from './propertyChangePolicy';
+import { requestRecompute } from '../services/intelligenceRecompute/intelligenceRecompute.service';
 
 type ChangeTransaction = Prisma.TransactionClient;
 
@@ -207,9 +210,54 @@ export async function emitPropertyChangeWithTransaction(
   return { change, deduped: false };
 }
 
-export function emitPropertyChange(input: PropertyChangeEmissionInput) {
-  return prisma.$transaction((tx) =>
+// FRD §15 Phase 2 work item 5 — PropertyChange's own changeType enum
+// (propertyChange.contracts.ts) already lines up almost 1:1 with
+// IntelligenceRecomputeTriggerType, so a real PropertyChange is the single
+// best trigger choke point for "property-fact changes, source-record
+// revisions, action-state changes, [and] source-health changes" (HI-REC-002)
+// rather than instrumenting every canonical write site individually.
+// SOURCE_LIFECYCLE_CHANGED has no distinct recompute trigger type of its
+// own; a lifecycle transition is treated as a source-record change.
+const PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER: Record<PropertyChangeType, IntelligenceRecomputeTriggerType> = {
+  SOURCE_RECORD_CREATED: 'SOURCE_RECORD_CHANGED',
+  SOURCE_RECORD_REVISED: 'SOURCE_RECORD_CHANGED',
+  SOURCE_LIFECYCLE_CHANGED: 'SOURCE_RECORD_CHANGED',
+  PROPERTY_FACT_CHANGED: 'PROPERTY_FACT_CHANGED',
+  ACTION_STATE_CHANGED: 'ACTION_STATE_CHANGED',
+  OUTCOME_CONFIRMED: 'OUTCOME_RECORDED',
+  SOURCE_HEALTH_CHANGED: 'SOURCE_HEALTH_CHANGED',
+};
+
+/**
+ * Best-effort: a recompute request is a downstream refresh signal, not part
+ * of the change record's own correctness — mirrors
+ * decisionPlatformChangeEmitter.ts's "never fails the caller's actual
+ * write" pattern. Only called for a genuinely new (non-deduped) change;
+ * requestRecompute's own idempotency key would converge a replay anyway,
+ * but skipping avoids the redundant DomainEvent lookup.
+ */
+export async function requestRecomputeForChange(
+  change: { propertyId: string; sourceType: string; sourceEntityId: string; changeType: PropertyChangeType },
+  requestRecomputeFn: typeof requestRecompute = requestRecompute,
+): Promise<void> {
+  try {
+    await requestRecomputeFn({
+      propertyId: change.propertyId,
+      triggerType: PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER[change.changeType],
+      triggerEntityType: change.sourceType,
+      triggerEntityId: change.sourceEntityId,
+      changedFactKeys: [],
+    });
+  } catch (err) {
+    logger.error({ err, propertyId: change.propertyId, sourceType: change.sourceType, sourceEntityId: change.sourceEntityId }, '[propertyChange.service] failed to request intelligence recompute');
+  }
+}
+
+export async function emitPropertyChange(input: PropertyChangeEmissionInput) {
+  const result = await prisma.$transaction((tx) =>
     emitPropertyChangeWithTransaction(tx, input));
+  if (!result.deduped) await requestRecomputeForChange(result.change);
+  return result;
 }
 
 export async function linkCanonicalActionToChange(input: {
