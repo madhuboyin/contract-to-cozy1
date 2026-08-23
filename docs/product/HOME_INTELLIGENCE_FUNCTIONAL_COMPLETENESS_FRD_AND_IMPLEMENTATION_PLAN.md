@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.2"
+version: "1.3"
 date: "August 23, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.2 |
+| Version | 1.3 |
 | Date | August 23, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -219,6 +219,25 @@ Every production source adapter shall declare source entity type, version, evide
 
 **HI-ATT-007 — No false completion**
 Sources without an authoritative completion adapter shall expose `ACKNOWLEDGE` or `REMOVE_FROM_HOME`, never `COMPLETE` or `ALREADY_DONE`.
+
+**HI-ATT-008 — Coverage-preserving Fix cutover**
+Fix shall not change read authority until every currently eligible Resolution Center action, decision insight, and execution item is represented by one canonical Home Action or Operational Work projection. A loader from an adjacent domain is not source parity when it reads different canonical records or applies different eligibility rules.
+
+The required initial source-parity mappings are:
+
+| Current Fix behavior | Current authoritative input | Required canonical representation |
+| --- | --- | --- |
+| Active incidents | `Incident` | Reuse the existing `INCIDENT` Home Action identity and lifecycle |
+| Overdue maintenance | `ChecklistItem` | `MAINTENANCE` Home Action linked to the ChecklistItem lifecycle owner |
+| Warranty renewal or expiry | `Warranty` | `COVERAGE` Home Action keyed to the Warranty record |
+| Insurance renewal or expiry | `InsurancePolicy` | `COVERAGE` Home Action keyed to the InsurancePolicy record |
+| Inventory coverage gap | canonical `detectCoverageGaps()` result | `COVERAGE` Home Action with a stable inventory-item gap key and detector-input version |
+| Property health insight | `Property.healthScore.insights` plus the concrete property/inventory context used by Fix | `SYSTEM` or domain-specific Home Action keyed by property and normalized health factor |
+| Active execution item | `Booking` | linked or reconciled Operational Work projection |
+| Repair/replace decision insight | `ReplaceRepairAnalysis` and related `GuidanceJourney` | canonical decision Home Action or linked decision detail without losing the ready insight |
+| Coverage decision insight | `CoverageAnalysis` plus detector result | canonical coverage Home Action or linked decision detail without losing the ready insight |
+
+Every mapping shall preserve the existing eligibility meaning, stable identity, source version, evidence, timing, CTA destination, governance, and allowed lifecycle commands. Fix may apply presentation grouping and result limits after canonical ranking, but it shall not retain independent source discovery, eligibility, scoring, or lifecycle ownership. Because there are no real users, the completed mappings shall be followed by one direct cutover; no partial cutover, feature flag, dual-read compatibility mode, staged rollout, or launch gate is required.
 
 ### 8.2 Dependency-aware recomputation
 
@@ -687,20 +706,33 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 ### Phase 1 — One attention authority across surfaces
 
-**Objective:** Home, Fix, Cozy, and notifications agree about what matters.
+**Objective:** Home, Fix, Cozy, and notifications agree about what matters without dropping any action, decision, or execution category currently available in Fix.
 
 **Work:**
 
 1. Extract the canonical Home Action read service from route-specific orchestration where needed.
-2. Convert Resolution Center/Fix to a projection over canonical Home Actions plus Operational Work Items.
-3. Make Cozy priority lists consume canonical ranking and lifecycle state.
-4. Unify suppression, snooze, dismissal, acknowledgement, and correction command policy.
-5. Remove independent rescoring from homeowner-visible consumers.
-6. Preserve channel-specific limits and delivery gates after ranking.
+2. Produce a source-parity matrix covering Resolution Center urgent actions, cases, decision insights, and execution items; distinguish source-equivalent loaders from adjacent-domain loaders that use different records or eligibility rules.
+3. Reuse the existing Incident adapter and implement canonical adapters for overdue `ChecklistItem` maintenance, `Warranty` renewals, `InsurancePolicy` renewals, detector-derived inventory coverage gaps, and property health insights.
+4. Give each new adapter stable identity/version, evidence, freshness, timing, CTA, governance, work-key resolution, supported commands, and an authoritative completion adapter or the no-false-completion behavior required by HI-ATT-007.
+5. Reconcile active `Booking` records into Operational Work projections and preserve ready repair/replace and coverage decision insights through canonical Home Actions or linked decision detail.
+6. Verify that every item eligible under the existing Resolution Center rules resolves to exactly one canonical Home Action or Operational Work projection, except an explicitly documented intentional eligibility correction.
+7. Atomically convert Resolution Center/Fix to a projection over the completed canonical Home Action feed plus Operational Work Items; do not perform a partial category cutover or leave a fallback legacy discovery path.
+8. Make Cozy priority lists consume canonical ranking and lifecycle state.
+9. Unify suppression, snooze, dismissal, acknowledgement, correction, and supported completion command policy.
+10. Remove independent rescoring from homeowner-visible consumers while preserving channel-specific grouping, limits, consent, fatigue, and delivery rules after ranking.
 
-**Frontend:** update Fix and Cozy presentation adapters; preserve routes initially but replace their data authority.
+**Primary files:**
 
-**Functional exit:** the same property returns identical action identities and ordering across Home, Fix, and Cozy, and a lifecycle command from any surface is reflected everywhere.
+- `apps/backend/src/services/homeActions.service.ts`
+- `apps/backend/src/services/homeActionSourcePromotion.service.ts`
+- `apps/backend/src/services/resolutionCenter.service.ts`
+- `apps/backend/src/productFramework/homeAction.contract.ts`
+- Operational Work booking/reconciliation adapters
+- Fix/Resolution Center and Cozy frontend presentation adapters
+
+**Frontend:** retain the existing homeowner routes, replace their data authority directly, and adapt canonical Home Actions and Operational Work into the required Fix and Cozy groupings without rescoring.
+
+**Functional exit:** every action, decision insight, and execution item eligible under the pre-cutover Resolution Center behavior is present as exactly one canonical Home Action or Operational Work projection; Home, Fix, and Cozy return the same canonical identities and ordering; no source category silently disappears; unsupported completion is never offered; and a lifecycle command from any surface is reflected everywhere. If the full source-parity mapping is incomplete, Fix retains its current read authority and Phase 1 is not complete.
 
 ### Phase 2 — Dependency-aware refresh and currentness
 
