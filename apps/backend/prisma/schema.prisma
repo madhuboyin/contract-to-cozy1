@@ -9636,6 +9636,14 @@ model IntelligenceRecomputeTarget {
   recomputeRunId    String
   consumerKey       String
   consumerVersion   String
+  // Stable resolver output. Static property-level consumers use "PROPERTY";
+  // dynamic consumers use a typed key such as "RecommendationSnapshot:<id>".
+  // Keeping this non-null makes target uniqueness deterministic and avoids the
+  // nullable-column behavior of compound unique constraints.
+  targetKey         String
+  targetType        String?
+  targetId          String?
+  targetVersion     String?
   status            IntelligenceRecomputeTargetStatus @default(PENDING)
   inputVersion      String?
   outputVersion     String?
@@ -9648,9 +9656,10 @@ model IntelligenceRecomputeTarget {
 
   recomputeRun IntelligenceRecomputeRun @relation(fields: [recomputeRunId], references: [id], onDelete: Cascade)
 
-  @@unique([recomputeRunId, consumerKey])
+  @@unique([recomputeRunId, consumerKey, targetKey])
   @@index([status, updatedAt])
   @@index([consumerKey, status])
+  @@index([targetType, targetId])
   @@map("intelligence_recompute_targets")
 }
 

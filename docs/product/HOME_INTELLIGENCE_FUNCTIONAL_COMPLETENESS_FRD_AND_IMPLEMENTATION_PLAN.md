@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.0"
+version: "1.1"
 date: "August 23, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,12 +14,12 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.0 |
+| Version | 1.1 |
 | Date | August 23, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
 | Primary backend owners | Property Context, Home Actions, Operational Work, Decision Platform, Skill Platform |
-| Database posture | Additive schema changes are allowed; no migration scripts or backfills are included |
+| Database posture | Direct schema changes are allowed; no migration scripts, data migration, or backfills are required |
 | User posture | No real users; prefer clean canonical cutover over compatibility layers |
 
 ---
@@ -223,7 +223,12 @@ Sources without an authoritative completion adapter shall expose `ACKNOWLEDGE` o
 ### 8.2 Dependency-aware recomputation
 
 **HI-REC-001 — Code-owned consumer registry**
-The backend shall define an `intelligenceConsumerRegistry` containing a stable consumer key, version, relevant fact keys and source entity types, recompute handler, output owner, timeout, retry policy, and failure behavior.
+The backend shall define an `intelligenceConsumerRegistry` containing a stable consumer key, version, resolution mode, relevant fact keys and source entity types, target resolver, recompute handler, output owner, timeout, retry policy, and failure behavior.
+
+Resolution modes are:
+
+- `STATIC`: the registry entry resolves one fixed property-level target; and
+- `DYNAMIC`: the registry entry resolves zero or more entity-level targets by querying canonical references that intersect the change.
 
 Initial registered consumers shall include:
 
@@ -240,7 +245,9 @@ Initial registered consumers shall include:
 - personalization materialization;
 - capability readiness/suggestions;
 - Home Briefing; and
-- any active Recommendation Snapshot family whose captured fact references intersect the change.
+- a dynamic Recommendation Snapshot consumer whose resolver returns each active snapshot family whose captured fact references intersect the change.
+
+Dynamic resolvers shall return stable `targetKey`, `targetType`, `targetId`, and `targetVersion` values. Resolution shall be deterministic for the same canonical input version, bounded and pageable, and unable to create duplicate targets for the same run. Recommendation Snapshot matching shall occur at resolution time; it is not a static registry row per snapshot or snapshot family.
 
 **HI-REC-002 — Trigger contract**
 Recomputation shall be requested after property-fact changes, source-record revisions, action-state changes, verified outcome recording, source-health changes, document promotion, and manual full refresh.
@@ -249,10 +256,10 @@ Recomputation shall be requested after property-fact changes, source-record revi
 The orchestrator shall execute only consumers whose declared dependencies intersect the changed facts or source type, except manual full refresh, which may execute all applicable consumers.
 
 **HI-REC-004 — Durable receipt**
-Every recomputation shall create an `IntelligenceRecomputeRun` with one target record per applicable consumer. The run shall expose pending, processing, partial, succeeded, and failed states.
+Every recomputation shall create an `IntelligenceRecomputeRun` with one target record per resolved consumer target. A static consumer normally produces one property-level target; a dynamic consumer may produce zero or more independently retryable entity targets. The run shall expose pending, processing, partial, succeeded, and failed states.
 
 **HI-REC-005 — Idempotency and convergence**
-Equivalent trigger, entity revision, property, and consumer version combinations shall converge through an idempotency key. Retrying shall not duplicate Home Actions, work items, recommendations, or Property Changes.
+Equivalent trigger, entity revision, property, consumer version, and target-key combinations shall converge through an idempotency key. Retrying shall not duplicate Home Actions, work items, recommendations, Recommendation Snapshots, or Property Changes.
 
 **HI-REC-006 — Stale behavior**
 While an affected consumer is pending or failed, its existing output shall be marked stale or unavailable according to its safety policy. Material recommendations shall not appear current when their dependencies have changed.
@@ -457,7 +464,9 @@ These fields allow current generic feedback paths to converge without adding a c
 Two additive models are introduced:
 
 - `IntelligenceRecomputeRun` records the triggering canonical change, context versions, overall status, timing, and failure summary.
-- `IntelligenceRecomputeTarget` records each registered consumer, version, input/output versions, attempts, status, and error.
+- `IntelligenceRecomputeTarget` records each resolved consumer target, including stable target key, optional target entity identity/version, consumer version, input/output versions, attempts, status, and error.
+
+Target uniqueness is `(recomputeRunId, consumerKey, targetKey)`. `targetKey` is `PROPERTY` for a static property-level target and a stable typed entity key such as `RecommendationSnapshot:<id>` for dynamic fan-out. This permits independent retry and diagnosis of one affected snapshot without rerunning every snapshot selected by the consumer.
 
 No property facts or recommendation payloads are duplicated into these records.
 
@@ -530,7 +539,7 @@ Converge Ask execution feedback, Home Action usefulness, capability feedback, Pr
 
 1. Canonical writes shall emit or reconcile a Property Change.
 2. Applicable changes shall enqueue `PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED` with an idempotency key.
-3. The worker shall create/claim the recompute run, materialize target rows from the consumer registry, and execute targets independently.
+3. The worker shall create/claim the recompute run, invoke each applicable registry resolver, materialize its static or dynamic target rows, and execute targets independently.
 4. Consumer failures shall not roll back successful consumers.
 5. Retryable failures shall enqueue a retry request using the existing worker execution policy and lease conventions.
 6. A completed or partial run shall update refresh metrics and become visible to Home/Cozy reads.
@@ -657,7 +666,7 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 **Work:**
 
-1. Define `intelligenceConsumerRegistry` and the capability/skill/guidance bridge contract.
+1. Define `intelligenceConsumerRegistry`, including static/dynamic resolution contracts, and the capability/skill/guidance bridge contract.
 2. Inventory all Home Action adapters and declare command/completion/work-key ownership.
 3. Identify every independent priority calculation used by Home, Fix, Cozy, notifications, Status Board, and dashboard hero components.
 4. Choose the canonical read boundary shared by these surfaces.
@@ -699,10 +708,11 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 1. Implement services for the new recompute-run and target models.
 2. Extend Domain Event dispatch for recompute and retry requests.
-3. Register initial high-value consumers: Home Actions, compound Radar, risk, coverage, maintenance prediction, sale readiness, personalization, capability suggestions, and Home Briefing.
-4. Emit requests after Property Context capture/promotion, work lifecycle changes, outcomes, and source-health changes.
-5. Add stale/unavailable policy and UI refresh status.
-6. Add admin manual full refresh and failed-target retry.
+3. Implement bounded static and dynamic target resolution, including Recommendation Snapshot fact-reference intersection.
+4. Register initial high-value consumers: Home Actions, compound Radar, risk, coverage, maintenance prediction, sale readiness, personalization, capability suggestions, Recommendation Snapshots, and Home Briefing.
+5. Emit requests after Property Context capture/promotion, work lifecycle changes, outcomes, and source-health changes.
+6. Add stale/unavailable policy and UI refresh status.
+7. Add admin manual full refresh and failed-target retry.
 
 **Primary files:**
 
@@ -714,7 +724,29 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 **Functional exit:** changing one canonical fact produces a durable recompute run, selectively refreshes registered consumers, and visibly converges Home and Cozy without manual per-feature refresh.
 
-### Phase 3 — Complete decision presentation
+### Phase 3A — Material decision lineage
+
+**Objective:** every material recommendation has durable Decision Thread and Recommendation Snapshot lineage before execution, compound routing, or skill handoff depends on it.
+
+**Work:**
+
+1. Extract a decision-family adapter contract around the existing Decision Platform services rather than treating the HVAC-specific service as a universal entry point.
+2. Resolve a material Home Action to its decision definition, primary entity, property, current context version, and active Decision Thread.
+3. Create or resume exactly one Decision Thread for the material action and persist the Home Action linkage.
+4. Persist an immutable Recommendation Snapshot before continuation or external commitment.
+5. Expose the Decision Thread and current snapshot linkage to Home Action detail, acceptance, compound-result, and skill-handoff services.
+6. Fail closed with a safe-next-action response when no registered decision-family adapter can create the required lineage.
+
+**Primary files:**
+
+- `apps/backend/src/services/decisionPlatform/decisionThreadService.ts`
+- new decision-family adapter registry under `apps/backend/src/services/decisionPlatform/`
+- `apps/backend/src/services/homeActions.service.ts`
+- Operational Work acceptance/handoff services
+
+**Functional exit:** starting any supported material Home Action creates or resumes one Decision Thread and captures a Recommendation Snapshot that later work, outcomes, compound routing, and skills can reference.
+
+### Phase 3B — Complete decision presentation
 
 **Objective:** the live Home experience exposes the decision intelligence already present in the contract.
 
@@ -723,15 +755,16 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 1. Add a reusable Home Action detail component for evidence, assumptions, options, trade-offs, timing, limitations, governance, and corrections.
 2. Render `recommendationResponse` availability and safe-next-action behavior.
 3. Integrate Property Context inline capture and resume.
-4. Create/resume Decision Threads for material actions.
-5. Persist Recommendation Snapshots before material decision continuation.
-6. Show snapshot changes when context changes.
+4. Consume the Phase 3A Decision Thread and Recommendation Snapshot linkage.
+5. Show snapshot changes when context changes.
 
 **Functional exit:** a material Home Action supports an understandable compare-and-decide flow without navigating to an unrelated tool merely to see its basis.
 
 ### Phase 4 — Evidence-backed completion and outcome loop
 
 **Objective:** execution changes the whole home record once, with appropriate evidence.
+
+**Prerequisite:** Phase 3A material decision lineage must be complete before recommendation acceptance and attribution are considered complete. Phase 3B presentation may continue in parallel.
 
 **Work:**
 
@@ -752,7 +785,7 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 **Work:**
 
 1. Promote existing Radar compound insights into canonical Home Actions.
-2. Implement the first additional reviewed compound rules in priority order.
+2. Implement all seven additional reviewed compound rules in the priority order defined by HI-CMP-002.
 3. Create the common document extraction envelope and promotion registry.
 4. Adapt Home Records, Inspection, tax, loan estimate, material spec, and insurance extraction paths.
 5. Retire or adapt legacy inspection extraction.
@@ -760,9 +793,13 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 **Functional exit:** an external event plus a relevant home condition produces one explainable action, and a corrected document fact automatically updates every affected recommendation.
 
+**Decision-lineage dependency:** compound and document work may begin after Phase 2, but HI-CMP-004 is incomplete until Phase 3A can create or update Decision Thread and Recommendation Snapshot lineage for material results when the homeowner enters the workflow.
+
 ### Phase 6 — Skill and capability completion
 
 **Objective:** Cozy can carry every priority workflow from discovery to verified outcome.
+
+**Prerequisites:** Phase 3A provides material Decision Thread lineage and Phase 4 provides canonical work acceptance/completion continuity. Phase 3B may continue independently of backend skill registration.
 
 **Work:**
 
@@ -786,7 +823,7 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 4. Build the source-health projection and affected-capability view.
 5. Standardize AI route controls and degraded behavior.
 6. Extend evaluation scenarios across ranking, decisions, extraction, compound rules, and generated explanations.
-7. Feed verified outcomes into reviewed calibration datasets only through existing governance/release gates.
+7. Feed verified outcomes into reviewed calibration datasets only through the existing calibration approval and activation workflow.
 
 **Functional exit:** product operators can identify which intelligence is useful, incorrect, stale, degraded, or failing, while production rules remain unchanged until a reviewed release is approved.
 
@@ -808,34 +845,51 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 ## 16. Delivery sequencing and parallel work
 
-The strict dependency chain is:
+The functional dependency chain is:
 
 ```text
 Phase 0 registry/ownership
-        |
-        v
-Phase 1 canonical attention
-        |
-        +-------------> Phase 3 decision UI
-        |
-        v
-Phase 2 recomputation
-        |
-        +-------------> Phase 5 compound/document
-        |
-        v
-Phase 4 completion/outcomes
-        |
-        +-------------> Phase 6 skills
-        |
-        v
-Phase 7 feedback/source health/learning
-        |
-        v
-Phase 8 cleanup
+  -> Phase 1 canonical attention
+
+Phase 1
+  -> Phase 2 recomputation
+  -> Phase 3A decision lineage
+  -> Phase 3B decision presentation (parallel; consumes 3A lineage)
+
+Phase 2 + Phase 3A
+  -> Phase 4 completion/outcomes
+  -> Phase 5 compound/document
+
+Phase 3A + Phase 4
+  -> Phase 6 skills
+
+Phases 2, 3A, 3B, 4, 5, and 6
+  -> Phase 7 feedback/source health/learning completion
+
+Phases 1 through 7
+  -> Phase 8 cleanup
 ```
 
-After Phase 1 establishes canonical identity and lifecycle, frontend decision presentation can proceed alongside backend recomputation. Schema changes may be applied by the user before Phase 2 and Phase 4 implementation.
+Phase 5 implementation may begin once Phase 2 supplies recomputation, but its material-decision routing is not functionally complete until Phase 3A is available. Phase 7 workstreams may start earlier, but their cross-capability aggregates and evaluations cannot be complete until the corresponding Phase 2–6 identifiers and behaviors exist. Phase 6 requires both Phase 3A lineage and Phase 4 work continuity. Schema changes may be applied directly before the dependent implementation; no historical data conversion or compatibility rollout is required.
+
+### 16.1 Relative implementation sizing
+
+Sizing communicates engineering capacity and coordination complexity, not elapsed time or a launch mechanism.
+
+| Phase | Relative size | Dominant work | Parallelism and principal uncertainty |
+| --- | --- | --- | --- |
+| 0 | M | backend registries and ownership inventory | Can start immediately; uncertainty is the number of duplicate active owners |
+| 1 | XL | backend projections plus Home/Fix/Cozy/notification cutover | Frontend adapters can run in parallel after the canonical read contract is fixed |
+| 2 | XL | backend orchestration, workers, admin visibility, currentness UI | Registry handlers can be implemented in parallel; dynamic fan-out and failure isolation are the main risks |
+| 3A | L | Decision Platform adapters and durable lineage | Runs beside Phase 2; uncertainty is decision-family coverage beyond existing HVAC support |
+| 3B | L | Home decision-detail and context-capture UI | Runs beside Phases 2 and 3A once response contracts stabilize |
+| 4 | XL | backend reconciliation plus Home/Fix completion UI | Domain adapters can be divided by maintenance, projects, claims, inspections, bookings, and sale readiness |
+| 5 | XL | compound rules and document promotion convergence | Rule families and document adapters can proceed in parallel after shared contracts exist |
+| 6 | XL | skill/capability bridges and missing operations | Workflow packages can be divided by domain after shared lineage and work contracts exist |
+| 7 | L | feedback, health, admin analytics, reviewed evaluation | Feedback and source-health workstreams can proceed independently after canonical identifiers stabilize |
+| 8 | M | direct removal of superseded paths | No compatibility window is required because there are no real users |
+
+Size legend: `M` is a bounded cross-service change, `L` is a multi-surface or multi-domain workstream, and `XL` requires several independently deliverable domain slices. Actual staffing may change elapsed time, but it does not change the dependency ordering above.
 
 ---
 
@@ -882,7 +936,7 @@ Home Intelligence functional completeness is achieved when:
 4. Accepted recommendations become one durable Operational Work Item or link to an existing one.
 5. Completion evidence is consequence-appropriate and reconciles every linked source without duplicate homeowner steps.
 6. Supported completions create provenance-bearing Outcome Observations and Recommendation Attributions.
-7. Radar compound insights and at least three additional reviewed cross-domain rules can become canonical Home Actions.
+7. Radar compound insights and all seven reviewed cross-domain rules in HI-CMP-002 can become canonical Home Actions or non-actionable Property Changes/Home Briefing items according to HI-CMP-004.
 8. Every supported document extraction uses the common review/promotion/conflict/recompute path.
 9. Priority workflows have complete Capability ↔ Guidance ↔ Skill ↔ operation ↔ completion/outcome mappings.
 10. Feedback is typed, cross-surface consistent, aggregated, and unable to bypass safety policy.
@@ -891,8 +945,8 @@ Home Intelligence functional completeness is achieved when:
 
 ---
 
-## 20. Schema and migration note
+## 20. Schema application note
 
-This FRD includes direct additive changes to `apps/backend/prisma/schema.prisma` for typed feedback, expanded outcome sources, and durable recomputation tracking.
+This FRD includes direct changes to `apps/backend/prisma/schema.prisma` for typed feedback, expanded outcome sources, and durable recomputation tracking, including independently addressable static and dynamic recompute targets.
 
-No Prisma migration script, SQL migration, backfill, or compatibility data transformation is included. The user is responsible for generating and applying the database migration.
+There are no real users or production data to preserve. No Prisma migration script, SQL migration, historical data migration, backfill, compatibility transformation, staged rollout, or launch gate is required. The user will apply the resulting schema directly to the development database.
