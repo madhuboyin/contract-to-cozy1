@@ -36,7 +36,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1469,6 +1469,124 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
       lastEvaluatedAt: review.updatedAt.toISOString(),
     });
   });
+}
+
+// Home Intelligence Functional Completeness FRD Phase 1, Slice 1 — the
+// only Resolution Center action category (resolutionCenter.service.ts
+// lines 972-1008) with no existing Home Action equivalent: no other
+// loader or the orchestration.service.ts candidate pipeline reads
+// Warranty/InsurancePolicy for renewal purposes. Mirrors that same
+// 90-day-upcoming / expired threshold so the semantics carry over.
+const COVERAGE_RENEWAL_UPCOMING_WINDOW_DAYS = 90;
+
+function daysBetween(later: Date, earlier: Date): number {
+  return Math.floor((later.getTime() - earlier.getTime()) / 86_400_000);
+}
+
+async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.warranty || !db.insurancePolicy) return [];
+
+  const now = evaluatedAt ?? new Date();
+  const [warranties, insurancePolicies] = await Promise.all([
+    db.warranty.findMany({
+      where: { propertyId },
+      select: { id: true, providerName: true, expiryDate: true, updatedAt: true, inventoryItemId: true },
+    }),
+    db.insurancePolicy.findMany({
+      where: { propertyId },
+      select: { id: true, carrierName: true, expiryDate: true, updatedAt: true },
+    }),
+  ]);
+
+  const actions: HomeAction[] = [];
+
+  const buildAction = (record: {
+    id: string;
+    expiryDate: Date | null;
+    updatedAt: Date;
+    label: string;
+    entityType: 'Warranty' | 'Insurance';
+    href: string;
+  }) => {
+    if (!record.expiryDate) return;
+    const daysUntilDue = daysBetween(record.expiryDate, now);
+    const expired = daysUntilDue < 0;
+    if (!expired && daysUntilDue > COVERAGE_RENEWAL_UPCOMING_WINDOW_DAYS) return;
+
+    const title = `${record.entityType} Renewal: ${record.label}`;
+    actions.push(adaptHomeActionSource('COVERAGE', {
+      id: `coverage-renewal:${record.entityType.toLowerCase()}:${record.id}`,
+      propertyId,
+      lineageId: `coverage-renewal:${record.entityType.toLowerCase()}:${record.id}`,
+      sourceEntityId: record.id,
+      sourceVersion: record.updatedAt.toISOString(),
+      state: 'OPEN',
+      priority: expired ? 'SOON' : 'PLAN',
+      signal: expired ? `EXPIRED: ${title}` : `UPCOMING: ${title}`,
+      whyItMatters: expired
+        ? `${record.entityType === 'Warranty' ? 'Warranty' : 'Policy'} coverage expired ${Math.abs(daysUntilDue)} day${Math.abs(daysUntilDue) === 1 ? '' : 's'} ago.`
+        : `${record.entityType === 'Warranty' ? 'Warranty' : 'Policy'} coverage expires in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}.`,
+      recommendedAction: expired ? 'Renew or replace this coverage as soon as possible.' : 'Review renewal terms before the coverage expires.',
+      expectedOutcome: 'Coverage continues without a gap.',
+      timing: {
+        dueAt: record.expiryDate.toISOString(),
+        windowStart: null,
+        windowEnd: null,
+        rationale: expired ? 'Coverage has already lapsed.' : `Renewal window opens ${COVERAGE_RENEWAL_UPCOMING_WINDOW_DAYS} days before expiry.`,
+      },
+      evidence: [{
+        id: record.id,
+        type: 'PROPERTY_FACT',
+        label: title,
+        source: `${record.entityType} record`,
+        observedAt: record.updatedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence: 1,
+      }],
+      assumptions: [{
+        key: 'renewal-decision',
+        label: 'Homeowner intends to keep this coverage active',
+        value: 'Coverage should continue without a gap unless the homeowner decides otherwise.',
+        source: 'SYSTEM_DEFAULT',
+        editable: true,
+      }],
+      options: [
+        { id: 'renew', label: 'Renew this coverage', summary: `Contact ${record.label} to renew before the coverage lapses.`, recommended: true },
+        { id: 'shop-alternatives', label: 'Compare alternatives', summary: 'Review other providers or policies before renewing.', recommended: false },
+      ],
+      tradeoffs: [
+        { optionId: 'renew', dimension: 'EFFORT', summary: 'Fastest way to avoid a coverage gap, but may not be the best available rate.' },
+        { optionId: 'shop-alternatives', dimension: 'TIMING', summary: 'May take longer and risks a temporary coverage gap if not completed before expiry.' },
+      ],
+      confidence: { score: 1, label: 'HIGH', missing: [] },
+      governance: materialFinancialGovernance('resolution-center-parity-v1'),
+      primaryCta: { kind: 'REVIEW', label: 'Review coverage', href: record.href },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: record.updatedAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    }));
+  };
+
+  warranties.forEach((warranty) => buildAction({
+    id: warranty.id,
+    expiryDate: warranty.expiryDate,
+    updatedAt: warranty.updatedAt,
+    label: warranty.providerName,
+    entityType: 'Warranty',
+    href: `/dashboard/properties/${propertyId}/inventory?tab=coverage${warranty.inventoryItemId ? `&highlight=${encodeURIComponent(warranty.inventoryItemId)}` : ''}`,
+  }));
+  insurancePolicies.forEach((policy) => buildAction({
+    id: policy.id,
+    expiryDate: policy.expiryDate,
+    updatedAt: policy.updatedAt,
+    label: policy.carrierName,
+    entityType: 'Insurance',
+    href: `/dashboard/insurance?propertyId=${encodeURIComponent(propertyId)}`,
+  }));
+
+  return actions;
 }
 
 async function loadPersonalizationActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
@@ -3477,6 +3595,7 @@ export async function getPromotedHomeActions(
       options.propertyLabel,
     ), Promise.resolve(incidentActions),
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
+    loadCoverageRenewalActions(propertyId, db, options.evaluatedAt),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     loadInspectionFindingActions(propertyId, db),
     loadSalePrepActions(propertyId, db),
