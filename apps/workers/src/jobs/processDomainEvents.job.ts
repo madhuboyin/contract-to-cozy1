@@ -8,6 +8,10 @@ import {
 import {
   processRadarPropertyReconciliationEvent,
 } from '@worker-shared/modules/homeEventRadar/services/radarPropertyReconciliation.service';
+import {
+  processRecomputeRequestedEvent,
+  processRecomputeRetryRequestedEvent,
+} from '@worker-shared/services/intelligenceRecompute/intelligenceRecompute.service';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
 type DomainEventType =
@@ -22,17 +26,21 @@ type DomainEventType =
   | 'REFINANCE_DECISION_CHANGED'
   | 'REFINANCE_NEXT_STEP_STARTED'
   | 'REFINANCE_OUTCOME_COMPLETED'
-  | 'RADAR_PROPERTY_RECONCILIATION_REQUESTED';
+  | 'RADAR_PROPERTY_RECONCILIATION_REQUESTED'
+  | 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED'
+  | 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED';
 
 export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
 
 // W4 item 1: small, job-scoped dependency interface (see
 // reserveFundBalanceReminder.job.ts for the pattern).
 export interface ProcessDomainEventsDeps {
-  prisma: Pick<typeof prisma, 'notification' | 'domainEvent'>;
+  prisma: Pick<typeof prisma, 'notification' | 'domainEvent' | 'intelligenceRecomputeRun' | 'intelligenceRecomputeTarget'>;
   notificationService: Pick<typeof NotificationService, 'create'>;
   refinanceTransitionAlert?: typeof processRefinanceTransitionAlert;
   radarPropertyReconciliation?: typeof processRadarPropertyReconciliationEvent;
+  recomputeRequested?: typeof processRecomputeRequestedEvent;
+  recomputeRetryRequested?: typeof processRecomputeRetryRequestedEvent;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -40,6 +48,8 @@ const defaultDeps: ProcessDomainEventsDeps = {
   notificationService: NotificationService,
   refinanceTransitionAlert: processRefinanceTransitionAlert,
   radarPropertyReconciliation: processRadarPropertyReconciliationEvent,
+  recomputeRequested: processRecomputeRequestedEvent,
+  recomputeRetryRequested: processRecomputeRetryRequestedEvent,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -252,6 +262,44 @@ function handleRefinanceDataRequired(ev: any) {
   // External delivery remains intentionally disabled.
 }
 
+function handleRecomputeRequested(ev: any, deps: ProcessDomainEventsDeps) {
+  const propertyId = ev.propertyId ?? ev.payload?.propertyId;
+  const triggerType = ev.payload?.triggerType;
+  const triggerEntityType = ev.payload?.triggerEntityType;
+  const triggerEntityId = ev.payload?.triggerEntityId;
+  const changedFactKeys = Array.isArray(ev.payload?.changedFactKeys) ? ev.payload.changedFactKeys : [];
+  const idempotencyKey = ev.payload?.idempotencyKey ?? ev.idempotencyKey;
+
+  mustHave(propertyId, 'Recompute REQUESTED event missing propertyId');
+  mustHave(triggerType, 'Recompute REQUESTED event missing triggerType');
+  mustHave(triggerEntityType, 'Recompute REQUESTED event missing triggerEntityType');
+  mustHave(triggerEntityId, 'Recompute REQUESTED event missing triggerEntityId');
+  mustHave(idempotencyKey, 'Recompute REQUESTED event missing idempotencyKey');
+
+  return (deps.recomputeRequested ?? processRecomputeRequestedEvent)(deps.prisma as any, {
+    propertyId,
+    triggerType,
+    triggerEntityType,
+    triggerEntityId,
+    changedFactKeys,
+    requestedContextVersion: ev.payload?.requestedContextVersion ?? null,
+    idempotencyKey,
+  });
+}
+
+function handleRecomputeRetryRequested(ev: any, deps: ProcessDomainEventsDeps) {
+  const recomputeRunId = ev.payload?.recomputeRunId;
+  const targetId = ev.payload?.targetId;
+
+  mustHave(recomputeRunId, 'Recompute RETRY_REQUESTED event missing recomputeRunId');
+  mustHave(targetId, 'Recompute RETRY_REQUESTED event missing targetId');
+
+  return (deps.recomputeRetryRequested ?? processRecomputeRetryRequestedEvent)(deps.prisma as any, {
+    recomputeRunId,
+    targetId,
+  });
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -330,6 +378,12 @@ export async function processDomainEventsJob(
             deps.radarPropertyReconciliation
             ?? processRadarPropertyReconciliationEvent
           )(ev);
+          break;
+        case 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED':
+          processingOutcome = await handleRecomputeRequested(ev, deps);
+          break;
+        case 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED':
+          processingOutcome = await handleRecomputeRetryRequested(ev, deps);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

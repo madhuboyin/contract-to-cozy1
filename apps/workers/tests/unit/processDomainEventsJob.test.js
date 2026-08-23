@@ -42,6 +42,10 @@ function fakeDeps({
   notificationCreateShouldFailFor = new Set(),
   lockShouldFail = false,
   radarReconciliationShouldFail = false,
+  recomputeRequestedResult = { status: 'SUCCEEDED' },
+  recomputeRequestedShouldFail = false,
+  recomputeRetryRequestedResult = { status: 'SUCCEEDED' },
+  recomputeRetryRequestedShouldFail = false,
 }) {
   const calls = {
     updates: [],
@@ -49,6 +53,8 @@ function fakeDeps({
     notificationFindFirstArgs: [],
     refinanceAlerts: [],
     radarReconciliations: [],
+    recomputeRequested: [],
+    recomputeRetryRequested: [],
   };
 
   const deps = {
@@ -93,6 +99,16 @@ function fakeDeps({
         evaluatedEvents: 2,
         continuationCreated: false,
       };
+    },
+    recomputeRequested: async (db, trigger) => {
+      calls.recomputeRequested.push(trigger);
+      if (recomputeRequestedShouldFail) throw new Error('recompute requested handling failed');
+      return recomputeRequestedResult;
+    },
+    recomputeRetryRequested: async (db, input) => {
+      calls.recomputeRetryRequested.push(input);
+      if (recomputeRetryRequestedShouldFail) throw new Error('recompute retry handling failed');
+      return recomputeRetryRequestedResult;
     },
   };
   return { deps, calls };
@@ -240,6 +256,84 @@ test('Radar reconciliation failures use the shared retry and dead-letter path', 
   const terminal = calls.updates.find((update) => update.kind === 'terminal');
   assert.equal(terminal.args.data.status, 'FAILED');
   assert.match(terminal.args.data.lastError, /radar reconciliation failed/);
+});
+
+test('processes a PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED event and dispatches it with the expected trigger fields', async () => {
+  const recomputeEvent = eventFixture({
+    type: 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED',
+    idempotencyKey: 'recompute:PROPERTY_FACT_CHANGED:Property:property-1:property-1:ctx-1',
+    payload: {
+      propertyId: 'property-1',
+      triggerType: 'PROPERTY_FACT_CHANGED',
+      triggerEntityType: 'Property',
+      triggerEntityId: 'property-1',
+      changedFactKeys: ['fact.a'],
+      requestedContextVersion: 'ctx-1',
+      idempotencyKey: 'recompute:PROPERTY_FACT_CHANGED:Property:property-1:property-1:ctx-1',
+    },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [recomputeEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.recomputeRequested.length, 1);
+  assert.equal(calls.recomputeRequested[0].propertyId, 'property-1');
+  assert.equal(calls.recomputeRequested[0].triggerType, 'PROPERTY_FACT_CHANGED');
+  assert.deepEqual(calls.recomputeRequested[0].changedFactKeys, ['fact.a']);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+});
+
+test('a PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED event missing required trigger fields fails without dispatching', async () => {
+  const recomputeEvent = eventFixture({
+    type: 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED',
+    payload: { propertyId: 'property-1' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [recomputeEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  assert.equal(calls.recomputeRequested.length, 0);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+});
+
+test('recompute-requested handler failures use the shared retry/dead-letter path', async () => {
+  const recomputeEvent = eventFixture({
+    type: 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED',
+    payload: {
+      propertyId: 'property-1',
+      triggerType: 'PROPERTY_FACT_CHANGED',
+      triggerEntityType: 'Property',
+      triggerEntityId: 'property-1',
+      changedFactKeys: ['fact.a'],
+      idempotencyKey: 'recompute-key-1',
+    },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [recomputeEvent], recomputeRequestedShouldFail: true });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /recompute requested handling failed/);
+});
+
+test('processes a PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED event and dispatches it with the target/run identifiers', async () => {
+  const retryEvent = eventFixture({
+    type: 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED',
+    payload: { recomputeRunId: 'run-1', targetId: 'target-1' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [retryEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.recomputeRetryRequested.length, 1);
+  assert.deepEqual(calls.recomputeRetryRequested[0], { recomputeRunId: 'run-1', targetId: 'target-1' });
 });
 
 test('a malformed refinance transition is retried as FAILED', async () => {
