@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.5"
+version: "1.6"
 date: "August 23, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.5 |
+| Version | 1.6 |
 | Date | August 23, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -235,9 +235,24 @@ The required initial source-parity mappings are:
 | Property health insight | `Property.healthScore.insights` plus the concrete property/inventory context used by Fix | `SYSTEM` or domain-specific Home Action keyed by property and normalized health factor |
 | Active execution item | `Booking` | linked or reconciled Operational Work projection |
 | Repair/replace decision insight | `ReplaceRepairAnalysis` and related `GuidanceJourney` | canonical decision Home Action or linked decision detail without losing the ready insight |
-| Coverage decision insight | `CoverageAnalysis` plus detector result | canonical coverage Home Action or linked decision detail without losing the ready insight |
+| Coverage decision insight | `CoverageAnalysis` plus detector result | enrich the same detector-derived coverage-gap Home Action; do not emit a competing action |
 
 Every mapping shall preserve the existing eligibility meaning, stable identity, source version, evidence, timing, CTA destination, governance, and allowed lifecycle commands. Fix may apply presentation grouping and result limits after canonical ranking, but it shall not retain independent source discovery, eligibility, scoring, or lifecycle ownership. Because there are no real users, the completed mappings shall be followed by one direct cutover; no partial cutover, feature flag, dual-read compatibility mode, staged rollout, or launch gate is required.
+
+**HI-ATT-009 — CoverageAnalysis enrichment without duplicate recommendations**
+`CoverageAnalysis` shall enrich the existing detector-derived coverage-gap obligation; it shall not create a second candidate that competes with the plain coverage-gap action in canonical ranking or work-key reconciliation.
+
+The implementation contract is:
+
+- keep `adaptOrchestratedActionToHomeAction()` synchronous and free of database access;
+- in the already-asynchronous orchestration read boundary, collect the inventory-item identifiers for eligible `COVERAGE_GAP::*` actions and batch-load the latest applicable `READY` `CoverageAnalysis` for those items;
+- pass a bounded enrichment lookup or DTO into the pure adapter and emit exactly one canonical Home Action for each eligible coverage gap;
+- preserve the inventory-item identifier as `source.entityId` and preserve the detector-derived obligation/work key so the action remains the same obligation before and after enrichment;
+- when a current ready analysis exists, include its identifier, version, and computation time in evidence/source versioning and project its relevant confidence, options, trade-offs, and decision detail into the action presentation;
+- when no applicable ready analysis exists, emit the existing plain coverage-gap action without delaying or suppressing it; and
+- do not use ranking score, action-ID tie-breaking, work-key deduplication, or a synthetic "richness" score to select between plain and enriched variants.
+
+If a future source must emit an additive candidate for the same canonical obligation, it shall declare explicit source precedence or a deterministic merge before canonical ranking. Generic deduplication is a safety net for accidental duplication, not an enrichment or authority-resolution policy.
 
 ### 8.2 Dependency-aware recomputation
 
@@ -713,18 +728,20 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 1. Extract the canonical Home Action read service from route-specific orchestration where needed.
 2. Produce a source-parity matrix covering Resolution Center urgent actions, cases, decision insights, and execution items; distinguish source-equivalent loaders from adjacent-domain loaders that use different records or eligibility rules.
 3. Reuse the existing Incident adapter and implement canonical adapters for overdue `ChecklistItem` maintenance, `Warranty` renewals, `InsurancePolicy` renewals, detector-derived inventory coverage gaps, and property health insights.
-4. Give each new adapter stable identity/version, evidence, freshness, timing, CTA, governance, work-key resolution, supported commands, and an authoritative completion adapter or the no-false-completion behavior required by HI-ATT-007.
-5. Reconcile active `Booking` records into Operational Work projections and preserve ready repair/replace and coverage decision insights through canonical Home Actions or linked decision detail.
-6. Verify that every item eligible under the existing Resolution Center rules resolves to exactly one canonical Home Action or Operational Work projection, except an explicitly documented intentional eligibility correction.
-7. Atomically convert Resolution Center/Fix to a projection over the completed canonical Home Action feed plus Operational Work Items; do not perform a partial category cutover or leave a fallback legacy discovery path.
-8. Make Cozy priority lists consume canonical ranking and lifecycle state.
-9. Unify suppression, snooze, dismissal, acknowledgement, correction, and supported completion command policy.
-10. Remove independent rescoring from homeowner-visible consumers while preserving channel-specific grouping, limits, consent, fatigue, and delivery rules after ranking.
+4. Batch-load the latest applicable ready `CoverageAnalysis` records in the asynchronous orchestration boundary and pass them as optional enrichment to the pure coverage-gap adapter, producing one action per canonical coverage obligation as required by HI-ATT-009.
+5. Give each new adapter stable identity/version, evidence, freshness, timing, CTA, governance, work-key resolution, supported commands, and an authoritative completion adapter or the no-false-completion behavior required by HI-ATT-007.
+6. Reconcile active `Booking` records into Operational Work projections and preserve ready repair/replace and coverage decision insights through canonical Home Actions or linked decision detail.
+7. Verify that every item eligible under the existing Resolution Center rules resolves to exactly one canonical Home Action or Operational Work projection, except an explicitly documented intentional eligibility correction.
+8. Atomically convert Resolution Center/Fix to a projection over the completed canonical Home Action feed plus Operational Work Items; do not perform a partial category cutover or leave a fallback legacy discovery path.
+9. Make Cozy priority lists consume canonical ranking and lifecycle state.
+10. Unify suppression, snooze, dismissal, acknowledgement, correction, and supported completion command policy.
+11. Remove independent rescoring from homeowner-visible consumers while preserving channel-specific grouping, limits, consent, fatigue, and delivery rules after ranking.
 
 **Primary files:**
 
 - `apps/backend/src/services/homeActions.service.ts`
 - `apps/backend/src/services/homeActionSourcePromotion.service.ts`
+- `apps/backend/src/services/orchestration.service.ts`
 - `apps/backend/src/services/resolutionCenter.service.ts`
 - `apps/backend/src/productFramework/homeAction.contract.ts`
 - Operational Work booking/reconciliation adapters
@@ -732,7 +749,7 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 **Frontend:** retain the existing homeowner routes, replace their data authority directly, and adapt canonical Home Actions and Operational Work into the required Fix and Cozy groupings without rescoring.
 
-**Functional exit:** every action, decision insight, and execution item eligible under the pre-cutover Resolution Center behavior is present as exactly one canonical Home Action or Operational Work projection; Home, Fix, and Cozy return the same canonical identities and ordering; no source category silently disappears; unsupported completion is never offered; and a lifecycle command from any surface is reflected everywhere. If the full source-parity mapping is incomplete, Fix retains its current read authority and Phase 1 is not complete.
+**Functional exit:** every action, decision insight, and execution item eligible under the pre-cutover Resolution Center behavior is present as exactly one canonical Home Action or Operational Work projection; a coverage gap with a ready analysis is one enriched action with stable detector-derived identity, while the same gap without an analysis remains one plain action; Home, Fix, and Cozy return the same canonical identities and ordering; no source category silently disappears; unsupported completion is never offered; and a lifecycle command from any surface is reflected everywhere. If the full source-parity mapping is incomplete, Fix retains its current read authority and Phase 1 is not complete.
 
 **Status: in progress (Slices 1-2 of the HI-ATT-008 source-parity matrix).** Full tracking in [`HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md`](./HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md). Verified against the codebase: incidents and overdue-maintenance-checklist parity already existed pre-session (the latter via `orchestration.service.ts`'s existing `mapChecklistItemToAction` pipeline, previously undocumented — building a dedicated loader for it would have produced duplicate action cards); inventory coverage-gap parity likewise already existed (via `orchestration.service.ts`'s existing `detectCoverageGaps()` → `OrchestratedAction` pipeline, not the adjacent-but-different `loadCoverageActions`/`CoverageReview` loader). Slice 1 added `loadCoverageRenewalActions` covering `Warranty`/`InsurancePolicy` renewal. Slice 2 added `loadHealthInsightActions` (health-score/appliance install-year gaps — an earlier "requires userId-scoped access" assessment was wrong; `calculateHealthScore()` is a pure, `propertyId`-scoped function) and `loadRepairReplaceDecisionActions` (`ReplaceRepairAnalysis` — considered and rejected wrapping this in a `DecisionThread`, since the only existing creation path is hardcoded to HVAC and recomputes its own verdict rather than ingesting an existing analysis). 7 of 9 HI-ATT-008 rows are now done. Two remain: coverage-analysis enrichment (small, deferred only to keep review surface to one file) and booking reconciliation, which is not a coding gap but a product decision — most bookings have no Home Action origin at all, so "reconciled" cannot mean 100% coverage without either retrofitting booking creation or explicitly accepting partial coverage. Per HI-ATT-008 and work item 7, Fix's read authority has not changed and will not until all 9 rows are done.
 
@@ -955,6 +972,7 @@ Tests must be updated when the canonical behavior intentionally changes. The imp
 
 | Risk | Mitigation |
 | --- | --- |
+| Rich and plain candidates compete for one obligation | enrich before adaptation or apply an explicit deterministic merge before ranking; never infer authority from ranking score, action-ID tie-breaking, or generic work-key deduplication |
 | Recompute storms | dependency filtering, bounded/pageable target resolution, per-run target uniqueness, idempotency, batching, per-property serialization, target-level retries |
 | New canonical feed changes ordering | versioned ranking, shadow comparison during development, explicit source and component diagnostics |
 | Completion closes the wrong source | stable work keys, expected versions, source adapters, reconciliation receipts, reopen support |
