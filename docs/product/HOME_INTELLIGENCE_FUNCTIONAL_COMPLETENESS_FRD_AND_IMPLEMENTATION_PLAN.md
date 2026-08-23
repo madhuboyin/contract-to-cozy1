@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.1"
+version: "1.2"
 date: "August 23, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.1 |
+| Version | 1.2 |
 | Date | August 23, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -750,6 +750,8 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 **Objective:** the live Home experience exposes the decision intelligence already present in the contract.
 
+**Sequencing:** the UI shell, decision-detail response contract, and Property Context capture work may proceed alongside Phases 2 and 3A. Final Decision Thread linkage and snapshot-change integration require the Phase 3A functional exit and real lineage data.
+
 **Work:**
 
 1. Add a reusable Home Action detail component for evidence, assumptions, options, trade-offs, timing, limitations, governance, and corrections.
@@ -854,7 +856,10 @@ Phase 0 registry/ownership
 Phase 1
   -> Phase 2 recomputation
   -> Phase 3A decision lineage
-  -> Phase 3B decision presentation (parallel; consumes 3A lineage)
+  -> Phase 3B UI shell/contracts (component-parallel with 2 and 3A)
+
+Phase 3A
+  -> Phase 3B lineage and snapshot integration
 
 Phase 2 + Phase 3A
   -> Phase 4 completion/outcomes
@@ -882,7 +887,7 @@ Sizing communicates engineering capacity and coordination complexity, not elapse
 | 1 | XL | backend projections plus Home/Fix/Cozy/notification cutover | Frontend adapters can run in parallel after the canonical read contract is fixed |
 | 2 | XL | backend orchestration, workers, admin visibility, currentness UI | Registry handlers can be implemented in parallel; dynamic fan-out and failure isolation are the main risks |
 | 3A | L | Decision Platform adapters and durable lineage | Runs beside Phase 2; uncertainty is decision-family coverage beyond existing HVAC support |
-| 3B | L | Home decision-detail and context-capture UI | Runs beside Phases 2 and 3A once response contracts stabilize |
+| 3B | L | Home decision-detail and context-capture UI | Shell/contracts run beside Phases 2 and 3A; final lineage and snapshot integration follows the Phase 3A functional exit |
 | 4 | XL | backend reconciliation plus Home/Fix completion UI | Domain adapters can be divided by maintenance, projects, claims, inspections, bookings, and sale readiness |
 | 5 | XL | compound rules and document promotion convergence | Rule families and document adapters can proceed in parallel after shared contracts exist |
 | 6 | XL | skill/capability bridges and missing operations | Workflow packages can be divided by domain after shared lineage and work contracts exist |
@@ -914,7 +919,7 @@ Tests must be updated when the canonical behavior intentionally changes. The imp
 
 | Risk | Mitigation |
 | --- | --- |
-| Recompute storms | dependency filtering, idempotency, batching, per-property serialization, target-level retries |
+| Recompute storms | dependency filtering, bounded/pageable target resolution, per-run target uniqueness, idempotency, batching, per-property serialization, target-level retries |
 | New canonical feed changes ordering | versioned ranking, shadow comparison during development, explicit source and component diagnostics |
 | Completion closes the wrong source | stable work keys, expected versions, source adapters, reconciliation receipts, reopen support |
 | Feedback hides safety work | governance floor enforced before suppression |
