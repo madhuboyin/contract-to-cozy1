@@ -3,28 +3,10 @@ import type { ProposedWorkItem } from '../domain/sourceAdapter';
 import type { WorkSubject } from '../domain/workKey';
 import { resolveWorkKey } from '../domain/workKey';
 import { listGuidanceSafetyClassifications } from '../../../services/guidanceEngine/guidanceGovernance.catalog';
-import type { OperationalObligationType, OperationalWorkSourceType } from '@prisma/client';
+import type { OperationalObligationType } from '@prisma/client';
+import { WORK_ITEM_ELIGIBLE_SOURCE_KINDS, SOURCE_TYPE_BY_KIND } from '../../../services/intelligence/homeActionAdapterOwnership';
 
-/**
- * Home Operations Slice 2: which HomeAction source kinds represent genuine
- * "work" (an obligation Home Operations should track through a lifecycle)
- * versus a pure advisory recommendation. This mirrors Slice 0's own finding
- * — PERSONALIZATION/SYSTEM/SAVINGS_BENEFITS sources have no authoritative
- * domain completion adapter behind them (see homeActions.service.ts's
- * SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER) and were downgraded to
- * ACKNOWLEDGE-only for that reason. They stay outside the work-item
- * backlog; Inspection Finding stays out too since it isn't promoted into
- * HomeAction at all yet (Slice 5).
- */
-export const WORK_ITEM_ELIGIBLE_SOURCE_KINDS: ReadonlySet<HomeAction['source']['kind']> = new Set([
-  'MAINTENANCE',
-  'GUIDANCE',
-  'PROJECT',
-  'INCIDENT',
-  'RECALL',
-  'COVERAGE',
-  'SALE_PREP',
-]);
+export { WORK_ITEM_ELIGIBLE_SOURCE_KINDS } from '../../../services/intelligence/homeActionAdapterOwnership';
 
 /**
  * The seasonal-checklist HomeAction is an aggregate over many items (see
@@ -202,16 +184,6 @@ export function resolveProjectExecutionWorkKey(propertyId: string, projectId: st
     occurrence: { obligationSlug: 'execution' },
   });
 }
-
-const SOURCE_TYPE_BY_KIND: Partial<Record<HomeAction['source']['kind'], OperationalWorkSourceType>> = {
-  MAINTENANCE: 'MAINTENANCE',
-  GUIDANCE: 'GUIDANCE',
-  PROJECT: 'PROJECT',
-  INCIDENT: 'INCIDENT',
-  RECALL: 'RECALL',
-  COVERAGE: 'COVERAGE',
-  SALE_PREP: 'SALE_PREP',
-};
 
 /**
  * Maps an already-built HomeAction into a ProposedWorkItem for the shared

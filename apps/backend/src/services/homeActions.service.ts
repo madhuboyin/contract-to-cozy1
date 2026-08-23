@@ -63,6 +63,7 @@ import { snoozeWorkItem } from '../modules/homeOperations/application/snoozeWork
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { markWorkItemUnderstood, recordWorkEvent } from '../modules/homeOperations/infrastructure/workItemRepository';
 import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState, Prisma } from '@prisma/client';
+import { SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER } from './intelligence/homeActionAdapterOwnership';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -78,27 +79,9 @@ export const HOME_ACTION_COMMANDS = [
   'REMOVE_FROM_HOME',
 ] as const;
 
-// Source kinds with no authoritative domain completion adapter today. For
-// these, COMPLETE/ALREADY_DONE would only write an orchestration event with
-// no effect on the underlying record — so the feed must not offer them, and
-// this command handler must not honor them even if requested directly
-// against the API.
-const SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER = new Set<HomeAction['source']['kind']>([
-  'GUIDANCE',
-  'MAINTENANCE',
-  'INCIDENT',
-  'RECALL',
-  'COVERAGE',
-  'PROJECT',
-  'SYSTEM',
-  'SAVINGS_BENEFITS',
-  'INSPECTION_FINDING',
-  // Completion here happens by the homeowner updating the underlying
-  // self-reported condition on Sale Case, not a COMPLETE command against
-  // the promoted work item — same untracked-source pattern as every other
-  // kind in this set.
-  'SALE_PREP',
-]);
+// Completion-adapter ownership per source kind (SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER)
+// is now declared once in ./intelligence/homeActionAdapterOwnership.ts, alongside
+// work-key eligibility — see that file for the Home Intelligence FRD Phase 0 rationale.
 
 export const HomeActionCommandSchema = z.object({
   command: z.enum(HOME_ACTION_COMMANDS),

@@ -201,6 +201,7 @@ import { validateDecisionContextContracts } from './services/decisionPlatform/de
 import { validateDecisionDefinitionRegistry } from './services/decisionPlatform/decisionDefinitionRegistry';
 import { validateDecisionThreadTransitionContract } from './services/decisionPlatform/decisionThreadTransitions';
 import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
+import { validateIntelligenceRegistries } from './services/intelligence';
 dotenv.config();
 
 const askRegistryIssues = [
@@ -231,6 +232,13 @@ const decisionPlatformRegistryIssues = [
 ];
 if (decisionPlatformRegistryIssues.length) {
   throw new Error(`FATAL: Decision Platform registry validation failed: ${decisionPlatformRegistryIssues.join('; ')}`);
+}
+
+// Home Intelligence Functional Completeness FRD Phase 0 — same fail-fast
+// registry validation pattern as the Ask and Decision Platform registries above.
+const intelligenceRegistryIssues = [...validateIntelligenceRegistries()];
+if (intelligenceRegistryIssues.length) {
+  throw new Error(`FATAL: Home Intelligence registry validation failed: ${intelligenceRegistryIssues.join('; ')}`);
 }
 
 const app = express();

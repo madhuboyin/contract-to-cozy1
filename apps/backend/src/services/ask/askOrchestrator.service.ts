@@ -125,6 +125,10 @@ import { suppressRepeatedAskSuggestions } from './askSuggestionPolicy';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
+import {
+  ASK_OPERATION_CAPABILITY,
+  ASK_CAPABILITY_UNIQUE_OPERATION,
+} from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../skills/skillRouter';
 import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
 import { buildSkillExecutionBinding, validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
@@ -5648,47 +5652,10 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   }
 }
 
-const ASK_OPERATION_CAPABILITY: Partial<Record<AskOperationResolution['operationId'], string>> = {
-  MAINTENANCE_STATUS: 'maintenance',
-  MAINTENANCE_TASK_CREATE: 'maintenance',
-  MAINTENANCE_TASK_COMPLETE: 'maintenance',
-  MAINTENANCE_TASK_UPDATE: 'maintenance',
-  COVERAGE_GAPS: 'coverage-intelligence',
-  SAVINGS_OPPORTUNITIES: 'savings-benefits',
-  OWNERSHIP_COSTS: 'ownership-costs',
-  INVENTORY_LOOKUP: 'home-records',
-  PROPERTY_SUMMARY: 'property-brief',
-  HOME_ACTIONS: 'home-operations',
-  REPLACEMENT_GUIDANCE: 'replace-repair',
-  REFINANCE_ANALYSIS: 'mortgage-refinance-radar',
-  REFINANCE_RATE_MONITOR: 'mortgage-refinance-radar',
-  SELL_HOLD_RENT_ANALYSIS: 'sell-hold-rent',
-  GUIDANCE_JOURNEY_CREATE: 'guidance-overview',
-  QUOTE_COMPARISON_CREATE: 'quote-comparison',
-  QUOTE_COMPARISON_REVIEW: 'quote-comparison',
-  HOME_DEADLINE_MONITOR: 'maintenance',
-  CAPITAL_RESERVE_PLAN: 'capital-timeline',
-  PROPERTY_TAX_APPEAL_READINESS: 'property-tax',
-  RENOVATION_PERMIT_READINESS: 'home-renovation-risk-advisor',
-  MAJOR_EVENT_ENTRY: 'property-brief',
-};
-
-// Reverse of ASK_OPERATION_CAPABILITY, kept only where a capabilityId maps
-// to exactly one operation. Several capabilities (e.g. 'maintenance')
-// front multiple operations, and a launch context naming one of those
-// wouldn't tell us which — this only ever biases routing when the launch
-// surface unambiguously implies a single operation.
-export const ASK_CAPABILITY_UNIQUE_OPERATION: Partial<Record<string, AskOperationResolution['operationId']>> = (() => {
-  const counts = new Map<string, number>();
-  for (const capabilityId of Object.values(ASK_OPERATION_CAPABILITY)) {
-    if (capabilityId) counts.set(capabilityId, (counts.get(capabilityId) ?? 0) + 1);
-  }
-  const unique: Partial<Record<string, AskOperationResolution['operationId']>> = {};
-  for (const [operationId, capabilityId] of Object.entries(ASK_OPERATION_CAPABILITY)) {
-    if (capabilityId && counts.get(capabilityId) === 1) unique[capabilityId] = operationId as AskOperationResolution['operationId'];
-  }
-  return unique;
-})();
+// ASK_OPERATION_CAPABILITY / ASK_CAPABILITY_UNIQUE_OPERATION now come from
+// ./intelligence/capabilitySkillGuidanceBridge.registry.ts (Home Intelligence
+// Functional Completeness FRD Phase 0) — same computed values, single-sourced
+// and validated at startup instead of an untyped inline map.
 
 async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; deferSemanticValidation?: boolean }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const skill = getSkillForOperation(input.operation.operationId);

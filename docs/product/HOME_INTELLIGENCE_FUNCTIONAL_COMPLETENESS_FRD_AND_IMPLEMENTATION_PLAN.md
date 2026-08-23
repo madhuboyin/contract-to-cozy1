@@ -683,6 +683,8 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 **Functional exit:** one generated registry report can trace every active recommendation source from fact/signal through action, work, completion, and outcome owner.
 
+**Status: complete.** `apps/backend/src/services/intelligence/` now holds the Home Action adapter ownership registry (consolidating three previously separate hardcoded structures), the capability/skill/guidance bridge registry (replacing an untyped, unvalidated map previously inline in `askOrchestrator.service.ts`), the completion evidence policy registry, and contract-only shells for the intelligence consumer registry and compound rule registry (intentionally unpopulated — Phase 2 and Phase 5 populate them respectively, since nothing yet invokes their handlers). All five are validated at process boot in `apps/backend/src/index.ts`, following the existing Ask/Decision Platform registry pattern. The functional-exit report lives at [`HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md`](./HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md) — it also carries work items 3 and 4 (the 10-system independent-priority-calculation inventory, and the canonical-read-boundary decision), which are documentation deliverables rather than code. No user-visible behavior changed in this phase.
+
 ### Phase 1 — One attention authority across surfaces
 
 **Objective:** Home, Fix, Cozy, and notifications agree about what matters.
