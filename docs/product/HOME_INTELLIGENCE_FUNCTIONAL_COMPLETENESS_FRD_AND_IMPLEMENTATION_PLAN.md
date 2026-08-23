@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.8"
+version: "1.9"
 date: "August 23, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.8 |
+| Version | 1.9 |
 | Date | August 23, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -269,6 +269,17 @@ The reconciliation rules are:
 - after the Fix cutover, project Booking execution from Operational Work and remove the direct Booking-to-Fix execution projection as an independent read authority.
 
 The existing `OperationalWorkExecution` relation with execution type `BOOKING` is the canonical Booking linkage; no direct `Booking.operationalWorkItemId` foreign key is required. Because there is no existing user data, this is a forward write-path requirement and requires no historical booking backfill.
+
+The atomicity implementation boundary is the shared Home Operations persistence and use-case layer, not a Booking-specific copy of that logic:
+
+- define one shared database-client type that accepts either the global Prisma client or `Prisma.TransactionClient`;
+- allow the repository operations used by work resolution, source reconciliation, event/evidence recording, execution linking, and lifecycle transitions to receive an optional database client that defaults to the global client so existing callers remain compatible;
+- thread that same client through `resolveAndUpsertWorkItem()` and `transitionWorkItem()`, including the latter's direct source-reconciliation, schedule-override, state, and event writes; passing a transaction only to `workItemRepository.ts` while a use case still calls the global client does not satisfy atomicity;
+- execute Booking creation, Operational Work Item creation/reuse, Booking execution linkage, initial lifecycle transitions, and canonical event/evidence writes in one interactive transaction;
+- return or collect the committed lifecycle-event information needed for downstream emission, then invoke `emitWorkItemLifecycleChange()`, notifications, analytics, recompute requests, and queue work only after the transaction commits; no best-effort or externally visible side effect shall run inside the transaction; and
+- do not catch a uniqueness violation inside an interactive transaction and then continue using the potentially failed transaction. Use an atomic upsert when its update semantics are correct, or retry the entire transaction on the reviewed uniqueness conflict.
+
+Only the Booking reconciliation path is required to open the new transaction in this phase. Existing Home Operations callers may continue using the default global client, while gaining the ability to participate in a caller-owned transaction when a future workflow requires atomic cross-domain persistence.
 
 ### 8.2 Dependency-aware recomputation
 
@@ -752,7 +763,7 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 3. Reuse the existing Incident adapter and implement canonical adapters for overdue `ChecklistItem` maintenance, `Warranty` renewals, `InsurancePolicy` renewals, detector-derived inventory coverage gaps, and property health insights.
 4. Batch-load the latest applicable ready `CoverageAnalysis` records in the asynchronous orchestration boundary and pass them as optional enrichment to the pure coverage-gap adapter, producing one action per canonical coverage obligation as required by HI-ATT-009.
 5. Give each new adapter stable identity/version, evidence, freshness, timing, CTA, governance, work-key resolution, supported commands, and an authoritative completion adapter or the no-false-completion behavior required by HI-ATT-007.
-6. Retrofit Booking creation and every Booking lifecycle mutation to create/reuse exactly one Operational Work Item, atomically link the Booking as its execution, and reconcile status/evidence according to HI-ATT-010; do not limit reconciliation to bookings with Home Action lineage.
+6. Make the shared Home Operations repository and work-resolution/transition use cases transaction-aware with a backward-compatible global-client default; then retrofit Booking creation and every Booking lifecycle mutation to create/reuse exactly one Operational Work Item, atomically link the Booking as its execution, reconcile status/evidence, and emit side effects only after commit according to HI-ATT-010. Do not limit reconciliation to bookings with Home Action lineage.
 7. Verify that every item eligible under the existing Resolution Center rules resolves to exactly one canonical Home Action or Operational Work projection, except an explicitly documented intentional eligibility correction.
 8. Atomically convert Resolution Center/Fix to a projection over the completed canonical Home Action feed plus Operational Work Items; do not perform a partial category cutover or leave a fallback legacy discovery path.
 9. Make Cozy priority lists consume canonical ranking and lifecycle state.
@@ -768,7 +779,9 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 - `apps/backend/src/services/resolutionCenter.service.ts`
 - `apps/backend/src/productFramework/homeAction.contract.ts`
 - `apps/backend/src/modules/homeOperations/application/resolveWorkItem.usecase.ts`
+- `apps/backend/src/modules/homeOperations/application/transitionWorkItem.usecase.ts`
 - `apps/backend/src/modules/homeOperations/infrastructure/workItemRepository.ts`
+- `apps/backend/src/modules/homeOperations/infrastructure/workItemChangeEmitter.ts`
 - Operational Work Booking source/reconciliation adapter
 - Fix/Resolution Center and Cozy frontend presentation adapters
 
@@ -998,7 +1011,7 @@ Tests must be updated when the canonical behavior intentionally changes. The imp
 | Risk | Mitigation |
 | --- | --- |
 | Rich and plain candidates compete for one obligation | enrich before adaptation or apply an explicit deterministic merge before ranking; never infer authority from ranking score, action-ID tie-breaking, or generic work-key deduplication |
-| Booking succeeds without canonical work lineage | create/reuse the work item and link the Booking execution in the same transaction; make retries idempotent and emit side effects only after commit |
+| Booking succeeds without canonical work lineage | pass one transaction client through the shared repository and complete work-resolution/transition call graph; create/reuse the work item and link the Booking execution in the same transaction; retry the whole transaction rather than continuing after a uniqueness failure; emit side effects only after commit |
 | Recompute storms | dependency filtering, bounded/pageable target resolution, per-run target uniqueness, idempotency, batching, per-property serialization, target-level retries |
 | New canonical feed changes ordering | versioned ranking, shadow comparison during development, explicit source and component diagnostics |
 | Completion closes the wrong source | stable work keys, expected versions, source adapters, reconciliation receipts, reopen support |
