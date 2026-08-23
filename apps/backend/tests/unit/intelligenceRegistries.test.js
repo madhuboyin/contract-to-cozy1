@@ -50,6 +50,15 @@ test('validateHomeActionAdapterOwnership fails fast on inconsistent ownership fl
   assert.ok(issues.some((issue) => issue.includes('workKeyEligible but declares no workItemSourceType')));
 });
 
+test('validateHomeActionAdapterOwnership fails fast on inconsistent outcome-adapter flags', () => {
+  const bad = [
+    ...HOME_ACTION_ADAPTER_OWNERSHIP.filter((entry) => entry.sourceKind !== 'MAINTENANCE'),
+    { ...HOME_ACTION_ADAPTER_OWNERSHIP.find((entry) => entry.sourceKind === 'MAINTENANCE'), hasOutcomeAdapter: true, outcomeAdapterOwner: null },
+  ];
+  const issues = validateHomeActionAdapterOwnership(bad);
+  assert.ok(issues.some((issue) => issue.includes('hasOutcomeAdapter but declares no outcomeAdapterOwner')));
+});
+
 test('validateCompletionEvidencePolicy fails fast on a missing safety tier', () => {
   const incomplete = COMPLETION_EVIDENCE_POLICY.filter((entry) => entry.safetyTier !== 'SAFETY_EMERGENCY');
   const issues = validateCompletionEvidencePolicy(incomplete);

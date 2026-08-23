@@ -38,6 +38,58 @@ test('validateHomeActionProducerKindConsistency fails fast when a producer silen
   assert.ok(issues.some((issue) => issue.includes('loadIncidentActions') && issue.includes('disagrees')));
 });
 
+test('validateHomeActionProducerOwnership fails fast on an empty supportedCommands', () => {
+  const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadProjectActions' ? { ...entry, supportedCommands: [] } : entry);
+  const issues = validateHomeActionProducerOwnership(bad);
+  assert.ok(issues.some((issue) => issue.includes('loadProjectActions') && issue.includes('no supportedCommands')));
+});
+
+test('validateHomeActionProducerOwnership fails fast on a missing commandOwner', () => {
+  const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadProjectActions' ? { ...entry, commandOwner: '' } : entry);
+  const issues = validateHomeActionProducerOwnership(bad);
+  assert.ok(issues.some((issue) => issue.includes('loadProjectActions') && issue.includes('no commandOwner')));
+});
+
+test('validateHomeActionProducerOwnership fails fast when hasCompletionAdapter and supportedCommands disagree', () => {
+  const missingCompleteCommand = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadPersonalizationActions' ? { ...entry, supportedCommands: ['DEFER', 'SNOOZE'] } : entry);
+  const issuesA = validateHomeActionProducerOwnership(missingCompleteCommand);
+  assert.ok(issuesA.some((issue) => issue.includes('loadPersonalizationActions') && issue.includes('neither COMPLETE nor ALREADY_DONE')));
+
+  const unexpectedCompleteCommand = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadProjectActions' ? { ...entry, supportedCommands: [...entry.supportedCommands, 'COMPLETE'] } : entry);
+  const issuesB = validateHomeActionProducerOwnership(unexpectedCompleteCommand);
+  assert.ok(issuesB.some((issue) => issue.includes('loadProjectActions') && issue.includes('hasCompletionAdapter is false')));
+});
+
+test('validateHomeActionProducerOwnership fails fast on inconsistent outcome-adapter flags', () => {
+  const missingOwner = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadProjectActions' ? { ...entry, hasOutcomeAdapter: true } : entry);
+  const issuesA = validateHomeActionProducerOwnership(missingOwner);
+  assert.ok(issuesA.some((issue) => issue.includes('loadProjectActions') && issue.includes('no outcomeAdapterOwner')));
+
+  const unexpectedOwner = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadProjectActions' ? { ...entry, outcomeAdapterOwner: 'made up for this test' } : entry);
+  const issuesB = validateHomeActionProducerOwnership(unexpectedOwner);
+  assert.ok(issuesB.some((issue) => issue.includes('loadProjectActions') && issue.includes('hasOutcomeAdapter is false')));
+});
+
+test('validateHomeActionProducerOwnership fails fast when hasOutcomeAdapter is true without a completion adapter', () => {
+  const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadProjectActions' ? { ...entry, hasOutcomeAdapter: true, outcomeAdapterOwner: 'made up for this test' } : entry);
+  const issues = validateHomeActionProducerOwnership(bad);
+  assert.ok(issues.some((issue) => issue.includes('loadProjectActions') && issue.includes('no completion adapter to observe')));
+});
+
+test('validateHomeActionProducerKindConsistency fails fast when a producer claims an outcome adapter its kind does not have', () => {
+  const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadIncidentActions' ? { ...entry, hasOutcomeAdapter: true, outcomeAdapterOwner: 'made up for this test' } : entry);
+  const issues = validateHomeActionProducerKindConsistency(bad, HOME_ACTION_ADAPTER_OWNERSHIP);
+  assert.ok(issues.some((issue) => issue.includes('loadIncidentActions') && issue.includes('no outcome adapter at the kind level')));
+});
+
 /**
  * Loaders aren't dynamically enumerable from any object in the codebase —
  * homeActionSourcePromotion.service.ts's ~19 producer functions are plain

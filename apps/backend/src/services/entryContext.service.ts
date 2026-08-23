@@ -829,7 +829,12 @@ export async function getActivationFirstValue(
       href: `/dashboard/properties/${propertyId}/onboarding`,
     },
     secondaryCtas: [],
-    feedbackControls: ['COMPLETE', 'DEFER', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT'],
+    // No COMPLETE control: this action has no completion adapter (it is
+    // routed by the "activation-context:" id, not the "activation:" prefix
+    // recordFirstActionResolution owns) and self-resolves by dropping out of
+    // the feed once `missing` is empty. See homeActionProducerOwnership.ts's
+    // getActivationFirstValue entry.
+    feedbackControls: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT'],
     relatedJourneyId: null,
     createdAt: now.toISOString(),
     lastEvaluatedAt: now.toISOString(),

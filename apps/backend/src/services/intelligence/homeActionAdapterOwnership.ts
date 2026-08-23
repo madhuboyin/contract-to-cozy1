@@ -8,6 +8,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: 'applyPersonalizationHomeActionLifecycle (modules/personalization/application/applyHomeActionLifecycle.usecase.ts)',
     workKeyEligible: false,
     workItemSourceType: null,
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'The only source kind with a real COMPLETE/ALREADY_DONE adapter today.',
   },
   {
@@ -16,6 +18,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: true,
     workItemSourceType: 'MAINTENANCE',
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'COMPLETE/ALREADY_DONE not supported; feed offers ACKNOWLEDGE. Seasonal-checklist aggregate actions (id prefix "seasonal-checklist:") are excluded from work-item eligibility even though the kind is eligible (isSeasonalAggregate).',
   },
   {
@@ -24,6 +28,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: true,
     workItemSourceType: 'GUIDANCE',
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'COMPLETE/ALREADY_DONE not supported; feed offers ACKNOWLEDGE.',
   },
   {
@@ -32,6 +38,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: true,
     workItemSourceType: 'PROJECT',
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'COMPLETE/ALREADY_DONE not supported; feed offers ACKNOWLEDGE.',
   },
   {
@@ -40,6 +48,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: true,
     workItemSourceType: 'INCIDENT',
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'COMPLETE/ALREADY_DONE not supported; feed offers ACKNOWLEDGE.',
   },
   {
@@ -48,6 +58,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: true,
     workItemSourceType: 'RECALL',
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'COMPLETE/ALREADY_DONE not supported; feed offers ACKNOWLEDGE.',
   },
   {
@@ -56,6 +68,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: true,
     workItemSourceType: 'COVERAGE',
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'COMPLETE/ALREADY_DONE not supported; feed offers ACKNOWLEDGE.',
   },
   {
@@ -64,6 +78,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: true,
     workItemSourceType: 'SALE_PREP',
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'Completion happens by the homeowner updating the self-reported condition on Sale Case, not a COMPLETE command against the promoted work item.',
   },
   {
@@ -72,6 +88,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: false,
     workItemSourceType: null,
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'ACKNOWLEDGE only for most SYSTEM-kind loaders (refinance, capital timeline, tax appeal, home-fact review, ownership-cost projection). Two exceptions are routed to a real completion handler by id prefix directly inside executeHomeActionCommand (homeActions.service.ts), not declared here: "ownership-cost-change:*" and "activation:*". This id-prefix carve-out is exactly the per-loader granularity gap HI-ATT-006 calls out — see the Phase 0 registry report.',
   },
   {
@@ -80,6 +98,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: false,
     workItemSourceType: null,
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'COMPLETE/ALREADY_DONE not supported; feed offers ACKNOWLEDGE.',
   },
   {
@@ -88,6 +108,8 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
     completionAdapterOwner: null,
     workKeyEligible: false,
     workItemSourceType: null,
+    hasOutcomeAdapter: false,
+    outcomeAdapterOwner: null,
     notes: 'ACKNOWLEDGE only. Not yet promoted into a work item — HI-DOC/Phase 5 work.',
   },
 ] as const;

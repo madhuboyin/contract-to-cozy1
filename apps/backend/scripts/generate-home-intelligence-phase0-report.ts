@@ -66,13 +66,26 @@ function producerTable(): string {
       : 'No';
     const workItem = entry.workKeyEligible ? `Yes (${entry.workItemSourceType})` : 'No';
     const prefixes = entry.idPrefixes.length > 0 ? entry.idPrefixes.map((p: string) => `\`${p}\``).join(', ') : '_none_';
-    return `| \`${entry.producerId}\` | \`${entry.sourceFile}\` | ${kind} | ${completion} | ${workItem} | ${prefixes} |`;
+    const commands = entry.supportedCommands.map((c: string) => `\`${c}\``).join(', ');
+    const outcome = entry.hasOutcomeAdapter ? `Yes — ${entry.outcomeAdapterOwner}` : 'No';
+    return `| \`${entry.producerId}\` | \`${entry.sourceFile}\` | ${entry.factSignalOrigin} | ${kind} | ${commands} | ${entry.commandOwner} | ${completion} | ${outcome} | ${workItem} | ${prefixes} |`;
   });
   return [
-    '| Producer | Source file | Source kind | Completion adapter | Work-item eligible | Id prefix(es) |',
-    '| --- | --- | --- | --- | --- | --- |',
+    '| Producer | Source file | Fact/signal origin | Source kind | Supported commands | Command owner | Completion adapter | Outcome owner | Work-item eligible | Id prefix(es) |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...rows,
   ].join('\n');
+}
+
+function outcomeObservationRealitySection(): string {
+  const producersWithOutcomeAdapter = HOME_ACTION_PRODUCER_OWNERSHIP.filter((entry: HomeActionProducerOwnershipEntry) => entry.hasOutcomeAdapter).length;
+  return `## 6. Outcome observation reality (FRD §8.5 HI-OUT-005)
+
+The FRD §15 Phase 0 functional exit criterion asks the registry report to trace every active recommendation source through to its "outcome owner." The honest answer today: **${producersWithOutcomeAdapter} of ${HOME_ACTION_PRODUCER_OWNERSHIP.length}** Home Action producers have one.
+
+\`OutcomeObservationSourceType\` (prisma/schema.prisma) already declares all 9 source types HI-OUT-005 calls for (\`HOMEOWNER_REPORTED\`, \`COMPLETED_MAINTENANCE_RECORD\`, \`OPERATIONAL_WORK_ITEM\`, \`PROJECT_RECORD\`, \`BOOKING_RECORD\`, \`CLAIM_RECORD\`, \`INSPECTION_FINDING\`, \`DOCUMENT_PROMOTION\`, \`COVERAGE_DECISION\`, \`HOME_EVENT\`), but \`outcomeObservationService.ts\` only implements creation for 2 of them: \`recordHomeownerReportedOutcome\` (reachable only from Ask/Cozy chat, \`askOrchestrator.service.ts\`) and \`recordCompletedMaintenanceOutcome\` (implemented, but has zero callers anywhere in the codebase). Neither is wired into \`executeHomeActionCommand\`'s COMPLETE path for any producer — completing a Home Action never creates an OutcomeObservation today, regardless of source.
+
+This is real, verified functionality that HI-OUT-005 still needs to build — expanding outcome creation to the other 7 source types and wiring it into the Home Action completion path is a later-phase implementation project, not a Phase 0 registry-and-ownership gap. Phase 0's job here is honest declaration: \`hasOutcomeAdapter\`/\`outcomeAdapterOwner\` in \`homeActionProducerOwnership.ts\` and \`homeActionAdapterOwnership.ts\`, and the derived \`outcomeAdapter\` field in \`capabilitySkillGuidanceBridge.registry.ts\`, all resolve to false/null today — mechanically consistent with each other (validated at boot) and traceable in the table above, rather than a hardcoded placeholder.`;
 }
 
 function capabilityBridgeTable(): string {
@@ -151,7 +164,7 @@ No formal three-way capability↔skill↔guidance link existed before Phase 0. \
 
 ${capabilityBridgeTable()}
 
-**Known gap this registry documents but does not close:** \`guidanceJourneyTypeKeys\` is empty for every entry above. No real capability↔guidance-journey linkage exists anywhere in the codebase today — guidance journeys are keyed by \`signalIntentFamilies\`, not capability id, and journey step \`toolKey\` strings are informal/free-text, not validated against \`canonicalCapabilityRegistry\`. Filling this in is HI-SKL work for a later phase, not Phase 0 — populating it now would mean inventing mappings not backed by real behavior.
+**Known gaps this registry documents but does not close:** \`guidanceJourneyTypeKeys\` is empty for every entry above. No real capability↔guidance-journey linkage exists anywhere in the codebase today — guidance journeys are keyed by \`signalIntentFamilies\`, not capability id, and journey step \`toolKey\` strings are informal/free-text, not validated against \`canonicalCapabilityRegistry\`. Filling this in is HI-SKL work for a later phase, not Phase 0 — populating it now would mean inventing mappings not backed by real behavior. \`outcomeAdapter\` is also \`null\` for every entry above — see §6.
 
 ---
 
@@ -166,6 +179,10 @@ Defined in \`apps/backend/src/services/intelligence/completionEvidencePolicy.reg
 ${completionEvidenceTable()}
 
 Not yet consumed anywhere (a later phase wires it into the completion UI); defined now so that phase has a validated contract to build against.
+
+---
+
+${outcomeObservationRealitySection()}
 
 ---
 

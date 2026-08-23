@@ -85,7 +85,12 @@ function buildEntry(capabilityId: string, operationIds: readonly AskOperationId[
       ? 'Ask operation execution (askOrchestrator.service.ts executeOperation)'
       : 'Home Action promotion only (homeActionSourcePromotion.service.ts) — not Ask-reachable',
     completionOwner: ownershipEntry?.completionAdapterOwner ?? 'Not declared — no single Home Action source kind resolves for this capability today',
-    outcomeAdapter: null,
+    // Derived from the same ownershipEntry lookup as completionOwner rather
+    // than hardcoded, so this stops being null the moment any Home Action
+    // source kind actually gets an outcome adapter (HI-OUT-005) — see
+    // homeActionAdapterOwnership.ts's hasOutcomeAdapter field doc for why
+    // every kind is null today.
+    outcomeAdapter: ownershipEntry?.outcomeAdapterOwner ?? null,
   };
 }
 

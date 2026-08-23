@@ -24,6 +24,15 @@ import type { SkillId } from '../skills/skillRegistry';
  * only carry a journeyTypeKey where one is independently verifiable. An
  * empty array documents a real, current gap rather than inventing a
  * mapping — see the Phase 0 registry report.
+ *
+ * outcomeAdapter is derived in the registry from the same Home Action
+ * adapter ownership lookup completionOwner uses (homeActionAdapterOwnership.ts's
+ * outcomeAdapterOwner), not hardcoded — it is null for every entry today
+ * because it is null for every Home Action source kind: HI-OUT-005 outcome
+ * observation exists in the codebase but is reachable only from Ask/Cozy
+ * chat (askOrchestrator.service.ts's recordHomeownerReportedOutcome), never
+ * from a Home Action's COMPLETE command. A real, verified gap, not a
+ * placeholder — see the Phase 0 registry report.
  */
 export interface CapabilitySkillGuidanceBridgeEntry {
   capabilityId: string;

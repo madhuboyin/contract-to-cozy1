@@ -25,6 +25,14 @@ export interface HomeActionAdapterOwnershipEntry {
   completionAdapterOwner: string | null;
   workKeyEligible: boolean;
   workItemSourceType: OperationalWorkSourceType | null;
+  /**
+   * Whether completing an action of this kind creates an OutcomeObservation
+   * (HI-OUT-005) — false for every kind today, cross-checked against the
+   * per-producer hasOutcomeAdapter rows in homeActionProducerOwnership.ts.
+   * See that file's field doc for why this is uniformly false.
+   */
+  hasOutcomeAdapter: boolean;
+  outcomeAdapterOwner: string | null;
   notes: string;
 }
 
@@ -49,6 +57,12 @@ export function validateHomeActionAdapterOwnership(
     }
     if (!entry.workKeyEligible && entry.workItemSourceType) {
       issues.push(`homeActionAdapterOwnership entry "${entry.sourceKind}" declares a workItemSourceType but is not workKeyEligible.`);
+    }
+    if (entry.hasOutcomeAdapter && !entry.outcomeAdapterOwner) {
+      issues.push(`homeActionAdapterOwnership entry "${entry.sourceKind}" hasOutcomeAdapter but declares no outcomeAdapterOwner.`);
+    }
+    if (!entry.hasOutcomeAdapter && entry.outcomeAdapterOwner) {
+      issues.push(`homeActionAdapterOwnership entry "${entry.sourceKind}" declares an outcomeAdapterOwner but hasOutcomeAdapter is false.`);
     }
   }
   for (const kind of HOME_ACTION_SOURCE_KINDS) {
