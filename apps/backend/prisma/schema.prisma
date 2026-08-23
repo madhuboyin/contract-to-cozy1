@@ -4298,6 +4298,7 @@ model Property {
   operationalWorkReconciliations OperationalWorkReconciliation[]
   propertyChanges       PropertyChange[]
   propertyChangeCursors PropertyChangeSourceCursor[]
+  intelligenceRecomputeRuns IntelligenceRecomputeRun[]
   homeBriefingPreferences HomeBriefingPreference[]
   homeBriefingDeliveries  HomeBriefingDelivery[]
   propertyBriefs          PropertyBrief[]
@@ -6019,19 +6020,53 @@ model PropertyTransition {
 // Originally seller-prep-only (SellerPrepFeedback); generalized so any page
 // in the app can submit feedback via POST /api/feedback. propertyId/page
 // are now optional/generic to support non-property-scoped screens.
+enum FeedbackTargetType {
+  HOME_ACTION
+  OPERATIONAL_WORK_ITEM
+  RECOMMENDATION_SNAPSHOT
+  CAPABILITY_SUGGESTION
+  ASK_EXECUTION
+  PROPERTY_CHANGE
+  HOME_BRIEFING_ITEM
+  OTHER
+}
+
+enum FeedbackSurface {
+  HOME
+  FIX
+  COZY
+  NOTIFICATION
+  HOME_BRIEFING
+  TOOL
+  ADMIN
+  OTHER
+}
+
 model Feedback {
-  id         String   @id @default(uuid())
-  userId     String
-  propertyId String?
-  rating     String // "helpful"/"not-helpful" (seller-prep) or "up"/"down" (generic widget)
-  comment    String?
-  page       String   @default("app")
-  createdAt  DateTime @default(now())
+  id                       String              @id @default(uuid())
+  userId                   String
+  propertyId               String?
+  rating                   String // "helpful"/"not-helpful" (seller-prep) or "up"/"down" (generic widget)
+  comment                  String?
+  page                     String              @default("app")
+  targetType               FeedbackTargetType?
+  targetId                 String?
+  surface                  FeedbackSurface?
+  reasonCodes              String[]            @default([])
+  contextVersion           String?
+  recommendationSnapshotId String?
+  outcomeObservationId     String?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
 
   @@index([propertyId])
   @@index([rating])
   @@index([createdAt])
   @@index([userId])
+  @@index([propertyId, targetType, targetId])
+  @@index([surface, createdAt])
+  @@index([recommendationSnapshotId])
+  @@index([outcomeObservationId])
 }
 
 // NEW MODEL: Stores data for the Agent Interview Guide
@@ -8562,6 +8597,14 @@ model RecommendationSnapshot {
 enum OutcomeObservationSourceType {
   HOMEOWNER_REPORTED
   COMPLETED_MAINTENANCE_RECORD
+  OPERATIONAL_WORK_ITEM
+  PROJECT_RECORD
+  BOOKING_RECORD
+  CLAIM_RECORD
+  INSPECTION_FINDING
+  DOCUMENT_PROMOTION
+  COVERAGE_DECISION
+  HOME_EVENT
 }
 
 enum OutcomeObservationVerificationStatus {
@@ -9336,6 +9379,8 @@ enum DomainEventType {
   REFINANCE_NEXT_STEP_STARTED
   REFINANCE_OUTCOME_COMPLETED
   RADAR_PROPERTY_RECONCILIATION_REQUESTED
+  PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED
+  PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED
 }
 
 enum DomainEventStatus {
@@ -9527,6 +9572,86 @@ model DomainEvent {
   @@index([status, createdAt])
   @@index([type, status])
   @@map("domain_events")
+}
+
+enum IntelligenceRecomputeTriggerType {
+  PROPERTY_FACT_CHANGED
+  SOURCE_RECORD_CHANGED
+  ACTION_STATE_CHANGED
+  OUTCOME_RECORDED
+  SOURCE_HEALTH_CHANGED
+  DOCUMENT_PROMOTED
+  MANUAL_REFRESH
+}
+
+enum IntelligenceRecomputeRunStatus {
+  PENDING
+  PROCESSING
+  PARTIAL
+  SUCCEEDED
+  FAILED
+}
+
+enum IntelligenceRecomputeTargetStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  SKIPPED
+  FAILED
+}
+
+// Durable orchestration receipt for dependency-aware intelligence refreshes.
+// Domain records remain canonical; this model records why recomputation ran,
+// which registered consumers were evaluated, and whether each projection was
+// refreshed successfully. It stores no duplicate property facts.
+model IntelligenceRecomputeRun {
+  id                   String                           @id @default(uuid())
+  propertyId           String
+  triggerType          IntelligenceRecomputeTriggerType
+  triggerEntityType    String
+  triggerEntityId      String
+  changedFactKeys      String[]                         @default([])
+  idempotencyKey       String                           @unique
+  requestedContextVersion String?
+  resultingContextVersion String?
+  status               IntelligenceRecomputeRunStatus  @default(PENDING)
+  requestedAt          DateTime                         @default(now())
+  startedAt            DateTime?
+  completedAt          DateTime?
+  errorSummary         String?                          @db.Text
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+
+  property Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  targets  IntelligenceRecomputeTarget[]
+
+  @@index([propertyId, requestedAt(sort: Desc)])
+  @@index([status, requestedAt])
+  @@index([triggerEntityType, triggerEntityId])
+  @@map("intelligence_recompute_runs")
+}
+
+model IntelligenceRecomputeTarget {
+  id                String                            @id @default(uuid())
+  recomputeRunId    String
+  consumerKey       String
+  consumerVersion   String
+  status            IntelligenceRecomputeTargetStatus @default(PENDING)
+  inputVersion      String?
+  outputVersion     String?
+  attempts          Int                               @default(0)
+  lastError         String?                           @db.Text
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime                          @default(now())
+  updatedAt         DateTime                          @updatedAt
+
+  recomputeRun IntelligenceRecomputeRun @relation(fields: [recomputeRunId], references: [id], onDelete: Cascade)
+
+  @@unique([recomputeRunId, consumerKey])
+  @@index([status, updatedAt])
+  @@index([consumerKey, status])
+  @@map("intelligence_recompute_targets")
 }
 
 // ============================================================================
