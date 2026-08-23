@@ -325,13 +325,27 @@ export type OrchestrationSummary = {
   aggregationContext?: Awaited<ReturnType<typeof getAggregationContextEnvelope>> | null;
 };
 
+/**
+ * Home Intelligence Functional Completeness FRD Phase 1, Slice 3 (coverage
+ * decision insight parity). A saved CoverageAnalysis is enrichment of this
+ * SAME coverage-gap obligation, not a second competing recommendation — so
+ * it is threaded in here as a parameter rather than promoted through a
+ * separate loader, which would create two candidates racing for the same
+ * canonical/work key with no reliable winner (rankAndDeduplicateHomeActions
+ * and linkWorkItemsAndReconcile both pick a winner purely by ranking score,
+ * which does not account for evidence richness). The caller
+ * (getOrchestrationSummary) batch-loads the applicable analyses since this
+ * function stays synchronous and pure.
+ */
 export function adaptOrchestratedActionToHomeAction(
   action: OrchestratedAction,
   evaluatedAt = new Date(),
+  coverageAnalysis?: { id: string; confidence: string; computedAt: Date } | null,
 ): HomeAction {
   const critical = normalizeUpper(action.riskLevel) === 'CRITICAL';
   const isCoverageAction = action.relatedEntity?.type === 'INVENTORY_ITEM'
     && action.actionKey.startsWith('COVERAGE_GAP::');
+  const hasSavedCoverageAnalysis = isCoverageAction && Boolean(coverageAnalysis);
   const sourceKind = action.source === 'CHECKLIST'
     ? 'MAINTENANCE'
     : isCoverageAction
@@ -423,32 +437,59 @@ export function adaptOrchestratedActionToHomeAction(
           ? 'The current source record provides this due date.'
           : 'No reliable due date is available; review the source evidence before scheduling.',
     },
-    evidence: [{
-      id: `orchestration:${action.actionKey}`,
-      type: 'SYSTEM_DERIVATION',
-      label: displayTitle,
-      source: isCoverageAction
-        ? 'Home Record coverage assessment'
-        : action.source === 'CHECKLIST'
-          ? 'Seasonal or maintenance checklist'
-          : 'Risk assessment',
-      observedAt,
-      freshness: action.confidence?.level === 'LOW' ? 'UNKNOWN' : 'CURRENT',
-      confidence: confidenceScore,
-    }],
-    assumptions: [],
-    options: [],
-    tradeoffs: [],
+    evidence: [
+      {
+        id: `orchestration:${action.actionKey}`,
+        type: 'SYSTEM_DERIVATION',
+        label: displayTitle,
+        source: isCoverageAction
+          ? 'Home Record coverage assessment'
+          : action.source === 'CHECKLIST'
+            ? 'Seasonal or maintenance checklist'
+            : 'Risk assessment',
+        observedAt,
+        freshness: action.confidence?.level === 'LOW' ? 'UNKNOWN' : 'CURRENT',
+        confidence: confidenceScore,
+      },
+      ...(hasSavedCoverageAnalysis && coverageAnalysis ? [{
+        id: `coverage-analysis:${coverageAnalysis.id}`,
+        type: 'SYSTEM_DERIVATION' as const,
+        label: `Protection cost scenario for ${displayTitle}`,
+        source: 'Coverage Intelligence',
+        observedAt: coverageAnalysis.computedAt.toISOString(),
+        freshness: 'CURRENT' as const,
+        confidence: normalizeHomeActionConfidenceScore(
+          coverageAnalysis.confidence === 'HIGH' ? 0.9 : coverageAnalysis.confidence === 'MEDIUM' ? 0.65 : 0.4,
+        ),
+      }] : []),
+    ],
+    assumptions: hasSavedCoverageAnalysis ? [{
+      key: 'coverage-analysis-computed-at',
+      label: 'Modeled cost comparison is current',
+      value: `Computed ${coverageAnalysis!.computedAt.toISOString()}`,
+      source: 'SYSTEM_DEFAULT' as const,
+      editable: true,
+    }] : [],
+    options: hasSavedCoverageAnalysis ? [
+      { id: 'add-protection', label: 'Add protection', summary: `Add warranty or insurance coverage for ${displayTitle}.`, recommended: true },
+      { id: 'self-fund', label: 'Self-fund', summary: `Rely on savings to cover a repair or replacement for ${displayTitle} if needed.`, recommended: false },
+    ] : [],
+    tradeoffs: hasSavedCoverageAnalysis ? [
+      { optionId: 'add-protection', dimension: 'COVERAGE' as const, summary: coverageExposure ? `Protects against the estimated ${coverageExposure} replacement exposure.` : 'Protects against replacement exposure for this item.' },
+      { optionId: 'self-fund', dimension: 'COST' as const, summary: 'No ongoing premium, but the full cost falls on you if the item fails.' },
+    ] : [],
     confidence: {
       score: confidenceScore,
       label: action.confidence?.level ?? 'MEDIUM',
       missing: action.cta?.reason === 'MISSING_DATA' ? ['Source context requested by the action'] : [],
     },
     governance: {
-      safetyTier: critical ? 'SAFETY_EMERGENCY' : 'LOW_CONSEQUENCE',
+      safetyTier: critical ? 'SAFETY_EMERGENCY' : hasSavedCoverageAnalysis ? 'MATERIAL_FINANCIAL' : 'LOW_CONSEQUENCE',
       professionalBoundary: critical
         ? 'This action is a conservative escalation prompt, not a diagnosis or emergency determination.'
-        : null,
+        : hasSavedCoverageAnalysis
+          ? 'Modeled cost comparison only; verify controlling contract terms before deciding.'
+          : null,
       jurisdictionCheck: {
         status: 'NOT_REQUIRED',
         jurisdiction: null,
@@ -2544,7 +2585,33 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
     logger.warn({ err: error }, '[ORCHESTRATION] shared context enrichment failed');
   }
 
-  const homeActions = actions.map((action) => adaptOrchestratedActionToHomeAction(action));
+  // Home Intelligence Functional Completeness FRD Phase 1, Slice 3 — batch
+  // load once here (the one async caller) so adaptOrchestratedActionToHomeAction
+  // can stay synchronous and pure. Latest READY analysis wins per item,
+  // matching resolutionCenter.service.ts's coverageAnalysesByItemId map.
+  const coverageGapInventoryItemIds = [...new Set(
+    actions
+      .filter((action) => action.relatedEntity?.type === 'INVENTORY_ITEM' && action.actionKey.startsWith('COVERAGE_GAP::'))
+      .map((action) => action.relatedEntity!.id),
+  )];
+  const coverageAnalysesByItemId = new Map<string, { id: string; confidence: string; computedAt: Date }>();
+  if (coverageGapInventoryItemIds.length > 0) {
+    const coverageAnalyses = await prisma.coverageAnalysis.findMany({
+      where: { propertyId, inventoryItemId: { in: coverageGapInventoryItemIds }, status: 'READY' },
+      select: { id: true, inventoryItemId: true, confidence: true, computedAt: true },
+      orderBy: { computedAt: 'desc' },
+    });
+    for (const analysis of coverageAnalyses) {
+      if (!analysis.inventoryItemId || coverageAnalysesByItemId.has(analysis.inventoryItemId)) continue;
+      coverageAnalysesByItemId.set(analysis.inventoryItemId, analysis);
+    }
+  }
+
+  const homeActions = actions.map((action) => adaptOrchestratedActionToHomeAction(
+    action,
+    undefined,
+    action.relatedEntity?.type === 'INVENTORY_ITEM' ? coverageAnalysesByItemId.get(action.relatedEntity.id) : undefined,
+  ));
   emitHomeActionsSurfaced({
     propertyId,
     userId,

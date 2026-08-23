@@ -1,7 +1,7 @@
 ---
 title: "Home Intelligence Phase 1 — Source Parity Status"
 document_type: "Implementation status report"
-status: "Phase 1 in progress — Slices 1-2 complete"
+status: "Phase 1 in progress — Slices 1-3 complete"
 date: "August 23, 2026"
 ---
 
@@ -19,9 +19,19 @@ Tracks the HI-ATT-008 source-parity matrix in [`HOME_INTELLIGENCE_FUNCTIONAL_COM
 | Property health insight | `Property.healthScore.insights` + appliance install-year gaps | **DONE (Slice 2)** | New `loadHealthInsightActions` loader. My earlier "Heaviest remaining row" assessment was wrong — `calculateHealthScore()` (`apps/backend/src/utils/propertyScore.util.ts`) is a pure function with no `userId` dependency; it doesn't require the auth-scoped `getPropertyById` path Resolution Center happens to use. |
 | Active execution item | `Booking` | **NOT STARTED — deferred pending a product decision** | Not a coding gap: the schema has a dead `OperationalWorkExecutionType.BOOKING` enum value nothing ever writes to, no resolver exists, and most bookings are created via a marketplace flow (`POST /api/bookings` needs only `providerId`/`serviceId`/`propertyId`) with **no** Home Action/work-item origin at all. "Reconciled" can't mean 100% coverage without either retrofitting booking creation to thread a `workKey` through, or explicitly accepting that marketplace-direct bookings have no Operational Work projection — that tradeoff needs a product decision before implementation. |
 | Repair/replace decision insight | `ReplaceRepairAnalysis` + `GuidanceJourney` | **DONE (Slice 2)** | New `loadRepairReplaceDecisionActions` loader. Considered and rejected wrapping this in a `DecisionThread`: `decisionThreadService.ts`'s only creation path (`createHvacDecisionThread`) is hardcoded to `category: 'HVAC'` and recomputes its own verdict via a separate engine rather than ingesting an existing `ReplaceRepairAnalysis` row — using it would mean building an entirely new generic-category decision definition and risks two systems disagreeing about the same item's verdict. |
-| Coverage decision insight | `CoverageAnalysis` + detector result | **NOT STARTED** | Smaller than originally assessed — the exposure/detection data already flows through `orchestration.service.ts`'s existing `COVERAGE_GAP` → `adaptOrchestratedActionToHomeAction` path (`LOW_CONSEQUENCE` tier, no `options`/`tradeoffs`). What's missing is specifically surfacing a *saved* `CoverageAnalysis` when one exists (matching Resolution Center's `hasSavedAnalysis`/`scenarioComputed` distinction) — likely an enrichment to that existing path rather than a new loader in `homeActionSourcePromotion.service.ts`. Deferred to keep Slice 2's review surface to one file/pattern. |
+| Coverage decision insight | `CoverageAnalysis` + detector result | **DONE (Slice 3)** | `adaptOrchestratedActionToHomeAction()` (`orchestration.service.ts`) now takes an optional `coverageAnalysis` parameter; `getOrchestrationSummary()` batch-loads the applicable `READY` `CoverageAnalysis` rows once and passes the matching one per inventory item. When present, the action elevates to `MATERIAL_FINANCIAL` with synthesized options/tradeoffs/assumptions and a second evidence entry. An additive-loader approach (racing the existing orchestration action for the same canonical/work key) was considered and rejected — see below. |
 
-**Summary: 7 of 9 rows done (2 pre-existing, 3 from Slice 1+2 new loaders, 2 already covered but previously undocumented), 2 remain: booking reconciliation (needs a product decision) and coverage-analysis enrichment (small, deferred for review-surface reasons).** Per HI-ATT-008 and the Phase 1 functional exit condition, Fix's read authority stays on `resolutionCenter.service.ts` until both remaining rows are done. This is intentionally not a full Phase 1 completion — see the FRD's Phase 1 status note for the explicit fallback this follows.
+**Summary: 8 of 9 rows done (2 pre-existing, 4 from Slice 1-3 new/enriched producers, 2 already covered but previously undocumented), 1 remains: booking reconciliation, which needs a product decision.** Per HI-ATT-008 and the Phase 1 functional exit condition, Fix's read authority stays on `resolutionCenter.service.ts` until that row is done. This is intentionally not a full Phase 1 completion — see the FRD's Phase 1 status note for the explicit fallback this follows.
+
+## Slice 3's implementation
+
+`apps/backend/src/services/orchestration.service.ts`:
+- The original plan was an additive loader (Slice 1/2's pattern) producing a richer COVERAGE-kind action for items with a saved `CoverageAnalysis`, relying on the existing dedup machinery (`rankAndDeduplicateHomeActions`'s `coverage-item:<inventoryItemId>` canonical-key grouping, then `linkWorkItemsAndReconcile`'s `workKey` grouping) to pick a winner against the plain orchestration-sourced action. Verified against the actual code that this is unsafe: both dedup passes pick a winner purely by ranking score (safety tier, urgency, confidence, job, actionability, missing-context penalty) then lexicographic action ID — richness of evidence/options/tradeoffs plays no part, so the enriched candidate could lose, and forcing a win by inflating priority/tier would corrupt ranking semantics for an unrelated reason.
+- Instead: `adaptOrchestratedActionToHomeAction()` stays synchronous and pure, gaining an optional third parameter (`coverageAnalysis?: { id, confidence, computedAt }`). Its one caller, `getOrchestrationSummary()` (already `async`), batch-loads `CoverageAnalysis` (`status: 'READY'`) for the coverage-gap items in the current action set, reduces to the latest one per item, and passes it through — producing exactly one Home Action per obligation, no competing candidates.
+- With an analysis present: `governance.safetyTier` elevates `LOW_CONSEQUENCE` → `MATERIAL_FINANCIAL`; `assumptions`/`options`/`tradeoffs` are synthesized generically (Add protection vs. Self-fund, a coverage/cost tradeoff pair, a computed-at assumption) to satisfy that tier's structural minimums (≥1 assumption, ≥2 options, ≥1 tradeoff per `HomeActionSchema`'s `superRefine`); a second evidence entry references the analysis's id/confidence/computed time, matching Resolution Center's `mapCoverageGapsToInsights` trust block. Without an analysis: byte-for-byte unchanged from before this slice.
+- Test coverage: `apps/backend/tests/unit/orchestrationCoverageAnalysisEnrichment.test.js` — no-analysis case unchanged, with-analysis case elevates correctly and round-trips through `HomeActionSchema.parse()`, a non-coverage action is unaffected by the new parameter.
+
+No change to `homeActionSourcePromotion.service.ts`, `resolutionCenter.service.ts`, or the Fix frontend in this slice.
 
 ## Slice 2's implementation
 
@@ -34,7 +44,7 @@ Tracks the HI-ATT-008 source-parity matrix in [`HOME_INTELLIGENCE_FUNCTIONAL_COM
 
 No change to `resolutionCenter.service.ts`, its API, or the Fix frontend in this slice either.
 
-## This slice's implementation
+## Slice 1's implementation
 
 `apps/backend/src/services/homeActionSourcePromotion.service.ts`:
 - `HomeActionSourceDb`'s optional field group extended with `warranty` | `insurancePolicy` (defensive `if (!db.warranty || !db.insurancePolicy) return [];` guard, matching the existing `loadInspectionFindingActions` convention — keeps the 5 existing test files with fake `db` stubs that don't declare these fields working unmodified).
