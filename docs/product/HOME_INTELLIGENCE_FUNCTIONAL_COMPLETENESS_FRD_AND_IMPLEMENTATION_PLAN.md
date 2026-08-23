@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.10"
+version: "1.11"
 date: "August 23, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.10 |
+| Version | 1.11 |
 | Date | August 23, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -283,6 +283,18 @@ Origin resolution shall be deterministic and shall never infer an existing oblig
 5. Zero matches, multiple matches, an incompatible match, or any unresolved lineage shall produce a new standalone `SERVICE_EXECUTION` item. The server shall not guess, choose the newest candidate, or rank possible work items.
 
 The Booking response shall include the resolved `operationalWorkItemId` and an origin resolution result of `EXPLICIT`, `DOMAIN_PROVENANCE`, or `STANDALONE`, allowing diagnostics and downstream consumers to explain why the linkage was selected.
+
+Booking cancellation shall distinguish loss of one execution from loss of the underlying obligation:
+
+- an originating obligation remains valid only when an active non-Booking trigger/evidence source or other reviewed domain authority still represents open work; explicit origin lineage alone does not prove that the obligation remains current;
+- when the originating obligation remains valid, an `ACCEPTED` item remains `ACCEPTED`, a `SCHEDULED` item transitions to `ACCEPTED`, and an `IN_PROGRESS` item transitions to `ACCEPTED`; `SCHEDULED -> ACCEPTED` shall be added to the legal domain transition map, while the existing `IN_PROGRESS -> ACCEPTED` edge is reused;
+- the cancellation reconciliation shall remove Booking-owned schedule/assignment context, restore or preserve source-derived due-window context, retain the cancelled Booking execution link as history, and leave the obligation actionable for a replacement execution;
+- rollback to `ACCEPTED` is domain-managed. Homeowner-facing generic Operational Work commands shall not expose `SCHEDULED -> ACCEPTED`, `IN_PROGRESS -> ACCEPTED`, or `IN_PROJECT -> ACCEPTED`; acceptance from `CANDIDATE` and reviewed follow-up flows remain governed separately;
+- cancellation shall record `EXECUTION_CANCELLED`, not a second `WORK_ACCEPTED` event. The event payload shall include Booking identifier, prior work state, origin resolution, cancellation actor/reason, and whether an independent obligation remained active;
+- when a standalone Booking-created item has no independent open source, close it with disposition `CANCELLED`; do not use `NOT_RELEVANT`, `DISMISSED`, or a null disposition; and
+- `BLOCKED`, `DEFERRED`, `REPORTED_COMPLETE`, `VERIFIED`, `FOLLOW_UP_DUE`, and `CLOSED` items shall not be generically rolled back by Booking cancellation. Their reconciliation shall follow the applicable source/outcome policy or surface a diagnosable conflict.
+
+Cancellation reconciliation is part of the same canonical Booking transaction and shall be idempotent on Booking identifier plus cancellation version/event.
 
 The atomicity implementation boundary is the shared Home Operations persistence and use-case layer, not a Booking-specific copy of that logic:
 
@@ -553,6 +565,8 @@ No property facts or recommendation payloads are duplicated into these records.
 
 `OperationalObligationType` is extended with `SERVICE_EXECUTION`, and `OperationalWorkSourceType` is extended with `BOOKING`. These values allow a marketplace-originated Booking to establish an accurately typed work obligation and provenance record without pretending that it came from Maintenance, Guidance, Project, or another recommendation source.
 
+`OperationalWorkEventType` is extended with `EXECUTION_CANCELLED`, and `OperationalWorkItemDisposition` is extended with `CANCELLED`. Execution cancellation is an event when the obligation survives and a terminal disposition only when the cancelled execution was the standalone item's sole basis.
+
 `OperationalWorkExecutionType.BOOKING` and the existing polymorphic execution entity identifier remain the canonical relation between the work item and Booking. No direct Booking-to-work-item foreign key or second booking-work table is added.
 
 ### 9.6 Explicitly avoided schema changes
@@ -783,7 +797,7 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 3. Reuse the existing Incident adapter and implement canonical adapters for overdue `ChecklistItem` maintenance, `Warranty` renewals, `InsurancePolicy` renewals, detector-derived inventory coverage gaps, and property health insights.
 4. Batch-load the latest applicable ready `CoverageAnalysis` records in the asynchronous orchestration boundary and pass them as optional enrichment to the pure coverage-gap adapter, producing one action per canonical coverage obligation as required by HI-ATT-009.
 5. Give each new adapter stable identity/version, evidence, freshness, timing, CTA, governance, work-key resolution, supported commands, and an authoritative completion adapter or the no-false-completion behavior required by HI-ATT-007.
-6. Add optional explicit `originWorkItemId` to the Booking write contract and implement deterministic origin resolution with exact source/work-key provenance and standalone fallback. Make the shared Home Operations repository and work-resolution/transition use cases transaction-aware with a backward-compatible global-client default; then retrofit Booking creation and every Booking lifecycle mutation to create/reuse exactly one Operational Work Item, atomically link the Booking as its execution, reconcile status/evidence, and emit side effects only after commit according to HI-ATT-010. Do not limit reconciliation to bookings with Home Action lineage or infer an obligation from inventory/service similarity.
+6. Add optional explicit `originWorkItemId` to the Booking write contract and implement deterministic origin resolution with exact source/work-key provenance and standalone fallback. Add domain-only `SCHEDULED -> ACCEPTED` cancellation rollback, restrict execution rollback from generic homeowner commands, and implement distinct surviving-obligation versus standalone-closure cancellation behavior. Make the shared Home Operations repository and work-resolution/transition use cases transaction-aware with a backward-compatible global-client default; then retrofit Booking creation and every Booking lifecycle mutation to create/reuse exactly one Operational Work Item, atomically link the Booking as its execution, reconcile status/evidence, and emit side effects only after commit according to HI-ATT-010. Do not limit reconciliation to bookings with Home Action lineage or infer an obligation from inventory/service similarity.
 7. Verify that every item eligible under the existing Resolution Center rules resolves to exactly one canonical Home Action or Operational Work projection, except an explicitly documented intentional eligibility correction.
 8. Atomically convert Resolution Center/Fix to a projection over the completed canonical Home Action feed plus Operational Work Items; do not perform a partial category cutover or leave a fallback legacy discovery path.
 9. Make Cozy priority lists consume canonical ranking and lifecycle state.
@@ -801,6 +815,8 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 - `apps/backend/src/productFramework/homeAction.contract.ts`
 - `apps/backend/src/modules/homeOperations/application/resolveWorkItem.usecase.ts`
 - `apps/backend/src/modules/homeOperations/application/transitionWorkItem.usecase.ts`
+- `apps/backend/src/modules/homeOperations/domain/transitions.ts`
+- `apps/backend/src/modules/homeOperations/domain/userGovernance.ts`
 - `apps/backend/src/modules/homeOperations/infrastructure/workItemRepository.ts`
 - `apps/backend/src/modules/homeOperations/infrastructure/workItemChangeEmitter.ts`
 - Operational Work Booking source/reconciliation adapter
@@ -1033,6 +1049,7 @@ Tests must be updated when the canonical behavior intentionally changes. The imp
 | --- | --- |
 | Rich and plain candidates compete for one obligation | enrich before adaptation or apply an explicit deterministic merge before ranking; never infer authority from ranking score, action-ID tie-breaking, or generic work-key deduplication |
 | Booking context links the wrong obligation | prefer validated `originWorkItemId`, allow only exact durable source/work-key provenance as fallback, never select by inventory/service similarity, and create standalone work whenever resolution is absent or ambiguous |
+| Booking cancellation closes valid work or leaves stale scheduled work | evaluate independent source authority; use domain-only execution rollback to `ACCEPTED` when work survives; close standalone work with `CANCELLED`; retain execution history; record `EXECUTION_CANCELLED`; reject unsupported-state rollback |
 | Booking succeeds without canonical work lineage | pass one transaction client through the shared repository and complete work-resolution/transition call graph; create/reuse the work item and link the Booking execution in the same transaction; retry the whole transaction rather than continuing after a uniqueness failure; emit side effects only after commit |
 | Recompute storms | dependency filtering, bounded/pageable target resolution, per-run target uniqueness, idempotency, batching, per-property serialization, target-level retries |
 | New canonical feed changes ordering | versioned ranking, shadow comparison during development, explicit source and component diagnostics |
