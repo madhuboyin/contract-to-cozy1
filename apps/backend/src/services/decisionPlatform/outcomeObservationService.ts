@@ -238,9 +238,24 @@ export async function disputeOutcomeObservation(observationId: string, propertyI
   });
 }
 
+// HI-OUT-005 (see the Phase 0/2 registry report) expanded
+// OutcomeObservationSourceType to 10 values, but only the first two are
+// actually created anywhere today (recordHomeownerReportedOutcome,
+// recordCompletedMaintenanceOutcome) — the rest have no creation path yet.
+// Every case is still listed explicitly, not a default fallback, so adding
+// a real creation path later trips this switch's exhaustiveness check
+// again rather than silently reusing a generic label.
 export function sourceTypeLabel(sourceType: OutcomeObservationSourceType): string {
   switch (sourceType) {
     case 'HOMEOWNER_REPORTED': return 'You reported this';
     case 'COMPLETED_MAINTENANCE_RECORD': return 'From a completed maintenance record';
+    case 'OPERATIONAL_WORK_ITEM': return 'From completed work';
+    case 'PROJECT_RECORD': return 'From a completed project';
+    case 'BOOKING_RECORD': return 'From a completed booking';
+    case 'CLAIM_RECORD': return 'From an insurance claim';
+    case 'INSPECTION_FINDING': return 'From an inspection finding';
+    case 'DOCUMENT_PROMOTION': return 'From an uploaded document';
+    case 'COVERAGE_DECISION': return 'From a coverage decision';
+    case 'HOME_EVENT': return 'From a recorded home event';
   }
 }
