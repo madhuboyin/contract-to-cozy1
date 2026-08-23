@@ -1,4 +1,5 @@
 import type { HomeActionAdapterOwnershipEntry } from './homeActionAdapterOwnership.contract';
+import { HOME_ACTION_PRODUCER_OWNERSHIP } from './homeActionProducerOwnership';
 
 export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipEntry[] = [
   {
@@ -94,12 +95,30 @@ export const HOME_ACTION_ADAPTER_OWNERSHIP: readonly HomeActionAdapterOwnershipE
 export const SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER: ReadonlySet<HomeActionAdapterOwnershipEntry['sourceKind']> =
   new Set(HOME_ACTION_ADAPTER_OWNERSHIP.filter((entry) => !entry.hasCompletionAdapter).map((entry) => entry.sourceKind));
 
+/**
+ * Derived from the producer-level registry (homeActionProducerOwnership.ts)
+ * rather than hand-typed here, so a kind can't be marked eligible/ineligible
+ * at this table without the underlying producers actually agreeing — a kind
+ * is eligible if any of its producers are (e.g. MAINTENANCE stays eligible
+ * even though the seasonal-checklist aggregate producer within it is not).
+ * Producers with sourceKind: null (dynamic per-action kind) don't
+ * contribute here; their eligibility is governed by whichever kind they
+ * resolve to at runtime, which this table already covers.
+ */
 export const WORK_ITEM_ELIGIBLE_SOURCE_KINDS: ReadonlySet<HomeActionAdapterOwnershipEntry['sourceKind']> =
-  new Set(HOME_ACTION_ADAPTER_OWNERSHIP.filter((entry) => entry.workKeyEligible).map((entry) => entry.sourceKind));
+  new Set(
+    HOME_ACTION_PRODUCER_OWNERSHIP
+      .filter((entry): entry is typeof entry & { sourceKind: HomeActionAdapterOwnershipEntry['sourceKind'] } =>
+        entry.sourceKind !== null && entry.workKeyEligible)
+      .map((entry) => entry.sourceKind),
+  );
 
 export const SOURCE_TYPE_BY_KIND: Partial<Record<HomeActionAdapterOwnershipEntry['sourceKind'], NonNullable<HomeActionAdapterOwnershipEntry['workItemSourceType']>>> =
   Object.fromEntries(
-    HOME_ACTION_ADAPTER_OWNERSHIP
-      .filter((entry): entry is HomeActionAdapterOwnershipEntry & { workItemSourceType: NonNullable<HomeActionAdapterOwnershipEntry['workItemSourceType']> } => entry.workItemSourceType !== null)
+    HOME_ACTION_PRODUCER_OWNERSHIP
+      .filter((entry): entry is typeof entry & {
+        sourceKind: HomeActionAdapterOwnershipEntry['sourceKind'];
+        workItemSourceType: NonNullable<HomeActionAdapterOwnershipEntry['workItemSourceType']>;
+      } => entry.sourceKind !== null && entry.workItemSourceType !== null)
       .map((entry) => [entry.sourceKind, entry.workItemSourceType]),
   );

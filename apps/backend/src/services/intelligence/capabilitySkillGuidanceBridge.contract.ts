@@ -9,7 +9,14 @@ import type { SkillId } from '../skills/skillRegistry';
  * ownership metadata that make it executable from Cozy and eligible for
  * Home Action promotion. HI-SKL-002 requires startup validation to fail
  * when an active capability claims Cozy execution or Home Action
- * integration without these mappings — see validateCapabilitySkillGuidanceBridge.
+ * integration without these mappings — see validateCapabilitySkillGuidanceBridge,
+ * whose completeness check (capabilityIdsRequiringBridge) covers every
+ * capability with a non-empty recommendation.sourceKinds. A capability
+ * reachable only via an Ask operation (empty sourceKinds, e.g. `maintenance`,
+ * `home-records`) has no independent canonical signal marking it "Ask
+ * reachable" today — completeness there still depends on this file's own
+ * entries being kept current by hand, a documented gap rather than a solved
+ * one (see the Phase 0 registry report).
  *
  * guidanceJourneyTypeKeys is deliberately sparse: no formal capability <->
  * guidance-journey linkage exists in the codebase today (guidance journeys
@@ -36,6 +43,18 @@ export interface CapabilitySkillGuidanceBridgeValidationContext {
   operationExists: (operationId: AskOperationId) => boolean;
   skillCoversOperation: (skillId: SkillId, operationId: AskOperationId) => boolean;
   guidanceJourneyTypeKeyExists: (journeyTypeKey: string) => boolean;
+  /**
+   * Capability ids that mechanically claim Home Action integration today —
+   * i.e. every capability in canonicalCapabilityRegistry with a non-empty
+   * recommendation.sourceKinds, the same field buildEntry already reads to
+   * resolve homeActionSourceKind. This is the one signal on
+   * ToolCapabilityDefinition that's independently checkable without
+   * inventing a new schema field; a capability reachable only via an Ask
+   * operation (no sourceKinds) has no such independent signal today and is
+   * not covered by this completeness check — see this file's header
+   * comment.
+   */
+  capabilityIdsRequiringBridge: () => readonly string[];
 }
 
 export function validateCapabilitySkillGuidanceBridge(
@@ -77,5 +96,12 @@ export function validateCapabilitySkillGuidanceBridge(
       issues.push(`capabilitySkillGuidanceBridge entry "${entry.capabilityId}" claims Cozy execution or Home Action integration but declares no executionOwner.`);
     }
   }
+
+  for (const capabilityId of context.capabilityIdsRequiringBridge()) {
+    if (!seen.has(capabilityId)) {
+      issues.push(`Capability "${capabilityId}" claims Home Action integration (non-empty recommendation.sourceKinds) but has no capabilitySkillGuidanceBridge entry.`);
+    }
+  }
+
   return issues;
 }

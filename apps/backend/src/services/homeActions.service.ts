@@ -64,6 +64,10 @@ import { transitionWorkItem } from '../modules/homeOperations/application/transi
 import { markWorkItemUnderstood, recordWorkEvent } from '../modules/homeOperations/infrastructure/workItemRepository';
 import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState, Prisma } from '@prisma/client';
 import { SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER } from './intelligence/homeActionAdapterOwnership';
+import {
+  OWNERSHIP_COST_CHANGE_ID_PREFIX,
+  ACTIVATION_ID_PREFIX,
+} from './intelligence/homeActionProducerOwnership';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -1214,9 +1218,10 @@ export async function executeHomeActionCommand(
     SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER.has(action.source.kind) &&
     // ownership-cost-change and activation actions are promoted with a
     // SYSTEM source.kind but are routed to a real completion adapter below
-    // by id prefix — they are not part of the untracked-source guard.
-    !action.id.startsWith('ownership-cost-change:') &&
-    !action.id.startsWith('activation:')
+    // by id prefix — declared as isKindLevelCompletionException entries in
+    // homeActionProducerOwnership.ts, not part of the untracked-source guard.
+    !action.id.startsWith(OWNERSHIP_COST_CHANGE_ID_PREFIX) &&
+    !action.id.startsWith(ACTIVATION_ID_PREFIX)
   ) {
     throw new Error(
       `${input.command} is not supported for this home action; use ACKNOWLEDGE instead.`,
@@ -1293,8 +1298,8 @@ export async function executeHomeActionCommand(
     }
   }
 
-  if (action.id.startsWith('ownership-cost-change:')) {
-    const sourceChangeId = action.id.slice('ownership-cost-change:'.length);
+  if (action.id.startsWith(OWNERSHIP_COST_CHANGE_ID_PREFIX)) {
+    const sourceChangeId = action.id.slice(OWNERSHIP_COST_CHANGE_ID_PREFIX.length);
     const ownershipAction = input.command === 'COMPLETE' || input.command === 'ALREADY_DONE'
       ? 'RESOLVE'
       : input.command === 'DEFER' || input.command === 'SNOOZE'
@@ -1330,7 +1335,7 @@ export async function executeHomeActionCommand(
     await markPropertyAsHavingNoMortgage(propertyId);
   }
 
-  if (action.id.startsWith('activation:')) {
+  if (action.id.startsWith(ACTIVATION_ID_PREFIX)) {
     const result = await recordFirstActionResolution(propertyId, userId, {
       disposition: resolutionDisposition(input.command),
       reason,

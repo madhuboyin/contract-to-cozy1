@@ -42,6 +42,7 @@
     "lint:ssrf": "node scripts/check-ssrf-guards.js",
     "lint:notification-boundary": "node scripts/check-notification-boundary.js",
     "report:weekly": "ts-node scripts/weekly-retention-report.ts",
+    "report:home-intelligence-phase0": "ts-node scripts/generate-home-intelligence-phase0-report.ts",
     "retention:ask": "node dist/scripts/askRetentionCleanup.js",
     "retention:ask:dev": "ts-node src/scripts/askRetentionCleanup.ts",
     "report:service-price-benchmarks": "ts-node src/scripts/reportServicePriceBenchmarkHealth.ts",

@@ -36,6 +36,24 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'home-renovation-risk-advisor': ['RENOVATION_PERMIT_READINESS'],
 };
 
+/**
+ * Capabilities that claim Home Action integration (non-empty
+ * recommendation.sourceKinds in canonicalCapabilityRegistry) but have no
+ * known Ask operation mapping — added so the completeness check in
+ * capabilitySkillGuidanceBridge.contract.ts (capabilityIdsRequiringBridge)
+ * has an entry to find for every one of them, not just the 15 originally
+ * hand-picked ones. Built the same way as OPERATIONS_BY_CAPABILITY's
+ * entries via buildEntry, just with an empty operationIds list — a
+ * capability can legitimately integrate with Home Action without being
+ * Ask-reachable.
+ */
+const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
+  'break-even', 'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
+  'home-event-radar', 'home-habit-coach', 'home-risk-replay', 'home-briefing',
+  'inspection-hub', 'material-specs', 'neighborhood-change-radar', 'permits',
+  'plant-advisor', 'project-tracker', 'seller-prep', 'service-price-radar', 'status-board',
+];
+
 function resolveSkillIdsForOperations(operationIds: readonly AskOperationId[]): SkillId[] {
   const skillIds = new Set<SkillId>();
   for (const operationId of operationIds) {
@@ -63,14 +81,18 @@ function buildEntry(capabilityId: string, operationIds: readonly AskOperationId[
     homeActionSourceKind: singleSourceKind,
     launchDestination: capability?.destination.routeTemplate ?? 'UNKNOWN — capability not found in canonicalCapabilityRegistry',
     requiredContext: capability?.destination.acceptedContext ?? [],
-    executionOwner: 'Ask operation execution (askOrchestrator.service.ts executeOperation)',
+    executionOwner: operationIds.length > 0
+      ? 'Ask operation execution (askOrchestrator.service.ts executeOperation)'
+      : 'Home Action promotion only (homeActionSourcePromotion.service.ts) — not Ask-reachable',
     completionOwner: ownershipEntry?.completionAdapterOwner ?? 'Not declared — no single Home Action source kind resolves for this capability today',
     outcomeAdapter: null,
   };
 }
 
-export const CAPABILITY_SKILL_GUIDANCE_BRIDGE: readonly CapabilitySkillGuidanceBridgeEntry[] =
-  Object.entries(OPERATIONS_BY_CAPABILITY).map(([capabilityId, operationIds]) => buildEntry(capabilityId, operationIds));
+export const CAPABILITY_SKILL_GUIDANCE_BRIDGE: readonly CapabilitySkillGuidanceBridgeEntry[] = [
+  ...Object.entries(OPERATIONS_BY_CAPABILITY).map(([capabilityId, operationIds]) => buildEntry(capabilityId, operationIds)),
+  ...HOME_ACTION_ONLY_CAPABILITY_IDS.map((capabilityId) => buildEntry(capabilityId, [])),
+];
 
 /**
  * Derived from CAPABILITY_SKILL_GUIDANCE_BRIDGE — same computed values the
