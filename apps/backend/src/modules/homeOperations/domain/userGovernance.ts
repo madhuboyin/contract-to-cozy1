@@ -19,6 +19,21 @@ const DOMAIN_MANAGED_STATES = new Set<OperationalWorkItemState>([
 ]);
 
 /**
+ * HI-ATT-010: SCHEDULED -> ACCEPTED and IN_PROGRESS -> ACCEPTED are
+ * execution-state rollbacks, driven only by a Booking (or another execution
+ * domain) losing the work that was occupying the item — not something a
+ * homeowner self-serves. DOMAIN_MANAGED_STATES excludes by target-state
+ * membership alone, which cannot express this: ACCEPTED must stay reachable
+ * from CANDIDATE/FOLLOW_UP_DUE (a homeowner accepting a recommendation is
+ * normal) while being unreachable from these two specific states. Recorded
+ * as a from+to pair set for exactly that reason.
+ */
+const EXECUTION_ROLLBACK_PAIRS = new Set<string>([
+  'SCHEDULED->ACCEPTED',
+  'IN_PROGRESS->ACCEPTED',
+]);
+
+/**
  * States a homeowner may change directly on the portfolio record. Execution
  * and outcome states are deliberately absent: Maintenance, Guidance, Project
  * Tracker, Booking, or another authoritative domain must publish those.
@@ -26,6 +41,7 @@ const DOMAIN_MANAGED_STATES = new Set<OperationalWorkItemState>([
 export function legalUserWorkItemTransitions(item: GovernedWorkItem): OperationalWorkItemState[] {
   return LEGAL_TRANSITIONS[item.state].filter((to) => {
     if (DOMAIN_MANAGED_STATES.has(to)) return false;
+    if (EXECUTION_ROLLBACK_PAIRS.has(`${item.state}->${to}`)) return false;
     if (to === 'CLOSED' && item.state !== 'CANDIDATE') return false;
     if (item.safetyTier === 'SAFETY_EMERGENCY' && (to === 'DEFERRED' || to === 'CLOSED')) return false;
     return true;

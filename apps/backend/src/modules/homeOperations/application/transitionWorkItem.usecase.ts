@@ -1,7 +1,7 @@
 import type { OperationalWorkActorType, OperationalWorkEventType, OperationalWorkItemDisposition, OperationalWorkItemState } from '@prisma/client';
 import { applyTransition } from '../domain/transitions';
-import { findWorkItemById, recordWorkEvent, updateWorkItemState } from '../infrastructure/workItemRepository';
-import { emitWorkItemLifecycleChange } from '../infrastructure/workItemChangeEmitter';
+import { findWorkItemById, recordWorkEvent, updateWorkItemState, type WorkItemDb } from '../infrastructure/workItemRepository';
+import { emitWorkItemLifecycleChange, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
 import { prisma } from '../../../lib/prisma';
 
 /**
@@ -49,10 +49,23 @@ export interface TransitionWorkItemInput {
    * now." Ignored for every other target state.
    */
   timestampValue?: Date;
+  /**
+   * HI-ATT-010: overrides eventTypeForTransition's default mapping. Not
+   * exposed through any user-facing route — only the booking reconciliation
+   * service passes this, for the SCHEDULED/IN_PROGRESS -> ACCEPTED rollback
+   * case, so the event history reads as a governed cancellation-driven
+   * rollback (EXECUTION_CANCELLED) rather than a fresh homeowner acceptance
+   * (WORK_ACCEPTED).
+   */
+  eventTypeOverride?: OperationalWorkEventType;
 }
 
-export async function transitionWorkItem(input: TransitionWorkItemInput) {
-  const workItem = await findWorkItemById(input.workItemId);
+export async function transitionWorkItem(
+  input: TransitionWorkItemInput,
+  db: WorkItemDb = prisma,
+  onLifecycleEvent?: WorkItemLifecycleEventCallback,
+) {
+  const workItem = await findWorkItemById(input.workItemId, db);
   if (!workItem) throw new Error(`OperationalWorkItem ${input.workItemId} not found.`);
 
   const result = applyTransition(workItem, input.to, { disposition: input.disposition });
@@ -60,10 +73,10 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
   const timestampValue = result.timestampField && FORWARD_LOOKING_TIMESTAMP_FIELDS.has(result.timestampField)
     ? input.timestampValue
     : undefined;
-  let updated = await updateWorkItemState(input.workItemId, { ...result, timestampValue });
+  let updated = await updateWorkItemState(input.workItemId, { ...result, timestampValue }, db);
 
   if (result.state === 'VERIFIED' || result.state === 'CLOSED') {
-    await prisma.operationalWorkSource.updateMany({
+    await db.operationalWorkSource.updateMany({
       where: { workItemId: input.workItemId, active: true },
       data: { active: false, reconciledAt: new Date() },
     });
@@ -71,12 +84,12 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
     result.state === 'REOPENED' ||
     (result.state === 'ACCEPTED' && workItem.state === 'FOLLOW_UP_DUE')
   ) {
-    await prisma.operationalWorkSource.updateMany({
+    await db.operationalWorkSource.updateMany({
       where: { workItemId: input.workItemId },
       data: { active: true, reconciledAt: null, lastObservedAt: new Date() },
     });
     if (workItem.state === 'FOLLOW_UP_DUE' || result.state === 'REOPENED') {
-      updated = await prisma.operationalWorkItem.update({
+      updated = await db.operationalWorkItem.update({
         where: { id: input.workItemId },
         data: { scheduleOverrideAt: null },
       });
@@ -85,12 +98,12 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
 
   const event = await recordWorkEvent({
     workItemId: input.workItemId,
-    eventType: eventTypeForTransition(result.state, result.disposition),
+    eventType: input.eventTypeOverride ?? eventTypeForTransition(result.state, result.disposition),
     actorType: input.actorType,
     actorUserId: input.actorUserId,
     idempotencyKey: input.idempotencyKey,
     payload: { from: workItem.state, to: result.state, disposition: result.disposition, ...(input.payload ?? {}) },
-  });
+  }, db);
 
   if (result.state === 'VERIFIED' || result.state === 'CLOSED') {
     await recordWorkEvent({
@@ -99,15 +112,21 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
       actorType: 'SYSTEM',
       idempotencyKey: `source-links-reconciled:${input.idempotencyKey}`,
       payload: { outcomeState: result.state, disposition: result.disposition, sourceLinksClosed: true },
-    });
+    }, db);
   }
 
   // Item #20 (Slice 8: "digest limited to changed or due work") — best-effort,
   // see workItemChangeEmitter.ts. event is nullable in type only for a
   // theoretical race on the idempotent-retry lookup; recordWorkEvent always
   // returns a row in practice for a freshly-issued idempotencyKey.
+  // HI-ATT-010: inside a caller-owned transaction (onLifecycleEvent
+  // supplied), defer this until after commit instead.
   if (event) {
-    await emitWorkItemLifecycleChange(updated, event);
+    if (onLifecycleEvent) {
+      await onLifecycleEvent(updated, event);
+    } else {
+      await emitWorkItemLifecycleChange(updated, event);
+    }
   }
 
   return updated;

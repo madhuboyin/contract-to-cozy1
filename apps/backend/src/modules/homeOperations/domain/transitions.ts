@@ -25,7 +25,13 @@ import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition
 export const LEGAL_TRANSITIONS: Record<OperationalWorkItemState, OperationalWorkItemState[]> = {
   CANDIDATE: ['ACCEPTED', 'CLOSED'],
   ACCEPTED: ['SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
-  SCHEDULED: ['IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
+  // ACCEPTED here too (HI-ATT-010): a Booking cancellation must be able to
+  // hand a still-obligated work item back to the actionable backlog,
+  // mirroring the existing IN_PROJECT -> ACCEPTED precedent for the same
+  // "the thing occupying this item went away" reason. Governed — see
+  // userGovernance.ts's EXECUTION_ROLLBACK_PAIRS; a homeowner cannot invoke
+  // this transition directly.
+  SCHEDULED: ['IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'ACCEPTED', 'CLOSED'],
   // ACCEPTED here too, same Slice 4 cancel-project reconciliation edge —
   // work may have already started under IN_PROJECT before cancellation.
   IN_PROGRESS: ['BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'ACCEPTED', 'CLOSED'],

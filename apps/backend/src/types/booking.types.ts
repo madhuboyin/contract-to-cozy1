@@ -42,6 +42,12 @@ export const createBookingSchema = z.object({
   sourceIncidentId: z.string().uuid('Invalid Incident ID').optional(),
   sourceRadarActionCode: z.string().trim().min(1).max(128).optional(),
   sourceLaunchSurface: z.literal('home_event_radar').optional(),
+  // Home Intelligence Functional Completeness FRD HI-ATT-010: an explicit,
+  // server-validated originating OperationalWorkItem for a canonical
+  // action/workflow launch (e.g. accepting a Home Action leads directly to
+  // booking a provider). Never trusted blindly — see
+  // bookingWorkReconciliation.service.ts's resolveOriginatingWorkItem.
+  originWorkItemId: z.string().uuid('Invalid origin work item ID').optional(),
 }).superRefine((value, context) => {
   const hasRadarLineage = Boolean(
     value.sourceRadarEventId

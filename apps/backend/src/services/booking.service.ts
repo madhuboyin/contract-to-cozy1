@@ -35,6 +35,14 @@ import { bookingEligibilityService } from './bookingEligibility.service';
 import { logger } from '../lib/logger';
 import { assertProjectComplianceApplicable } from './projectCompliance/context';
 import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
+import { emitWorkItemLifecycleChange } from '../modules/homeOperations/infrastructure/workItemChangeEmitter';
+import {
+  resolveOriginatingWorkItem,
+  reconcileBookingCreated,
+  reconcileBookingCancelled,
+  reconcileBookingLifecycle,
+} from './bookingWorkReconciliation.service';
+import type { OperationalWorkEvent, OperationalWorkItem } from '@prisma/client';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -395,63 +403,108 @@ export class BookingService {
         ? `Prediction-driven service for ${linkedInventoryItem.name}`
         : input.insightContext || null;
 
-    // Create booking with initial timeline
-    const booking = await prisma.booking.create({
-      data: {
-        bookingNumber,
-        homeownerId,
-        providerId: service.providerProfile.userId,
-        providerProfileId: service.providerProfileId,
-        propertyId: input.propertyId,
-        serviceId: input.serviceId,
-        category: service.category,
-        status: 'PENDING',
-        requestedDate: input.requestedDate ? new Date(input.requestedDate) : null,
-        scheduledDate: input.scheduledDate ? new Date(input.scheduledDate) : null,
-        startTime: input.startTime ? new Date(input.startTime) : null,
-        endTime: input.endTime ? new Date(input.endTime) : null,
-        estimatedPrice: input.estimatedPrice,
-        depositAmount: input.depositAmount || null,
-        description: bookingDescription,
-        specialRequests: input.specialRequests || null,
-        // NEW: Capture health insight tracking fields
-        insightFactor: predictiveInsightFactor,
-        insightContext: predictiveInsightContext,
-        maintenancePredictionId: input.maintenancePredictionId || null,
-        inventoryItemId: resolvedInventoryItemId,
-        executionScopeType: executionScope.type,
-        executionScopeKey: executionScope.key,
-        activeExecutionScopeKey: executionScope.key,
-        // Phase 5 (TR-03): persist so service completion can auto-advance the journey.
-        // Spread-cast required until `npx prisma generate` is run after migration.
-        ...({
-          guidanceJourneyId: options?.guidanceJourneyId ?? null,
-          guidanceStepKey: options?.guidanceStepKey ?? null,
-          sourceRadarMatchId: input.sourceRadarMatchId ?? null,
-          sourceRadarEventId: input.sourceRadarEventId ?? null,
-          sourceIncidentId: input.sourceIncidentId ?? null,
-          sourceRadarActionCode: input.sourceRadarActionCode ?? null,
-          sourceLaunchSurface: input.sourceLaunchSurface ?? null,
-        } as Record<string, unknown>),
-        timeline: {
-          create: {
-            status: 'PENDING',
-            note: 'Booking created',
-            createdBy: homeownerId,
-          },
-        },
-      },
-      include: {
-        homeowner: true,
-        provider: true,
-        providerProfile: true,
-        service: true,
-        property: true,
-        timeline: {
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
+    // HI-ATT-010: Booking creation, Operational Work Item creation/reuse,
+    // and execution linkage commit atomically. Lifecycle-change side
+    // effects (emitWorkItemLifecycleChange) are collected here and only
+    // fired after the transaction commits — never from data that might
+    // still roll back. A uniqueness conflict inside the transaction
+    // (workKey race) retries the whole transaction rather than continuing
+    // against a possibly-aborted one.
+    const pendingLifecycleEvents: Array<{ workItem: OperationalWorkItem; event: OperationalWorkEvent }> = [];
+    let booking!: Awaited<ReturnType<typeof prisma.booking.create>> & {
+      homeowner: any; provider: any; providerProfile: any; service: any; property: any; timeline: any[];
+    };
+    const MAX_TX_ATTEMPTS = 2;
+    for (let attempt = 1; attempt <= MAX_TX_ATTEMPTS; attempt++) {
+      pendingLifecycleEvents.length = 0;
+      try {
+        booking = await prisma.$transaction(async (tx) => {
+          const created = await tx.booking.create({
+            data: {
+              bookingNumber,
+              homeownerId,
+              providerId: service.providerProfile.userId,
+              providerProfileId: service.providerProfileId,
+              propertyId: input.propertyId,
+              serviceId: input.serviceId,
+              category: service.category,
+              status: 'PENDING',
+              requestedDate: input.requestedDate ? new Date(input.requestedDate) : null,
+              scheduledDate: input.scheduledDate ? new Date(input.scheduledDate) : null,
+              startTime: input.startTime ? new Date(input.startTime) : null,
+              endTime: input.endTime ? new Date(input.endTime) : null,
+              estimatedPrice: input.estimatedPrice,
+              depositAmount: input.depositAmount || null,
+              description: bookingDescription,
+              specialRequests: input.specialRequests || null,
+              // NEW: Capture health insight tracking fields
+              insightFactor: predictiveInsightFactor,
+              insightContext: predictiveInsightContext,
+              maintenancePredictionId: input.maintenancePredictionId || null,
+              inventoryItemId: resolvedInventoryItemId,
+              executionScopeType: executionScope.type,
+              executionScopeKey: executionScope.key,
+              activeExecutionScopeKey: executionScope.key,
+              // Phase 5 (TR-03): persist so service completion can auto-advance the journey.
+              // Spread-cast required until `npx prisma generate` is run after migration.
+              ...({
+                guidanceJourneyId: options?.guidanceJourneyId ?? null,
+                guidanceStepKey: options?.guidanceStepKey ?? null,
+                sourceRadarMatchId: input.sourceRadarMatchId ?? null,
+                sourceRadarEventId: input.sourceRadarEventId ?? null,
+                sourceIncidentId: input.sourceIncidentId ?? null,
+                sourceRadarActionCode: input.sourceRadarActionCode ?? null,
+                sourceLaunchSurface: input.sourceLaunchSurface ?? null,
+              } as Record<string, unknown>),
+              timeline: {
+                create: {
+                  status: 'PENDING',
+                  note: 'Booking created',
+                  createdBy: homeownerId,
+                },
+              },
+            },
+            include: {
+              homeowner: true,
+              provider: true,
+              providerProfile: true,
+              service: true,
+              property: true,
+              timeline: {
+                orderBy: { createdAt: 'asc' },
+              },
+            },
+          });
+
+          const resolution = await resolveOriginatingWorkItem(tx, {
+            propertyId: input.propertyId,
+            originWorkItemId: input.originWorkItemId ?? null,
+            guidanceJourneyId: options?.guidanceJourneyId ?? null,
+            maintenancePredictionId: input.maintenancePredictionId ?? null,
+            priceFinalizationId: input.priceFinalizationId ?? null,
+            inventoryItemId: resolvedInventoryItemId,
+          });
+          await reconcileBookingCreated(tx, created, resolution, (workItem, event) => {
+            pendingLifecycleEvents.push({ workItem, event });
+          });
+
+          return created;
+        });
+        break;
+      } catch (err: any) {
+        if (err?.code === 'P2002' && attempt < MAX_TX_ATTEMPTS) {
+          logger.warn({ err, attempt }, '[BOOKING] work-item resolution hit a uniqueness conflict inside the creation transaction; retrying');
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    for (const { workItem, event } of pendingLifecycleEvents) {
+      await emitWorkItemLifecycleChange(workItem, event).catch((err) =>
+        logger.warn({ err, bookingId: booking.id }, '[BOOKING] work-item lifecycle-change emission failed post-commit'),
+      );
+    }
 
     let linkedPriceFinalizationForBooking = false;
     if (linkedPriceFinalizationId) {
@@ -782,29 +835,41 @@ export class BookingService {
     // confirmation; this is the last point that can still catch it.
     await bookingEligibilityService.assertProviderEligible(booking.providerProfileId, booking.category);
 
-    const updated = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'CONFIRMED',
-        timeline: {
-          create: {
-            status: 'CONFIRMED',
-            note: 'Booking confirmed by provider',
-            createdBy: providerId,
+    const confirmedPendingEvents: Array<{ workItem: OperationalWorkItem; event: OperationalWorkEvent }> = [];
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'CONFIRMED',
+          timeline: {
+            create: {
+              status: 'CONFIRMED',
+              note: 'Booking confirmed by provider',
+              createdBy: providerId,
+            },
           },
         },
-      },
-      include: {
-        homeowner: true,
-        provider: true,
-        providerProfile: true,
-        service: true,
-        property: true,
-        timeline: {
-          orderBy: { createdAt: 'asc' },
+        include: {
+          homeowner: true,
+          provider: true,
+          providerProfile: true,
+          service: true,
+          property: true,
+          timeline: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
-      },
+      });
+      await reconcileBookingLifecycle(tx, { id: bookingId }, 'CONFIRMED', (workItem, event) => {
+        confirmedPendingEvents.push({ workItem, event });
+      });
+      return result;
     });
+    for (const { workItem, event } of confirmedPendingEvents) {
+      await emitWorkItemLifecycleChange(workItem, event).catch((err) =>
+        logger.warn({ err, bookingId }, '[BOOKING] work-item lifecycle-change emission failed post-commit'),
+      );
+    }
 
     const quoteDecisionWorkspaceId = (booking as any).quoteDecisionWorkspaceId as string | null;
     if (quoteDecisionWorkspaceId) {
@@ -845,30 +910,42 @@ export class BookingService {
       throw new Error(`Cannot start booking with status ${booking.status}`);
     }
 
-    const updated = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'IN_PROGRESS',
-        actualStartTime: new Date(),
-        timeline: {
-          create: {
-            status: 'IN_PROGRESS',
-            note: 'Service started',
-            createdBy: providerId,
+    const startedPendingEvents: Array<{ workItem: OperationalWorkItem; event: OperationalWorkEvent }> = [];
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'IN_PROGRESS',
+          actualStartTime: new Date(),
+          timeline: {
+            create: {
+              status: 'IN_PROGRESS',
+              note: 'Service started',
+              createdBy: providerId,
+            },
           },
         },
-      },
-      include: {
-        homeowner: true,
-        provider: true,
-        providerProfile: true,
-        service: true,
-        property: true,
-        timeline: {
-          orderBy: { createdAt: 'asc' },
+        include: {
+          homeowner: true,
+          provider: true,
+          providerProfile: true,
+          service: true,
+          property: true,
+          timeline: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
-      },
+      });
+      await reconcileBookingLifecycle(tx, { id: bookingId }, 'STARTED', (workItem, event) => {
+        startedPendingEvents.push({ workItem, event });
+      });
+      return result;
     });
+    for (const { workItem, event } of startedPendingEvents) {
+      await emitWorkItemLifecycleChange(workItem, event).catch((err) =>
+        logger.warn({ err, bookingId }, '[BOOKING] work-item lifecycle-change emission failed post-commit'),
+      );
+    }
 
     return this.formatBookingResponse(updated);
   }
@@ -913,6 +990,7 @@ export class BookingService {
       throw new Error('End time must be after start time');
     }
 
+    const completedPendingEvents: Array<{ workItem: OperationalWorkItem; event: OperationalWorkEvent }> = [];
     const updated = await prisma.$transaction(async (tx) => {
       const completedBooking = await tx.booking.update({
         where: { id: bookingId },
@@ -976,8 +1054,20 @@ export class BookingService {
         });
       }
 
+      // HI-ATT-010: the Booking is authoritative domain evidence for
+      // REPORTED_COMPLETE -> VERIFIED — reconciled in this same transaction
+      // as the completion write, not a separate one.
+      await reconcileBookingLifecycle(tx, { id: bookingId }, 'COMPLETED', (workItem, event) => {
+        completedPendingEvents.push({ workItem, event });
+      });
+
       return completedBooking;
     });
+    for (const { workItem, event } of completedPendingEvents) {
+      await emitWorkItemLifecycleChange(workItem, event).catch((err) =>
+        logger.warn({ err, bookingId }, '[BOOKING] work-item lifecycle-change emission failed post-commit'),
+      );
+    }
 
     if (booking.maintenancePredictionId) {
       try {
@@ -1073,33 +1163,45 @@ export class BookingService {
       throw new Error(`Cannot cancel booking with status ${booking.status}`);
     }
 
-    const updated = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'CANCELLED',
-        activeExecutionScopeKey: null,
-        cancelledAt: new Date(),
-        cancelledBy: userId,
-        cancellationReason: input.reason,
-        timeline: {
-          create: {
-            status: 'CANCELLED',
-            note: `Booking cancelled: ${input.reason}`,
-            createdBy: userId,
+    const cancelledPendingEvents: Array<{ workItem: OperationalWorkItem; event: OperationalWorkEvent }> = [];
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'CANCELLED',
+          activeExecutionScopeKey: null,
+          cancelledAt: new Date(),
+          cancelledBy: userId,
+          cancellationReason: input.reason,
+          timeline: {
+            create: {
+              status: 'CANCELLED',
+              note: `Booking cancelled: ${input.reason}`,
+              createdBy: userId,
+            },
           },
         },
-      },
-      include: {
-        homeowner: true,
-        provider: true,
-        providerProfile: true,
-        service: true,
-        property: true,
-        timeline: {
-          orderBy: { createdAt: 'asc' },
+        include: {
+          homeowner: true,
+          provider: true,
+          providerProfile: true,
+          service: true,
+          property: true,
+          timeline: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
-      },
+      });
+      await reconcileBookingCancelled(tx, { id: bookingId }, { reason: input.reason, actorUserId: userId }, (workItem, event) => {
+        cancelledPendingEvents.push({ workItem, event });
+      });
+      return result;
     });
+    for (const { workItem, event } of cancelledPendingEvents) {
+      await emitWorkItemLifecycleChange(workItem, event).catch((err) =>
+        logger.warn({ err, bookingId }, '[BOOKING] work-item lifecycle-change emission failed post-commit'),
+      );
+    }
 
     const cancelActionUrlParams = new URLSearchParams();
     if (updated.inventoryItemId) cancelActionUrlParams.set('itemId', updated.inventoryItemId);

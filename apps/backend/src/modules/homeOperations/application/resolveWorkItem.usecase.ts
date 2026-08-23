@@ -9,9 +9,11 @@ import {
   refreshWorkItemPresentation,
   updateWorkItemDueFields,
   upsertWorkSource,
+  type WorkItemDb,
 } from '../infrastructure/workItemRepository';
-import { emitWorkItemLifecycleChange } from '../infrastructure/workItemChangeEmitter';
+import { emitWorkItemLifecycleChange, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
 import { transitionWorkItem } from './transitionWorkItem.usecase';
+import { prisma } from '../../../lib/prisma';
 
 /**
  * The identity resolver (parent plan section 7.5, rule 2: "an identity
@@ -33,7 +35,11 @@ import { transitionWorkItem } from './transitionWorkItem.usecase';
  * and "one obligation resolves to one work item across recalculation" true
  * by construction, not by convention.
  */
-export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
+export async function resolveAndUpsertWorkItem(
+  proposal: ProposedWorkItem,
+  db: WorkItemDb = prisma,
+  onLifecycleEvent?: WorkItemLifecycleEventCallback,
+) {
   const workKey = resolveWorkKey({
     propertyId: proposal.propertyId,
     subject: proposal.subject,
@@ -41,7 +47,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
     occurrence: proposal.occurrence,
   });
 
-  const existing = await findWorkItemByWorkKey(proposal.propertyId, workKey);
+  const existing = await findWorkItemByWorkKey(proposal.propertyId, workKey, db);
 
   let workItem = existing;
   let sourceRemainsActive = true;
@@ -65,20 +71,28 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
       sourceVersion: proposal.source.sourceVersion,
       recurrenceTemplateKey: proposal.occurrence.occurrenceKey ? proposal.occurrence.obligationSlug : null,
       occurrenceKey: proposal.occurrence.occurrenceKey ?? null,
-    });
+    }, db);
     const event = await recordWorkEvent({
       workItemId: workItem.id,
       eventType: 'WORK_CANDIDATE_DETECTED',
       actorType: 'SYSTEM',
       idempotencyKey: `created:${workKey}`,
       payload: { sourceType: proposal.source.sourceType, sourceEntityId: proposal.source.sourceEntityId },
-    });
+    }, db);
     // Item #20 (Slice 8: "digest limited to changed or due work") —
     // best-effort, see workItemChangeEmitter.ts. Only the brand-new-item
     // branch emits; a source-driven due-field refresh (Item #19 Slice 2) on
     // an existing item is not a household-visible lifecycle event.
+    // HI-ATT-010: inside a caller-owned transaction (onLifecycleEvent
+    // supplied), defer this until after commit instead — emitting a
+    // lifecycle-change side effect from data that might still roll back
+    // would be visible and wrong.
     if (event) {
-      await emitWorkItemLifecycleChange(workItem, event);
+      if (onLifecycleEvent) {
+        await onLifecycleEvent(workItem, event);
+      } else {
+        await emitWorkItemLifecycleChange(workItem, event);
+      }
     }
   } else {
     if (workItem.state === 'CLOSED') sourceRemainsActive = false;
@@ -91,7 +105,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
           sourceType: proposal.source.sourceType,
           sourceEntityId: proposal.source.sourceEntityId,
           sourceRole: proposal.source.sourceRole,
-        })
+        }, db)
       : null;
     const sourceChanged = priorSource == null || (proposal.source.sourceVersion != null &&
       priorSource.sourceVersion !== proposal.source.sourceVersion);
@@ -102,7 +116,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
         actorType: 'SYSTEM',
         idempotencyKey: `source-reopened:${proposal.source.sourceType}:${proposal.source.sourceEntityId}:${proposal.source.sourceVersion ?? 'none'}`,
         payload: { reason: 'source_condition_observed_again' },
-      });
+      }, db, onLifecycleEvent);
     } else if (workItem.state === 'VERIFIED') {
       // An idempotent retry of the same already-reconciled observation must
       // not silently reactivate the source beneath a verified item.
@@ -118,7 +132,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
         confidence: proposal.confidence,
         missingContext: proposal.missingContext,
         sourceVersion: proposal.source.sourceVersion,
-      });
+      }, db);
     }
     // An explicit homeowner reschedule owns the current occurrence timing.
     // Source recalculation may refresh dates again after completion clears
@@ -128,7 +142,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
         dueWindowStart: proposal.dueWindowStart ?? null,
         dueAt: proposal.dueAt ?? null,
         dueWindowEnd: proposal.dueWindowEnd ?? null,
-      });
+      }, {}, db);
     }
   }
 
@@ -139,7 +153,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
     sourceVersion: proposal.source.sourceVersion,
     sourceRole: proposal.source.sourceRole,
     active: sourceRemainsActive,
-  });
+  }, db);
 
   // Idempotent per (source, version): re-resolving the same source at the
   // same version is a no-op event; a genuine version change is a new one.
@@ -149,7 +163,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
     actorType: 'SYSTEM',
     idempotencyKey: `source-reconciled:${proposal.source.sourceType}:${proposal.source.sourceEntityId}:${proposal.source.sourceVersion ?? 'none'}`,
     payload: { sourceType: proposal.source.sourceType, sourceEntityId: proposal.source.sourceEntityId, sourceRole: proposal.source.sourceRole },
-  });
+  }, db);
 
   return workItem;
 }

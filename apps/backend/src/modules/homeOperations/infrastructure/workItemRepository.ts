@@ -1,5 +1,15 @@
 import { prisma } from '../../../lib/prisma';
 import type { Prisma } from '@prisma/client';
+
+/**
+ * Home Intelligence Functional Completeness FRD HI-ATT-010: lets the
+ * booking reconciliation path (the only caller that needs it this phase)
+ * pass its own transaction client through work resolution/transition so
+ * Booking creation, work-item creation/reuse, and execution linkage commit
+ * atomically. Every function below defaults this to the global `prisma`
+ * singleton, so every existing caller is unaffected.
+ */
+export type WorkItemDb = typeof prisma | Prisma.TransactionClient;
 import type {
   OperationalObligationType,
   OperationalWorkActorType,
@@ -70,14 +80,14 @@ export interface RecordEventInput {
   occurredAt?: Date;
 }
 
-export function findWorkItemByWorkKey(propertyId: string, workKey: string) {
-  return prisma.operationalWorkItem.findUnique({
+export function findWorkItemByWorkKey(propertyId: string, workKey: string, db: WorkItemDb = prisma) {
+  return db.operationalWorkItem.findUnique({
     where: { propertyId_workKey: { propertyId, workKey } },
   });
 }
 
-export function findWorkItemById(workItemId: string) {
-  return prisma.operationalWorkItem.findUnique({ where: { id: workItemId } });
+export function findWorkItemById(workItemId: string, db: WorkItemDb = prisma) {
+  return db.operationalWorkItem.findUnique({ where: { id: workItemId } });
 }
 
 /**
@@ -114,9 +124,9 @@ export function countAcceptedWorkItemsForProperty(propertyId: string) {
  * whole resolution, matching the P2002-catch-and-refetch idiom already used
  * by PropertyMaintenanceTaskService.createFromActionCenter.
  */
-export async function createWorkItem(input: CreateWorkItemInput) {
+export async function createWorkItem(input: CreateWorkItemInput, db: WorkItemDb = prisma) {
   try {
-    return await prisma.operationalWorkItem.create({
+    return await db.operationalWorkItem.create({
       data: {
         propertyId: input.propertyId,
         workKey: input.workKey,
@@ -140,8 +150,13 @@ export async function createWorkItem(input: CreateWorkItemInput) {
       },
     });
   } catch (err: any) {
-    if (err?.code === 'P2002') {
-      const existing = await findWorkItemByWorkKey(input.propertyId, input.workKey);
+    // Inside a real interactive transaction, a P2002 aborts the transaction —
+    // any further query on the same `db` (including this refetch) would fail
+    // with "current transaction is aborted." Only safe to catch-and-refetch
+    // against the default global client; a transactional caller must catch
+    // the propagated error and retry the whole transaction instead.
+    if (err?.code === 'P2002' && db === prisma) {
+      const existing = await findWorkItemByWorkKey(input.propertyId, input.workKey, db);
       if (existing) return existing;
     }
     throw err;
@@ -155,8 +170,8 @@ export async function createWorkItem(input: CreateWorkItemInput) {
  * schedule. Only ever called when the item is still CANDIDATE (see
  * canRefreshPresentationFromSource).
  */
-export function refreshWorkItemPresentation(workItemId: string, input: RefreshWorkItemPresentationInput) {
-  return prisma.operationalWorkItem.update({
+export function refreshWorkItemPresentation(workItemId: string, input: RefreshWorkItemPresentationInput, db: WorkItemDb = prisma) {
+  return db.operationalWorkItem.update({
     where: { id: workItemId },
     data: {
       priority: input.priority,
@@ -172,8 +187,8 @@ export function refreshWorkItemPresentation(workItemId: string, input: RefreshWo
   });
 }
 
-export function upsertWorkSource(input: UpsertSourceInput) {
-  return prisma.operationalWorkSource.upsert({
+export function upsertWorkSource(input: UpsertSourceInput, db: WorkItemDb = prisma) {
+  return db.operationalWorkSource.upsert({
     where: {
       workItemId_sourceType_sourceEntityId_sourceRole: {
         workItemId: input.workItemId,
@@ -201,8 +216,8 @@ export function upsertWorkSource(input: UpsertSourceInput) {
   });
 }
 
-export function findWorkSource(input: Pick<UpsertSourceInput, 'workItemId' | 'sourceType' | 'sourceEntityId' | 'sourceRole'>) {
-  return prisma.operationalWorkSource.findUnique({
+export function findWorkSource(input: Pick<UpsertSourceInput, 'workItemId' | 'sourceType' | 'sourceEntityId' | 'sourceRole'>, db: WorkItemDb = prisma) {
+  return db.operationalWorkSource.findUnique({
     where: {
       workItemId_sourceType_sourceEntityId_sourceRole: input,
     },
@@ -213,9 +228,9 @@ export function findWorkSource(input: Pick<UpsertSourceInput, 'workItemId' | 'so
  * Idempotent on [workItemId, idempotencyKey]. A retried event (same key) is
  * a no-op, not an error — callers should not have to special-case retries.
  */
-export async function recordWorkEvent(input: RecordEventInput) {
+export async function recordWorkEvent(input: RecordEventInput, db: WorkItemDb = prisma) {
   try {
-    return await prisma.operationalWorkEvent.create({
+    return await db.operationalWorkEvent.create({
       data: {
         workItemId: input.workItemId,
         eventType: input.eventType,
@@ -227,8 +242,10 @@ export async function recordWorkEvent(input: RecordEventInput) {
       },
     });
   } catch (err: any) {
-    if (err?.code === 'P2002') {
-      return prisma.operationalWorkEvent.findUnique({
+    // See createWorkItem's comment — only safe to catch-and-refetch against
+    // the default global client, never inside a real transaction.
+    if (err?.code === 'P2002' && db === prisma) {
+      return db.operationalWorkEvent.findUnique({
         where: { workItemId_idempotencyKey: { workItemId: input.workItemId, idempotencyKey: input.idempotencyKey } },
       });
     }
@@ -244,8 +261,8 @@ export interface UpdateStateInput {
   timestampValue?: Date;
 }
 
-export function updateWorkItemState(workItemId: string, input: UpdateStateInput) {
-  return prisma.operationalWorkItem.update({
+export function updateWorkItemState(workItemId: string, input: UpdateStateInput, db: WorkItemDb = prisma) {
+  return db.operationalWorkItem.update({
     where: { id: workItemId },
     data: {
       state: input.state,
@@ -285,8 +302,9 @@ export function updateWorkItemDueFields(
   workItemId: string,
   input: UpdateDueFieldsInput,
   options: { userOverride?: boolean; clearOverride?: boolean } = {},
+  db: WorkItemDb = prisma,
 ) {
-  return prisma.operationalWorkItem.update({
+  return db.operationalWorkItem.update({
     where: { id: workItemId },
     data: {
       ...('dueWindowStart' in input ? { dueWindowStart: input.dueWindowStart } : {}),
@@ -337,8 +355,8 @@ export function linkWorkExecution(input: {
   executionEntityId: string;
   role?: OperationalWorkExecutionRole;
   responsibleParty?: OperationalWorkResponsibleParty;
-}) {
-  return prisma.operationalWorkExecution.upsert({
+}, db: WorkItemDb = prisma) {
+  return db.operationalWorkExecution.upsert({
     where: {
       workItemId_executionType_executionEntityId: {
         workItemId: input.workItemId,
@@ -386,9 +404,10 @@ export function findWorkItemsLinkedToExecution(
 export function findAllWorkItemsLinkedToExecution(
   executionType: OperationalWorkExecutionType,
   executionEntityId: string,
+  db: WorkItemDb = prisma,
 ) {
-  if (typeof prisma.operationalWorkExecution.findMany !== 'function') return Promise.resolve([]);
-  return prisma.operationalWorkExecution.findMany({
+  if (typeof db.operationalWorkExecution.findMany !== 'function') return Promise.resolve([]);
+  return db.operationalWorkExecution.findMany({
     where: { executionType, executionEntityId },
     include: { workItem: true },
     orderBy: { createdAt: 'asc' },

@@ -3,10 +3,22 @@ import { logger } from '../../../lib/logger';
 import { emitPropertyChange } from '../../../propertyChanges/propertyChange.service';
 import { resolveReminderPolicy } from '../domain/reminderPolicy';
 import type {
+  OperationalWorkEvent,
   OperationalWorkEventType,
+  OperationalWorkItem,
   OperationalWorkItemPriority,
   RecommendationSafetyTier,
 } from '@prisma/client';
+
+/**
+ * Home Intelligence Functional Completeness FRD HI-ATT-010: passed to
+ * resolveAndUpsertWorkItem()/transitionWorkItem() by a caller running inside
+ * its own transaction, so they can defer this module's emitWorkItemLifecycleChange
+ * (and any other post-commit side effect) until after that transaction
+ * commits, instead of calling it inline against data that might still roll
+ * back.
+ */
+export type WorkItemLifecycleEventCallback = (workItem: OperationalWorkItem, event: OperationalWorkEvent) => void | Promise<void>;
 
 /**
  * Item #20 (Slice 8 punch list: "digest limited to changed or due work").

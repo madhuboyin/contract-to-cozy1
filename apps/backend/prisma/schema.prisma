@@ -23001,6 +23001,11 @@ enum OperationalWorkItemDisposition {
   DUPLICATE
   EXPIRED
   DISMISSED
+  // HI-ATT-010: a standalone Booking-created work item closes with this
+  // disposition when its only Booking is cancelled and no other source
+  // authority remains — distinct from NOT_RELEVANT/DUPLICATE/DISMISSED,
+  // none of which would correctly state why accepted work ended.
+  CANCELLED
 }
 
 enum OperationalWorkItemPriority {
@@ -23035,6 +23040,13 @@ enum OperationalObligationType {
   // checklist as a second, duplicate HOME_ACTION-sourced item wrapping the
   // very SaleReadinessItem that spawned it.
   SALE_PREP_TASK
+  // Home Intelligence Functional Completeness FRD HI-ATT-010: reserved
+  // exclusively for a standalone work item created directly from a Booking
+  // with no validated originating obligation (a marketplace-direct
+  // request). Its presence is a classification only, not durable proof of
+  // linkage provenance — cancellation-time survival decisions read the
+  // EXECUTION_LINKED event / active OperationalWorkSource rows instead.
+  SERVICE_EXECUTION
 }
 
 enum OperationalWorkSourceType {
@@ -23055,6 +23067,10 @@ enum OperationalWorkSourceType {
   COVERAGE
   INSPECTION_FINDING
   PROPERTY_RECORD
+  // HI-ATT-010: the standalone-obligation case's source IS the Booking
+  // itself (sourceEntityId = Booking.id) — the same entity that also
+  // becomes the work item's OperationalWorkExecution(BOOKING) row.
+  BOOKING
 }
 
 enum OperationalWorkSourceRole {
@@ -23104,6 +23120,12 @@ enum OperationalWorkEventType {
   OUTCOME_EVIDENCE_ADDED
   OUTCOME_VERIFIED
   WORK_REOPENED
+  // HI-ATT-010: a governed rollback of an execution-state work item back to
+  // ACCEPTED (or its standalone closure) driven by a Booking cancellation —
+  // deliberately distinct from WORK_ACCEPTED/WORK_DISPOSITION_RECORDED so
+  // the event history doesn't misread a rollback as a fresh homeowner
+  // acceptance or an ordinary dismissal.
+  EXECUTION_CANCELLED
   WORK_DISPOSITION_RECORDED
   FOLLOW_UP_CREATED
   WATCHER_ADDED
