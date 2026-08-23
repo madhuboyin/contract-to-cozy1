@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.4"
+version: "1.5"
 date: "August 23, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.4 |
+| Version | 1.5 |
 | Date | August 23, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -734,7 +734,7 @@ Implementation is functionality-first. Each phase must end with a usable vertica
 
 **Functional exit:** every action, decision insight, and execution item eligible under the pre-cutover Resolution Center behavior is present as exactly one canonical Home Action or Operational Work projection; Home, Fix, and Cozy return the same canonical identities and ordering; no source category silently disappears; unsupported completion is never offered; and a lifecycle command from any surface is reflected everywhere. If the full source-parity mapping is incomplete, Fix retains its current read authority and Phase 1 is not complete.
 
-**Status: in progress (Slice 1 of the HI-ATT-008 source-parity matrix).** Full tracking in [`HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md`](./HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md). Verified against the codebase: incidents and overdue-maintenance-checklist parity already existed pre-session (the latter via `orchestration.service.ts`'s existing `mapChecklistItemToAction` pipeline, previously undocumented — building a dedicated loader for it would have produced duplicate action cards); inventory coverage-gap parity likewise already existed (via `orchestration.service.ts`'s existing `detectCoverageGaps()` → `OrchestratedAction` pipeline, not the adjacent-but-different `loadCoverageActions`/`CoverageReview` loader). This slice adds the one row with a confirmed genuine gap: a new `loadCoverageRenewalActions` Home Action source loader (`homeActionSourcePromotion.service.ts`) covering `Warranty` and `InsurancePolicy` renewal/expiry. 5 of 9 HI-ATT-008 rows are now done; health insight, booking reconciliation, and the two decision-insight rows remain. Per HI-ATT-008 and work item 7, Fix's read authority has not changed and will not until all 9 rows are done.
+**Status: in progress (Slices 1-2 of the HI-ATT-008 source-parity matrix).** Full tracking in [`HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md`](./HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md). Verified against the codebase: incidents and overdue-maintenance-checklist parity already existed pre-session (the latter via `orchestration.service.ts`'s existing `mapChecklistItemToAction` pipeline, previously undocumented — building a dedicated loader for it would have produced duplicate action cards); inventory coverage-gap parity likewise already existed (via `orchestration.service.ts`'s existing `detectCoverageGaps()` → `OrchestratedAction` pipeline, not the adjacent-but-different `loadCoverageActions`/`CoverageReview` loader). Slice 1 added `loadCoverageRenewalActions` covering `Warranty`/`InsurancePolicy` renewal. Slice 2 added `loadHealthInsightActions` (health-score/appliance install-year gaps — an earlier "requires userId-scoped access" assessment was wrong; `calculateHealthScore()` is a pure, `propertyId`-scoped function) and `loadRepairReplaceDecisionActions` (`ReplaceRepairAnalysis` — considered and rejected wrapping this in a `DecisionThread`, since the only existing creation path is hardcoded to HVAC and recomputes its own verdict rather than ingesting an existing analysis). 7 of 9 HI-ATT-008 rows are now done. Two remain: coverage-analysis enrichment (small, deferred only to keep review surface to one file) and booking reconciliation, which is not a coding gap but a product decision — most bookings have no Home Action origin at all, so "reconciled" cannot mean 100% coverage without either retrofitting booking creation or explicitly accepting partial coverage. Per HI-ATT-008 and work item 7, Fix's read authority has not changed and will not until all 9 rows are done.
 
 ### Phase 2 — Dependency-aware refresh and currentness
 

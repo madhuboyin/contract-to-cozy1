@@ -20,6 +20,7 @@ import { buildRefinanceFreshness } from '../refinanceRadar/refinanceFreshness';
 import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinancialContext.service';
 import { analyticsEmitter } from './analytics';
 import { ProductAnalyticsEventType } from '@prisma/client';
+import { calculateHealthScore } from '../utils/propertyScore.util';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -36,7 +37,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1587,6 +1588,305 @@ async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSour
   }));
 
   return actions;
+}
+
+// Home Intelligence Functional Completeness FRD Phase 1, Slice 2 — ports
+// resolutionCenter.service.ts's HEALTH_INSIGHT logic (lines ~882-955) onto
+// the canonical feed. Mirrors that file's two-branch handling: the
+// aggregate "Appliances" factor is recomputed independently from inventory
+// records (a stale score snapshot must not hide a concrete missing-field
+// action), while every other named factor is surfaced generically from
+// calculateHealthScore()'s own insights, matched to an inventory item by
+// fuzzy name where possible.
+const HEALTH_INSIGHT_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+const ACTIVE_BOOKING_STATUSES_FOR_HEALTH_SCORE = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] as const;
+
+function normalizeHealthFactorText(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function isAggregateApplianceFactor(factor: string): boolean {
+  return normalizeHealthFactorText(factor) === 'appliances';
+}
+
+function extractHealthInsightAssetName(title: string): string | null {
+  const trimmed = title.trim();
+  if (!trimmed) return null;
+  const withoutSuffix = trimmed
+    .replace(/\s+aging$/i, '').replace(/\s+age$/i, '')
+    .replace(/\s+needs coverage$/i, '').replace(/\s+has partial coverage$/i, '')
+    .trim();
+  if (!withoutSuffix) return null;
+  const normalized = normalizeHealthFactorText(withoutSuffix);
+  if (['property', 'property age', 'hvac', 'hvac age', 'water heater', 'water heater age'].includes(normalized)) return null;
+  return withoutSuffix;
+}
+
+function matchInventoryItemForHealthFactor(
+  title: string,
+  inventoryItems: Array<{ id: string; name: string }>,
+): { id: string; name: string } | null {
+  const assetName = extractHealthInsightAssetName(title);
+  if (!assetName) return null;
+  const normalizedAssetName = normalizeHealthFactorText(assetName);
+  if (!normalizedAssetName) return null;
+
+  let bestMatch: { id: string; name: string } | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const item of inventoryItems) {
+    const normalizedItemName = normalizeHealthFactorText(item.name);
+    if (!normalizedItemName) continue;
+    const isMatch = normalizedItemName === normalizedAssetName ||
+      normalizedItemName.includes(normalizedAssetName) || normalizedAssetName.includes(normalizedItemName);
+    if (!isMatch) continue;
+    const score = Math.abs(normalizedItemName.length - normalizedAssetName.length);
+    if (score < bestScore) { bestMatch = item; bestScore = score; }
+  }
+  return bestMatch;
+}
+
+async function loadHealthInsightActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.property || !db.document || !db.booking) return [];
+
+  const now = evaluatedAt ?? new Date();
+  const [property, documentCount, activeBookings] = await Promise.all([
+    db.property.findUnique({ where: { id: propertyId }, include: { inventoryItems: true, warranties: true } }),
+    db.document.count({ where: { propertyId } }),
+    db.booking.findMany({ where: { propertyId, status: { in: [...ACTIVE_BOOKING_STATUSES_FOR_HEALTH_SCORE] } } }),
+  ]);
+  if (!property) return [];
+
+  const healthScore = calculateHealthScore(property as any, documentCount, activeBookings as any);
+  const inventoryItems = (property as any).inventoryItems as Array<{ id: string; name: string; category: string; installedOn: Date | null }> ?? [];
+  const applianceRecords = inventoryItems.filter((item) => item.category === 'APPLIANCE');
+  const appliancesMissingInstallYear = applianceRecords.filter((item) => !item.installedOn);
+
+  const actions: HomeAction[] = [];
+  const buildInsightAction = (params: {
+    factorSlug: string;
+    title: string;
+    description: string;
+    href: string;
+    itemId?: string;
+    assetName?: string;
+  }) => {
+    actions.push(adaptHomeActionSource('SYSTEM', {
+      id: `health-insight:${propertyId}:${params.factorSlug}`,
+      propertyId,
+      lineageId: `health-insight:${propertyId}:${params.factorSlug}`,
+      sourceEntityId: propertyId,
+      sourceVersion: null,
+      state: 'OPEN',
+      priority: 'PLAN',
+      signal: params.title,
+      whyItMatters: params.description,
+      recommendedAction: 'Review and update this home fact.',
+      expectedOutcome: 'The home health score reflects the property\'s current condition.',
+      timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
+      evidence: [{
+        id: `${propertyId}:${params.factorSlug}`,
+        type: 'SYSTEM_DERIVATION',
+        label: params.title,
+        source: 'Property health score',
+        observedAt: now.toISOString(),
+        freshness: 'CURRENT',
+        confidence: 0.7,
+      }],
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 0.7, label: 'MEDIUM', missing: params.itemId ? [] : ['Matched inventory item'] },
+      governance: lowConsequenceGovernance('resolution-center-parity-v1'),
+      primaryCta: { kind: 'REVIEW', label: 'Review', href: params.href },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: now.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    }));
+  };
+
+  const insightsByFactor = new Map<string, { factor: string; status: string }>();
+  healthScore.insights
+    .filter((insight) => {
+      if (isAggregateApplianceFactor(insight.factor)) {
+        return applianceRecords.length === 0 || appliancesMissingInstallYear.length > 0;
+      }
+      return HEALTH_INSIGHT_STATUSES.includes(insight.status);
+    })
+    .forEach((insight) => {
+      if (!insightsByFactor.has(insight.factor)) insightsByFactor.set(insight.factor, insight);
+    });
+
+  insightsByFactor.forEach(({ factor, status }) => {
+    const factorSlug = factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (isAggregateApplianceFactor(factor)) {
+      const missingNames = appliancesMissingInstallYear.map((item) => item.name);
+      const hasRecordedAppliances = applianceRecords.length > 0;
+      const title = hasRecordedAppliances
+        ? missingNames.length === 1
+          ? `Add installation year for ${missingNames[0]}`
+          : `Complete installation years for ${missingNames.length} appliances`
+        : 'Add major appliances';
+      const description = hasRecordedAppliances
+        ? `Installation year is missing for ${missingNames.join(', ')}. Add an approximate year to improve lifecycle and recall guidance.`
+        : 'No major appliances are recorded. Add only the appliances that are present in this home.';
+      buildInsightAction({ factorSlug, title, description, href: `/dashboard/properties/${propertyId}/edit?focus=appliances` });
+      return;
+    }
+
+    const matchedItem = matchInventoryItemForHealthFactor(factor, inventoryItems);
+    const href = matchedItem
+      ? (() => {
+          const params = new URLSearchParams();
+          params.set('scopeCategory', 'ITEM');
+          params.set('itemId', matchedItem.id);
+          params.set('inventoryItemId', matchedItem.id);
+          params.set('assetName', matchedItem.name);
+          params.set('customIssueLabel', factor);
+          return `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
+        })()
+      : `/dashboard/properties/${propertyId}/focus/health/${factorSlug}`;
+
+    buildInsightAction({
+      factorSlug,
+      title: factor,
+      description: `Status: ${status}. Requires resolution.`,
+      href,
+      itemId: matchedItem?.id,
+      assetName: matchedItem?.name ?? extractHealthInsightAssetName(factor) ?? undefined,
+    });
+  });
+
+  return actions;
+}
+
+// Home Intelligence Functional Completeness FRD Phase 1, Slice 2 — the
+// other confirmed-zero-coverage row: no Home Action producer anywhere
+// reads ReplaceRepairAnalysis today. Mirrors
+// resolutionCenter.service.ts's mapReplaceRepairAnalysesToInsights (lines
+// ~359-411) and its dedupe-by-item logic, but synthesizes generic
+// options/tradeoffs/assumptions (rather than carrying verdict/impactLevel
+// as bespoke fields) so the result satisfies HomeAction's MATERIAL_FINANCIAL
+// structural minimums without extending the canonical contract.
+const CURRENT_REPLACE_REPAIR_MARKER = 'CURRENT';
+
+function dedupeReplaceRepairAnalysesForPromotion<T extends {
+  inventoryItemId: string;
+  currentMarker?: string | null;
+  computedAt: Date;
+}>(rows: T[]): T[] {
+  const byItemId = new Map<string, T>();
+  for (const row of rows) {
+    const existing = byItemId.get(row.inventoryItemId);
+    if (!existing) { byItemId.set(row.inventoryItemId, row); continue; }
+    const rowIsCurrent = row.currentMarker === CURRENT_REPLACE_REPAIR_MARKER;
+    const existingIsCurrent = existing.currentMarker === CURRENT_REPLACE_REPAIR_MARKER;
+    if (rowIsCurrent && !existingIsCurrent) { byItemId.set(row.inventoryItemId, row); continue; }
+    if (!rowIsCurrent && existingIsCurrent) continue;
+    if (row.computedAt.getTime() > existing.computedAt.getTime()) byItemId.set(row.inventoryItemId, row);
+  }
+  return [...byItemId.values()];
+}
+
+async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.replaceRepairAnalysis) return [];
+
+  const now = evaluatedAt ?? new Date();
+  const [analyses, journeys] = await Promise.all([
+    db.replaceRepairAnalysis.findMany({
+      where: { propertyId, status: 'READY' },
+      include: { inventoryItem: { select: { id: true, name: true } } },
+      orderBy: { computedAt: 'desc' },
+      take: 10,
+    }),
+    db.guidanceJourney.findMany({
+      where: {
+        propertyId, issueDomain: 'ASSET_LIFECYCLE', status: 'ACTIVE',
+        inventoryItemId: { not: null },
+        steps: { some: { toolKey: 'replace-repair' } },
+      },
+      select: { id: true, inventoryItemId: true, currentStepKey: true, issueType: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    }),
+  ]);
+
+  const journeysByItemId = new Map<string, { id: string; currentStepKey: string | null; issueType: string | null }>();
+  journeys.forEach((journey) => {
+    if (!journey.inventoryItemId || journeysByItemId.has(journey.inventoryItemId)) return;
+    journeysByItemId.set(journey.inventoryItemId, journey);
+  });
+
+  const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses);
+
+  return deduped.map((analysis) => {
+    const itemName = analysis.inventoryItem?.name || 'Inventory Item';
+    const journey = journeysByItemId.get(analysis.inventoryItemId);
+    let href: string;
+    if (journey?.id) {
+      const params = new URLSearchParams();
+      params.set('journeyId', journey.id);
+      if (journey.currentStepKey) params.set('stepKey', journey.currentStepKey);
+      params.set('scopeCategory', 'ITEM');
+      params.set('itemId', analysis.inventoryItemId);
+      params.set('inventoryItemId', analysis.inventoryItemId);
+      params.set('assetName', itemName);
+      if (journey.issueType) params.set('issueType', journey.issueType);
+      if (analysis.summary) params.set('customIssueLabel', analysis.summary);
+      href = `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
+    } else {
+      href = `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`;
+    }
+
+    const favorsReplace = analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON';
+    const confidenceScore = analysis.confidence === 'HIGH' ? 0.9 : analysis.confidence === 'MEDIUM' ? 0.65 : 0.4;
+
+    return adaptHomeActionSource('GUIDANCE', {
+      id: `repair-replace:${analysis.id}`,
+      propertyId,
+      lineageId: `repair-replace:${analysis.inventoryItemId}`,
+      sourceEntityId: analysis.id,
+      sourceVersion: analysis.computedAt.toISOString(),
+      state: 'OPEN',
+      priority: analysis.verdict === 'REPLACE_NOW' ? 'SOON' : 'PLAN',
+      signal: `Repair vs Replace: ${itemName}`,
+      whyItMatters: analysis.summary || `Our AI has a recommendation for ${itemName}.`,
+      recommendedAction: favorsReplace ? 'Consider replacing this item.' : 'Consider repairing this item.',
+      expectedOutcome: 'A documented repair-or-replace decision for this item.',
+      timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
+      evidence: [{
+        id: analysis.id,
+        type: 'SYSTEM_DERIVATION',
+        label: `Repair vs Replace: ${itemName}`,
+        source: 'Lifespan Engine',
+        observedAt: analysis.computedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence: confidenceScore,
+      }],
+      assumptions: [{
+        key: 'verdict-computed-at',
+        label: 'Verdict reflects the most recent computation',
+        value: `Computed ${analysis.computedAt.toISOString()}`,
+        source: 'SYSTEM_DEFAULT',
+        editable: true,
+      }],
+      options: [
+        { id: 'repair', label: 'Repair', summary: `Continue repairing ${itemName} as issues arise.`, recommended: !favorsReplace },
+        { id: 'replace', label: 'Replace', summary: `Replace ${itemName} rather than continuing to repair it.`, recommended: favorsReplace },
+      ],
+      tradeoffs: [
+        { optionId: 'repair', dimension: 'COST', summary: 'Lower upfront cost, but risk of recurring failures.' },
+        { optionId: 'replace', dimension: 'COST', summary: 'Higher upfront cost, but resets the item\'s expected lifespan.' },
+      ],
+      confidence: { score: confidenceScore, label: analysis.confidence, missing: [] },
+      governance: materialFinancialGovernance('resolution-center-parity-v1'),
+      primaryCta: { kind: 'COMPARE', label: 'Review Decision', href },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: journey?.id ?? null,
+      createdAt: analysis.computedAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    });
+  });
 }
 
 async function loadPersonalizationActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
@@ -3596,6 +3896,8 @@ export async function getPromotedHomeActions(
     ), Promise.resolve(incidentActions),
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadCoverageRenewalActions(propertyId, db, options.evaluatedAt),
+    loadHealthInsightActions(propertyId, db, options.evaluatedAt),
+    loadRepairReplaceDecisionActions(propertyId, db, options.evaluatedAt),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     loadInspectionFindingActions(propertyId, db),
     loadSalePrepActions(propertyId, db),
