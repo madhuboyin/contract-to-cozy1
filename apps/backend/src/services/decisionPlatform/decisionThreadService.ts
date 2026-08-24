@@ -661,17 +661,21 @@ export async function abandonDecisionThread(threadId: string, propertyId: string
 // homeActionDecisionLineage.ts) so a material Home Action never has to
 // import the HVAC engine directly. Every method here delegates to the
 // functions above; no lifecycle/evaluation logic is duplicated.
-function toDecisionFamilyLineage(thread: {
-  id: string;
-  lifecycleStatus: DecisionThreadLifecycleStatus;
-  contextStatus: DecisionThreadContextStatus;
-  currentRecommendationSnapshotId: string | null;
-}): DecisionFamilyThreadLineage {
+function toDecisionFamilyLineage(
+  thread: {
+    id: string;
+    lifecycleStatus: DecisionThreadLifecycleStatus;
+    contextStatus: DecisionThreadContextStatus;
+    currentRecommendationSnapshotId: string | null;
+  },
+  recommendationChange: RecommendationChangeDiff | null = null,
+): DecisionFamilyThreadLineage {
   return {
     decisionThreadId: thread.id,
     lifecycleStatus: thread.lifecycleStatus,
     contextStatus: thread.contextStatus,
     currentRecommendationSnapshotId: thread.currentRecommendationSnapshotId,
+    recommendationChange,
   };
 }
 
@@ -696,7 +700,7 @@ export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
     const selection = await selectHvacDecisionThread(propertyId, primaryEntityId);
     if (selection.kind === 'NONE') return { kind: 'NONE' };
     if (selection.kind === 'AMBIGUOUS') {
-      return { kind: 'AMBIGUOUS', candidates: selection.candidates.map(toDecisionFamilyLineage) };
+      return { kind: 'AMBIGUOUS', candidates: selection.candidates.map((candidate) => toDecisionFamilyLineage(candidate)) };
     }
     return { kind: 'UNIQUE', thread: toDecisionFamilyLineage(selection.thread) };
   },
@@ -707,8 +711,8 @@ export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
       throw new DecisionFamilyAmbiguousThreadError('HVAC_REPAIR_REPLACE', primaryEntityId);
     }
     if (selection.kind === 'UNIQUE') {
-      const { thread } = await continueHvacDecisionThread(selection.thread.id, propertyId, askExecutionId);
-      return toDecisionFamilyLineage(thread);
+      const { thread, change } = await continueHvacDecisionThread(selection.thread.id, propertyId, askExecutionId);
+      return toDecisionFamilyLineage(thread, change);
     }
     const created = await createHvacDecisionThread({ propertyId, userId, inventoryItemId: primaryEntityId, askExecutionId, homeActionOrigin });
     return toDecisionFamilyLineage(created.thread);

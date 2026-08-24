@@ -26,6 +26,7 @@ describe('shouldBlockNavigationForLineage', () => {
         lifecycleStatus: 'RECOMMENDATION_AVAILABLE',
         contextStatus: 'CURRENT',
         currentRecommendationSnapshotId: 'snapshot-1',
+        recommendationChange: null,
       } : undefined,
     })).toBe(false);
   });

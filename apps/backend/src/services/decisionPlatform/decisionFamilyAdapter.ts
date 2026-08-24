@@ -14,12 +14,20 @@ import type {
 } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
 import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
 import type { ThreadSelection } from './decisionThreadService';
+import type { RecommendationChangeDiff } from './decisionPreferenceService';
 
 export interface DecisionFamilyThreadLineage {
   decisionThreadId: string;
   lifecycleStatus: DecisionThreadLifecycleStatus;
   contextStatus: DecisionThreadContextStatus;
   currentRecommendationSnapshotId: string | null;
+  // Home Intelligence Functional Completeness FRD Phase 3B work item 5:
+  // "Show snapshot changes when context changes." Non-null only when this
+  // very call recomputed a stale thread (FRD §14.3's diff, already
+  // computed by continueHvacDecisionThread/recomputeStaleThread for the
+  // Ask-chat surface's RECOMMENDATION_CHANGE block) — a plain read-only
+  // selectThread/resolve never produces one.
+  recommendationChange: RecommendationChangeDiff | null;
 }
 
 export class DecisionFamilyAmbiguousThreadError extends Error {

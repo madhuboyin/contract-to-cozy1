@@ -1906,6 +1906,11 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
       ],
       confidence: { score: confidenceScore, label: analysis.confidence, missing: [] },
       governance: materialFinancialGovernance('resolution-center-parity-v1'),
+      propertyContextFeature: {
+        featureKey: 'REPAIR_REPLACE',
+        operationKey: 'RUN_ANALYSIS',
+        operationInput: { inventoryItemId: analysis.inventoryItemId },
+      },
       primaryCta: { kind: 'COMPARE', label: 'Review Decision', href },
       secondaryCtas: [],
       feedbackControls: RECOMMENDATION_FEEDBACK,

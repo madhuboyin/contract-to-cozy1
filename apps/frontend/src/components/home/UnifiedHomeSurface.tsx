@@ -1144,7 +1144,7 @@ export function ActionCard({
               <p className="mt-1 text-sm text-amber-800">{action.confidence.missing.join(' · ')}</p>
             </div>
           )}
-          <HomeActionDecisionDetail action={action} />
+          <HomeActionDecisionDetail action={action} propertyId={propertyId} onContextCaptured={onChanged} />
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">

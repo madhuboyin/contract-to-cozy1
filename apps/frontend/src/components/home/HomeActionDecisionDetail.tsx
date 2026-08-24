@@ -11,6 +11,28 @@
 
 import type { RankedHomeActionDTO } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+
+const CHANGE_CATEGORY_LABELS: Record<string, string> = {
+  MATERIAL: 'The recommendation itself changed',
+  CONFIDENCE_ONLY: 'The recommendation is the same, with updated confidence',
+  SYSTEM_METHOD_ONLY: 'Recalculated with an updated method — your facts did not change',
+};
+
+function RecommendationChangeNotice({ change }: { change: NonNullable<NonNullable<RankedHomeActionDTO['decisionLineage']>['thread']>['recommendationChange'] }) {
+  if (!change || change.category === 'UNCHANGED') return null;
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 md:col-span-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-sky-800">What changed since you last looked</p>
+      <p className="mt-1 text-sm text-sky-900">{CHANGE_CATEGORY_LABELS[change.category] ?? 'This recommendation was recalculated.'}</p>
+      {change.category === 'MATERIAL' && (
+        <p className="mt-1 text-sm text-sky-800">
+          Previous recommendation: <span className="font-medium">{change.previousVerdict}</span> → Now: <span className="font-medium">{change.currentVerdict}</span>
+        </p>
+      )}
+    </div>
+  );
+}
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   OPEN: 'Started',
@@ -84,7 +106,16 @@ function DecisionLineageStatus({ decisionLineage }: { decisionLineage: RankedHom
  * timing render alongside this in the caller (already present before this
  * component existed).
  */
-export function HomeActionDecisionDetail({ action }: { action: RankedHomeActionDTO }) {
+export function HomeActionDecisionDetail({
+  action,
+  propertyId,
+  onContextCaptured,
+}: {
+  action: RankedHomeActionDTO;
+  propertyId: string;
+  /** Phase 3B work item 3 — "resume the same action or decision after capture." Re-fetches the Home feed so the recommendation reflects the newly captured fact. */
+  onContextCaptured?: () => void | Promise<unknown>;
+}) {
   const { recommendationResponse, governance } = action;
   const hasAssumptions = action.assumptions.length > 0;
   const hasOptions = action.options.length > 0;
@@ -92,13 +123,26 @@ export function HomeActionDecisionDetail({ action }: { action: RankedHomeActionD
   const degraded = recommendationResponse.status !== 'AVAILABLE';
   const hasDisclosure = governance.commercialDisclosure.involvesCommercialAction ||
     Boolean(governance.professionalBoundary) || Boolean(governance.conservativeFallback);
+  const contextFeature = action.propertyContextFeature;
 
-  if (!hasAssumptions && !hasOptions && !hasTradeoffs && !degraded && !hasDisclosure && !action.decisionLineage) {
+  if (!hasAssumptions && !hasOptions && !hasTradeoffs && !degraded && !hasDisclosure && !action.decisionLineage && !contextFeature) {
     return null;
   }
 
   return (
     <>
+      {contextFeature && (
+        <div className="md:col-span-2">
+          <PropertyContextCapturePanel
+            propertyId={propertyId}
+            featureKey={contextFeature.featureKey}
+            operationKey={contextFeature.operationKey}
+            operationInput={contextFeature.operationInput}
+            onCaptured={async () => { await onContextCaptured?.(); }}
+          />
+        </div>
+      )}
+      <RecommendationChangeNotice change={action.decisionLineage?.thread?.recommendationChange ?? null} />
       <DecisionLineageStatus decisionLineage={action.decisionLineage} />
 
       {degraded && (

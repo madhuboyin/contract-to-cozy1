@@ -164,6 +164,22 @@ const HomeActionPresentationSchema = z.object({
   }).nullable(),
 });
 
+// Home Intelligence Functional Completeness FRD Phase 3B work item 3:
+// "Integrate Property Context inline capture and resume." Optional — set
+// only by a producer whose recommendation depends on registered Property
+// Context facts (today: loadRepairReplaceDecisionActions, featureKey
+// REPAIR_REPLACE/operationKey RUN_ANALYSIS, the same pair the standalone
+// Replace-or-Repair tool page already evaluates against). The frontend
+// resolves this against evaluateFeatureContext/captureFeatureContext (the
+// same endpoints PropertyContextCapturePanel already drives elsewhere) and
+// renders the capture form inline rather than sending the homeowner to a
+// separate tool.
+export const PropertyContextFeatureRefSchema = z.object({
+  featureKey: z.string().trim().min(1).max(100),
+  operationKey: z.string().trim().min(1).max(100),
+  operationInput: z.record(z.string(), z.unknown()),
+});
+
 export const HomeActionSchema = z.object({
   id: z.string().trim().min(1).max(160),
   propertyId: z.string().trim().min(1).max(120),
@@ -184,6 +200,7 @@ export const HomeActionSchema = z.object({
   // explanation. This is optional while source adapters migrate, so the
   // canonical action contract remains backward compatible.
   presentation: HomeActionPresentationSchema.optional(),
+  propertyContextFeature: PropertyContextFeatureRefSchema.optional(),
   timing: z.object({
     dueAt: z.string().datetime().nullable(),
     windowStart: z.string().datetime().nullable(),

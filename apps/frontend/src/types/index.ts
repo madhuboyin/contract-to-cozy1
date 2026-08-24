@@ -478,7 +478,22 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
       lifecycleStatus: string;
       contextStatus: 'CURRENT' | 'STALE' | 'CONFLICTED';
       currentRecommendationSnapshotId: string | null;
+      // Phase 3B work item 5 — non-null only when opening this action just
+      // recomputed a stale thread (a plain re-render never produces one).
+      recommendationChange: {
+        category: 'MATERIAL' | 'CONFIDENCE_ONLY' | 'SYSTEM_METHOD_ONLY' | 'UNCHANGED';
+        previousVerdict: string;
+        currentVerdict: string;
+        changedFactors: string[];
+      } | null;
     };
+  } | null;
+  // Phase 3B work item 3 — set only by a producer whose recommendation
+  // depends on registered Property Context facts (today: repair/replace).
+  propertyContextFeature?: {
+    featureKey: string;
+    operationKey: string;
+    operationInput: Record<string, unknown>;
   } | null;
   feedbackControls: HomeActionCommand[];
   ranking: {
