@@ -204,7 +204,7 @@ test('ROUTINE urgency creates delivery rows but never enqueues immediate transpo
   assert.equal(enqueued.email.length, 0);
 });
 
-test('persists a canonical attention priority for weekly Home Brief grouping', async () => {
+test('does not independently rescore attention priority from days-until-due metadata', async () => {
   const { NotificationService, calls } = loadService({
     policy: policyFixture({ urgency: 'ROUTINE' }),
   });
@@ -213,7 +213,7 @@ test('persists a canonical attention priority for weekly Home Brief grouping', a
     metadata: { daysUntilDue: 21 },
   }));
 
-  assert.equal(calls.creates[0].data.metadata.attentionPriority, 'SOON');
+  assert.equal(calls.creates[0].data.metadata.attentionPriority, 'PLAN');
 });
 
 test('preserves an explicit canonical attention priority', async () => {

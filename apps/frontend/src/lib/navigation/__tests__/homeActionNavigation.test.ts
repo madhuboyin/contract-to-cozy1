@@ -88,6 +88,20 @@ describe('resolveHomeActionPrimaryHref', () => {
     expect(href).toContain('serviceLabel=Water+Heater');
   });
 
+  it('propagates canonical Operational Work lineage into provider search', () => {
+    const href = resolveHomeActionPrimaryHref(action({
+      workItem: {
+        id: 'work-item-1',
+        workKey: 'maintenance:property-1:hvac',
+        state: 'ACCEPTED',
+        acceptanceState: 'ACCEPTED',
+        disposition: null,
+      },
+    }), 'property-1');
+
+    expect(href).toContain('originWorkItemId=work-item-1');
+  });
+
   it('keeps roof responsibility even though roofing providers use the inspection marketplace category', () => {
     const href = resolveHomeActionPrimaryHref(action({
       signal: 'Schedule service for Roof Shingle',

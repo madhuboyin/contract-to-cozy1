@@ -41,6 +41,10 @@ function caseSourceForAction(action: UrgentActionItem): ResolutionCase['source']
 }
 
 export function casePriorityForAction(action: UrgentActionItem): ResolutionCase['priority'] {
+  if (action.canonicalPriority === 'NOW') return 'critical';
+  if (action.canonicalPriority === 'SOON') return 'high';
+  if (action.canonicalPriority === 'PLAN') return 'medium';
+  if (action.canonicalPriority === 'CONSIDER') return 'low';
   if (action.type === 'INCIDENT' && action.severity === 'CRITICAL') return 'critical';
   if (action.type === 'INCIDENT') return 'high';
   if (action.type === 'RENEWAL_EXPIRED' || action.type === 'COVERAGE_GAP' || action.type === 'MAINTENANCE_OVERDUE') {

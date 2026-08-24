@@ -6,7 +6,7 @@
 // (inventoryItemId, provider, service, category, executionScopeKey, and
 // free-text insight fields describe *what* the booking is about, not which
 // obligation it fulfills).
-import type { OperationalWorkItem, OperationalWorkSourceType, Prisma } from '@prisma/client';
+import type { OperationalWorkItem, OperationalWorkItemState, OperationalWorkSourceType, Prisma } from '@prisma/client';
 import type { WorkItemDb } from '../modules/homeOperations/infrastructure/workItemRepository';
 import {
   findWorkItemById,
@@ -42,6 +42,63 @@ export interface ResolveOriginatingWorkItemInput {
   maintenancePredictionId?: string | null;
   priceFinalizationId?: string | null;
   inventoryItemId?: string | null;
+  guidanceStepKey?: string | null;
+}
+
+const BOOKING_COMPATIBLE_WORK_ITEM_STATES = new Set<OperationalWorkItemState>([
+  'CANDIDATE',
+  'ACCEPTED',
+  'SCHEDULED',
+  'REOPENED',
+  'FOLLOW_UP_DUE',
+]);
+
+export class BookingOriginConflictError extends Error {
+  readonly statusCode = 409;
+  readonly details: Record<string, unknown>;
+
+  constructor(message: string, details: Record<string, unknown>) {
+    super(message);
+    this.name = 'BookingOriginConflictError';
+    this.details = details;
+  }
+}
+
+function assertBookingCompatibleWorkItem(
+  candidate: OperationalWorkItem | null,
+  input: ResolveOriginatingWorkItemInput,
+): asserts candidate is OperationalWorkItem {
+  if (!candidate) {
+    throw new BookingOriginConflictError('The originating work item no longer exists.', {
+      originWorkItemId: input.originWorkItemId,
+      reason: 'ORIGIN_NOT_FOUND',
+    });
+  }
+  if (candidate.propertyId !== input.propertyId) {
+    throw new BookingOriginConflictError('The originating work item belongs to a different property.', {
+      originWorkItemId: candidate.id,
+      reason: 'PROPERTY_MISMATCH',
+    });
+  }
+  if (!BOOKING_COMPATIBLE_WORK_ITEM_STATES.has(candidate.state)) {
+    throw new BookingOriginConflictError('The originating work item is not in a booking-compatible state.', {
+      originWorkItemId: candidate.id,
+      state: candidate.state,
+      reason: 'LIFECYCLE_INCOMPATIBLE',
+    });
+  }
+  if (
+    input.inventoryItemId &&
+    candidate.subjectType === 'INVENTORY_ITEM' &&
+    candidate.subjectId !== input.inventoryItemId
+  ) {
+    throw new BookingOriginConflictError('The originating work item belongs to a different home asset.', {
+      originWorkItemId: candidate.id,
+      expectedInventoryItemId: candidate.subjectId,
+      suppliedInventoryItemId: input.inventoryItemId,
+      reason: 'SUBJECT_MISMATCH',
+    });
+  }
 }
 
 /**
@@ -49,9 +106,8 @@ export interface ResolveOriginatingWorkItemInput {
  * provenance second, standalone otherwise. Never falls back to matching on
  * inventoryItemId/provider/service/category/executionScopeKey/insight
  * fields alone — those describe subject/scope, not obligation identity. A
- * stale or mismatched hint falls through to standalone rather than erroring
- * the whole booking; only an explicit `originWorkItemId` that turns out
- * invalid is worth distinguishing in the audit payload (still non-fatal).
+ * An invalid explicit `originWorkItemId` is a command conflict and is never
+ * silently replaced with a different obligation or a standalone item.
  */
 // A work item is "already spoken for" only by an ACTIVE (non-CANCELLED)
 // Booking execution — a cancelled Booking's execution row is intentionally
@@ -74,29 +130,30 @@ async function hasActiveBookingExecution(tx: WorkItemDb, workItemId: string): Pr
   return activeBookings.length > 0;
 }
 
+async function lockWorkItemForBooking(tx: WorkItemDb, workItemId: string): Promise<void> {
+  // Serialize competing booking requests for the same obligation. Locking
+  // only the newly-created Booking row cannot prevent two different
+  // Bookings from both observing the work item as unoccupied.
+  await tx.$queryRaw`SELECT id FROM operational_work_items WHERE id = ${workItemId} FOR UPDATE`;
+}
+
 export async function resolveOriginatingWorkItem(
   tx: WorkItemDb,
   input: ResolveOriginatingWorkItemInput,
 ): Promise<OriginResolution> {
   if (input.originWorkItemId) {
+    const initialCandidate = await findWorkItemById(input.originWorkItemId, tx);
+    assertBookingCompatibleWorkItem(initialCandidate, input);
+    await lockWorkItemForBooking(tx, initialCandidate.id);
     const candidate = await findWorkItemById(input.originWorkItemId, tx);
-    if (
-      candidate &&
-      candidate.propertyId === input.propertyId &&
-      candidate.state !== 'CLOSED' &&
-      (!input.inventoryItemId || candidate.subjectType !== 'INVENTORY_ITEM' || candidate.subjectId === input.inventoryItemId)
-    ) {
-      // findAllWorkItemsLinkedToExecution looks up BY execution entity (a
-      // Booking id), not by workItemId — checking "is this candidate work
-      // item already spoken for" needs the reverse direction, queried
-      // directly here.
-      if (!(await hasActiveBookingExecution(tx, candidate.id))) {
-        return { workItem: candidate, method: 'EXPLICIT_LINEAGE', suppliedOriginWorkItemId: input.originWorkItemId };
-      }
+    assertBookingCompatibleWorkItem(candidate, input);
+    if (await hasActiveBookingExecution(tx, candidate.id)) {
+      throw new BookingOriginConflictError('The originating work item already has an active booking.', {
+        originWorkItemId: candidate.id,
+        reason: 'ACTIVE_BOOKING_EXISTS',
+      });
     }
-    // Falls through to STANDALONE (or a later exact-provenance branch, if
-    // one is also supplied) rather than erroring — a stale/mismatched
-    // hint must not block a legitimate booking request.
+    return { workItem: candidate, method: 'EXPLICIT_LINEAGE', suppliedOriginWorkItemId: input.originWorkItemId };
   }
 
   if (input.guidanceJourneyId) {
@@ -105,6 +162,19 @@ export async function resolveOriginatingWorkItem(
       select: { id: true, propertyId: true, journeyTypeKey: true, inventoryItemId: true, status: true },
     });
     if (journey && journey.propertyId === input.propertyId) {
+      if (input.guidanceStepKey) {
+        const step = await tx.guidanceJourneyStep.findFirst({
+          where: { journeyId: journey.id, stepKey: input.guidanceStepKey },
+          select: { id: true },
+        });
+        if (!step) {
+          throw new BookingOriginConflictError('The supplied guidance step does not belong to the originating journey.', {
+            guidanceJourneyId: journey.id,
+            guidanceStepKey: input.guidanceStepKey,
+            reason: 'GUIDANCE_STEP_MISMATCH',
+          });
+        }
+      }
       const workKey = resolveGuidanceJourneyWorkKey({
         propertyId: input.propertyId,
         journeyId: journey.id,
@@ -112,11 +182,20 @@ export async function resolveOriginatingWorkItem(
         inventoryItemId: journey.inventoryItemId,
       });
       const matches = await tx.operationalWorkItem.findMany({
-        where: { propertyId: input.propertyId, workKey, state: { not: 'CLOSED' } },
+        where: { propertyId: input.propertyId, workKey, state: { in: [...BOOKING_COMPATIBLE_WORK_ITEM_STATES] } },
       });
-      if (matches.length === 1 && !(await hasActiveBookingExecution(tx, matches[0].id))) {
+      let matchedWorkItem = matches.length === 1 ? matches[0] : null;
+      if (matchedWorkItem) {
+        await lockWorkItemForBooking(tx, matchedWorkItem.id);
+        matchedWorkItem = await findWorkItemById(matchedWorkItem.id, tx);
+      }
+      if (
+        matchedWorkItem &&
+        BOOKING_COMPATIBLE_WORK_ITEM_STATES.has(matchedWorkItem.state) &&
+        !(await hasActiveBookingExecution(tx, matchedWorkItem.id))
+      ) {
         return {
-          workItem: matches[0],
+          workItem: matchedWorkItem,
           method: 'GUIDANCE_JOURNEY',
           matchedSourceType: 'GUIDANCE',
           matchedSourceEntityId: journey.id,
@@ -136,13 +215,25 @@ export async function resolveOriginatingWorkItem(
       where: { sourceType: 'MAINTENANCE', sourceEntityId: input.maintenancePredictionId, active: true },
       include: { workItem: true },
     });
-    if (activeSource?.workItem && activeSource.workItem.propertyId === input.propertyId && activeSource.workItem.state !== 'CLOSED') {
-      return {
-        workItem: activeSource.workItem,
-        method: 'MAINTENANCE_SOURCE',
-        matchedSourceType: 'MAINTENANCE',
-        matchedSourceEntityId: input.maintenancePredictionId,
-      };
+    if (
+      activeSource?.workItem &&
+      activeSource.workItem.propertyId === input.propertyId &&
+      BOOKING_COMPATIBLE_WORK_ITEM_STATES.has(activeSource.workItem.state)
+    ) {
+      await lockWorkItemForBooking(tx, activeSource.workItem.id);
+      const lockedWorkItem = await findWorkItemById(activeSource.workItem.id, tx);
+      if (
+        lockedWorkItem &&
+        BOOKING_COMPATIBLE_WORK_ITEM_STATES.has(lockedWorkItem.state) &&
+        !(await hasActiveBookingExecution(tx, lockedWorkItem.id))
+      ) {
+        return {
+          workItem: lockedWorkItem,
+          method: 'MAINTENANCE_SOURCE',
+          matchedSourceType: 'MAINTENANCE',
+          matchedSourceEntityId: input.maintenancePredictionId,
+        };
+      }
     }
   }
 
@@ -155,6 +246,7 @@ export async function resolveOriginatingWorkItem(
       return resolveOriginatingWorkItem(tx, {
         propertyId: input.propertyId,
         guidanceJourneyId: finalization.guidanceJourneyId,
+        guidanceStepKey: input.guidanceStepKey,
         inventoryItemId: input.inventoryItemId,
       });
     }

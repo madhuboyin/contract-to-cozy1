@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, ArrowRight, CheckCircle2, Clock3, Loader2, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
 import { GuidancePrimaryCta } from '@/components/guidance/GuidancePrimaryCta';
 import { GuidanceStatusBadge } from '@/components/guidance/GuidanceStatusBadge';
 import { GuidanceDrawer } from '@/components/guidance/GuidanceDrawer';
+import { api } from '@/lib/api/client';
 
 // ---------------------------------------------------------------------------
 // Hero selector
@@ -33,83 +34,7 @@ const DOMAIN_LABELS: Partial<Record<GuidanceActionModel['issueDomain'], string>>
   OTHER: 'Home',
 };
 
-function normalizeConfidenceScore(value: number | null): number | null {
-  if (value === null || Number.isNaN(value)) return null;
-  if (value <= 1) return Math.max(0, Math.min(1, value));
-  return Math.max(0, Math.min(1, value / 100));
-}
-
-function readinessScore(value: GuidanceActionModel['executionReadiness']): number {
-  if (value === 'READY') return 22;
-  if (value === 'NEEDS_CONTEXT') return 14;
-  if (value === 'TRACKING_ONLY') return 8;
-  if (value === 'UNKNOWN') return 6;
-  return -24;
-}
-
-function priorityGroupScore(value: GuidanceActionModel['priorityGroup']): number {
-  if (value === 'IMMEDIATE') return 30;
-  if (value === 'UPCOMING') return 16;
-  return 6;
-}
-
-function priorityBucketScore(value: GuidanceActionModel['priorityBucket']): number {
-  if (value === 'HIGH') return 16;
-  if (value === 'MEDIUM') return 9;
-  return 3;
-}
-
-function severityScore(value: GuidanceActionModel['severity']): number {
-  if (value === 'CRITICAL') return 18;
-  if (value === 'HIGH') return 14;
-  if (value === 'MEDIUM') return 9;
-  if (value === 'LOW') return 4;
-  if (value === 'INFO') return 2;
-  return 1;
-}
-
-function coverageImpactScore(value: GuidanceActionModel['coverageImpact']): number {
-  if (value === 'NOT_COVERED') return 8;
-  if (value === 'PARTIAL') return 5;
-  return 0;
-}
-
-function estimateHeroStrength(action: GuidanceActionModel): number {
-  let score = 0;
-
-  score += readinessScore(action.executionReadiness);
-  score += priorityGroupScore(action.priorityGroup);
-  score += priorityBucketScore(action.priorityBucket);
-  score += severityScore(action.severity);
-
-  score += action.nextStep ? 20 : -16;
-  score += action.href ? 12 : -8;
-
-  if (action.confidenceLabel === 'HIGH') score += 12;
-  if (action.confidenceLabel === 'MEDIUM') score += 7;
-  if (action.confidenceLabel === 'LOW') score += 2;
-
-  const confidenceScore = normalizeConfidenceScore(action.confidenceScore);
-  if (confidenceScore !== null) score += Math.round(confidenceScore * 8);
-
-  if (action.costOfDelay && action.costOfDelay > 0) {
-    score += Math.min(12, Math.round(action.costOfDelay / 250));
-  }
-
-  if (action.financialImpactScore && action.financialImpactScore > 0) {
-    score += Math.min(8, Math.round(action.financialImpactScore / 12.5));
-  }
-
-  score += coverageImpactScore(action.coverageImpact);
-
-  if (action.fundingGapFlag) score += 6;
-  if (action.isLowContext) score -= 12;
-  if (!action.explanation && !action.subtitle?.trim()) score -= 6;
-
-  return score;
-}
-
-function isStrongHeroCandidate(action: GuidanceActionModel, score: number): boolean {
+function isHeroEligible(action: GuidanceActionModel): boolean {
   const executable = action.executionReadiness !== 'NOT_READY';
   const actionable = executable && action.nextStep !== null && action.href !== null;
   const isCompleted =
@@ -117,56 +42,16 @@ function isStrongHeroCandidate(action: GuidanceActionModel, score: number): bool
 
   if (isCompleted) return false;
   if (!actionable) return false;
-  if (score < 62) return false;
   if (action.priorityGroup === 'OPTIMIZATION' && action.priorityBucket === 'LOW') return false;
-
-  if (action.priorityGroup === 'IMMEDIATE') return true;
-  if (action.priorityBucket === 'HIGH') return true;
-  if (action.severity === 'CRITICAL' || action.severity === 'HIGH') return true;
-  if ((action.costOfDelay ?? 0) >= 250) return true;
-  if (action.coverageImpact === 'NOT_COVERED') return true;
-
-  return action.confidenceLabel === 'HIGH' && score >= 70;
-}
-
-type RankedHeroCandidate = {
-  action: GuidanceActionModel;
-  score: number;
-};
-
-function rankHeroCandidates(actions: GuidanceActionModel[]): RankedHeroCandidate[] {
-  return actions
-    .map((action) => ({
-      action,
-      score: estimateHeroStrength(action),
-    }))
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-
-      const priorityDiff = (b.action.priorityScore ?? 0) - (a.action.priorityScore ?? 0);
-      if (priorityDiff !== 0) return priorityDiff;
-
-      const costDiff = (b.action.costOfDelay ?? 0) - (a.action.costOfDelay ?? 0);
-      if (costDiff !== 0) return costDiff;
-
-      const confidenceDiff = (b.action.confidenceScore ?? 0) - (a.action.confidenceScore ?? 0);
-      if (confidenceDiff !== 0) return confidenceDiff;
-
-      return a.action.journeyId.localeCompare(b.action.journeyId);
-    });
+  return true;
 }
 
 /**
- * Deterministic hero selector.
- * Chooses only strong actionable items and falls back to calm state otherwise.
+ * Presentation-only hero selector. Input order is canonical Home Action rank;
+ * this function may skip ineligible cards but never assigns another score.
  */
 export function selectHeroAction(actions: GuidanceActionModel[]): GuidanceActionModel | null {
-  if (actions.length === 0) return null;
-  const ranked = rankHeroCandidates(actions);
-  const best = ranked[0];
-  if (!best) return null;
-  if (!isStrongHeroCandidate(best.action, best.score)) return null;
-  return best.action;
+  return actions.find(isHeroEligible) ?? null;
 }
 
 function toDomainLabel(action: GuidanceActionModel): string {
@@ -196,11 +81,10 @@ function toFallbackObservation(action: GuidanceActionModel): string | null {
 function deriveFallbackObservations(actions: GuidanceActionModel[], max = 2): string[] {
   if (actions.length === 0) return [];
 
-  const ranked = rankHeroCandidates(actions);
   const observations: string[] = [];
   const seen = new Set<string>();
 
-  for (const { action } of ranked) {
+  for (const action of actions) {
     const observation = toFallbackObservation(action);
     if (!observation) continue;
     const key = observation.toLowerCase();
@@ -226,26 +110,6 @@ function isAttentionCandidate(action: GuidanceActionModel): boolean {
     return true;
   }
   return (action.costOfDelay ?? 0) >= 250;
-}
-
-function attentionStrength(action: GuidanceActionModel): number {
-  let score = estimateHeroStrength(action);
-  if (action.priorityGroup === 'IMMEDIATE') score += 10;
-  if (action.priorityBucket === 'HIGH') score += 7;
-  if (action.severity === 'CRITICAL' || action.severity === 'HIGH') score += 6;
-  return score;
-}
-
-function rankAttentionActions(actions: GuidanceActionModel[]): GuidanceActionModel[] {
-  return [...actions].sort((a, b) => {
-    const scoreDiff = attentionStrength(b) - attentionStrength(a);
-    if (scoreDiff !== 0) return scoreDiff;
-
-    const priorityDiff = (b.priorityScore ?? 0) - (a.priorityScore ?? 0);
-    if (priorityDiff !== 0) return priorityDiff;
-
-    return a.journeyId.localeCompare(b.journeyId);
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -628,35 +492,62 @@ export function DashboardHeroSection({
 }: DashboardHeroSectionProps) {
   const [drawerAction, setDrawerAction] = useState<GuidanceActionModel | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [canonicalJourneyOrder, setCanonicalJourneyOrder] = useState<string[] | null>(null);
+  const [canonicalFeedFailed, setCanonicalFeedFailed] = useState(false);
 
   const guidance = useGuidance(propertyId);
 
+  useEffect(() => {
+    let active = true;
+    setCanonicalJourneyOrder(null);
+    setCanonicalFeedFailed(false);
+    void api.getHomeActions(propertyId)
+      .then((feed) => {
+        if (!active) return;
+        setCanonicalJourneyOrder([
+          ...new Set(feed.actions.map((action) => action.relatedJourneyId).filter((id): id is string => Boolean(id))),
+        ]);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCanonicalJourneyOrder([]);
+        setCanonicalFeedFailed(true);
+      });
+    return () => { active = false; };
+  }, [propertyId]);
+
+  const canonicalGuidanceActions = useMemo(() => {
+    if (canonicalJourneyOrder === null) return [];
+    const byJourneyId = new Map(guidance.actions.map((action) => [action.journeyId, action]));
+    return canonicalJourneyOrder
+      .map((journeyId) => byJourneyId.get(journeyId))
+      .filter((action): action is GuidanceActionModel => Boolean(action));
+  }, [canonicalJourneyOrder, guidance.actions]);
+
   const { heroAction, attentionActions, fallbackObservations } = useMemo(() => {
-    const hero = selectHeroAction(guidance.actions);
+    const hero = selectHeroAction(canonicalGuidanceActions);
     if (!hero) {
       return {
         heroAction: null,
         attentionActions: [],
-        fallbackObservations: deriveFallbackObservations(guidance.actions, 2),
+        fallbackObservations: deriveFallbackObservations(canonicalGuidanceActions, 2),
       };
     }
 
-    const attention = rankAttentionActions(
-      guidance.actions
+    const attention = canonicalGuidanceActions
       .filter((a) => a.journeyId !== hero.journeyId)
       .filter(isAttentionCandidate)
-    )
       .slice(0, attentionLimit);
 
     return { heroAction: hero, attentionActions: attention, fallbackObservations: [] };
-  }, [guidance.actions, attentionLimit]);
+  }, [canonicalGuidanceActions, attentionLimit]);
 
   const handleOpenJourney = (action: GuidanceActionModel) => {
     setDrawerAction(action);
     setDrawerOpen(true);
   };
 
-  if (guidance.isLoading) {
+  if (guidance.isLoading || canonicalJourneyOrder === null) {
     return (
       <section className="space-y-3">
         <Card className="border-border">
@@ -679,7 +570,7 @@ export function DashboardHeroSection({
     );
   }
 
-  if (guidance.isError && guidance.actions.length === 0) {
+  if (canonicalFeedFailed || (guidance.isError && guidance.actions.length === 0)) {
     return <GuidanceUnavailableCard propertyId={propertyId} />;
   }
 

@@ -97,6 +97,10 @@ test('with a saved coverage analysis, the action elevates to MATERIAL_FINANCIAL 
   assert.equal(action.tradeoffs.length, 2);
   assert.equal(action.evidence.length, 2);
   assert.equal(action.evidence[1].id, 'coverage-analysis:analysis-1');
+  assert.equal(
+    action.source.version,
+    'phase1-v1:coverage-analysis:analysis-1:2026-08-01T00:00:00.000Z',
+  );
   assert.match(action.tradeoffs.find((t) => t.optionId === 'add-protection').summary, /\$1,200/);
 });
 

@@ -55,17 +55,11 @@ export function filterResolutionActions(
   return result;
 }
 
-const ACTION_PRIORITY_RANK: Record<ReturnType<typeof casePriorityForAction>, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
-
 export function sortResolutionActionsByPriority(actions: UrgentActionItem[]): UrgentActionItem[] {
-  return [...actions].sort(
-    (a, b) => ACTION_PRIORITY_RANK[casePriorityForAction(a)] - ACTION_PRIORITY_RANK[casePriorityForAction(b)],
-  );
+  // The backend already returns canonical Home Action rank order. Keep this
+  // compatibility helper stable for callers, but never calculate a second
+  // Fix-specific priority order in the browser.
+  return [...actions];
 }
 
 export function buildResolutionCenterViewModel(args: {

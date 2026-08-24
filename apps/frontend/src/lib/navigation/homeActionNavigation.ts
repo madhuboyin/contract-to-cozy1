@@ -3,7 +3,7 @@ import { getProviderCategoryForSystemType, getProviderWorkCategory } from '@/lib
 
 type ServiceActionDestination = Pick<
   RankedHomeActionDTO,
-  'lineageId' | 'signal' | 'recommendedAction' | 'evidence' | 'governance' | 'primaryCta'
+  'lineageId' | 'signal' | 'recommendedAction' | 'evidence' | 'governance' | 'primaryCta' | 'workItem'
 >;
 
 /**
@@ -30,6 +30,9 @@ export function resolveHomeActionPrimaryHref(
       const workCategory = getProviderWorkCategory(serviceLabel);
       if (workCategory) destination.searchParams.set('workCategory', workCategory);
     }
+    if (action.workItem?.id && !destination.searchParams.has('originWorkItemId')) {
+      destination.searchParams.set('originWorkItemId', action.workItem.id);
+    }
     return `${destination.pathname}${destination.search}${destination.hash}`;
   }
 
@@ -41,6 +44,7 @@ export function resolveHomeActionPrimaryHref(
     from: 'home-action',
     actionKey: action.lineageId,
   });
+  if (action.workItem?.id) params.set('originWorkItemId', action.workItem.id);
   if (action.primaryCta.href.startsWith('/')) {
     const sourceDestination = new URL(action.primaryCta.href, 'https://contracttocozy.local');
     [

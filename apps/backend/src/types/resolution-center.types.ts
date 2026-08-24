@@ -4,6 +4,7 @@ export type ResolutionActionType =
   | 'RENEWAL_EXPIRED'
   | 'RENEWAL_UPCOMING'
   | 'HEALTH_INSIGHT'
+  | 'DECISION_REVIEW'
   | 'INCIDENT'
   | 'COVERAGE_GAP'
   | 'COVERAGE_PARTIAL';
@@ -17,6 +18,7 @@ export interface ResolutionActionDTO {
   daysUntilDue?: number;
   propertyId: string;
   severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+  canonicalPriority?: 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
   entityType?: 'Warranty' | 'Insurance';
   itemId?: string;
   assetName?: string;

@@ -429,6 +429,7 @@ export type WorkItemDetailDTO = WorkItemListEntryDTO & {
 
 export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   lineageId: string;
+  relatedJourneyId?: string | null;
   state: 'OPEN' | 'IN_PROGRESS' | 'SNOOZED' | 'COMPLETED' | 'DEFERRED' | 'DISMISSED' | 'SUPERSEDED';
   job: 'STAY_AHEAD' | 'DECIDE' | 'MAJOR_MOMENT';
   source: { kind: string; entityId: string; version: string | null };
@@ -2100,6 +2101,8 @@ export interface Booking {
   bookingNumber: string;
   status: BookingStatus;
   category: ServiceCategory;
+  operationalWorkItemId: string | null;
+  originResolution: 'EXPLICIT' | 'DOMAIN_PROVENANCE' | 'STANDALONE' | null;
   homeowner: {
     id: string;
     firstName: string;
@@ -5813,6 +5816,7 @@ export type ResolutionCenterActionType =
   | 'RENEWAL_EXPIRED'
   | 'RENEWAL_UPCOMING'
   | 'HEALTH_INSIGHT'
+  | 'DECISION_REVIEW'
   | 'INCIDENT'
   | 'COVERAGE_GAP'
   | 'COVERAGE_PARTIAL';
@@ -5826,6 +5830,7 @@ export interface ResolutionCenterAction {
   daysUntilDue?: number;
   propertyId: string;
   severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+  canonicalPriority?: 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
   entityType?: 'Warranty' | 'Insurance';
   itemId?: string;
   status?: string;

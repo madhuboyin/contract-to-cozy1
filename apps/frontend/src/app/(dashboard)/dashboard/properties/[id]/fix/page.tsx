@@ -32,8 +32,8 @@ import {
   resolveUrgentActionHref,
   UrgentActionItem,
 } from '@/lib/dashboard/urgentActions';
-import { filterResolutionActions, sortResolutionActionsByPriority } from '@/lib/dashboard/resolutionCenterViewModel';
-import { filterResolutionCases, sortResolutionCasesByPriority } from '@/lib/dashboard/resolutionCases';
+import { filterResolutionActions } from '@/lib/dashboard/resolutionCenterViewModel';
+import { filterResolutionCases } from '@/lib/dashboard/resolutionCases';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import type { GuidanceJourneyDTO } from '@/lib/api/guidanceApi';
 import { startGuidanceJourney } from '@/lib/api/guidanceApi';
@@ -367,7 +367,6 @@ export default function ResolutionHubPage() {
 
   const filterParam = searchParams.get('filter');
   const priorityParam = searchParams.get('priority');
-  const sortParam = searchParams.get('sort');
   const genericIssueGuidanceHref = propertyId
     ? buildIssueGuidanceOverviewHref({
         propertyId,
@@ -460,13 +459,11 @@ export default function ResolutionHubPage() {
   }, [fetchData]);
 
   const filteredActions = useMemo(() => {
-    const filtered = filterResolutionActions(urgentActions, filterParam, priorityParam);
-    return sortParam === 'priority' ? sortResolutionActionsByPriority(filtered) : filtered;
-  }, [urgentActions, filterParam, priorityParam, sortParam]);
+    return filterResolutionActions(urgentActions, filterParam, priorityParam);
+  }, [urgentActions, filterParam, priorityParam]);
   const filteredCases = useMemo(() => {
-    const filtered = filterResolutionCases(resolutionCenterData.cases, filterParam, priorityParam);
-    return sortParam === 'priority' ? sortResolutionCasesByPriority(filtered) : filtered;
-  }, [resolutionCenterData.cases, filterParam, priorityParam, sortParam]);
+    return filterResolutionCases(resolutionCenterData.cases, filterParam, priorityParam);
+  }, [resolutionCenterData.cases, filterParam, priorityParam]);
   const displayedOpenCaseCount = resolutionCenterV2Enabled
     ? filteredCases.length
     : filteredActions.length;

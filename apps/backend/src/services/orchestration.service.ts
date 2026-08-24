@@ -346,6 +346,9 @@ export function adaptOrchestratedActionToHomeAction(
   const isCoverageAction = action.relatedEntity?.type === 'INVENTORY_ITEM'
     && action.actionKey.startsWith('COVERAGE_GAP::');
   const hasSavedCoverageAnalysis = isCoverageAction && Boolean(coverageAnalysis);
+  const sourceVersion = hasSavedCoverageAnalysis && coverageAnalysis
+    ? `phase1-v1:coverage-analysis:${coverageAnalysis.id}:${coverageAnalysis.computedAt.toISOString()}`
+    : 'phase1-v1';
   const sourceKind = action.source === 'CHECKLIST'
     ? 'MAINTENANCE'
     : isCoverageAction
@@ -409,7 +412,7 @@ export function adaptOrchestratedActionToHomeAction(
     sourceEntityId: isCoverageAction && action.relatedEntity?.type === 'INVENTORY_ITEM'
       ? action.relatedEntity.id
       : action.checklistItemId ?? action.orchestrationActionId ?? action.id,
-    sourceVersion: 'phase0-v1',
+    sourceVersion,
     job: critical ? 'MAJOR_MOMENT' : undefined,
     state: action.snooze ? 'SNOOZED' : 'OPEN',
     priority: critical || action.overdue ? 'NOW' : action.priority >= 70 ? 'SOON' : 'PLAN',
@@ -2595,15 +2598,18 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
       .map((action) => action.relatedEntity!.id),
   )];
   const coverageAnalysesByItemId = new Map<string, { id: string; confidence: string; computedAt: Date }>();
-  if (coverageGapInventoryItemIds.length > 0) {
+  const COVERAGE_ANALYSIS_PAGE_SIZE = 100;
+  for (let offset = 0; offset < coverageGapInventoryItemIds.length; offset += COVERAGE_ANALYSIS_PAGE_SIZE) {
+    const inventoryItemPage = coverageGapInventoryItemIds.slice(offset, offset + COVERAGE_ANALYSIS_PAGE_SIZE);
     const coverageAnalyses = await prisma.coverageAnalysis.findMany({
-      where: { propertyId, inventoryItemId: { in: coverageGapInventoryItemIds }, status: 'READY' },
+      where: { propertyId, inventoryItemId: { in: inventoryItemPage }, status: 'READY' },
       select: { id: true, inventoryItemId: true, confidence: true, computedAt: true },
-      orderBy: { computedAt: 'desc' },
+      orderBy: [{ inventoryItemId: 'asc' }, { computedAt: 'desc' }],
+      distinct: ['inventoryItemId'],
+      take: inventoryItemPage.length,
     });
     for (const analysis of coverageAnalyses) {
-      if (!analysis.inventoryItemId || coverageAnalysesByItemId.has(analysis.inventoryItemId)) continue;
-      coverageAnalysesByItemId.set(analysis.inventoryItemId, analysis);
+      if (analysis.inventoryItemId) coverageAnalysesByItemId.set(analysis.inventoryItemId, analysis);
     }
   }
 

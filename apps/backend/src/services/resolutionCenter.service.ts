@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { getPropertyById } from './property.service';
 import { detectCoverageGaps, type CoverageGapResult } from './coverageGap.service';
 import { operatingModeForOwnershipState } from './skills/context/propertyJourneyContext.contract';
+import { getHomeActionFeed, type RankedHomeAction } from './homeActions.service';
 import type {
   DecisionInsightDTO,
   ExecutionItemDTO,
@@ -238,6 +239,8 @@ function caseKindForAction(action: ResolutionActionDTO): ResolutionCaseDTO['kind
       return 'coverage_gap';
     case 'HEALTH_INSIGHT':
       return 'health_insight';
+    case 'DECISION_REVIEW':
+      return 'repair_replace';
     default:
       return 'maintenance';
   }
@@ -254,13 +257,22 @@ function caseSourceForAction(action: ResolutionActionDTO): ResolutionCaseDTO['so
       return 'coverage';
     case 'HEALTH_INSIGHT':
       return 'health_score';
+    case 'DECISION_REVIEW':
+      return 'replace_repair';
     default:
       return 'checklist';
   }
 }
 
 function casePriorityForAction(action: ResolutionActionDTO): ResolutionCaseDTO['priority'] {
-  if (action.type === 'INCIDENT' && action.severity === 'CRITICAL') return 'critical';
+  if (action.canonicalPriority === 'NOW') return 'critical';
+  if (action.canonicalPriority === 'SOON') return 'high';
+  if (action.canonicalPriority === 'PLAN') return 'medium';
+  if (action.canonicalPriority === 'CONSIDER') return 'low';
+  // severity is the canonical Home Action band projection after cutover;
+  // these branches preserve it without recomputing priority from case type.
+  if (action.severity === 'CRITICAL') return 'critical';
+  if (action.severity === 'WARNING') return 'high';
   if (action.type === 'INCIDENT') return 'high';
   if (action.type === 'RENEWAL_EXPIRED' || action.type === 'COVERAGE_GAP' || action.type === 'MAINTENANCE_OVERDUE') {
     return 'high';
@@ -350,6 +362,7 @@ function mapActionsToCases(
     metadata: {
       actionType: action.type,
       severity: action.severity,
+      canonicalPriority: action.canonicalPriority,
       entityType: action.entityType,
       daysUntilDue: action.daysUntilDue,
     },
@@ -680,406 +693,166 @@ function mapCoverageGapToAction(gap: CoverageGapResult): ResolutionActionDTO {
   };
 }
 
-function sortActions(actions: ResolutionActionDTO[]): ResolutionActionDTO[] {
-  return actions.sort((a, b) => {
-    if (a.type === 'INCIDENT' && b.type !== 'INCIDENT') return -1;
-    if (b.type === 'INCIDENT' && a.type !== 'INCIDENT') return 1;
-    if (a.type === 'COVERAGE_GAP' && b.type !== 'COVERAGE_GAP' && b.type !== 'INCIDENT') return -1;
-    if (b.type === 'COVERAGE_GAP' && a.type !== 'COVERAGE_GAP' && a.type !== 'INCIDENT') return 1;
-    if (a.daysUntilDue === undefined) return 1;
-    if (b.daysUntilDue === undefined) return -1;
-    return a.daysUntilDue - b.daysUntilDue;
+function canonicalActionType(action: RankedHomeAction): ResolutionActionDTO['type'] {
+  if (action.source.kind === 'INCIDENT' || action.id.startsWith('incident:')) return 'INCIDENT';
+  if (action.id.startsWith('coverage-renewal:')) {
+    const dueAt = action.timing.dueAt ? new Date(action.timing.dueAt) : null;
+    return dueAt && dueAt.getTime() < Date.now() ? 'RENEWAL_EXPIRED' : 'RENEWAL_UPCOMING';
+  }
+  if (action.id.startsWith('health-insight:')) return 'HEALTH_INSIGHT';
+  if (action.id.startsWith('repair-replace:') || action.job === 'DECIDE') return 'DECISION_REVIEW';
+  if (action.source.kind === 'COVERAGE') {
+    return /partial|incomplete/i.test(`${action.signal} ${action.whyItMatters}`)
+      ? 'COVERAGE_PARTIAL'
+      : 'COVERAGE_GAP';
+  }
+  const dueAt = action.timing.dueAt ? new Date(action.timing.dueAt) : null;
+  return dueAt && dueAt.getTime() < Date.now() ? 'MAINTENANCE_OVERDUE' : 'MAINTENANCE_UNSCHEDULED';
+}
+
+function canonicalActionToResolutionAction(action: RankedHomeAction): ResolutionActionDTO {
+  const dueDate = action.timing.dueAt;
+  const dueAt = dueDate ? new Date(dueDate) : null;
+  const itemId = action.presentation?.subject?.kind === 'INVENTORY_ITEM'
+    ? action.presentation.subject.id
+    : undefined;
+  const entityType = action.id.startsWith('coverage-renewal:warranty:')
+    ? 'Warranty' as const
+    : action.id.startsWith('coverage-renewal:insurance:')
+      ? 'Insurance' as const
+      : undefined;
+  return {
+    id: action.id,
+    type: canonicalActionType(action),
+    title: action.signal,
+    description: action.whyItMatters,
+    dueDate,
+    daysUntilDue: dueAt ? differenceInDays(dueAt, new Date()) : undefined,
+    propertyId: action.propertyId,
+    severity: action.governance.safetyTier === 'SAFETY_EMERGENCY' || action.priority === 'NOW'
+      ? 'CRITICAL'
+      : action.priority === 'SOON'
+        ? 'WARNING'
+        : 'INFO',
+    canonicalPriority: action.priority,
+    entityType,
+    itemId,
+    assetName: action.presentation?.subject?.label,
+    href: action.primaryCta.href,
+  };
+}
+
+function canonicalDecisionInsight(action: RankedHomeAction): DecisionInsightDTO | null {
+  const hasDecisionStructure = Boolean(action.decisionLineage) || action.options.length >= 2;
+  if (!hasDecisionStructure) return null;
+  const linkedDecision = action.decisionLineage?.status === 'LINKED' ? action.decisionLineage.thread : null;
+  const coverageDecision = action.source.kind === 'COVERAGE' || action.governance.safetyTier === 'REGULATED_COVERAGE';
+  const itemId = action.presentation?.subject?.kind === 'INVENTORY_ITEM'
+    ? action.presentation.subject.id
+    : undefined;
+  const freshestEvidence = action.evidence[0];
+  return {
+    id: linkedDecision?.currentRecommendationSnapshotId ?? action.id,
+    propertyId: action.propertyId,
+    kind: coverageDecision ? 'coverage_recommendation' : 'repair_replace',
+    title: action.signal,
+    subject: action.presentation?.subject?.label ?? action.signal,
+    summary: action.recommendedAction,
+    href: action.primaryCta.href,
+    itemId,
+    trust: {
+      confidenceLabel: action.confidence.label,
+      freshnessLabel: freshestEvidence?.freshness ?? 'UNKNOWN',
+      sourceLabel: freshestEvidence?.source ?? action.source.kind,
+      rationale: action.ranking.explanation,
+    },
+    metadata: {
+      homeActionId: action.id,
+      workItemId: action.workItem?.id ?? null,
+      decisionThreadId: linkedDecision?.decisionThreadId ?? null,
+      recommendationSnapshotId: linkedDecision?.currentRecommendationSnapshotId ?? null,
+    },
+  };
+}
+
+async function canonicalBookingExecutionItems(
+  propertyId: string,
+  actions: RankedHomeAction[],
+): Promise<ExecutionItemDTO[]> {
+  const workItemRank = new Map(
+    actions.flatMap((action) => action.workItem ? [[action.workItem.id, action.ranking.rank] as const] : []),
+  );
+  const links = await prisma.operationalWorkExecution.findMany({
+    where: {
+      executionType: 'BOOKING',
+      workItem: {
+        propertyId,
+        acceptanceState: 'ACCEPTED',
+        state: { notIn: ['VERIFIED', 'CLOSED'] },
+        supersededByWorkItemId: null,
+      },
+    },
+    select: { workItemId: true, executionEntityId: true },
+    take: 200,
   });
+  const rankedLinks = [...links].sort(
+    (left, right) => (workItemRank.get(left.workItemId) ?? Number.MAX_SAFE_INTEGER) -
+      (workItemRank.get(right.workItemId) ?? Number.MAX_SAFE_INTEGER),
+  );
+  const bookingIds = [...new Set(rankedLinks.map((link) => link.executionEntityId))];
+  if (bookingIds.length === 0) return [];
+  const bookings = await prisma.booking.findMany({
+    where: { id: { in: bookingIds }, propertyId, status: { in: [...ACTIVE_BOOKING_STATUSES] } },
+    include: {
+      provider: true,
+      providerProfile: { select: { businessName: true } },
+      service: true,
+      property: true,
+    },
+  });
+  const byId = new Map(bookings.map((booking) => [booking.id, booking]));
+  return mapBookingsToExecutionItems(
+    rankedLinks.map((link) => byId.get(link.executionEntityId)).filter((booking): booking is NonNullable<typeof booking> => Boolean(booking)),
+  );
 }
 
 export async function getResolutionCenter(propertyId: string, userId: string): Promise<ResolutionCenterPayloadDTO> {
   const property = await getPropertyById(propertyId, userId);
-
-  if (!property) {
-    throw new Error('Property not found or access denied.');
-  }
-
-  const homeownerProfileId = property.homeownerProfileId;
-  const today = new Date();
-
-  const [
-    checklistItems,
-    warranties,
-    insurancePolicies,
-    incidents,
-    bookings,
-    inventoryItems,
-    replaceRepairAnalyses,
-    replaceRepairJourneys,
-    coverageGaps,
-    coverageAnalyses,
-    onboarding,
-  ] = await Promise.all([
-    prisma.checklistItem.findMany({
-      where: { propertyId },
-      select: {
-        id: true,
-        status: true,
-        nextDueDate: true,
-        title: true,
-        description: true,
-        propertyId: true,
-      },
-    }),
-    prisma.warranty.findMany({
-      where: { propertyId, homeownerProfileId },
-      select: {
-        id: true,
-        propertyId: true,
-        inventoryItemId: true,
-        providerName: true,
-        expiryDate: true,
-      },
-    }),
-    prisma.insurancePolicy.findMany({
-      where: { propertyId, homeownerProfileId },
-      select: {
-        id: true,
-        propertyId: true,
-        carrierName: true,
-        expiryDate: true,
-      },
-    }),
-    prisma.incident.findMany({
-      where: {
-        propertyId,
-        status: {
-          notIn: ['RESOLVED', 'EXPIRED', 'SUPPRESSED'],
-        },
-        isSuppressed: false,
-      },
-      orderBy: [{ openedAt: 'desc' }],
-    }),
-    prisma.booking.findMany({
-      where: {
-        propertyId,
-        homeownerId: userId,
-        status: {
-          in: [...ACTIVE_BOOKING_STATUSES],
-        },
-      },
-      include: {
-        provider: true,
-        providerProfile: {
-          select: {
-            businessName: true,
-          },
-        },
-        service: true,
-        property: true,
-      },
-      orderBy: [{ createdAt: 'desc' }],
-      take: 10,
-    }),
-    prisma.inventoryItem.findMany({
-      where: { propertyId },
-      select: {
-        id: true,
-        name: true,
-      },
-      take: 200,
-    }),
-    prisma.replaceRepairAnalysis.findMany({
-      where: {
-        propertyId,
-        homeownerProfileId,
-        status: 'READY',
-      },
-      include: {
-        inventoryItem: {
-          select: {
-            id: true,
-            name: true,
-            category: true,
-          },
-        },
-      },
-      orderBy: {
-        computedAt: 'desc',
-      },
-      take: 10,
-    }),
-    prisma.guidanceJourney.findMany({
-      where: {
-        propertyId,
-        issueDomain: 'ASSET_LIFECYCLE',
-        status: 'ACTIVE',
-        inventoryItemId: {
-          not: null,
-        },
-        steps: {
-          some: {
-            toolKey: 'replace-repair',
-          },
-        },
-      },
-      select: {
-        id: true,
-        inventoryItemId: true,
-        currentStepKey: true,
-        issueType: true,
-        updatedAt: true,
-        primarySignal: {
-          select: {
-            signalIntentFamily: true,
-          },
-        },
-      },
-      orderBy: [{ updatedAt: 'desc' }],
-      take: 200,
-    }),
-    // Keep Resolution Center aligned with Home Record. The canonical detector
-    // excludes absent/inferred risk concepts, incomplete context, and systems
-    // managed by an HOA, landlord, or shared party.
-    detectCoverageGaps(propertyId),
-    prisma.coverageAnalysis.findMany({
-      where: {
-        propertyId,
-        homeownerProfileId,
-        inventoryItemId: { not: null },
-        status: 'READY',
-      },
-      select: {
-        id: true,
-        propertyId: true,
-        homeownerProfileId: true,
-        status: true,
-        computedAt: true,
-        confidence: true,
-        inventoryItemId: true,
-      },
-      orderBy: {
-        computedAt: 'desc',
-      },
-      take: 200,
-    }),
+  if (!property) throw new Error('Property not found or access denied.');
+  const [feed, onboarding] = await Promise.all([
+    getHomeActionFeed(propertyId, userId),
     prisma.propertyOnboarding.findUnique({
       where: { propertyId },
       select: { ownershipState: true },
     }),
   ]);
-
-  const isPreCloseBuyer = operatingModeForOwnershipState(onboarding?.ownershipState) === 'BUYING';
-
-  const urgentActions: ResolutionActionDTO[] = [];
-
-  incidents.forEach((incident) => {
-    urgentActions.push({
-      id: incident.id,
-      type: 'INCIDENT',
-      title: incident.title,
-      description: incident.summary || 'Critical home event detected.',
-      propertyId: incident.propertyId,
-      severity: incident.severity || 'WARNING',
-    });
-  });
-
-  const applianceRecords = Array.isArray(property.majorAppliances)
-    ? property.majorAppliances
-    : [];
-  const appliancesMissingInstallYear = applianceRecords.filter(
-    (appliance) => !appliance.installationYear,
-  );
-  const isAggregateApplianceFactor = (factor: string) =>
-    factor.trim().toLowerCase() === 'appliances';
-
-  const insightsByFactor = new Map<string, { factor: string; status: string; statusIndex: number }>();
-  property.healthScore?.insights
-    ?.filter((insight) => {
-      if (isAggregateApplianceFactor(insight.factor)) {
-        // Canonical appliance records take precedence over a stale score
-        // snapshot. Only surface an aggregate case when there is a concrete
-        // field to complete, or no appliances have been recorded at all.
-        return applianceRecords.length === 0 || appliancesMissingInstallYear.length > 0;
-      }
-      return HEALTH_INSIGHT_STATUSES.includes(insight.status);
-    })
-    .forEach((insight) => {
-      const statusIndex = HEALTH_INSIGHT_STATUSES.indexOf(insight.status);
-      const existing = insightsByFactor.get(insight.factor);
-      if (!existing || statusIndex < existing.statusIndex) {
-        insightsByFactor.set(insight.factor, {
-          factor: insight.factor,
-          status: insight.status,
-          statusIndex,
-        });
-      }
-    });
-
-  insightsByFactor.forEach(({ factor, status }) => {
-    const factorId = factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    if (isAggregateApplianceFactor(factor)) {
-      const missingNames = appliancesMissingInstallYear.map((appliance) =>
-        String(appliance.assetType || 'Appliance')
-          .toLowerCase()
-          .split('_')
-          .map((word) => word ? word[0].toUpperCase() + word.slice(1) : word)
-          .join(' '),
-      );
-      const hasRecordedAppliances = applianceRecords.length > 0;
-      const title = hasRecordedAppliances
-        ? missingNames.length === 1
-          ? `Add installation year for ${missingNames[0]}`
-          : `Complete installation years for ${missingNames.length} appliances`
-        : 'Add major appliances';
-      const description = hasRecordedAppliances
-        ? `Installation year is missing for ${missingNames.join(', ')}. Add an approximate year to improve lifecycle and recall guidance.`
-        : 'No major appliances are recorded. Add only the appliances that are present in this home.';
-
-      urgentActions.push({
-        id: `${property.id}-INSIGHT-${factorId}`,
-        type: 'HEALTH_INSIGHT',
-        title,
-        description,
-        propertyId: property.id,
-        href: `/dashboard/properties/${property.id}/edit?focus=appliances`,
-      });
-      return;
-    }
-
-    const matchedItem = matchInventoryItemForHealthInsight(factor, inventoryItems);
-    urgentActions.push({
-      id: `${property.id}-INSIGHT-${factorId}`,
-      type: 'HEALTH_INSIGHT',
-      title: factor,
-      description: `Status: ${status}. Requires resolution.`,
-      propertyId: property.id,
-      itemId: matchedItem?.id,
-      assetName: matchedItem?.name ?? extractHealthInsightAssetName(factor) ?? undefined,
-    });
-  });
-
-  checklistItems.forEach((item) => {
-    if (item.status === 'COMPLETED' || item.status === 'NOT_NEEDED') return;
-    if (!item.nextDueDate || !isPast(item.nextDueDate)) return;
-
-    urgentActions.push({
-      id: item.id,
-      type: 'MAINTENANCE_OVERDUE',
-      title: `OVERDUE: ${item.title}`,
-      description: item.description || `Overdue by ${differenceInDays(today, item.nextDueDate)} days.`,
-      dueDate: item.nextDueDate.toISOString(),
-      daysUntilDue: differenceInDays(item.nextDueDate, today),
-      propertyId: item.propertyId || propertyId,
-    });
-  });
-
-  [...warranties, ...insurancePolicies].forEach((item) => {
-    if (!item.expiryDate) return;
-
-    const dueDate = item.expiryDate;
-    const days = differenceInDays(dueDate, today);
-    const itemType = 'providerName' in item ? 'Warranty' : 'Insurance';
-    const title = `${itemType} Renewal: ${'providerName' in item ? item.providerName : item.carrierName}`;
-
-    if (isPast(dueDate)) {
-      urgentActions.push({
-        id: item.id,
-        type: 'RENEWAL_EXPIRED',
-        title: `EXPIRED: ${title}`,
-        description: `Policy expired ${Math.abs(days)} days ago. Immediate action required.`,
-        dueDate: dueDate.toISOString(),
-        daysUntilDue: days,
-        propertyId: item.propertyId || propertyId,
-        entityType: itemType,
-        itemId: 'providerName' in item ? item.inventoryItemId || undefined : undefined,
-      });
-      return;
-    }
-
-    if (days <= 90) {
-      urgentActions.push({
-        id: item.id,
-        type: 'RENEWAL_UPCOMING',
-        title: `UPCOMING: ${title}`,
-        description: `Expires in ${days} days.`,
-        dueDate: dueDate.toISOString(),
-        daysUntilDue: days,
-        propertyId: item.propertyId || propertyId,
-        entityType: itemType,
-        itemId: 'providerName' in item ? item.inventoryItemId || undefined : undefined,
-      });
-    }
-  });
-
-  coverageGaps.forEach((gap) => {
-    urgentActions.push(mapCoverageGapToAction(gap));
-  });
-
-  const sortedActions = sortActions(urgentActions);
-
-  const coverageAnalysesByItemId = new Map<string, CoverageAnalysisRecord>();
-  coverageAnalyses.forEach((analysis) => {
-    const itemId = analysis.inventoryItemId;
-    if (!itemId || coverageAnalysesByItemId.has(itemId)) return;
-    coverageAnalysesByItemId.set(itemId, analysis);
-  });
-
-  const dedupedReplaceRepairAnalyses = dedupeReplaceRepairAnalyses(replaceRepairAnalyses);
-  const replaceRepairJourneysByItemId = new Map<string, ReplaceRepairJourneyRecord>();
-  replaceRepairJourneys.forEach((journey) => {
-    if (!journey.inventoryItemId || replaceRepairJourneysByItemId.has(journey.inventoryItemId)) return;
-    replaceRepairJourneysByItemId.set(journey.inventoryItemId, journey);
-  });
-
-  const coverageInsights = mapCoverageGapsToInsights({
-    coverageGaps,
-    coverageAnalysesByItemId,
-    propertyId,
-  });
-  const replaceRepairInsights = mapReplaceRepairAnalysesToInsights(
-    dedupedReplaceRepairAnalyses.map((analysis) => ({
-      id: analysis.id,
-      propertyId: analysis.propertyId,
-      homeownerProfileId: analysis.homeownerProfileId,
-      inventoryItemId: analysis.inventoryItemId,
-      currentMarker: analysis.currentMarker,
-      status: analysis.status,
-      verdict: analysis.verdict,
-      confidence: analysis.confidence,
-      impactLevel: analysis.impactLevel,
-      summary: analysis.summary,
-      computedAt: analysis.computedAt,
-      inventoryItem: analysis.inventoryItem,
-    })),
-    propertyId,
-    replaceRepairJourneysByItemId,
-  );
-  const allDecisionInsights = filterMaterialDecisionInsights([
-    ...coverageInsights,
-    ...replaceRepairInsights,
-  ]);
-  const decisionInsights = allDecisionInsights.slice(0, 10);
-  const executionItems = mapBookingsToExecutionItems(dedupeActiveBookings(bookings));
+  // Preserve the canonical Home feed's identity and order. Fix is now a
+  // projection only: it does not rediscover, deduplicate, or re-rank work.
+  const actions = feed.actions as RankedHomeAction[];
+  const urgentActions = actions.map(canonicalActionToResolutionAction);
+  const decisionInsights = actions
+    .map(canonicalDecisionInsight)
+    .filter((insight): insight is DecisionInsightDTO => insight !== null);
+  const executionItems = await canonicalBookingExecutionItems(propertyId, actions);
   const coverageInsightItemIds = new Set(
-    allDecisionInsights
-      .filter((entry) => entry.kind === 'coverage_recommendation')
-      .map((entry) => entry.itemId)
-      .filter(Boolean) as string[],
+    decisionInsights
+      .filter((insight) => insight.kind === 'coverage_recommendation' && insight.itemId)
+      .map((insight) => insight.itemId as string),
   );
-  const workflowAwareBaseCases = mapActionsToCases(sortedActions, propertyId, coverageInsightItemIds);
-  const cases = sortCases(
-    enrichCasesWithWorkflowState(
-      appendDecisionOnlyCases(workflowAwareBaseCases, allDecisionInsights),
-      allDecisionInsights,
-      executionItems,
-    ),
+  const cases = enrichCasesWithWorkflowState(
+    mapActionsToCases(urgentActions, propertyId, coverageInsightItemIds),
+    decisionInsights,
+    executionItems,
   );
-
   return {
-    urgentActions: sortedActions,
+    urgentActions,
     cases,
     decisionInsights,
     executionItems,
-    isPreCloseBuyer,
+    isPreCloseBuyer: operatingModeForOwnershipState(onboarding?.ownershipState) === 'BUYING',
     counts: {
       openCases: cases.length,
-      decisionsReady: allDecisionInsights.length,
+      decisionsReady: decisionInsights.length,
       activeBookings: executionItems.length,
       activeIncidents: cases.filter((entry) => entry.kind === 'incident').length,
     },

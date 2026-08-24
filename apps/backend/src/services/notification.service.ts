@@ -58,7 +58,6 @@ function resolveAttentionPriority(
   const explicit = String(
     metadata?.attentionPriority ??
     metadata?.homeActionPriority ??
-    metadata?.priorityBand ??
     '',
   ).toUpperCase();
   if (explicit === 'NOW') return 'NOW';
@@ -66,14 +65,9 @@ function resolveAttentionPriority(
   if (explicit === 'PLAN' || explicit === 'MEDIUM') return 'PLAN';
   if (explicit === 'CONSIDER' || explicit === 'LOW') return 'CONSIDER';
 
-  const daysUntilDue = Number(metadata?.daysUntilDue);
-  if (Number.isFinite(daysUntilDue)) {
-    if (daysUntilDue <= 7) return 'NOW';
-    if (daysUntilDue <= 30) return 'SOON';
-    if (daysUntilDue <= 90) return 'PLAN';
-    return 'CONSIDER';
-  }
-
+  // No due-date or domain-metadata rescoring here. Home Action delivery
+  // supplies its canonical priority explicitly; the remaining mapping is
+  // channel policy for notifications that do not originate in that feed.
   if (urgency === 'CRITICAL' || urgency === 'URGENT') return 'NOW';
   if (urgency === 'MATERIAL') return 'SOON';
   if (category === 'GENERAL' || category === 'NEIGHBORHOOD') return 'CONSIDER';

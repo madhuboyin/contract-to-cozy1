@@ -206,16 +206,18 @@ test('resolveOriginatingWorkItem: a valid, unbooked originWorkItemId is reused',
   assert.equal(resolution.workItem.id, item.id);
 });
 
-test('resolveOriginatingWorkItem: an originWorkItemId for a different property falls through to STANDALONE', async () => {
+test('resolveOriginatingWorkItem: an originWorkItemId for a different property is rejected', async () => {
   const tx = makeFakeTx();
   const item = await tx.operationalWorkItem.create({
     data: { propertyId: 'other-property', workKey: 'k1', subjectType: 'PROPERTY', subjectId: 'other-property', obligationType: 'DECISION', priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE', title: 't', homeownerReason: 'r', expectedOutcome: 'o', state: 'CANDIDATE' },
   });
-  const resolution = await resolveOriginatingWorkItem(tx, { propertyId: 'property-1', originWorkItemId: item.id });
-  assert.equal(resolution.method, 'STANDALONE');
+  await assert.rejects(
+    resolveOriginatingWorkItem(tx, { propertyId: 'property-1', originWorkItemId: item.id }),
+    (error) => error.statusCode === 409 && error.details?.reason === 'PROPERTY_MISMATCH',
+  );
 });
 
-test('resolveOriginatingWorkItem: an originWorkItemId already linked to another ACTIVE booking falls through', async () => {
+test('resolveOriginatingWorkItem: an originWorkItemId already linked to another ACTIVE booking is rejected', async () => {
   const tx = makeFakeTx();
   const item = await tx.operationalWorkItem.create({
     data: { propertyId: 'property-1', workKey: 'k1', subjectType: 'PROPERTY', subjectId: 'property-1', obligationType: 'DECISION', priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE', title: 't', homeownerReason: 'r', expectedOutcome: 'o', state: 'CANDIDATE' },
@@ -226,8 +228,21 @@ test('resolveOriginatingWorkItem: an originWorkItemId already linked to another 
     create: { workItemId: item.id, executionType: 'BOOKING', executionEntityId: 'other-booking', role: 'PRIMARY', responsibleParty: 'UNKNOWN' },
     update: {},
   });
-  const resolution = await resolveOriginatingWorkItem(tx, { propertyId: 'property-1', originWorkItemId: item.id });
-  assert.equal(resolution.method, 'STANDALONE');
+  await assert.rejects(
+    resolveOriginatingWorkItem(tx, { propertyId: 'property-1', originWorkItemId: item.id }),
+    (error) => error.statusCode === 409 && error.details?.reason === 'ACTIVE_BOOKING_EXISTS',
+  );
+});
+
+test('resolveOriginatingWorkItem: an explicit completed work item is rejected as lifecycle-incompatible', async () => {
+  const tx = makeFakeTx();
+  const item = await tx.operationalWorkItem.create({
+    data: { propertyId: 'property-1', workKey: 'k-complete', subjectType: 'PROPERTY', subjectId: 'property-1', obligationType: 'DECISION', priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE', title: 't', homeownerReason: 'r', expectedOutcome: 'o', state: 'VERIFIED' },
+  });
+  await assert.rejects(
+    resolveOriginatingWorkItem(tx, { propertyId: 'property-1', originWorkItemId: item.id }),
+    (error) => error.statusCode === 409 && error.details?.reason === 'LIFECYCLE_INCOMPATIBLE',
+  );
 });
 
 // Finding: explicit lineage previously rejected reuse for ANY existing

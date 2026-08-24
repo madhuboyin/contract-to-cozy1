@@ -18,6 +18,7 @@ import {
   BookingResponse,
   BookingListResponse,
   BookingPermissions,
+  BookingOriginResolution,
   VALID_STATUS_TRANSITIONS,
 } from '../types/booking.types';
 
@@ -41,6 +42,7 @@ import {
   reconcileBookingCreated,
   reconcileBookingCancelled,
   reconcileBookingLifecycle,
+  type OriginResolutionMethod,
 } from './bookingWorkReconciliation.service';
 import type { OperationalWorkEvent, OperationalWorkItem } from '@prisma/client';
 
@@ -54,6 +56,12 @@ type BookingExecutionScope = {
   type: string;
   key: string;
 };
+
+function publicOriginResolution(method: OriginResolutionMethod): BookingOriginResolution {
+  if (method === 'EXPLICIT_LINEAGE') return 'EXPLICIT';
+  if (method === 'STANDALONE') return 'STANDALONE';
+  return 'DOMAIN_PROVENANCE';
+}
 
 export class BookingService {
   private static buildExecutionScope(args: {
@@ -414,6 +422,7 @@ export class BookingService {
     let booking!: Awaited<ReturnType<typeof prisma.booking.create>> & {
       homeowner: any; provider: any; providerProfile: any; service: any; property: any; timeline: any[];
     };
+    let bookingWorkLink!: { operationalWorkItemId: string; originResolution: BookingOriginResolution };
     const MAX_TX_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_TX_ATTEMPTS; attempt++) {
       pendingLifecycleEvents.length = 0;
@@ -483,10 +492,15 @@ export class BookingService {
             maintenancePredictionId: input.maintenancePredictionId ?? null,
             priceFinalizationId: input.priceFinalizationId ?? null,
             inventoryItemId: resolvedInventoryItemId,
+            guidanceStepKey: options?.guidanceStepKey ?? null,
           });
-          await reconcileBookingCreated(tx, created, resolution, (workItem, event) => {
+          const workItem = await reconcileBookingCreated(tx, created, resolution, (workItem, event) => {
             pendingLifecycleEvents.push({ workItem, event });
           });
+          bookingWorkLink = {
+            operationalWorkItemId: workItem.id,
+            originResolution: publicOriginResolution(resolution.method),
+          };
 
           return created;
         });
@@ -582,7 +596,7 @@ export class BookingService {
     // --- PHASE 3 IMPLEMENTATION END ---
 
     return {
-      ...this.formatBookingResponse(booking),
+      ...this.formatBookingResponse(booking, bookingWorkLink),
       providerEligibilityWarning: providerEligibility.isEligible
         ? null
         : {
@@ -678,7 +692,7 @@ export class BookingService {
     
     for (const booking of bookings) {
         try {
-            formattedBookings.push(this.formatBookingResponse(booking));
+            formattedBookings.push(await this.formatBookingResponseWithWorkLink(booking));
         } catch (error) {
             // Log the error for later investigation but prevent crash
             // The logger.error will appear in the server logs, alerting DevOps/Engineering
@@ -739,7 +753,7 @@ export class BookingService {
       }
     }
 
-    return this.formatBookingResponse(booking);
+    return this.formatBookingResponseWithWorkLink(booking);
   }
 
   /**
@@ -804,7 +818,7 @@ export class BookingService {
       },
     });
 
-    return this.formatBookingResponse(updated);
+    return this.formatBookingResponseWithWorkLink(updated);
   }
 
   /**
@@ -884,7 +898,7 @@ export class BookingService {
         reason: 'The provider confirmed the service booking.',
       });
     }
-    return this.formatBookingResponse(updated);
+    return this.formatBookingResponseWithWorkLink(updated);
   }
 
   /**
@@ -947,7 +961,7 @@ export class BookingService {
       );
     }
 
-    return this.formatBookingResponse(updated);
+    return this.formatBookingResponseWithWorkLink(updated);
   }
 
   /**
@@ -1130,7 +1144,7 @@ export class BookingService {
         metadataJson: { finalPrice: input.finalPrice },
       });
     }
-    return this.formatBookingResponse(updated);
+    return this.formatBookingResponseWithWorkLink(updated);
   }
 
   /**
@@ -1244,7 +1258,7 @@ export class BookingService {
       });
     }
     
-    return this.formatBookingResponse(updated);
+    return this.formatBookingResponseWithWorkLink(updated);
   }
 
   /**
@@ -1475,12 +1489,44 @@ export class BookingService {
   /**
    * Format booking response
    */
-  private static formatBookingResponse(booking: any): BookingResponse {
+  private static async formatBookingResponseWithWorkLink(booking: any): Promise<BookingResponse> {
+    const links = await prisma.operationalWorkExecution.findMany({
+      where: { executionType: 'BOOKING', executionEntityId: booking.id },
+      select: { workItemId: true },
+      take: 2,
+    });
+    if (links.length > 1) {
+      throw new Error(`Booking ${booking.id} is linked to multiple Operational Work Items.`);
+    }
+    if (links.length === 0) return this.formatBookingResponse(booking);
+
+    const event = await prisma.operationalWorkEvent.findUnique({
+      where: {
+        workItemId_idempotencyKey: {
+          workItemId: links[0].workItemId,
+          idempotencyKey: `booking-linked:${booking.id}`,
+        },
+      },
+      select: { payload: true },
+    });
+    const recordedMethod = (event?.payload as { originResolution?: OriginResolutionMethod } | null)?.originResolution;
+    return this.formatBookingResponse(booking, {
+      operationalWorkItemId: links[0].workItemId,
+      originResolution: recordedMethod ? publicOriginResolution(recordedMethod) : null,
+    });
+  }
+
+  private static formatBookingResponse(
+    booking: any,
+    workLink: { operationalWorkItemId: string; originResolution: BookingOriginResolution | null } | null = null,
+  ): BookingResponse {
     return {
       id: booking.id,
       bookingNumber: booking.bookingNumber,
       status: booking.status,
       category: booking.category,
+      operationalWorkItemId: workLink?.operationalWorkItemId ?? null,
+      originResolution: workLink?.originResolution ?? null,
       homeowner: {
         id: booking.homeowner.id,
         firstName: booking.homeowner.firstName,

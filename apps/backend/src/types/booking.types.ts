@@ -146,6 +146,8 @@ export const listBookingsSchema = z.object({
 
 export type ListBookingsQuery = z.infer<typeof listBookingsSchema>;
 
+export type BookingOriginResolution = 'EXPLICIT' | 'DOMAIN_PROVENANCE' | 'STANDALONE';
+
 /**
  * Booking Response Types
  */
@@ -154,6 +156,8 @@ export interface BookingResponse {
   bookingNumber: string;
   status: BookingStatus;
   category: ServiceCategory;
+  operationalWorkItemId: string | null;
+  originResolution: BookingOriginResolution | null;
   
   // Parties
   homeowner: {
