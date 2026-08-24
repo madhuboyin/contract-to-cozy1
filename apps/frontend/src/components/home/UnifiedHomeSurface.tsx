@@ -989,6 +989,13 @@ function CompleteMaterialWorkDialog({
   );
 }
 
+export function shouldInitiallyExpandActionDetails(action: RankedHomeActionDTO, showSupportingDetails = false): boolean {
+  return showSupportingDetails || Boolean(
+    action.decisionLineage?.thread?.recommendationChange &&
+    action.decisionLineage.thread.currentRecommendationSnapshotId,
+  );
+}
+
 export function ActionCard({
   action,
   propertyId,
@@ -1004,9 +1011,16 @@ export function ActionCard({
   const router = useRouter();
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
   const [manageOpen, setManageOpen] = React.useState(false);
-  const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
+  const recommendationChangeSnapshotId = action.decisionLineage?.thread?.recommendationChange
+    ? action.decisionLineage.thread.currentRecommendationSnapshotId
+    : null;
+  const [detailsOpen, setDetailsOpen] = React.useState(shouldInitiallyExpandActionDetails(action, showSupportingDetails));
   const [completeDialogOpen, setCompleteDialogOpen] = React.useState(false);
   const [openingDecision, setOpeningDecision] = React.useState(false);
+
+  React.useEffect(() => {
+    if (recommendationChangeSnapshotId) setDetailsOpen(true);
+  }, [recommendationChangeSnapshotId]);
 
   const execute = async (
     command: HomeActionCommand,
@@ -1149,7 +1163,25 @@ export function ActionCard({
               <p className="mt-1 text-sm text-amber-800">{action.confidence.missing.join(' · ')}</p>
             </div>
           )}
-          <HomeActionDecisionDetail action={action} propertyId={propertyId} onContextCaptured={onChanged} />
+          <HomeActionDecisionDetail
+            action={action}
+            propertyId={propertyId}
+            onContextCaptured={onChanged}
+            onRecommendationChangeAcknowledged={async (decisionThreadId, snapshotId) => {
+              try {
+                const response = await api.acknowledgeHomeRecommendationChange(propertyId, decisionThreadId, snapshotId);
+                if (!response.success) throw new Error(response.message || 'Unable to acknowledge this recommendation change.');
+                toast({ title: 'Recommendation change acknowledged' });
+                await onChanged();
+              } catch (error) {
+                toast({
+                  title: 'Unable to acknowledge recommendation change',
+                  description: error instanceof Error ? error.message : 'Please refresh Home and try again.',
+                  variant: 'destructive',
+                });
+              }
+            }}
+          />
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">

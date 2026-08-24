@@ -148,7 +148,7 @@ test('every DecisionThreadExecutionLink write is createMany + skipDuplicates, ne
 test('executionId is threaded from executeOperationCore through both HVAC continuation call sites', () => {
   assert.match(orchestratorSource, /async function executeOperationCore\(input: \{[^}]*executionId: string/, 'executeOperationCore\'s input type must carry executionId');
   assert.match(orchestratorSource, /case 'HVAC_DECISION_START': return hvacDecisionStartResult\([^)]*input\.executionId\)/);
-  assert.match(orchestratorSource, /case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult\([^)]*input\.executionId\)/);
+  assert.match(orchestratorSource, /case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult\([\s\S]*?input\.executionId[\s\S]*?\n\s*\);/);
   const continuationCalls = [...orchestratorSource.matchAll(/decisionThreadService\.continueHvacDecisionThread\(([^)]*)\)/g)];
   assert.ok(continuationCalls.length >= 2, 'expected at least the two HVAC handler call sites');
   for (const match of continuationCalls) {
@@ -181,9 +181,15 @@ test('hvacDecisionFamilyAdapter.selectThread computes an unacknowledged-change d
   assert.match(source, /kind: 'UNIQUE',\s*\n\s*thread: toDecisionFamilyLineage\(selection\.thread, change,/);
 });
 
-test('acknowledgeCurrentSnapshot is called from both createHvacDecisionThread and continueHvacDecisionThread', () => {
-  const calls = [...source.matchAll(/acknowledgeCurrentSnapshot\(/g)];
-  assert.ok(calls.length >= 2, `expected at least 2 acknowledgeCurrentSnapshot calls, found ${calls.length}`);
+test('thread creation and continuation do not acknowledge a snapshot before its change notice is presented', () => {
+  assert.doesNotMatch(source, /await acknowledgeCurrentSnapshot\(/);
+  assert.match(source, /export async function acknowledgeRecommendationChange\(/);
+  const acknowledgementStart = source.indexOf('export async function acknowledgeRecommendationChange(');
+  const acknowledgementEnd = source.indexOf('\n}\n', acknowledgementStart);
+  const acknowledgement = source.slice(acknowledgementStart, acknowledgementEnd + 2);
+  assert.match(acknowledgement, /propertyId,/);
+  assert.match(acknowledgement, /currentRecommendationSnapshotId:\s*snapshotId/);
+  assert.match(acknowledgement, /lastChangeAcknowledgedSnapshotId:\s*snapshotId/);
 });
 
 // Phase 3 review finding 5: a disagreement between evaluateHvacRepairReplace

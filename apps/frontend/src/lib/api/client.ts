@@ -3310,6 +3310,17 @@ class APIClient {
     );
   }
 
+  async acknowledgeHomeRecommendationChange(propertyId: string, decisionThreadId: string, snapshotId: string) {
+    return this.request<{
+      decisionThreadId: string;
+      snapshotId: string;
+      acknowledged: true;
+    }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-actions/decision-threads/${encodeURIComponent(decisionThreadId)}/recommendation-changes/${encodeURIComponent(snapshotId)}/acknowledge`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+  }
+
   // ── Home Operations Item #16: work-item write API ──────────────────────
 
   async listWorkItems(

@@ -8364,9 +8364,9 @@ model DecisionThread {
   // resolveHomeActionDecisionLineage (read-only) can and should surface the
   // diff between currentRecommendationSnapshot and its supersedesSnapshotId
   // predecessor again on every render, not just the one moment it was
-  // computed. Set to currentRecommendationSnapshotId whenever the homeowner
-  // actually engages with the thread (create, resume, Ask continuation
-  // alike) — see decisionThreadHomeActionLink.ts-adjacent write sites.
+  // computed. Set to currentRecommendationSnapshotId only by the explicit
+  // acknowledgment action on the rendered Home change notice; opening or
+  // resuming a thread must not consume a notice before presentation.
   // Deliberately NOT part of the version-guarded lifecycleStatus/
   // contextStatus optimistic-concurrency contract: a race here only
   // affects whether a "what changed" banner shows one render early or late,

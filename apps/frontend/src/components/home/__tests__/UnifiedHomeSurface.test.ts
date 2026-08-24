@@ -3,6 +3,7 @@ import {
   isAssetLifecycleAction,
   isEnvironmentAction,
   resolveHomeAttentionState,
+  shouldInitiallyExpandActionDetails,
   shouldBlockNavigationForLineage,
   splitHomeAttentionEntries,
 } from '@/components/home/UnifiedHomeSurface';
@@ -54,6 +55,31 @@ describe('shouldBlockNavigationForLineage', () => {
       primaryEntityId: null,
       reason: 'No decision-family adapter is registered for this recommendation type.',
     })).toBe(true);
+  });
+});
+
+describe('recommendation-change presentation', () => {
+  it('automatically expands an action card with an unread persisted change', () => {
+    expect(shouldInitiallyExpandActionDetails({
+      decisionLineage: {
+        status: 'LINKED',
+        decisionDefinitionId: 'COVERAGE_QUESTION',
+        primaryEntityId: 'question-1',
+        thread: {
+          decisionThreadId: 'thread-1',
+          lifecycleStatus: 'RECOMMENDATION_AVAILABLE',
+          contextStatus: 'CURRENT',
+          currentRecommendationSnapshotId: 'snapshot-2',
+          recommendationChange: {
+            category: 'MATERIAL',
+            previousVerdict: 'KEEP_CURRENT',
+            currentVerdict: 'ADD_COVERAGE',
+            changedFactors: [],
+          },
+          limitationCodes: [],
+        },
+      },
+    } as unknown as RankedHomeActionDTO)).toBe(true);
   });
 });
 

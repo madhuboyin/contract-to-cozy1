@@ -13,6 +13,7 @@ import {
   getUnifiedHome,
   recordHomeActionOpened,
 } from '../services/homeActions.service';
+import { acknowledgeRecommendationChange } from '../services/decisionPlatform/decisionThreadService';
 
 const router = Router();
 
@@ -47,6 +48,27 @@ router.get(
     } catch (error: any) {
       logger.error({ err: error }, 'Failed to load unified Home');
       return res.status(500).json({ success: false, message: error?.message || 'Failed to load Home.' });
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/home-actions/decision-threads/:threadId/recommendation-changes/:snapshotId/acknowledge',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res) => {
+    try {
+      if (!req.user?.userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const data = await acknowledgeRecommendationChange(
+        req.params.propertyId,
+        req.params.threadId,
+        req.params.snapshotId,
+      );
+      return res.json({ success: true, data });
+    } catch (error: any) {
+      const message = error?.message || 'Failed to acknowledge recommendation change.';
+      return res.status(/changed again|no longer active/i.test(message) ? 409 : 400)
+        .json({ success: false, message });
     }
   },
 );

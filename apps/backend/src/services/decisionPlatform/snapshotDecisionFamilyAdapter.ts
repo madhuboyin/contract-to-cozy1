@@ -31,7 +31,6 @@ import {
   classifyThreadSelection,
   DecisionThreadVersionConflictError,
   loadUnacknowledgedRecommendationChange,
-  acknowledgeCurrentSnapshot,
   type ThreadSelection,
 } from './decisionThreadService';
 import {
@@ -217,9 +216,9 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
     // is still a real "this Home Action version was open against this
     // thread" event worth attributing later.
     await recordHomeActionOriginLink(threadId, homeActionOrigin);
-    // Phase 3 review finding 4: the homeowner is looking at the (possibly
-    // just-recomputed) current snapshot right now — acknowledge it.
-    await acknowledgeCurrentSnapshot(threadId, result.thread.currentRecommendationSnapshotId);
+    // The Home interaction navigates immediately and does not render this
+    // response. Keep a recomputed change unread until the persisted Home
+    // notice is explicitly acknowledged by the homeowner.
     return toLineage(result.thread, result.change);
   }
 
@@ -298,10 +297,6 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
     // signalReferences, but the durable link table is the one source
     // every downstream consumer can query without re-parsing snapshot JSON.
     await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
-    // Phase 3 review finding 4: the homeowner is looking at the first
-    // snapshot right now — acknowledge it so a later read never has
-    // anything to diff against.
-    await acknowledgeCurrentSnapshot(result.thread.id, result.snapshot.id);
     return toLineage(result.thread, null);
   }
 

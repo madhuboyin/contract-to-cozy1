@@ -209,17 +209,11 @@ export function resolveActionDecisionLineagePolicy(
  * creation, project creation — funnels through transitionWorkItem.usecase.ts
  * at that one edge, so it is the single chokepoint this guards.
  *
- * An OperationalWorkItem carries no direct inventoryItemId for a
- * GUIDANCE-sourced obligation — resolveSubject in homeActionWorkItem
- * .adapter.ts falls through to a PROPERTY subject for everything except
- * coverage-shaped GUIDANCE actions — so the only reliable path back to the
- * primary entity is the work item's own OperationalWorkSource
- * (sourceType: GUIDANCE).sourceEntityId, which for
- * loadRepairReplaceDecisionActions (homeActionSourcePromotion.service.ts)
- * is the originating ReplaceRepairAnalysis id. A work item with no such
- * source, or whose source doesn't resolve to a ReplaceRepairAnalysis, is
- * not a repair/replace obligation and this is a no-op — the overwhelming
- * majority of work items never reach the lookup below at all.
+ * OperationalWorkSource is the durable path back to each decision primary
+ * entity: GUIDANCE/ReplaceRepairAnalysis resolves the HVAC inventory item,
+ * while COVERAGE/CoverageReview resolves its current primary questionKey.
+ * Both source types also contain non-decision obligations, so concrete
+ * record resolution distinguishes required lineage from a legitimate no-op.
  */
 export class DecisionLineageRequiredForAcceptanceError extends APIError {
   constructor(message: string) {
@@ -228,45 +222,100 @@ export class DecisionLineageRequiredForAcceptanceError extends APIError {
   }
 }
 
+type WorkItemDecisionFamilyRef = HomeActionDecisionFamilyRef & { sourceLabel: string };
+
+export const WORK_ITEM_DECISION_LINEAGE_SOURCE_TYPES = new Set(['GUIDANCE', 'COVERAGE'] as const);
+
+/** Resolve every decision-required source family that can currently produce a work item. */
+export async function resolveWorkItemDecisionFamilyRefs(
+  propertyId: string,
+  workItemId: string,
+  db: WorkItemDb,
+): Promise<WorkItemDecisionFamilyRef[]> {
+  const sources = await db.operationalWorkSource.findMany({
+    where: {
+      workItemId,
+      sourceType: { in: [...WORK_ITEM_DECISION_LINEAGE_SOURCE_TYPES] },
+    },
+    select: { sourceType: true, sourceEntityId: true },
+  });
+  const refs: WorkItemDecisionFamilyRef[] = [];
+
+  for (const source of sources) {
+    if (source.sourceType === 'GUIDANCE') {
+      const analysis = await db.replaceRepairAnalysis.findFirst({
+        where: { id: source.sourceEntityId, propertyId },
+        select: { inventoryItemId: true },
+      });
+      if (analysis) {
+        refs.push({
+          decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+          primaryEntityId: analysis.inventoryItemId,
+          sourceLabel: 'repair/replace',
+        });
+      }
+      continue;
+    }
+
+    const coverageReview = await db.coverageReview.findFirst({
+      where: { id: source.sourceEntityId, propertyId },
+      select: {
+        questions: {
+          where: {
+            isPrimary: true,
+            status: 'OPEN',
+            questionType: 'EVIDENCE_BASED',
+            priority: 'HIGH',
+          },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: { questionKey: true },
+        },
+      },
+    });
+    // COVERAGE also backs renewal reminders; only CoverageReview sources
+    // represent the decision-required coverage-question producer.
+    if (!coverageReview) continue;
+    const questionKey = coverageReview.questions[0]?.questionKey;
+    if (!questionKey) {
+      throw new DecisionLineageRequiredForAcceptanceError(
+        'This coverage obligation no longer has a current primary question and cannot be accepted until the coverage review is refreshed.',
+      );
+    }
+    refs.push({
+      decisionDefinitionId: 'COVERAGE_QUESTION',
+      primaryEntityId: questionKey,
+      sourceLabel: 'coverage',
+    });
+  }
+  return refs;
+}
+
 export async function assertDecisionLineageSatisfiedForAcceptance(
   propertyId: string,
   workItemId: string,
   db: WorkItemDb,
 ): Promise<void> {
-  const sources = await db.operationalWorkSource.findMany({
-    where: { workItemId, sourceType: 'GUIDANCE' },
-    select: { sourceEntityId: true },
-  });
-  if (!sources.length) return;
-
-  for (const source of sources) {
-    const analysis = await db.replaceRepairAnalysis.findUnique({
-      where: { id: source.sourceEntityId },
-      select: { inventoryItemId: true },
-    });
-    if (!analysis) continue;
-
-    const lineage = await resolveHomeActionDecisionLineage(propertyId, {
-      decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
-      primaryEntityId: analysis.inventoryItemId,
-    });
-    if (lineage.status !== 'LINKED') {
+  const refs = await resolveWorkItemDecisionFamilyRefs(propertyId, workItemId, db);
+  for (const ref of refs) {
+    const lineage = await resolveHomeActionDecisionLineage(propertyId, ref);
+    if (lineage.status !== 'LINKED' || !lineage.thread.currentRecommendationSnapshotId) {
+      const status = lineage.status === 'LINKED' ? 'MISSING_CURRENT_SNAPSHOT' : lineage.status;
       throw new DecisionLineageRequiredForAcceptanceError(
-        `This repair/replace decision needs a current recommendation before the work can be accepted (decision lineage status: ${lineage.status}).`,
+        `This ${ref.sourceLabel} decision needs a current recommendation before the work can be accepted (decision lineage status: ${status}).`,
       );
     }
-    return;
   }
 }
 
 /**
  * Home Intelligence Functional Completeness FRD Phase 3 review finding 2:
- * assertDecisionLineageSatisfiedForAcceptance above only guards the one
- * OperationalWorkItem CANDIDATE -> ACCEPTED chokepoint, which is HVAC-only
- * (the ReplaceRepairAnalysis traversal) and which most of the domains
- * added in delivery steps 6-7 never even reach (refinance, capital-timeline,
- * savings-benefit-match, coverage-question, and sell-hold-rent are not
- * workKeyEligible; ownership-cost-change's COMPLETE routes straight to
+ * assertDecisionLineageSatisfiedForAcceptance above guards the one
+ * OperationalWorkItem CANDIDATE -> ACCEPTED chokepoint for every producer
+ * that is both workKeyEligible and DECISION_REQUIRED (currently HVAC
+ * repair/replace and coverage questions). The other domains do not reach
+ * it (refinance, capital-timeline, savings-benefit-match, and sell-hold-rent
+ * are not workKeyEligible; ownership-cost-change's COMPLETE routes straight to
  * ownershipCostDecisionService.record via an id-prefix carve-out in
  * executeHomeActionCommand, never touching transitionWorkItem at all).
  *

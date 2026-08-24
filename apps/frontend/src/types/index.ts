@@ -482,8 +482,8 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
       lifecycleStatus: string;
       contextStatus: 'CURRENT' | 'STALE' | 'CONFLICTED';
       currentRecommendationSnapshotId: string | null;
-      // Phase 3B work item 5 — non-null only when opening this action just
-      // recomputed a stale thread (a plain re-render never produces one).
+      // Phase 3B work item 5 — remains non-null on read-only Home renders
+      // until the homeowner explicitly acknowledges the persisted notice.
       recommendationChange: {
         category: 'MATERIAL' | 'CONFIDENCE_ONLY' | 'SYSTEM_METHOD_ONLY' | 'UNCHANGED';
         previousVerdict: string;

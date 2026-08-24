@@ -13,15 +13,28 @@ require('ts-node/register');
 
 const {
   assertDecisionLineageSatisfiedForAcceptance,
+  resolveWorkItemDecisionFamilyRefs,
 } = require('../../../src/services/decisionPlatform/homeActionDecisionLineage.ts');
 
-function fakeDb({ sources = [], analyses = {} } = {}) {
+function fakeDb({ sources = [], analyses = {}, coverageReviews = {} } = {}) {
   return {
     operationalWorkSource: {
-      findMany: async ({ where }) => sources.filter((s) => s.workItemId === where.workItemId && s.sourceType === where.sourceType),
+      findMany: async ({ where }) => sources.filter((s) =>
+        s.workItemId === where.workItemId &&
+        (where.active === undefined || s.active === where.active) &&
+        where.sourceType.in.includes(s.sourceType)),
     },
     replaceRepairAnalysis: {
-      findUnique: async ({ where }) => analyses[where.id] ?? null,
+      findFirst: async ({ where }) => {
+        const analysis = analyses[where.id] ?? null;
+        return analysis?.propertyId === where.propertyId ? analysis : null;
+      },
+    },
+    coverageReview: {
+      findFirst: async ({ where }) => {
+        const review = coverageReviews[where.id] ?? null;
+        return review?.propertyId === where.propertyId ? { questions: review.questions } : null;
+      },
     },
   };
 }
@@ -33,10 +46,46 @@ test('a work item with no GUIDANCE source is a no-op', async () => {
 
 test('a GUIDANCE source whose sourceEntityId is not a ReplaceRepairAnalysis is a no-op (not a repair/replace obligation)', async () => {
   const db = fakeDb({
-    sources: [{ workItemId: 'work-1', sourceType: 'GUIDANCE', sourceEntityId: 'journey-1' }],
+    sources: [{ workItemId: 'work-1', sourceType: 'GUIDANCE', sourceEntityId: 'journey-1', active: true }],
     analyses: {},
   });
   await assert.doesNotReject(assertDecisionLineageSatisfiedForAcceptance('property-1', 'work-1', db));
+});
+
+test('repair/replace and coverage sources resolve to their registered decision families', async () => {
+  const db = fakeDb({
+    sources: [
+      { workItemId: 'work-1', sourceType: 'GUIDANCE', sourceEntityId: 'analysis-1', active: true },
+      { workItemId: 'work-1', sourceType: 'COVERAGE', sourceEntityId: 'review-1', active: true },
+    ],
+    analyses: { 'analysis-1': { propertyId: 'property-1', inventoryItemId: 'hvac-1' } },
+    coverageReviews: {
+      'review-1': { propertyId: 'property-1', questions: [{ questionKey: 'coverage-question-1' }] },
+    },
+  });
+
+  assert.deepEqual(await resolveWorkItemDecisionFamilyRefs('property-1', 'work-1', db), [
+    { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId: 'hvac-1', sourceLabel: 'repair/replace' },
+    { decisionDefinitionId: 'COVERAGE_QUESTION', primaryEntityId: 'coverage-question-1', sourceLabel: 'coverage' },
+  ]);
+});
+
+test('a CoverageReview source with no current primary question fails closed', async () => {
+  const db = fakeDb({
+    sources: [{ workItemId: 'work-1', sourceType: 'COVERAGE', sourceEntityId: 'review-1', active: true }],
+    coverageReviews: { 'review-1': { propertyId: 'property-1', questions: [] } },
+  });
+  await assert.rejects(
+    resolveWorkItemDecisionFamilyRefs('property-1', 'work-1', db),
+    /no longer has a current primary question/i,
+  );
+});
+
+test('a non-review COVERAGE source remains outside decision lineage', async () => {
+  const db = fakeDb({
+    sources: [{ workItemId: 'work-1', sourceType: 'COVERAGE', sourceEntityId: 'warranty-1', active: true }],
+  });
+  assert.deepEqual(await resolveWorkItemDecisionFamilyRefs('property-1', 'work-1', db), []);
 });
 
 // The LINKED/blocked branches (a GUIDANCE source that does resolve to a

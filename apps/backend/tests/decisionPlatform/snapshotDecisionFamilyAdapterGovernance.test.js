@@ -127,7 +127,6 @@ test('selectThread computes an unacknowledged-change diff instead of a hardcoded
   assert.match(factorySource, /return \{ kind: 'UNIQUE', thread: toLineage\(selection\.thread, change\) \};/);
 });
 
-test('acknowledgeCurrentSnapshot is called from both createThread and resumeThread', () => {
-  const calls = [...factorySource.matchAll(/acknowledgeCurrentSnapshot\(/g)];
-  assert.ok(calls.length >= 2, `expected at least 2 acknowledgeCurrentSnapshot calls (createThread, resumeThread), found ${calls.length}`);
+test('the shared adapter leaves snapshot acknowledgment to the presentation surface', () => {
+  assert.doesNotMatch(factorySource, /acknowledgeCurrentSnapshot/);
 });

@@ -22,11 +22,10 @@ export interface DecisionFamilyThreadLineage {
   contextStatus: DecisionThreadContextStatus;
   currentRecommendationSnapshotId: string | null;
   // Home Intelligence Functional Completeness FRD Phase 3B work item 5:
-  // "Show snapshot changes when context changes." Non-null only when this
-  // very call recomputed a stale thread (FRD §14.3's diff, already
-  // computed by continueHvacDecisionThread/recomputeStaleThread for the
-  // Ask-chat surface's RECOMMENDATION_CHANGE block) — a plain read-only
-  // selectThread/resolve never produces one.
+  // "Show snapshot changes when context changes." A recompute returns the
+  // new diff immediately; later read-only selections reproduce that diff
+  // from the immutable supersession chain until the homeowner explicitly
+  // acknowledges the rendered Home notice.
   recommendationChange: RecommendationChangeDiff | null;
   // Home Intelligence Functional Completeness FRD Phase 3 review finding 5:
   // the current snapshot's own limitationCodes, surfaced so a homeowner can

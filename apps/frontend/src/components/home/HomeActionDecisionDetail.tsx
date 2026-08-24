@@ -9,8 +9,10 @@
 // explanation blocks" — reuse this component there rather than
 // reimplementing the same fields.
 
+import { useState } from 'react';
 import type { RankedHomeActionDTO } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 const CHANGE_CATEGORY_LABELS: Record<string, string> = {
@@ -19,7 +21,14 @@ const CHANGE_CATEGORY_LABELS: Record<string, string> = {
   SYSTEM_METHOD_ONLY: 'Recalculated with an updated method — your facts did not change',
 };
 
-function RecommendationChangeNotice({ change }: { change: NonNullable<NonNullable<RankedHomeActionDTO['decisionLineage']>['thread']>['recommendationChange'] }) {
+function RecommendationChangeNotice({
+  change,
+  onAcknowledge,
+}: {
+  change: NonNullable<NonNullable<RankedHomeActionDTO['decisionLineage']>['thread']>['recommendationChange'];
+  onAcknowledge?: () => Promise<unknown>;
+}) {
+  const [acknowledging, setAcknowledging] = useState(false);
   if (!change || change.category === 'UNCHANGED') return null;
   return (
     <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 md:col-span-2">
@@ -29,6 +38,32 @@ function RecommendationChangeNotice({ change }: { change: NonNullable<NonNullabl
         <p className="mt-1 text-sm text-sky-800">
           Previous recommendation: <span className="font-medium">{change.previousVerdict}</span> → Now: <span className="font-medium">{change.currentVerdict}</span>
         </p>
+      )}
+      {change.changedFactors.length > 0 && (
+        <p className="mt-1 text-sm text-sky-800">
+          Updated factors: {change.changedFactors.join(' · ')}
+        </p>
+      )}
+      {onAcknowledge && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-3 rounded-full border-sky-300 bg-white text-sky-900 hover:bg-sky-100"
+          disabled={acknowledging}
+          onClick={() => void (async () => {
+            setAcknowledging(true);
+            try {
+              await onAcknowledge();
+            } catch {
+              // The owning surface presents the actionable error state.
+            } finally {
+              setAcknowledging(false);
+            }
+          })()}
+        >
+          {acknowledging ? 'Saving…' : 'Got it'}
+        </Button>
       )}
     </div>
   );
@@ -126,11 +161,13 @@ export function HomeActionDecisionDetail({
   action,
   propertyId,
   onContextCaptured,
+  onRecommendationChangeAcknowledged,
 }: {
   action: RankedHomeActionDTO;
   propertyId: string;
   /** Phase 3B work item 3 — "resume the same action or decision after capture." Re-fetches the Home feed so the recommendation reflects the newly captured fact. */
   onContextCaptured?: () => void | Promise<unknown>;
+  onRecommendationChangeAcknowledged?: (decisionThreadId: string, snapshotId: string) => Promise<unknown>;
 }) {
   const { recommendationResponse, governance } = action;
   const hasAssumptions = action.assumptions.length > 0;
@@ -140,6 +177,7 @@ export function HomeActionDecisionDetail({
   const hasDisclosure = governance.commercialDisclosure.involvesCommercialAction ||
     Boolean(governance.professionalBoundary) || Boolean(governance.conservativeFallback);
   const contextFeature = action.propertyContextFeature;
+  const changeThread = action.decisionLineage?.thread;
 
   if (!hasAssumptions && !hasOptions && !hasTradeoffs && !degraded && !hasDisclosure && !action.decisionLineage && !contextFeature) {
     return null;
@@ -158,7 +196,12 @@ export function HomeActionDecisionDetail({
           />
         </div>
       )}
-      <RecommendationChangeNotice change={action.decisionLineage?.thread?.recommendationChange ?? null} />
+      <RecommendationChangeNotice
+        change={changeThread?.recommendationChange ?? null}
+        onAcknowledge={changeThread?.recommendationChange && changeThread.currentRecommendationSnapshotId && onRecommendationChangeAcknowledged
+          ? () => onRecommendationChangeAcknowledged(changeThread.decisionThreadId, changeThread.currentRecommendationSnapshotId!)
+          : undefined}
+      />
       <LimitationCodeNotices limitationCodes={action.decisionLineage?.thread?.limitationCodes} />
       <DecisionLineageStatus decisionLineage={action.decisionLineage} />
 

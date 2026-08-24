@@ -396,10 +396,6 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
   // Phase 3 review finding 3: durable alongside the first snapshot's own
   // embedded origin — see decisionThreadHomeActionLink.ts's doc comment.
   await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
-  // Phase 3 review finding 4: the homeowner is looking at the first
-  // snapshot right now (it's brand new, never "changed" from anything) —
-  // acknowledge it so a later read never has anything to diff against.
-  await acknowledgeCurrentSnapshot(result.thread.id, result.snapshot.id);
 
   return result;
 }
@@ -415,7 +411,8 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
 // already does inside recomputeStaleThread/resumeThread, and only when the
 // homeowner hasn't acknowledged the current one yet (DecisionThread
 // .lastChangeAcknowledgedSnapshotId) -- so it stops showing once they've
-// actually engaged with the thread again, not on some arbitrary timer.
+// explicitly acknowledged the rendered Home notice, not merely clicked a
+// CTA that navigated away before the change could be presented.
 export async function loadUnacknowledgedRecommendationChange(thread: {
   currentRecommendationSnapshotId: string | null;
   lastChangeAcknowledgedSnapshotId: string | null;
@@ -429,19 +426,28 @@ export async function loadUnacknowledgedRecommendationChange(thread: {
   return compareRecommendationSnapshots(previous, current, []);
 }
 
-// Home Intelligence Functional Completeness FRD Phase 3 review finding 4:
-// the write side of the acknowledgment above -- called whenever the
-// homeowner actually engages with a thread (create, resume, or an Ask
-// continuation), regardless of whether that engagement produced a new
-// snapshot. See lastChangeAcknowledgedSnapshotId's schema comment for why
-// this is a plain write, not version-guarded like lifecycleStatus/
-// contextStatus.
-export async function acknowledgeCurrentSnapshot(threadId: string, currentRecommendationSnapshotId: string | null): Promise<void> {
-  if (!currentRecommendationSnapshotId) return;
-  await prisma.decisionThread.updateMany({
-    where: { id: threadId },
-    data: { lastChangeAcknowledgedSnapshotId: currentRecommendationSnapshotId },
+/**
+ * Acknowledge only the exact current snapshot the homeowner was shown.
+ * Including snapshotId in the predicate prevents a delayed UI action from
+ * acknowledging a newer recommendation that has not been rendered yet.
+ */
+export async function acknowledgeRecommendationChange(
+  propertyId: string,
+  threadId: string,
+  snapshotId: string,
+): Promise<{ decisionThreadId: string; snapshotId: string; acknowledged: true }> {
+  const updated = await prisma.decisionThread.updateMany({
+    where: {
+      id: threadId,
+      propertyId,
+      currentRecommendationSnapshotId: snapshotId,
+    },
+    data: { lastChangeAcknowledgedSnapshotId: snapshotId },
   });
+  if (updated.count === 0) {
+    throw new Error('The recommendation changed again or is no longer active. Refresh Home before acknowledging it.');
+  }
+  return { decisionThreadId: threadId, snapshotId, acknowledged: true };
 }
 
 export async function loadHvacDecisionThreadDetail(threadId: string, propertyId: string) {
@@ -500,9 +506,6 @@ export async function continueHvacDecisionThread(
   // decisionThreadHomeActionLink.ts's doc comment. Ask-originated
   // continuations omit homeActionOrigin, so this is a no-op for them.
   await recordHomeActionOriginLink(threadId, homeActionOrigin);
-  // Phase 3 review finding 4: the homeowner is looking at the (possibly
-  // just-recomputed) current snapshot right now — acknowledge it.
-  await acknowledgeCurrentSnapshot(threadId, thread.currentRecommendationSnapshotId);
 
   return { thread, change, triggerReasonCodes };
 }
