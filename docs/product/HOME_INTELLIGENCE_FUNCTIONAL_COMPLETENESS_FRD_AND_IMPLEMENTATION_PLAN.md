@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.17"
+version: "1.18"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.17 |
+| Version | 1.18 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1074,7 +1074,11 @@ The stale governance assertion for multiline HVAC continuation routing was also 
 
 Work item 1 closes that gap: `loadCompoundRadarInsightActions` (`services/homeActionSourcePromotion.service.ts`) reads active `PropertyRadarCompoundInsight` rows for a property and projects each into a `SYSTEM`-kind Home Action — a pure projection, not a second place that decides whether a compound risk is real. It is wired into `getPromotedHomeActions()`'s aggregation alongside the other source loaders, so it inherits the existing `home-actions` intelligence-consumer recompute trigger, the standard dismiss/snooze/terminal-event suppression, and the grounding gate for free. `homeActionProducerOwnership.ts` gained a matching `loadCompoundRadarInsightActions` row (`compound-radar:` id prefix, ACKNOWLEDGE-only, `workKeyEligible: false`, `decisionLineagePolicy: NOT_REQUIRED` — advisory awareness, never a material decision). A resolved insight (the reconciler's own `status: 'resolved'` transition) simply stops being emitted here, which is what satisfies HI-CMP-005 lifecycle convergence without a homeowner dismissal. Test coverage: `tests/unit/homeActionCompoundRadarPromotion.test.js` (grounding, evidence projection, priority mapping, confidence/missing-fact behavior, deterministic `sourceVersion`) plus the existing `homeActionProducerOwnership.test.js` completeness scan, all passing.
 
-Not yet done: work item 2 (the seven additional HI-CMP-002 rule families — `COMPOUND_RULE_REGISTRY` is still empty); work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI — `homeRecordsExtraction.service.ts` has no conflict-detection call at all).
+**Work item 2 (2026-08-24): 1 of 7 HI-CMP-002 rule families landed.** `COMPOUND_RULE_REGISTRY` moved from a literal empty array to a real, code-owned audit registry (`services/intelligence/compoundRuleRegistry.ts`) — `compoundRuleRegistry.contract.ts`'s `CompoundRuleDefinition` was also corrected in the same pass: its original `buildAction: (input) => Promise<void>` field was a stored-callback shape inconsistent with every sibling Phase 0 registry (`commandOwner`, `completionAdapterOwner`, etc., all declarative string pointers to a real, independently testable implementation) and risked exactly the "generic registry becomes a rules engine" failure mode the FRD's own risk table (§18) warns against. It is now `producerId` (cross-checked at startup against `homeActionProducerOwnership.ts` by `validateCompoundRuleRegistry`'s second argument) plus a reviewed `recommendedActionBuilder` description. The registry now documents both rules that actually exist: `RADAR_COMPOUND_INSIGHT_PROMOTION` (work item 1, retroactively registered) and `INSPECTION_FINDING_WARRANTY_COVERAGE` (HI-CMP-002 rule 1 of 7).
+
+`INSPECTION_FINDING_WARRANTY_COVERAGE` is implemented as `loadInspectionCoverageActions` (`services/homeActionSourcePromotion.service.ts`) — deliberately *not* a second persisted "insight" table like Radar's: InspectionFinding and Warranty are both canonical records already kept fresh by their own domains, so the rule correlates them live at read/recompute time (deterministically, via a reviewed `WarrantyCategory` → `InspectionHomeSystem` mapping, never free-text inference) and converges automatically on the next read when either side changes — no separate resolution step to get wrong. InsurancePolicy correlation was deliberately left out of this rule version; its `coverageType` is free text, and matching a finding to a policy would require inferring damage cause from inspector prose, which HI-CMP-003 doesn't allow. Test coverage: `tests/unit/homeActionInspectionCoveragePromotion.test.js` (8 tests: matching, category mapping incl. `HOME_WARRANTY_PLAN`'s multi-system bundle, non-matches, priority mapping, deterministic `sourceVersion`), plus updated `homeActionProducerOwnership.test.js`/`intelligenceRegistries.test.js` completeness/startup-validation coverage, all passing.
+
+Not yet done: work item 2's remaining six rule families (severe weather + unresolved maintenance/vulnerable system; inspection/permit issue + active sale readiness; high premium + eligible mitigation plan; property-cost change + refinance/ownership-cost threshold; recurring failure + repair-vs-replace readiness; document-promoted fact + conflicting fact); work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI — `homeRecordsExtraction.service.ts` has no conflict-detection call at all).
 
 ### Phase 6 — Skill and capability completion
 
