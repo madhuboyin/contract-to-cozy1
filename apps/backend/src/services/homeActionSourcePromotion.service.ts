@@ -39,7 +39,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -2174,6 +2174,48 @@ function dedupeReplaceRepairAnalysesForPromotion<T extends {
   return [...byItemId.values()];
 }
 
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 2,
+// rule 6 of 7 (HI-CMP-002) — "recurring failure + repair-versus-replace
+// decision readiness." Both halves already exist independently: HomeEvent
+// rows of type REPAIR/MAINTENANCE against an inventory item are the
+// canonical repair-history record (the same convention
+// hvacRepairReplaceEngine.service.ts's own repairEventCountLast30Months
+// input already reads, on the identical 30-month lookback — recomputed
+// here rather than read back off a persisted analysis's inputsSnapshot,
+// since only the HVAC-specific engine populates that field and this rule
+// must apply to every inventory category the generic
+// replaceRepairAnalysis.service.ts also serves), and a READY
+// ReplaceRepairAnalysis is the decision-readiness half. Two or more repair/
+// maintenance events in the lookback window is "recurring" — one past
+// repair is not a pattern.
+const RECURRING_FAILURE_LOOKBACK_MONTHS = 30;
+const RECURRING_FAILURE_MIN_EVENT_COUNT = 2;
+
+async function countRecentRepairEventsByInventoryItem(
+  db: HomeActionSourceDb,
+  inventoryItemIds: readonly string[],
+  evaluatedAt: Date,
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (!db.homeEvent || inventoryItemIds.length === 0) return counts;
+  const lookbackDate = new Date(evaluatedAt);
+  lookbackDate.setMonth(lookbackDate.getMonth() - RECURRING_FAILURE_LOOKBACK_MONTHS);
+  const events = await db.homeEvent.findMany({
+    where: {
+      inventoryItemId: { in: [...inventoryItemIds] },
+      isCurrent: true,
+      type: { in: ['REPAIR', 'MAINTENANCE'] },
+      occurredAt: { gte: lookbackDate },
+    },
+    select: { inventoryItemId: true },
+  });
+  for (const event of events) {
+    if (!event.inventoryItemId) continue;
+    counts.set(event.inventoryItemId, (counts.get(event.inventoryItemId) ?? 0) + 1);
+  }
+  return counts;
+}
+
 async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
   if (!db.replaceRepairAnalysis) return [];
 
@@ -2204,6 +2246,11 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   });
 
   const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses);
+  const recurringFailureCounts = await countRecentRepairEventsByInventoryItem(
+    db,
+    deduped.map((analysis) => analysis.inventoryItemId),
+    now,
+  );
 
   return deduped.map((analysis) => {
     const itemName = analysis.inventoryItem?.name || 'Inventory Item';
@@ -2226,6 +2273,14 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
 
     const favorsReplace = analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON';
     const confidenceScore = analysis.confidence === 'HIGH' ? 0.9 : analysis.confidence === 'MEDIUM' ? 0.65 : 0.4;
+    // HI-CMP-002 rule 6 enrichment: same obligation as every other
+    // ReplaceRepairAnalysis promotion — id/lineageId/sourceEntityId/
+    // decisionLineagePolicy are untouched by the recurring-failure signal.
+    const recentRepairCount = recurringFailureCounts.get(analysis.inventoryItemId) ?? 0;
+    const hasRecurringFailure = recentRepairCount >= RECURRING_FAILURE_MIN_EVENT_COUNT;
+    const recurringFailureSentence = hasRecurringFailure
+      ? ` This item has ${recentRepairCount} logged repair or maintenance events in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months — a recurring failure pattern worth weighing against a one-time replacement.`
+      : '';
 
     return adaptHomeActionSource('GUIDANCE', {
       id: `repair-replace:${analysis.id}`,
@@ -2234,21 +2289,32 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
       sourceEntityId: analysis.id,
       sourceVersion: analysis.computedAt.toISOString(),
       state: 'OPEN',
-      priority: analysis.verdict === 'REPLACE_NOW' ? 'SOON' : 'PLAN',
+      priority: analysis.verdict === 'REPLACE_NOW' || hasRecurringFailure ? 'SOON' : 'PLAN',
       signal: `Repair vs Replace: ${itemName}`,
-      whyItMatters: analysis.summary || `Our AI has a recommendation for ${itemName}.`,
+      whyItMatters: `${analysis.summary || `Our AI has a recommendation for ${itemName}.`}${recurringFailureSentence}`,
       recommendedAction: favorsReplace ? 'Consider replacing this item.' : 'Consider repairing this item.',
       expectedOutcome: 'A documented repair-or-replace decision for this item.',
       timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
-      evidence: [{
-        id: analysis.id,
-        type: 'SYSTEM_DERIVATION',
-        label: `Repair vs Replace: ${itemName}`,
-        source: 'Lifespan Engine',
-        observedAt: analysis.computedAt.toISOString(),
-        freshness: 'CURRENT',
-        confidence: confidenceScore,
-      }],
+      evidence: [
+        {
+          id: analysis.id,
+          type: 'SYSTEM_DERIVATION',
+          label: `Repair vs Replace: ${itemName}`,
+          source: 'Lifespan Engine',
+          observedAt: analysis.computedAt.toISOString(),
+          freshness: 'CURRENT',
+          confidence: confidenceScore,
+        },
+        ...(hasRecurringFailure ? [{
+          id: `${analysis.inventoryItemId}:recurring-repair-history`,
+          type: 'SYSTEM_DERIVATION' as const,
+          label: `${recentRepairCount} repair/maintenance events in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months`,
+          source: 'Home Timeline',
+          observedAt: now.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 0.85,
+        }] : []),
+      ],
       assumptions: [{
         key: 'verdict-computed-at',
         label: 'Verdict reflects the most recent computation',
@@ -3037,9 +3103,84 @@ function ownershipChangeEvidence(value: unknown): Record<string, any> {
     : {};
 }
 
+const MORTGAGE_OWNERSHIP_COST_CATEGORIES = new Set(['MORTGAGE_PRINCIPAL', 'MORTGAGE_INTEREST']);
+
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 2,
+// rule 5 of 7 (HI-CMP-002) — "property-cost change + refinance or
+// ownership-cost decision threshold." A material MORTGAGE_PRINCIPAL/
+// MORTGAGE_INTEREST OwnershipCostChange today routes generically to
+// "Review financing" (resolveOwnershipCostCategoryAction) even when a
+// live, ready refinance opportunity already explains the cost pressure.
+// This independently computes that same readiness signal
+// loadRefinanceOpportunityActions uses (an OPEN radar state, a complete
+// mortgage profile, current market/mortgage data, a captured
+// currentOpportunity) so loadOwnershipCostChangeActions can enrich its
+// evidence and CTA — the HI-ATT-009 enrichment contract: same obligation
+// (the mortgage cost change keeps its own id/lineageId/decision lineage
+// untouched), never a second competing action for it. Deliberately
+// duplicated rather than refactored out of loadRefinanceOpportunityActions
+// — that function's own decision-status/deferred-review suppression logic
+// governs whether the *separate* refinance action itself should show, which
+// is not the question here (whether to cite an opportunity as supporting
+// evidence on a different action).
+async function getReadyMortgageRefinanceOpportunitySummary(
+  propertyId: string,
+  db: HomeActionSourceDb,
+  evaluatedAt: Date,
+): Promise<{ monthlySavings: number; breakEvenMonths: number; marketRate: number } | null> {
+  if (!db.propertyRefinanceRadarState || !db.propertyFinancingProfile) return null;
+  const [state, profile] = await Promise.all([
+    db.propertyRefinanceRadarState.findUnique({
+      where: { propertyId },
+      select: {
+        radarState: true,
+        lastRateSnapshot: { select: { date: true, source: true } },
+        currentOpportunity: { select: { monthlySavings: true, breakEvenMonths: true, marketRate: true } },
+      },
+    }),
+    db.propertyFinancingProfile.findUnique({
+      where: { propertyId },
+      select: {
+        mortgageStatus: true,
+        currentMortgageBalanceCents: true,
+        interestRateBps: true,
+        remainingTermMonths: true,
+        mortgageBalanceAsOfDate: true,
+      },
+    }),
+  ]);
+  const completeMortgage = Boolean(
+    profile &&
+    profile.mortgageStatus !== 'NO_MORTGAGE' &&
+    profile.currentMortgageBalanceCents != null &&
+    profile.interestRateBps != null &&
+    profile.remainingTermMonths != null,
+  );
+  const freshness = buildRefinanceFreshness({
+    mortgageDataAsOf: profile?.mortgageBalanceAsOfDate?.toISOString() ?? null,
+    marketDataAsOf: state?.lastRateSnapshot?.date?.toISOString() ?? null,
+    marketDataSource: state?.lastRateSnapshot?.source ?? null,
+  }, evaluatedAt);
+  if (
+    !state ||
+    !completeMortgage ||
+    freshness.alertReadiness !== 'READY' ||
+    state.radarState !== 'OPEN' ||
+    !state.currentOpportunity
+  ) {
+    return null;
+  }
+  return {
+    monthlySavings: Number(state.currentOpportunity.monthlySavings),
+    breakEvenMonths: state.currentOpportunity.breakEvenMonths,
+    marketRate: Number(state.currentOpportunity.marketRate),
+  };
+}
+
 export async function loadOwnershipCostChangeActions(
   propertyId: string,
   db: HomeActionSourceDb,
+  evaluatedAt?: Date,
 ): Promise<HomeAction[]> {
   if (!db.ownershipCostChange || !db.ownershipCostSnapshot) return [];
   const [latestSnapshot, decisionRows] = await Promise.all([
@@ -3074,6 +3215,11 @@ export async function loadOwnershipCostChangeActions(
       toSnapshotId: true,
     },
   });
+
+  const hasMortgageChange = changes.some((change) => MORTGAGE_OWNERSHIP_COST_CATEGORIES.has(change.category));
+  const refinanceOpportunity = hasMortgageChange
+    ? await getReadyMortgageRefinanceOpportunitySummary(propertyId, db, evaluatedAt ?? new Date())
+    : null;
 
   return changes.flatMap((change) => {
     const actionId = `ownership-cost-change:${change.id}`;
@@ -3134,6 +3280,16 @@ export async function loadOwnershipCostChangeActions(
       propertyId,
       change.category,
     );
+    // HI-CMP-002 rule 5 enrichment: same obligation (mortgage cost change),
+    // never a competing action — id/lineageId/sourceEntityId/decisionLineage
+    // stay exactly as they were for every category, mortgage or otherwise.
+    const hasRefinanceLever = MORTGAGE_OWNERSHIP_COST_CATEGORIES.has(change.category) && refinanceOpportunity !== null;
+    const enrichedDestination = hasRefinanceLever
+      ? { label: 'Compare refinance options', href: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar` }
+      : destination;
+    const refinanceSentence = hasRefinanceLever && refinanceOpportunity
+      ? ` A refinance comparison is currently ready and estimates about $${Math.round(refinanceOpportunity.monthlySavings).toLocaleString()}/month in savings (break-even ${refinanceOpportunity.breakEvenMonths > 0 ? `${refinanceOpportunity.breakEvenMonths} months` : 'not yet established'}).`
+      : '';
 
     return [adaptHomeActionSource('SYSTEM', {
       id: actionId,
@@ -3143,10 +3299,10 @@ export async function loadOwnershipCostChangeActions(
       sourceVersion: change.toSnapshotId,
       job: 'STAY_AHEAD',
       state: 'OPEN',
-      priority: Math.abs(change.amountDeltaCents) >= 100_000 ? 'SOON' : 'PLAN',
+      priority: hasRefinanceLever || Math.abs(change.amountDeltaCents) >= 100_000 ? 'SOON' : 'PLAN',
       signal: `${categoryLabel} ${direction} by ${amount} per year.`,
-      whyItMatters: explanation,
-      recommendedAction: `${destination.label} after reviewing the observed change`,
+      whyItMatters: `${explanation}${refinanceSentence}`,
+      recommendedAction: `${enrichedDestination.label} after reviewing the observed change`,
       expectedOutcome:
         'Confirm whether the current household plan should change or whether the source record needs correction.',
       timing: {
@@ -3156,15 +3312,26 @@ export async function loadOwnershipCostChangeActions(
         rationale:
           'This action remains current while the latest comparable snapshot contains a material observed change.',
       },
-      evidence: [{
-        id: evidence[0]?.observationId ?? change.id,
-        type: evidence[0]?.sourceDocumentId ? 'DOCUMENT' : 'SYSTEM_DERIVATION',
-        label: `${categoryLabel} comparable-period evidence`,
-        source: sourceLabel,
-        observedAt: typeof observedAt === 'string' ? observedAt : change.createdAt.toISOString(),
-        freshness: 'CURRENT',
-        confidence,
-      }],
+      evidence: [
+        {
+          id: evidence[0]?.observationId ?? change.id,
+          type: evidence[0]?.sourceDocumentId ? 'DOCUMENT' : 'SYSTEM_DERIVATION',
+          label: `${categoryLabel} comparable-period evidence`,
+          source: sourceLabel,
+          observedAt: typeof observedAt === 'string' ? observedAt : change.createdAt.toISOString(),
+          freshness: 'CURRENT',
+          confidence,
+        },
+        ...(hasRefinanceLever && refinanceOpportunity ? [{
+          id: `${propertyId}:refinance-opportunity`,
+          type: 'SYSTEM_DERIVATION' as const,
+          label: `Ready refinance opportunity — market rate ${refinanceOpportunity.marketRate.toFixed(3)}%`,
+          source: 'Mortgage Refinance Radar',
+          observedAt: change.createdAt.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 0.7,
+        }] : []),
+      ],
       assumptions: [{
         key: 'observed_change_attribution',
         label: 'Reason attribution is evidence-limited',
@@ -3209,8 +3376,8 @@ export async function loadOwnershipCostChangeActions(
       governance: materialFinancialGovernance('ownership-cost-change-v1'),
       primaryCta: {
         kind: 'REVIEW',
-        label: destination.label,
-        href: destination.href,
+        label: enrichedDestination.label,
+        href: enrichedDestination.href,
       },
       secondaryCtas: [
         {
@@ -4419,7 +4586,7 @@ export async function getPromotedHomeActions(
     loadSellHoldRentActions(propertyId, db),
     loadPropertyTaxAppealCaseActions(propertyId, db),
     loadSavingsBenefitsActions(propertyId, db),
-    loadOwnershipCostChangeActions(propertyId, db),
+    loadOwnershipCostChangeActions(propertyId, db, options.evaluatedAt),
     Promise.resolve(environmentActions),
   ]);
   const rawCandidates = groups.flat();
