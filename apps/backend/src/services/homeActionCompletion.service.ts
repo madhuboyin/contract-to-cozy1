@@ -78,6 +78,7 @@ export interface CompleteAcceptedWorkItemInput {
   userId: string;
   safetyTier: RecommendationSafetyTier;
   decisionLineage: HomeActionDecisionLineage | null;
+  recommendationSnapshotId?: string | null;
   costCents?: number | null;
   observedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
   // Home Intelligence Functional Completeness FRD Phase 4 review finding 2
@@ -125,6 +126,17 @@ export async function completeAcceptedOperationalWorkItem(
     );
   }
 
+  const photoDocumentIds = [...new Set(input.photoDocumentIds ?? [])];
+  if (photoDocumentIds.length > 0) {
+    const documents = await prisma.document.findMany({
+      where: { id: { in: photoDocumentIds }, propertyId: input.propertyId, deletedAt: null },
+      select: { id: true },
+    });
+    if (documents.length !== photoDocumentIds.length) {
+      throw new CompletionEvidencePolicyViolationError('Every completion photo/document must exist on this property and must not be deleted.');
+    }
+  }
+
   const idempotencyKey = `home-action-complete:${item.id}:${input.userId}`;
   const parsedCompletedAt = input.completedAt ? new Date(input.completedAt) : undefined;
   await PropertyMaintenanceTaskService.updateTaskStatus(
@@ -140,14 +152,14 @@ export async function completeAcceptedOperationalWorkItem(
       providerName: input.providerName ?? undefined,
       notes: input.notes ?? undefined,
       followUpNeeded: input.followUpNeeded ?? undefined,
-      photoDocumentIds: input.photoDocumentIds ?? undefined,
+      photoDocumentIds: photoDocumentIds.length ? photoDocumentIds : undefined,
     },
   );
 
   // Photos/documents become durable OperationalWorkEvidence, not just JSON
   // on the maintenance task -- the same evidence list "Manage action"
   // already renders for evidence recorded through the other completion path.
-  for (const documentId of input.photoDocumentIds ?? []) {
+  for (const documentId of photoDocumentIds) {
     await recordWorkEvidence({
       workItemId: item.id,
       evidenceType: 'DOCUMENT',
@@ -174,9 +186,9 @@ export async function completeAcceptedOperationalWorkItem(
     workItemId: item.id,
     userId: input.userId,
     costCents: input.costCents ?? null,
-    recommendationSnapshotId: input.decisionLineage?.status === 'LINKED'
+    recommendationSnapshotId: input.recommendationSnapshotId ?? (input.decisionLineage?.status === 'LINKED'
       ? input.decisionLineage.thread.currentRecommendationSnapshotId
-      : null,
+      : null),
   });
 
   // "Follow-up need" (HI-OUT-003) -- VERIFIED work the homeowner flagged as

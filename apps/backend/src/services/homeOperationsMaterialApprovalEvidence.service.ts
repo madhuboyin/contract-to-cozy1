@@ -66,6 +66,17 @@ async function domainCompletionRecordIsVerifiable(
   return Boolean(claim || booking || task);
 }
 
+async function documentIsVerifiableForPolicyOrClaim(
+  item: WorkItemForEvidenceCheck,
+  evidenceEntityId: string,
+): Promise<boolean> {
+  const document = await prisma.document.findFirst({
+    where: { id: evidenceEntityId, propertyId: item.propertyId, deletedAt: null },
+    select: { policyId: true, claimDocuments: { select: { id: true }, take: 1 } },
+  });
+  return Boolean(document && (document.policyId || document.claimDocuments.length > 0));
+}
+
 /**
  * HI-OUT-002, enforced at the "Manage action" approval boundary. Throws
  * before any mutation -- approveMaterialWorkHandler must call this before
@@ -74,8 +85,15 @@ async function domainCompletionRecordIsVerifiable(
 export async function assertMaterialApprovalEvidenceSatisfiesPolicy(
   item: WorkItemForEvidenceCheck,
   evidence: { evidenceType: OperationalWorkEvidenceType; evidenceEntityId: string },
+  completion: { costCents?: number | null; observedResult?: string | null } = {},
 ): Promise<void> {
   const policy = evidencePolicyFor(item.safetyTier);
+
+  if (policy.costOrObservedResult === 'REQUIRED' && completion.costCents == null && !completion.observedResult) {
+    throw new MaterialApprovalEvidencePolicyViolationError(
+      `${item.safetyTier} work requires a cost or an observed result before approval. ${policy.minimumCompletionBehavior}`,
+    );
+  }
 
   const allowedTypes = RECORD_EVIDENCE_ALLOWED_TYPES[policy.recordEvidence];
   if (allowedTypes && !allowedTypes.has(evidence.evidenceType)) {
@@ -98,8 +116,13 @@ export async function assertMaterialApprovalEvidenceSatisfiesPolicy(
     return;
   }
 
-  if (policy.policyOrClaimLinkage === 'WHEN_APPLICABLE' && evidence.evidenceType === 'DOMAIN_COMPLETION_RECORD') {
-    if (!(await domainCompletionRecordIsVerifiable(item, evidence.evidenceEntityId))) {
+  if (policy.policyOrClaimLinkage === 'WHEN_APPLICABLE') {
+    const linked = evidence.evidenceType === 'DOMAIN_COMPLETION_RECORD'
+      ? await domainCompletionRecordIsVerifiable(item, evidence.evidenceEntityId)
+      : evidence.evidenceType === 'DOCUMENT'
+        ? await documentIsVerifiableForPolicyOrClaim(item, evidence.evidenceEntityId)
+        : false;
+    if (!linked) {
       throw new MaterialApprovalEvidencePolicyViolationError(
         'This evidence does not correspond to a verifiable domain, policy, or claim record for this work.',
       );

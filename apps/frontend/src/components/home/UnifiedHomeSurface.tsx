@@ -934,19 +934,21 @@ function AssetLifecycleFacts({ action }: { action: RankedHomeActionDTO }) {
  * policy requires cost or an observed result; requiring cost specifically
  * keeps this dialog's minimum bar unchanged from before).
  */
-function CompleteMaterialWorkDialog({
+function CompleteWorkDialog({
   open,
   onOpenChange,
   propertyId,
   submitting,
+  costRequired,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   propertyId: string;
   submitting: boolean;
+  costRequired: boolean;
   onSubmit: (completion: {
-    completionCostCents: number;
+    completionCostCents: number | null;
     completionDate: string;
     completionFulfillmentMode: 'DIY' | 'PROVIDER' | null;
     completionProviderName: string | null;
@@ -962,10 +964,11 @@ function CompleteMaterialWorkDialog({
       onOpenChange={onOpenChange}
       propertyId={propertyId}
       submitting={submitting}
-      costRequired
-      description="Material work needs a recorded cost before it can be marked done."
+      costRequired={costRequired}
+      description={costRequired
+        ? 'Material work needs a recorded cost before it can be marked done.'
+        : 'Record when and how the work was completed, with optional notes and photos.'}
       onSubmit={(values) => {
-        if (values.costCents === null) return;
         onSubmit({
           completionCostCents: values.costCents,
           completionDate: values.completedAt,
@@ -1208,7 +1211,7 @@ export function ActionCard({
             variant="outline"
             className="rounded-full"
             disabled={Boolean(pending)}
-            onClick={() => (action.governance.safetyTier === 'MATERIAL_FINANCIAL' ? setCompleteDialogOpen(true) : execute('COMPLETE'))}
+            onClick={() => setCompleteDialogOpen(true)}
           >
             <Check className="mr-1 h-3.5 w-3.5" />Mark done
           </Button>
@@ -1285,12 +1288,13 @@ export function ActionCard({
           onChanged={onChanged}
         />
       )}
-      {action.governance.safetyTier === 'MATERIAL_FINANCIAL' && (
-        <CompleteMaterialWorkDialog
+      {action.feedbackControls.includes('COMPLETE') && (
+        <CompleteWorkDialog
           open={completeDialogOpen}
           onOpenChange={setCompleteDialogOpen}
           propertyId={propertyId}
           submitting={pending === 'COMPLETE'}
+          costRequired={action.governance.safetyTier === 'MATERIAL_FINANCIAL'}
           onSubmit={(completion) => {
             setCompleteDialogOpen(false);
             void execute('COMPLETE', completion);

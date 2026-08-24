@@ -15,7 +15,8 @@ import { HOME_ACTION_PRODUCER_OWNERSHIP } from './homeActionProducerOwnership';
 import { validateCapabilitySkillGuidanceBridge } from './capabilitySkillGuidanceBridge.contract';
 import { CAPABILITY_SKILL_GUIDANCE_BRIDGE } from './capabilitySkillGuidanceBridge.registry';
 import { validateCompletionEvidencePolicy, COMPLETION_EVIDENCE_POLICY } from './completionEvidencePolicy.registry';
-import { validateCompoundRuleRegistry, COMPOUND_RULE_REGISTRY } from './compoundRuleRegistry.contract';
+import { validateCompoundRuleRegistry } from './compoundRuleRegistry.contract';
+import { COMPOUND_RULE_REGISTRY } from './compoundRuleRegistry';
 import { ATTENTION_PRIORITY_OWNERS, validateAttentionPriorityOwners } from './attentionPriorityOwnership.registry';
 
 export * from './intelligenceConsumerRegistry.contract';
@@ -28,6 +29,7 @@ export * from './capabilitySkillGuidanceBridge.contract';
 export * from './capabilitySkillGuidanceBridge.registry';
 export * from './completionEvidencePolicy.registry';
 export * from './compoundRuleRegistry.contract';
+export * from './compoundRuleRegistry';
 export * from './attentionPriorityOwnership.registry';
 
 /**
@@ -56,7 +58,10 @@ export function validateIntelligenceRegistries(): string[] {
         .map((capability) => capability.id),
     }),
     ...validateCompletionEvidencePolicy(COMPLETION_EVIDENCE_POLICY),
-    ...validateCompoundRuleRegistry(COMPOUND_RULE_REGISTRY),
+    ...validateCompoundRuleRegistry(
+      COMPOUND_RULE_REGISTRY,
+      new Set(HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) => entry.producerId)),
+    ),
     ...validateAttentionPriorityOwners(ATTENTION_PRIORITY_OWNERS),
   ];
 }

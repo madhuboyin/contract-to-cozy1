@@ -3,6 +3,7 @@ import { DiyProject, DiyProjectCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { HomeEventsService } from './homeEvents.service';
 import { logger } from '../lib/logger';
+import { syncIncidentWorkItem } from './incidents/incidentWorkReconciliation.service';
 
 const homeEventsService = new HomeEventsService();
 
@@ -79,6 +80,9 @@ export class DiyCompletionService {
     }
 
     await Promise.all(updates);
+    if (project.incidentId) {
+      await syncIncidentWorkItem(project.incidentId, project.userId);
+    }
   }
 }
 

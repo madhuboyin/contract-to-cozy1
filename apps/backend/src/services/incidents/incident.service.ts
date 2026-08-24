@@ -496,6 +496,7 @@ export class IncidentService {
       } catch (guidanceError) {
         logger.warn({ guidanceError }, '[GUIDANCE] auto-resolve archive hook failed');
       }
+      await syncIncidentWorkItem(oldIncident.id, oldIncident.userId ?? undefined);
     }
 
     // Step 2: Prefer updating an existing incident with same fingerprint if it's still "open-ish"
@@ -839,6 +840,7 @@ static async acknowledge(incidentId: string, userId: string, input: AcknowledgeI
           input.type === AcknowledgementType.SNOOZED ? (ack as any).snoozeUntil : 'PERMANENT',
       },
     });
+    await syncIncidentWorkItem(incidentId, userId);
 
     try {
       await archiveIncidentGuidance(incidentId);

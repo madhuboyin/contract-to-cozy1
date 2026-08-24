@@ -60,6 +60,8 @@ export interface TransitionWorkItemInput {
    * (WORK_ACCEPTED).
    */
   eventTypeOverride?: OperationalWorkEventType;
+  /** Domain reconciliation may explicitly return a reversible decision to undecided. */
+  resetAcceptanceOnReopen?: boolean;
 }
 
 export async function transitionWorkItem(
@@ -71,6 +73,9 @@ export async function transitionWorkItem(
   if (!workItem) throw new Error(`OperationalWorkItem ${input.workItemId} not found.`);
 
   const result = applyTransition(workItem, input.to, { disposition: input.disposition });
+  if (result.state === 'REOPENED' && input.resetAcceptanceOnReopen) {
+    result.acceptanceState = 'PROPOSED';
+  }
 
   // Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
   // delivery step 5 — server-side commitment-boundary enforcement. Every

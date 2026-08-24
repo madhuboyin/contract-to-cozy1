@@ -38,7 +38,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1258,6 +1258,7 @@ async function loadInspectionFindingActions(propertyId: string, db: HomeActionSo
           safetyTier: 'SAFETY_EMERGENCY' as const,
           professionalBoundary: 'This reflects the inspector\'s written finding, not a licensed re-inspection. Confirm the safety condition with a qualified professional before relying on it.',
           conservativeFallback: 'Treat the affected system as unsafe until a qualified professional confirms otherwise.',
+          emergencyEscalation: 'If the condition presents an immediate risk to people or property, leave the affected area and contact emergency services or a qualified emergency professional.',
         }
       : isMaterialMajor
         ? {
@@ -1315,6 +1316,118 @@ async function loadInspectionFindingActions(propertyId: string, db: HomeActionSo
       createdAt: finding.createdAt.toISOString(),
       lastEvaluatedAt: finding.updatedAt.toISOString(),
     });
+  });
+}
+
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 2,
+// rule 1 of HI-CMP-002's seven ("inspection finding + applicable warranty
+// or coverage evidence"). Unlike the Radar compound rules (which correlate
+// externally-fetched provider events staged into PropertyRadarMatch),
+// InspectionFinding and Warranty are both canonical records already kept
+// fresh by their own domains — this correlates them live at read time
+// rather than introducing a second persisted "insight" copy, so a fact
+// change on either side converges automatically on the next recompute with
+// no separate resolution step to get wrong.
+//
+// The match is deterministic, not textual: WarrantyCategory already names
+// the system a warranty covers (or, for HOME_WARRANTY_PLAN, the
+// conventional multi-system bundle a home-warranty service contract
+// covers — reviewed and fixed here, not inferred). InsurancePolicy
+// correlation is deliberately not included in this pass: its coverageType
+// field is free text, and matching a finding to a homeowner's policy would
+// require inferring damage cause from inspector prose, which is exactly
+// the kind of ungrounded correlation HI-CMP-003 prohibits.
+const WARRANTY_CATEGORY_HOME_SYSTEMS: Record<string, readonly string[]> = {
+  APPLIANCE: ['APPLIANCES'],
+  HVAC: ['HVAC'],
+  ROOFING: ['ROOF'],
+  PLUMBING: ['PLUMBING'],
+  ELECTRICAL: ['ELECTRICAL'],
+  STRUCTURAL: ['STRUCTURAL', 'FOUNDATION', 'BASEMENT_CRAWLSPACE', 'EXTERIOR'],
+  HOME_WARRANTY_PLAN: ['HVAC', 'PLUMBING', 'ELECTRICAL', 'APPLIANCES'],
+  OTHER: [],
+};
+
+async function loadInspectionCoverageActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.inspectionFinding || !db.warranty) return [];
+  const now = evaluatedAt ?? new Date();
+  const [findings, warranties] = await Promise.all([
+    db.inspectionFinding.findMany({
+      where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' }, report: { status: 'CONFIRMED' } },
+      select: { id: true, reportId: true, homeSystem: true, severity: true, createdAt: true, updatedAt: true },
+    }),
+    db.warranty.findMany({
+      where: { propertyId, startDate: { lte: now }, expiryDate: { gte: now } },
+      select: { id: true, category: true, providerName: true, expiryDate: true, updatedAt: true },
+    }),
+  ]);
+  if (findings.length === 0 || warranties.length === 0) return [];
+
+  return findings.flatMap((finding) => {
+    const matches = warranties.filter((warranty) =>
+      (WARRANTY_CATEGORY_HOME_SYSTEMS[String(warranty.category)] ?? []).includes(finding.homeSystem));
+    if (matches.length === 0) return [];
+
+    const soonestExpiry = [...matches].sort((left, right) => left.expiryDate.getTime() - right.expiryDate.getTime())[0].expiryDate;
+    const providerNames = [...new Set(matches.map((warranty) => warranty.providerName))];
+    const providerList = providerNames.join(' or ');
+    const sourceVersion = createHash('sha256').update(JSON.stringify({
+      findingUpdatedAt: finding.updatedAt.toISOString(),
+      warranties: matches.map((warranty) => `${warranty.id}:${warranty.expiryDate.toISOString()}:${warranty.providerName}`).sort(),
+    })).digest('hex');
+
+    return [adaptHomeActionSource('SYSTEM', {
+      id: `inspection-coverage:${finding.id}`,
+      propertyId,
+      lineageId: `inspection-coverage:${finding.id}`,
+      sourceEntityId: finding.id,
+      sourceVersion,
+      state: 'OPEN',
+      priority: finding.severity === 'SAFETY' ? 'NOW' : finding.severity === 'MAJOR' ? 'SOON' : 'PLAN',
+      signal: `${finding.homeSystem} finding may be covered by ${providerList}`,
+      whyItMatters: `An open inspection finding in ${finding.homeSystem} overlaps with an active warranty (${providerList}) that covers this system. Filing a claim before the warranty expires may cover repair costs that would otherwise come out of pocket.`,
+      recommendedAction: `Contact ${providerList} to check whether this finding is covered before paying for repairs independently.`,
+      expectedOutcome: 'Repair costs for this finding are covered by an active warranty instead of paid out of pocket.',
+      timing: {
+        dueAt: soonestExpiry.toISOString(),
+        windowStart: null,
+        windowEnd: soonestExpiry.toISOString(),
+        rationale: 'The matched warranty coverage expires on this date.',
+      },
+      evidence: [
+        {
+          id: `${propertyId}:${finding.id}`,
+          type: 'SYSTEM_DERIVATION',
+          label: `${finding.homeSystem} inspection finding`,
+          source: 'Inspection Hub',
+          observedAt: finding.updatedAt.toISOString(),
+          freshness: 'CURRENT',
+          confidence: 1,
+        },
+        ...matches.map((warranty) => ({
+          id: warranty.id,
+          type: 'PROPERTY_FACT' as const,
+          label: `${warranty.category} warranty — ${warranty.providerName}`,
+          source: 'Warranty record',
+          observedAt: warranty.updatedAt.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 1,
+        })),
+      ],
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 0.75, label: confidenceLabel(0.75), missing: [] },
+      governance: lowConsequenceGovernance('inspection-coverage-v1'),
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'Review finding and coverage',
+        href: `/dashboard/properties/${propertyId}/inspection-hub/${finding.reportId}?findingId=${encodeURIComponent(finding.id)}`,
+      },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: finding.createdAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    })];
   });
 }
 
@@ -1794,6 +1907,125 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
   });
 
   return actions;
+}
+
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 1
+// (HI-CMP-002 vertical slice) — promotes active
+// PropertyRadarCompoundInsight rows (reconciled by
+// reconcileRadarCompoundInsightsForProperty, the 'compound-radar'
+// intelligence consumer) into canonical Home Actions. The insight row
+// already carries reviewed, evidence-bound copy (title/summary) and its
+// own correlationKey-based identity/dedup — this adapter is a pure
+// projection, not a second place that decides whether a compound risk is
+// real. A resolved (no-longer-active) insight simply stops being emitted
+// here, which is what converges the Home Action per HI-CMP-005 without a
+// homeowner dismissal.
+type CompoundRadarRecommendedAction = {
+  code: string;
+  label: string;
+  priority: 'high' | 'medium' | 'low';
+};
+type CompoundRadarSourceEvidence = {
+  eventId: string;
+  eventType: string;
+  eventSubType: string | null;
+  severity: string;
+  effectiveAt: string;
+  expiresAt: string | null;
+  sourceName: string | null;
+  provider: string | null;
+};
+type CompoundRadarFactEvidence = { factKey: string; state: string; value: unknown };
+
+const COMPOUND_RADAR_PRIORITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+function compoundRadarInsightPriority(actions: CompoundRadarRecommendedAction[]): HomeAction['priority'] {
+  const highest = actions.reduce(
+    (best, candidate) =>
+      (COMPOUND_RADAR_PRIORITY_RANK[candidate.priority] ?? 0) > (COMPOUND_RADAR_PRIORITY_RANK[best] ?? 0)
+        ? candidate.priority
+        : best,
+    'low',
+  );
+  if (highest === 'high') return 'NOW';
+  if (highest === 'medium') return 'SOON';
+  return 'PLAN';
+}
+
+async function loadCompoundRadarInsightActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.propertyRadarCompoundInsight) return [];
+  const now = evaluatedAt ?? new Date();
+  const insights = await db.propertyRadarCompoundInsight.findMany({
+    where: { propertyId, status: 'active' },
+    orderBy: { evaluatedAt: 'desc' },
+  });
+
+  return insights.map((row: any) => {
+    const recommendedActions = ((row.recommendedActionsJson as any)?.actions ?? []) as CompoundRadarRecommendedAction[];
+    const sourceEvidence = (row.sourceEvidenceJson ?? []) as CompoundRadarSourceEvidence[];
+    const factEvidence = (row.factEvidenceJson ?? []) as CompoundRadarFactEvidence[];
+    const unknownFacts = factEvidence.filter((fact) => fact.state === 'unknown');
+    const soonestExpiry = sourceEvidence
+      .map((event) => (event.expiresAt ? new Date(event.expiresAt) : null))
+      .filter((value): value is Date => value !== null && Number.isFinite(value.getTime()))
+      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+    const recommendedActionLabel = recommendedActions.map((entry) => entry.label).join(' ')
+      || 'Review this compound risk before overlapping conditions cause damage or loss.';
+    const confidenceScore = unknownFacts.length > 0 ? 0.65 : 0.85;
+
+    return adaptHomeActionSource('SYSTEM', {
+      id: `compound-radar:${row.correlationKey}`,
+      propertyId,
+      lineageId: `compound-radar:${row.correlationKey}`,
+      sourceEntityId: row.id,
+      sourceVersion: `${row.ruleVersion}:${row.evaluatedAt.toISOString()}`,
+      state: 'OPEN',
+      priority: compoundRadarInsightPriority(recommendedActions),
+      signal: row.title,
+      whyItMatters: row.summary,
+      recommendedAction: recommendedActionLabel,
+      expectedOutcome: 'This compound risk is addressed before the overlapping conditions cause damage or loss.',
+      timing: {
+        dueAt: soonestExpiry ? soonestExpiry.toISOString() : null,
+        windowStart: null,
+        windowEnd: soonestExpiry ? soonestExpiry.toISOString() : null,
+        rationale: 'Derived from the overlapping window of the contributing Home Events.',
+      },
+      evidence: [
+        ...sourceEvidence.map((event) => ({
+          id: `${propertyId}:${event.eventId}`,
+          type: 'HOME_EVENT' as const,
+          label: `${event.eventType}${event.eventSubType ? ` (${event.eventSubType})` : ''} — ${event.severity}`,
+          source: event.sourceName ?? event.provider ?? 'Home Event Radar',
+          observedAt: event.effectiveAt,
+          freshness: 'CURRENT' as const,
+          confidence: 0.85,
+        })),
+        ...factEvidence.map((fact) => ({
+          id: `${propertyId}:${fact.factKey}`,
+          type: 'PROPERTY_FACT' as const,
+          label: fact.factKey,
+          source: 'Property Context',
+          observedAt: row.evaluatedAt.toISOString(),
+          freshness: fact.state === 'unknown' ? 'UNKNOWN' as const : 'CURRENT' as const,
+          confidence: fact.state === 'confirmed' ? 0.9 : fact.state === 'unknown' ? 0.3 : 0.6,
+        })),
+      ],
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: {
+        score: confidenceScore,
+        label: confidenceLabel(confidenceScore),
+        missing: unknownFacts.map((fact) => fact.factKey),
+      },
+      governance: lowConsequenceGovernance('compound-radar-v1'),
+      primaryCta: { kind: 'REVIEW', label: 'Review recommended action', href: `/dashboard/home-event-radar?propertyId=${propertyId}` },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: row.createdAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    });
+  });
 }
 
 // Home Intelligence Functional Completeness FRD Phase 1, Slice 2 — the
@@ -4031,9 +4263,11 @@ export async function getPromotedHomeActions(
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadCoverageRenewalActions(propertyId, db, options.evaluatedAt),
     loadHealthInsightActions(propertyId, db, options.evaluatedAt),
+    loadCompoundRadarInsightActions(propertyId, db, options.evaluatedAt),
     loadRepairReplaceDecisionActions(propertyId, db, options.evaluatedAt),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     loadInspectionFindingActions(propertyId, db),
+    loadInspectionCoverageActions(propertyId, db, options.evaluatedAt),
     loadSalePrepActions(propertyId, db),
     options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
     loadRefinanceDataRequiredActions(propertyId, db),

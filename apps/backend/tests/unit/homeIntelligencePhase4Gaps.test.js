@@ -29,6 +29,8 @@ const saleReadinessReconciliation = read('../../src/services/saleReadinessWorkRe
 const propertySaleCaseService = read('../../src/services/propertySaleCase.service.ts');
 const incidentReconciliation = read('../../src/services/incidents/incidentWorkReconciliation.service.ts');
 const incidentService = read('../../src/services/incidents/incident.service.ts');
+const weatherPreparationService = read('../../src/services/environment/weatherPreparation.service.ts');
+const diyCompletionService = read('../../src/services/diyCompletion.service.ts');
 const domainReopenDispatch = read('../../src/modules/homeOperations/infrastructure/domainReopenDispatch.ts');
 const transitionWorkItemUsecase = read('../../src/modules/homeOperations/application/transitionWorkItem.usecase.ts');
 const bookingReconciliation = read('../../src/services/bookingWorkReconciliation.service.ts');
@@ -141,12 +143,13 @@ test('recordCoverageDecision records a COVERAGE_DECISION outcome inside its own 
 
 // --- Second review round: findings 1, 2, 3, 5, 6 -----------------------
 
-test('approveMaterialWorkHandler consults the completion evidence policy before verifying, and records an outcome on VERIFIED', () => {
+test('approveMaterialWorkHandler consults the completion evidence policy before verifying, and records an attributed outcome on VERIFIED', () => {
   const fnStart = homeOperationsController.indexOf('export async function approveMaterialWorkHandler(');
   const fnEnd = homeOperationsController.indexOf('\nexport async function batchTransitionWorkItemsHandler', fnStart);
   const fn = homeOperationsController.slice(fnStart, fnEnd);
-  assert.match(fn, /assertMaterialApprovalEvidenceSatisfiesPolicy\(item, evidence\)/);
+  assert.match(fn, /assertMaterialApprovalEvidenceSatisfiesPolicy\(item, evidence,/);
   assert.match(fn, /recordOperationalWorkOutcome\(\{/);
+  assert.match(fn, /resolveWorkItemRecommendationSnapshotId\(verified\.propertyId, verified\.id\)/);
   // The old unconditional SAFETY_EMERGENCY-only check must be gone, not
   // just supplemented -- REGULATED_COVERAGE must go through the same gate.
   assert.doesNotMatch(fn, /AUTHORITATIVE_EVIDENCE_REQUIRED/);
@@ -157,6 +160,8 @@ test('the material approval evidence policy enforces recordEvidence type, requir
   assert.match(materialApprovalEvidenceService, /policy\.recordEvidence/);
   assert.match(materialApprovalEvidenceService, /policy\.requiresDomainOwnedResolution/);
   assert.match(materialApprovalEvidenceService, /policy\.policyOrClaimLinkage/);
+  assert.match(materialApprovalEvidenceService, /policy\.costOrObservedResult === 'REQUIRED'/);
+  assert.match(materialApprovalEvidenceService, /documentIsVerifiableForPolicyOrClaim/);
   // requiresDomainOwnedResolution must reject anything but a verified
   // DOMAIN_COMPLETION_RECORD -- a DOCUMENT alone is not "domain-owned."
   const domainOwnedBlock = materialApprovalEvidenceService.slice(
@@ -165,12 +170,17 @@ test('the material approval evidence policy enforces recordEvidence type, requir
   assert.match(domainOwnedBlock, /evidence\.evidenceType !== 'DOMAIN_COMPLETION_RECORD'/);
 });
 
-test('sale-readiness WAIVE/PURSUE reconcile the linked work item; REOPEN/UNPURSUE deliberately do not force a transition', () => {
-  assert.match(saleReadinessReconciliation, /if \(input\.action !== 'WAIVE' && input\.action !== 'PURSUE'\) return;/);
+test('sale-readiness decisions are reversible and source resolution verifies accepted work', () => {
   assert.match(saleReadinessReconciliation, /disposition = workItem\.state === 'CANDIDATE' \? 'NOT_RELEVANT' : 'CANCELLED'/);
   assert.match(saleReadinessReconciliation, /to:\s*'ACCEPTED'/);
+  assert.match(saleReadinessReconciliation, /input\.action === 'REOPEN' \|\| input\.action === 'UNPURSUE'/);
+  assert.match(saleReadinessReconciliation, /to:\s*'REOPENED'/);
+  assert.match(saleReadinessReconciliation, /export async function reconcileSaleReadinessItemResolved/);
+  assert.match(saleReadinessReconciliation, /to:\s*'VERIFIED'/);
+  assert.match(saleReadinessReconciliation, /recordOperationalWorkOutcome\(\{/);
 
-  assert.match(propertySaleCaseService, /import \{ reconcileSaleReadinessItemDecision \} from '\.\/saleReadinessWorkReconciliation\.service'/);
+  assert.match(propertySaleCaseService, /reconcileSaleReadinessItemDecision, reconcileSaleReadinessItemResolved/);
+  assert.match(propertySaleCaseService, /itemsToResolve\.map\(\(item\) => reconcileSaleReadinessItemResolved/);
   const setItemDecisionStart = propertySaleCaseService.indexOf('static async setItemDecision(');
   const setItemDecisionEnd = propertySaleCaseService.indexOf('\n  // Resolves & validates', setItemDecisionStart);
   const fn = propertySaleCaseService.slice(setItemDecisionStart, setItemDecisionEnd > setItemDecisionStart ? setItemDecisionEnd : undefined);
@@ -187,6 +197,10 @@ test('incident work reconciliation closes on genuine resolution vs. no-longer-re
 
   assert.match(incidentService, /import \{ syncIncidentWorkItem \} from '\.\/incidentWorkReconciliation\.service'/);
   assert.match(incidentService, /await syncIncidentWorkItem\(id, actorUserId\);/);
+  assert.match(incidentService, /await syncIncidentWorkItem\(oldIncident\.id/);
+  assert.match(incidentService, /await syncIncidentWorkItem\(incidentId, userId\);/);
+  assert.match(weatherPreparationService, /await syncIncidentWorkItem\(preparationId\);/);
+  assert.match(diyCompletionService, /await syncIncidentWorkItem\(project\.incidentId, project\.userId\);/);
 });
 
 test('reopening a work item dispatches a best-effort domain-record reopen that never throws back into the transition itself', () => {
@@ -201,6 +215,8 @@ test('reopening a work item dispatches a best-effort domain-record reopen that n
   assert.match(domainReopenDispatch, /case 'GUIDANCE':/);
   assert.match(domainReopenDispatch, /case 'PROJECT':/);
   assert.match(domainReopenDispatch, /case 'BOOKING':\s*\n\s*case 'CLAIM':/);
+  assert.match(domainReopenDispatch, /data:\s*\{ role: 'SUPPORTING' \}/);
+  assert.match(domainReopenDispatch, /recordReconciliationFailure\(\{/);
   assert.match(domainReopenDispatch, /const exhaustiveCheck: never = executionType;/);
   // Bypasses the domain service layer with a direct Prisma write -- no call
   // to updateTaskStatus(...) (only mentioned, in prose, as the thing being
@@ -243,4 +259,6 @@ test('completeAcceptedOperationalWorkItem collects the full HI-OUT-003 field set
   assert.match(homeActionCompletionService, /followUpNeeded\?:\s*boolean;/);
   assert.match(homeActionCompletionService, /photoDocumentIds\?:\s*string\[\];/);
   assert.match(homeActionCompletionService, /to:\s*'FOLLOW_UP_DUE'/);
+  assert.match(homeActionCompletionService, /prisma\.document\.findMany/);
+  assert.match(homeActionCompletionService, /recommendationSnapshotId:\s*input\.recommendationSnapshotId/);
 });

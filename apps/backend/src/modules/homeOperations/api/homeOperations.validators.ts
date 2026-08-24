@@ -30,6 +30,8 @@ export const AddWatcherSchema = z.object({
 export const ApproveMaterialWorkSchema = z.object({
   evidenceId: z.string().uuid(),
   decisionNote: z.string().trim().min(1).max(1000),
+  costCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  observedResult: z.enum(['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED']).nullable().optional(),
 });
 
 // Home Intelligence Functional Completeness FRD Phase 4 review finding 2
@@ -44,7 +46,7 @@ export const CompleteWorkItemSchema = z.object({
   providerName: z.string().trim().max(200).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
   followUpNeeded: z.boolean().optional(),
-  photoDocumentIds: z.array(z.string()).max(20).optional(),
+  photoDocumentIds: z.array(z.string().uuid()).max(20).optional(),
 });
 
 export const TransitionWorkItemSchema = z.object({

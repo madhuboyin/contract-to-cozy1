@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.16"
+version: "1.17"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.16 |
+| Version | 1.17 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1069,6 +1069,12 @@ The stale governance assertion for multiline HVAC continuation routing was also 
 **Functional exit:** an external event plus a relevant home condition produces one explainable action, and a corrected document fact automatically updates every affected recommendation.
 
 **Decision-lineage dependency:** compound and document work may begin after Phase 2, but HI-CMP-004 is incomplete until Phase 3A can create or update Decision Thread and Recommendation Snapshot lineage for material results when the homeowner enters the workflow.
+
+**Status: work item 1 complete (2026-08-24); work items 2–6 not started.** Before this pass, `COMPOUND_RULE_REGISTRY` was a literal empty array (`services/intelligence/compoundRuleRegistry.contract.ts`'s own header: "Phase 5 populates it... so compoundRuleRegistry.ts stays empty until then") and `radarCompoundInsight.service.ts` never referenced `HomeAction` anywhere — Radar's four existing compound rules (`HEAVY_RAIN_OUTAGE_SUMP_BACKUP`, `SMOKE_HVAC_FILTER`, `FREEZE_OUTAGE_ELECTRIC_HEAT`, `SEVERE_WEATHER_OPEN_ROOF_ISSUE`) reconciled into `PropertyRadarCompoundInsight` rows with no path to Home, Fix, or Cozy.
+
+Work item 1 closes that gap: `loadCompoundRadarInsightActions` (`services/homeActionSourcePromotion.service.ts`) reads active `PropertyRadarCompoundInsight` rows for a property and projects each into a `SYSTEM`-kind Home Action — a pure projection, not a second place that decides whether a compound risk is real. It is wired into `getPromotedHomeActions()`'s aggregation alongside the other source loaders, so it inherits the existing `home-actions` intelligence-consumer recompute trigger, the standard dismiss/snooze/terminal-event suppression, and the grounding gate for free. `homeActionProducerOwnership.ts` gained a matching `loadCompoundRadarInsightActions` row (`compound-radar:` id prefix, ACKNOWLEDGE-only, `workKeyEligible: false`, `decisionLineagePolicy: NOT_REQUIRED` — advisory awareness, never a material decision). A resolved insight (the reconciler's own `status: 'resolved'` transition) simply stops being emitted here, which is what satisfies HI-CMP-005 lifecycle convergence without a homeowner dismissal. Test coverage: `tests/unit/homeActionCompoundRadarPromotion.test.js` (grounding, evidence projection, priority mapping, confidence/missing-fact behavior, deterministic `sourceVersion`) plus the existing `homeActionProducerOwnership.test.js` completeness scan, all passing.
+
+Not yet done: work item 2 (the seven additional HI-CMP-002 rule families — `COMPOUND_RULE_REGISTRY` is still empty); work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI — `homeRecordsExtraction.service.ts` has no conflict-detection call at all).
 
 ### Phase 6 — Skill and capability completion
 

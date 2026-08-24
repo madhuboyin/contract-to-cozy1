@@ -22,7 +22,7 @@ import { auditLog } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { listWorkItems } from '../modules/homeOperations/application/listWorkItems.usecase';
-import { reconcileSaleReadinessItemDecision } from './saleReadinessWorkReconciliation.service';
+import { reconcileSaleReadinessItemDecision, reconcileSaleReadinessItemResolved } from './saleReadinessWorkReconciliation.service';
 import { homeRecordsService } from './homeRecords.service';
 import { revokePropertyBriefShare } from '../propertyBrief/propertyBrief.service';
 import { listPropertyApplianceInventory } from './propertyApplianceInventory.service';
@@ -1028,6 +1028,9 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
   const existing = await prisma.saleReadinessItem.findMany({ where: { saleCaseId } });
   const existingByKey = new Map(existing.map((item) => [`${item.sourceEntityType}:${item.sourceEntityId}`, item]));
 
+  const itemsToResolve = existing.filter(
+    (item) => !projectedKeys.has(`${item.sourceEntityType}:${item.sourceEntityId}`) && item.status === 'OPEN',
+  );
   await prisma.$transaction([
     ...projected.map((item) => {
       const key = `${item.sourceEntityType}:${item.sourceEntityId}`;
@@ -1078,13 +1081,13 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
     }),
     // Sources that no longer appear (fixed, closed, resolved) — auto-resolve
     // unless the homeowner had already waived it, which is a durable decision.
-    ...existing
-      .filter((item) => !projectedKeys.has(`${item.sourceEntityType}:${item.sourceEntityId}`) && item.status === 'OPEN')
+    ...itemsToResolve
       .map((item) => prisma.saleReadinessItem.update({
         where: { id: item.id },
         data: { status: 'RESOLVED' as SaleReadinessItemStatus, resolvedAt: new Date() },
       })),
   ]);
+  await Promise.all(itemsToResolve.map((item) => reconcileSaleReadinessItemResolved({ propertyId, itemId: item.id })));
 }
 
 async function requireAccess(userId: string, propertyId: string, minimumRole?: 'CONTRIBUTOR' | 'OWNER') {
@@ -1378,11 +1381,6 @@ export class PropertySaleCaseService {
       where: { id: itemId },
       data: { status: 'OPEN', waivedAt: null, waivedByUserId: null, waivedReason: null, pursuedAt: null, pursuedByUserId: null },
     });
-    // See reconcileSaleReadinessItemDecision's own docblock: REOPEN/UNPURSUE
-    // deliberately do not force a work-item transition (CLOSED is
-    // terminal; ACCEPTED has no legal path back to CANDIDATE). The call
-    // still runs so its early-return stays the single documented decision
-    // point, rather than that constraint living silently in this caller.
     await reconcileSaleReadinessItemDecision({ propertyId, itemId, userId, action });
     return reopened;
   }

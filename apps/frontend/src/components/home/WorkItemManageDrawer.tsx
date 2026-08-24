@@ -114,6 +114,8 @@ export function WorkItemManageDrawer({
   const [documents, setDocuments] = useState<PropertyDocument[]>([]);
   const [approvalEvidenceId, setApprovalEvidenceId] = useState('');
   const [approvalNote, setApprovalNote] = useState('');
+  const [approvalCostDollars, setApprovalCostDollars] = useState('');
+  const [approvalObservedResult, setApprovalObservedResult] = useState<'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | ''>('');
   const [approvalPending, setApprovalPending] = useState(false);
 
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
@@ -298,11 +300,17 @@ export function WorkItemManageDrawer({
     if (!approvalEvidenceId || !approvalNote.trim()) return;
     setApprovalPending(true);
     try {
-      const res = await api.approveMaterialWorkItem(propertyId, workItemId, approvalEvidenceId, approvalNote.trim());
+      const costCents = approvalCostDollars.trim() ? Math.round(Number(approvalCostDollars) * 100) : null;
+      const res = await api.approveMaterialWorkItem(propertyId, workItemId, approvalEvidenceId, approvalNote.trim(), {
+        costCents: Number.isFinite(costCents) ? costCents : null,
+        observedResult: approvalObservedResult || null,
+      });
       if (!res.success) throw new Error(res.message || 'Unable to approve this work.');
       toast({ title: 'Material work approved', description: 'The reviewed evidence and approval are now in the audit trail.' });
       setApprovalEvidenceId('');
       setApprovalNote('');
+      setApprovalCostDollars('');
+      setApprovalObservedResult('');
       await refresh();
     } catch (error) {
       toast({ title: 'Unable to approve work', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
@@ -614,7 +622,20 @@ export function WorkItemManageDrawer({
                     </SelectContent>
                   </Select>
                   <Input value={approvalNote} onChange={(event) => setApprovalNote(event.target.value)} placeholder="Record why this evidence is sufficient" />
-                  <Button size="sm" disabled={!approvalEvidenceId || !approvalNote.trim() || approvalPending} onClick={handleApprove}>
+                  {detail.safetyTier === 'MATERIAL_FINANCIAL' && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input type="number" min="0" step="0.01" value={approvalCostDollars} onChange={(event) => setApprovalCostDollars(event.target.value)} placeholder="Cost ($), if known" />
+                      <Select value={approvalObservedResult} onValueChange={(value) => setApprovalObservedResult(value as typeof approvalObservedResult)}>
+                        <SelectTrigger><SelectValue placeholder="Observed result" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CONFIRMED_HEALTHY">Confirmed healthy</SelectItem>
+                          <SelectItem value="NEEDS_ATTENTION">Needs attention</SelectItem>
+                          <SelectItem value="FAILED">Failed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <Button size="sm" disabled={!approvalEvidenceId || !approvalNote.trim() || approvalPending || (detail.safetyTier === 'MATERIAL_FINANCIAL' && !approvalCostDollars.trim() && !approvalObservedResult)} onClick={handleApprove}>
                     {approvalPending ? 'Approving…' : 'Approve reviewed outcome'}
                   </Button>
                 </section>

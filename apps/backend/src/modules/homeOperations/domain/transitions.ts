@@ -24,7 +24,7 @@ import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition
  */
 export const LEGAL_TRANSITIONS: Record<OperationalWorkItemState, OperationalWorkItemState[]> = {
   CANDIDATE: ['ACCEPTED', 'CLOSED'],
-  ACCEPTED: ['SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
+  ACCEPTED: ['SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'REOPENED', 'CLOSED'],
   // ACCEPTED here too (HI-ATT-010): a Booking cancellation must be able to
   // hand a still-obligated work item back to the actionable backlog,
   // mirroring the existing IN_PROJECT -> ACCEPTED precedent for the same
@@ -44,7 +44,7 @@ export const LEGAL_TRANSITIONS: Record<OperationalWorkItemState, OperationalWork
   BLOCKED: ['SCHEDULED', 'IN_PROGRESS', 'DEFERRED', 'CLOSED'],
   DEFERRED: ['SCHEDULED', 'IN_PROGRESS', 'CLOSED'],
   REPORTED_COMPLETE: ['VERIFIED', 'REOPENED', 'CLOSED'],
-  REOPENED: ['SCHEDULED', 'IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
+  REOPENED: ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
   // REOPENED here too: verified/follow-up-due work must be reversible when a
   // reported completion turns out to be wrong (Home Operations Slice 3 —
   // uncompleting a maintenance task that was already verified needs this
@@ -52,7 +52,11 @@ export const LEGAL_TRANSITIONS: Record<OperationalWorkItemState, OperationalWork
   // on completed/verified work, not only on not-yet-verified REPORTED_COMPLETE).
   VERIFIED: ['FOLLOW_UP_DUE', 'REOPENED', 'CLOSED'],
   FOLLOW_UP_DUE: ['ACCEPTED', 'SCHEDULED', 'REOPENED', 'CLOSED'],
-  CLOSED: [],
+  // A disposition-driven close is a reversible homeowner decision. The
+  // source adapter is responsible for deciding whether the source is still
+  // applicable before using this edge; verified completion closes remain
+  // historical and are reopened from VERIFIED/FOLLOW_UP_DUE instead.
+  CLOSED: ['REOPENED'],
 };
 
 /** States reached only via VERIFIED (or FOLLOW_UP_DUE, itself reached only via VERIFIED). */

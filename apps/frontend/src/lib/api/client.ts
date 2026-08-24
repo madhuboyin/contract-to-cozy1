@@ -3451,10 +3451,11 @@ class APIClient {
     workItemId: string,
     evidenceId: string,
     decisionNote: string,
+    completion?: { costCents?: number | null; observedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null },
   ) {
     return this.request<WorkItemDetailDTO>(
       `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/approve`,
-      { method: 'POST', body: JSON.stringify({ evidenceId, decisionNote }) },
+      { method: 'POST', body: JSON.stringify({ evidenceId, decisionNote, ...completion }) },
     );
   }
 

@@ -23,6 +23,7 @@ import { getDecisionFamilyAdapter } from './decisionFamilyAdapterRegistry';
 import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
 import type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
 import { OPERATIONAL_WORK_ID_PREFIX, OWNERSHIP_COST_CHANGE_ID_PREFIX } from '../intelligence/homeActionProducerOwnership';
+import { prisma } from '../../lib/prisma';
 
 export type { HomeActionOriginRef } from './decisionFamilyAdapter';
 export type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
@@ -306,6 +307,22 @@ export async function assertDecisionLineageSatisfiedForAcceptance(
       );
     }
   }
+}
+
+/** Resolve the immutable recommendation snapshot attributable to a work item. */
+export async function resolveWorkItemRecommendationSnapshotId(
+  propertyId: string,
+  workItemId: string,
+  db: WorkItemDb = prisma,
+): Promise<string | null> {
+  const refs = await resolveWorkItemDecisionFamilyRefs(propertyId, workItemId, db);
+  for (const ref of refs) {
+    const lineage = await resolveHomeActionDecisionLineage(propertyId, ref);
+    if (lineage.status === 'LINKED' && lineage.thread.currentRecommendationSnapshotId) {
+      return lineage.thread.currentRecommendationSnapshotId;
+    }
+  }
+  return null;
 }
 
 /**

@@ -29,6 +29,7 @@ function seedWorkItem(id, propertyId) {
 }
 
 function fullPrismaMock() {
+  const domainEvents = new Map();
   return {
     operationalWorkItem: {
       findUnique: async ({ where }) => {
@@ -79,6 +80,14 @@ function fullPrismaMock() {
           }
         }
         throw new Error('cursor not found');
+      },
+    },
+    domainEvent: {
+      findUnique: async ({ where }) => domainEvents.get(where.idempotencyKey) ?? null,
+      create: async ({ data }) => {
+        const row = { id: crypto.randomUUID(), ...data };
+        if (data.idempotencyKey) domainEvents.set(data.idempotencyKey, row);
+        return row;
       },
     },
     $transaction: async (fn) => fn(fullPrismaMockInstance),

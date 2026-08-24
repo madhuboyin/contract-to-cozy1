@@ -26,6 +26,7 @@ import {
   CompletionEvidencePolicyViolationError,
   UnsupportedWorkItemCompletionError,
 } from '../../../services/homeActionCompletion.service';
+import { resolveWorkItemRecommendationSnapshotId } from '../../../services/decisionPlatform/homeActionDecisionLineage';
 
 function homeOperationsContext(req: CustomRequest, res: Response): { propertyId: string } | null {
   const propertyId = req.params.propertyId;
@@ -264,7 +265,10 @@ export async function approveMaterialWorkHandler(req: CustomRequest, res: Respon
     // DOCUMENT/PROPERTY_FACT check never proved the evidence was tied to a
     // real domain record.
     try {
-      await assertMaterialApprovalEvidenceSatisfiesPolicy(item, evidence);
+      await assertMaterialApprovalEvidenceSatisfiesPolicy(item, evidence, {
+        costCents: req.body.costCents ?? null,
+        observedResult: req.body.observedResult ?? null,
+      });
     } catch (err) {
       return handleWorkItemMutationError(err, res);
     }
@@ -296,8 +300,8 @@ export async function approveMaterialWorkHandler(req: CustomRequest, res: Respon
         propertyId: verified.propertyId,
         workItemId: verified.id,
         userId: req.user!.userId,
-        costCents: null,
-        recommendationSnapshotId: null,
+        costCents: req.body.costCents ?? null,
+        recommendationSnapshotId: await resolveWorkItemRecommendationSnapshotId(verified.propertyId, verified.id),
       });
     }
     return res.json({ success: true, data: await loadWorkItem(item.id) });
@@ -331,6 +335,7 @@ export async function completeWorkItemHandler(req: CustomRequest, res: Response,
         userId: req.user!.userId,
         safetyTier: item.safetyTier,
         decisionLineage: null,
+        recommendationSnapshotId: await resolveWorkItemRecommendationSnapshotId(context.propertyId, item.id),
         costCents: req.body.costCents ?? null,
         observedResult: req.body.observedResult ?? null,
         completedAt: req.body.completedAt ?? null,

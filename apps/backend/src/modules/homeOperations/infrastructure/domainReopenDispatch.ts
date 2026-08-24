@@ -8,6 +8,7 @@
 import type { OperationalWorkExecutionType } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
+import { recordReconciliationFailure } from './reconciliationRepository';
 
 /**
  * Best-effort domain-record reopen, dispatched by executionType. Called
@@ -28,14 +29,26 @@ import { logger } from '../../../lib/logger';
  * honestly know about any one domain's own rules.
  */
 export async function reopenLinkedDomainRecords(workItemId: string): Promise<void> {
+  const workItem = await prisma.operationalWorkItem.findUnique({ where: { id: workItemId }, select: { propertyId: true } });
   const executions = await prisma.operationalWorkExecution.findMany({
     where: { workItemId },
     select: { executionType: true, executionEntityId: true },
   });
   for (const execution of executions) {
     try {
-      await reopenOneDomainRecord(execution.executionType, execution.executionEntityId);
+      await reopenOneDomainRecord(workItemId, execution.executionType, execution.executionEntityId);
     } catch (err) {
+      if (workItem) {
+        await recordReconciliationFailure({
+          propertyId: workItem.propertyId,
+          operation: 'DOMAIN_REOPEN_SYNC',
+          sourceType: execution.executionType,
+          sourceEntityId: execution.executionEntityId,
+          idempotencyKey: `domain-reopen:${workItemId}:${execution.executionType}:${execution.executionEntityId}`,
+          payload: { workItemId, executionType: execution.executionType },
+          error: err,
+        }).catch(() => null);
+      }
       logger.warn(
         { err, workItemId, executionType: execution.executionType, executionEntityId: execution.executionEntityId },
         '[domainReopenDispatch] failed to reopen a linked domain record; the OperationalWorkItem is REOPENED but this domain record may still show complete',
@@ -44,7 +57,7 @@ export async function reopenLinkedDomainRecords(workItemId: string): Promise<voi
   }
 }
 
-async function reopenOneDomainRecord(executionType: OperationalWorkExecutionType, executionEntityId: string): Promise<void> {
+async function reopenOneDomainRecord(workItemId: string, executionType: OperationalWorkExecutionType, executionEntityId: string): Promise<void> {
   switch (executionType) {
     case 'MAINTENANCE_TASK':
       await prisma.propertyMaintenanceTask.updateMany({
@@ -66,12 +79,14 @@ async function reopenOneDomainRecord(executionType: OperationalWorkExecutionType
       return;
     case 'BOOKING':
     case 'CLAIM':
-      // Neither domain has a reopen primitive of its own to call: Booking
-      // has no "uncomplete" concept, and ClaimStatus's APPROVED/DENIED both
-      // only legally transition to CLOSED (claims.transitions.ts --
-      // terminal by that domain's own design). Leaving the domain record
-      // as-is is the honest behavior here, not a gap this dispatch can
-      // close on its own -- there is nothing for it to call.
+      // Completed bookings and decided claims are immutable historical
+      // executions. On work reopen they stop being the PRIMARY execution,
+      // so the reopened obligation can acquire a new primary execution
+      // without pretending the prior booking/claim itself was undone.
+      await prisma.operationalWorkExecution.updateMany({
+        where: { workItemId, executionType, executionEntityId, role: 'PRIMARY' },
+        data: { role: 'SUPPORTING' },
+      });
       return;
     default: {
       const exhaustiveCheck: never = executionType;

@@ -1,5 +1,6 @@
 import { IncidentActionStatus, IncidentActionType, IncidentSourceType, IncidentStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { syncIncidentWorkItem } from '../incidents/incidentWorkReconciliation.service';
 import type { EnvironmentInsight } from './environmentInsights.service';
 
 export type WeatherPreparationItemStatus = 'CREATED' | 'COMPLETED' | 'CANCELED';
@@ -156,6 +157,7 @@ export async function updateWeatherPreparationItem(
         : { status: IncidentStatus.ACTIONED, mitigatedAt: null },
       include: planInclude,
     });
+    await syncIncidentWorkItem(preparationId);
     return toPlan(updated);
   }
   return plan;
