@@ -51,7 +51,7 @@ function relationshipTypesFor(actionState: ReportedOutcomeActionState, hasCost: 
   return types;
 }
 
-async function attachAttributions(
+export async function attachAttributions(
   outcomeObservationId: string,
   recommendationSnapshotId: string | null,
   relationshipTypes: RecommendationAttributionRelationshipType[],
@@ -189,6 +189,61 @@ export async function recordCompletedMaintenanceOutcome(
   });
 
   await attachAttributions(observation.id, thread.currentRecommendationSnapshotId, relationshipTypesFor('COMPLETED', costCents != null));
+  return observation;
+}
+
+// Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005/006) —
+// the first OutcomeObservation creation path for the OPERATIONAL_WORK_ITEM
+// source type (previously declared in the schema but never created
+// anywhere — see the Phase 0 registry report's "0 of 23" finding).
+// Idempotent on (propertyId, sourceEntityId): a retried completion request
+// returns the existing observation rather than creating a duplicate.
+// Attribution is created only when the caller supplies a decision lineage
+// snapshot (HI-DEC-002/HI-OUT-006) — most completed work has no material
+// decision behind it at all.
+interface RecordOperationalWorkOutcomeInput {
+  propertyId: string;
+  workItemId: string;
+  userId: string;
+  costCents: number | null;
+  recommendationSnapshotId: string | null;
+}
+
+export async function recordOperationalWorkOutcome(
+  input: RecordOperationalWorkOutcomeInput,
+): Promise<OutcomeObservation> {
+  const existing = await prisma.outcomeObservation.findFirst({
+    where: {
+      propertyId: input.propertyId,
+      sourceType: 'OPERATIONAL_WORK_ITEM',
+      sourceEntityType: 'OperationalWorkItem',
+      sourceEntityId: input.workItemId,
+    },
+  });
+  if (existing) return existing;
+
+  const hasCost = input.costCents != null;
+  const observation = await prisma.outcomeObservation.create({
+    data: {
+      propertyId: input.propertyId,
+      sourceType: 'OPERATIONAL_WORK_ITEM',
+      sourceEntityType: 'OperationalWorkItem',
+      sourceEntityId: input.workItemId,
+      observedType: 'ACTION_COMPLETED',
+      observedPayloadVersion: '1.0',
+      observedPayload: { costCents: input.costCents, currency: hasCost ? 'USD' : null },
+      occurredAt: new Date(),
+      recordedByUserId: input.userId,
+      // A domain-owned execution record (Operational Work Item, reconciled
+      // through its authoritative execution adapter) corroborates this
+      // outcome -- the same standing recordCompletedMaintenanceOutcome
+      // above already gives a directly-observed maintenance completion.
+      verificationStatus: 'CORROBORATED',
+      provenanceRefs: [`OperationalWorkItem:${input.workItemId}`],
+    },
+  });
+
+  await attachAttributions(observation.id, input.recommendationSnapshotId, relationshipTypesFor('COMPLETED', hasCost));
   return observation;
 }
 

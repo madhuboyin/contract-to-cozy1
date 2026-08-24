@@ -793,7 +793,9 @@ async function appendAcceptedOperationalWork(
 
 export function appendHomeActionLaunchContext(
   href: string,
-  action: Pick<HomeAction, 'id' | 'propertyId' | 'source' | 'presentation' | 'relatedJourneyId'>,
+  action: Pick<HomeAction, 'id' | 'propertyId' | 'source' | 'presentation' | 'relatedJourneyId'> & {
+    workItem?: HomeActionWorkItemLink | null;
+  },
   contextVersion: string | null,
 ): string {
   // Do not decorate official/external resources. The continuity contract is
@@ -812,6 +814,7 @@ export function appendHomeActionLaunchContext(
   setIfMissing('recommendationVersion', action.source.version ?? 'phase2-v1');
   setIfMissing('contextVersion', contextVersion ?? action.source.version ?? 'home-action-v1');
   setIfMissing('journeyId', action.relatedJourneyId);
+  setIfMissing('originWorkItemId', action.workItem?.id);
   setIfMissing(
     'itemId',
     action.presentation?.subject?.kind === 'INVENTORY_ITEM'

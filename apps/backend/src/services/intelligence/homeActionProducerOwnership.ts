@@ -35,6 +35,12 @@ import type { HomeActionProducerOwnershipEntry } from './homeActionProducerOwner
 
 export const OWNERSHIP_COST_CHANGE_ID_PREFIX = 'ownership-cost-change:';
 export const ACTIVATION_ID_PREFIX = 'activation:';
+// Home Intelligence Functional Completeness FRD Phase 4 — the third
+// id-prefix carve-out: appendAcceptedOperationalWork's re-projected accepted
+// work now supports COMPLETE/ALREADY_DONE for a maintenance-backed item
+// despite its computed source.kind (MAINTENANCE/GUIDANCE/PROJECT) having no
+// completion adapter at the kind level.
+export const OPERATIONAL_WORK_ID_PREFIX = 'operational-work:';
 
 const GENERIC_DEFAULT_COMMAND_OWNER = 'Generic default (executeHomeActionCommand, services/homeActions.service.ts): snoozeAction for DEFER/SNOOZE, recordOrchestrationEvent otherwise.';
 
@@ -429,17 +435,17 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     sourceFile: 'apps/backend/src/services/homeActions.service.ts',
     factSignalOrigin: 'OperationalWorkItem (prisma.operationalWorkItem.findMany, acceptanceState: ACCEPTED).',
     sourceKind: null,
-    idPrefixes: ['operational-work:'],
-    hasCompletionAdapter: false,
-    completionAdapterOwner: null,
-    isKindLevelCompletionException: false,
+    idPrefixes: [OPERATIONAL_WORK_ID_PREFIX],
+    hasCompletionAdapter: true,
+    completionAdapterOwner: 'completeAcceptedOperationalWorkItem (services/homeActionCompletion.service.ts), routed by OPERATIONAL_WORK_ID_PREFIX in executeHomeActionCommand — maintenance-execution items only (Phase 4 slice 1); other execution types keep no COMPLETE control this pass.',
+    isKindLevelCompletionException: true,
     workKeyEligible: false,
     workItemSourceType: null,
     carriesExistingWorkItem: true,
-    supportedCommands: ['CORRECT_FACT', 'SNOOZE'],
-    commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
-    hasOutcomeAdapter: false,
-    outcomeAdapterOwner: null,
-    notes: 'Re-projects already-ACCEPTED OperationalWorkItem rows back into the feed with source.kind computed from the item\'s primary execution type (PROJECT/GUIDANCE/MAINTENANCE). Never routes through proposeWorkItemFromHomeAction — it already carries an existing work item reference, so workKeyEligible is not applicable rather than a real "no."',
+    supportedCommands: ['CORRECT_FACT', 'SNOOZE', 'COMPLETE', 'ALREADY_DONE'],
+    commandOwner: 'completeAcceptedOperationalWorkItem (services/homeActionCompletion.service.ts) for COMPLETE/ALREADY_DONE on a maintenance-backed item; generic default otherwise.',
+    hasOutcomeAdapter: true,
+    outcomeAdapterOwner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) — OPERATIONAL_WORK_ITEM source type, created by completeAcceptedOperationalWorkItem.',
+    notes: 'Re-projects already-ACCEPTED OperationalWorkItem rows back into the feed with source.kind computed from the item\'s primary execution type (PROJECT/GUIDANCE/MAINTENANCE). Never routes through proposeWorkItemFromHomeAction — it already carries an existing work item reference, so workKeyEligible is not applicable rather than a real "no." Home Intelligence FRD Phase 4: COMPLETE/ALREADY_DONE is offered only when the primary execution is MAINTENANCE_TASK and the item\'s safetyTier completion-evidence policy permits attestation (LOW_CONSEQUENCE/MATERIAL_FINANCIAL) — REGULATED_COVERAGE/SAFETY_EMERGENCY items keep CORRECT_FACT/SNOOZE only, same as GUIDANCE/PROJECT-backed items, and must use "Manage action" instead.',
   },
 ] as const;
