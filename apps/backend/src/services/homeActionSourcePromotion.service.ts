@@ -39,7 +39,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -2510,6 +2510,197 @@ async function loadInsurancePolicyFactConflictActions(propertyId: string, db: Ho
   });
 }
 
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 6
+// (HI-DOC-004) — extends the conflict-surfacing pattern work item 2 rule 7
+// established for InsurancePolicy to Warranty: promoteWarranty
+// (homeRecordsExtraction.service.ts) creates a new Warranty row on every
+// promotion with no check against an already-existing one for the same
+// property and category, so two document uploads for the same coverage
+// silently produce two diverging records with no signal either is stale,
+// duplicate, or wrong. Live-correlated on every read (like rule 1's
+// inspection/warranty rule and rule 6's recurring-failure enrichment) —
+// two or more active warranties in the same category are a conflict when
+// they disagree on provider or their expiry dates differ by more than the
+// tolerance below; the CTA routes to Property Context's own registered
+// correction path for warranties (factCatalog.ts's coverage.warranties
+// entry), tying the detection back to the canonical correction surface
+// HI-DOC-004 names even though the detection itself lives here, not in
+// Property Context's fact-candidate machinery (which — like
+// InsurancePolicy's fact-level system — has no per-warranty-field
+// granularity to hook into).
+const WARRANTY_EXPIRY_CONFLICT_TOLERANCE_DAYS = 30;
+
+async function loadWarrantyConflictActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.warranty) return [];
+  const now = evaluatedAt ?? new Date();
+  const warranties = await db.warranty.findMany({
+    where: { propertyId, expiryDate: { gte: now } },
+    select: { id: true, category: true, providerName: true, expiryDate: true, updatedAt: true },
+  });
+
+  const byCategory = new Map<string, typeof warranties>();
+  for (const warranty of warranties) {
+    // OTHER is a catch-all category — two OTHER-category warranties aren't
+    // necessarily "the same coverage" the way two ROOFING warranties are,
+    // so grouping them would risk a false-positive conflict.
+    if (warranty.category === 'OTHER') continue;
+    const group = byCategory.get(warranty.category) ?? [];
+    group.push(warranty);
+    byCategory.set(warranty.category, group);
+  }
+
+  const actions: HomeAction[] = [];
+  for (const [category, group] of byCategory) {
+    if (group.length < 2) continue;
+    const providers = [...new Set(group.map((warranty) => warranty.providerName))];
+    const expiryTimes = group.map((warranty) => warranty.expiryDate.getTime());
+    const expirySpreadDays = (Math.max(...expiryTimes) - Math.min(...expiryTimes)) / (24 * 60 * 60 * 1000);
+    const conflicting = providers.length > 1 || expirySpreadDays > WARRANTY_EXPIRY_CONFLICT_TOLERANCE_DAYS;
+    if (!conflicting) continue;
+
+    const sorted = [...group].sort((left, right) => left.id.localeCompare(right.id));
+    const groupHash = createHash('sha256').update(sorted.map((warranty) => warranty.id).join('|')).digest('hex');
+    const sourceVersion = createHash('sha256')
+      .update(sorted.map((warranty) => `${warranty.id}:${warranty.updatedAt.toISOString()}`).join('|'))
+      .digest('hex');
+    const categoryLabel = category.toLowerCase().replace(/_/g, ' ');
+    const providerList = providers.join(', ');
+
+    actions.push(adaptHomeActionSource('SYSTEM', {
+      id: `warranty-conflict:${groupHash}`,
+      propertyId,
+      lineageId: `warranty-conflict:${propertyId}:${category}`,
+      sourceEntityId: groupHash,
+      sourceVersion,
+      state: 'OPEN',
+      priority: 'SOON',
+      signal: `${sorted.length} active ${categoryLabel} warranties on file may conflict`,
+      whyItMatters: `This property has ${sorted.length} active warranties recorded in the same category (${categoryLabel}) from ${providerList}, with expiry dates spanning ${Math.round(expirySpreadDays)} days. This may be a duplicate upload, an outdated record that was never removed, or genuinely separate coverage — worth confirming which is current before relying on either for a claim.`,
+      recommendedAction: 'Review these warranty records and remove or correct whichever is outdated or duplicated.',
+      expectedOutcome: 'Only the current, correct warranty record remains active for this coverage category.',
+      timing: {
+        dueAt: null,
+        windowStart: null,
+        windowEnd: null,
+        rationale: 'Advisory — not tied to a specific deadline, but resolving it avoids relying on a stale or duplicate coverage record.',
+      },
+      evidence: sorted.map((warranty) => ({
+        id: warranty.id,
+        type: 'PROPERTY_FACT' as const,
+        label: `${categoryLabel} warranty — ${warranty.providerName}, expires ${warranty.expiryDate.toISOString().slice(0, 10)}`,
+        source: 'Warranty record',
+        observedAt: warranty.updatedAt.toISOString(),
+        freshness: 'CURRENT' as const,
+        confidence: 1,
+      })),
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 0.7, label: confidenceLabel(0.7), missing: [] },
+      governance: lowConsequenceGovernance('warranty-conflict-v1'),
+      primaryCta: {
+        kind: 'CORRECT_FACT',
+        label: 'Review warranty records',
+        href: '/dashboard/warranties',
+      },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: sorted[0].updatedAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    }));
+  }
+
+  return actions;
+}
+
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 6
+// (HI-DOC-004) — the Expense-side counterpart, scoped narrowly and
+// deliberately differently from Warranty's: expenses are discrete
+// historical transactions, so several rows in the same category is
+// normal, not a conflict. What genuinely can go wrong is the same receipt
+// getting promoted twice (e.g. the homeowner uploads it again, or
+// promotes two near-identical extractions) — an exact-amount match within
+// a short date window is a real duplicate-entry signal, not "a second,
+// different opinion about the same fact" the way Warranty/InsurancePolicy
+// conflicts are.
+const EXPENSE_DUPLICATE_DATE_TOLERANCE_DAYS = 3;
+
+async function loadExpenseDuplicateActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.expense) return [];
+  const now = evaluatedAt ?? new Date();
+  const expenses = await db.expense.findMany({
+    where: { propertyId },
+    select: { id: true, description: true, category: true, amount: true, transactionDate: true, updatedAt: true },
+    orderBy: { transactionDate: 'desc' },
+    take: 200,
+  });
+
+  const used = new Set<string>();
+  const actions: HomeAction[] = [];
+  for (let i = 0; i < expenses.length; i += 1) {
+    if (used.has(expenses[i].id)) continue;
+    const group = [expenses[i]];
+    for (let j = i + 1; j < expenses.length; j += 1) {
+      if (used.has(expenses[j].id)) continue;
+      const sameAmount = Number(expenses[i].amount) === Number(expenses[j].amount);
+      const dayDelta = Math.abs(expenses[i].transactionDate.getTime() - expenses[j].transactionDate.getTime()) / (24 * 60 * 60 * 1000);
+      if (sameAmount && dayDelta <= EXPENSE_DUPLICATE_DATE_TOLERANCE_DAYS) group.push(expenses[j]);
+    }
+    if (group.length < 2) continue;
+    group.forEach((expense) => used.add(expense.id));
+
+    const sorted = [...group].sort((left, right) => left.id.localeCompare(right.id));
+    const groupHash = createHash('sha256').update(sorted.map((expense) => expense.id).join('|')).digest('hex');
+    const sourceVersion = createHash('sha256')
+      .update(sorted.map((expense) => `${expense.id}:${expense.updatedAt.toISOString()}`).join('|'))
+      .digest('hex');
+    const amountLabel = formatHomeActionCurrency(Number(sorted[0].amount));
+
+    actions.push(adaptHomeActionSource('SYSTEM', {
+      id: `expense-duplicate:${groupHash}`,
+      propertyId,
+      lineageId: `expense-duplicate:${groupHash}`,
+      sourceEntityId: groupHash,
+      sourceVersion,
+      state: 'OPEN',
+      priority: 'PLAN',
+      signal: `${sorted.length} expenses of ${amountLabel} recorded within ${EXPENSE_DUPLICATE_DATE_TOLERANCE_DAYS} days of each other`,
+      whyItMatters: `These ${sorted.length} expense records share the same amount (${amountLabel}) and were logged within a few days of each other — a likely duplicate entry (e.g. the same receipt uploaded twice) rather than two separate transactions.`,
+      recommendedAction: 'Review these expense records and remove whichever is a duplicate.',
+      expectedOutcome: 'Only one expense record remains for this transaction.',
+      timing: {
+        dueAt: null,
+        windowStart: null,
+        windowEnd: null,
+        rationale: 'Advisory — not tied to a specific deadline, but resolving it keeps expense totals accurate.',
+      },
+      evidence: sorted.map((expense) => ({
+        id: expense.id,
+        type: 'PROPERTY_FACT' as const,
+        label: `${expense.description} — ${amountLabel} on ${expense.transactionDate.toISOString().slice(0, 10)}`,
+        source: 'Expense record',
+        observedAt: expense.updatedAt.toISOString(),
+        freshness: 'CURRENT' as const,
+        confidence: 0.7,
+      })),
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 0.7, label: confidenceLabel(0.7), missing: [] },
+      governance: lowConsequenceGovernance('expense-duplicate-v1'),
+      primaryCta: {
+        kind: 'CORRECT_FACT',
+        label: 'Review expense records',
+        href: '/dashboard/expenses',
+      },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: sorted[0].updatedAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    }));
+  }
+
+  return actions;
+}
+
 async function loadPersonalizationActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
   const now = new Date();
   const recommendations = await db.personalizedRecommendation.findMany({
@@ -4735,6 +4926,8 @@ export async function getPromotedHomeActions(
     loadCoverageRenewalActions(propertyId, db, options.evaluatedAt),
     loadRiskMitigationActions(propertyId, db, options.evaluatedAt),
     loadInsurancePolicyFactConflictActions(propertyId, db, options.evaluatedAt),
+    loadWarrantyConflictActions(propertyId, db, options.evaluatedAt),
+    loadExpenseDuplicateActions(propertyId, db, options.evaluatedAt),
     loadHealthInsightActions(propertyId, db, options.evaluatedAt),
     loadCompoundRadarInsightActions(propertyId, db, options.evaluatedAt),
     loadRepairReplaceDecisionActions(propertyId, db, options.evaluatedAt),

@@ -8,6 +8,7 @@ const {
 } = require('../../src/services/intelligence/extractionEnvelope.contract.ts');
 const {
   documentInsightsToExtractionEnvelope,
+  materialPhotoInsightsToExtractionEnvelope,
   DOCUMENT_INTELLIGENCE_EXTRACTOR_ID,
 } = require('../../src/services/documentIntelligenceExtractionEnvelope.adapter.ts');
 
@@ -124,4 +125,32 @@ test('undefined/null extractedData fields are excluded from the envelope\'s fiel
   }));
   assert.equal(envelope.fields.length, 1);
   assert.equal(envelope.fields[0].fieldKey, 'manufacturer');
+});
+
+// materialPhotoInsightsToExtractionEnvelope — Phase 5 work item 4.
+
+test('a material photo result with real candidate fields maps to a PARSED envelope', () => {
+  const envelope = materialPhotoInsightsToExtractionEnvelope({
+    candidateFields: { manufacturer: 'Sherwin-Williams', colorCode: 'SW 7008' },
+    confidence: 0.7,
+  });
+  assert.equal(envelope.parseStatus, 'PARSED');
+  assert.equal(envelope.candidateEntityType, 'MATERIAL_SPEC');
+  assert.equal(envelope.fields.length, 2);
+  assert.ok(envelope.fields.some((f) => f.fieldKey === 'colorCode' && f.value === 'SW 7008'));
+  assert.equal(envelope.overallConfidence, 0.7);
+  assert.deepEqual(envelope.warnings, []);
+  assert.equal(validateExtractionEnvelope(envelope).length, 0);
+});
+
+test('a material photo result with no candidate fields maps to FALLBACK_UNSTRUCTURED, not FAILED or PARSED', () => {
+  // analyzeMaterialPhoto's own catch block returns this exact shape for
+  // both a genuine parse failure and "nothing visible on the label" — the
+  // adapter must not overclaim either one.
+  const envelope = materialPhotoInsightsToExtractionEnvelope({ candidateFields: {}, confidence: 0 });
+  assert.equal(envelope.parseStatus, 'FALLBACK_UNSTRUCTURED');
+  assert.equal(envelope.fields.length, 0);
+  assert.equal(envelope.overallConfidence, null);
+  assert.equal(envelope.warnings.length, 1);
+  assert.equal(validateExtractionEnvelope(envelope).length, 0);
 });

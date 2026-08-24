@@ -43,6 +43,15 @@ export interface ExtractionEnvelope {
   parseStatus: ExtractionParseStatus;
   warnings: readonly string[];
   extractedAt: string;
+  /**
+   * True for an extractor that produces zero-or-more distinct candidate
+   * records from one call (e.g. inspection findings) rather than fields
+   * for exactly one record. A batch extractor's PARSED status legitimately
+   * carries zero fields (nothing found is a valid outcome, not a bug) —
+   * see validateExtractionEnvelope's PARSED/fields check. Defaults to
+   * false (single-entity) when omitted.
+   */
+  isBatch?: boolean;
 }
 
 export function validateExtractionEnvelope(envelope: ExtractionEnvelope): string[] {
@@ -53,7 +62,7 @@ export function validateExtractionEnvelope(envelope: ExtractionEnvelope): string
   if (!EXTRACTION_PARSE_STATUSES.includes(envelope.parseStatus)) {
     issues.push(`ExtractionEnvelope has an unknown parseStatus "${envelope.parseStatus}".`);
   }
-  if (envelope.parseStatus === 'PARSED' && envelope.fields.length === 0) {
+  if (envelope.parseStatus === 'PARSED' && envelope.fields.length === 0 && !envelope.isBatch) {
     issues.push('ExtractionEnvelope reports PARSED but declares no candidate fields.');
   }
   if (envelope.parseStatus === 'FAILED' && envelope.fields.length > 0) {

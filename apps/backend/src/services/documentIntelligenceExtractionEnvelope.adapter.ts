@@ -74,3 +74,44 @@ export function documentInsightsToExtractionEnvelope(
     extractedAt: (meta.extractedAt ?? new Date()).toISOString(),
   };
 }
+
+// Home Intelligence Functional Completeness FRD Phase 5 work item 4 —
+// wraps documentIntelligenceService.analyzeMaterialPhoto()'s output
+// (materialSpec.service.ts's runPhotoExtraction) into the same
+// ExtractionEnvelope contract. analyzeMaterialPhoto returns { candidateFields,
+// confidence }, a different shape from DocumentInsights, so this is a
+// separate mapping rather than a shared code path with
+// documentInsightsToExtractionEnvelope — but unlike that adapter,
+// analyzeMaterialPhoto's own catch block makes "the AI response wasn't
+// valid JSON" and "the model genuinely found nothing on the label"
+// indistinguishable (both return { candidateFields: {}, confidence: 0 } —
+// see documentIntelligence.service.ts). Reporting either as FAILED would
+// overclaim a parse error that may not have happened, and reporting either
+// as PARSED would violate this contract's own "PARSED implies at least one
+// field" invariant — FALLBACK_UNSTRUCTURED is exactly the status this third
+// value exists for.
+export const MATERIAL_PHOTO_EXTRACTOR_ID = 'document-intelligence-gemini-material-photo';
+
+export function materialPhotoInsightsToExtractionEnvelope(
+  insights: { candidateFields: Record<string, string>; confidence: number },
+  meta: { documentId?: string | null; documentVersionId?: string | null; extractedAt?: Date } = {},
+): ExtractionEnvelope {
+  const fieldEntries = Object.entries(insights.candidateFields);
+  const parseStatus: ExtractionParseStatus = fieldEntries.length === 0 ? 'FALLBACK_UNSTRUCTURED' : 'PARSED';
+
+  return {
+    documentId: meta.documentId ?? null,
+    documentVersionId: meta.documentVersionId ?? null,
+    extractorId: MATERIAL_PHOTO_EXTRACTOR_ID,
+    extractorVersion: DOCUMENT_INTELLIGENCE_EXTRACTOR_VERSION,
+    modelId: DOCUMENT_INTELLIGENCE_MODEL_ID,
+    candidateEntityType: 'MATERIAL_SPEC',
+    fields: fieldEntries.map(([fieldKey, value]) => ({ fieldKey, value, confidence: insights.confidence })),
+    overallConfidence: parseStatus === 'PARSED' ? insights.confidence : null,
+    parseStatus,
+    warnings: parseStatus === 'FALLBACK_UNSTRUCTURED'
+      ? ['No fields could be read from this photo — the label may be unclear, or nothing matched the expected format.']
+      : [],
+    extractedAt: (meta.extractedAt ?? new Date()).toISOString(),
+  };
+}

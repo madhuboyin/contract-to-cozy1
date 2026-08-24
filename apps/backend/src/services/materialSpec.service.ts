@@ -1043,11 +1043,24 @@ export class MaterialSpecService {
     void (async () => {
       try {
         const { documentIntelligenceService } = require('./documentIntelligence.service') as typeof import('./documentIntelligence.service');
+        // Home Intelligence FRD Phase 5 work item 4 (HI-DOC-001) — the same
+        // ExtractionEnvelope contract homeRecordsExtraction.service.ts
+        // consumes, wrapping analyzeMaterialPhoto's own { candidateFields,
+        // confidence } shape. Gating on parseStatus === 'PARSED' is
+        // behaviorally identical to the prior direct
+        // Object.keys(...).length === 0 check — see the adapter's own
+        // header comment for why a photo with nothing readable reports
+        // FALLBACK_UNSTRUCTURED rather than PARSED or FAILED.
+        const { materialPhotoInsightsToExtractionEnvelope } = require('./documentIntelligenceExtractionEnvelope.adapter') as typeof import('./documentIntelligenceExtractionEnvelope.adapter');
         const insights = await documentIntelligenceService.analyzeMaterialPhoto(buffer, mimeType);
-        if (Object.keys(insights.candidateFields).length === 0) return;
+        const envelope = materialPhotoInsightsToExtractionEnvelope(insights, { documentId: null, documentVersionId: null });
+        if (envelope.parseStatus !== 'PARSED') return;
 
         const confidence = Object.fromEntries(
-          Object.keys(insights.candidateFields).map((key) => [key, insights.confidence]),
+          envelope.fields.map((field) => [field.fieldKey, field.confidence ?? 0]),
+        );
+        const candidateFields = Object.fromEntries(
+          envelope.fields.map((field) => [field.fieldKey, field.value]),
         );
         await prisma.materialExtractionReview.create({
           data: {
@@ -1055,7 +1068,7 @@ export class MaterialSpecService {
             propertyId,
             sourcePhotoKey: photoKey,
             extractionMethod: 'DOCUMENT_AI',
-            candidateFields: insights.candidateFields,
+            candidateFields,
             confidence,
           },
         });

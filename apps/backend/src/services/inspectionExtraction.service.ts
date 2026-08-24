@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { uploadPdfBuffer } from './storage/reportStorage';
 import { APIError } from '../middleware/error.middleware';
+import { inspectionExtractionToEnvelope } from './inspectionExtractionEnvelope.adapter';
 
 type HomeSystem =
   | 'ROOF' | 'EXTERIOR' | 'FOUNDATION' | 'BASEMENT_CRAWLSPACE' | 'STRUCTURAL'
@@ -69,7 +70,7 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   return data.text;
 }
 
-async function callGemini(pdfText: string): Promise<ExtractedFinding[]> {
+async function callGemini(pdfText: string): Promise<{ findings: ExtractedFinding[]; rawFindingCount: number }> {
   const ai = getGeminiClient();
   const model = 'gemini-1.5-flash';
 
@@ -108,7 +109,8 @@ async function callGemini(pdfText: string): Promise<ExtractedFinding[]> {
   const VALID_REC = new Set(['MONITOR','REPAIR','REPLACE','FURTHER_EVALUATION','SAFETY_IMMEDIATE']);
   const VALID_CONF = new Set(['HIGH','MEDIUM','LOW']);
 
-  return (parsed.findings as any[]).reduce<ExtractedFinding[]>((acc, f) => {
+  const rawFindings = parsed.findings as any[];
+  const findings = rawFindings.reduce<ExtractedFinding[]>((acc, f) => {
     if (!VALID_SYSTEMS.has(f.homeSystem)) return acc;
     if (!VALID_CONDITION.has(f.conditionRating)) f.conditionRating = 'FAIR';
     if (!VALID_SEVERITY.has(f.severity)) f.severity = 'MINOR';
@@ -131,6 +133,7 @@ async function callGemini(pdfText: string): Promise<ExtractedFinding[]> {
     });
     return acc;
   }, []);
+  return { findings, rawFindingCount: rawFindings.length };
 }
 
 export interface IngestArgs {
@@ -194,8 +197,21 @@ export async function ingestInspectionReport(
   let findingCount = 0;
   try {
     const pdfText = await extractPdfText(pdfBuffer);
-    const findings = await callGemini(pdfText);
+    const { findings, rawFindingCount } = await callGemini(pdfText);
     findingCount = findings.length;
+
+    // Home Intelligence FRD §8.7 (HI-DOC-001/HI-DOC-006), Phase 5 work item
+    // 5 — the same ExtractionEnvelope contract homeRecordsExtraction.
+    // service.ts and materialSpec.service.ts consume. Purely additive
+    // observability here: it does not change which findings get created
+    // or how the report status transitions, but it does surface the one
+    // case those existing fields can't distinguish on their own — the AI
+    // returning findings that all failed validation, which looks
+    // identical to a genuinely clean inspection from totalFindings alone.
+    const envelope = inspectionExtractionToEnvelope(findings, rawFindingCount, { documentVersionId: report.id });
+    if (envelope.warnings.length > 0) {
+      logger.warn({ reportId: report.id, warnings: envelope.warnings }, '[INSPECTION] Extraction envelope reported warnings');
+    }
 
     if (findings.length > 0) {
       await prisma.inspectionFinding.createMany({

@@ -26,9 +26,9 @@ test('the real registry reflects verified adapter status: 5 implemented, 4 missi
   assert.deepEqual(missing, ['CLAIM', 'INVENTORY', 'LOAN_ESTIMATE', 'PROPERTY_TAX']);
 });
 
-test('only INSURANCE_POLICY declares conflict detection today', () => {
-  const withConflictDetection = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.filter((e) => e.conflictDetection).map((e) => e.targetDomain);
-  assert.deepEqual(withConflictDetection, ['INSURANCE_POLICY']);
+test('WARRANTY, INSURANCE_POLICY, and EXPENSE declare conflict detection after Phase 5 work item 6', () => {
+  const withConflictDetection = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.filter((e) => e.conflictDetection).map((e) => e.targetDomain).sort();
+  assert.deepEqual(withConflictDetection, ['EXPENSE', 'INSURANCE_POLICY', 'WARRANTY']);
 });
 
 test('validateDocumentPromotionAdapterRegistry fails fast on a missing target domain', () => {
