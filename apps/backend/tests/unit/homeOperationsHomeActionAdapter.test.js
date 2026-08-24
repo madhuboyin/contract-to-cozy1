@@ -67,14 +67,48 @@ test('a PROJECT action gets a PROJECT subject using the real project id', () => 
   assert.equal(proposed.source.sourceType, 'PROJECT');
 });
 
-test('a COVERAGE action gets an INVENTORY_ITEM subject', () => {
+// Only orchestration.service.ts's coverage-gap detector (action id
+// prefixed COVERAGE_GAP::, built from a real relatedEntity.type ===
+// 'INVENTORY_ITEM') genuinely carries an inventory item id in
+// source.entityId — this is the one COVERAGE-kind shape that resolves to
+// an INVENTORY_ITEM subject.
+test('a genuine coverage-gap-detector action (COVERAGE_GAP:: id prefix) gets an INVENTORY_ITEM subject', () => {
   const action = actionFixture({
-    id: 'coverage-review:review-1',
+    id: 'COVERAGE_GAP::inventory-1',
     source: { kind: 'COVERAGE', entityId: 'inventory-1', version: 'v1' },
   });
   const proposed = proposeWorkItemFromHomeAction(action, 'property-1');
   assert.deepEqual(proposed.subject, { type: 'INVENTORY_ITEM', id: 'inventory-1' });
   assert.equal(proposed.obligationType, 'COVERAGE_ACTION');
+  assert.equal(proposed.occurrence.obligationSlug, 'coverage-gap');
+});
+
+// loadCoverageActions' source.entityId is a CoverageReview.id, and
+// loadCoverageRenewalActions' is a Warranty/InsurancePolicy.id — neither is
+// an inventory item id (an InsurancePolicy in particular may not identify
+// one at all). Both must fall back to a PROPERTY subject with a
+// record-specific obligationSlug rather than mint a nonsensical
+// INVENTORY_ITEM subject out of the wrong id.
+test('a coverage-review action (CoverageReview.id, not an inventory item id) gets a PROPERTY subject with a record-specific slug', () => {
+  const action = actionFixture({
+    id: 'coverage-review:review-1',
+    source: { kind: 'COVERAGE', entityId: 'review-1', version: 'v1' },
+  });
+  const proposed = proposeWorkItemFromHomeAction(action, 'property-1');
+  assert.deepEqual(proposed.subject, { type: 'PROPERTY', id: 'property-1' });
+  assert.equal(proposed.obligationType, 'COVERAGE_ACTION');
+  assert.equal(proposed.occurrence.obligationSlug, 'coverage-gap-review-1');
+});
+
+test('a coverage-renewal action (Warranty/InsurancePolicy.id, not an inventory item id) gets a PROPERTY subject with a record-specific slug', () => {
+  const action = actionFixture({
+    id: 'coverage-renewal:insurance:policy-1',
+    source: { kind: 'COVERAGE', entityId: 'policy-1', version: 'v1' },
+  });
+  const proposed = proposeWorkItemFromHomeAction(action, 'property-1');
+  assert.deepEqual(proposed.subject, { type: 'PROPERTY', id: 'property-1' });
+  assert.equal(proposed.obligationType, 'COVERAGE_ACTION');
+  assert.equal(proposed.occurrence.obligationSlug, 'coverage-gap-policy-1');
 });
 
 test('a GUIDANCE action with REGULATED_COVERAGE safety tier is treated as coverage-shaped', () => {
@@ -93,6 +127,23 @@ test('a non-coverage GUIDANCE action falls back to a PROPERTY subject, uniquenes
   assert.deepEqual(proposed.subject, { type: 'PROPERTY', id: 'property-1' });
   assert.equal(proposed.obligationType, 'DECISION');
   assert.equal(proposed.occurrence.obligationSlug, 'guidance-journey-1');
+});
+
+// Finding: loadRepairReplaceDecisionActions keys source.entityId to the
+// ReplaceRepairAnalysis id, not the journey — but a Booking launched from
+// that journey resolves origin via guidanceJourneyId, keyed to the
+// journey's own id. Without preferring relatedJourneyId, the two would
+// never converge on the same work item.
+test('a GUIDANCE action whose entityId diverges from its relatedJourneyId (e.g. repair/replace) keys its obligation on the journey, not the entityId', () => {
+  const action = actionFixture({
+    id: 'repair-replace:analysis-1',
+    source: { kind: 'GUIDANCE', entityId: 'analysis-1', version: 'v1' },
+    relatedJourneyId: 'journey-42',
+  });
+  const proposed = proposeWorkItemFromHomeAction(action, 'property-1');
+  assert.deepEqual(proposed.subject, { type: 'PROPERTY', id: 'property-1' });
+  assert.equal(proposed.obligationType, 'DECISION');
+  assert.equal(proposed.occurrence.obligationSlug, 'guidance-journey-42', 'must match whatever obligationSlug a Booking resolved via guidanceJourneyId=journey-42 would key to');
 });
 
 test('MAINTENANCE, INCIDENT, and RECALL all resolve to a PROPERTY subject with a distinguishing slug', () => {

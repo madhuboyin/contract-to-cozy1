@@ -17,9 +17,10 @@ function makeFakeTx() {
   const workExecutions = new Map(); // key: `${workItemId}:${executionType}:${executionEntityId}`
   const guidanceJourneys = new Map();
   const priceFinalizations = new Map();
+  const bookings = new Map();
 
   const tx = {
-    __store: { workItems, workSources, workEvents, workExecutions, guidanceJourneys, priceFinalizations },
+    __store: { workItems, workSources, workEvents, workExecutions, guidanceJourneys, priceFinalizations, bookings },
     $queryRaw: async () => [],
     operationalWorkItem: {
       findUnique: async ({ where }) => {
@@ -149,6 +150,15 @@ function makeFakeTx() {
     priceFinalization: {
       findUnique: async ({ where }) => priceFinalizations.get(where.id) ?? null,
     },
+    booking: {
+      findMany: async ({ where }) => {
+        return [...bookings.values()].filter((b) => {
+          if (where.id?.in && !where.id.in.includes(b.id)) return false;
+          if (where.status?.not && b.status === where.status.not) return false;
+          return true;
+        });
+      },
+    },
   };
 
   return tx;
@@ -205,11 +215,12 @@ test('resolveOriginatingWorkItem: an originWorkItemId for a different property f
   assert.equal(resolution.method, 'STANDALONE');
 });
 
-test('resolveOriginatingWorkItem: an originWorkItemId already linked to another booking falls through', async () => {
+test('resolveOriginatingWorkItem: an originWorkItemId already linked to another ACTIVE booking falls through', async () => {
   const tx = makeFakeTx();
   const item = await tx.operationalWorkItem.create({
     data: { propertyId: 'property-1', workKey: 'k1', subjectType: 'PROPERTY', subjectId: 'property-1', obligationType: 'DECISION', priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE', title: 't', homeownerReason: 'r', expectedOutcome: 'o', state: 'CANDIDATE' },
   });
+  tx.__store.bookings.set('other-booking', { id: 'other-booking', status: 'CONFIRMED' });
   await tx.operationalWorkExecution.upsert({
     where: { workItemId_executionType_executionEntityId: { workItemId: item.id, executionType: 'BOOKING', executionEntityId: 'other-booking' } },
     create: { workItemId: item.id, executionType: 'BOOKING', executionEntityId: 'other-booking', role: 'PRIMARY', responsibleParty: 'UNKNOWN' },
@@ -217,6 +228,26 @@ test('resolveOriginatingWorkItem: an originWorkItemId already linked to another 
   });
   const resolution = await resolveOriginatingWorkItem(tx, { propertyId: 'property-1', originWorkItemId: item.id });
   assert.equal(resolution.method, 'STANDALONE');
+});
+
+// Finding: explicit lineage previously rejected reuse for ANY existing
+// execution row, even one belonging to a CANCELLED booking (retained only
+// as history). A replacement booking for the same obligation must be able
+// to reuse the work item.
+test('resolveOriginatingWorkItem: an originWorkItemId whose only linked booking is CANCELLED is reusable (replacement booking)', async () => {
+  const tx = makeFakeTx();
+  const item = await tx.operationalWorkItem.create({
+    data: { propertyId: 'property-1', workKey: 'k1', subjectType: 'PROPERTY', subjectId: 'property-1', obligationType: 'DECISION', priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE', title: 't', homeownerReason: 'r', expectedOutcome: 'o', state: 'CANDIDATE' },
+  });
+  tx.__store.bookings.set('cancelled-booking', { id: 'cancelled-booking', status: 'CANCELLED' });
+  await tx.operationalWorkExecution.upsert({
+    where: { workItemId_executionType_executionEntityId: { workItemId: item.id, executionType: 'BOOKING', executionEntityId: 'cancelled-booking' } },
+    create: { workItemId: item.id, executionType: 'BOOKING', executionEntityId: 'cancelled-booking', role: 'PRIMARY', responsibleParty: 'UNKNOWN' },
+    update: {},
+  });
+  const resolution = await resolveOriginatingWorkItem(tx, { propertyId: 'property-1', originWorkItemId: item.id });
+  assert.equal(resolution.method, 'EXPLICIT_LINEAGE');
+  assert.equal(resolution.workItem.id, item.id);
 });
 
 test('resolveOriginatingWorkItem: a matching guidanceJourneyId resolves via GUIDANCE_JOURNEY', async () => {
@@ -231,6 +262,28 @@ test('resolveOriginatingWorkItem: a matching guidanceJourneyId resolves via GUID
   const resolution = await resolveOriginatingWorkItem(tx, { propertyId: 'property-1', guidanceJourneyId: 'journey-1' });
   assert.equal(resolution.method, 'GUIDANCE_JOURNEY');
   assert.equal(resolution.workItem.id, item.id);
+});
+
+// Finding: guidance-derived resolution previously applied no
+// active-booking check at all, unlike explicit lineage — risking silently
+// double-linking a work item that already has an active booking.
+test('resolveOriginatingWorkItem: a matching guidanceJourneyId with an already-ACTIVE booking execution does not reuse the work item', async () => {
+  const tx = makeFakeTx();
+  tx.__store.guidanceJourneys.set('journey-1', { id: 'journey-1', propertyId: 'property-1', journeyTypeKey: 'asset_lifecycle_resolution', inventoryItemId: null, status: 'ACTIVE' });
+  const { resolveGuidanceJourneyWorkKey } = require('../../src/modules/homeOperations/adapters/homeActionWorkItem.adapter.ts');
+  const workKey = resolveGuidanceJourneyWorkKey({ propertyId: 'property-1', journeyId: 'journey-1', journeyTypeKey: 'asset_lifecycle_resolution', inventoryItemId: null });
+  const item = await tx.operationalWorkItem.create({
+    data: { propertyId: 'property-1', workKey, subjectType: 'PROPERTY', subjectId: 'property-1', obligationType: 'DECISION', priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE', title: 't', homeownerReason: 'r', expectedOutcome: 'o', state: 'CANDIDATE' },
+  });
+  tx.__store.bookings.set('other-booking', { id: 'other-booking', status: 'CONFIRMED' });
+  await tx.operationalWorkExecution.upsert({
+    where: { workItemId_executionType_executionEntityId: { workItemId: item.id, executionType: 'BOOKING', executionEntityId: 'other-booking' } },
+    create: { workItemId: item.id, executionType: 'BOOKING', executionEntityId: 'other-booking', role: 'PRIMARY', responsibleParty: 'UNKNOWN' },
+    update: {},
+  });
+
+  const resolution = await resolveOriginatingWorkItem(tx, { propertyId: 'property-1', guidanceJourneyId: 'journey-1' });
+  assert.equal(resolution.method, 'STANDALONE');
 });
 
 test('resolveOriginatingWorkItem: a maintenancePredictionId never matches anything today (no producer sets that sourceEntityId)', async () => {
@@ -397,6 +450,34 @@ test('reconcileBookingCancelled: a reused SCHEDULED item with an active independ
   assert.equal(cancelEvent.payload.originResolution, 'GUIDANCE_JOURNEY');
   assert.equal(cancelEvent.payload.cancellationReason, 'test cancellation');
   assert.equal(cancelEvent.payload.cancellationActorUserId, 'user-1');
+  assert.equal(cancelEvent.payload.independentObligationRemained, true);
+});
+
+// Finding: a reused work item that survives cancellation but was still
+// ACCEPTED (never SCHEDULED/IN_PROGRESS) previously got no
+// EXECUTION_CANCELLED event at all — only transitionWorkItem's own
+// transition writes one, and ACCEPTED -> ACCEPTED isn't a transition.
+test('reconcileBookingCancelled: a reused ACCEPTED item with an active independent source stays ACCEPTED but still records EXECUTION_CANCELLED', async () => {
+  const tx = makeFakeTx();
+  const candidate = await tx.operationalWorkItem.create({
+    data: { propertyId: 'property-1', workKey: 'k1', subjectType: 'PROPERTY', subjectId: 'property-1', obligationType: 'DECISION', priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE', title: 't', homeownerReason: 'r', expectedOutcome: 'o', state: 'CANDIDATE', acceptanceState: 'PROPOSED' },
+  });
+  await tx.operationalWorkSource.upsert({
+    where: { workItemId_sourceType_sourceEntityId_sourceRole: { workItemId: candidate.id, sourceType: 'GUIDANCE', sourceEntityId: 'journey-1', sourceRole: 'TRIGGER' } },
+    create: { workItemId: candidate.id, sourceType: 'GUIDANCE', sourceEntityId: 'journey-1', sourceRole: 'TRIGGER', sourceVersion: 'v1', active: true },
+    update: {},
+  });
+  const { onLifecycleEvent } = collectEvents();
+  const item = await reconcileBookingCreated(tx, booking(), { workItem: candidate, method: 'GUIDANCE_JOURNEY' }, onLifecycleEvent);
+  // Still ACCEPTED — never confirmed/scheduled before this cancellation.
+  assert.equal(item.state, 'ACCEPTED');
+
+  await reconcileBookingCancelled(tx, { id: 'booking-1' }, { reason: 'test cancellation', actorUserId: 'user-1' }, onLifecycleEvent);
+  const afterCancel = tx.__store.workItems.get(item.id);
+  assert.equal(afterCancel.state, 'ACCEPTED', 'no transition to make — state does not change');
+  const cancelEvent = [...tx.__store.workEvents.values()].find((e) => e.eventType === 'EXECUTION_CANCELLED' && e.workItemId === item.id);
+  assert.ok(cancelEvent, 'EXECUTION_CANCELLED must still be recorded even with no state transition');
+  assert.equal(cancelEvent.payload.priorState, 'ACCEPTED');
   assert.equal(cancelEvent.payload.independentObligationRemained, true);
 });
 

@@ -21,6 +21,7 @@ import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinanc
 import { analyticsEmitter } from './analytics';
 import { ProductAnalyticsEventType } from '@prisma/client';
 import { calculateHealthScore } from '../utils/propertyScore.util';
+import { createHash } from 'node:crypto';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -1661,6 +1662,21 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
   const applianceRecords = inventoryItems.filter((item) => item.category === 'APPLIANCE');
   const appliancesMissingInstallYear = applianceRecords.filter((item) => !item.installedOn);
 
+  // Deterministic sourceVersion (HI-ATT-007 stable-version requirement) —
+  // previously null, which stamped every evaluation as a fresh change
+  // regardless of whether the contributing facts actually moved.
+  // property.updatedAt already captures every scalar field
+  // calculateHealthScore reads (yearBuilt, dwellingType, roofType, install
+  // years, etc. — any change to those bumps it automatically); documentCount,
+  // activeBookings, and per-item installedOn/category are separate records
+  // that don't, so each is folded into the hash explicitly.
+  const healthInsightVersion = createHash('sha256').update(JSON.stringify({
+    propertyUpdatedAt: (property as any).updatedAt?.toISOString?.() ?? null,
+    documentCount,
+    activeBookingIds: activeBookings.map((b: any) => b.id).sort(),
+    items: inventoryItems.map((item) => `${item.id}:${item.category}:${item.installedOn?.toISOString() ?? ''}`).sort(),
+  })).digest('hex');
+
   const actions: HomeAction[] = [];
   const buildInsightAction = (params: {
     factorSlug: string;
@@ -1675,7 +1691,7 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
       propertyId,
       lineageId: `health-insight:${propertyId}:${params.factorSlug}`,
       sourceEntityId: propertyId,
-      sourceVersion: null,
+      sourceVersion: healthInsightVersion,
       state: 'OPEN',
       priority: 'PLAN',
       signal: params.title,

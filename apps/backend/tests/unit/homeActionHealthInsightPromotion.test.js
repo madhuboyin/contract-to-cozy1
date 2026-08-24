@@ -128,6 +128,36 @@ test('a missing property record produces no actions', async () => {
   assert.equal(actions.length, 0);
 });
 
+// Finding: sourceVersion was previously hardcoded null, stamping every
+// evaluation as a fresh change regardless of whether the contributing
+// property/inventory/document/booking facts actually moved (HI-ATT-007
+// stable-version requirement).
+test('sourceVersion is deterministic across two evaluations of identical inputs', async () => {
+  const property = baseProperty({
+    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: null }],
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  });
+  const db = stubSources({ property, documentCount: 3 });
+  const first = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+  const second = await getPromotedHomeActions('property-1', db, { evaluatedAt: new Date('2026-08-24T00:00:00.000Z'), includePersonalization: false });
+
+  assert.equal(first.actions.length, 1);
+  assert.equal(second.actions.length, 1);
+  assert.ok(first.actions[0].source.version, 'sourceVersion must not be null');
+  assert.equal(first.actions[0].source.version, second.actions[0].source.version, 'identical contributing facts must produce the identical version, even at a later evaluation time');
+});
+
+test('sourceVersion changes when a contributing fact (documentCount) changes', async () => {
+  const property = baseProperty({
+    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: null }],
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  });
+  const before = await getPromotedHomeActions('property-1', stubSources({ property, documentCount: 3 }), { evaluatedAt: NOW, includePersonalization: false });
+  const after = await getPromotedHomeActions('property-1', stubSources({ property, documentCount: 4 }), { evaluatedAt: NOW, includePersonalization: false });
+
+  assert.notEqual(before.actions[0].source.version, after.actions[0].source.version);
+});
+
 test('a db stub without property/document/booking tables does not throw and yields no health-insight actions', async () => {
   const db = {
     guidanceJourney: { findMany: async () => [] },

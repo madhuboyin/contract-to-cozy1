@@ -31,6 +31,26 @@ function isCoverageShaped(action: HomeAction): boolean {
 }
 
 /**
+ * Not every COVERAGE-kind action's source.entityId is actually an
+ * inventory item id, even though isCoverageShaped's INVENTORY_ITEM subject
+ * resolution previously assumed so unconditionally. Only
+ * orchestration.service.ts's coverage-gap detector (action id prefixed
+ * `COVERAGE_GAP::`, built from a real `relatedEntity.type === 'INVENTORY_ITEM'`)
+ * genuinely carries one. `loadCoverageActions` (homeActionSourcePromotion
+ * .service.ts, entityId = CoverageReview.id) and
+ * `loadCoverageRenewalActions` (entityId = Warranty.id or
+ * InsurancePolicy.id) do not — an InsurancePolicy in particular may not
+ * identify any inventory item at all, so treating its own record id as an
+ * item id built a nonsensical work-item subject. GUIDANCE/REGULATED_COVERAGE
+ * journeys are unaffected by this check — their entityId resolution has a
+ * separate, already-documented gap (see resolveGuidanceJourneyWorkKey's
+ * docblock), not touched here.
+ */
+function coverageActionHasInventoryItemSubject(action: HomeAction): boolean {
+  return action.source.kind === 'GUIDANCE' || action.id.startsWith('COVERAGE_GAP::');
+}
+
+/**
  * HomeAction carries only an overloaded source.entityId (sometimes a
  * journey id, sometimes a project id, sometimes already an inventory item
  * id) — not a clean typed subject for every source. Where the id is known
@@ -59,7 +79,10 @@ function resolveSubject(action: HomeAction, propertyId: string): WorkSubject {
     return { type: 'PROJECT', id: action.source.entityId };
   }
   if (isCoverageShaped(action)) {
-    return { type: 'INVENTORY_ITEM', id: action.source.entityId };
+    if (coverageActionHasInventoryItemSubject(action)) {
+      return { type: 'INVENTORY_ITEM', id: action.source.entityId };
+    }
+    return { type: 'PROPERTY', id: propertyId };
   }
   return { type: 'PROPERTY', id: propertyId };
 }
@@ -74,10 +97,29 @@ function resolveObligation(action: HomeAction): { obligationType: OperationalObl
     return { obligationType: 'PROJECT_EXECUTION', obligationSlug: 'execution' };
   }
   if (isCoverageShaped(action)) {
-    return { obligationType: 'COVERAGE_ACTION', obligationSlug: 'coverage-gap' };
+    // Item-scoped coverage gaps keep the shared 'coverage-gap' slug —
+    // uniqueness already comes from the INVENTORY_ITEM subject id. A
+    // PROPERTY-subject coverage action (see resolveSubject above) has no
+    // such subject-level uniqueness, so its slug must carry the record's
+    // own id instead, or two different reviews/renewals would collide into
+    // one work item.
+    return {
+      obligationType: 'COVERAGE_ACTION',
+      obligationSlug: coverageActionHasInventoryItemSubject(action) ? 'coverage-gap' : `coverage-gap-${action.source.entityId}`,
+    };
   }
   if (action.source.kind === 'GUIDANCE') {
-    return { obligationType: 'DECISION', obligationSlug: `guidance-${action.source.entityId}` };
+    // Prefer relatedJourneyId over source.entityId when both are set — a
+    // GUIDANCE action whose entityId diverges from its own journey (e.g.
+    // loadRepairReplaceDecisionActions keys entityId to the
+    // ReplaceRepairAnalysis id, not the journey) must still resolve to the
+    // SAME obligation a Booking launched from that journey resolves to
+    // (bookingWorkReconciliation.service.ts's guidanceJourneyId path keys
+    // off the journey, never the analysis). loadGuidanceActions already
+    // sets entityId === relatedJourneyId for every non-coverage-shaped
+    // journey (coverage-shaped ones never reach this branch — see
+    // isCoverageShaped above), so this is a no-op change for it.
+    return { obligationType: 'DECISION', obligationSlug: `guidance-${action.relatedJourneyId ?? action.source.entityId}` };
   }
   if (action.source.kind === 'MAINTENANCE') {
     return { obligationType: 'MAINTENANCE_TASK', obligationSlug: `maintenance-${action.source.entityId}` };

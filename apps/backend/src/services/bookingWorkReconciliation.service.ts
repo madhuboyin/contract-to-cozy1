@@ -6,7 +6,7 @@
 // (inventoryItemId, provider, service, category, executionScopeKey, and
 // free-text insight fields describe *what* the booking is about, not which
 // obligation it fulfills).
-import type { OperationalWorkItem, OperationalWorkSourceType } from '@prisma/client';
+import type { OperationalWorkItem, OperationalWorkSourceType, Prisma } from '@prisma/client';
 import type { WorkItemDb } from '../modules/homeOperations/infrastructure/workItemRepository';
 import {
   findWorkItemById,
@@ -53,6 +53,27 @@ export interface ResolveOriginatingWorkItemInput {
  * the whole booking; only an explicit `originWorkItemId` that turns out
  * invalid is worth distinguishing in the audit payload (still non-fatal).
  */
+// A work item is "already spoken for" only by an ACTIVE (non-CANCELLED)
+// Booking execution — a cancelled Booking's execution row is intentionally
+// retained as history, not evidence the obligation is currently fulfilled.
+// Applied identically to both lineage-resolution paths below: explicit
+// lineage previously rejected reuse for ANY existing execution (even a
+// cancelled one, wrongly blocking a legitimate replacement booking);
+// guidance-derived resolution previously ran no such check at all (risking
+// silently double-linking a work item that already has an active booking).
+async function hasActiveBookingExecution(tx: WorkItemDb, workItemId: string): Promise<boolean> {
+  const executions = await tx.operationalWorkExecution.findMany({
+    where: { workItemId, executionType: 'BOOKING' },
+    select: { executionEntityId: true },
+  });
+  if (executions.length === 0) return false;
+  const activeBookings = await tx.booking.findMany({
+    where: { id: { in: executions.map((e) => e.executionEntityId) }, status: { not: 'CANCELLED' } },
+    select: { id: true },
+  });
+  return activeBookings.length > 0;
+}
+
 export async function resolveOriginatingWorkItem(
   tx: WorkItemDb,
   input: ResolveOriginatingWorkItemInput,
@@ -69,10 +90,7 @@ export async function resolveOriginatingWorkItem(
       // Booking id), not by workItemId — checking "is this candidate work
       // item already spoken for" needs the reverse direction, queried
       // directly here.
-      const existingBookingExecutions = await tx.operationalWorkExecution.findMany({
-        where: { workItemId: candidate.id, executionType: 'BOOKING' },
-      });
-      if (existingBookingExecutions.length === 0) {
+      if (!(await hasActiveBookingExecution(tx, candidate.id))) {
         return { workItem: candidate, method: 'EXPLICIT_LINEAGE', suppliedOriginWorkItemId: input.originWorkItemId };
       }
     }
@@ -96,7 +114,7 @@ export async function resolveOriginatingWorkItem(
       const matches = await tx.operationalWorkItem.findMany({
         where: { propertyId: input.propertyId, workKey, state: { not: 'CLOSED' } },
       });
-      if (matches.length === 1) {
+      if (matches.length === 1 && !(await hasActiveBookingExecution(tx, matches[0].id))) {
         return {
           workItem: matches[0],
           method: 'GUIDANCE_JOURNEY',
@@ -284,11 +302,11 @@ async function requireSingleLinkedWorkItem(tx: WorkItemDb, bookingId: string): P
  * used for the survives-or-closes decision itself (that's the active-
  * independent-source check below); this is explanation only.
  */
-async function findExecutionLinkedOriginResolution(tx: WorkItemDb, workItemId: string, bookingId: string): Promise<unknown> {
+async function findExecutionLinkedOriginResolution(tx: WorkItemDb, workItemId: string, bookingId: string): Promise<Prisma.InputJsonValue | null> {
   const event = await tx.operationalWorkEvent.findUnique({
     where: { workItemId_idempotencyKey: { workItemId, idempotencyKey: `booking-linked:${bookingId}` } },
   });
-  return (event?.payload as { originResolution?: unknown } | null)?.originResolution ?? null;
+  return ((event?.payload as { originResolution?: Prisma.InputJsonValue } | null)?.originResolution) ?? null;
 }
 
 export async function reconcileBookingCancelled(
@@ -330,6 +348,23 @@ export async function reconcileBookingCancelled(
         eventTypeOverride: 'EXECUTION_CANCELLED',
         payload: basePayload,
       }, tx, onLifecycleEvent);
+    } else {
+      // The work item survives (an independent obligation remains) but was
+      // never SCHEDULED/IN_PROGRESS at cancellation time (e.g. still
+      // ACCEPTED) — no state transition to make, but HI-ATT-010's promise
+      // that cancellation always records an EXECUTION_CANCELLED event still
+      // applies. transitionWorkItem only fires on an actual transition, so
+      // write the event directly rather than force a same-state transition
+      // through applyTransition (which may not even allow a no-op edge).
+      const event = await recordWorkEvent({
+        workItemId: workItem.id,
+        eventType: 'EXECUTION_CANCELLED',
+        actorType: 'SYSTEM',
+        actorUserId: cancellation.actorUserId,
+        idempotencyKey: `booking-cancelled-rollback:${booking.id}`,
+        payload: basePayload,
+      }, tx);
+      if (event && onLifecycleEvent) await onLifecycleEvent(workItem, event);
     }
     // Remove Booking-owned scheduling context while preserving the
     // obligation's source-derived due window; leave the BOOKING execution

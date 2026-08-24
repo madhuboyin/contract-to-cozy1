@@ -2285,6 +2285,12 @@ export interface CreateBookingInput {
   sourceIncidentId?: string;
   sourceRadarActionCode?: string;
   sourceLaunchSurface?: 'home_event_radar';
+  // Home Intelligence Functional Completeness FRD HI-ATT-010: an explicit
+  // originating OperationalWorkItem for a canonical action/workflow launch
+  // (e.g. accepting a Home Action leads directly to booking a provider).
+  // Server-validated, never trusted blindly — see
+  // bookingWorkReconciliation.service.ts's resolveOriginatingWorkItem.
+  originWorkItemId?: string;
 }
 
 /**

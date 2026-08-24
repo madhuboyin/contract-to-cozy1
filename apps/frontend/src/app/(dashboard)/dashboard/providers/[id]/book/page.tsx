@@ -58,6 +58,7 @@ export default function BookProviderPage() {
   const insightFactor = searchParams.get('insightFactor');
   const insightContext = searchParams.get('insightContext');
   const maintenancePredictionId = searchParams.get('predictionId');
+  const originWorkItemId = searchParams.get('originWorkItemId');
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const inventoryItemId = searchParams.get('itemId') || guidanceContext.itemId;
   const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
@@ -377,6 +378,7 @@ export default function BookProviderPage() {
       ...(insightFactor && { insightFactor }),
       ...(insightContext && { insightContext }),
       ...(maintenancePredictionId && { maintenancePredictionId }),
+      ...(originWorkItemId && { originWorkItemId }),
       ...(inventoryItemId && { inventoryItemId }),
       ...(priceFinalizationId && { priceFinalizationId }),
       ...(guidanceJourneyId && { guidanceJourneyId }),
