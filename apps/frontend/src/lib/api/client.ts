@@ -3278,6 +3278,10 @@ class APIClient {
       reason?: string | null;
       nextTriggerAt?: string | null;
       consequenceAcknowledged?: boolean;
+      // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-002/003).
+      // Only meaningful for COMPLETE/ALREADY_DONE.
+      completionCostCents?: number | null;
+      completionObservedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
     },
   ) {
     return this.request<{
@@ -3286,6 +3290,7 @@ class APIClient {
       state: string;
       nextTriggerAt?: string | null;
       correctionHref?: string;
+      alreadyComplete?: boolean;
       recordedAt: string;
     }>(`/api/properties/${propertyId}/home-actions/${encodeURIComponent(actionId)}/commands`, {
       method: 'POST',

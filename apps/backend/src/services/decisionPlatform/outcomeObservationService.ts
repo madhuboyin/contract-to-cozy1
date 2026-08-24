@@ -204,7 +204,10 @@ export async function recordCompletedMaintenanceOutcome(
 interface RecordOperationalWorkOutcomeInput {
   propertyId: string;
   workItemId: string;
-  userId: string;
+  // null for a system-triggered completion (e.g. guidance journey
+  // completion hooks, which may run off a resolver step with no acting
+  // user), matching recordCompletedMaintenanceOutcome's own precedent.
+  userId: string | null;
   costCents: number | null;
   recommendationSnapshotId: string | null;
 }

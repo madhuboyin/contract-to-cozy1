@@ -38,6 +38,9 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -858,6 +861,71 @@ function AssetLifecycleFacts({ action }: { action: RankedHomeActionDTO }) {
   );
 }
 
+/**
+ * Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-002/003).
+ * MATERIAL_FINANCIAL completion requires a cost or observed result before
+ * the backend will accept it (completionEvidencePolicy.registry.ts) -- this
+ * is the minimum capture UI for that: a required cost field. Observed
+ * result isn't collected here since cost alone already satisfies the
+ * policy; a homeowner who wants to record a result instead can still use
+ * "Manage action".
+ */
+function CompleteMaterialWorkDialog({
+  open,
+  onOpenChange,
+  submitting,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  submitting: boolean;
+  onSubmit: (completion: { completionCostCents: number }) => void;
+}) {
+  const [costInput, setCostInput] = React.useState('');
+  const parsedCostCents = (() => {
+    const dollars = Number(costInput);
+    if (!costInput.trim() || !Number.isFinite(dollars) || dollars < 0) return null;
+    return Math.round(dollars * 100);
+  })();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Complete this work</DialogTitle>
+          <DialogDescription>Material work needs a recorded cost before it can be marked done.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="completion-cost">Cost ($)</Label>
+          <Input
+            id="completion-cost"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={costInput}
+            onChange={(event) => setCostInput(event.target.value)}
+            placeholder="0.00"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button
+            disabled={parsedCostCents === null || submitting}
+            onClick={() => {
+              if (parsedCostCents === null) return;
+              onSubmit({ completionCostCents: parsedCostCents });
+              setCostInput('');
+            }}
+          >
+            Mark done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ActionCard({
   action,
   propertyId,
@@ -873,8 +941,12 @@ export function ActionCard({
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
   const [manageOpen, setManageOpen] = React.useState(false);
   const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
+  const [completeDialogOpen, setCompleteDialogOpen] = React.useState(false);
 
-  const execute = async (command: HomeActionCommand) => {
+  const execute = async (
+    command: HomeActionCommand,
+    completion?: { completionCostCents?: number | null; completionObservedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null },
+  ) => {
     setPending(command);
     try {
       const nextTriggerAt = ['DEFER', 'SNOOZE'].includes(command)
@@ -884,6 +956,7 @@ export function ActionCard({
         command,
         nextTriggerAt,
         consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(command),
+        ...completion,
       });
       if (!response.success) throw new Error(response.message || 'Unable to update this action.');
       recordHomeActionFeedback(action, propertyId, command);
@@ -1019,7 +1092,13 @@ export function ActionCard({
           <Link href={primaryHref} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
         </Button>
         {action.feedbackControls.includes('COMPLETE') && (
-          <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute('COMPLETE')}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            disabled={Boolean(pending)}
+            onClick={() => (action.governance.safetyTier === 'MATERIAL_FINANCIAL' ? setCompleteDialogOpen(true) : execute('COMPLETE'))}
+          >
             <Check className="mr-1 h-3.5 w-3.5" />Mark done
           </Button>
         )}
@@ -1093,6 +1172,17 @@ export function ActionCard({
           open={manageOpen}
           onOpenChange={setManageOpen}
           onChanged={onChanged}
+        />
+      )}
+      {action.governance.safetyTier === 'MATERIAL_FINANCIAL' && (
+        <CompleteMaterialWorkDialog
+          open={completeDialogOpen}
+          onOpenChange={setCompleteDialogOpen}
+          submitting={pending === 'COMPLETE'}
+          onSubmit={(completion) => {
+            setCompleteDialogOpen(false);
+            void execute('COMPLETE', completion);
+          }}
         />
       )}
     </article>

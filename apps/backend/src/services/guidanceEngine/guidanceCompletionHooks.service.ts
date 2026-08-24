@@ -29,6 +29,8 @@ import { prisma } from '../../lib/prisma';
 import { invalidateStatusForInventoryItem } from '../homeStatusBoard.service';
 import { findAllWorkItemsLinkedToExecution, recordWorkEvent } from '../../modules/homeOperations/infrastructure/workItemRepository';
 import { transitionWorkItem } from '../../modules/homeOperations/application/transitionWorkItem.usecase';
+import { recordOperationalWorkOutcome } from '../decisionPlatform/outcomeObservationService';
+import { resolveHomeActionDecisionLineage } from '../decisionPlatform/homeActionDecisionLineage';
 
 const REPLACEMENT_VERDICTS = new Set(['REPLACE_NOW', 'REPLACE_SOON']);
 
@@ -110,6 +112,33 @@ export async function syncGuidanceWorkItemsOnCompletion(journeyId: string, actor
         to: 'VERIFIED',
         actorType: 'SYSTEM',
         idempotencyKey: `guidance-outcome-verified:${current.id}:${journeyId}`,
+      });
+
+      // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005/
+      // 006) — the guidance-journey completion path's own OutcomeObservation,
+      // mirroring the maintenance path (homeActionCompletion.service.ts).
+      // Attribution is attempted only for a repair/replace journey on an
+      // inventory item that resolves to a linked HVAC decision thread
+      // (Phase 3A) -- most guidance journeys aren't material decisions at
+      // all, so this stays best-effort rather than a hard requirement.
+      const journeyForOutcome = await prisma.guidanceJourney.findUnique({
+        where: { id: journeyId },
+        select: { inventoryItemId: true },
+      });
+      let recommendationSnapshotId: string | null = null;
+      if (journeyForOutcome?.inventoryItemId) {
+        const lineage = await resolveHomeActionDecisionLineage(current.propertyId, {
+          decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+          primaryEntityId: journeyForOutcome.inventoryItemId,
+        }).catch(() => null);
+        if (lineage?.status === 'LINKED') recommendationSnapshotId = lineage.thread.currentRecommendationSnapshotId;
+      }
+      await recordOperationalWorkOutcome({
+        propertyId: current.propertyId,
+        workItemId: current.id,
+        userId: actorUserId ?? null,
+        costCents: null,
+        recommendationSnapshotId,
       });
     }
   }

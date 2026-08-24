@@ -77,7 +77,7 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only. No fixed id prefix.',
+    notes: 'ACKNOWLEDGE only via executeHomeActionCommand (COMMAND path has no completion adapter here). No fixed id prefix. Home Intelligence FRD Phase 4: a guidance journey\'s own completion (runJourneyCompletionHooks -> syncGuidanceWorkItemsOnCompletion, guidanceCompletionHooks.service.ts) now creates an OutcomeObservation when its work item reaches VERIFIED -- a genuine outcome adapter, just not one reachable through this producer\'s Home Action command surface, so hasCompletionAdapter/hasOutcomeAdapter stay false here per this table\'s command-path framing.',
   },
   {
     producerId: 'loadIncidentActions',
@@ -247,7 +247,7 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only.',
+    notes: 'ACKNOWLEDGE only via executeHomeActionCommand. Home Intelligence FRD Phase 4: a project\'s own verified completion (syncJourneyWorkItemForProjectEvent / syncProjectExecutionWorkItemOnCompletion, projectWorkItemReconciliation.service.ts) now creates an OutcomeObservation when its work item reaches VERIFIED, same command-path caveat as loadGuidanceActions above.',
   },
   {
     producerId: 'loadSalePrepActions',

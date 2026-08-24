@@ -9,6 +9,8 @@ import {
   linkWorkExecution,
 } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
+import { recordOperationalWorkOutcome } from './decisionPlatform/outcomeObservationService';
+import { resolveHomeActionDecisionLineage } from './decisionPlatform/homeActionDecisionLineage';
 
 /**
  * Worker-safe project lifecycle projection into Home Operations.
@@ -17,6 +19,44 @@ import { recordReconciliationFailure } from '../modules/homeOperations/infrastru
  * boundary. The worker can replay failed projections without importing the
  * route-oriented projectTracker.service and its large HTTP/service graph.
  */
+// Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005/006) —
+// mirrors guidanceCompletionHooks.service.ts's own outcome creation for a
+// project that was handed off from a guidance journey's DECISION obligation.
+// Best-effort: an outcome-recording failure must never block the project/
+// work-item reconciliation that already succeeded above it.
+async function recordProjectHandoffOutcome(
+  propertyId: string,
+  workItemId: string,
+  guidanceJourneyId: string | null | undefined,
+  actorUserId: string | null,
+): Promise<void> {
+  try {
+    let recommendationSnapshotId: string | null = null;
+    if (guidanceJourneyId) {
+      const journey = await prisma.guidanceJourney.findUnique({
+        where: { id: guidanceJourneyId },
+        select: { inventoryItemId: true },
+      });
+      if (journey?.inventoryItemId) {
+        const lineage = await resolveHomeActionDecisionLineage(propertyId, {
+          decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+          primaryEntityId: journey.inventoryItemId,
+        }).catch(() => null);
+        if (lineage?.status === 'LINKED') recommendationSnapshotId = lineage.thread.currentRecommendationSnapshotId;
+      }
+    }
+    await recordOperationalWorkOutcome({
+      propertyId,
+      workItemId,
+      userId: actorUserId,
+      costCents: null,
+      recommendationSnapshotId,
+    });
+  } catch (err) {
+    logger.warn({ err, propertyId, workItemId }, 'Project handoff outcome recording failed; work item verification proceeds regardless');
+  }
+}
+
 export async function resolveJourneyWorkKey(propertyId: string, journeyId: string): Promise<string> {
   const journey = await prisma.guidanceJourney.findUnique({
     where: { id: journeyId },
@@ -109,6 +149,7 @@ export async function syncJourneyWorkItemForProjectEvent(
           actorType: 'SYSTEM',
           idempotencyKey: `project-verified:${workItem.id}:${projectId}`,
         });
+        await recordProjectHandoffOutcome(propertyId, workItem.id, guidanceJourneyId, actorUserId);
       }
       const now = new Date();
       const completedJourney = await prisma.guidanceJourney.updateMany({
@@ -195,6 +236,7 @@ export async function syncProjectExecutionWorkItemOnCompletion(
           actorType: 'SYSTEM',
           idempotencyKey: `project-execution-verified:${workItem.id}:${projectId}`,
         });
+        await recordProjectHandoffOutcome(propertyId, workItem.id, null, null);
       }
       return;
     }

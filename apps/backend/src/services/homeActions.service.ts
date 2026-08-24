@@ -705,17 +705,17 @@ async function appendAcceptedOperationalWork(
     const primaryExecution = item.executions.find((entry) => entry.role === 'PRIMARY') ?? item.executions[0];
     // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-002).
     // Only a maintenance-backed item routes to a real completion adapter
-    // this slice (see homeActionCompletion.service.ts). The one-click "Mark
-    // done" control is offered only when the policy permits attestation
-    // alone (LOW_CONSEQUENCE) -- this card has no cost/result capture UI
-    // yet, so MATERIAL_FINANCIAL (attestation REQUIRED plus cost/result) and
+    // this slice (see homeActionCompletion.service.ts). The "Mark done"
+    // control is offered whenever the policy allows attestation at all
+    // (LOW_CONSEQUENCE and MATERIAL_FINANCIAL) -- the frontend collects
+    // cost/observed-result before submitting when the policy requires it.
     // REGULATED_COVERAGE/SAFETY_EMERGENCY (attestation INSUFFICIENT) keep
     // using the existing "Manage action" evidence drawer instead of a
     // control that would only reject the request server-side.
     const completionEvidencePolicy = COMPLETION_EVIDENCE_POLICY.find((entry) => entry.safetyTier === item.safetyTier);
     const completionEligible = primaryExecution?.executionType === 'MAINTENANCE_TASK' &&
       item.state !== 'REPORTED_COMPLETE' &&
-      completionEvidencePolicy?.attestation === 'PERMITTED';
+      completionEvidencePolicy?.attestation !== 'INSUFFICIENT';
     const sourceKind: HomeAction['source']['kind'] = primaryExecution?.executionType === 'PROJECT'
       ? 'PROJECT'
       : primaryExecution?.executionType === 'GUIDANCE'
