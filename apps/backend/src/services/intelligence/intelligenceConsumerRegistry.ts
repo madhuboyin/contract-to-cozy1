@@ -5,6 +5,9 @@ import { generateForecast } from '../maintenancePrediction.service';
 import { materializeRecommendationsForProperty } from '../../modules/personalization/application/materializeRecommendations.usecase';
 import { getSnapshotsReferencingFact } from '../decisionPlatform/homeIntelligenceGraph';
 import { markThreadsStaleByIds } from '../decisionPlatform/decisionThreadService';
+import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
+import { refreshSaleReadinessForRecompute } from '../propertySaleCase.service';
+import { generateDueHomeBriefings } from '../../homeBriefing/homeBriefing.service';
 
 /**
  * Home Intelligence Functional Completeness FRD §15 Phase 2 work item 4 —
@@ -12,44 +15,60 @@ import { markThreadsStaleByIds } from '../decisionPlatform/decisionThreadService
  * slice (intelligenceRecompute.service.ts). §15's "initial high-value
  * consumers" list names 10: Home Actions, compound Radar, risk, coverage,
  * maintenance prediction, sale readiness, personalization, capability
- * suggestions, Recommendation Snapshots, and Home Briefing. This registry
- * populates 5 of those 10 for real, and documents — rather than fakes —
- * why the other 5 aren't registered yet:
+ * suggestions, Recommendation Snapshots, and Home Briefing.
+ *
+ * A first pass registered 5 (compound Radar, risk, maintenance prediction,
+ * personalization, Recommendation Snapshots) and deferred coverage, sale
+ * readiness, and Home Briefing over a userId/role mismatch: a recompute
+ * handler only receives `{propertyId, target}`, and each of those three's
+ * obvious entry point required more (a real `userId`, a resolved
+ * `saleCaseId`, a `HouseholdRole`). Further investigation found a correct
+ * fit for each without inventing a fake actor:
+ *
+ * - **coverage**: uses `markCoverageAnalysisStale`/
+ *   `markItemCoverageAnalysesStale` (coverageAnalysis.service.ts) — the
+ *   same "mark stale, don't eagerly regenerate" pattern the
+ *   `recommendation-snapshots` consumer already uses below. Both are
+ *   `propertyId`-only and need no user context at all, so there's no
+ *   userId question to resolve. This is coverage's OWN independent
+ *   staleness system (still called from ~30 other sites directly — not
+ *   migrated, just now also reachable through this pipeline).
+ * - **sale readiness**: `PropertySaleCase.propertyId` is a unique key — a
+ *   property has zero or one sale case, never multiple — so "no case" (or
+ *   a `CLOSED`/`CANCELLED` one) is a real, expected no-op, not an error.
+ *   `refreshSaleReadinessForRecompute` (propertySaleCase.service.ts) makes
+ *   that check and, when applicable, syncs with role `'OWNER'` — the
+ *   strict-superset visibility role (verified: `projectRecords`' `visibleWhere`
+ *   only restricts for non-OWNER roles), the objectively correct choice
+ *   for an unrestricted background refresh, not an arbitrary guess.
+ * - **Home Briefing**: `generateDueHomeBriefings(propertyId)`
+ *   (homeBriefing.service.ts) resolves the real homeowner internally (same
+ *   safe property→homeownerProfile.userId pattern `RiskAssessmentService`
+ *   already uses), skips disabled preferences without throwing, and is
+ *   already invoked on a schedule by a real worker job
+ *   (`apps/workers/src/jobs/homeBriefingDelivery.job.ts`) — its own
+ *   time-window-bucketed `deliveryKey` already makes a repeat call within
+ *   the same window a no-op, so triggering it from recompute doesn't risk
+ *   a duplicate delivery, just an earlier one.
+ *
+ * The remaining 2 stay deferred, documented rather than faked:
  *
  * - **Home Actions**: `getHomeActionFeed()` (homeActions.service.ts) has no
  *   persisted output today — it's computed live from source records on
  *   every read. There is no cache to mark stale (HI-REC-006's premise), so
  *   a registered consumer here would be a no-op that exists only for
  *   ceremony. Revisit once/if a materialized feed cache exists.
- * - **coverage**: `CoverageIntelligenceService.run(propertyId, userId, ...)`
- *   requires a real `userId` for authorization/access, which a
- *   property-scoped background recompute handler (`{propertyId, target}`)
- *   doesn't have. Coverage also already has its own extensive, independent
- *   staleness system — `markCoverageAnalysisStale`/`markItemCoverageAnalysesStale`
- *   (coverageAnalysis.service.ts), called from ~30 sites across several
- *   controllers/services — so this isn't an uncovered gap today, just a
- *   parallel mechanism Phase 2 hasn't unified yet. Do not paper over the
- *   userId requirement with a hardcoded system user id — that exact
- *   anti-pattern already caused a real bug in this area (Coverage/Guidance
- *   Advisor "homeowner profile not found").
- * - **sale readiness**: `syncReadinessItems(saleCaseId, propertyId, role)`
- *   (propertySaleCase.service.ts) is not exported, requires a resolved
- *   `saleCaseId` (a property may have no active Sale Case at all) and a
- *   `HouseholdRole` a system-triggered recompute has no natural value for.
  * - **capability suggestions**: `getCapabilitySuggestionsFromAuthorizedSources`
- *   requires `userId` and `surface`, and has no persisted output — same
- *   userId mismatch as coverage, without even coverage's compensating
- *   parallel staleness system.
- * - **Home Briefing**: `generateHomeBriefing({propertyId, userId, now})`
- *   requires `userId` and is gated by a cadence window and delivery
- *   preference — regenerating/redelivering it off-cycle from a background
- *   recompute risks violating those delivery semantics, not just an
- *   authorization mismatch.
+ *   requires `userId` and `surface`, and re-confirmed to have zero
+ *   persisted output anywhere (every call in capabilityRecommendation
+ *   .service.ts is a read) — nothing to mark stale even if the userId
+ *   question were resolved.
  *
- * All 5 registered below take (at most) an optional `actorUserId` with a
- * real system-triggered fallback already built into the function itself —
- * confirmed by direct code read, not assumed — so none of them repeat the
- * hardcoded-system-user anti-pattern above.
+ * Every registered consumer below either needs no user context at all, or
+ * resolves a real user via the property's own homeownerProfile — verified
+ * by direct code read for each — so none of them repeat the
+ * hardcoded-system-user anti-pattern that previously caused a real bug in
+ * this codebase (Coverage/Guidance Advisor "homeowner profile not found").
  */
 
 const DEPENDENCY_CHANGED_STALE_REASON = 'INTELLIGENCE_RECOMPUTE_DEPENDENCY_CHANGED';
@@ -116,6 +135,51 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     failureBehavior: 'MARK_STALE',
     recompute: async ({ propertyId }) => {
       await materializeRecommendationsForProperty(propertyId, 'INTELLIGENCE_RECOMPUTE');
+    },
+  },
+  {
+    consumerKey: 'coverage',
+    version: '1.0',
+    resolutionMode: 'STATIC',
+    relevantFactKeys: [],
+    relevantSourceEntityTypes: ['PROPERTY_FACT', 'CLAIM_RECORD', 'DOCUMENT'],
+    outputOwner: 'markCoverageAnalysisStale + markItemCoverageAnalysesStale (services/coverageAnalysis.service.ts) — marks CoverageAnalysis rows STALE; does not eagerly regenerate.',
+    timeoutMs: 10_000,
+    retryPolicy: { maxAttempts: 3, backoffMs: 30_000 },
+    failureBehavior: 'MARK_STALE',
+    recompute: async ({ propertyId }) => {
+      await Promise.all([
+        markCoverageAnalysisStale(propertyId),
+        markItemCoverageAnalysesStale(propertyId),
+      ]);
+    },
+  },
+  {
+    consumerKey: 'sale-readiness',
+    version: '1.0',
+    resolutionMode: 'STATIC',
+    relevantFactKeys: [],
+    relevantSourceEntityTypes: ['PROPERTY_FACT', 'HOME_EVENT', 'MAINTENANCE_RECORD', 'PROJECT_RECORD', 'DOCUMENT'],
+    outputOwner: 'refreshSaleReadinessForRecompute (services/propertySaleCase.service.ts) — writes SaleReadinessItem rows. No-op for a property with no PropertySaleCase, or one that is CLOSED/CANCELLED.',
+    timeoutMs: 20_000,
+    retryPolicy: { maxAttempts: 3, backoffMs: 60_000 },
+    failureBehavior: 'MARK_STALE',
+    recompute: async ({ propertyId }) => {
+      await refreshSaleReadinessForRecompute(propertyId);
+    },
+  },
+  {
+    consumerKey: 'home-briefing',
+    version: '1.0',
+    resolutionMode: 'STATIC',
+    relevantFactKeys: [],
+    relevantSourceEntityTypes: ['PROPERTY_FACT', 'HOME_EVENT', 'MAINTENANCE_RECORD', 'CLAIM_RECORD', 'PROJECT_RECORD'],
+    outputOwner: 'generateDueHomeBriefings (homeBriefing/homeBriefing.service.ts) — same function apps/workers/src/jobs/homeBriefingDelivery.job.ts already calls on a schedule; its deliveryKey dedup makes a repeat call within the same window a no-op.',
+    timeoutMs: 20_000,
+    retryPolicy: { maxAttempts: 2, backoffMs: 60_000 },
+    failureBehavior: 'RETRY_ONLY',
+    recompute: async ({ propertyId }) => {
+      await generateDueHomeBriefings(propertyId);
     },
   },
   /**

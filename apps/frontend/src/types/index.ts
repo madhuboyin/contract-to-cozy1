@@ -2293,6 +2293,10 @@ export interface CreateBookingInput {
   originWorkItemId?: string;
 }
 
+// Home Intelligence Functional Completeness FRD HI-REC-007 — mirrors backend
+// PropertyRefreshState (intelligenceRecompute.service.ts).
+export type PropertyIntelligenceRefreshState = 'CURRENT' | 'REFRESHING' | 'PARTIALLY_REFRESHED' | 'DEGRADED' | 'UNKNOWN';
+
 /**
  * Maintenance Task Template
  */

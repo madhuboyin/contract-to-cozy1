@@ -950,6 +950,26 @@ async function checkMandatoryFactCoverage(propertyId: string): Promise<Mandatory
   };
 }
 
+/**
+ * Home Intelligence FRD §15 Phase 2 work item 4 — a property-scoped
+ * recompute handler has no userId (background trigger, not a per-request
+ * read), so it can't call getCase's requireAccess-gated path. PropertySaleCase
+ * .propertyId is a unique key — a property has zero or one sale case, never
+ * multiple — so "no case" or a closed/cancelled one is a real, expected
+ * no-op, not an error. 'OWNER' is used as the sync role deliberately: it is
+ * the strict superset view (projectRecords' visibleWhere only restricts for
+ * non-OWNER roles), the objectively correct choice for a full background
+ * refresh rather than an arbitrary guess.
+ */
+export async function refreshSaleReadinessForRecompute(propertyId: string): Promise<void> {
+  const saleCase = await prisma.propertySaleCase.findUnique({
+    where: { propertyId },
+    select: { id: true, status: true },
+  });
+  if (!saleCase || saleCase.status === 'CLOSED' || saleCase.status === 'CANCELLED') return;
+  await syncReadinessItems(saleCase.id, propertyId, 'OWNER');
+}
+
 async function syncReadinessItems(saleCaseId: string, propertyId: string, role: HouseholdRole): Promise<void> {
   const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents, agingInventoryItems, lapsedMaintenance, transferableWarranties, sizeContextProperty] = await Promise.all([
     projectInspectionFindings(propertyId),

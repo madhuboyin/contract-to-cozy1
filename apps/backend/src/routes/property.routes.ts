@@ -12,6 +12,7 @@ import { prisma } from '../lib/prisma';
 import { deriveChecklistProgress } from '../utils/seasonalProgress';
 import { syncSeasonalChecklistStatus } from '../services/seasonalChecklistStatus.service';
 import { evaluateCoverageRecord } from '../services/coverage/contextPolicy';
+import { getPropertyRefreshState } from '../services/intelligenceRecompute/intelligenceRecompute.service';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   getPropertyContextCompleteness,
@@ -520,6 +521,25 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
  * summary: List warranties for a specific property
  * tags: [Properties]
  */
+/**
+ * @swagger
+ * /api/properties/{propertyId}/intelligence-refresh-state:
+ *   get:
+ *     summary: Home Intelligence FRD HI-REC-007 — whether this property's intelligence outputs are current, refreshing, partially refreshed, or degraded
+ *     tags: [Properties]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/:propertyId/intelligence-refresh-state', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { propertyId } = req.params;
+    const state = await getPropertyRefreshState(prisma, propertyId);
+    return res.json({ success: true, data: { propertyId, state } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch intelligence refresh state' });
+  }
+});
+
 router.get('/:propertyId/warranties', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const { propertyId } = req.params;

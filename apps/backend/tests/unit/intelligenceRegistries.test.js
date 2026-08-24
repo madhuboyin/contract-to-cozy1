@@ -33,14 +33,17 @@ test('every recommendation safety tier has exactly one declared completion evide
 // FRD §15 Phase 2 work item 4 — 5 of the 10 "initial high-value consumers"
 // are registered for real this pass; the other 5 are deliberately deferred
 // (see intelligenceConsumerRegistry.ts's header) rather than stubbed.
-test('the intelligence consumer registry has exactly the 5 consumers registered this pass, each with a real recompute handler', () => {
+test('the intelligence consumer registry has exactly the 8 consumers registered so far (2 of the FRD\'s 10 remain deferred), each with a real recompute handler', () => {
   const keys = INTELLIGENCE_CONSUMER_REGISTRY.map((entry) => entry.consumerKey).sort();
   assert.deepEqual(keys, [
     'compound-radar',
+    'coverage',
+    'home-briefing',
     'maintenance-prediction',
     'personalization',
     'recommendation-snapshots',
     'risk-assessment',
+    'sale-readiness',
   ]);
   for (const entry of INTELLIGENCE_CONSUMER_REGISTRY) {
     assert.equal(typeof entry.recompute, 'function', `${entry.consumerKey} must declare a recompute handler`);

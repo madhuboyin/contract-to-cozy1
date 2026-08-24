@@ -17,6 +17,7 @@ import {
   ProviderProfileSelf,
   Booking,
   CreateBookingInput,
+  PropertyIntelligenceRefreshState,
   Review,
   CreateReviewInput,
   PaginationParams,
@@ -3079,6 +3080,17 @@ class APIClient {
     );
     if (response.success && response.data) return response.data;
     throw new APIError('Failed to load Home', 'UNIFIED_HOME_ERROR');
+  }
+
+  // Home Intelligence Functional Completeness FRD HI-REC-007 — whether this
+  // property's intelligence outputs are current, refreshing, partially
+  // refreshed, or degraded.
+  async getPropertyIntelligenceRefreshState(propertyId: string): Promise<PropertyIntelligenceRefreshState> {
+    const response = await this.request<{ propertyId: string; state: PropertyIntelligenceRefreshState }>(
+      `/api/properties/${propertyId}/intelligence-refresh-state`,
+    );
+    if (response.success && response.data) return response.data.state;
+    throw new APIError('Failed to load intelligence refresh state', 'INTELLIGENCE_REFRESH_STATE_ERROR');
   }
 
   async getCapabilitySuggestions(
