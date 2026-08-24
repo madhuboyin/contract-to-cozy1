@@ -25,6 +25,7 @@ test('every registered DecisionDefinition has a matching decision-family adapter
     'OWNERSHIP_COST_CHANGE',
     'SAVINGS_BENEFIT_MATCH',
     'COVERAGE_QUESTION',
+    'SELL_HOLD_RENT',
   ]));
 });
 

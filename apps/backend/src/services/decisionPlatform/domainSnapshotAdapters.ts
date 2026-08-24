@@ -249,3 +249,51 @@ export const coverageQuestionDecisionFamilyAdapter = createSnapshotDecisionFamil
   contextContractVersion: '1.0',
   loadSourceState: loadCoverageQuestionSourceState,
 });
+
+// ── Sell / Hold / Rent ──────────────────────────────────────────────────
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+// delivery step 7. Wraps the latest CANONICAL SellHoldRentAnalysis — the
+// persisted record sellHoldRent.service.ts's estimate() now writes on
+// every non-scenario call (see that file's isCanonicalRequest). One
+// analysis per property, so primaryEntityId is the propertyId itself, same
+// as refinance-opportunity.
+
+async function loadSellHoldRentSourceState(propertyId: string, primaryEntityId: string): Promise<SnapshotSourceState | null> {
+  if (primaryEntityId !== propertyId) return null;
+  const analysis = await prisma.sellHoldRentAnalysis.findFirst({
+    where: { propertyId },
+    orderBy: { computedAt: 'desc' },
+    select: {
+      id: true, years: true, winner: true, confidence: true,
+      homeValueNowCents: true, netSellCents: true, netHoldCents: true, netRentCents: true,
+    },
+  });
+  if (!analysis) return null;
+
+  return {
+    title: 'Sell, hold, or rent this property',
+    goalCode: 'SELL_HOLD_RENT_DECISION',
+    verdictCode: analysis.winner,
+    reasonCodes: [`CONFIDENCE_${analysis.confidence}`],
+    confidenceBreakdown: {
+      label: analysis.confidence,
+      netSellCents: analysis.netSellCents,
+      netHoldCents: analysis.netHoldCents,
+      netRentCents: analysis.netRentCents,
+    },
+    inputDigest: hashSourceState({
+      id: analysis.id, years: analysis.years, winner: analysis.winner, confidence: analysis.confidence,
+      homeValueNowCents: analysis.homeValueNowCents, netSellCents: analysis.netSellCents,
+      netHoldCents: analysis.netHoldCents, netRentCents: analysis.netRentCents,
+    }),
+  };
+}
+
+export const sellHoldRentDecisionFamilyAdapter = createSnapshotDecisionFamilyAdapter({
+  decisionDefinitionId: 'SELL_HOLD_RENT',
+  primaryEntityType: 'Property',
+  recommendationDefinitionVersion: '1.0',
+  engineVersion: 'sell-hold-rent-v1',
+  contextContractVersion: '1.0',
+  loadSourceState: loadSellHoldRentSourceState,
+});

@@ -15,7 +15,8 @@ export type DecisionDefinitionId =
   | 'HOME_CAPITAL_TIMELINE_WINDOW'
   | 'OWNERSHIP_COST_CHANGE'
   | 'SAVINGS_BENEFIT_MATCH'
-  | 'COVERAGE_QUESTION';
+  | 'COVERAGE_QUESTION'
+  | 'SELL_HOLD_RENT';
 
 const decisionDefinition = (overrides: DecisionDefinition): DecisionDefinition => overrides;
 
@@ -59,6 +60,7 @@ export const DECISION_DEFINITIONS: Readonly<Record<DecisionDefinitionId, Decisio
   OWNERSHIP_COST_CHANGE: snapshotDefinition('OWNERSHIP_COST_CHANGE', 'Review this ownership cost change'),
   SAVINGS_BENEFIT_MATCH: snapshotDefinition('SAVINGS_BENEFIT_MATCH', 'Pursue this savings or benefits match'),
   COVERAGE_QUESTION: snapshotDefinition('COVERAGE_QUESTION', 'Resolve this coverage question'),
+  SELL_HOLD_RENT: snapshotDefinition('SELL_HOLD_RENT', 'Sell, hold, or rent this property'),
 });
 
 export function getDecisionDefinition(id: DecisionDefinitionId): DecisionDefinition {

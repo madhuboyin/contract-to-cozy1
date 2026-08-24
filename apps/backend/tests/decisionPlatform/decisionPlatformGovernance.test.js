@@ -39,6 +39,7 @@ const SNAPSHOT_CONTEXT_CONTRACT_IDS = [
   'OWNERSHIP_COST_CHANGE',
   'SAVINGS_BENEFIT_MATCH',
   'COVERAGE_QUESTION',
+  'SELL_HOLD_RENT',
 ];
 
 test('every DecisionContextContract is complete and only references known preference keys (FRD §12)', () => {

@@ -38,7 +38,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -3351,6 +3351,87 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
   });
 }
 
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+// delivery step 7. Wraps the latest CANONICAL SellHoldRentAnalysis
+// (sellHoldRent.service.ts persists one whenever the tool is opened without
+// request-time scenario overrides — see estimate()'s isCanonicalRequest).
+// Only surfaces once the homeowner has actually opened the tool at least
+// once, same "propose, not force" pattern as repair-replace/capital-timeline.
+export async function loadSellHoldRentActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+  if (!db.sellHoldRentAnalysis) return [];
+  const analysis = await db.sellHoldRentAnalysis.findFirst({
+    where: { propertyId },
+    orderBy: { computedAt: 'desc' },
+  });
+  if (!analysis) return [];
+
+  const winnerLabel = { SELL: 'Selling', HOLD: 'Holding', RENT: 'Renting' }[analysis.winner];
+  const formatCents = (cents: number) => `$${Math.round(cents / 100).toLocaleString()}`;
+  const rationale = Array.isArray(analysis.rationale)
+    ? analysis.rationale.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  const confidenceScore = analysis.confidence === 'HIGH' ? 0.9 : analysis.confidence === 'MEDIUM' ? 0.65 : 0.4;
+
+  return [adaptHomeActionSource('SYSTEM', {
+    id: `sell-hold-rent:${analysis.id}`,
+    propertyId,
+    lineageId: `sell-hold-rent:${propertyId}`,
+    sourceEntityId: analysis.id,
+    sourceVersion: analysis.computedAt.toISOString(),
+    job: 'MAJOR_MOMENT',
+    state: 'OPEN',
+    priority: 'PLAN',
+    signal: `Over ${analysis.years} years, ${winnerLabel.toLowerCase()} comes out ahead in our modeled comparison.`,
+    whyItMatters: rationale[0] ?? `A ${analysis.years}-year sell/hold/rent comparison for this property currently favors ${winnerLabel.toLowerCase()}.`,
+    recommendedAction: 'Review the sell, hold, and rent scenarios for this property',
+    expectedOutcome: 'A documented sell/hold/rent decision, with the modeled numbers behind it.',
+    timing: {
+      dueAt: null,
+      windowStart: null,
+      windowEnd: null,
+      rationale: 'Advisory — revisit whenever your numbers or plans change.',
+    },
+    evidence: [{
+      id: analysis.id,
+      type: 'SYSTEM_DERIVATION',
+      label: `${analysis.years}-year sell/hold/rent comparison`,
+      source: 'Sell / Hold / Rent Advisor',
+      observedAt: analysis.computedAt.toISOString(),
+      freshness: 'CURRENT',
+      confidence: confidenceScore,
+    }],
+    assumptions: [{
+      key: 'modeled-estimate',
+      label: 'Based on modeled assumptions, not a formal appraisal',
+      value: 'Appreciation, rent, and cost projections are estimates — verify with a professional before committing.',
+      source: 'SYSTEM_DEFAULT',
+      editable: true,
+    }],
+    options: [
+      { id: 'sell', label: 'Sell', summary: `Estimated net proceeds: ${formatCents(analysis.netSellCents)}.`, recommended: analysis.winner === 'SELL' },
+      { id: 'hold', label: 'Hold', summary: `Estimated ${analysis.years}-year net: ${formatCents(analysis.netHoldCents)}.`, recommended: analysis.winner === 'HOLD' },
+      { id: 'rent', label: 'Rent', summary: `Estimated ${analysis.years}-year net: ${formatCents(analysis.netRentCents)}.`, recommended: analysis.winner === 'RENT' },
+    ],
+    tradeoffs: [
+      { optionId: 'sell', dimension: 'COST', summary: 'Realizes proceeds now but ends future appreciation and rental income from this property.' },
+      { optionId: 'hold', dimension: 'COST', summary: 'Keeps ownership costs and market risk, but retains equity growth.' },
+      { optionId: 'rent', dimension: 'EFFORT', summary: 'Adds landlord responsibilities and vacancy/management risk in exchange for rental income.' },
+    ],
+    confidence: { score: confidenceScore, label: analysis.confidence, missing: [] },
+    governance: materialFinancialGovernance('sell-hold-rent-v1'),
+    primaryCta: {
+      kind: 'COMPARE',
+      label: 'Review Sell/Hold/Rent',
+      href: `/dashboard/properties/${propertyId}/tools/sell-hold-rent`,
+    },
+    secondaryCtas: [],
+    feedbackControls: ['DEFER', 'SNOOZE', 'DISMISS', 'NOT_RELEVANT'],
+    relatedJourneyId: null,
+    createdAt: analysis.computedAt.toISOString(),
+    lastEvaluatedAt: analysis.computedAt.toISOString(),
+  })];
+}
+
 async function loadPropertyTaxAppealCaseActions(
   propertyId: string,
   db: HomeActionSourceDb,
@@ -3938,6 +4019,7 @@ export async function getPromotedHomeActions(
     loadRefinanceOpportunityActions(propertyId, db, options.evaluatedAt),
     loadHomeDigitalTwinFactReviewActions(propertyId, db),
     loadHomeCapitalTimelineMaterialWindowActions(propertyId, db),
+    loadSellHoldRentActions(propertyId, db),
     loadPropertyTaxAppealCaseActions(propertyId, db),
     loadSavingsBenefitsActions(propertyId, db),
     loadOwnershipCostChangeActions(propertyId, db),

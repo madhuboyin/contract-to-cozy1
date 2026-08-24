@@ -1,5 +1,6 @@
 // apps/backend/src/services/sellHoldRent.service.ts
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 import { listToolOverrides } from './toolOverride.service';
 import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
@@ -254,6 +255,7 @@ export class SellHoldRentService {
       where: { id: propertyId },
       select: {
         id: true,
+        homeownerProfileId: true,
         address: true,
         city: true,
         state: true,
@@ -272,6 +274,14 @@ export class SellHoldRentService {
     const addressLabel = `${property.address}, ${property.city} ${property.state} ${property.zipCode}`;
 
     const years: 5 | 10 = input.years === 10 ? 10 : 5;
+
+    // Home Intelligence Functional Completeness FRD Phase 3 review finding
+    // 4, delivery step 7: only the canonical (no request-time scenario
+    // override) evaluation is the property's authoritative recommendation
+    // worth persisting for a Home Action / Decision Thread to reference. A
+    // "what if I raise the rent" scenario run must never overwrite it.
+    const isCanonicalRequest = (Object.keys(input) as Array<keyof SellHoldRentInput>)
+      .every((key) => key === 'years' || input[key] === undefined);
 
     // --- Phase 3 persisted overrides ---
     const toolOv = await loadToolOverrideMap(propertyId);
@@ -531,7 +541,7 @@ export class SellHoldRentService {
     }
     if (debtMode === 'ON') dataSources.push('PropertyFinancingProfile + mortgageMath (debt modeling)');
 
-    return {
+    const dto: SellHoldRentDTO = {
       ownershipCostContext: ownershipCostContext(ownershipCostProjection),
       assumptionSetId: financialContext.assumptionSetId,
       preferenceProfileId: financialContext.preferenceProfileId,
@@ -642,6 +652,32 @@ export class SellHoldRentService {
         confidence,
       },
     };
+
+    if (isCanonicalRequest) {
+      // Best-effort: persistence must never break the live estimate
+      // response the homeowner is waiting on.
+      try {
+        await prisma.sellHoldRentAnalysis.create({
+          data: {
+            homeownerProfileId: property.homeownerProfileId,
+            propertyId,
+            years,
+            winner: dto.recommendation.winner,
+            confidence: dto.recommendation.confidence,
+            homeValueNowCents: Math.round(dto.current.homeValueNow * 100),
+            netSellCents: Math.round(dto.scenarios.sell.netProceeds * 100),
+            netHoldCents: Math.round(dto.scenarios.hold.net * 100),
+            netRentCents: Math.round(dto.scenarios.rent.net * 100),
+            rationale: dto.recommendation.rationale,
+            drivers: dto.drivers,
+          },
+        });
+      } catch (err) {
+        logger.warn({ err, propertyId }, 'Failed to persist SellHoldRentAnalysis; the live estimate is unaffected');
+      }
+    }
+
+    return dto;
   }
 }
 

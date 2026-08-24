@@ -15,6 +15,7 @@ import {
   ownershipCostChangeDecisionFamilyAdapter,
   refinanceOpportunityDecisionFamilyAdapter,
   savingsBenefitMatchDecisionFamilyAdapter,
+  sellHoldRentDecisionFamilyAdapter,
 } from './domainSnapshotAdapters';
 
 const DECISION_FAMILY_ADAPTERS: Partial<Record<DecisionDefinitionId, DecisionFamilyAdapter>> = {
@@ -24,6 +25,7 @@ const DECISION_FAMILY_ADAPTERS: Partial<Record<DecisionDefinitionId, DecisionFam
   OWNERSHIP_COST_CHANGE: ownershipCostChangeDecisionFamilyAdapter,
   SAVINGS_BENEFIT_MATCH: savingsBenefitMatchDecisionFamilyAdapter,
   COVERAGE_QUESTION: coverageQuestionDecisionFamilyAdapter,
+  SELL_HOLD_RENT: sellHoldRentDecisionFamilyAdapter,
 };
 
 export function getDecisionFamilyAdapter(decisionDefinitionId: DecisionDefinitionId): DecisionFamilyAdapter | null {

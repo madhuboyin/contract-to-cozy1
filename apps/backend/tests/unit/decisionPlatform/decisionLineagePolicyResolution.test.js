@@ -75,6 +75,14 @@ test('every domain registered in Phase 3 review finding 4 delivery step 6 resolv
     resolveActionDecisionLineagePolicy(action('coverage-review:question-key-1', 'MATERIAL_FINANCIAL')),
     { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'COVERAGE_QUESTION' },
   );
+  // Delivery step 7: the one genuinely missing engine — persistence,
+  // producer, and adapter all added together (sellHoldRent.service.ts,
+  // homeActionSourcePromotion.service.ts's loadSellHoldRentActions,
+  // domainSnapshotAdapters.ts's sellHoldRentDecisionFamilyAdapter).
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('sell-hold-rent:property-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'SELL_HOLD_RENT' },
+  );
 });
 
 test('reclassified execution-continuity/workflow prefixes never require a decision even when material', () => {

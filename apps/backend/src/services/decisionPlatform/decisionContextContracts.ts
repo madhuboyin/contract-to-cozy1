@@ -12,7 +12,8 @@ export type DecisionContextContractId =
   | 'HOME_CAPITAL_TIMELINE_WINDOW'
   | 'OWNERSHIP_COST_CHANGE'
   | 'SAVINGS_BENEFIT_MATCH'
-  | 'COVERAGE_QUESTION';
+  | 'COVERAGE_QUESTION'
+  | 'SELL_HOLD_RENT';
 
 const contract = (overrides: DecisionContextContract): DecisionContextContract => overrides;
 
@@ -100,6 +101,7 @@ export const DECISION_CONTEXT_CONTRACTS: Readonly<Record<DecisionContextContract
   OWNERSHIP_COST_CHANGE: snapshotContract('OWNERSHIP_COST_CHANGE'),
   SAVINGS_BENEFIT_MATCH: snapshotContract('SAVINGS_BENEFIT_MATCH'),
   COVERAGE_QUESTION: snapshotContract('COVERAGE_QUESTION'),
+  SELL_HOLD_RENT: snapshotContract('SELL_HOLD_RENT'),
 });
 
 export function getDecisionContextContract(id: DecisionContextContractId): DecisionContextContract {

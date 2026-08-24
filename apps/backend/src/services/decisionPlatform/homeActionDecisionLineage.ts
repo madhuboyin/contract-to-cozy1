@@ -41,6 +41,7 @@ const SAVINGS_BENEFIT_MATCH_ID_PREFIX = 'savings-benefit-match:';
 // MATERIAL_FINANCIAL. No decision-family adapter for this prefix.
 const SAVINGS_BENEFIT_ACTION_ID_PREFIX = 'savings-benefit-action:';
 const COVERAGE_QUESTION_ID_PREFIX = 'coverage-review:';
+const SELL_HOLD_RENT_ID_PREFIX = 'sell-hold-rent:';
 // Phase 3 review finding 4 delivery step 6 reclassification: both are
 // MATERIAL_FINANCIAL-governed but not verdict-bearing recommendations — a
 // renewal reminder against a static choice, and a workflow/case tracker
@@ -62,6 +63,7 @@ const PREFIX_TO_DECISION_DEFINITION: Array<{ prefix: string; decisionDefinitionI
   { prefix: OWNERSHIP_COST_CHANGE_ID_PREFIX, decisionDefinitionId: 'OWNERSHIP_COST_CHANGE' },
   { prefix: SAVINGS_BENEFIT_MATCH_ID_PREFIX, decisionDefinitionId: 'SAVINGS_BENEFIT_MATCH' },
   { prefix: COVERAGE_QUESTION_ID_PREFIX, decisionDefinitionId: 'COVERAGE_QUESTION' },
+  { prefix: SELL_HOLD_RENT_ID_PREFIX, decisionDefinitionId: 'SELL_HOLD_RENT' },
 ];
 
 /**

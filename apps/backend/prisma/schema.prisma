@@ -2706,6 +2706,7 @@ model HomeownerProfile {
   replaceRepairAnalyses           ReplaceRepairAnalysis[]
   riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
   homeCapitalTimelineAnalyses     HomeCapitalTimelineAnalysis[]
+  sellHoldRentAnalyses            SellHoldRentAnalysis[]
   doNothingScenarios              DoNothingScenario[]
   doNothingSimulationRuns         DoNothingSimulationRun[]
   scoreSnapshots                  PropertyScoreSnapshot[]
@@ -4150,6 +4151,7 @@ model Property {
   homeCapitalTimelineAnalyses  HomeCapitalTimelineAnalysis[]
   homeCapitalTimelineItems     HomeCapitalTimelineItem[]
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
+  sellHoldRentAnalyses         SellHoldRentAnalysis[]
   doNothingScenarios           DoNothingScenario[]
   doNothingSimulationRuns      DoNothingSimulationRun[]
   scoreSnapshots               PropertyScoreSnapshot[]
@@ -10272,6 +10274,63 @@ model HomeCapitalTimelineOverride {
   @@index([inventoryItemId])
   @@index([propertyId, type])
   @@map("home_capital_timeline_overrides")
+}
+
+// ============================================================================
+// Sell / Hold / Rent
+// ============================================================================
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+// delivery step 7. SellHoldRentService.estimate() (services/sellHoldRent
+// .service.ts) previously computed entirely in-memory on every GET request
+// and persisted nothing -- there was no authoritative, versioned record a
+// Home Action producer or Decision Thread lineage adapter could reference,
+// unlike every other domain step 6 wrapped. This is the persisted record
+// of the CANONICAL evaluation only (no request-time scenario overrides);
+// a scenario ("what if I raise the rent") run never writes one of these
+// rows -- see estimate()'s isCanonicalRequest check.
+//
+// One row per computation (never upserted in place), same immutable-
+// history convention as ReplaceRepairAnalysis/HomeCapitalTimelineAnalysis
+// -- read the latest by (propertyId, computedAt desc).
+
+enum SellHoldRentWinner {
+  SELL
+  HOLD
+  RENT
+}
+
+enum SellHoldRentConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model SellHoldRentAnalysis {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  years      Int
+  winner     SellHoldRentWinner
+  confidence SellHoldRentConfidence
+
+  homeValueNowCents Int
+  netSellCents      Int
+  netHoldCents      Int
+  netRentCents      Int
+
+  rationale Json // string[]
+  drivers   Json // SellHoldRentDTO['drivers']
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@map("sell_hold_rent_analyses")
 }
 
 // ============================================================================
