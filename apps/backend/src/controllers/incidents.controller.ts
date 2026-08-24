@@ -274,7 +274,7 @@ export const setIncidentStatus = async (req: CustomRequest, res: Response) => {
     const exists = await assertIncidentInPropertyOr404({ propertyId, incidentId });
     if (!exists) return res.status(404).json({ message: 'Incident not found' });
 
-    const updated = await IncidentService.setStatus(incidentId, status);
+    const updated = await IncidentService.setStatus(incidentId, status, req.user?.userId ?? null);
     return res.json(updated);
   } catch (e: any) {
     return res.status(400).json({ message: e?.message || 'Failed to update status' });

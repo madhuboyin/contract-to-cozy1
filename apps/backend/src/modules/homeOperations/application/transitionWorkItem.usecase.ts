@@ -4,6 +4,7 @@ import { findWorkItemById, recordWorkEvent, updateWorkItemState, type WorkItemDb
 import { emitWorkItemLifecycleChange, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
 import { prisma } from '../../../lib/prisma';
 import { assertDecisionLineageSatisfiedForAcceptance } from '../../../services/decisionPlatform/homeActionDecisionLineage';
+import { reopenLinkedDomainRecords } from '../infrastructure/domainReopenDispatch';
 
 /**
  * Maps a legal state transition to the event vocabulary the parent plan
@@ -106,6 +107,13 @@ export async function transitionWorkItem(
         data: { scheduleOverrideAt: null },
       });
     }
+    // Home Intelligence Functional Completeness FRD Phase 4 review finding
+    // 6 gap fix: both branches here mean "previously-verified work is open
+    // again" -- the authoritative domain record must follow, not just this
+    // item's own source links. Best-effort, after the item's own state is
+    // already committed (see reopenLinkedDomainRecords's own docblock for
+    // why it must never block this transition).
+    await reopenLinkedDomainRecords(input.workItemId);
   }
 
   const event = await recordWorkEvent({

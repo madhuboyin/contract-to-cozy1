@@ -14,6 +14,7 @@ import {
 import { prisma } from '../../lib/prisma';
 import { logIncidentEvent } from './incident.events';
 import { isCoverageActive } from '../coverage/contextPolicy';
+import { syncIncidentWorkItem } from './incidentWorkReconciliation.service';
 
 /**
  * ✅ Action recommendation for incident types.
@@ -166,6 +167,7 @@ export async function orchestrateIncident(incidentId: string) {
         message: 'Coverage lapse resolved because an active property policy is now on file.',
         payload: { policyId: activePolicy.id, reasonCode: 'ACTIVE_POLICY_SUPPRESSES_LAPSE' },
       });
+      await syncIncidentWorkItem(incident.id);
       return resolved;
     }
   }

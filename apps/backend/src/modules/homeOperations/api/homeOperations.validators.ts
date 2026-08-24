@@ -32,6 +32,21 @@ export const ApproveMaterialWorkSchema = z.object({
   decisionNote: z.string().trim().min(1).max(1000),
 });
 
+// Home Intelligence Functional Completeness FRD Phase 4 review finding 2
+// gap fix (HI-OUT-003): Fix's own richer completion flow, mirroring the
+// field set completeAcceptedOperationalWorkItem (Home's quick-complete)
+// already collects.
+export const CompleteWorkItemSchema = z.object({
+  costCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  observedResult: z.enum(['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED']).nullable().optional(),
+  completedAt: z.string().datetime().nullable().optional(),
+  fulfillmentMode: z.enum(['DIY', 'PROVIDER']).nullable().optional(),
+  providerName: z.string().trim().max(200).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+  followUpNeeded: z.boolean().optional(),
+  photoDocumentIds: z.array(z.string()).max(20).optional(),
+});
+
 export const TransitionWorkItemSchema = z.object({
   to: z.nativeEnum(OperationalWorkItemState),
   disposition: z.nativeEnum(OperationalWorkItemDisposition).optional(),

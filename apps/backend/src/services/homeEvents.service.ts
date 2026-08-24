@@ -13,6 +13,7 @@ import {
   TimelineProjectionEntry,
 } from './eventSignalProjection.service';
 import { SharedSignalKey, signalService } from './signal.service';
+import { recordHomeEventOutcome } from './decisionPlatform/outcomeObservationService';
 
 type ListQuery = {
   type?: any;
@@ -857,7 +858,7 @@ export class HomeEventsService {
         'HOME_EVENT_CONFIRMATION_NOT_APPLICABLE',
       );
     }
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       const updated = await tx.homeEvent.update({
         where: { id: event.id },
         data: {
@@ -874,8 +875,16 @@ export class HomeEventsService {
           reason: args.reason,
         },
       });
+      // Home Intelligence Functional Completeness FRD Phase 4 review
+      // finding 4 gap fix (HI-OUT-005): the first creation path for the
+      // HOME_EVENT source type. Confirming corroborates the event; disputing
+      // is not a positive outcome, so only HOMEOWNER_CONFIRMED records one.
+      if (args.status === 'HOMEOWNER_CONFIRMED') {
+        await recordHomeEventOutcome({ propertyId: args.propertyId, homeEventId: event.id, userId: args.userId }, tx);
+      }
       return updated;
     });
+    return updated;
   }
 
   // A privacy preference, not a factual correction — deliberately does not

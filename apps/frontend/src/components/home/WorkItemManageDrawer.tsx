@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { getMemberDisplayName } from '@/components/features/household/HouseholdUtils';
 import { WorkItemMemberPicker } from './WorkItemMemberPicker';
 import { WorkItemDuplicatePicker } from './WorkItemDuplicatePicker';
+import { RichCompletionDialog } from './RichCompletionDialog';
 import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 const STATE_LABELS: Record<OperationalWorkItemState, string> = {
@@ -114,6 +115,9 @@ export function WorkItemManageDrawer({
   const [approvalEvidenceId, setApprovalEvidenceId] = useState('');
   const [approvalNote, setApprovalNote] = useState('');
   const [approvalPending, setApprovalPending] = useState(false);
+
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [completePending, setCompletePending] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -310,13 +314,68 @@ export function WorkItemManageDrawer({
   const showDispositionField = nextState === 'CLOSED' && detail?.closureDispositionRule !== 'FORBIDDEN';
   const dispositionRequired = nextState === 'CLOSED' && detail?.closureDispositionRule === 'REQUIRED';
 
+  // Home Intelligence Functional Completeness FRD Phase 4 review finding 2
+  // gap fix (HI-OUT-003): completeAcceptedOperationalWorkItem/
+  // completeWorkItemHandler only support a MAINTENANCE_TASK primary
+  // execution today (homeActionCompletion.service.ts), and
+  // assertCompletionEvidenceSatisfied unconditionally rejects
+  // REGULATED_COVERAGE/SAFETY_EMERGENCY quick-completion (attestation:
+  // INSUFFICIENT) -- gate the button on both so Fix never offers a control
+  // the backend would always reject, and keep the honest "controlled by the
+  // linked execution record" / "requires reviewed evidence and approval"
+  // copy for what it can't do yet.
+  const canQuickComplete = detail
+    ? detail.executions.some((execution) => execution.executionType === 'MAINTENANCE_TASK')
+    && (detail.safetyTier === 'LOW_CONSEQUENCE' || detail.safetyTier === 'MATERIAL_FINANCIAL')
+    && !['VERIFIED', 'CLOSED', 'FOLLOW_UP_DUE'].includes(detail.state)
+    : false;
+
+  const handleComplete = async (values: {
+    completedAt: string;
+    costCents: number | null;
+    fulfillmentMode: 'DIY' | 'PROVIDER' | null;
+    providerName: string | null;
+    notes: string | null;
+    observedResult: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
+    followUpNeeded: boolean;
+    photoDocumentIds: string[];
+  }) => {
+    setCompletePending(true);
+    try {
+      const res = await api.completeWorkItem(propertyId, workItemId, {
+        costCents: values.costCents,
+        observedResult: values.observedResult,
+        completedAt: values.completedAt,
+        fulfillmentMode: values.fulfillmentMode,
+        providerName: values.providerName,
+        notes: values.notes,
+        followUpNeeded: values.followUpNeeded,
+        photoDocumentIds: values.photoDocumentIds,
+      });
+      if (!res.success) throw new Error(res.message || 'Unable to complete this work.');
+      toast({ title: 'Work completed' });
+      setCompleteDialogOpen(false);
+      await refresh();
+    } catch (error) {
+      toast({ title: 'Unable to complete work', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+    } finally {
+      setCompletePending(false);
+    }
+  };
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl">
           <SheetHeader className="border-b border-slate-100 p-6 pb-4">
             <SheetTitle>Manage work item</SheetTitle>
-            <SheetDescription>Assign, schedule, defer, or add evidence. Completion and verification are controlled by the linked execution record.</SheetDescription>
+            <SheetDescription>
+              {canQuickComplete
+                ? 'Assign, schedule, defer, complete, or add evidence.'
+                : detail && (detail.safetyTier === 'REGULATED_COVERAGE' || detail.safetyTier === 'SAFETY_EMERGENCY')
+                  ? 'Assign, schedule, defer, or add evidence. This work requires reviewed evidence and owner approval below before it can be verified.'
+                  : 'Assign, schedule, defer, or add evidence. Completion and verification are controlled by the linked execution record.'}
+            </SheetDescription>
           </SheetHeader>
 
           {loading || !detail ? (
@@ -336,6 +395,11 @@ export function WorkItemManageDrawer({
                     </Badge>
                   )}
                 </div>
+                {canQuickComplete && (
+                  <Button size="sm" className="mt-3 rounded-full" onClick={() => setCompleteDialogOpen(true)}>
+                    Complete this work
+                  </Button>
+                )}
               </div>
 
               {/* Owner */}
@@ -559,6 +623,16 @@ export function WorkItemManageDrawer({
           )}
         </SheetContent>
       </Sheet>
+      {canQuickComplete && (
+        <RichCompletionDialog
+          open={completeDialogOpen}
+          onOpenChange={setCompleteDialogOpen}
+          propertyId={propertyId}
+          submitting={completePending}
+          costRequired={detail?.safetyTier === 'MATERIAL_FINANCIAL'}
+          onSubmit={handleComplete}
+        />
+      )}
       {confirmationDialog}
     </>
   );

@@ -23,6 +23,17 @@ const claimReconciliation = read('../../src/services/claimWorkReconciliation.ser
 const claimsService = read('../../src/services/claims/claims.service.ts');
 const extractionService = read('../../src/services/homeRecordsExtraction.service.ts');
 const coverageComparisonService = read('../../src/services/coverageComparison.service.ts');
+const homeOperationsController = read('../../src/modules/homeOperations/api/homeOperations.controller.ts');
+const materialApprovalEvidenceService = read('../../src/services/homeOperationsMaterialApprovalEvidence.service.ts');
+const saleReadinessReconciliation = read('../../src/services/saleReadinessWorkReconciliation.service.ts');
+const propertySaleCaseService = read('../../src/services/propertySaleCase.service.ts');
+const incidentReconciliation = read('../../src/services/incidents/incidentWorkReconciliation.service.ts');
+const incidentService = read('../../src/services/incidents/incident.service.ts');
+const domainReopenDispatch = read('../../src/modules/homeOperations/infrastructure/domainReopenDispatch.ts');
+const transitionWorkItemUsecase = read('../../src/modules/homeOperations/application/transitionWorkItem.usecase.ts');
+const bookingReconciliation = read('../../src/services/bookingWorkReconciliation.service.ts');
+const homeEventsService = read('../../src/services/homeEvents.service.ts');
+const homeActionCompletionService = read('../../src/services/homeActionCompletion.service.ts');
 
 test('schema declares the new claim work-item enum values', () => {
   const obligationEnum = schema.slice(schema.indexOf('enum OperationalObligationType {'), schema.indexOf('enum OperationalWorkSourceType {'));
@@ -126,4 +137,110 @@ test('recordCoverageDecision records a COVERAGE_DECISION outcome inside its own 
   const fn = coverageComparisonService.slice(fnStart);
   assert.match(fn, /recordCoverageDecisionOutcome\(\{/);
   assert.match(fn, /coverageDecisionId:\s*recorded\.id/);
+});
+
+// --- Second review round: findings 1, 2, 3, 5, 6 -----------------------
+
+test('approveMaterialWorkHandler consults the completion evidence policy before verifying, and records an outcome on VERIFIED', () => {
+  const fnStart = homeOperationsController.indexOf('export async function approveMaterialWorkHandler(');
+  const fnEnd = homeOperationsController.indexOf('\nexport async function batchTransitionWorkItemsHandler', fnStart);
+  const fn = homeOperationsController.slice(fnStart, fnEnd);
+  assert.match(fn, /assertMaterialApprovalEvidenceSatisfiesPolicy\(item, evidence\)/);
+  assert.match(fn, /recordOperationalWorkOutcome\(\{/);
+  // The old unconditional SAFETY_EMERGENCY-only check must be gone, not
+  // just supplemented -- REGULATED_COVERAGE must go through the same gate.
+  assert.doesNotMatch(fn, /AUTHORITATIVE_EVIDENCE_REQUIRED/);
+});
+
+test('the material approval evidence policy enforces recordEvidence type, requiresDomainOwnedResolution, and policy/claim linkage from the real registry (not a duplicated copy)', () => {
+  assert.match(materialApprovalEvidenceService, /import \{ evidencePolicyFor \} from '\.\/homeActionCompletion\.service'/);
+  assert.match(materialApprovalEvidenceService, /policy\.recordEvidence/);
+  assert.match(materialApprovalEvidenceService, /policy\.requiresDomainOwnedResolution/);
+  assert.match(materialApprovalEvidenceService, /policy\.policyOrClaimLinkage/);
+  // requiresDomainOwnedResolution must reject anything but a verified
+  // DOMAIN_COMPLETION_RECORD -- a DOCUMENT alone is not "domain-owned."
+  const domainOwnedBlock = materialApprovalEvidenceService.slice(
+    materialApprovalEvidenceService.indexOf('if (policy.requiresDomainOwnedResolution) {'),
+  );
+  assert.match(domainOwnedBlock, /evidence\.evidenceType !== 'DOMAIN_COMPLETION_RECORD'/);
+});
+
+test('sale-readiness WAIVE/PURSUE reconcile the linked work item; REOPEN/UNPURSUE deliberately do not force a transition', () => {
+  assert.match(saleReadinessReconciliation, /if \(input\.action !== 'WAIVE' && input\.action !== 'PURSUE'\) return;/);
+  assert.match(saleReadinessReconciliation, /disposition = workItem\.state === 'CANDIDATE' \? 'NOT_RELEVANT' : 'CANCELLED'/);
+  assert.match(saleReadinessReconciliation, /to:\s*'ACCEPTED'/);
+
+  assert.match(propertySaleCaseService, /import \{ reconcileSaleReadinessItemDecision \} from '\.\/saleReadinessWorkReconciliation\.service'/);
+  const setItemDecisionStart = propertySaleCaseService.indexOf('static async setItemDecision(');
+  const setItemDecisionEnd = propertySaleCaseService.indexOf('\n  // Resolves & validates', setItemDecisionStart);
+  const fn = propertySaleCaseService.slice(setItemDecisionStart, setItemDecisionEnd > setItemDecisionStart ? setItemDecisionEnd : undefined);
+  // WAIVE and PURSUE each have their own branch/call; REOPEN and UNPURSUE
+  // share one branch (and one call) per setItemDecision's own comment.
+  const callCount = (fn.match(/reconcileSaleReadinessItemDecision\(/g) || []).length;
+  assert.equal(callCount, 3, 'WAIVE, PURSUE, and the shared REOPEN/UNPURSUE branch must each call the reconciler');
+});
+
+test('incident work reconciliation closes on genuine resolution vs. no-longer-relevant statuses, and is wired into every status-mutation site the module has', () => {
+  assert.match(incidentReconciliation, /GENUINE_RESOLUTION_STATUSES = new Set\(\['RESOLVED', 'MITIGATED'\]\)/);
+  assert.match(incidentReconciliation, /NO_LONGER_RELEVANT_STATUSES = new Set\(\['SUPPRESSED', 'EXPIRED'\]\)/);
+  assert.match(incidentReconciliation, /recordOperationalWorkOutcome\(\{/);
+
+  assert.match(incidentService, /import \{ syncIncidentWorkItem \} from '\.\/incidentWorkReconciliation\.service'/);
+  assert.match(incidentService, /await syncIncidentWorkItem\(id, actorUserId\);/);
+});
+
+test('reopening a work item dispatches a best-effort domain-record reopen that never throws back into the transition itself', () => {
+  assert.match(transitionWorkItemUsecase, /import \{ reopenLinkedDomainRecords \} from '\.\.\/infrastructure\/domainReopenDispatch'/);
+  assert.match(transitionWorkItemUsecase, /await reopenLinkedDomainRecords\(input\.workItemId\);/);
+
+  // MAINTENANCE_TASK/GUIDANCE/PROJECT get a real reopen; BOOKING/CLAIM
+  // intentionally have nothing to call (neither domain has a reopen
+  // primitive) -- every OperationalWorkExecutionType must still be listed
+  // explicitly (exhaustiveness), not silently ignored via a default case.
+  assert.match(domainReopenDispatch, /case 'MAINTENANCE_TASK':/);
+  assert.match(domainReopenDispatch, /case 'GUIDANCE':/);
+  assert.match(domainReopenDispatch, /case 'PROJECT':/);
+  assert.match(domainReopenDispatch, /case 'BOOKING':\s*\n\s*case 'CLAIM':/);
+  assert.match(domainReopenDispatch, /const exhaustiveCheck: never = executionType;/);
+  // Bypasses the domain service layer with a direct Prisma write -- no call
+  // to updateTaskStatus(...) (only mentioned, in prose, as the thing being
+  // avoided).
+  assert.doesNotMatch(domainReopenDispatch, /PropertyMaintenanceTaskService\.updateTaskStatus\(/, 'must bypass the domain service layer to avoid a circular Home Operations sync');
+  assert.match(domainReopenDispatch, /prisma\.propertyMaintenanceTask\.updateMany\(/);
+});
+
+test('booking completion attempts recommendation attribution via the shared decision-family resolver instead of always passing null', () => {
+  assert.match(bookingReconciliation, /import \{ resolveWorkItemDecisionFamilyRefs, resolveHomeActionDecisionLineage \} from '\.\/decisionPlatform\/homeActionDecisionLineage'/);
+  assert.match(bookingReconciliation, /resolveBookingRecommendationSnapshotId\(tx, workItem\.propertyId, workItem\.id\)/);
+  assert.doesNotMatch(bookingReconciliation, /recommendationSnapshotId:\s*null,\s*\n\s*\}, tx\);/);
+});
+
+test('recordOperationalWorkOutcome attaches attribution on an idempotent retry instead of returning early with none', () => {
+  const fnStart = outcomeService.indexOf('export async function recordOperationalWorkOutcome(');
+  const fnEnd = outcomeService.indexOf('\n// Home Intelligence Functional Completeness FRD Phase 4 gap fix (HI-OUT-003/', fnStart);
+  const fn = outcomeService.slice(fnStart, fnEnd);
+  const existingBlock = fn.slice(fn.indexOf('if (existing) {'), fn.indexOf('const hasCost = input.costCents'));
+  assert.match(existingBlock, /attachAttributions\(existing\.id, input\.recommendationSnapshotId/);
+});
+
+test('recordHomeEventOutcome is the first HOME_EVENT creation path, wired only into a positive (confirmed) verification', () => {
+  const fnStart = outcomeService.indexOf('export async function recordHomeEventOutcome(');
+  const fn = outcomeService.slice(fnStart);
+  assert.match(fn, /if \(existing\) return existing;/);
+  assert.match(fn, /sourceType:\s*'HOME_EVENT'/);
+
+  assert.match(homeEventsService, /import \{ recordHomeEventOutcome \} from '\.\/decisionPlatform\/outcomeObservationService'/);
+  const confirmStart = homeEventsService.indexOf('async confirmHomeEvent(');
+  const confirmFn = homeEventsService.slice(confirmStart, confirmStart + 2500);
+  assert.match(confirmFn, /if \(args\.status === 'HOMEOWNER_CONFIRMED'\) \{\s*\n\s*await recordHomeEventOutcome/);
+});
+
+test('completeAcceptedOperationalWorkItem collects the full HI-OUT-003 field set and transitions to FOLLOW_UP_DUE when flagged', () => {
+  assert.match(homeActionCompletionService, /completedAt\?:\s*string \| null;/);
+  assert.match(homeActionCompletionService, /fulfillmentMode\?:\s*'DIY' \| 'PROVIDER' \| null;/);
+  assert.match(homeActionCompletionService, /providerName\?:\s*string \| null;/);
+  assert.match(homeActionCompletionService, /notes\?:\s*string \| null;/);
+  assert.match(homeActionCompletionService, /followUpNeeded\?:\s*boolean;/);
+  assert.match(homeActionCompletionService, /photoDocumentIds\?:\s*string\[\];/);
+  assert.match(homeActionCompletionService, /to:\s*'FOLLOW_UP_DUE'/);
 });

@@ -20,6 +20,7 @@ import { transitionWorkItem } from '../modules/homeOperations/application/transi
 import { resolveGuidanceJourneyWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import type { ProposedWorkItem } from '../modules/homeOperations/domain/sourceAdapter';
 import { recordOperationalWorkOutcome } from './decisionPlatform/outcomeObservationService';
+import { resolveWorkItemDecisionFamilyRefs, resolveHomeActionDecisionLineage } from './decisionPlatform/homeActionDecisionLineage';
 
 export type OriginResolutionMethod =
   | 'EXPLICIT_LINEAGE'
@@ -483,6 +484,34 @@ export async function reconcileBookingCancelled(
   }
 }
 
+// Home Intelligence Functional Completeness FRD Phase 4 review finding 5
+// gap fix: a booking resolved through GUIDANCE_JOURNEY origin resolution
+// (resolveOriginatingWorkItem above) reuses the exact same recommendation-
+// backed work item projectWorkItemReconciliation.service.ts's
+// recordProjectHandoffOutcome already attributes correctly -- this reuses
+// the shared decision-family resolver (homeActionDecisionLineage.ts)
+// instead of a second hand-rolled GUIDANCE lookup, which also covers the
+// COVERAGE decision family for free. Best-effort: an unresolvable lineage
+// is not an error, just no attribution.
+async function resolveBookingRecommendationSnapshotId(
+  tx: WorkItemDb,
+  propertyId: string,
+  workItemId: string,
+): Promise<string | null> {
+  try {
+    const refs = await resolveWorkItemDecisionFamilyRefs(propertyId, workItemId, tx);
+    for (const ref of refs) {
+      const lineage = await resolveHomeActionDecisionLineage(propertyId, ref);
+      if (lineage.status === 'LINKED' && lineage.thread.currentRecommendationSnapshotId) {
+        return lineage.thread.currentRecommendationSnapshotId;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function reconcileBookingLifecycle(
   tx: WorkItemDb,
   booking: { id: string; finalPriceCents?: number | null },
@@ -517,15 +546,17 @@ export async function reconcileBookingLifecycle(
     // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005/
     // 006). Recorded inside this same transaction (tx), not the global
     // client -- if the booking-completion transaction rolls back, no
-    // outcome should exist either. No attribution attempt here (unlike the
-    // maintenance/guidance/project paths) -- a marketplace booking has no
-    // reliable path back to a Decision Thread yet.
+    // outcome should exist either. Phase 4 review finding 5 gap fix:
+    // attribution is now attempted for a booking that reused a
+    // recommendation-backed work item (GUIDANCE/COVERAGE origin) -- a truly
+    // standalone marketplace booking still resolves no refs and gets none.
+    const recommendationSnapshotId = await resolveBookingRecommendationSnapshotId(tx, workItem.propertyId, workItem.id);
     await recordOperationalWorkOutcome({
       propertyId: workItem.propertyId,
       workItemId: workItem.id,
       userId: null,
       costCents: booking.finalPriceCents ?? null,
-      recommendationSnapshotId: null,
+      recommendationSnapshotId,
     }, tx);
   }
 }

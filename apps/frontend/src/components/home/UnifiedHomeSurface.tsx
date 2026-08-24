@@ -53,6 +53,7 @@ import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSecti
 import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
 import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLinks';
 import { WorkItemManageDrawer } from '@/components/home/WorkItemManageDrawer';
+import { RichCompletionDialog } from '@/components/home/RichCompletionDialog';
 import { track } from '@/lib/analytics/events';
 import { RecentOwnerAdvocacyPrompt } from '@/components/home/RecentOwnerAdvocacyPrompt';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
@@ -925,67 +926,58 @@ function AssetLifecycleFacts({ action }: { action: RankedHomeActionDTO }) {
 }
 
 /**
- * Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-002/003).
- * MATERIAL_FINANCIAL completion requires a cost or observed result before
- * the backend will accept it (completionEvidencePolicy.registry.ts) -- this
- * is the minimum capture UI for that: a required cost field. Observed
- * result isn't collected here since cost alone already satisfies the
- * policy; a homeowner who wants to record a result instead can still use
- * "Manage action".
+ * Home Intelligence Functional Completeness FRD Phase 4 review finding 2
+ * gap fix (HI-OUT-003). Was a cost-only dialog; now wraps the shared
+ * RichCompletionDialog and maps its fuller field set onto
+ * executeHomeActionCommand's completion* request fields. Cost stays
+ * required here (MATERIAL_FINANCIAL's completionEvidencePolicy.registry.ts
+ * policy requires cost or an observed result; requiring cost specifically
+ * keeps this dialog's minimum bar unchanged from before).
  */
 function CompleteMaterialWorkDialog({
   open,
   onOpenChange,
+  propertyId,
   submitting,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  propertyId: string;
   submitting: boolean;
-  onSubmit: (completion: { completionCostCents: number }) => void;
+  onSubmit: (completion: {
+    completionCostCents: number;
+    completionDate: string;
+    completionFulfillmentMode: 'DIY' | 'PROVIDER' | null;
+    completionProviderName: string | null;
+    completionNotes: string | null;
+    completionObservedResult: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
+    completionFollowUpNeeded: boolean;
+    completionPhotoDocumentIds: string[];
+  }) => void;
 }) {
-  const [costInput, setCostInput] = React.useState('');
-  const parsedCostCents = (() => {
-    const dollars = Number(costInput);
-    if (!costInput.trim() || !Number.isFinite(dollars) || dollars < 0) return null;
-    return Math.round(dollars * 100);
-  })();
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Complete this work</DialogTitle>
-          <DialogDescription>Material work needs a recorded cost before it can be marked done.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2">
-          <Label htmlFor="completion-cost">Cost ($)</Label>
-          <Input
-            id="completion-cost"
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={costInput}
-            onChange={(event) => setCostInput(event.target.value)}
-            placeholder="0.00"
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
-          <Button
-            disabled={parsedCostCents === null || submitting}
-            onClick={() => {
-              if (parsedCostCents === null) return;
-              onSubmit({ completionCostCents: parsedCostCents });
-              setCostInput('');
-            }}
-          >
-            Mark done
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <RichCompletionDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      propertyId={propertyId}
+      submitting={submitting}
+      costRequired
+      description="Material work needs a recorded cost before it can be marked done."
+      onSubmit={(values) => {
+        if (values.costCents === null) return;
+        onSubmit({
+          completionCostCents: values.costCents,
+          completionDate: values.completedAt,
+          completionFulfillmentMode: values.fulfillmentMode,
+          completionProviderName: values.providerName,
+          completionNotes: values.notes,
+          completionObservedResult: values.observedResult,
+          completionFollowUpNeeded: values.followUpNeeded,
+          completionPhotoDocumentIds: values.photoDocumentIds,
+        });
+      }}
+    />
   );
 }
 
@@ -1024,7 +1016,16 @@ export function ActionCard({
 
   const execute = async (
     command: HomeActionCommand,
-    completion?: { completionCostCents?: number | null; completionObservedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null },
+    completion?: {
+      completionCostCents?: number | null;
+      completionObservedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
+      completionDate?: string | null;
+      completionFulfillmentMode?: 'DIY' | 'PROVIDER' | null;
+      completionProviderName?: string | null;
+      completionNotes?: string | null;
+      completionFollowUpNeeded?: boolean;
+      completionPhotoDocumentIds?: string[];
+    },
   ) => {
     setPending(command);
     try {
@@ -1288,6 +1289,7 @@ export function ActionCard({
         <CompleteMaterialWorkDialog
           open={completeDialogOpen}
           onOpenChange={setCompleteDialogOpen}
+          propertyId={propertyId}
           submitting={pending === 'COMPLETE'}
           onSubmit={(completion) => {
             setCompleteDialogOpen(false);

@@ -115,6 +115,14 @@ export const HomeActionCommandSchema = z.object({
   // loaded, not here — this schema stays permissive.
   completionCostCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
   completionObservedResult: z.enum(['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED']).nullable().optional(),
+  // Home Intelligence Functional Completeness FRD Phase 4 review finding 2
+  // gap fix (HI-OUT-003): the rest of the richer completion field set.
+  completionDate: z.string().datetime().nullable().optional(),
+  completionFulfillmentMode: z.enum(['DIY', 'PROVIDER']).nullable().optional(),
+  completionProviderName: z.string().trim().max(200).nullable().optional(),
+  completionNotes: z.string().trim().max(2000).nullable().optional(),
+  completionFollowUpNeeded: z.boolean().optional(),
+  completionPhotoDocumentIds: z.array(z.string()).max(20).optional(),
 }).superRefine((value, ctx) => {
   if (['DEFER', 'SNOOZE'].includes(value.command) && !value.nextTriggerAt) {
     ctx.addIssue({
@@ -1502,6 +1510,12 @@ export async function executeHomeActionCommand(
         decisionLineage: action.decisionLineage,
         costCents: input.completionCostCents ?? null,
         observedResult: input.completionObservedResult ?? null,
+        completedAt: input.completionDate ?? null,
+        fulfillmentMode: input.completionFulfillmentMode ?? null,
+        providerName: input.completionProviderName ?? null,
+        notes: input.completionNotes ?? null,
+        followUpNeeded: input.completionFollowUpNeeded ?? false,
+        photoDocumentIds: input.completionPhotoDocumentIds ?? [],
       });
       return {
         actionId,

@@ -25,6 +25,7 @@ import { orchestrateIncident } from './incident.orchestrator';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
 import type { GuidanceSeverity } from '../guidanceEngine/guidanceTypes';
 import { logger } from '../../lib/logger';
+import { syncIncidentWorkItem } from './incidentWorkReconciliation.service';
 
 function computeStatusTimestamps(nextStatus: IncidentStatus) {
   const now = new Date();
@@ -702,7 +703,7 @@ export class IncidentService {
     });
   }
 
-  static async setStatus(id: string, status: IncidentStatus) {
+  static async setStatus(id: string, status: IncidentStatus, actorUserId: string | null = null) {
     const patch = computeStatusTimestamps(status);
     const data: any = { status, ...patch };
 
@@ -734,6 +735,11 @@ export class IncidentService {
         logger.warn({ guidanceError }, '[GUIDANCE] incident archive hook failed');
       }
     }
+
+    // Home Intelligence Functional Completeness FRD Phase 4 review finding
+    // 3 gap fix: reconcile any linked OperationalWorkItem to this incident's
+    // fresh status.
+    await syncIncidentWorkItem(id, actorUserId);
 
     return updated;
   }

@@ -584,11 +584,25 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       actualCost?: number,
       outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
       completionIdempotencyKey?: string,
+      // Home Intelligence Functional Completeness FRD Phase 4 review finding
+      // 2 gap fix (HI-OUT-003): the richer completion field set the Home/Fix
+      // quick-complete flow now collects. Merged into the existing flexible
+      // completionMetadata JSON bucket rather than adding typed columns --
+      // same convention this function already used for
+      // completionIdempotencyKey/recordedByUserId.
+      completionDetails?: {
+        completedAt?: Date;
+        fulfillmentMode?: 'DIY' | 'PROVIDER';
+        providerName?: string | null;
+        notes?: string | null;
+        followUpNeeded?: boolean;
+        photoDocumentIds?: string[];
+      },
     ): Record<string, unknown> {
       const updateData: Record<string, unknown> = { status };
       if (status !== 'COMPLETED') return updateData;
 
-      updateData.lastCompletedDate = new Date();
+      updateData.lastCompletedDate = completionDetails?.completedAt ?? new Date();
       if (actualCost !== undefined) {
         updateData.actualCost = actualCost;
       }
@@ -596,6 +610,13 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       const existingMetadata = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata)
         ? task.completionMetadata as Record<string, unknown>
         : {};
+      const richDetails = completionDetails ? {
+        fulfillmentMode: completionDetails.fulfillmentMode ?? null,
+        providerName: completionDetails.providerName ?? null,
+        notes: completionDetails.notes ?? null,
+        followUpNeeded: completionDetails.followUpNeeded ?? false,
+        photoDocumentIds: completionDetails.photoDocumentIds ?? [],
+      } : {};
       const projectFollowUpMatch = task.actionKey?.match(/^project:([^:]+):follow-up$/);
       if (projectFollowUpMatch) {
         updateData.completionMetadata = {
@@ -605,9 +626,15 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
           outcomeHealth: outcomeHealth ?? 'CONFIRMED_HEALTHY',
           recordedByUserId: userId,
           ...(completionIdempotencyKey ? { completionIdempotencyKey } : {}),
+          ...richDetails,
         };
-      } else if (completionIdempotencyKey) {
-        updateData.completionMetadata = { ...existingMetadata, completionIdempotencyKey, recordedByUserId: userId };
+      } else if (completionIdempotencyKey || completionDetails) {
+        updateData.completionMetadata = {
+          ...existingMetadata,
+          ...(completionIdempotencyKey ? { completionIdempotencyKey } : {}),
+          recordedByUserId: userId,
+          ...richDetails,
+        };
       }
 
       if (task.isRecurring && task.frequency) {
@@ -1070,6 +1097,14 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       actualCost?: number,
       outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
       completionIdempotencyKey?: string,
+      completionDetails?: {
+        completedAt?: Date;
+        fulfillmentMode?: 'DIY' | 'PROVIDER';
+        providerName?: string | null;
+        notes?: string | null;
+        followUpNeeded?: boolean;
+        photoDocumentIds?: string[];
+      },
     ): Promise<PropertyMaintenanceTask> {
       // Verify access (CONTRIBUTOR+ required to mutate tasks)
       await this.getTask(userId, taskId, 'CONTRIBUTOR');
@@ -1094,7 +1129,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       const wasCompleted = task.status === 'COMPLETED';
       const isNowCompleted = status === 'COMPLETED';
 
-      const updateData = this.buildStatusUpdateData(task, status, userId, actualCost, outcomeHealth, completionIdempotencyKey);
+      const updateData = this.buildStatusUpdateData(task, status, userId, actualCost, outcomeHealth, completionIdempotencyKey, completionDetails);
 
       // Atomic compare-and-swap: Prisma has no row locking, so an
       // unconditional update() lets two concurrent completions (e.g. a

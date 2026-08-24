@@ -228,6 +228,41 @@ export function resolveProjectExecutionWorkKey(propertyId: string, projectId: st
 }
 
 /**
+ * Home Intelligence Functional Completeness FRD Phase 4 review finding 3
+ * gap fix: the workKey a SALE_PREP-kind HomeAction resolves to via
+ * resolveSubject/resolveObligation above (PROPERTY subject — see
+ * resolveSubject's default branch — with obligationSlug
+ * `sale-prep-${item.id}`), computable from just {propertyId, itemId} for
+ * propertySaleCase.service.ts's setItemDecision, which only has the
+ * SaleReadinessItem record, not a live HomeAction.
+ */
+export function resolveSalePrepWorkKey(propertyId: string, itemId: string): string {
+  return resolveWorkKey({
+    propertyId,
+    subject: { type: 'PROPERTY', id: propertyId },
+    obligationType: 'SALE_PREP_TASK',
+    occurrence: { obligationSlug: `sale-prep-${itemId}` },
+  });
+}
+
+/**
+ * Home Intelligence Functional Completeness FRD Phase 4 review finding 3
+ * gap fix: the workKey an INCIDENT-kind HomeAction resolves to (PROPERTY
+ * subject, obligationSlug `incident-${incident.id}` — see resolveObligation
+ * above), computable from just {propertyId, incidentId} for
+ * incidentWorkReconciliation.service.ts, which only has the Incident
+ * record, not a live HomeAction.
+ */
+export function resolveIncidentWorkKey(propertyId: string, incidentId: string): string {
+  return resolveWorkKey({
+    propertyId,
+    subject: { type: 'PROPERTY', id: propertyId },
+    obligationType: 'INCIDENT_RESPONSE',
+    occurrence: { obligationSlug: `incident-${incidentId}` },
+  });
+}
+
+/**
  * Maps an already-built HomeAction into a ProposedWorkItem for the shared
  * identity resolver (resolveAndUpsertWorkItem). Deliberately works from the
  * normalized HomeAction rather than raw per-domain records (unlike the

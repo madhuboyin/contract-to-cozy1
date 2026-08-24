@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { IncidentEventType, IncidentStatus } from '@prisma/client';
 import { logIncidentEvent } from './incident.events';
+import { syncIncidentWorkItem } from './incidentWorkReconciliation.service';
 
 // WEATHER_PREPARATION incidents (weatherPreparation.service.ts's
 // startWeatherPreparation) are created from a forecast-anchored, date-scoped
@@ -63,6 +64,7 @@ export async function expireStaleWeatherPreparations(
       message: 'Auto-resolved: the weather preparation window has passed.',
       payload: { autoResolved: true, reason: 'weather_window_passed' },
     });
+    await syncIncidentWorkItem(incident.id);
     resolved += 1;
   }
 

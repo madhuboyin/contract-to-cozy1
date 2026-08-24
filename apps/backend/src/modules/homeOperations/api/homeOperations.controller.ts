@@ -19,6 +19,13 @@ import { listPendingReconciliations } from '../infrastructure/reconciliationRepo
 import { retryHomeOperationsReconciliation } from '../../../services/homeOperationsReconciliation.service';
 import { resolvePropertyAccess } from '../../../services/propertyAccess.service';
 import { approveMaterialWorkItem, recordWorkEvent } from '../infrastructure/workItemRepository';
+import { assertMaterialApprovalEvidenceSatisfiesPolicy, MaterialApprovalEvidencePolicyViolationError } from '../../../services/homeOperationsMaterialApprovalEvidence.service';
+import { recordOperationalWorkOutcome } from '../../../services/decisionPlatform/outcomeObservationService';
+import {
+  completeAcceptedOperationalWorkItem,
+  CompletionEvidencePolicyViolationError,
+  UnsupportedWorkItemCompletionError,
+} from '../../../services/homeActionCompletion.service';
 
 function homeOperationsContext(req: CustomRequest, res: Response): { propertyId: string } | null {
   const propertyId = req.params.propertyId;
@@ -100,6 +107,9 @@ function handleWorkItemMutationError(err: unknown, res: Response) {
   }
   if (err instanceof GovernedWorkItemTransitionError) {
     return res.status(409).json({ success: false, error: { code: 'GOVERNED_TRANSITION_REQUIRED', message: err.message } });
+  }
+  if (err instanceof MaterialApprovalEvidencePolicyViolationError) {
+    return res.status(409).json({ success: false, error: { code: 'EVIDENCE_POLICY_VIOLATION', message: err.message } });
   }
   throw err;
 }
@@ -246,11 +256,17 @@ export async function approveMaterialWorkHandler(req: CustomRequest, res: Respon
     if (!evidence) {
       return res.status(400).json({ success: false, error: { code: 'EVIDENCE_REQUIRED', message: 'Select evidence attached to this work item.' } });
     }
-    if (
-      item.safetyTier === 'SAFETY_EMERGENCY' &&
-      !['DOCUMENT', 'PROPERTY_FACT'].includes(evidence.evidenceType)
-    ) {
-      return res.status(409).json({ success: false, error: { code: 'AUTHORITATIVE_EVIDENCE_REQUIRED', message: 'Safety work requires reviewed document or verified property evidence.' } });
+    // Home Intelligence Functional Completeness FRD Phase 4 review finding
+    // 1 gap fix: consult the same consequence-based policy the quick-
+    // complete path already enforces (HI-OUT-002) -- this was previously
+    // the one completion path that never checked it, so REGULATED_COVERAGE
+    // work accepted any evidence type and SAFETY_EMERGENCY's ad hoc
+    // DOCUMENT/PROPERTY_FACT check never proved the evidence was tied to a
+    // real domain record.
+    try {
+      await assertMaterialApprovalEvidenceSatisfiesPolicy(item, evidence);
+    } catch (err) {
+      return handleWorkItemMutationError(err, res);
     }
     await prisma.operationalWorkEvidence.update({
       where: { id: evidence.id },
@@ -266,15 +282,74 @@ export async function approveMaterialWorkHandler(req: CustomRequest, res: Respon
       payload: { evidenceId: evidence.id, decisionNote: req.body.decisionNote },
     });
     if (item.state === 'REPORTED_COMPLETE') {
-      await transitionWorkItem({
+      const verified = await transitionWorkItem({
         workItemId: item.id,
         to: 'VERIFIED',
         actorType: 'USER',
         actorUserId: req.user!.userId,
         idempotencyKey: `material-approved-verified:${item.id}:${evidence.id}`,
       });
+      // HI-OUT-005/006: the quick-complete path already records an
+      // OutcomeObservation on VERIFIED; this approval path -- the one
+      // reserved for the highest-consequence work -- previously did not.
+      await recordOperationalWorkOutcome({
+        propertyId: verified.propertyId,
+        workItemId: verified.id,
+        userId: req.user!.userId,
+        costCents: null,
+        recommendationSnapshotId: null,
+      });
     }
     return res.json({ success: true, data: await loadWorkItem(item.id) });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Home Intelligence Functional Completeness FRD Phase 4 review finding 2
+ * gap fix (HI-OUT-003): Fix's own richer completion flow. WorkItemManage
+ * Drawer only ever offered evidence/approval controls and told the
+ * homeowner completion was "controlled by the linked execution record" --
+ * true for guidance/project/booking, but not for the highest-volume
+ * maintenance-backed obligation, which had a real quick-complete path on
+ * Home with no Fix equivalent. Reuses completeAcceptedOperationalWorkItem
+ * directly (Home-Operations-native, not the Home Action feed's
+ * executeHomeActionCommand) -- decisionLineage is null here, the same
+ * conservative choice bookingWorkReconciliation/inspectionFinding.adapter
+ * already make for completions with no live Home Action context.
+ */
+export async function completeWorkItemHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+
+    try {
+      const result = await completeAcceptedOperationalWorkItem({
+        workItemId: item.id,
+        propertyId: context.propertyId,
+        userId: req.user!.userId,
+        safetyTier: item.safetyTier,
+        decisionLineage: null,
+        costCents: req.body.costCents ?? null,
+        observedResult: req.body.observedResult ?? null,
+        completedAt: req.body.completedAt ?? null,
+        fulfillmentMode: req.body.fulfillmentMode ?? null,
+        providerName: req.body.providerName ?? null,
+        notes: req.body.notes ?? null,
+        followUpNeeded: req.body.followUpNeeded ?? false,
+        photoDocumentIds: req.body.photoDocumentIds ?? [],
+      });
+      return res.json({ success: true, data: { ...(await loadWorkItem(item.id)), alreadyComplete: result.alreadyComplete } });
+    } catch (err) {
+      if (err instanceof CompletionEvidencePolicyViolationError) {
+        return res.status(409).json({ success: false, error: { code: 'EVIDENCE_POLICY_VIOLATION', message: err.message } });
+      }
+      if (err instanceof UnsupportedWorkItemCompletionError) {
+        return res.status(409).json({ success: false, error: { code: 'UNSUPPORTED_COMPLETION', message: err.message } });
+      }
+      throw err;
+    }
   } catch (err) { next(err); }
 }
 

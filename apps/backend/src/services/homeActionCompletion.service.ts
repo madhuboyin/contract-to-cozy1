@@ -25,6 +25,8 @@ import { recordOperationalWorkOutcome } from './decisionPlatform/outcomeObservat
 import { COMPLETION_EVIDENCE_POLICY } from './intelligence/completionEvidencePolicy.registry';
 import type { RecommendationSafetyTier } from '../productFramework/recommendationGovernance.contract';
 import type { HomeActionDecisionLineage } from './decisionPlatform/homeActionDecisionLineage';
+import { recordWorkEvidence, recordWorkEvent } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 
 export class CompletionEvidencePolicyViolationError extends Error {
   constructor(message: string) {
@@ -40,7 +42,7 @@ export class UnsupportedWorkItemCompletionError extends Error {
   }
 }
 
-function evidencePolicyFor(safetyTier: RecommendationSafetyTier) {
+export function evidencePolicyFor(safetyTier: RecommendationSafetyTier) {
   const entry = COMPLETION_EVIDENCE_POLICY.find((candidate) => candidate.safetyTier === safetyTier);
   if (!entry) throw new Error(`No completion evidence policy declared for safety tier "${safetyTier}".`);
   return entry;
@@ -78,6 +80,17 @@ export interface CompleteAcceptedWorkItemInput {
   decisionLineage: HomeActionDecisionLineage | null;
   costCents?: number | null;
   observedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
+  // Home Intelligence Functional Completeness FRD Phase 4 review finding 2
+  // gap fix (HI-OUT-003): completion date, DIY/provider, provider identity,
+  // notes, photos/documents, and follow-up need -- the full field set the
+  // FRD requires, adapted here to the one obligation type quick-complete
+  // supports today (maintenance).
+  completedAt?: string | null;
+  fulfillmentMode?: 'DIY' | 'PROVIDER' | null;
+  providerName?: string | null;
+  notes?: string | null;
+  followUpNeeded?: boolean;
+  photoDocumentIds?: string[];
 }
 
 export type CompleteAcceptedWorkItemResult =
@@ -113,6 +126,7 @@ export async function completeAcceptedOperationalWorkItem(
   }
 
   const idempotencyKey = `home-action-complete:${item.id}:${input.userId}`;
+  const parsedCompletedAt = input.completedAt ? new Date(input.completedAt) : undefined;
   await PropertyMaintenanceTaskService.updateTaskStatus(
     input.userId,
     primaryExecution.executionEntityId,
@@ -120,9 +134,40 @@ export async function completeAcceptedOperationalWorkItem(
     input.costCents != null ? input.costCents / 100 : undefined,
     input.observedResult ?? undefined,
     idempotencyKey,
+    {
+      completedAt: parsedCompletedAt && !Number.isNaN(parsedCompletedAt.getTime()) ? parsedCompletedAt : undefined,
+      fulfillmentMode: input.fulfillmentMode ?? undefined,
+      providerName: input.providerName ?? undefined,
+      notes: input.notes ?? undefined,
+      followUpNeeded: input.followUpNeeded ?? undefined,
+      photoDocumentIds: input.photoDocumentIds ?? undefined,
+    },
   );
 
-  const updatedItem = await prisma.operationalWorkItem.findUniqueOrThrow({ where: { id: item.id }, select: { state: true } });
+  // Photos/documents become durable OperationalWorkEvidence, not just JSON
+  // on the maintenance task -- the same evidence list "Manage action"
+  // already renders for evidence recorded through the other completion path.
+  for (const documentId of input.photoDocumentIds ?? []) {
+    await recordWorkEvidence({
+      workItemId: item.id,
+      evidenceType: 'DOCUMENT',
+      evidenceEntityId: documentId,
+      verificationStatus: 'VERIFIED',
+      observedAt: parsedCompletedAt && !Number.isNaN(parsedCompletedAt.getTime()) ? parsedCompletedAt : new Date(),
+    });
+  }
+  if (input.notes) {
+    await recordWorkEvent({
+      workItemId: item.id,
+      eventType: 'OUTCOME_EVIDENCE_ADDED',
+      actorType: 'USER',
+      actorUserId: input.userId,
+      idempotencyKey: `${idempotencyKey}:notes`,
+      payload: { notes: input.notes, fulfillmentMode: input.fulfillmentMode ?? null, providerName: input.providerName ?? null },
+    });
+  }
+
+  let updatedItem = await prisma.operationalWorkItem.findUniqueOrThrow({ where: { id: item.id }, select: { id: true, propertyId: true, state: true } });
 
   const observation = await recordOperationalWorkOutcome({
     propertyId: input.propertyId,
@@ -133,6 +178,22 @@ export async function completeAcceptedOperationalWorkItem(
       ? input.decisionLineage.thread.currentRecommendationSnapshotId
       : null,
   });
+
+  // "Follow-up need" (HI-OUT-003) -- VERIFIED work the homeowner flagged as
+  // needing another look moves straight to FOLLOW_UP_DUE, a legal direct
+  // edge (domain/transitions.ts) that already drives its own reminder
+  // policy (reminderPolicy.ts's remindOnNextReview).
+  if (input.followUpNeeded && updatedItem.state === 'VERIFIED') {
+    const followedUp = await transitionWorkItem({
+      workItemId: item.id,
+      to: 'FOLLOW_UP_DUE',
+      actorType: 'USER',
+      actorUserId: input.userId,
+      idempotencyKey: `${idempotencyKey}:follow-up`,
+      payload: { reason: 'homeowner_flagged_follow_up_needed' },
+    });
+    updatedItem = { id: followedUp.id, propertyId: followedUp.propertyId, state: followedUp.state };
+  }
 
   return { alreadyComplete: false, workItemState: updatedItem.state, observationId: observation.id };
 }

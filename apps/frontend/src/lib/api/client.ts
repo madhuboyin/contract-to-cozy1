@@ -3282,6 +3282,13 @@ class APIClient {
       // Only meaningful for COMPLETE/ALREADY_DONE.
       completionCostCents?: number | null;
       completionObservedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
+      // Phase 4 review finding 2 gap fix: the rest of HI-OUT-003's field set.
+      completionDate?: string | null;
+      completionFulfillmentMode?: 'DIY' | 'PROVIDER' | null;
+      completionProviderName?: string | null;
+      completionNotes?: string | null;
+      completionFollowUpNeeded?: boolean;
+      completionPhotoDocumentIds?: string[];
     },
   ) {
     return this.request<{
@@ -3448,6 +3455,28 @@ class APIClient {
     return this.request<WorkItemDetailDTO>(
       `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/approve`,
       { method: 'POST', body: JSON.stringify({ evidenceId, decisionNote }) },
+    );
+  }
+
+  // Home Intelligence Functional Completeness FRD Phase 4 review finding 2
+  // gap fix (HI-OUT-003): Fix's own richer completion flow.
+  async completeWorkItem(
+    propertyId: string,
+    workItemId: string,
+    input: {
+      costCents?: number | null;
+      observedResult?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
+      completedAt?: string | null;
+      fulfillmentMode?: 'DIY' | 'PROVIDER' | null;
+      providerName?: string | null;
+      notes?: string | null;
+      followUpNeeded?: boolean;
+      photoDocumentIds?: string[];
+    },
+  ) {
+    return this.request<WorkItemDetailDTO & { alreadyComplete?: boolean }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/complete`,
+      { method: 'POST', body: JSON.stringify(input) },
     );
   }
 

@@ -22,6 +22,7 @@ import { auditLog } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { listWorkItems } from '../modules/homeOperations/application/listWorkItems.usecase';
+import { reconcileSaleReadinessItemDecision } from './saleReadinessWorkReconciliation.service';
 import { homeRecordsService } from './homeRecords.service';
 import { revokePropertyBriefShare } from '../propertyBrief/propertyBrief.service';
 import { listPropertyApplianceInventory } from './propertyApplianceInventory.service';
@@ -1339,7 +1340,7 @@ export class PropertySaleCaseService {
     if (!item) throw new APIError('Readiness item not found', 404, 'SALE_READINESS_ITEM_NOT_FOUND');
 
     if (action === 'WAIVE') {
-      return prisma.saleReadinessItem.update({
+      const updated = await prisma.saleReadinessItem.update({
         where: { id: itemId },
         data: {
           status: 'WAIVED', waivedAt: new Date(), waivedByUserId: userId, waivedReason: reason ?? null,
@@ -1348,29 +1349,42 @@ export class PropertySaleCaseService {
           pursuedAt: null, pursuedByUserId: null,
         },
       });
+      // Home Intelligence Functional Completeness FRD Phase 4 review
+      // finding 3 gap fix: reconcile any linked OperationalWorkItem.
+      await reconcileSaleReadinessItemDecision({ propertyId, itemId, userId, action });
+      return updated;
     }
     // Value-aware checklist plan (2026-08-07, §12 Stage 3): a homeowner
     // explicitly committing to an item, typically one surfaced by the
     // budget-based recommendation — a durable decision, same pattern as
     // WAIVE, not something that resets on the next checklist sync.
     if (action === 'PURSUE') {
-      return prisma.saleReadinessItem.update({
+      const updated = await prisma.saleReadinessItem.update({
         where: { id: itemId },
         data: {
           status: 'PURSUING', pursuedAt: new Date(), pursuedByUserId: userId,
           waivedAt: null, waivedByUserId: null, waivedReason: null,
         },
       });
+      await reconcileSaleReadinessItemDecision({ propertyId, itemId, userId, action });
+      return updated;
     }
     // REOPEN and UNPURSUE both mean the same thing operationally — clear
     // whichever durable decision was on file and return to undecided.
     // Kept as two action names so the frontend can call the one that
     // matches what the homeowner actually did (reopen a waived item vs.
     // un-pursue a committed one), rather than one generically-named action.
-    return prisma.saleReadinessItem.update({
+    const reopened = await prisma.saleReadinessItem.update({
       where: { id: itemId },
       data: { status: 'OPEN', waivedAt: null, waivedByUserId: null, waivedReason: null, pursuedAt: null, pursuedByUserId: null },
     });
+    // See reconcileSaleReadinessItemDecision's own docblock: REOPEN/UNPURSUE
+    // deliberately do not force a work-item transition (CLOSED is
+    // terminal; ACCEPTED has no legal path back to CANDIDATE). The call
+    // still runs so its early-return stays the single documented decision
+    // point, rather than that constraint living silently in this caller.
+    await reconcileSaleReadinessItemDecision({ propertyId, itemId, userId, action });
+    return reopened;
   }
 
   // Resolves & validates a candidate buyerPackageId against the real

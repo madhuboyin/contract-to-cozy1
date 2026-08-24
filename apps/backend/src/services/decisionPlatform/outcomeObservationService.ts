@@ -231,7 +231,20 @@ export async function recordOperationalWorkOutcome(
       sourceEntityId: input.workItemId,
     },
   });
-  if (existing) return existing;
+  if (existing) {
+    // Home Intelligence Functional Completeness FRD Phase 4 review finding
+    // 5 gap fix: a caller that couldn't resolve a recommendationSnapshotId
+    // the first time (e.g. lineage resolved asynchronously, or a retry
+    // after a partial failure) must still be able to attach it on a later
+    // call -- returning early here unconditionally silently dropped that.
+    // attachAttributions's own skipDuplicates makes this a safe no-op when
+    // the attribution already exists.
+    const existingPayload = existing.observedPayload && typeof existing.observedPayload === 'object' && !Array.isArray(existing.observedPayload)
+      ? existing.observedPayload as Record<string, unknown>
+      : {};
+    await attachAttributions(existing.id, input.recommendationSnapshotId, relationshipTypesFor('COMPLETED', existingPayload.costCents != null), db);
+    return existing;
+  }
 
   const hasCost = input.costCents != null;
   const observation = await db.outcomeObservation.create({
@@ -409,6 +422,54 @@ export async function recordCoverageDecisionOutcome(
   return observation;
 }
 
+// Home Intelligence Functional Completeness FRD Phase 4 review finding 4
+// gap fix (HI-OUT-005) — the last of the ten declared source types with no
+// creation path. A homeowner confirming an INFERRED/USER_REPORTED/
+// SYSTEM_GENERATED HomeEvent (homeEvents.service.ts's confirmHomeEvent) is
+// a genuine corroborated real-world observation, the same shape as
+// recordCompletedMaintenanceOutcome's "a domain record cleared" evidence --
+// disputing one is not a positive outcome, so only HOMEOWNER_CONFIRMED
+// records here. No attribution attempt: HomeEvent.sourceEntityType/
+// sourceEntityId are free-form pointers into many different domains, with
+// no reliable, general mapping back to a decision family the way GUIDANCE/
+// COVERAGE work-item sources have.
+interface RecordHomeEventOutcomeInput {
+  propertyId: string;
+  homeEventId: string;
+  userId: string;
+}
+
+export async function recordHomeEventOutcome(
+  input: RecordHomeEventOutcomeInput,
+  db: WorkItemDb = prisma,
+): Promise<OutcomeObservation> {
+  const existing = await db.outcomeObservation.findFirst({
+    where: {
+      propertyId: input.propertyId,
+      sourceType: 'HOME_EVENT',
+      sourceEntityType: 'HomeEvent',
+      sourceEntityId: input.homeEventId,
+    },
+  });
+  if (existing) return existing;
+
+  return db.outcomeObservation.create({
+    data: {
+      propertyId: input.propertyId,
+      sourceType: 'HOME_EVENT',
+      sourceEntityType: 'HomeEvent',
+      sourceEntityId: input.homeEventId,
+      observedType: 'HOME_EVENT_CONFIRMED',
+      observedPayloadVersion: '1.0',
+      observedPayload: {},
+      occurredAt: new Date(),
+      recordedByUserId: input.userId,
+      verificationStatus: 'CORROBORATED',
+      provenanceRefs: [`HomeEvent:${input.homeEventId}`],
+    },
+  });
+}
+
 export interface OutcomeSummaryAttribution {
   observation: OutcomeObservation;
   attribution: RecommendationAttribution;
@@ -456,21 +517,20 @@ export async function disputeOutcomeObservation(observationId: string, propertyI
 }
 
 // HI-OUT-005 (see the Phase 0/2 registry report) expanded
-// OutcomeObservationSourceType to 10 values. HOMEOWNER_REPORTED,
-// COMPLETED_MAINTENANCE_RECORD, OPERATIONAL_WORK_ITEM, CLAIM_RECORD,
-// DOCUMENT_PROMOTION, and COVERAGE_DECISION now have real creation paths
-// (see recordHomeownerReportedOutcome, recordCompletedMaintenanceOutcome,
-// recordOperationalWorkOutcome, recordClaimOutcome,
-// recordDocumentPromotionOutcome, recordCoverageDecisionOutcome).
-// PROJECT_RECORD, BOOKING_RECORD, and INSPECTION_FINDING are deliberately
-// unused: guidance/project/booking/inspection completions all converge on
-// OPERATIONAL_WORK_ITEM instead (see recordOperationalWorkOutcome's own
-// callers) so every Operational Work Item completion produces one
+// OutcomeObservationSourceType to 10 values. Every value now has a real
+// creation path except PROJECT_RECORD and BOOKING_RECORD, which are
+// deliberately unused: guidance/project/booking/inspection completions all
+// converge on OPERATIONAL_WORK_ITEM instead (see recordOperationalWorkOutcome's
+// own callers) so every Operational Work Item completion produces one
 // consistently-shaped outcome rather than a domain-specific variant.
-// HOME_EVENT has no creation path yet. Every case is still listed
-// explicitly, not a default fallback, so adding a real creation path later
-// trips this switch's exhaustiveness check again rather than silently
-// reusing a generic label.
+// (recordHomeownerReportedOutcome, recordCompletedMaintenanceOutcome,
+// recordOperationalWorkOutcome, recordClaimOutcome,
+// recordDocumentPromotionOutcome, recordCoverageDecisionOutcome,
+// recordHomeEventOutcome cover the rest, including INSPECTION_FINDING via
+// recordOperationalWorkOutcome.) Every case is still listed explicitly, not
+// a default fallback, so adding a real creation path later trips this
+// switch's exhaustiveness check again rather than silently reusing a
+// generic label.
 export function sourceTypeLabel(sourceType: OutcomeObservationSourceType): string {
   switch (sourceType) {
     case 'HOMEOWNER_REPORTED': return 'You reported this';
