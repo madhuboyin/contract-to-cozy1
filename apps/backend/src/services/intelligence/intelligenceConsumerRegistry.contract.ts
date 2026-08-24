@@ -4,8 +4,8 @@
  * canonical property fact, source record, action state, outcome, or source
  * health changes. Phase 0 defines the contract only; Phase 2 registers real
  * consumers once IntelligenceRecomputeRun/IntelligenceRecomputeTarget
- * processing exists (see prisma/schema.prisma), so intelligenceConsumerRegistry.ts
- * stays empty until then rather than carrying no-op handlers.
+ * processing exists (see prisma/schema.prisma). The registry is populated by
+ * Phase 2; this file remains the shared executable contract.
  */
 import type { IntelligenceRecomputeTriggerType } from '@prisma/client';
 
@@ -20,11 +20,17 @@ export interface IntelligenceRecomputeTargetHandle {
   targetVersion: string | null;
 }
 
+export interface IntelligenceRecomputeTargetPage {
+  targets: IntelligenceRecomputeTargetHandle[];
+  nextCursor: string | null;
+}
+
 /**
  * STATIC consumers resolve to exactly one property-level target ("PROPERTY").
  * DYNAMIC consumers query canonical references intersecting the change and
  * may resolve to zero or more entity-level targets (e.g. one per affected
- * Recommendation Snapshot family) — see FRD §8.2's Resolution modes note.
+ * Recommendation Snapshot family) through bounded cursor pages — see FRD
+ * §8.2's Resolution modes note.
  */
 export interface IntelligenceConsumerDefinition {
   consumerKey: string;
@@ -62,7 +68,9 @@ export interface IntelligenceConsumerDefinition {
     triggerType: IntelligenceRecomputeTriggerType;
     triggerEntityType: string;
     triggerEntityId: string;
-  }) => Promise<IntelligenceRecomputeTargetHandle[]>;
+    cursor: string | null;
+    pageSize: number;
+  }) => Promise<IntelligenceRecomputeTargetPage>;
   recompute: (input: { propertyId: string; target: IntelligenceRecomputeTargetHandle }) => Promise<void>;
   /**
    * HI-REC-006: "while an affected consumer is pending or failed, its

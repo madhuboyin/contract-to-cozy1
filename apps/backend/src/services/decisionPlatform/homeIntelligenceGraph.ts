@@ -156,6 +156,32 @@ export async function getSnapshotsReferencingFact(
   });
 }
 
+export async function getSnapshotsReferencingFactPage(
+  propertyId: string,
+  entityType: string,
+  entityId: string,
+  input: { cursor: string | null; pageSize: number; fieldPath?: string },
+) {
+  const rows = await prisma.recommendationSnapshot.findMany({
+    where: {
+      propertyId,
+      canonicalFactReferences: {
+        array_contains: input.fieldPath
+          ? [{ entityType, entityId, fieldPath: input.fieldPath }]
+          : [{ entityType, entityId }],
+      },
+    },
+    orderBy: [{ generatedAt: 'desc' }, { id: 'desc' }],
+    take: input.pageSize + 1,
+    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+  });
+  const snapshots = rows.slice(0, input.pageSize);
+  return {
+    snapshots,
+    nextCursor: rows.length > input.pageSize ? snapshots.at(-1)?.id ?? null : null,
+  };
+}
+
 // "which future expense or warranty records are directly linked" (FRD
 // §15.3). Both Warranty link kinds and HomeCapitalTimelineItem rows are
 // optional and owned by other features — an empty result on either side is

@@ -32,7 +32,7 @@ import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { alertOnJobFailure } from './lib/jobFailureAlert';
 import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
 import { registerShutdownHandler, installGracefulShutdown } from './lib/gracefulShutdown';
-import { validateStartupDependencies } from './lib/startupValidation';
+import { assertValidWorkerIntelligenceRegistries, validateStartupDependencies } from './lib/startupValidation';
 import { runWithCronLease } from './lib/cronExecutionCoordinator';
 import { DEFAULT_JOB_RETENTION } from '@worker-shared/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
@@ -1676,6 +1676,7 @@ const KNOWN_QUEUE_NAMES = new Set<string>([
 // the process exits fast and visibly instead of limping along with a job
 // class it can't actually execute.
 void (async function startWorkerProcess() {
+  assertValidWorkerIntelligenceRegistries();
   await validateStartupDependencies();
 
   // Start cron jobs from registry, then start BullMQ worker

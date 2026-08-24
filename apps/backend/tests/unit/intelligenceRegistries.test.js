@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 require('ts-node/register');
 
@@ -12,6 +14,8 @@ const {
   validateCompletionEvidencePolicy,
   INTELLIGENCE_CONSUMER_REGISTRY,
   validateIntelligenceConsumerRegistry,
+  ATTENTION_PRIORITY_OWNERS,
+  validateAttentionPriorityOwners,
 } = require('../../src/services/intelligence/index.ts');
 const { HOME_ACTION_SOURCE_KINDS } = require('../../src/productFramework/homeAction.contract.ts');
 const { RECOMMENDATION_SAFETY_TIERS } = require('../../src/productFramework/recommendationGovernance.contract.ts');
@@ -28,6 +32,27 @@ test('every HomeAction source kind has exactly one declared adapter-ownership en
 test('every recommendation safety tier has exactly one declared completion evidence policy', () => {
   const tiers = COMPLETION_EVIDENCE_POLICY.map((entry) => entry.safetyTier).sort();
   assert.deepEqual(tiers, [...RECOMMENDATION_SAFETY_TIERS].sort());
+});
+
+test('completion evidence policies expose enforceable fields, not display prose alone', () => {
+  const material = COMPLETION_EVIDENCE_POLICY.find((entry) => entry.safetyTier === 'MATERIAL_FINANCIAL');
+  assert.equal(material.costOrObservedResult, 'REQUIRED');
+  const emergency = COMPLETION_EVIDENCE_POLICY.find((entry) => entry.safetyTier === 'SAFETY_EMERGENCY');
+  assert.equal(emergency.requiresDomainOwnedResolution, true);
+  assert.equal(emergency.simpleDismissalAllowed, false);
+});
+
+test('the attention-priority registry includes both Fix ranking owners and validates cleanly', () => {
+  assert.deepEqual(validateAttentionPriorityOwners(ATTENTION_PRIORITY_OWNERS), []);
+  const keys = new Set(ATTENTION_PRIORITY_OWNERS.map((entry) => entry.ownerKey));
+  assert.ok(keys.has('fix-backend-resolution-center'));
+  assert.ok(keys.has('fix-frontend-resolution-center'));
+  const repoRoot = path.resolve(__dirname, '../../../..');
+  for (const owner of ATTENTION_PRIORITY_OWNERS) {
+    for (const sourceFile of owner.sourceFiles) {
+      assert.equal(fs.existsSync(path.join(repoRoot, sourceFile)), true, `${owner.ownerKey} references missing file ${sourceFile}`);
+    }
+  }
 });
 
 // FRD §15 Phase 2 work item 4 — 5 of the 10 "initial high-value consumers"
@@ -70,7 +95,7 @@ test('validateIntelligenceConsumerRegistry fails fast on a duplicate consumerKey
 
 test('validateIntelligenceConsumerRegistry fails fast on a STATIC consumer that declares resolveTargets', () => {
   const bad = INTELLIGENCE_CONSUMER_REGISTRY.map((entry) =>
-    entry.consumerKey === 'risk-assessment' ? { ...entry, resolveTargets: async () => [] } : entry);
+    entry.consumerKey === 'risk-assessment' ? { ...entry, resolveTargets: async () => ({ targets: [], nextCursor: null }) } : entry);
   const issues = validateIntelligenceConsumerRegistry(bad);
   assert.ok(issues.some((issue) => issue.includes('risk-assessment') && issue.includes('STATIC but declares a resolveTargets resolver')));
 });

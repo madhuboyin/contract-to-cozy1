@@ -3,8 +3,8 @@ import { reconcileRadarCompoundInsightsForProperty } from '../../modules/homeEve
 import RiskAssessmentService from '../RiskAssessment.service';
 import { generateForecast } from '../maintenancePrediction.service';
 import { materializeRecommendationsForProperty } from '../../modules/personalization/application/materializeRecommendations.usecase';
-import { getSnapshotsReferencingFact } from '../decisionPlatform/homeIntelligenceGraph';
-import { markThreadsStaleByIds, listActiveDecisionThreadsForProperty } from '../decisionPlatform/decisionThreadService';
+import { getSnapshotsReferencingFactPage } from '../decisionPlatform/homeIntelligenceGraph';
+import { markThreadsStaleByIds, listActiveDecisionThreadsPageForProperty } from '../decisionPlatform/decisionThreadService';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
 import { refreshSaleReadinessForRecompute } from '../propertySaleCase.service';
 import { generateDueHomeBriefings } from '../../homeBriefing/homeBriefing.service';
@@ -242,25 +242,45 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     timeoutMs: 10_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 30_000 },
     failureBehavior: 'MARK_STALE',
-    resolveTargets: async ({ propertyId, triggerType, triggerEntityType, triggerEntityId }) => {
+    resolveTargets: async ({ propertyId, triggerType, triggerEntityType, triggerEntityId, cursor, pageSize }) => {
       // HI-REC-003: MANUAL_REFRESH must execute every applicable consumer,
       // not just the ones an entity-specific query happens to match — a
       // manual refresh has no single "changed entity" to resolve against.
-      // Every other trigger type keeps the real fact-reference containment
-      // query (bounded to the one entity that actually changed).
-      const threadIds = triggerType === 'MANUAL_REFRESH'
-        ? new Set((await listActiveDecisionThreadsForProperty(propertyId, 500)).map((thread) => thread.id))
-        : new Set(
-            (await getSnapshotsReferencingFact(propertyId, triggerEntityType, triggerEntityId))
-              .map((snapshot) => snapshot.decisionThreadId)
-              .filter((id): id is string => Boolean(id)),
-          );
-      return [...threadIds].map((threadId) => ({
-        targetKey: threadId,
-        targetType: 'DecisionThread',
-        targetId: threadId,
-        targetVersion: null,
-      }));
+      // Both branches use the resolver contract's cursor/pageSize; target
+      // materialization follows every bounded page and deduplicates thread
+      // keys across pages.
+      if (triggerType === 'MANUAL_REFRESH') {
+        const page = await listActiveDecisionThreadsPageForProperty(propertyId, { cursor, pageSize });
+        return {
+          targets: page.threads.map((thread) => ({
+            targetKey: thread.id,
+            targetType: 'DecisionThread',
+            targetId: thread.id,
+            targetVersion: null,
+          })),
+          nextCursor: page.nextCursor,
+        };
+      }
+      const page = await getSnapshotsReferencingFactPage(
+        propertyId,
+        triggerEntityType,
+        triggerEntityId,
+        { cursor, pageSize },
+      );
+      const threadIds = new Set(
+        page.snapshots
+          .map((snapshot) => snapshot.decisionThreadId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      return {
+        targets: [...threadIds].map((threadId) => ({
+          targetKey: threadId,
+          targetType: 'DecisionThread',
+          targetId: threadId,
+          targetVersion: null,
+        })),
+        nextCursor: page.nextCursor,
+      };
     },
     recompute: async ({ target }) => {
       if (!target.targetId) return;

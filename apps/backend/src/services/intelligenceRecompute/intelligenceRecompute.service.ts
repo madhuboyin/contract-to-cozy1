@@ -47,6 +47,9 @@ export interface RecomputeRunTrigger extends RequestRecomputeInput {
 
 export type ProcessTargetOutcome = 'SUCCEEDED' | 'FAILED' | 'NOT_CLAIMED';
 
+export const DYNAMIC_TARGET_PAGE_SIZE = 100;
+export const MAX_DYNAMIC_TARGET_PAGES = 100;
+
 /** Injectable seam over DomainEventsService.emit so the orchestration functions below are unit-testable without a live DB. */
 export type EmitDomainEvent = typeof DomainEventsService.emit;
 
@@ -157,16 +160,43 @@ export async function materializeTargets(
 ): Promise<MaterializedTarget[]> {
   const result: MaterializedTarget[] = [];
   for (const consumer of consumers) {
-    const handles: IntelligenceRecomputeTargetHandle[] =
-      consumer.resolutionMode === 'STATIC'
-        ? [{ targetKey: 'PROPERTY', targetType: null, targetId: null, targetVersion: null }]
-        : await consumer.resolveTargets!({
-            propertyId: run.propertyId,
-            changedFactKeys: run.changedFactKeys,
-            triggerType: run.triggerType,
-            triggerEntityType: run.triggerEntityType,
-            triggerEntityId: run.triggerEntityId,
-          });
+    let handles: IntelligenceRecomputeTargetHandle[];
+    if (consumer.resolutionMode === 'STATIC') {
+      handles = [{ targetKey: 'PROPERTY', targetType: null, targetId: null, targetVersion: null }];
+    } else {
+      const uniqueHandles = new Map<string, IntelligenceRecomputeTargetHandle>();
+      const seenCursors = new Set<string>();
+      let cursor: string | null = null;
+      let completed = false;
+      for (let pageNumber = 0; pageNumber < MAX_DYNAMIC_TARGET_PAGES; pageNumber += 1) {
+        const page = await consumer.resolveTargets!({
+          propertyId: run.propertyId,
+          changedFactKeys: run.changedFactKeys,
+          triggerType: run.triggerType,
+          triggerEntityType: run.triggerEntityType,
+          triggerEntityId: run.triggerEntityId,
+          cursor,
+          pageSize: DYNAMIC_TARGET_PAGE_SIZE,
+        });
+        if (page.targets.length > DYNAMIC_TARGET_PAGE_SIZE) {
+          throw new Error(`Dynamic consumer "${consumer.consumerKey}" returned ${page.targets.length} targets, exceeding pageSize ${DYNAMIC_TARGET_PAGE_SIZE}.`);
+        }
+        for (const handle of page.targets) uniqueHandles.set(handle.targetKey, handle);
+        if (page.nextCursor === null) {
+          completed = true;
+          break;
+        }
+        if (page.nextCursor === cursor || seenCursors.has(page.nextCursor)) {
+          throw new Error(`Dynamic consumer "${consumer.consumerKey}" returned a repeated pagination cursor "${page.nextCursor}".`);
+        }
+        seenCursors.add(page.nextCursor);
+        cursor = page.nextCursor;
+      }
+      if (!completed) {
+        throw new Error(`Dynamic consumer "${consumer.consumerKey}" exceeded ${MAX_DYNAMIC_TARGET_PAGES} target pages.`);
+      }
+      handles = [...uniqueHandles.values()];
+    }
     for (const handle of handles) {
       const target = await db.intelligenceRecomputeTarget.upsert({
         where: {

@@ -23,12 +23,28 @@ import { prisma } from './prisma';
 import { logger } from './logger';
 import { JOB_REGISTRY, RUNNER_REGISTRY } from '@worker-shared/config/workerJobRegistry';
 import { evaluateWorkerExecution, type WorkerTriggerType } from '@worker-shared/config/workerExecutionPolicy';
+import { validateIntelligenceRegistries } from '@worker-shared/services/intelligence';
 
 export interface StartupCheckResult {
   name: string;
   required: boolean;
   ok: boolean;
   detail: string;
+}
+
+/**
+ * The Domain Event worker executes the shared intelligence consumer registry,
+ * so API-process validation alone is insufficient: deployments can restart
+ * the worker independently. Fail before pollers start when the executable
+ * registry is internally invalid.
+ */
+export function assertValidWorkerIntelligenceRegistries(
+  validate: () => string[] = validateIntelligenceRegistries,
+): void {
+  const issues = validate();
+  if (issues.length > 0) {
+    throw new Error(`FATAL: Home Intelligence registry validation failed in worker: ${issues.join('; ')}`);
+  }
 }
 
 // Runners known to write to S3 — no registry field marks this explicitly,

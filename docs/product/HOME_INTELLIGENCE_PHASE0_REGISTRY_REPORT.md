@@ -10,7 +10,7 @@ generated_from: "scripts/generate-home-intelligence-phase0-report.ts (npm run re
 
 Companion artifact to [`HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md`](./HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md) §15 Phase 0. This is the "one generated registry report [that] can trace every active recommendation source from fact/signal through action, work, completion, and outcome owner" Phase 0's functional exit criterion calls for. Every table below is generated directly from the registries under `apps/backend/src/services/intelligence/` and `canonicalCapabilityRegistry` — not hand-typed — by `scripts/generate-home-intelligence-phase0-report.ts`; a parity test fails CI if this file stops matching that script's output.
 
-Phase 0 ships six registries under `apps/backend/src/services/intelligence/`, each validated at process boot in `apps/backend/src/index.ts` alongside the existing Ask and Decision Platform registry checks:
+Phase 0 ships seven registries under `apps/backend/src/services/intelligence/`, validated in both the API and worker processes where applicable:
 
 | Registry | File | Populated? |
 | --- | --- | --- |
@@ -20,8 +20,9 @@ Phase 0 ships six registries under `apps/backend/src/services/intelligence/`, ea
 | Completion evidence policy | `completionEvidencePolicy.registry.ts` | Yes — 4/4 safety tiers |
 | Intelligence consumer registry | `intelligenceConsumerRegistry.ts` | Populated — 8 entries |
 | Compound rule registry | `compoundRuleRegistry.contract.ts` | Empty by design — Phase 5 populates it |
+| Independent attention-priority ownership | `attentionPriorityOwnership.registry.ts` | Populated — 11 owners |
 
-The last two are contract-only: nothing in the codebase yet invokes recompute handlers or compound rules, so populating them now would be dead code (see each file's header comment).
+The compound-rule registry remains contract-only until Phase 5. The recompute and attention-priority registries are populated and executable today.
 
 ---
 
@@ -51,28 +52,29 @@ The last two are contract-only: nothing in the codebase yet invokes recompute ha
 | `loadPropertyTaxAppealCaseActions` | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | PropertyTaxAppealCase (prisma.propertyTaxAppealCase.findFirst). | SYSTEM | `SNOOZE`, `DISMISS`, `NOT_RELEVANT` | Generic default (executeHomeActionCommand, services/homeActions.service.ts): snoozeAction for DEFER/SNOOZE, recordOrchestrationEvent otherwise. | No | No | No | `property-tax-appeal-case:` |
 | `loadSavingsBenefitsActions` | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | SavingsBenefitAction (prisma.savingsBenefitAction.findMany) + PropertyHiddenAssetMatch (prisma.propertyHiddenAssetMatch.findMany) — two id-prefixed sub-shapes. | SAVINGS_BENEFITS | `ACKNOWLEDGE`, `DEFER`, `SNOOZE`, `DISMISS`, `NOT_RELEVANT`, `CORRECT_FACT` | Generic default (executeHomeActionCommand, services/homeActions.service.ts): snoozeAction for DEFER/SNOOZE, recordOrchestrationEvent otherwise. | No | No | No | `savings-benefit-action:`, `savings-benefit-match:` |
 | `loadOwnershipCostChangeActions` | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | OwnershipCostSnapshot (prisma.ownershipCostSnapshot.findFirst). | SYSTEM | `COMPLETE`, `DEFER`, `SNOOZE`, `DISMISS`, `ALREADY_DONE`, `NOT_RELEVANT`, `CORRECT_FACT` | ownershipCostDecisionService.record (services/ownershipCosts/ownershipCostDecision.service.ts), routed by OWNERSHIP_COST_CHANGE_ID_PREFIX in executeHomeActionCommand — owns every command for this producer, not completion only. | Yes — ownershipCostDecisionService.record (services/ownershipCosts/ownershipCostDecision.service.ts), routed by id prefix in executeHomeActionCommand (homeActions.service.ts) (id-prefix exception, not the source kind default) | No | No | `ownership-cost-change:` |
-| `adaptOrchestratedActionToHomeAction` | `apps/backend/src/services/orchestration.service.ts` | Risk assessment engine output (orchestration.service.ts) — a pre-computed action object passed in by the caller, not a direct DB query inside this adapter; the underlying domain signal varies per orchestrated risk type. | _dynamic per-action_ | `ACKNOWLEDGE`, `DEFER`, `SNOOZE`, `DISMISS`, `NOT_RELEVANT`, `CORRECT_FACT` | Generic default (executeHomeActionCommand, services/homeActions.service.ts): snoozeAction for DEFER/SNOOZE, recordOrchestrationEvent otherwise. | No | No | No | _none_ |
-| `getActivationFirstValue` | `apps/backend/src/services/entryContext.service.ts` | PropertyOnboarding.activeTriggerId, resolved by sourceAdapterForTrigger (entryContext.service.ts) to whichever domain record the trigger type points at (Incident/Warranty/InsurancePolicy/etc.). | _dynamic per-action_ | `COMPLETE`, `DEFER`, `SNOOZE`, `DISMISS`, `NOT_RELEVANT`, `CORRECT_FACT` | recordFirstActionResolution (services/entryContext.service.ts), routed by ACTIVATION_ID_PREFIX in executeHomeActionCommand — applies only to the "activation:" id family. The "activation-context:" family this producer also emits (see notes) falls through to the generic default and has no COMPLETE control, so it never reaches this owner. | Yes — recordFirstActionResolution (services/entryContext.service.ts), routed by id prefix in executeHomeActionCommand (homeActions.service.ts) (id-prefix exception, not the source kind default) | No | No | `activation:` |
-| `appendAcceptedOperationalWork` | `apps/backend/src/services/homeActions.service.ts` | OperationalWorkItem (prisma.operationalWorkItem.findMany, acceptanceState: ACCEPTED). | _dynamic per-action_ | `CORRECT_FACT`, `SNOOZE` | Generic default (executeHomeActionCommand, services/homeActions.service.ts): snoozeAction for DEFER/SNOOZE, recordOrchestrationEvent otherwise. | No | No | No | `operational-work:` |
+| `adaptOrchestratedActionToHomeAction` | `apps/backend/src/services/orchestration.service.ts` | Risk assessment engine output (orchestration.service.ts) — a pre-computed action object passed in by the caller, not a direct DB query inside this adapter; the underlying domain signal varies per orchestrated risk type. | _dynamic per-action_ | `ACKNOWLEDGE`, `DEFER`, `SNOOZE`, `DISMISS`, `NOT_RELEVANT`, `CORRECT_FACT` | Generic default (executeHomeActionCommand, services/homeActions.service.ts): snoozeAction for DEFER/SNOOZE, recordOrchestrationEvent otherwise. | No | No | By runtime source kind: MAINTENANCE→MAINTENANCE, COVERAGE→COVERAGE | _none_ |
+| `getActivationFirstValue` | `apps/backend/src/services/entryContext.service.ts` | PropertyOnboarding.activeTriggerId, resolved by sourceAdapterForTrigger (entryContext.service.ts) to whichever domain record the trigger type points at (Incident/Warranty/InsurancePolicy/etc.). | _dynamic per-action_ | `COMPLETE`, `DEFER`, `SNOOZE`, `DISMISS`, `NOT_RELEVANT`, `CORRECT_FACT` | recordFirstActionResolution (services/entryContext.service.ts), routed by ACTIVATION_ID_PREFIX in executeHomeActionCommand — applies only to the "activation:" id family. The "activation-context:" family this producer also emits (see notes) falls through to the generic default and has no COMPLETE control, so it never reaches this owner. | Yes — recordFirstActionResolution (services/entryContext.service.ts), routed by id prefix in executeHomeActionCommand (homeActions.service.ts) (id-prefix exception, not the source kind default) | No | By runtime source kind: MAINTENANCE→MAINTENANCE, COVERAGE→COVERAGE, INCIDENT→INCIDENT, PROJECT→PROJECT, GUIDANCE→GUIDANCE | `activation:` |
+| `appendAcceptedOperationalWork` | `apps/backend/src/services/homeActions.service.ts` | OperationalWorkItem (prisma.operationalWorkItem.findMany, acceptanceState: ACCEPTED). | _dynamic per-action_ | `CORRECT_FACT`, `SNOOZE` | Generic default (executeHomeActionCommand, services/homeActions.service.ts): snoozeAction for DEFER/SNOOZE, recordOrchestrationEvent otherwise. | No | No | Existing linked Operational Work Item | `operational-work:` |
 
 Also re-entering the feed independent of the producers above but included in the table: `appendAcceptedOperationalWork()` projects already-`ACCEPTED` `OperationalWorkItem` rows back in with `presentation.variant: 'ACCEPTED_WORK'`.
 
 ## 2. Independent priority calculations (inventory only — Phase 1 converts these)
 
-Ten systems outside `homeActions.service.ts` independently compute urgency/priority/rank for "what needs attention," confirmed by direct code read. None were modified this phase — HI-ATT-001 through HI-ATT-004 (making `getHomeActionFeed()` the sole ranking authority) is Phase 1. Listing them here so Phase 1 starts from a real inventory instead of rediscovering them.
+11 systems outside `homeActions.service.ts` independently compute urgency/priority/rank for "what needs attention." The rows are generated from `ATTENTION_PRIORITY_OWNERS`, validated at startup, and retained until Phase 1 converts or retires each owner.
 
 | # | File | Surface | What it computes independently |
 | --- | --- | --- | --- |
-| 1 | `apps/backend/src/services/resolutionCenter.service.ts` | Fix | Own priority scale (`critical/high/medium/low`), own status model, three separate sort functions (`sortCases`, `sortActions`) — no import of `homeActions.service.ts` at all |
-| 2 | `apps/backend/src/services/homeStatusBoard.service.ts` | Status Board (backend) | `CONDITION_SEVERITY` + `CATEGORY_PRIORITY_WEIGHT` weighted sort |
-| 3 | `apps/frontend/.../status-board/utils/priorityUtils.ts` | Status Board (frontend) | Re-ranks *again*, client-side, on top of #2, with yet a third weight set (`RECOMMENDATION_PRIORITY`) |
-| 4 | `apps/backend/src/services/guidanceEngine/guidancePriority.service.ts` | Dashboard hero / Morning Pulse | `GuidancePriorityService.score()` — an entirely parallel weighted-score system (severity/urgency/financial/safety/confidence/readiness), zero references to Home Actions |
-| 5 | `apps/frontend/.../DashboardHeroSection.tsx` | Dashboard hero | Ranks *again* on top of #4's already-scored guidance data (`estimateHeroStrength`, `rankHeroCandidates`) — the hero item is scored three times total across #4/#5 for this one surface |
-| 6 | `apps/frontend/.../MorningPulseSection.tsx` | Dashboard | `PULSE_DOMAIN_ORDER` + own `deriveUrgency()`, on the same guidance-engine data as #4/#5 |
-| 7 | `apps/backend/src/services/notification.service.ts` | Notifications | `resolveAttentionPriority()` fallback, used whenever a caller doesn't pass an explicit priority |
-| 8 | `apps/backend/src/services/maintenanceReminder.service.ts`, `newHomeWarrantyDeadline.service.ts` | Notifications | Each computes its own `daysUntilDue`-based priority/urgency independently |
-| 9 | `apps/backend/src/modules/homeEventRadar/services/radarNotificationDelivery.service.ts` | Notifications | Writes directly to the `Notification` table, bypassing `NotificationService.create` entirely, with its own urgency mapping |
-| 10 | `apps/backend/src/homeBriefing/homeBriefing.service.ts` | Home Briefing | Independent `urgency`/materiality computation, separate from Home Action priority |
+| 1 | `apps/backend/src/services/resolutionCenter.service.ts` | Fix backend | Own critical/high/medium/low scale, status model, and case/action sorting. |
+| 2 | `apps/frontend/src/lib/dashboard/resolutionCenterViewModel.ts` | Fix frontend | ACTION_PRIORITY_RANK and casePriorityForAction re-sort the backend projection in the browser. |
+| 3 | `apps/backend/src/services/homeStatusBoard.service.ts` | Status Board backend | CONDITION_SEVERITY and CATEGORY_PRIORITY_WEIGHT weighted sorting. |
+| 4 | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/status-board/utils/priorityUtils.ts` | Status Board frontend | RECOMMENDATION_PRIORITY re-ranks the backend result client-side. |
+| 5 | `apps/backend/src/services/guidanceEngine/guidancePriority.service.ts` | Dashboard hero and Morning Pulse backend | GuidancePriorityService independently scores severity, urgency, financial impact, safety, confidence, and readiness. |
+| 6 | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/DashboardHeroSection.tsx` | Dashboard hero frontend | estimateHeroStrength and rankHeroCandidates re-rank already-scored guidance. |
+| 7 | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/MorningPulseSection.tsx` | Dashboard Morning Pulse frontend | PULSE_DOMAIN_ORDER and deriveUrgency independently order guidance. |
+| 8 | `apps/backend/src/services/notification.service.ts` | Notifications | resolveAttentionPriority supplies a separate fallback priority. |
+| 9 | `apps/backend/src/services/maintenanceReminder.service.ts`<br>`apps/backend/src/services/newHomeWarrantyDeadline.service.ts` | Maintenance and warranty notifications | Each service derives priority or urgency independently from days until due. |
+| 10 | `apps/backend/src/modules/homeEventRadar/services/radarNotificationDelivery.service.ts` | Radar notifications | Direct Notification writes use a Radar-specific urgency mapping. |
+| 11 | `apps/backend/src/homeBriefing/homeBriefing.service.ts` | Home Briefing | Independent briefing urgency and materiality calculation. |
 
 **Positive counter-example — the pattern Phase 1 should generalize, not replace:** `apps/backend/src/services/decisionPlatform/priorityListPolicy.ts`'s `buildPriorityListView()` is a genuinely pure, DB-free projection of `homeActions.service.ts`'s already-ranked feed — it never re-ranks. `askOrchestrator.service.ts` (Ask/Cozy) and `homeActionProactiveDelivery.service.ts` (external proactive notifications) already consume it correctly today.
 
@@ -124,7 +126,7 @@ No formal three-way capability↔skill↔guidance link existed before Phase 0. `
 
 ## 4. Canonical read boundary decision (FRD Phase 0 work item 4)
 
-**Decision:** `buildPriorityListView()` in `apps/backend/src/services/decisionPlatform/priorityListPolicy.ts`, applied over `homeActions.service.ts`'s `getHomeActionFeed()`, is the canonical read boundary. It is already correctly implemented and already consumed by two of the ten systems in §2 (Ask/Cozy and proactive notification delivery). Phase 1 generalizes this exact pattern to the other eight — Resolution Center/Fix, Status Board (both layers), Guidance Engine/dashboard hero (all three layers), the remaining notification paths, and Home Briefing — rather than introducing a new boundary.
+**Decision:** `buildPriorityListView()` in `apps/backend/src/services/decisionPlatform/priorityListPolicy.ts`, applied over `homeActions.service.ts`'s `getHomeActionFeed()`, is the canonical read boundary. Ask/Cozy and proactive notification delivery already consume this projection correctly. Phase 1 generalizes the same boundary to every owner remaining in §2 rather than introducing a new one.
 
 ---
 
@@ -132,12 +134,12 @@ No formal three-way capability↔skill↔guidance link existed before Phase 0. `
 
 Defined in `apps/backend/src/services/intelligence/completionEvidencePolicy.registry.ts`, keyed by the existing `RecommendationSafetyTier` enum (`recommendationGovernance.contract.ts`) rather than a new parallel tier — every `HomeAction.governance.safetyTier` already carries this value.
 
-| Safety tier | Minimum completion behavior |
-| --- | --- |
-| `LOW_CONSEQUENCE` | Homeowner attestation permitted. |
-| `MATERIAL_FINANCIAL` | Attestation plus cost/result; document or domain record when available. |
-| `REGULATED_COVERAGE` | Domain completion record or document evidence; policy/claim linkage where applicable. |
-| `SAFETY_EMERGENCY` | Domain-owned resolution plus evidence or qualified-professional confirmation; simple dismissal prohibited. |
+| Safety tier | Attestation | Cost/result | Record evidence | Policy/claim link | Domain-owned resolution | Simple dismissal | Minimum completion behavior |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `LOW_CONSEQUENCE` | PERMITTED | NOT_REQUIRED | NOT_REQUIRED | NOT_REQUIRED | No | Yes | Homeowner attestation permitted. |
+| `MATERIAL_FINANCIAL` | REQUIRED | REQUIRED | WHEN_AVAILABLE | NOT_REQUIRED | No | Yes | Attestation plus cost/result; document or domain record when available. |
+| `REGULATED_COVERAGE` | INSUFFICIENT | NOT_REQUIRED | DOMAIN_RECORD_OR_DOCUMENT | WHEN_APPLICABLE | No | Yes | Domain completion record or document evidence; policy/claim linkage where applicable. |
+| `SAFETY_EMERGENCY` | INSUFFICIENT | NOT_REQUIRED | EVIDENCE_OR_PROFESSIONAL_CONFIRMATION | NOT_REQUIRED | Yes | No | Domain-owned resolution plus evidence or qualified-professional confirmation; simple dismissal prohibited. |
 
 Not yet consumed anywhere (a later phase wires it into the completion UI); defined now so that phase has a validated contract to build against.
 

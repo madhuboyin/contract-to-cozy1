@@ -63,6 +63,15 @@ const CLEAR_FLAGS = {
   GEMINI_API_KEY: undefined,
 };
 
+test('worker intelligence registry validation fails before processing invalid mappings', () => {
+  const { assertValidWorkerIntelligenceRegistries } = freshModule();
+  assert.doesNotThrow(() => assertValidWorkerIntelligenceRegistries(() => []));
+  assert.throws(
+    () => assertValidWorkerIntelligenceRegistries(() => ['duplicate consumer owner']),
+    /Home Intelligence registry validation failed in worker: duplicate consumer owner/,
+  );
+});
+
 test('database and redis are always required, regardless of job flags', async () => {
   await withEnv(CLEAR_FLAGS, async () => {
     const { validateStartupDependencies } = freshModule();

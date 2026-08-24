@@ -104,6 +104,24 @@ export async function listActiveDecisionThreadsForProperty(propertyId: string, l
   });
 }
 
+export async function listActiveDecisionThreadsPageForProperty(
+  propertyId: string,
+  input: { cursor: string | null; pageSize: number },
+) {
+  const rows = await prisma.decisionThread.findMany({
+    where: { propertyId, lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] } },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    take: input.pageSize + 1,
+    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+    select: { id: true },
+  });
+  const threads = rows.slice(0, input.pageSize);
+  return {
+    threads,
+    nextCursor: rows.length > input.pageSize ? threads.at(-1)?.id ?? null : null,
+  };
+}
+
 function inputDigestFor(context: HvacDecisionContext): string {
   return createHash('sha256').update(JSON.stringify(context)).digest('hex');
 }

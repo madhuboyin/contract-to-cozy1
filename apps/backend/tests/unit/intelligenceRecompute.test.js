@@ -174,10 +174,13 @@ function dynamicConsumer(overrides = {}) {
     timeoutMs: 1000,
     retryPolicy: { maxAttempts: 2, backoffMs: 1000 },
     failureBehavior: 'MARK_UNAVAILABLE',
-    resolveTargets: async () => [
-      { targetKey: 'Snapshot:1', targetType: 'Snapshot', targetId: '1', targetVersion: null },
-      { targetKey: 'Snapshot:2', targetType: 'Snapshot', targetId: '2', targetVersion: null },
-    ],
+    resolveTargets: async () => ({
+      targets: [
+        { targetKey: 'Snapshot:1', targetType: 'Snapshot', targetId: '1', targetVersion: null },
+        { targetKey: 'Snapshot:2', targetType: 'Snapshot', targetId: '2', targetVersion: null },
+      ],
+      nextCursor: null,
+    }),
     recompute: async () => {},
     ...overrides,
   };
@@ -281,7 +284,7 @@ test('materializeTargets passes triggerType/triggerEntityType/triggerEntityId th
   const run = await createOrClaimRecomputeRun(db, trigger());
   let received = null;
   const consumer = dynamicConsumer({
-    resolveTargets: async (input) => { received = input; return []; },
+    resolveTargets: async (input) => { received = input; return { targets: [], nextCursor: null }; },
   });
   await materializeTargets(
     db,
@@ -306,9 +309,12 @@ test('materializeTargets passes triggerType through as MANUAL_REFRESH so a DYNAM
   const consumer = dynamicConsumer({
     resolveTargets: async (input) => {
       received = input;
-      return input.triggerType === 'MANUAL_REFRESH'
-        ? [{ targetKey: 'a', targetType: 'X', targetId: 'a', targetVersion: null }, { targetKey: 'b', targetType: 'X', targetId: 'b', targetVersion: null }]
-        : [];
+      return {
+        targets: input.triggerType === 'MANUAL_REFRESH'
+          ? [{ targetKey: 'a', targetType: 'X', targetId: 'a', targetVersion: null }, { targetKey: 'b', targetType: 'X', targetId: 'b', targetVersion: null }]
+          : [],
+        nextCursor: null,
+      };
     },
   });
   const handles = await materializeTargets(
@@ -318,6 +324,44 @@ test('materializeTargets passes triggerType through as MANUAL_REFRESH so a DYNAM
   );
   assert.equal(received.triggerType, 'MANUAL_REFRESH');
   assert.equal(handles.length, 2, 'a MANUAL_REFRESH-aware resolver can return every relevant target, not just an entity-matched subset');
+});
+
+test('materializeTargets pages through a DYNAMIC resolver and deduplicates target keys across pages', async () => {
+  const db = makeFakeDb();
+  const run = await createOrClaimRecomputeRun(db, trigger());
+  const cursors = [];
+  const consumer = dynamicConsumer({
+    resolveTargets: async (input) => {
+      cursors.push(input.cursor);
+      assert.equal(input.pageSize, 100);
+      return input.cursor === null
+        ? { targets: [{ targetKey: 'a', targetType: 'X', targetId: 'a', targetVersion: null }], nextCursor: 'page-2' }
+        : { targets: [{ targetKey: 'a', targetType: 'X', targetId: 'a', targetVersion: null }, { targetKey: 'b', targetType: 'X', targetId: 'b', targetVersion: null }], nextCursor: null };
+    },
+  });
+  const targets = await materializeTargets(
+    db,
+    { id: run.id, propertyId: run.propertyId, changedFactKeys: ['fact.b'], triggerType: 'PROPERTY_FACT_CHANGED', triggerEntityType: 'Property', triggerEntityId: run.propertyId },
+    [consumer],
+  );
+  assert.deepEqual(cursors, [null, 'page-2']);
+  assert.deepEqual(targets.map((target) => target.targetKey).sort(), ['a', 'b']);
+});
+
+test('materializeTargets rejects a repeated DYNAMIC pagination cursor', async () => {
+  const db = makeFakeDb();
+  const run = await createOrClaimRecomputeRun(db, trigger());
+  const consumer = dynamicConsumer({
+    resolveTargets: async () => ({ targets: [], nextCursor: 'same-cursor' }),
+  });
+  await assert.rejects(
+    () => materializeTargets(
+      db,
+      { id: run.id, propertyId: run.propertyId, changedFactKeys: ['fact.b'], triggerType: 'PROPERTY_FACT_CHANGED', triggerEntityType: 'Property', triggerEntityId: run.propertyId },
+      [consumer],
+    ),
+    /repeated pagination cursor/,
+  );
 });
 
 test('materializeTargets is idempotent — re-materializing the same run/consumer/target does not duplicate or reset', async () => {

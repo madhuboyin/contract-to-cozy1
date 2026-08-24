@@ -11,24 +11,54 @@ import { RECOMMENDATION_SAFETY_TIERS, type RecommendationSafetyTier } from '../.
  */
 export interface CompletionEvidencePolicyEntry {
   safetyTier: RecommendationSafetyTier;
+  attestation: 'PERMITTED' | 'REQUIRED' | 'INSUFFICIENT';
+  costOrObservedResult: 'NOT_REQUIRED' | 'REQUIRED';
+  recordEvidence: 'NOT_REQUIRED' | 'WHEN_AVAILABLE' | 'DOMAIN_RECORD_OR_DOCUMENT' | 'EVIDENCE_OR_PROFESSIONAL_CONFIRMATION';
+  policyOrClaimLinkage: 'NOT_REQUIRED' | 'WHEN_APPLICABLE';
+  requiresDomainOwnedResolution: boolean;
+  simpleDismissalAllowed: boolean;
   minimumCompletionBehavior: string;
 }
 
 export const COMPLETION_EVIDENCE_POLICY: readonly CompletionEvidencePolicyEntry[] = [
   {
     safetyTier: 'LOW_CONSEQUENCE',
+    attestation: 'PERMITTED',
+    costOrObservedResult: 'NOT_REQUIRED',
+    recordEvidence: 'NOT_REQUIRED',
+    policyOrClaimLinkage: 'NOT_REQUIRED',
+    requiresDomainOwnedResolution: false,
+    simpleDismissalAllowed: true,
     minimumCompletionBehavior: 'Homeowner attestation permitted.',
   },
   {
     safetyTier: 'MATERIAL_FINANCIAL',
+    attestation: 'REQUIRED',
+    costOrObservedResult: 'REQUIRED',
+    recordEvidence: 'WHEN_AVAILABLE',
+    policyOrClaimLinkage: 'NOT_REQUIRED',
+    requiresDomainOwnedResolution: false,
+    simpleDismissalAllowed: true,
     minimumCompletionBehavior: 'Attestation plus cost/result; document or domain record when available.',
   },
   {
     safetyTier: 'REGULATED_COVERAGE',
+    attestation: 'INSUFFICIENT',
+    costOrObservedResult: 'NOT_REQUIRED',
+    recordEvidence: 'DOMAIN_RECORD_OR_DOCUMENT',
+    policyOrClaimLinkage: 'WHEN_APPLICABLE',
+    requiresDomainOwnedResolution: false,
+    simpleDismissalAllowed: true,
     minimumCompletionBehavior: 'Domain completion record or document evidence; policy/claim linkage where applicable.',
   },
   {
     safetyTier: 'SAFETY_EMERGENCY',
+    attestation: 'INSUFFICIENT',
+    costOrObservedResult: 'NOT_REQUIRED',
+    recordEvidence: 'EVIDENCE_OR_PROFESSIONAL_CONFIRMATION',
+    policyOrClaimLinkage: 'NOT_REQUIRED',
+    requiresDomainOwnedResolution: true,
+    simpleDismissalAllowed: false,
     minimumCompletionBehavior: 'Domain-owned resolution plus evidence or qualified-professional confirmation; simple dismissal prohibited.',
   },
 ];
@@ -45,6 +75,15 @@ export function validateCompletionEvidencePolicy(
     seen.add(entry.safetyTier);
     if (!entry.minimumCompletionBehavior.trim()) {
       issues.push(`completionEvidencePolicy entry "${entry.safetyTier}" declares no minimum completion behavior.`);
+    }
+    if (entry.safetyTier === 'SAFETY_EMERGENCY' && (!entry.requiresDomainOwnedResolution || entry.simpleDismissalAllowed)) {
+      issues.push('completionEvidencePolicy SAFETY_EMERGENCY must require domain-owned resolution and prohibit simple dismissal.');
+    }
+    if (entry.safetyTier === 'REGULATED_COVERAGE' && entry.recordEvidence !== 'DOMAIN_RECORD_OR_DOCUMENT') {
+      issues.push('completionEvidencePolicy REGULATED_COVERAGE must require a domain record or document.');
+    }
+    if (entry.safetyTier === 'MATERIAL_FINANCIAL' && entry.costOrObservedResult !== 'REQUIRED') {
+      issues.push('completionEvidencePolicy MATERIAL_FINANCIAL must require cost or observed-result capture.');
     }
   }
   for (const tier of RECOMMENDATION_SAFETY_TIERS) {

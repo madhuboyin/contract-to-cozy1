@@ -42,6 +42,19 @@ export interface HomeActionProducerOwnershipEntry {
   workKeyEligible: boolean;
   workItemSourceType: OperationalWorkSourceType | null;
   /**
+   * Runtime work ownership for producers whose sourceKind is selected per
+   * action. The Home Operations adapter makes its decision from the
+   * normalized action.source.kind, so recording a blanket workKeyEligible
+   * false for these producers makes the ownership report lie about actions
+   * that resolve to an eligible kind. Static producers leave this empty.
+   */
+  dynamicWorkItemOwnership?: readonly {
+    sourceKind: HomeAction['source']['kind'];
+    workItemSourceType: OperationalWorkSourceType;
+  }[];
+  /** True when the producer projects an already-linked work item rather than resolving a new one. */
+  carriesExistingWorkItem?: boolean;
+  /**
    * Every command (from HOME_ACTION_FEEDBACK_CONTROLS) this producer's
    * actions may declare in feedbackControls — the union across every id
    * family/branch the producer emits when they differ, confirmed by direct
@@ -157,6 +170,26 @@ export function validateHomeActionProducerOwnership(
     }
     if (!entry.workKeyEligible && entry.workItemSourceType) {
       issues.push(`homeActionProducerOwnership entry "${entry.producerId}" declares a workItemSourceType but is not workKeyEligible.`);
+    }
+    const dynamicOwnership = entry.dynamicWorkItemOwnership ?? [];
+    if (entry.sourceKind !== null && dynamicOwnership.length > 0) {
+      issues.push(`homeActionProducerOwnership entry "${entry.producerId}" has a fixed sourceKind but also declares dynamicWorkItemOwnership.`);
+    }
+    if (entry.workKeyEligible && dynamicOwnership.length > 0) {
+      issues.push(`homeActionProducerOwnership entry "${entry.producerId}" declares both fixed and dynamic work-item ownership.`);
+    }
+    if (entry.carriesExistingWorkItem && (entry.workKeyEligible || dynamicOwnership.length > 0)) {
+      issues.push(`homeActionProducerOwnership entry "${entry.producerId}" carries an existing work item but also declares work-item resolution ownership.`);
+    }
+    const seenDynamicKinds = new Set<string>();
+    for (const mapping of dynamicOwnership) {
+      if (seenDynamicKinds.has(mapping.sourceKind)) {
+        issues.push(`homeActionProducerOwnership entry "${entry.producerId}" declares duplicate dynamic work ownership for source kind "${mapping.sourceKind}".`);
+      }
+      seenDynamicKinds.add(mapping.sourceKind);
+      if (!HOME_ACTION_SOURCE_KINDS.includes(mapping.sourceKind)) {
+        issues.push(`homeActionProducerOwnership entry "${entry.producerId}" references unknown dynamic work source kind "${mapping.sourceKind}".`);
+      }
     }
     if (entry.supportedCommands.length === 0) {
       issues.push(`homeActionProducerOwnership entry "${entry.producerId}" declares no supportedCommands.`);

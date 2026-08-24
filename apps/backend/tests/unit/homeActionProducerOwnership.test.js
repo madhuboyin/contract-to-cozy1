@@ -76,6 +76,23 @@ test('validateHomeActionProducerOwnership fails fast on inconsistent outcome-ada
   assert.ok(issuesB.some((issue) => issue.includes('loadProjectActions') && issue.includes('hasOutcomeAdapter is false')));
 });
 
+test('dynamic Home Action producers declare the runtime source kinds that resolve work items', () => {
+  const orchestration = HOME_ACTION_PRODUCER_OWNERSHIP.find((entry) => entry.producerId === 'adaptOrchestratedActionToHomeAction');
+  assert.deepEqual(orchestration.dynamicWorkItemOwnership, [
+    { sourceKind: 'MAINTENANCE', workItemSourceType: 'MAINTENANCE' },
+    { sourceKind: 'COVERAGE', workItemSourceType: 'COVERAGE' },
+  ]);
+
+  const activation = HOME_ACTION_PRODUCER_OWNERSHIP.find((entry) => entry.producerId === 'getActivationFirstValue');
+  assert.deepEqual(
+    activation.dynamicWorkItemOwnership.map((entry) => entry.sourceKind).sort(),
+    ['COVERAGE', 'GUIDANCE', 'INCIDENT', 'MAINTENANCE', 'PROJECT'],
+  );
+
+  const acceptedWork = HOME_ACTION_PRODUCER_OWNERSHIP.find((entry) => entry.producerId === 'appendAcceptedOperationalWork');
+  assert.equal(acceptedWork.carriesExistingWorkItem, true);
+});
+
 test('validateHomeActionProducerOwnership fails fast when hasOutcomeAdapter is true without a completion adapter', () => {
   const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
     entry.producerId === 'loadProjectActions' ? { ...entry, hasOutcomeAdapter: true, outcomeAdapterOwner: 'made up for this test' } : entry);

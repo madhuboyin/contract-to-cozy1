@@ -15,6 +15,7 @@ import { validateCapabilitySkillGuidanceBridge } from './capabilitySkillGuidance
 import { CAPABILITY_SKILL_GUIDANCE_BRIDGE } from './capabilitySkillGuidanceBridge.registry';
 import { validateCompletionEvidencePolicy, COMPLETION_EVIDENCE_POLICY } from './completionEvidencePolicy.registry';
 import { validateCompoundRuleRegistry, COMPOUND_RULE_REGISTRY } from './compoundRuleRegistry.contract';
+import { ATTENTION_PRIORITY_OWNERS, validateAttentionPriorityOwners } from './attentionPriorityOwnership.registry';
 
 export * from './intelligenceConsumerRegistry.contract';
 export * from './intelligenceConsumerRegistry';
@@ -26,6 +27,7 @@ export * from './capabilitySkillGuidanceBridge.contract';
 export * from './capabilitySkillGuidanceBridge.registry';
 export * from './completionEvidencePolicy.registry';
 export * from './compoundRuleRegistry.contract';
+export * from './attentionPriorityOwnership.registry';
 
 /**
  * Home Intelligence Functional Completeness FRD Phase 0 work item 6 —
@@ -53,5 +55,6 @@ export function validateIntelligenceRegistries(): string[] {
     }),
     ...validateCompletionEvidencePolicy(COMPLETION_EVIDENCE_POLICY),
     ...validateCompoundRuleRegistry(COMPOUND_RULE_REGISTRY),
+    ...validateAttentionPriorityOwners(ATTENTION_PRIORITY_OWNERS),
   ];
 }
