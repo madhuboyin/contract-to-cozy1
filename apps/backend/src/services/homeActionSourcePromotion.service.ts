@@ -21,6 +21,7 @@ import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinanc
 import { analyticsEmitter } from './analytics';
 import { ProductAnalyticsEventType } from '@prisma/client';
 import { calculateHealthScore } from '../utils/propertyScore.util';
+import { hasGovernedPlanGuidance } from './riskPremiumOptimizer.service';
 import { createHash } from 'node:crypto';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
@@ -38,7 +39,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1426,6 +1427,123 @@ async function loadInspectionCoverageActions(propertyId: string, db: HomeActionS
       feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
       createdAt: finding.createdAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    })];
+  });
+}
+
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 2,
+// rule 4 of 7 (HI-CMP-002) — "high premium + eligible mitigation plan."
+// Both halves are already computed together by one
+// RiskPremiumOptimizationAnalysis run (premiumDrivers + planItems), but
+// neither had a Home Action producer. The correlation is deterministic at
+// the same level the analysis itself already reasons: a HIGH-severity
+// premium driver and a RECOMMENDED plan item that target the same peril
+// (MitigationPeril and PremiumDriver.relatedPerils use the identical
+// WATER/FIRE/WIND_HAIL/THEFT/LIABILITY/ELECTRICAL/OTHER taxonomy). An
+// untargeted plan item (no targetPeril) is deliberately excluded — without
+// a peril match it can't be tied to a specific high-severity driver, and
+// promoting it here would overclaim causality HI-CMP-003 doesn't allow.
+// hasGovernedPlanGuidance is imported rather than re-derived so this
+// reader can never silently disagree with the optimizer's own governance
+// gate (mapAnalysisToDto withholds ungoverned rows the same way).
+type PremiumDriverSnapshot = {
+  code: string;
+  title: string;
+  detail: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  relatedPerils?: string[];
+};
+
+async function loadRiskMitigationActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.riskPremiumOptimizationAnalysis) return [];
+  const now = evaluatedAt ?? new Date();
+  const analysis = await db.riskPremiumOptimizationAnalysis.findFirst({
+    where: { propertyId },
+    include: { planItems: { where: { status: 'RECOMMENDED' } } },
+    orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
+  });
+  if (!analysis || analysis.status !== 'READY') return [];
+
+  const premiumDrivers = (Array.isArray(analysis.premiumDrivers) ? analysis.premiumDrivers : []) as PremiumDriverSnapshot[];
+  const highDriversByPeril = new Map<string, PremiumDriverSnapshot[]>();
+  for (const driver of premiumDrivers) {
+    if (driver.severity !== 'HIGH') continue;
+    for (const peril of driver.relatedPerils ?? []) {
+      const existing = highDriversByPeril.get(peril) ?? [];
+      existing.push(driver);
+      highDriversByPeril.set(peril, existing);
+    }
+  }
+  if (highDriversByPeril.size === 0) return [];
+
+  const governedItems = (analysis.planItems as any[]).filter((item) => hasGovernedPlanGuidance(item));
+
+  return governedItems.flatMap((item) => {
+    if (!item.targetPeril) return [];
+    const matchedDrivers = highDriversByPeril.get(item.targetPeril);
+    if (!matchedDrivers || matchedDrivers.length === 0) return [];
+
+    const handoff = item.handoffJson as { kind: 'DIY' | 'PROVIDER' | 'CARRIER'; label: string; href: string; safetyNote: string };
+    // SELECT_PROVIDER/PURCHASE/FINANCE require a governed commercial
+    // disclosure (HomeActionSchema's superRefine) — this producer has no
+    // basis to certify one for the general provider directory
+    // mitigationHandoff() links to, so PROVIDER stays REVIEW rather than
+    // fabricating compensation/ranking-influence claims it can't verify.
+    const ctaKind = handoff.kind === 'DIY' ? 'START' : 'REVIEW';
+    const driverTitles = matchedDrivers.map((driver) => driver.title).join(', ');
+    const requiresProfessionalNote = item.professionalHelpLevel === 'QUALIFIED_PROFESSIONAL_REQUIRED'
+      || item.professionalHelpLevel === 'PROFESSIONAL_RECOMMENDED';
+    const costText = item.estimatedCost != null ? ` Estimated cost: ${formatHomeActionCurrency(Number(item.estimatedCost))}.` : '';
+
+    return [adaptHomeActionSource('COVERAGE', {
+      id: `mitigation-plan:${item.id}`,
+      propertyId,
+      lineageId: `mitigation-plan:${item.id}`,
+      sourceEntityId: item.id,
+      sourceVersion: `${item.updatedAt.toISOString()}:${analysis.computedAt.toISOString()}`,
+      state: 'OPEN',
+      priority: item.priority === 'HIGH' ? 'NOW' : item.priority === 'MEDIUM' ? 'SOON' : 'PLAN',
+      signal: item.title ?? `Address ${driverTitles.toLowerCase()}`,
+      whyItMatters: `${item.why} This targets ${driverTitles}, which the Risk-to-Premium Optimizer flagged as a high-severity driver of your insurance premium.${costText} Ask your carrier: ${item.carrierReviewQuestion}`,
+      recommendedAction: handoff.label,
+      expectedOutcome: 'This mitigation may reduce your insurance risk profile and premium, subject to your carrier\'s confirmation.',
+      timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
+      evidence: [
+        ...matchedDrivers.map((driver) => ({
+          id: `${analysis.id}:${driver.code}`,
+          type: 'SYSTEM_DERIVATION' as const,
+          label: `${driver.title} (high-severity premium driver)`,
+          source: 'Risk-to-Premium Optimizer',
+          observedAt: analysis.computedAt.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 0.8,
+        })),
+        {
+          id: item.id,
+          type: 'SYSTEM_DERIVATION' as const,
+          label: item.title ?? 'Recommended mitigation',
+          source: 'Risk mitigation plan',
+          observedAt: item.updatedAt.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 0.75,
+        },
+      ],
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 0.75, label: confidenceLabel(0.75), missing: [] },
+      governance: {
+        ...lowConsequenceGovernance('risk-mitigation-v1'),
+        professionalBoundary: requiresProfessionalNote ? handoff.safetyNote : null,
+      },
+      primaryCta: { kind: ctaKind, label: handoff.label, href: handoff.href },
+      secondaryCtas: [{
+        kind: 'REVIEW',
+        label: 'Review full risk-to-premium plan',
+        href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=risk`,
+      }],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: item.createdAt.toISOString(),
       lastEvaluatedAt: now.toISOString(),
     })];
   });
@@ -4285,6 +4403,7 @@ export async function getPromotedHomeActions(
     ), Promise.resolve(incidentActions),
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadCoverageRenewalActions(propertyId, db, options.evaluatedAt),
+    loadRiskMitigationActions(propertyId, db, options.evaluatedAt),
     loadHealthInsightActions(propertyId, db, options.evaluatedAt),
     loadCompoundRadarInsightActions(propertyId, db, options.evaluatedAt),
     loadRepairReplaceDecisionActions(propertyId, db, options.evaluatedAt),

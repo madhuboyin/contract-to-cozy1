@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.20"
+version: "1.21"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.20 |
+| Version | 1.21 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1086,7 +1086,11 @@ This pass adds a genuinely new fifth rule extending the family's "unresolved mai
 
 Independently found and fixed while testing this: every `SALE_PREP_SELF_REPORT` Home Action was being silently suppressed from the entire Home feed. Its title is always `"<field>: <condition>"` (always contains a colon), which made `loadSalePrepActions`'s `keyFacts` swap the required `'Item'` label for `'Current assessment'` — failing `homeActionPresentationRegistry.ts`'s `SALE_PREPARATION.requiredFactLabels` check (`['Sale stage', 'Item', 'Source', 'Category', 'Impact']`) and dropping the action at the grounding gate with zero visible error. Every homeowner who ever answered the Sale Readiness self-report questionnaire has never seen those items surface as Home Actions. Fixed by keeping the label always `'Item'` and folding the assessment into its value instead (`"<subject> — <assessment>"`), verified not to push `keyFacts` past its 8-entry schema cap. Test coverage: `tests/unit/homeActionSalePrepPermitPromotion.test.js` (7 tests: permit/unpermitted-flag promotion, inactive/closed/cancelled sale-case suppression, every sale stage, and a regression test pinning the self-report fix), all passing.
 
-Not yet done: work item 2's remaining four rule families (high premium + eligible mitigation plan; property-cost change + refinance/ownership-cost threshold; recurring failure + repair-vs-replace readiness; document-promoted fact + conflicting fact); work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI — `homeRecordsExtraction.service.ts` has no conflict-detection call at all).
+**Work item 2 rule 4 of 7 (2026-08-24): high premium + eligible mitigation plan.** `riskPremiumOptimizer.service.ts` already computes both halves together in one `RiskPremiumOptimizationAnalysis` run — `premiumDrivers` (each carrying a `severity` and `relatedPerils`) and `RiskMitigationPlanItem` rows (`status: RECOMMENDED`, `targetPeril`, governed carrier/professional-help/handoff guidance) — but neither had ever been promoted into a Home Action. New `loadRiskMitigationActions` (`services/homeActionSourcePromotion.service.ts`) correlates them deterministically: a `RECOMMENDED` plan item is promoted only when its `targetPeril` matches a `HIGH`-severity premium driver in the same analysis (`MitigationPeril` and `PremiumDriver.relatedPerils` share one taxonomy, so the join is exact, not inferred). An untargeted plan item is deliberately excluded — without a peril match it can't be tied to a specific high-severity driver, which HI-CMP-003 doesn't allow asserting.
+
+The loader imports `hasGovernedPlanGuidance` (newly exported from `riskPremiumOptimizer.service.ts`, previously private) rather than re-deriving the governance check, so it can never silently disagree with the optimizer's own withholding rule (`mapAnalysisToDto` already refuses to expose an ungoverned plan item; this reader now refuses identically). The primary CTA reuses the plan item's own governed `mitigationHandoff()` label/href directly. One CTA-kind correction made while wiring this: a `PROVIDER` handoff maps to `REVIEW`, not `SELECT_PROVIDER` — the latter requires a certified `commercialDisclosure` block (compensation/ranking-influence claims) this producer has no basis to assert for the general provider directory `mitigationHandoff()` links to. Registered as `HIGH_PREMIUM_ELIGIBLE_MITIGATION` in `COMPOUND_RULE_REGISTRY`; no new work-item eligibility was added (the plan item's own `RECOMMENDED`→`PLANNED`→`COMPLETED` lifecycle stays owned by the optimizer tool's `updatePlanItem`, matching the same "stay advisory" scoping as rules 1 and 2). Test coverage: `tests/unit/homeActionRiskMitigationPromotion.test.js` (10 tests: peril matching, HIGH-severity gating, governance withholding, STALE/ERROR analysis suppression, DIY vs. provider CTA mapping, deterministic `sourceVersion`), all passing alongside the full producer-ownership and startup-registry-validation suites (70/70).
+
+Not yet done: work item 2's remaining three rule families (property-cost change + refinance/ownership-cost threshold; recurring failure + repair-vs-replace readiness; document-promoted fact + conflicting fact); work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI — `homeRecordsExtraction.service.ts` has no conflict-detection call at all).
 
 ### Phase 6 — Skill and capability completion
 

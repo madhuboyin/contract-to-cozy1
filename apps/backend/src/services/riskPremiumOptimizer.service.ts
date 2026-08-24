@@ -327,7 +327,10 @@ const PROFESSIONAL_HELP_LEVELS = new Set([
 ]);
 const HANDOFF_KINDS = new Set(['DIY', 'PROVIDER', 'CARRIER']);
 
-function hasGovernedPlanGuidance(item: RiskMitigationPlanItem): boolean {
+// Exported so a promoted-to-Home-Action reader (homeActionSourcePromotion.
+// service.ts's loadRiskMitigationActions) never re-derives this governance
+// check independently and drifts from it.
+export function hasGovernedPlanGuidance(item: RiskMitigationPlanItem): boolean {
   if (!item.carrierReviewQuestion?.trim()) return false;
   if (!item.professionalHelpLevel || !PROFESSIONAL_HELP_LEVELS.has(item.professionalHelpLevel)) {
     return false;
