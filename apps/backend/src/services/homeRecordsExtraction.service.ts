@@ -18,6 +18,7 @@ import { homeRecordsService } from './homeRecords.service';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
+import { recordDocumentPromotionOutcome } from './decisionPlatform/outcomeObservationService';
 
 // Best-effort bridge into Home Operations (Slice 4 of the continuity
 // plan) — re-reads the record's freshly recomputed needsReview/
@@ -496,6 +497,18 @@ export class HomeRecordsExtractionService {
         signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
       });
 
+      // Home Intelligence Functional Completeness FRD Phase 4 gap fix
+      // (HI-OUT-005): this promotion is fully evidence-verified above (the
+      // HomeEvent this transaction just created carries
+      // verificationStatus: 'EVIDENCE_VERIFIED'), so it is safe to record the
+      // outcome now rather than waiting on a separate review step.
+      await recordDocumentPromotionOutcome({
+        propertyId: input.propertyId,
+        promotedEntityType: 'WARRANTY',
+        promotedEntityId: created.id,
+        userId: input.userId,
+      }, tx);
+
       return created;
     });
 
@@ -656,6 +669,16 @@ export class HomeRecordsExtractionService {
         sourceHealth: 'CURRENT',
         signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
       });
+
+      // Home Intelligence Functional Completeness FRD Phase 4 gap fix
+      // (HI-OUT-005): same reasoning as promoteWarranty — the HomeEvent this
+      // transaction just created is already EVIDENCE_VERIFIED.
+      await recordDocumentPromotionOutcome({
+        propertyId: input.propertyId,
+        promotedEntityType: 'EXPENSE',
+        promotedEntityId: created.id,
+        userId: input.userId,
+      }, tx);
 
       return created;
     });

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { recordCoverageDecisionOutcome } from './decisionPlatform/outcomeObservationService';
 
 export const COVERAGE_EQUIVALENCE_VERSION = 1;
 
@@ -576,6 +577,23 @@ export async function recordCoverageDecision(
       where: { id: decision.id },
       data: { homeEventId: homeEvent.id },
     });
+
+    // Home Intelligence Functional Completeness FRD Phase 4 gap fix
+    // (HI-OUT-005): the first creation path for the COVERAGE_DECISION
+    // source type. No recommendationSnapshotId is resolved here — comparison
+    // .sourceActionId is a raw Home Action id, not a decision-family
+    // lineageId, and there is no verified mapping from one to the other yet;
+    // attaching an attribution on an unverified guess would be worse than
+    // recording no attribution at all.
+    await recordCoverageDecisionOutcome({
+      propertyId,
+      coverageDecisionId: recorded.id,
+      userId,
+      decision: input.decision,
+      selectedOptionId: selected?.id ?? null,
+      recommendationSnapshotId: null,
+    }, tx);
+
     await tx.auditLog.create({
       data: {
         userId,

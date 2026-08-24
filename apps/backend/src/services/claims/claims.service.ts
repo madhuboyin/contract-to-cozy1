@@ -26,6 +26,7 @@ import {
   requiredCoverageKind,
   type ClaimCoverageInput,
 } from '../coverage/contextPolicy';
+import { reconcileClaimCreated, reconcileClaimStatusChanged } from '../claimWorkReconciliation.service';
 
 
 type UploadAndAttachArgs = {
@@ -643,6 +644,18 @@ export class ClaimsService {
     await markItemCoverageAnalysesStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
     await markDoNothingRunsStale(propertyId);
+
+    // Home Intelligence Functional Completeness FRD Phase 4 gap fix
+    // (HI-OUT-003/005): give this claim an Operational Work Item so it is
+    // visible as accepted homeowner work, not just a standalone record.
+    await reconcileClaimCreated({
+      propertyId,
+      claimId: claim.id,
+      userId,
+      title: claim.title,
+      createdAt: claim.createdAt,
+    });
+
     return this.getClaim(propertyId, claim.id);
   }
 
@@ -794,6 +807,21 @@ export class ClaimsService {
       fromStatus: String(claim.status),
       toStatus: String(requestedStatus),
     });
+
+    // Home Intelligence Functional Completeness FRD Phase 4 gap fix
+    // (HI-OUT-003/005/006): reconcile the claim's Operational Work Item and
+    // record a CLAIM_RECORD outcome on a real decision. DRAFT is never a
+    // valid transition target (claims.transitions.ts), so requestedStatus is
+    // always one of the six statuses this reconciler expects.
+    if (requestedStatus !== 'DRAFT') {
+      await reconcileClaimStatusChanged({
+        propertyId: updated.propertyId,
+        claimId: updated.id,
+        userId,
+        toStatus: requestedStatus,
+        settlementAmountCents: updated.settlementAmount != null ? Math.round(Number(updated.settlementAmount) * 100) : null,
+      });
+    }
   }
 
   

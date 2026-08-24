@@ -258,6 +258,157 @@ export async function recordOperationalWorkOutcome(
   return observation;
 }
 
+// Home Intelligence Functional Completeness FRD Phase 4 gap fix (HI-OUT-003/
+// 005) — claims previously had no touchpoint with Operational Work Items or
+// Outcome Observations at all: no Home Action ever recommends filing a
+// claim, so claimWorkReconciliation.service.ts's standalone work item is the
+// first (and only) obligation representation for a claim. Idempotent on
+// (propertyId, sourceEntityId): a retried resolution returns the existing
+// observation.
+interface RecordClaimOutcomeInput {
+  propertyId: string;
+  claimId: string;
+  userId: string | null;
+  decision: 'APPROVED' | 'DENIED';
+  costCents: number | null;
+  recommendationSnapshotId: string | null;
+}
+
+export async function recordClaimOutcome(
+  input: RecordClaimOutcomeInput,
+  db: WorkItemDb = prisma,
+): Promise<OutcomeObservation> {
+  const existing = await db.outcomeObservation.findFirst({
+    where: {
+      propertyId: input.propertyId,
+      sourceType: 'CLAIM_RECORD',
+      sourceEntityType: 'Claim',
+      sourceEntityId: input.claimId,
+    },
+  });
+  if (existing) return existing;
+
+  const hasCost = input.costCents != null;
+  const observation = await db.outcomeObservation.create({
+    data: {
+      propertyId: input.propertyId,
+      sourceType: 'CLAIM_RECORD',
+      sourceEntityType: 'Claim',
+      sourceEntityId: input.claimId,
+      observedType: input.decision === 'APPROVED' ? 'CLAIM_APPROVED' : 'CLAIM_DENIED',
+      observedPayloadVersion: '1.0',
+      observedPayload: { decision: input.decision, costCents: input.costCents, currency: hasCost ? 'USD' : null },
+      occurredAt: new Date(),
+      recordedByUserId: input.userId,
+      // The claim's own status transition is the domain-owned resolution
+      // (same corroboration reasoning as recordOperationalWorkOutcome).
+      verificationStatus: 'CORROBORATED',
+      provenanceRefs: [`Claim:${input.claimId}`],
+    },
+  });
+
+  await attachAttributions(observation.id, input.recommendationSnapshotId, relationshipTypesFor('COMPLETED', hasCost), db);
+  return observation;
+}
+
+// Home Intelligence Functional Completeness FRD Phase 4 gap fix (HI-OUT-005)
+// — the first creation path for the DOCUMENT_PROMOTION source type.
+// Deliberately called only from promoteWarranty/promoteExpense (both create
+// a HomeEvent with verificationStatus EVIDENCE_VERIFIED in the same
+// transaction), never from promoteInsurancePolicy — that promotion stages an
+// UNVERIFIED/PENDING policy term the homeowner has not yet confirmed, and
+// recording a verified outcome for it would repeat the "invented certainty"
+// failure mode homeRecordsExtraction.service.ts's own comment on that path
+// warns against. No attribution: a document promotion is not the result of
+// a Home Action recommendation.
+interface RecordDocumentPromotionOutcomeInput {
+  propertyId: string;
+  promotedEntityType: string;
+  promotedEntityId: string;
+  userId: string;
+}
+
+export async function recordDocumentPromotionOutcome(
+  input: RecordDocumentPromotionOutcomeInput,
+  db: WorkItemDb = prisma,
+): Promise<OutcomeObservation> {
+  const existing = await db.outcomeObservation.findFirst({
+    where: {
+      propertyId: input.propertyId,
+      sourceType: 'DOCUMENT_PROMOTION',
+      sourceEntityType: input.promotedEntityType,
+      sourceEntityId: input.promotedEntityId,
+    },
+  });
+  if (existing) return existing;
+
+  return db.outcomeObservation.create({
+    data: {
+      propertyId: input.propertyId,
+      sourceType: 'DOCUMENT_PROMOTION',
+      sourceEntityType: input.promotedEntityType,
+      sourceEntityId: input.promotedEntityId,
+      observedType: 'DOCUMENT_PROMOTED',
+      observedPayloadVersion: '1.0',
+      observedPayload: { promotedEntityType: input.promotedEntityType },
+      occurredAt: new Date(),
+      recordedByUserId: input.userId,
+      verificationStatus: 'CORROBORATED',
+      provenanceRefs: [`${input.promotedEntityType}:${input.promotedEntityId}`],
+    },
+  });
+}
+
+// Home Intelligence Functional Completeness FRD Phase 4 gap fix (HI-OUT-005/
+// 006) — the first creation path for the COVERAGE_DECISION source type.
+// SELECTED_OPTION is the only relationship type that fits a homeowner
+// choosing among coverage alternatives (not a start/completion/cost of
+// executed work), so it is the sole attribution attached here.
+interface RecordCoverageDecisionOutcomeInput {
+  propertyId: string;
+  coverageDecisionId: string;
+  userId: string;
+  decision: string;
+  selectedOptionId: string | null;
+  recommendationSnapshotId: string | null;
+}
+
+export async function recordCoverageDecisionOutcome(
+  input: RecordCoverageDecisionOutcomeInput,
+  db: WorkItemDb = prisma,
+): Promise<OutcomeObservation> {
+  const existing = await db.outcomeObservation.findFirst({
+    where: {
+      propertyId: input.propertyId,
+      sourceType: 'COVERAGE_DECISION',
+      sourceEntityType: 'CoverageDecision',
+      sourceEntityId: input.coverageDecisionId,
+    },
+  });
+  if (existing) return existing;
+
+  const observation = await db.outcomeObservation.create({
+    data: {
+      propertyId: input.propertyId,
+      sourceType: 'COVERAGE_DECISION',
+      sourceEntityType: 'CoverageDecision',
+      sourceEntityId: input.coverageDecisionId,
+      observedType: 'COVERAGE_DECISION_RECORDED',
+      observedPayloadVersion: '1.0',
+      observedPayload: { decision: input.decision, selectedOptionId: input.selectedOptionId },
+      occurredAt: new Date(),
+      recordedByUserId: input.userId,
+      verificationStatus: 'CORROBORATED',
+      provenanceRefs: [`CoverageDecision:${input.coverageDecisionId}`],
+    },
+  });
+
+  if (input.recommendationSnapshotId) {
+    await attachAttributions(observation.id, input.recommendationSnapshotId, ['SELECTED_OPTION'], db);
+  }
+  return observation;
+}
+
 export interface OutcomeSummaryAttribution {
   observation: OutcomeObservation;
   attribution: RecommendationAttribution;
@@ -305,12 +456,21 @@ export async function disputeOutcomeObservation(observationId: string, propertyI
 }
 
 // HI-OUT-005 (see the Phase 0/2 registry report) expanded
-// OutcomeObservationSourceType to 10 values, but only the first two are
-// actually created anywhere today (recordHomeownerReportedOutcome,
-// recordCompletedMaintenanceOutcome) — the rest have no creation path yet.
-// Every case is still listed explicitly, not a default fallback, so adding
-// a real creation path later trips this switch's exhaustiveness check
-// again rather than silently reusing a generic label.
+// OutcomeObservationSourceType to 10 values. HOMEOWNER_REPORTED,
+// COMPLETED_MAINTENANCE_RECORD, OPERATIONAL_WORK_ITEM, CLAIM_RECORD,
+// DOCUMENT_PROMOTION, and COVERAGE_DECISION now have real creation paths
+// (see recordHomeownerReportedOutcome, recordCompletedMaintenanceOutcome,
+// recordOperationalWorkOutcome, recordClaimOutcome,
+// recordDocumentPromotionOutcome, recordCoverageDecisionOutcome).
+// PROJECT_RECORD, BOOKING_RECORD, and INSPECTION_FINDING are deliberately
+// unused: guidance/project/booking/inspection completions all converge on
+// OPERATIONAL_WORK_ITEM instead (see recordOperationalWorkOutcome's own
+// callers) so every Operational Work Item completion produces one
+// consistently-shaped outcome rather than a domain-specific variant.
+// HOME_EVENT has no creation path yet. Every case is still listed
+// explicitly, not a default fallback, so adding a real creation path later
+// trips this switch's exhaustiveness check again rather than silently
+// reusing a generic label.
 export function sourceTypeLabel(sourceType: OutcomeObservationSourceType): string {
   switch (sourceType) {
     case 'HOMEOWNER_REPORTED': return 'You reported this';

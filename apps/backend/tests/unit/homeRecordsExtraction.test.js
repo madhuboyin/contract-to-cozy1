@@ -115,6 +115,20 @@ require.cache[propertyChangePath] = {
   },
 };
 
+const documentPromotionOutcomeCalls = [];
+const outcomeObservationServicePath = require.resolve('../../src/services/decisionPlatform/outcomeObservationService.ts');
+require.cache[outcomeObservationServicePath] = {
+  id: outcomeObservationServicePath,
+  filename: outcomeObservationServicePath,
+  loaded: true,
+  exports: {
+    recordDocumentPromotionOutcome: async (input) => {
+      documentPromotionOutcomeCalls.push(input);
+      return { id: `outcome-${documentPromotionOutcomeCalls.length}`, ...input };
+    },
+  },
+};
+
 const { HomeRecordsExtractionService } = require('../../src/services/homeRecordsExtraction.service.ts');
 const service = new HomeRecordsExtractionService();
 

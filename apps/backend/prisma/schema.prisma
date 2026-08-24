@@ -23217,6 +23217,12 @@ enum OperationalObligationType {
   // linkage provenance — cancellation-time survival decisions read the
   // EXECUTION_LINKED event / active OperationalWorkSource rows instead.
   SERVICE_EXECUTION
+  // Home Intelligence Functional Completeness FRD Phase 4 gap fix (§8.5
+  // work item 3): an insurance/warranty claim is accepted homeowner work
+  // the moment it is filed — there is no prior Home Action recommendation
+  // to accept, so (like SERVICE_EXECUTION) this is a distinct obligation
+  // shape, not MAINTENANCE_TASK or COVERAGE_ACTION.
+  CLAIM_RESOLUTION
 }
 
 enum OperationalWorkSourceType {
@@ -23241,6 +23247,10 @@ enum OperationalWorkSourceType {
   // itself (sourceEntityId = Booking.id) — the same entity that also
   // becomes the work item's OperationalWorkExecution(BOOKING) row.
   BOOKING
+  // Home Intelligence Functional Completeness FRD Phase 4 gap fix: same
+  // pattern as BOOKING — sourceEntityId = Claim.id, the standalone
+  // obligation's source and execution are the same claim record.
+  CLAIM
 }
 
 enum OperationalWorkSourceRole {
@@ -23255,6 +23265,10 @@ enum OperationalWorkExecutionType {
   GUIDANCE
   PROJECT
   BOOKING
+  // Home Intelligence Functional Completeness FRD Phase 4 gap fix: the
+  // claim itself is both the triggering source and the primary execution
+  // for a standalone CLAIM_RESOLUTION work item.
+  CLAIM
 }
 
 enum OperationalWorkExecutionRole {
