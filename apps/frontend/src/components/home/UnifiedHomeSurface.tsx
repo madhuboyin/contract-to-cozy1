@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { usePostLoginTransitionReadiness } from '@/components/system/PostLoginTransitionContext';
 import {
@@ -217,7 +218,7 @@ export function homeActionProvenance(action: RankedHomeActionDTO): {
   };
 }
 
-function recordHomeActionPrimaryClick(action: RankedHomeActionDTO, propertyId: string): void {
+function trackHomeActionPrimaryClick(action: RankedHomeActionDTO, propertyId: string): void {
   let continuityComplete = false;
   if (action.primaryCta.href.startsWith('/')) {
     const destination = new URL(action.primaryCta.href, 'https://contracttocozy.local');
@@ -247,7 +248,64 @@ function recordHomeActionPrimaryClick(action: RankedHomeActionDTO, propertyId: s
       sourceKind: action.source.kind,
     });
   }
+}
+
+function recordHomeActionPrimaryClick(action: RankedHomeActionDTO, propertyId: string): void {
+  trackHomeActionPrimaryClick(action, propertyId);
   void api.recordHomeActionOpened(propertyId, action.id);
+}
+
+const DECISION_LINEAGE_BLOCKED_STATUSES = new Set(['AMBIGUOUS', 'UNAVAILABLE']);
+
+/** Pure so the gating decision itself is directly unit-testable without mocking api/router/toast. */
+export function shouldBlockNavigationForLineage(lineage: RankedHomeActionDTO['decisionLineage']): boolean {
+  return Boolean(lineage && DECISION_LINEAGE_BLOCKED_STATUSES.has(lineage.status));
+}
+
+/**
+ * Code-review finding (Phase 3 review, item 1): the primary CTA previously
+ * fired recordHomeActionOpened fire-and-forget and navigated immediately,
+ * so a Decision Thread create/resume could still be in flight — or have
+ * failed — when the destination loaded, violating HI-DEC-002's "before
+ * external commitment." Only decision-lineage-eligible actions (today:
+ * repair-replace HVAC) pay this cost; every other action keeps the
+ * original fire-and-forget navigation unchanged.
+ */
+async function openDecisionGatedHomeAction(input: {
+  action: RankedHomeActionDTO;
+  propertyId: string;
+  href: string;
+  router: ReturnType<typeof useRouter>;
+  toast: ReturnType<typeof useToast>['toast'];
+  setPending: (pending: boolean) => void;
+}): Promise<void> {
+  const { action, propertyId, href, router, toast, setPending } = input;
+  trackHomeActionPrimaryClick(action, propertyId);
+  setPending(true);
+  try {
+    const response = await api.recordHomeActionOpened(propertyId, action.id);
+    if (!response.success) throw new Error(response.message || 'Unable to open this recommendation.');
+    const lineage = response.data.decisionLineage;
+    if (shouldBlockNavigationForLineage(lineage)) {
+      toast({
+        title: 'Unable to open this decision right now',
+        description: lineage?.status === 'AMBIGUOUS'
+          ? 'More than one decision is in progress for this item. Contact support to reconcile them.'
+          : 'This decision could not be started or resumed. Please try again in a moment.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    router.push(href);
+  } catch (error) {
+    toast({
+      title: 'Unable to open this recommendation',
+      description: error instanceof Error ? error.message : 'Please try again.',
+      variant: 'destructive',
+    });
+  } finally {
+    setPending(false);
+  }
 }
 
 function recordHomeActionFeedback(
@@ -938,10 +996,12 @@ export function ActionCard({
   showSupportingDetails?: boolean;
 }) {
   const { toast } = useToast();
+  const router = useRouter();
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
   const [manageOpen, setManageOpen] = React.useState(false);
   const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
   const [completeDialogOpen, setCompleteDialogOpen] = React.useState(false);
+  const [openingDecision, setOpeningDecision] = React.useState(false);
 
   const execute = async (
     command: HomeActionCommand,
@@ -1088,9 +1148,22 @@ export function ActionCard({
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button asChild size="sm" className="rounded-full">
-          <Link href={primaryHref} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
-        </Button>
+        {action.decisionLineage ? (
+          <Button
+            size="sm"
+            className="rounded-full"
+            disabled={openingDecision}
+            onClick={() => void openDecisionGatedHomeAction({
+              action, propertyId, href: primaryHref, router, toast, setPending: setOpeningDecision,
+            })}
+          >
+            {action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </Button>
+        ) : (
+          <Button asChild size="sm" className="rounded-full">
+            <Link href={primaryHref} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          </Button>
+        )}
         {action.feedbackControls.includes('COMPLETE') && (
           <Button
             size="sm"

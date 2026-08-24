@@ -15,10 +15,12 @@
 // homeActionProducerOwnership.ts for command routing.
 
 import { logger } from '../../lib/logger';
-import type { DecisionFamilyThreadLineage } from './decisionFamilyAdapter';
+import type { DecisionFamilyThreadLineage, HomeActionOriginRef } from './decisionFamilyAdapter';
 import { DecisionFamilyAmbiguousThreadError } from './decisionFamilyAdapter';
 import { getDecisionFamilyAdapter } from './decisionFamilyAdapterRegistry';
 import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
+
+export type { HomeActionOriginRef } from './decisionFamilyAdapter';
 
 const REPAIR_REPLACE_ID_PREFIX = 'repair-replace:';
 
@@ -84,8 +86,9 @@ export async function startOrResumeHomeActionDecisionThread(input: {
   userId: string;
   ref: HomeActionDecisionFamilyRef;
   askExecutionId?: string;
+  homeActionOrigin?: HomeActionOriginRef;
 }): Promise<HomeActionDecisionLineage> {
-  const { propertyId, userId, ref, askExecutionId } = input;
+  const { propertyId, userId, ref, askExecutionId, homeActionOrigin } = input;
   const adapter = getDecisionFamilyAdapter(ref.decisionDefinitionId);
   if (!adapter) {
     return { status: 'UNAVAILABLE', ...ref, reason: `No decision-family adapter is registered for ${ref.decisionDefinitionId}.` };
@@ -93,7 +96,7 @@ export async function startOrResumeHomeActionDecisionThread(input: {
   const eligible = await adapter.isEligiblePrimaryEntity(propertyId, ref.primaryEntityId);
   if (!eligible) return { status: 'NOT_APPLICABLE', ...ref };
   try {
-    const thread = await adapter.createOrResumeThread({ propertyId, userId, primaryEntityId: ref.primaryEntityId, askExecutionId });
+    const thread = await adapter.createOrResumeThread({ propertyId, userId, primaryEntityId: ref.primaryEntityId, askExecutionId, homeActionOrigin });
     return { status: 'LINKED', ...ref, thread };
   } catch (error) {
     if (error instanceof DecisionFamilyAmbiguousThreadError) return { status: 'AMBIGUOUS', ...ref };

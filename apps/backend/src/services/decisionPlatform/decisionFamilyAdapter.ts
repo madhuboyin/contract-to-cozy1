@@ -29,6 +29,23 @@ export class DecisionFamilyAmbiguousThreadError extends Error {
   }
 }
 
+/**
+ * Durable provenance for "which Home Action, at which version, opened this
+ * decision" — code-review finding (Phase 3 review, item 3): a created
+ * thread/snapshot previously had no link back to the specific Home Action
+ * the homeowner had open when they triggered creation. Recorded into the
+ * first snapshot's signalReferences (RecommendationSnapshot already has a
+ * generic Json provenance field for exactly this) rather than a new schema
+ * column.
+ */
+export interface HomeActionOriginRef {
+  homeActionId: string;
+  lineageId: string;
+  sourceEntityId: string;
+  sourceVersion: string | null;
+  contextVersion: string | null;
+}
+
 export interface DecisionFamilyAdapter {
   decisionDefinitionId: DecisionDefinitionId;
   primaryEntityType: string;
@@ -57,5 +74,7 @@ export interface DecisionFamilyAdapter {
     userId: string;
     primaryEntityId: string;
     askExecutionId?: string;
+    /** Only recorded on an actual creation — a resumed thread already carries its own creation-time origin. */
+    homeActionOrigin?: HomeActionOriginRef;
   }): Promise<DecisionFamilyThreadLineage>;
 }

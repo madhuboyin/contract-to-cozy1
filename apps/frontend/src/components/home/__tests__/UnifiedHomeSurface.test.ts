@@ -3,9 +3,41 @@ import {
   isAssetLifecycleAction,
   isEnvironmentAction,
   resolveHomeAttentionState,
+  shouldBlockNavigationForLineage,
   splitHomeAttentionEntries,
 } from '@/components/home/UnifiedHomeSurface';
 import type { RankedHomeActionDTO } from '@/types';
+
+describe('shouldBlockNavigationForLineage', () => {
+  // Code-review finding (Phase 3 review, item 1): the primary CTA must not
+  // navigate before a Decision Thread create/resume either succeeds or is
+  // known to have failed/gone ambiguous.
+  it('does not block when there is no decision lineage at all', () => {
+    expect(shouldBlockNavigationForLineage(null)).toBe(false);
+  });
+
+  it.each(['LINKED', 'NOT_STARTED', 'NOT_APPLICABLE'] as const)('does not block status %s', (status) => {
+    expect(shouldBlockNavigationForLineage({
+      status,
+      decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+      primaryEntityId: 'item-1',
+      thread: status === 'LINKED' ? {
+        decisionThreadId: 'thread-1',
+        lifecycleStatus: 'RECOMMENDATION_AVAILABLE',
+        contextStatus: 'CURRENT',
+        currentRecommendationSnapshotId: 'snapshot-1',
+      } : undefined,
+    })).toBe(false);
+  });
+
+  it.each(['AMBIGUOUS', 'UNAVAILABLE'] as const)('blocks status %s', (status) => {
+    expect(shouldBlockNavigationForLineage({
+      status,
+      decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+      primaryEntityId: 'item-1',
+    })).toBe(true);
+  });
+});
 
 describe('resolveHomeAttentionState', () => {
   it('keeps ranked actions ahead of incomplete setup', () => {

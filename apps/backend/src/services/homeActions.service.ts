@@ -1063,7 +1063,24 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
   let decisionLineage: HomeActionDecisionLineage | null = null;
   const decisionFamilyRef = resolveDecisionFamilyRef(action);
   if (decisionFamilyRef) {
-    decisionLineage = await startOrResumeHomeActionDecisionThread({ propertyId, userId, ref: decisionFamilyRef });
+    // Phase 3 review item 3: capture which Home Action, at which source
+    // version and Property Context version, triggered this creation — see
+    // decisionFamilyAdapter.ts's HomeActionOriginRef.
+    const contextVersion = await getAggregationPropertyContext(propertyId, userId, 'UNIFIED_HOME')
+      .then((context) => context.contextVersion)
+      .catch(() => null);
+    decisionLineage = await startOrResumeHomeActionDecisionThread({
+      propertyId,
+      userId,
+      ref: decisionFamilyRef,
+      homeActionOrigin: {
+        homeActionId: action.id,
+        lineageId: action.lineageId,
+        sourceEntityId: action.source.entityId,
+        sourceVersion: action.source.version,
+        contextVersion,
+      },
+    });
   }
 
   return { actionId, interaction: 'OPENED' as const, recordedAt: new Date().toISOString(), decisionLineage };

@@ -44,6 +44,7 @@ import {
   DecisionFamilyAmbiguousThreadError,
   type DecisionFamilyAdapter,
   type DecisionFamilyThreadLineage,
+  type HomeActionOriginRef,
 } from './decisionFamilyAdapter';
 
 export class DecisionThreadVersionConflictError extends Error {
@@ -161,6 +162,11 @@ interface CreateThreadInput {
   // conditional DecisionThreadExecutionLink write below. Every existing Ask
   // caller (askOrchestrator.service.ts) still always supplies one.
   askExecutionId?: string;
+  // Phase 3 review item 3: the Home Action origin (id, lineage, source
+  // entity/version, captured context version), recorded into the initial
+  // snapshot's signalReferences so downstream attribution can prove which
+  // Home Action and recommendation version originated this decision.
+  homeActionOrigin?: HomeActionOriginRef;
 }
 
 interface RecommendationSkillLineage {
@@ -235,7 +241,20 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
           { entityType: 'INVENTORY_ITEM', entityId: input.inventoryItemId, fieldPath: 'installedOn' },
         ],
         preferenceReferenceIds: preferenceValueIds,
-        signalReferences: [],
+        // Phase 3 review item 3: records which Home Action (id, lineage,
+        // source entity/version, captured context version) opened this
+        // thread, so downstream attribution can prove which recommendation
+        // version the homeowner actually reacted to. Empty for an
+        // Ask-originated create (no Home Action involved).
+        signalReferences: input.homeActionOrigin ? [{
+          type: 'HOME_ACTION_ORIGIN',
+          homeActionId: input.homeActionOrigin.homeActionId,
+          lineageId: input.homeActionOrigin.lineageId,
+          sourceEntityId: input.homeActionOrigin.sourceEntityId,
+          sourceVersion: input.homeActionOrigin.sourceVersion,
+          contextVersion: input.homeActionOrigin.contextVersion,
+          capturedAt: new Date().toISOString(),
+        }] as unknown as Prisma.InputJsonValue : [],
         evidenceReferences: [],
         resultPayloadVersion: '1.0',
         verdictCode: evaluation.verdict,
@@ -638,7 +657,7 @@ export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
     return { kind: 'UNIQUE', thread: toDecisionFamilyLineage(selection.thread) };
   },
 
-  async createOrResumeThread({ propertyId, userId, primaryEntityId, askExecutionId }) {
+  async createOrResumeThread({ propertyId, userId, primaryEntityId, askExecutionId, homeActionOrigin }) {
     const selection = await selectHvacDecisionThread(propertyId, primaryEntityId);
     if (selection.kind === 'AMBIGUOUS') {
       throw new DecisionFamilyAmbiguousThreadError('HVAC_REPAIR_REPLACE', primaryEntityId);
@@ -647,7 +666,7 @@ export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
       const { thread } = await continueHvacDecisionThread(selection.thread.id, propertyId, askExecutionId);
       return toDecisionFamilyLineage(thread);
     }
-    const created = await createHvacDecisionThread({ propertyId, userId, inventoryItemId: primaryEntityId, askExecutionId });
+    const created = await createHvacDecisionThread({ propertyId, userId, inventoryItemId: primaryEntityId, askExecutionId, homeActionOrigin });
     return toDecisionFamilyLineage(created.thread);
   },
 };
