@@ -92,8 +92,35 @@ export type HomeActionDecisionLineage =
   | { status: 'NOT_APPLICABLE'; decisionDefinitionId: DecisionDefinitionId; primaryEntityId: string }
   // HI-DEC-002 work item 6: no registered decision-family adapter exists
   // for this action's decisionDefinitionId — fail closed rather than
-  // pretend lineage is available.
-  | { status: 'UNAVAILABLE'; decisionDefinitionId: DecisionDefinitionId; primaryEntityId: string; reason: string };
+  // pretend lineage is available. decisionDefinitionId/primaryEntityId are
+  // nullable here specifically (only here): Phase 3 review finding 1 —
+  // a DECISION_REQUIRED action whose lineageId matches no registered
+  // prefix at all (resolveDecisionFamilyRef returns null, so there is no
+  // ref to build a real decisionDefinitionId/primaryEntityId from) is a
+  // MORE severe instance of "lineage unavailable," not a different case,
+  // and must still produce a truthy HomeActionDecisionLineage so the
+  // frontend never falls through to its ungated plain-link render path.
+  | { status: 'UNAVAILABLE'; decisionDefinitionId: DecisionDefinitionId | null; primaryEntityId: string | null; reason: string };
+
+/**
+ * Phase 3 review finding 1: the single place every "this DECISION_REQUIRED
+ * action has no usable lineage" caller constructs the UNAVAILABLE object —
+ * whether or not a ref (decisionDefinitionId/primaryEntityId) could even
+ * be resolved. A caller that instead left decisionLineage as null in this
+ * situation is exactly the bug that let a blocked material action fall
+ * through to the frontend's ungated plain-link render path.
+ */
+export function unavailableDecisionLineage(
+  ref: { decisionDefinitionId: DecisionDefinitionId; primaryEntityId: string } | null,
+  reason: string,
+): HomeActionDecisionLineage {
+  return {
+    status: 'UNAVAILABLE',
+    decisionDefinitionId: ref?.decisionDefinitionId ?? null,
+    primaryEntityId: ref?.primaryEntityId ?? null,
+    reason,
+  };
+}
 
 /** Read-only. Never creates a thread — safe to call while rendering the Home feed. */
 export async function resolveHomeActionDecisionLineage(
@@ -229,5 +256,37 @@ export async function assertDecisionLineageSatisfiedForAcceptance(
       );
     }
     return;
+  }
+}
+
+/**
+ * Home Intelligence Functional Completeness FRD Phase 3 review finding 2:
+ * assertDecisionLineageSatisfiedForAcceptance above only guards the one
+ * OperationalWorkItem CANDIDATE -> ACCEPTED chokepoint, which is HVAC-only
+ * (the ReplaceRepairAnalysis traversal) and which most of the domains
+ * added in delivery steps 6-7 never even reach (refinance, capital-timeline,
+ * savings-benefit-match, coverage-question, and sell-hold-rent are not
+ * workKeyEligible; ownership-cost-change's COMPLETE routes straight to
+ * ownershipCostDecisionService.record via an id-prefix carve-out in
+ * executeHomeActionCommand, never touching transitionWorkItem at all).
+ *
+ * This is the domain-agnostic sibling for the Home Action command surface
+ * itself: COMPLETE/ALREADY_DONE are the two commands that represent
+ * "the homeowner is committing to/finishing this recommendation", and
+ * every domain's decision lineage is already resolved generically by
+ * linkDecisionLineage (via the adapter registry) onto action.decisionLineage
+ * by the time executeHomeActionCommand loads the action from the feed — so
+ * this needs no DB access and no per-domain traversal, unlike the guard
+ * above. Called once from executeHomeActionCommand, upstream of every
+ * command-specific dispatch (OperationalWorkItem-backed or not).
+ */
+export function assertHomeActionDecisionLineageSatisfiedForCommitment(
+  action: { decisionLineage: HomeActionDecisionLineage | null },
+): void {
+  if (!action.decisionLineage) return;
+  if (action.decisionLineage.status !== 'LINKED') {
+    throw new DecisionLineageRequiredForAcceptanceError(
+      `This recommendation needs a current, tracked decision before it can be completed (decision lineage status: ${action.decisionLineage.status}).`,
+    );
   }
 }

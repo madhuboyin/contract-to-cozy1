@@ -80,6 +80,8 @@ import {
   resolveHomeActionDecisionLineage,
   resolveActionDecisionLineagePolicy,
   startOrResumeHomeActionDecisionThread,
+  unavailableDecisionLineage,
+  assertHomeActionDecisionLineageSatisfiedForCommitment,
   type HomeActionDecisionLineage,
 } from './decisionPlatform/homeActionDecisionLineage';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
@@ -693,11 +695,21 @@ export async function linkDecisionLineage(propertyId: string, actions: RankedHom
     if (policy.kind !== 'DECISION_REQUIRED') return action;
     if (!policy.decisionDefinitionId) {
       // No decision family is registered for this recommendation type at
-      // all -- nothing to look up, fail closed immediately.
-      return degradeActionForBlockedDecision(action);
+      // all -- nothing to look up, fail closed immediately. Phase 3 review
+      // finding 1: decisionLineage must still be set here, or the frontend
+      // falls through to its ungated plain-link render path.
+      return degradeActionForBlockedDecision({
+        ...action,
+        decisionLineage: unavailableDecisionLineage(null, 'No decision-family adapter is registered for this recommendation type.'),
+      });
     }
     const ref = resolveDecisionFamilyRef(action);
-    if (!ref) return degradeActionForBlockedDecision(action);
+    if (!ref) {
+      return degradeActionForBlockedDecision({
+        ...action,
+        decisionLineage: unavailableDecisionLineage(null, 'This recommendation could not be resolved to a decision family.'),
+      });
+    }
     try {
       const decisionLineage = await resolveHomeActionDecisionLineage(propertyId, ref);
       const withLineage = { ...action, decisionLineage };
@@ -706,7 +718,10 @@ export async function linkDecisionLineage(propertyId: string, actions: RankedHom
         : withLineage;
     } catch (err) {
       logger.warn({ err, actionId: action.id, propertyId }, 'Decision lineage resolution failed; action degraded to a safe review CTA this request');
-      return degradeActionForBlockedDecision(action);
+      return degradeActionForBlockedDecision({
+        ...action,
+        decisionLineage: unavailableDecisionLineage(ref, 'Decision lineage could not be resolved right now.'),
+      });
     }
   }));
 }
@@ -1120,26 +1135,35 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
   // the homeowner reaches a compare/commit surface, rather than on every
   // passive Home feed render (linkDecisionLineage above stays read-only).
   let decisionLineage: HomeActionDecisionLineage | null = null;
-  const decisionFamilyRef = resolveDecisionFamilyRef(action);
-  if (decisionFamilyRef) {
-    // Phase 3 review item 3: capture which Home Action, at which source
-    // version and Property Context version, triggered this creation — see
-    // decisionFamilyAdapter.ts's HomeActionOriginRef.
-    const contextVersion = await getAggregationPropertyContext(propertyId, userId, 'UNIFIED_HOME')
-      .then((context) => context.contextVersion)
-      .catch(() => null);
-    decisionLineage = await startOrResumeHomeActionDecisionThread({
-      propertyId,
-      userId,
-      ref: decisionFamilyRef,
-      homeActionOrigin: {
-        homeActionId: action.id,
-        lineageId: action.lineageId,
-        sourceEntityId: action.source.entityId,
-        sourceVersion: action.source.version,
-        contextVersion,
-      },
-    });
+  const openPolicy = resolveActionDecisionLineagePolicy(action);
+  if (openPolicy.kind === 'DECISION_REQUIRED') {
+    const decisionFamilyRef = resolveDecisionFamilyRef(action);
+    if (decisionFamilyRef) {
+      // Phase 3 review item 3: capture which Home Action, at which source
+      // version and Property Context version, triggered this creation — see
+      // decisionFamilyAdapter.ts's HomeActionOriginRef.
+      const contextVersion = await getAggregationPropertyContext(propertyId, userId, 'UNIFIED_HOME')
+        .then((context) => context.contextVersion)
+        .catch(() => null);
+      decisionLineage = await startOrResumeHomeActionDecisionThread({
+        propertyId,
+        userId,
+        ref: decisionFamilyRef,
+        homeActionOrigin: {
+          homeActionId: action.id,
+          lineageId: action.lineageId,
+          sourceEntityId: action.source.entityId,
+          sourceVersion: action.source.version,
+          contextVersion,
+        },
+      });
+    } else {
+      // Phase 3 review finding 1: this action requires lineage but resolves
+      // to no registered decision family -- report UNAVAILABLE rather than
+      // null, so the frontend's click-time block (shouldBlockNavigationForLineage)
+      // still fires even though the feed-render-time gate already caught this.
+      decisionLineage = unavailableDecisionLineage(null, 'No decision-family adapter is registered for this recommendation type.');
+    }
   }
 
   return { actionId, interaction: 'OPENED' as const, recordedAt: new Date().toISOString(), decisionLineage };
@@ -1387,6 +1411,13 @@ export async function executeHomeActionCommand(
   if (action.governance.safetyTier === 'SAFETY_EMERGENCY' &&
     ['DEFER', 'DISMISS', 'NOT_RELEVANT'].includes(input.command)) {
     throw new Error('Safety and emergency actions cannot be deferred or dismissed from the default action feed.');
+  }
+  // Phase 3 review finding 2: independently reject COMPLETE/ALREADY_DONE
+  // for any DECISION_REQUIRED action without LINKED lineage, regardless of
+  // which domain-specific handler this command would otherwise route to —
+  // see assertHomeActionDecisionLineageSatisfiedForCommitment's doc comment.
+  if (['COMPLETE', 'ALREADY_DONE'].includes(input.command)) {
+    assertHomeActionDecisionLineageSatisfiedForCommitment(action);
   }
 
   emitNorthStarLineageEvent({

@@ -470,8 +470,12 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   // overwhelming majority) — see backend homeActionDecisionLineage.ts.
   decisionLineage: {
     status: 'LINKED' | 'NOT_STARTED' | 'AMBIGUOUS' | 'NOT_APPLICABLE' | 'UNAVAILABLE';
-    decisionDefinitionId: string;
-    primaryEntityId: string;
+    // Phase 3 review finding 1: null only for UNAVAILABLE — a
+    // DECISION_REQUIRED action that resolves to no registered decision
+    // family at all still reports a truthy decisionLineage object so this
+    // never falls through to the ungated plain-link render path.
+    decisionDefinitionId: string | null;
+    primaryEntityId: string | null;
     reason?: string;
     thread?: {
       decisionThreadId: string;

@@ -255,7 +255,12 @@ function recordHomeActionPrimaryClick(action: RankedHomeActionDTO, propertyId: s
   void api.recordHomeActionOpened(propertyId, action.id);
 }
 
-const DECISION_LINEAGE_BLOCKED_STATUSES = new Set(['AMBIGUOUS', 'UNAVAILABLE']);
+// Phase 3 review finding 1: must match the backend's
+// BLOCKING_DECISION_LINEAGE_STATUSES (homeActions.service.ts) exactly.
+// NOT_APPLICABLE was missing here — the backend already treats it as
+// blocking (degrades the CTA and sets materialActionAllowed: false) but
+// this set previously let it through unblocked at click time too.
+const DECISION_LINEAGE_BLOCKED_STATUSES = new Set(['AMBIGUOUS', 'UNAVAILABLE', 'NOT_APPLICABLE']);
 
 /** Pure so the gating decision itself is directly unit-testable without mocking api/router/toast. */
 export function shouldBlockNavigationForLineage(lineage: RankedHomeActionDTO['decisionLineage']): boolean {

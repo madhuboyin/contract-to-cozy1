@@ -16,7 +16,7 @@ describe('shouldBlockNavigationForLineage', () => {
     expect(shouldBlockNavigationForLineage(null)).toBe(false);
   });
 
-  it.each(['LINKED', 'NOT_STARTED', 'NOT_APPLICABLE'] as const)('does not block status %s', (status) => {
+  it.each(['LINKED', 'NOT_STARTED'] as const)('does not block status %s', (status) => {
     expect(shouldBlockNavigationForLineage({
       status,
       decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
@@ -31,11 +31,27 @@ describe('shouldBlockNavigationForLineage', () => {
     })).toBe(false);
   });
 
-  it.each(['AMBIGUOUS', 'UNAVAILABLE'] as const)('blocks status %s', (status) => {
+  // Phase 3 review finding 1: NOT_APPLICABLE must block here to match the
+  // backend's BLOCKING_DECISION_LINEAGE_STATUSES (homeActions.service.ts),
+  // which already degrades the CTA and sets materialActionAllowed: false
+  // for this status. Previously missing from this set entirely.
+  it.each(['AMBIGUOUS', 'UNAVAILABLE', 'NOT_APPLICABLE'] as const)('blocks status %s', (status) => {
     expect(shouldBlockNavigationForLineage({
       status,
       decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
       primaryEntityId: 'item-1',
+    })).toBe(true);
+  });
+
+  // Phase 3 review finding 1: UNAVAILABLE now legitimately carries a null
+  // decisionDefinitionId/primaryEntityId (a DECISION_REQUIRED action that
+  // resolves to no registered decision family at all) — must still block.
+  it('blocks UNAVAILABLE even with a null decisionDefinitionId/primaryEntityId', () => {
+    expect(shouldBlockNavigationForLineage({
+      status: 'UNAVAILABLE',
+      decisionDefinitionId: null,
+      primaryEntityId: null,
+      reason: 'No decision-family adapter is registered for this recommendation type.',
     })).toBe(true);
   });
 });
