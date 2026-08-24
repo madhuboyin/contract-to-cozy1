@@ -40,12 +40,54 @@ test('a repair-replace item resolves to the registered HVAC decision family', ()
 });
 
 test('a material action with no registered decision family fails closed with a null decisionDefinitionId', () => {
+  // Phase 3 review finding 4 delivery step 6 registered adapters for every
+  // producer that was null at Phase 3's original review — this exercises
+  // the fail-closed behavior itself against a hypothetical unregistered
+  // prefix, independent of which real producers currently have adapters.
   assert.deepEqual(
-    resolveActionDecisionLineagePolicy(action('refinance-opportunity:property-1', 'MATERIAL_FINANCIAL')),
+    resolveActionDecisionLineagePolicy(action('hypothetical-unregistered-domain:item-1', 'MATERIAL_FINANCIAL')),
     { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
   );
   assert.deepEqual(
-    resolveActionDecisionLineagePolicy(action('coverage-renewal:warranty-1', 'REGULATED_COVERAGE')),
+    resolveActionDecisionLineagePolicy(action('hypothetical-unregistered-domain:item-1', 'REGULATED_COVERAGE')),
     { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+  );
+});
+
+test('every domain registered in Phase 3 review finding 4 delivery step 6 resolves to its decision family', () => {
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('refinance-opportunity:property-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'REFINANCE_OPPORTUNITY' },
+  );
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('home-capital-timeline-window:item-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'HOME_CAPITAL_TIMELINE_WINDOW' },
+  );
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('ownership-cost-change:property-1:UTILITIES', 'MATERIAL_FINANCIAL')),
+    { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'OWNERSHIP_COST_CHANGE' },
+  );
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('savings-benefit-match:match-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'SAVINGS_BENEFIT_MATCH' },
+  );
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('coverage-review:question-key-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'COVERAGE_QUESTION' },
+  );
+});
+
+test('reclassified execution-continuity/workflow prefixes never require a decision even when material', () => {
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('savings-benefit-action:action-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'NOT_REQUIRED' },
+  );
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('coverage-renewal:warranty:warranty-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'NOT_REQUIRED' },
+  );
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('property-tax-appeal-case:case-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'NOT_REQUIRED' },
   );
 });

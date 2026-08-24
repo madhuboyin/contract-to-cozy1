@@ -33,10 +33,19 @@ test('every DecisionPreferenceDefinition is complete and internally consistent (
   assert.equal(DECISION_PREFERENCE_DEFINITIONS.REPAIR_REPLACE_APPROACH.materialForRanking, true);
 });
 
+const SNAPSHOT_CONTEXT_CONTRACT_IDS = [
+  'REFINANCE_OPPORTUNITY',
+  'HOME_CAPITAL_TIMELINE_WINDOW',
+  'OWNERSHIP_COST_CHANGE',
+  'SAVINGS_BENEFIT_MATCH',
+  'COVERAGE_QUESTION',
+];
+
 test('every DecisionContextContract is complete and only references known preference keys (FRD §12)', () => {
   assert.deepEqual(validateDecisionContextContracts(), []);
-  assert.deepEqual(Object.keys(DECISION_CONTEXT_CONTRACTS), ['HVAC_REPAIR_REPLACE']);
+  assert.deepEqual(new Set(Object.keys(DECISION_CONTEXT_CONTRACTS)), new Set(['HVAC_REPAIR_REPLACE', ...SNAPSHOT_CONTEXT_CONTRACT_IDS]));
   const hvac = DECISION_CONTEXT_CONTRACTS.HVAC_REPAIR_REPLACE;
+  assert.equal(hvac.composesFromPropertyContext, true);
   assert.ok(hvac.requiredFactDefinitions.length > 0);
   // FRD §12.3: insurance, rebates, financing, energy savings, and resale
   // effects must not be added until their own enhancer contracts and
@@ -44,11 +53,18 @@ test('every DecisionContextContract is complete and only references known prefer
   for (const enhancer of hvac.optionalEnhancerDefinitions) {
     assert.doesNotMatch(enhancer, /INSURANCE|REBATE|FINANC|ENERGY_SAVINGS|RESALE/);
   }
+  // Phase 3 review finding 4 delivery step 6: these five snapshot an
+  // already-authoritative domain evaluation instead of composing one from
+  // Property Context facts, so they declare no required facts.
+  for (const id of SNAPSHOT_CONTEXT_CONTRACT_IDS) {
+    assert.equal(DECISION_CONTEXT_CONTRACTS[id].composesFromPropertyContext, false);
+    assert.deepEqual(DECISION_CONTEXT_CONTRACTS[id].requiredFactDefinitions, []);
+  }
 });
 
 test('every DecisionDefinition resolves to a registered context contract and known preferences (FRD §10.5)', () => {
   assert.deepEqual(validateDecisionDefinitionRegistry(), []);
-  assert.deepEqual(Object.keys(DECISION_DEFINITIONS), ['HVAC_REPAIR_REPLACE']);
+  assert.deepEqual(new Set(Object.keys(DECISION_DEFINITIONS)), new Set(['HVAC_REPAIR_REPLACE', ...SNAPSHOT_CONTEXT_CONTRACT_IDS]));
 });
 
 test('the DecisionThread lifecycle/context-health transition contract is internally consistent (FRD §10.2/§10.3)', () => {

@@ -89,6 +89,18 @@ export interface DecisionContextContract {
   decisionDefinitionId: string;
   version: string;
   primaryDomain: string;
+  // Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+  // delivery step 6. HVAC composes its context by assembling declared
+  // Property Context facts (composeHvacDecisionContext) before the engine
+  // runs — that's what requiredFactDefinitions/the latency budgets/the
+  // input policies below actually govern (only hvacRepairReplaceEngine
+  // .service.ts reads them). A domain that instead snapshots its own
+  // already-authoritative, already-persisted evaluation (refinance
+  // opportunity, capital-timeline window, ownership cost change, a
+  // savings/benefits match, a coverage question) has no fact-composition
+  // step to bound, so it declares composesFromPropertyContext: false and
+  // the fields below become inert metadata the validator does not enforce.
+  composesFromPropertyContext: boolean;
   requiredFactDefinitions: string[];
   optionalEnhancerDefinitions: string[];
   allowedPreferenceDefinitions: string[];

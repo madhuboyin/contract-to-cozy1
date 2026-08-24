@@ -9,9 +9,21 @@
 import { DECISION_DEFINITIONS, type DecisionDefinitionId } from './decisionDefinitionRegistry';
 import type { DecisionFamilyAdapter } from './decisionFamilyAdapter';
 import { hvacDecisionFamilyAdapter } from './decisionThreadService';
+import {
+  coverageQuestionDecisionFamilyAdapter,
+  homeCapitalTimelineWindowDecisionFamilyAdapter,
+  ownershipCostChangeDecisionFamilyAdapter,
+  refinanceOpportunityDecisionFamilyAdapter,
+  savingsBenefitMatchDecisionFamilyAdapter,
+} from './domainSnapshotAdapters';
 
 const DECISION_FAMILY_ADAPTERS: Partial<Record<DecisionDefinitionId, DecisionFamilyAdapter>> = {
   HVAC_REPAIR_REPLACE: hvacDecisionFamilyAdapter,
+  REFINANCE_OPPORTUNITY: refinanceOpportunityDecisionFamilyAdapter,
+  HOME_CAPITAL_TIMELINE_WINDOW: homeCapitalTimelineWindowDecisionFamilyAdapter,
+  OWNERSHIP_COST_CHANGE: ownershipCostChangeDecisionFamilyAdapter,
+  SAVINGS_BENEFIT_MATCH: savingsBenefitMatchDecisionFamilyAdapter,
+  COVERAGE_QUESTION: coverageQuestionDecisionFamilyAdapter,
 };
 
 export function getDecisionFamilyAdapter(decisionDefinitionId: DecisionDefinitionId): DecisionFamilyAdapter | null {

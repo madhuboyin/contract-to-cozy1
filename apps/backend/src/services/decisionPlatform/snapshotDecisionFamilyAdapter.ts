@@ -1,0 +1,298 @@
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+// delivery step 6: "Add adapters around existing domain recommendations...
+// Many domains already have authoritative outputs that adapters can
+// snapshot." Unlike hvacDecisionFamilyAdapter (decisionThreadService.ts),
+// these domains don't compose a decision from raw Property Context facts —
+// they already have a persisted, authoritative evaluation (a
+// RefinanceOpportunity row, a HomeCapitalTimelineItem, an
+// OwnershipCostChange, a PropertyHiddenAssetMatch, a CoverageQuestion) that
+// this factory turns into a DecisionThread/RecommendationSnapshot by
+// snapshotting its current state, not by re-deriving a recommendation.
+//
+// Staleness here is pull-based, not push-based: instead of an external
+// event marking contextStatus STALE (HVAC's markThreadStaleOnFactCorrection,
+// keyed off Property Context fact changes these domains don't participate
+// in), every resume recomputes a digest of the domain's current source
+// state and compares it against the thread's last snapshot. A changed
+// digest creates a new superseding snapshot and produces a
+// RecommendationChangeDiff (Phase 3B work item 5) exactly like
+// recomputeStaleThread does; an unchanged digest is a no-op read. No
+// preferences, no Scenario support — none of these domains has a
+// registered DecisionPreferenceDefinition or scenario-input contract yet;
+// add that machinery to a specific domain if and when it needs it, rather
+// than speculatively wiring it here for all five.
+
+import type { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
+import { prisma } from '../../lib/prisma';
+import {
+  ACTIVE_LIFECYCLE_STATUSES,
+  activeDecisionThreadIdentityKey,
+  classifyThreadSelection,
+  DecisionThreadVersionConflictError,
+  type ThreadSelection,
+} from './decisionThreadService';
+import {
+  computeContextStatus,
+  isContextTransitionAllowed,
+  isLifecycleTransitionAllowed,
+} from './decisionThreadTransitions';
+import { compareRecommendationSnapshots, type RecommendationChangeDiff } from './decisionPreferenceService';
+import { emitDecisionRecommendationChange } from './decisionPlatformChangeEmitter';
+import {
+  DecisionFamilyAmbiguousThreadError,
+  type DecisionFamilyAdapter,
+  type DecisionFamilyThreadLineage,
+  type HomeActionOriginRef,
+} from './decisionFamilyAdapter';
+import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
+
+export interface SnapshotSourceState {
+  /** DecisionThread.title — a short human label, e.g. "Refinance opportunity". */
+  title: string;
+  /** DecisionThread.goalCode — a stable machine code for this decision family's goal. */
+  goalCode: string;
+  verdictCode: string;
+  reasonCodes: string[];
+  confidenceBreakdown: unknown;
+  /** Stable across calls when nothing about the source changed; any change to the underlying record must change this. */
+  inputDigest: string;
+  canonicalFactReferences?: Array<{ entityType: string; entityId: string; fieldPath?: string }>;
+}
+
+export interface SnapshotDecisionFamilyDomainConfig {
+  decisionDefinitionId: DecisionDefinitionId;
+  primaryEntityType: string;
+  recommendationDefinitionVersion: string;
+  engineVersion: string;
+  contextContractVersion: string;
+  /** Null means no current recommendation for this primary entity — NOT_APPLICABLE, not a registry gap. */
+  loadSourceState(propertyId: string, primaryEntityId: string): Promise<SnapshotSourceState | null>;
+}
+
+export function hashSourceState(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function toLineage(
+  thread: { id: string; lifecycleStatus: DecisionFamilyThreadLineage['lifecycleStatus']; contextStatus: DecisionFamilyThreadLineage['contextStatus']; currentRecommendationSnapshotId: string | null },
+  recommendationChange: RecommendationChangeDiff | null,
+): DecisionFamilyThreadLineage {
+  return {
+    decisionThreadId: thread.id,
+    lifecycleStatus: thread.lifecycleStatus,
+    contextStatus: thread.contextStatus,
+    currentRecommendationSnapshotId: thread.currentRecommendationSnapshotId,
+    recommendationChange,
+  };
+}
+
+export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFamilyDomainConfig): DecisionFamilyAdapter {
+  function buildSnapshotData(
+    decisionThreadId: string,
+    propertyId: string,
+    source: SnapshotSourceState,
+    homeActionOrigin: HomeActionOriginRef | undefined,
+    supersedesSnapshotId: string | null,
+    operationId: string,
+  ) {
+    return {
+      decisionThreadId,
+      propertyId,
+      recommendationOwner: 'DECISION_PLATFORM',
+      recommendationDefinitionId: config.decisionDefinitionId,
+      recommendationDefinitionVersion: config.recommendationDefinitionVersion,
+      operationId,
+      operationVersion: '1.0',
+      engineVersion: config.engineVersion,
+      contextContractVersion: config.contextContractVersion,
+      canonicalFactReferences: (source.canonicalFactReferences ?? []).map((ref) => ({
+        entityType: ref.entityType, entityId: ref.entityId, fieldPath: ref.fieldPath ?? null,
+      })) as unknown as Prisma.InputJsonValue,
+      preferenceReferenceIds: [] as string[],
+      signalReferences: (homeActionOrigin ? [{
+        type: 'HOME_ACTION_ORIGIN',
+        homeActionId: homeActionOrigin.homeActionId,
+        lineageId: homeActionOrigin.lineageId,
+        sourceEntityId: homeActionOrigin.sourceEntityId,
+        sourceVersion: homeActionOrigin.sourceVersion,
+        contextVersion: homeActionOrigin.contextVersion,
+        capturedAt: new Date().toISOString(),
+      }] : []) as unknown as Prisma.InputJsonValue,
+      evidenceReferences: [] as unknown as Prisma.InputJsonValue,
+      resultPayloadVersion: '1.0',
+      verdictCode: source.verdictCode,
+      reasonCodes: source.reasonCodes,
+      limitationCodes: [] as string[],
+      confidenceBreakdown: source.confidenceBreakdown as unknown as Prisma.InputJsonValue,
+      supersedesSnapshotId,
+      inputDigest: source.inputDigest,
+    };
+  }
+
+  async function selectThread(propertyId: string, primaryEntityId: string): Promise<ThreadSelection<DecisionFamilyThreadLineage>> {
+    const candidates = await prisma.decisionThread.findMany({
+      where: {
+        propertyId,
+        decisionDefinitionId: config.decisionDefinitionId,
+        primaryEntityType: config.primaryEntityType,
+        primaryEntityId,
+        lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const selection = classifyThreadSelection(candidates);
+    if (selection.kind === 'UNIQUE') return { kind: 'UNIQUE', thread: toLineage(selection.thread, null) };
+    if (selection.kind === 'AMBIGUOUS') return { kind: 'AMBIGUOUS', candidates: selection.candidates.map((c) => toLineage(c, null)) };
+    return { kind: 'NONE' };
+  }
+
+  // Recomputes only when the source's current digest differs from the
+  // thread's last snapshot — a true no-op read otherwise. Mirrors
+  // recomputeStaleThread's diff/supersede/emit shape (decisionThreadService.ts)
+  // without the preference/scenario machinery HVAC alone needs.
+  async function resumeThread(threadId: string, source: SnapshotSourceState): Promise<DecisionFamilyThreadLineage> {
+    const result = await prisma.$transaction(async (tx) => {
+      const current = await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
+      const previousSnapshot = current.currentRecommendationSnapshotId
+        ? await tx.recommendationSnapshot.findUnique({ where: { id: current.currentRecommendationSnapshotId } })
+        : null;
+      if (previousSnapshot && previousSnapshot.inputDigest === source.inputDigest) {
+        return { thread: current, change: null as RecommendationChangeDiff | null, recomputed: false };
+      }
+
+      const newSnapshot = await tx.recommendationSnapshot.create({
+        data: buildSnapshotData(threadId, current.propertyId, source, undefined, current.currentRecommendationSnapshotId, 'DECISION_CONTINUE'),
+      });
+
+      const nextContextStatus = computeContextStatus({ hasUnresolvedConflict: current.contextStatus === 'CONFLICTED', hasUnresolvedStale: false });
+      if (!isContextTransitionAllowed(current.contextStatus, nextContextStatus) && current.contextStatus !== nextContextStatus) {
+        throw new Error(`Illegal context transition ${current.contextStatus} -> ${nextContextStatus}`);
+      }
+      const updateResult = await tx.decisionThread.updateMany({
+        where: { id: threadId, version: current.version },
+        data: {
+          contextStatus: nextContextStatus,
+          contextIssueCodes: nextContextStatus === 'CURRENT' ? [] : current.contextIssueCodes,
+          staleAt: nextContextStatus === 'CURRENT' ? null : current.staleAt,
+          currentRecommendationSnapshotId: newSnapshot.id,
+          version: { increment: 1 },
+        },
+      });
+      if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(threadId);
+
+      const change = previousSnapshot ? compareRecommendationSnapshots(previousSnapshot, newSnapshot, []) : null;
+      return { thread: await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } }), change, recomputed: true };
+    });
+
+    if (result.recomputed && result.thread.currentRecommendationSnapshotId) {
+      await emitDecisionRecommendationChange({
+        propertyId: result.thread.propertyId,
+        decisionThreadId: threadId,
+        snapshotId: result.thread.currentRecommendationSnapshotId,
+        generatedAt: new Date(),
+        isFirstSnapshot: false,
+        category: result.change?.category ?? null,
+      });
+    }
+    return toLineage(result.thread, result.change);
+  }
+
+  async function createThread(input: {
+    propertyId: string;
+    userId: string;
+    primaryEntityId: string;
+    homeActionOrigin?: HomeActionOriginRef;
+    source: SnapshotSourceState;
+  }): Promise<DecisionFamilyThreadLineage> {
+    const identityKey = activeDecisionThreadIdentityKey(input.propertyId, config.decisionDefinitionId, config.primaryEntityType, input.primaryEntityId);
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const thread = await tx.decisionThread.create({
+          data: {
+            propertyId: input.propertyId,
+            createdByUserId: input.userId,
+            decisionDefinitionId: config.decisionDefinitionId,
+            primaryEntityType: config.primaryEntityType,
+            primaryEntityId: input.primaryEntityId,
+            activeIdentityKey: identityKey,
+            title: input.source.title,
+            goalCode: input.source.goalCode,
+            lifecycleStatus: 'OPEN',
+            contextStatus: 'CURRENT',
+          },
+        });
+
+        if (!isLifecycleTransitionAllowed('OPEN', 'READY_TO_COMPARE')) throw new Error('Illegal lifecycle transition OPEN -> READY_TO_COMPARE');
+        await tx.decisionThread.update({ where: { id: thread.id }, data: { lifecycleStatus: 'READY_TO_COMPARE', version: { increment: 1 } } });
+
+        const snapshot = await tx.recommendationSnapshot.create({
+          data: buildSnapshotData(thread.id, input.propertyId, input.source, input.homeActionOrigin, null, 'DECISION_START'),
+        });
+
+        if (!isLifecycleTransitionAllowed('READY_TO_COMPARE', 'RECOMMENDATION_AVAILABLE')) throw new Error('Illegal lifecycle transition READY_TO_COMPARE -> RECOMMENDATION_AVAILABLE');
+        const updatedThread = await tx.decisionThread.update({
+          where: { id: thread.id },
+          data: { lifecycleStatus: 'RECOMMENDATION_AVAILABLE', currentRecommendationSnapshotId: snapshot.id, version: { increment: 1 } },
+        });
+
+        if (input.source.canonicalFactReferences?.length) {
+          await tx.decisionThreadFactReference.createMany({
+            data: input.source.canonicalFactReferences.map((ref) => ({
+              decisionThreadId: thread.id, canonicalEntityType: ref.entityType, canonicalEntityId: ref.entityId, canonicalFieldPath: ref.fieldPath ?? null,
+            })),
+          });
+        }
+
+        return { thread: updatedThread, snapshot };
+      });
+    } catch (error: any) {
+      // Same P2002-catch-and-resume idiom as createHvacDecisionThread
+      // (Phase 3 review finding 2) — caught outside the transaction since a
+      // P2002 aborts it.
+      if (error?.code === 'P2002' && (error?.meta?.target as string[] | undefined)?.includes('activeIdentityKey')) {
+        const resumeSelection = await selectThread(input.propertyId, input.primaryEntityId);
+        if (resumeSelection.kind === 'UNIQUE') {
+          return resumeThread(resumeSelection.thread.decisionThreadId, input.source);
+        }
+      }
+      throw error;
+    }
+
+    await emitDecisionRecommendationChange({
+      propertyId: input.propertyId,
+      decisionThreadId: result.thread.id,
+      snapshotId: result.snapshot.id,
+      generatedAt: result.snapshot.generatedAt,
+      isFirstSnapshot: true,
+      category: null,
+    });
+    return toLineage(result.thread, null);
+  }
+
+  return {
+    decisionDefinitionId: config.decisionDefinitionId,
+    primaryEntityType: config.primaryEntityType,
+
+    async isEligiblePrimaryEntity(propertyId, primaryEntityId) {
+      return (await config.loadSourceState(propertyId, primaryEntityId)) !== null;
+    },
+
+    selectThread,
+
+    async createOrResumeThread({ propertyId, userId, primaryEntityId, homeActionOrigin }) {
+      const selection = await selectThread(propertyId, primaryEntityId);
+      if (selection.kind === 'AMBIGUOUS') {
+        throw new DecisionFamilyAmbiguousThreadError(config.decisionDefinitionId, primaryEntityId);
+      }
+      const source = await config.loadSourceState(propertyId, primaryEntityId);
+      if (!source) throw new Error(`No current recommendation available for ${config.decisionDefinitionId}/${primaryEntityId}.`);
+
+      if (selection.kind === 'UNIQUE') {
+        return resumeThread(selection.thread.decisionThreadId, source);
+      }
+      return createThread({ propertyId, userId, primaryEntityId, homeActionOrigin, source });
+    },
+  };
+}

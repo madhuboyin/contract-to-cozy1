@@ -16,7 +16,16 @@ const { hvacDecisionFamilyAdapter } = require('../../src/services/decisionPlatfo
 
 test('every registered DecisionDefinition has a matching decision-family adapter', () => {
   assert.deepEqual(validateDecisionFamilyAdapterRegistry(), []);
-  assert.deepEqual(Object.keys(DECISION_DEFINITIONS), ['HVAC_REPAIR_REPLACE']);
+  // Phase 3 review finding 4 delivery step 6 added five snapshot adapters
+  // (domainSnapshotAdapters.ts) alongside the original HVAC engine adapter.
+  assert.deepEqual(new Set(Object.keys(DECISION_DEFINITIONS)), new Set([
+    'HVAC_REPAIR_REPLACE',
+    'REFINANCE_OPPORTUNITY',
+    'HOME_CAPITAL_TIMELINE_WINDOW',
+    'OWNERSHIP_COST_CHANGE',
+    'SAVINGS_BENEFIT_MATCH',
+    'COVERAGE_QUESTION',
+  ]));
 });
 
 test('getDecisionFamilyAdapter resolves the HVAC adapter and returns null for an unregistered family', () => {

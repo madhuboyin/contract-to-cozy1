@@ -138,7 +138,7 @@ function inputDigestFor(context: HvacDecisionContext): string {
 // Phase 3 review finding 2: the DB-enforced identity for "at most one
 // active thread for this (property, decision family, primary entity)" —
 // see DecisionThread.activeIdentityKey's schema comment.
-function activeDecisionThreadIdentityKey(
+export function activeDecisionThreadIdentityKey(
   propertyId: string,
   decisionDefinitionId: string,
   primaryEntityType: string,

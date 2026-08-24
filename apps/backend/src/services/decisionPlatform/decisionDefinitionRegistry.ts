@@ -9,9 +9,35 @@ import type { DecisionDefinition } from '../../productFramework/decisionPlatform
 import { DECISION_CONTEXT_CONTRACTS } from './decisionContextContracts';
 import { DECISION_PREFERENCE_DEFINITIONS } from './decisionPreferenceRegistry';
 
-export type DecisionDefinitionId = 'HVAC_REPAIR_REPLACE';
+export type DecisionDefinitionId =
+  | 'HVAC_REPAIR_REPLACE'
+  | 'REFINANCE_OPPORTUNITY'
+  | 'HOME_CAPITAL_TIMELINE_WINDOW'
+  | 'OWNERSHIP_COST_CHANGE'
+  | 'SAVINGS_BENEFIT_MATCH'
+  | 'COVERAGE_QUESTION';
 
 const decisionDefinition = (overrides: DecisionDefinition): DecisionDefinition => overrides;
+
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+// delivery step 6: these five wrap an already-authoritative, already-
+// persisted domain evaluation (snapshotDecisionFamilyAdapter.ts) rather
+// than composing a fresh recommendation from Property Context facts, so
+// they carry no allowedPreferenceDefinitionIds — none of these domains has
+// a registered DecisionPreferenceDefinition yet.
+const snapshotDefinition = (
+  id: Exclude<DecisionDefinitionId, 'HVAC_REPAIR_REPLACE'>,
+  title: string,
+): DecisionDefinition => decisionDefinition({
+  decisionDefinitionId: id,
+  version: '1.0',
+  primaryDomain: id,
+  title,
+  contextContractId: id,
+  allowedPreferenceDefinitionIds: [],
+  professionalBoundaryCode: null,
+  evalSuite: `decision-platform-${id.toLowerCase().replace(/_/g, '-')}-golden`,
+});
 
 export const DECISION_DEFINITIONS: Readonly<Record<DecisionDefinitionId, DecisionDefinition>> = Object.freeze({
   HVAC_REPAIR_REPLACE: decisionDefinition({
@@ -28,6 +54,11 @@ export const DECISION_DEFINITIONS: Readonly<Record<DecisionDefinitionId, Decisio
     professionalBoundaryCode: 'NOT_A_TECHNICIAN_ASSESSMENT',
     evalSuite: 'decision-platform-hvac-repair-replace-golden',
   }),
+  REFINANCE_OPPORTUNITY: snapshotDefinition('REFINANCE_OPPORTUNITY', 'Explore this refinance opportunity'),
+  HOME_CAPITAL_TIMELINE_WINDOW: snapshotDefinition('HOME_CAPITAL_TIMELINE_WINDOW', 'Plan for this capital timeline window'),
+  OWNERSHIP_COST_CHANGE: snapshotDefinition('OWNERSHIP_COST_CHANGE', 'Review this ownership cost change'),
+  SAVINGS_BENEFIT_MATCH: snapshotDefinition('SAVINGS_BENEFIT_MATCH', 'Pursue this savings or benefits match'),
+  COVERAGE_QUESTION: snapshotDefinition('COVERAGE_QUESTION', 'Resolve this coverage question'),
 });
 
 export function getDecisionDefinition(id: DecisionDefinitionId): DecisionDefinition {

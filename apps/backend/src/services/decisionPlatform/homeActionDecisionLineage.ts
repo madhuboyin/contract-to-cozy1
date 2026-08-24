@@ -22,17 +22,47 @@ import { DecisionFamilyAmbiguousThreadError } from './decisionFamilyAdapter';
 import { getDecisionFamilyAdapter } from './decisionFamilyAdapterRegistry';
 import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
 import type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
-import { OPERATIONAL_WORK_ID_PREFIX } from '../intelligence/homeActionProducerOwnership';
+import { OPERATIONAL_WORK_ID_PREFIX, OWNERSHIP_COST_CHANGE_ID_PREFIX } from '../intelligence/homeActionProducerOwnership';
 
 export type { HomeActionOriginRef } from './decisionFamilyAdapter';
 export type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
 
 const REPAIR_REPLACE_ID_PREFIX = 'repair-replace:';
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+// delivery step 6 — one prefix per new decision-family adapter
+// (domainSnapshotAdapters.ts), matching each producer's own lineageId
+// construction in homeActionSourcePromotion.service.ts exactly.
+const REFINANCE_OPPORTUNITY_ID_PREFIX = 'refinance-opportunity:';
+const HOME_CAPITAL_TIMELINE_WINDOW_ID_PREFIX = 'home-capital-timeline-window:';
+const SAVINGS_BENEFIT_MATCH_ID_PREFIX = 'savings-benefit-match:';
+// Resume path for an already-started Savings & Benefits action — execution
+// continuity, not a fresh decision (same reasoning as
+// OPERATIONAL_WORK_ID_PREFIX below), even though its governance is
+// MATERIAL_FINANCIAL. No decision-family adapter for this prefix.
+const SAVINGS_BENEFIT_ACTION_ID_PREFIX = 'savings-benefit-action:';
+const COVERAGE_QUESTION_ID_PREFIX = 'coverage-review:';
+// Phase 3 review finding 4 delivery step 6 reclassification: both are
+// MATERIAL_FINANCIAL-governed but not verdict-bearing recommendations — a
+// renewal reminder against a static choice, and a workflow/case tracker
+// for an appeal the homeowner already decided to pursue. Neither has (or
+// needs) a decision-family adapter; see their homeActionProducerOwnership
+// .ts registry notes for the full reasoning.
+const COVERAGE_RENEWAL_ID_PREFIX = 'coverage-renewal:';
+const PROPERTY_TAX_APPEAL_CASE_ID_PREFIX = 'property-tax-appeal-case:';
 
 export interface HomeActionDecisionFamilyRef {
   decisionDefinitionId: DecisionDefinitionId;
   primaryEntityId: string;
 }
+
+const PREFIX_TO_DECISION_DEFINITION: Array<{ prefix: string; decisionDefinitionId: DecisionDefinitionId }> = [
+  { prefix: REPAIR_REPLACE_ID_PREFIX, decisionDefinitionId: 'HVAC_REPAIR_REPLACE' },
+  { prefix: REFINANCE_OPPORTUNITY_ID_PREFIX, decisionDefinitionId: 'REFINANCE_OPPORTUNITY' },
+  { prefix: HOME_CAPITAL_TIMELINE_WINDOW_ID_PREFIX, decisionDefinitionId: 'HOME_CAPITAL_TIMELINE_WINDOW' },
+  { prefix: OWNERSHIP_COST_CHANGE_ID_PREFIX, decisionDefinitionId: 'OWNERSHIP_COST_CHANGE' },
+  { prefix: SAVINGS_BENEFIT_MATCH_ID_PREFIX, decisionDefinitionId: 'SAVINGS_BENEFIT_MATCH' },
+  { prefix: COVERAGE_QUESTION_ID_PREFIX, decisionDefinitionId: 'COVERAGE_QUESTION' },
+];
 
 /**
  * Returns null for the overwhelming majority of Home Actions — those with
@@ -41,10 +71,11 @@ export interface HomeActionDecisionFamilyRef {
  * Decision Thread lineage.
  */
 export function resolveDecisionFamilyRef(action: { lineageId: string }): HomeActionDecisionFamilyRef | null {
-  if (action.lineageId.startsWith(REPAIR_REPLACE_ID_PREFIX)) {
-    const primaryEntityId = action.lineageId.slice(REPAIR_REPLACE_ID_PREFIX.length);
+  for (const { prefix, decisionDefinitionId } of PREFIX_TO_DECISION_DEFINITION) {
+    if (!action.lineageId.startsWith(prefix)) continue;
+    const primaryEntityId = action.lineageId.slice(prefix.length);
     if (!primaryEntityId) return null;
-    return { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId };
+    return { decisionDefinitionId, primaryEntityId };
   }
   return null;
 }
@@ -122,7 +153,12 @@ export async function startOrResumeHomeActionDecisionThread(input: {
 export function resolveActionDecisionLineagePolicy(
   action: { lineageId: string; governance: { safetyTier: string } },
 ): DecisionLineagePolicy {
-  if (action.lineageId.startsWith(OPERATIONAL_WORK_ID_PREFIX)) {
+  if (
+    action.lineageId.startsWith(OPERATIONAL_WORK_ID_PREFIX) ||
+    action.lineageId.startsWith(SAVINGS_BENEFIT_ACTION_ID_PREFIX) ||
+    action.lineageId.startsWith(COVERAGE_RENEWAL_ID_PREFIX) ||
+    action.lineageId.startsWith(PROPERTY_TAX_APPEAL_CASE_ID_PREFIX)
+  ) {
     return { kind: 'NOT_REQUIRED' };
   }
   const tier = action.governance.safetyTier;

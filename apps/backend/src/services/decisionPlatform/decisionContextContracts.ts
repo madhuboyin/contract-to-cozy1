@@ -6,9 +6,45 @@
 import type { DecisionContextContract } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
 import { DECISION_PREFERENCE_DEFINITIONS } from './decisionPreferenceRegistry';
 
-export type DecisionContextContractId = 'HVAC_REPAIR_REPLACE';
+export type DecisionContextContractId =
+  | 'HVAC_REPAIR_REPLACE'
+  | 'REFINANCE_OPPORTUNITY'
+  | 'HOME_CAPITAL_TIMELINE_WINDOW'
+  | 'OWNERSHIP_COST_CHANGE'
+  | 'SAVINGS_BENEFIT_MATCH'
+  | 'COVERAGE_QUESTION';
 
 const contract = (overrides: DecisionContextContract): DecisionContextContract => overrides;
+
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+// delivery step 6: a contract for a domain that snapshots its own
+// already-authoritative, already-persisted evaluation instead of composing
+// one from Property Context facts (composesFromPropertyContext: false —
+// see the field's doc comment in decisionPlatform.contract.ts). The
+// latency/policy fields below are inert for these; kept at the same
+// values across all five rather than invented per-domain, since nothing
+// reads them.
+const snapshotContract = (id: Exclude<DecisionContextContractId, 'HVAC_REPAIR_REPLACE'>): DecisionContextContract => contract({
+  decisionDefinitionId: id,
+  version: '1.0',
+  primaryDomain: id,
+  composesFromPropertyContext: false,
+  requiredFactDefinitions: [],
+  optionalEnhancerDefinitions: [],
+  allowedPreferenceDefinitions: [],
+  allowedScenarioInputDefinitions: [],
+  professionalBoundaryCode: null,
+  maximumFacts: 0,
+  maximumSerializedBytes: 32_768,
+  requiredFactLatencyMs: 0,
+  maximumEnhancerLatencyMs: 0,
+  overallLatencyMs: 0,
+  staleInputPolicy: 'NOT_APPLICABLE_NO_FACT_COMPOSITION',
+  missingInputPolicy: 'NOT_APPLICABLE_NO_FACT_COMPOSITION',
+  conflictPolicy: 'NOT_APPLICABLE_NO_FACT_COMPOSITION',
+  redactionPolicy: 'ROLE_AND_VISIBILITY_AWARE',
+  outputSchemaVersion: '1.0',
+});
 
 export const DECISION_CONTEXT_CONTRACTS: Readonly<Record<DecisionContextContractId, DecisionContextContract>> = Object.freeze({
   // FRD §12.3: canonical HVAC identity/age/condition/repair history,
@@ -22,6 +58,7 @@ export const DECISION_CONTEXT_CONTRACTS: Readonly<Record<DecisionContextContract
     decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
     version: '1.0',
     primaryDomain: 'HVAC',
+    composesFromPropertyContext: true,
     requiredFactDefinitions: [
       'HVAC_IDENTITY',
       'HVAC_AGE_OR_RANGE',
@@ -58,6 +95,11 @@ export const DECISION_CONTEXT_CONTRACTS: Readonly<Record<DecisionContextContract
     redactionPolicy: 'ROLE_AND_VISIBILITY_AWARE',
     outputSchemaVersion: '1.0',
   }),
+  REFINANCE_OPPORTUNITY: snapshotContract('REFINANCE_OPPORTUNITY'),
+  HOME_CAPITAL_TIMELINE_WINDOW: snapshotContract('HOME_CAPITAL_TIMELINE_WINDOW'),
+  OWNERSHIP_COST_CHANGE: snapshotContract('OWNERSHIP_COST_CHANGE'),
+  SAVINGS_BENEFIT_MATCH: snapshotContract('SAVINGS_BENEFIT_MATCH'),
+  COVERAGE_QUESTION: snapshotContract('COVERAGE_QUESTION'),
 });
 
 export function getDecisionContextContract(id: DecisionContextContractId): DecisionContextContract {
@@ -72,7 +114,12 @@ export function validateDecisionContextContracts(): string[] {
     if (mapKey !== entry.decisionDefinitionId) issues.push(`${mapKey}: decisionDefinitionId mismatch`);
     if (ids.has(entry.decisionDefinitionId)) issues.push(`${mapKey}: duplicate decisionDefinitionId`);
     ids.add(entry.decisionDefinitionId);
-    if (!entry.requiredFactDefinitions.length) issues.push(`${mapKey}: no required fact definitions`);
+    if (entry.composesFromPropertyContext && !entry.requiredFactDefinitions.length) {
+      issues.push(`${mapKey}: no required fact definitions`);
+    }
+    if (!entry.composesFromPropertyContext && entry.requiredFactDefinitions.length) {
+      issues.push(`${mapKey}: composesFromPropertyContext is false but requiredFactDefinitions is non-empty — declare it true, or drop the fact keys instead of fabricating composition that never runs`);
+    }
     if (entry.maximumFacts < entry.requiredFactDefinitions.length) {
       issues.push(`${mapKey}: maximumFacts is lower than the declared required fact count`);
     }
@@ -81,14 +128,20 @@ export function validateDecisionContextContracts(): string[] {
         issues.push(`${mapKey}: allowedPreferenceDefinitions references unknown preference key "${preferenceKey}"`);
       }
     }
-    if (entry.overallLatencyMs <= 0 || entry.maximumEnhancerLatencyMs <= 0 || entry.requiredFactLatencyMs <= 0) {
-      issues.push(`${mapKey}: latency budgets must be positive`);
-    }
-    if (entry.maximumEnhancerLatencyMs > entry.overallLatencyMs) {
-      issues.push(`${mapKey}: an optional enhancer's latency budget exceeds the overall operation deadline`);
-    }
-    if (entry.requiredFactLatencyMs + entry.maximumEnhancerLatencyMs > entry.overallLatencyMs) {
-      issues.push(`${mapKey}: required-fact and enhancer latency budgets together exceed the overall operation deadline`);
+    // The latency budgets and input policies below only govern a real
+    // fact-composition step (see the field's doc comment in
+    // decisionPlatform.contract.ts) — irrelevant metadata for an adapter
+    // that snapshots an already-authoritative source instead.
+    if (entry.composesFromPropertyContext) {
+      if (entry.overallLatencyMs <= 0 || entry.maximumEnhancerLatencyMs <= 0 || entry.requiredFactLatencyMs <= 0) {
+        issues.push(`${mapKey}: latency budgets must be positive`);
+      }
+      if (entry.maximumEnhancerLatencyMs > entry.overallLatencyMs) {
+        issues.push(`${mapKey}: an optional enhancer's latency budget exceeds the overall operation deadline`);
+      }
+      if (entry.requiredFactLatencyMs + entry.maximumEnhancerLatencyMs > entry.overallLatencyMs) {
+        issues.push(`${mapKey}: required-fact and enhancer latency budgets together exceed the overall operation deadline`);
+      }
     }
   }
   return issues;
