@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.15"
+version: "1.16"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.15 |
+| Version | 1.16 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1036,12 +1036,22 @@ The stale governance assertion for multiline HVAC continuation routing was also 
 
 **Functional exit:** a homeowner completes one obligation once, the authoritative domain record and every projection converge, and the platform records a provenance-bearing outcome.
 
-**Status: complete.** Work items 1, 2, 6, and 7 landed with the phase's original commits (`38bde30d`, `c13f9307`, `38e8ec82`, `6c62d4b9`). A completeness review (2026-08-24) found two gaps in items 3 and 4 and closed both in commit `5ba49b3e`:
+**Status: complete.** Work items 1, 2, 6, and 7 landed with the phase's original commits (`38bde30d`, `c13f9307`, `38e8ec82`, `6c62d4b9`). Two completeness review rounds (2026-08-24) found and closed real gaps:
+
+**First round (commit `5ba49b3e`):**
 
 - **Item 3 gap:** claims had zero touchpoint with Operational Work Items — `claims.service.ts` never referenced `modules/homeOperations`, and no `CLAIM` obligation/source/execution type existed. Fixed by `claimWorkReconciliation.service.ts`: filing a claim now resolves/creates a standalone `CLAIM_RESOLUTION` work item and immediately accepts it (a claim has no prior Home Action to accept, unlike every other producer), and `APPROVED`/`DENIED`/`CLOSED` reconcile it to `VERIFIED` or a `CANCELLED` close.
 - **Item 4 gap:** `OutcomeObservationSourceType` declared `PROJECT_RECORD`, `BOOKING_RECORD`, `CLAIM_RECORD`, `INSPECTION_FINDING`, `DOCUMENT_PROMOTION`, and `COVERAGE_DECISION`, but only `HOMEOWNER_REPORTED`/`COMPLETED_MAINTENANCE_RECORD`/`OPERATIONAL_WORK_ITEM` were ever created — the rest had no creation path at all. Fixed by adding `recordClaimOutcome`, `recordDocumentPromotionOutcome`, and `recordCoverageDecisionOutcome` to `outcomeObservationService.ts`, wired into claim resolution, warranty/expense document promotion, and coverage decisions.
 
-`PROJECT_RECORD`, `BOOKING_RECORD`, and `INSPECTION_FINDING` remain deliberately unused: guidance/project/booking/inspection completions all converge on `OPERATIONAL_WORK_ITEM` instead, by design, so every Operational Work Item completion produces one consistently-shaped outcome rather than a domain-specific variant (see the comment on `recordOperationalWorkOutcome`'s callers). `HOME_EVENT` still has no creation path. `promoteInsurancePolicy` deliberately does not record a `DOCUMENT_PROMOTION` outcome — that path stages an unverified/unconfirmed policy term, and recording a verified-looking outcome for it would repeat the "invented certainty" failure mode `homeRecordsExtraction.service.ts`'s own comments warn against elsewhere. The coverage-decision outcome carries no recommendation attribution — `CoverageComparison.sourceActionId` is a raw Home Action id, not a verified decision-family lineage id, and attaching an attribution on an unverified guess would be worse than recording none.
+**Second round (commit `3fd45ad2`)** found the first round's own "complete" status was premature — items 1, 2, 3, and 5 each had a real remaining defect, in addition to item 4's still-open `HOME_EVENT` gap:
+
+- **Item 1 (evidence policy bypass):** `approveMaterialWorkHandler` — the path `assertCompletionEvidenceSatisfied` redirects REGULATED_COVERAGE/SAFETY_EMERGENCY work to — never consulted `completionEvidencePolicy.registry.ts` at all: any evidence type satisfied REGULATED_COVERAGE, "verification" was a self-referential status flip with no proof the evidence was a real domain record, policy/claim linkage was never checked, and no `OutcomeObservation` was ever created for this path. Fixed by new `homeOperationsMaterialApprovalEvidence.service.ts`, which enforces the registry's `recordEvidence`/`requiresDomainOwnedResolution`/`policyOrClaimLinkage` fields and verifies a `DOMAIN_COMPLETION_RECORD` resolves to a real linked execution/source or a terminal Claim/Booking/MaintenanceTask, not an arbitrary client-supplied string.
+- **Item 2 (missing rich completion flow):** Home's completion dialog collected only cost; Fix's `WorkItemManageDrawer` collected nothing and told homeowners completion was "controlled by the linked execution record." Fixed by a new shared `RichCompletionDialog` (completion date, cost, DIY/provider + identity, notes, photos/documents via the existing upload endpoint, observed result, follow-up-needed) backing both surfaces, plus a new Home-Operations-native `POST .../work-items/:id/complete` route for Fix.
+- **Item 3 (sale-readiness/incident reconciliation):** both are `workKeyEligible` and can become accepted work items, but neither reconciled back — `propertySaleCase.service.ts`'s `setItemDecision` only ever wrote `SaleReadinessItem.status`, and the incidents module never touched `OperationalWorkItem` at all. Fixed by new `saleReadinessWorkReconciliation.service.ts` (WAIVE/PURSUE) and `incidentWorkReconciliation.service.ts` (wired into every incident status-mutation site), both using the existing deterministic workKey rather than a new execution-type/schema change.
+- **Item 4 (`HOME_EVENT` gap, now closed):** `recordHomeEventOutcome` wires into `confirmHomeEvent`'s `HOMEOWNER_CONFIRMED` path — the tenth and last declared source type now has a real creation path.
+- **Item 5 (attribution gaps):** booking completion always passed `recommendationSnapshotId: null`, even when it reused a recommendation-backed work item (GUIDANCE/COVERAGE origin); now resolves it via the same `resolveWorkItemDecisionFamilyRefs`/`resolveHomeActionDecisionLineage` machinery project handoffs already use. `recordOperationalWorkOutcome`'s idempotent-retry path returned early without ever calling `attachAttributions`, silently dropping a later-resolved snapshot; it now still attempts attribution on retry.
+
+`PROJECT_RECORD` and `BOOKING_RECORD` remain deliberately unused: guidance/project/booking/inspection completions all converge on `OPERATIONAL_WORK_ITEM` instead, by design, so every Operational Work Item completion produces one consistently-shaped outcome rather than a domain-specific variant (see the comment on `recordOperationalWorkOutcome`'s callers). `promoteInsurancePolicy` deliberately does not record a `DOCUMENT_PROMOTION` outcome — that path stages an unverified/unconfirmed policy term, and recording a verified-looking outcome for it would repeat the "invented certainty" failure mode `homeRecordsExtraction.service.ts`'s own comments warn against elsewhere. The coverage-decision outcome carries no recommendation attribution — `CoverageComparison.sourceActionId` is a raw Home Action id, not a verified decision-family lineage id, and attaching an attribution on an unverified guess would be worse than recording none. Item 6 (reopen restoring domain state) is addressed by `domainReopenDispatch.ts`, called from `transitionWorkItem`'s REOPENED branch; it explicitly does not cover Booking or Claim, since neither domain has a reopen primitive of its own to call (Booking has no "uncomplete" concept, and `ClaimStatus`'s `APPROVED`/`DENIED` only legally transition to `CLOSED`).
 
 ### Phase 5 — Compound intelligence and document convergence
 
