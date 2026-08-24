@@ -14,6 +14,7 @@ import { auditLog, logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { downloadObjectBuffer } from './storage/reportStorage';
 import { documentIntelligenceService, type DocumentInsights } from './documentIntelligence.service';
+import { documentInsightsToExtractionEnvelope } from './documentIntelligenceExtractionEnvelope.adapter';
 import { homeRecordsService } from './homeRecords.service';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
@@ -242,6 +243,23 @@ export class HomeRecordsExtractionService {
 
     const buffer = await downloadObjectBuffer(bucket, version.storageKey);
     const insights = await documentIntelligenceService.analyzeDocument(buffer, version.mimeType);
+    // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-001),
+    // Phase 5 work item 3 — the common ExtractionEnvelope this extraction
+    // call now also returns. parseStatus FAILED (the AI's response wasn't
+    // valid JSON) previously fell through silently: fieldCandidates ended
+    // up empty and the only row created was an unreviewable
+    // "documentType: UNKNOWN, confidence 0" placeholder, with no way for
+    // the homeowner to know extraction actually failed vs. genuinely found
+    // nothing. Failing closed here is honest instead (HI-SRC-005) and lets
+    // the homeowner enter the record by hand right away.
+    const envelope = documentInsightsToExtractionEnvelope(insights, { documentVersionId: version.id });
+    if (envelope.parseStatus === 'FAILED') {
+      throw new APIError(
+        'This document could not be read automatically. Enter the details manually instead.',
+        422,
+        'PROPERTY_RECORD_EXTRACTION_UNREADABLE',
+      );
+    }
 
     const citation = `AI extraction from "${version.originalFileName}"`;
     const confidence = insights.confidence ?? 0;

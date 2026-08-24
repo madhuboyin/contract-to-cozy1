@@ -179,6 +179,36 @@ test('runExtraction is idempotent — does not re-run AI analysis when candidate
   assert.deepEqual(result, existingCandidates);
 });
 
+// Home Intelligence FRD Phase 5 work item 3 (HI-DOC-001): runExtraction now
+// builds an ExtractionEnvelope from the AI insights and fails closed when
+// parseStatus is FAILED, instead of silently creating a single unreviewable
+// "documentType: UNKNOWN, confidence 0" candidate row with no other fields.
+test('runExtraction fails closed with a clear error when the AI response could not be parsed', async () => {
+  versionForRecord = {
+    id: 'version-1',
+    storageKey: 'key-1',
+    mimeType: 'application/pdf',
+    originalFileName: 'unreadable.pdf',
+    scanStatus: 'CLEAN',
+    record: { lifecycleStatus: 'ACTIVE', recordType: 'WARRANTY' },
+  };
+  existingCandidates = [];
+  analyzeResult = {
+    documentType: 'UNKNOWN',
+    confidence: 0,
+    extractedData: {},
+    suggestedActions: ['Manual review required - AI response format was invalid'],
+    rawText: 'not json',
+  };
+  createManyCalls.length = 0;
+
+  await assert.rejects(
+    service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' }),
+    (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_UNREADABLE',
+  );
+  assert.equal(createManyCalls.length, 0, 'no placeholder candidate row should be created on a failed parse');
+});
+
 test('runExtraction stages a document-type candidate plus mapped warranty fields from AI insights', async () => {
   versionForRecord = {
     id: 'version-1',

@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.24"
+version: "1.25"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.24 |
+| Version | 1.25 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1104,7 +1104,16 @@ New `loadInsurancePolicyFactConflictActions` batch-loads every `PENDING_CONFIRMA
 
 **All 7 HI-CMP-002 rule families are now landed.** `COMPOUND_RULE_REGISTRY` carries 8 entries total (the original 4 pre-existing Radar rules under one collective entry, plus 5 rules added across this work — 3 net-new producers for rules 1, 4, and 7; 2 enrichments of existing producers for rules 5 and 6; 1 net-new domain rule reusing the Radar pipeline for rule 2's fifth instance; rule 3 extended an existing allowlist). Every rule's `outputType` is `HOME_ACTION` — none needed HI-CMP-004's `PROPERTY_CHANGE`/`HOME_BRIEFING_ITEM` routing, since every correlation implemented turned out to be homeowner-actionable rather than merely informational; that routing path remains unexercised and should be revisited if a future rule genuinely needs it.
 
-Not yet done: work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI for the Warranty/Expense promotion paths — `homeRecordsExtraction.service.ts` has no conflict-detection call for those two; rule 7 above closes this specifically for `InsurancePolicyTerm`/`InsurancePolicyFact` only).
+**Work item 3 (2026-08-24): common document extraction envelope and promotion registry.** Before this pass, no common extraction envelope existed anywhere in the backend — each extraction path (`homeRecordsExtraction.service.ts`, `materialSpec.service.ts`, `insurancePolicyRecord.service.ts`, the loan-estimate/inventory-OCR extractors) carried its own ad-hoc, partially-overlapping shape. Investigating this work item also corrected an unverified estimate carried in earlier status notes here ("only 3 of the ~10 required promotion adapters exist") — direct code read found **5** of the 9 HI-DOC-003 domains already have a real, working, review-gated promotion adapter (`WARRANTY`, `EXPENSE`, `INSURANCE_POLICY` via the shared `ExtractedFactCandidate` table; `MATERIAL_SPEC` via its own parallel `MaterialExtractionReview` table; `INSPECTION_FINDING` via the legacy path HI-DOC-006 already flags for retirement) — the genuinely missing four are `INVENTORY` and `LOAN_ESTIMATE` (extractor exists, but returns results straight to the client for form prefill with no server-side review-gated candidate) and `PROPERTY_TAX`/`CLAIM` (no extraction pipeline exists at all).
+
+Two new contracts land in `services/intelligence/`, following the same declarative-registry pattern as every sibling registry in that directory:
+
+- **`extractionEnvelope.contract.ts`** (HI-DOC-001) — the `ExtractionEnvelope` type (document/version ids, extractor/model/version, candidate entity type, per-field candidates with confidence, overall confidence, evidence locations, warnings, `parseStatus`) plus `validateExtractionEnvelope`, a per-call runtime validator (not a startup registry — an envelope is validated against a real instance, not a static list).
+- **`documentPromotionAdapterRegistry.contract.ts` + `.ts`** (HI-DOC-003) — one row per target domain documenting `adapterExists`, `adapterFunction`/`sourceFile`, `consumesExtractionEnvelope`, `reviewGate` (`REVIEW_GATED_CANDIDATE` / `CLIENT_FORM_PREFILL_ONLY` / `NONE`), `conflictDetection`, and notes — wired into `validateIntelligenceRegistries()` (the same fail-fast gate the API and worker both already run at startup), so a new domain added without a registry row fails closed the same way an undeclared Home Action producer does.
+
+A real vertical slice, not just documentation: **`documentIntelligenceExtractionEnvelope.adapter.ts`** wraps `documentIntelligenceService`'s existing `DocumentInsights` output (the AI extractor `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` all read from) into the new envelope — purely additive, the AI prompt/model call/`DocumentInsights` shape are untouched. Wired into `homeRecordsExtraction.service.ts`'s `runExtraction()` at its real call site, and a genuine behavior improvement fell out of doing this for real: a parse failure (the AI's response wasn't valid JSON) previously fell through silently, creating one unreviewable "documentType: UNKNOWN, confidence 0" placeholder candidate with no way for the homeowner to tell "extraction failed" from "extraction genuinely found nothing." `envelope.parseStatus === 'FAILED'` now fails closed with a clear `PROPERTY_RECORD_EXTRACTION_UNREADABLE` error instead (HI-SRC-005 honest degradation), so the homeowner can enter the record by hand right away. Test coverage: `tests/unit/extractionEnvelope.test.js` (11 tests: contract validation, real-vs-fallback `DocumentInsights` mapping, low-confidence warnings), `tests/unit/documentPromotionAdapterRegistry.test.js` (11 tests: registry completeness/validation, the verified 5-implemented/4-missing split), and a new regression test in the existing `homeRecordsExtraction.test.js` pinning the fail-closed behavior — all passing alongside the full existing extraction suite (20/20) and the complete registry/producer test set (70/70).
+
+Not yet done: candidate-mapping logic itself (`warrantyCandidatesFromInsights` and siblings) still reads `DocumentInsights` directly rather than the envelope — migrating it, and the remaining 4 domains without an adapter, is work item 4; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path (work item 5); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI for the Warranty/Expense promotion paths — `homeRecordsExtraction.service.ts` has no conflict-detection call for those two; Phase 5 work item 2 rule 7 closes this specifically for `InsurancePolicyTerm`/`InsurancePolicyFact` only).
 
 ### Phase 6 — Skill and capability completion
 

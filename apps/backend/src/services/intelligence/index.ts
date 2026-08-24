@@ -18,6 +18,9 @@ import { validateCompletionEvidencePolicy, COMPLETION_EVIDENCE_POLICY } from './
 import { validateCompoundRuleRegistry } from './compoundRuleRegistry.contract';
 import { COMPOUND_RULE_REGISTRY } from './compoundRuleRegistry';
 import { ATTENTION_PRIORITY_OWNERS, validateAttentionPriorityOwners } from './attentionPriorityOwnership.registry';
+import { validateDocumentPromotionAdapterRegistry } from './documentPromotionAdapterRegistry.contract';
+import { DOCUMENT_PROMOTION_ADAPTER_REGISTRY } from './documentPromotionAdapterRegistry';
+export * from './extractionEnvelope.contract';
 
 export * from './intelligenceConsumerRegistry.contract';
 export * from './intelligenceConsumerRegistry';
@@ -31,6 +34,8 @@ export * from './completionEvidencePolicy.registry';
 export * from './compoundRuleRegistry.contract';
 export * from './compoundRuleRegistry';
 export * from './attentionPriorityOwnership.registry';
+export * from './documentPromotionAdapterRegistry.contract';
+export * from './documentPromotionAdapterRegistry';
 
 /**
  * Home Intelligence Functional Completeness FRD Phase 0 work item 6 —
@@ -63,5 +68,6 @@ export function validateIntelligenceRegistries(): string[] {
       new Set(HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) => entry.producerId)),
     ),
     ...validateAttentionPriorityOwners(ATTENTION_PRIORITY_OWNERS),
+    ...validateDocumentPromotionAdapterRegistry(DOCUMENT_PROMOTION_ADAPTER_REGISTRY),
   ];
 }
