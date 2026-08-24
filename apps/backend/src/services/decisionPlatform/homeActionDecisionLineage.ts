@@ -19,8 +19,11 @@ import type { DecisionFamilyThreadLineage, HomeActionOriginRef } from './decisio
 import { DecisionFamilyAmbiguousThreadError } from './decisionFamilyAdapter';
 import { getDecisionFamilyAdapter } from './decisionFamilyAdapterRegistry';
 import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
+import type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
+import { OPERATIONAL_WORK_ID_PREFIX } from '../intelligence/homeActionProducerOwnership';
 
 export type { HomeActionOriginRef } from './decisionFamilyAdapter';
+export type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
 
 const REPAIR_REPLACE_ID_PREFIX = 'repair-replace:';
 
@@ -103,4 +106,27 @@ export async function startOrResumeHomeActionDecisionThread(input: {
     logger.warn({ err: error, propertyId, ref }, 'Decision thread create-or-resume failed; Home Action opened without decision lineage this request');
     return { status: 'UNAVAILABLE', ...ref, reason: 'Unable to start or resume the decision at this time.' };
   }
+}
+
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4.
+// Producers whose instances can carry more than one safety tier declare
+// decisionLineagePolicy: VARIES_BY_INSTANCE in homeActionProducerOwnership
+// .ts (a reviewed, audited classification a completeness test enforces);
+// this is the actual per-action runtime rule every action is ultimately
+// evaluated against, VARIES_BY_INSTANCE producer or not. safetyTier alone
+// is not the signal: an emergency should never wait on a Decision Thread,
+// and completing already-accepted work is execution continuity, not fresh
+// decision creation, even when material.
+export function resolveActionDecisionLineagePolicy(
+  action: { lineageId: string; governance: { safetyTier: string } },
+): DecisionLineagePolicy {
+  if (action.lineageId.startsWith(OPERATIONAL_WORK_ID_PREFIX)) {
+    return { kind: 'NOT_REQUIRED' };
+  }
+  const tier = action.governance.safetyTier;
+  if (tier !== 'MATERIAL_FINANCIAL' && tier !== 'REGULATED_COVERAGE') {
+    return { kind: 'NOT_REQUIRED' };
+  }
+  const ref = resolveDecisionFamilyRef(action);
+  return { kind: 'DECISION_REQUIRED', decisionDefinitionId: ref?.decisionDefinitionId ?? null };
 }

@@ -1,5 +1,50 @@
 import { HOME_ACTION_SOURCE_KINDS, type HomeAction } from '../../productFramework/homeAction.contract';
 import type { OperationalWorkSourceType } from '@prisma/client';
+import { DECISION_DEFINITIONS, type DecisionDefinitionId } from '../decisionPlatform/decisionDefinitionRegistry';
+
+/**
+ * Home Intelligence Functional Completeness FRD Phase 3 review finding 4 —
+ * declares, per producer, whether its outputs are ever a genuine material
+ * decision needing Decision Thread lineage. safetyTier alone is not this
+ * signal: an emergency should never wait on a Decision Thread, "add missing
+ * mortgage details" is context capture rather than a recommendation yet,
+ * and completing already-accepted work is execution continuity, not fresh
+ * decision creation, even when material. A producer whose instances can
+ * carry more than one safety tier (e.g. a guidance journey step's own
+ * declared governance) cannot be pinned to one static answer, hence
+ * VARIES_BY_INSTANCE — see homeActionDecisionLineage.ts's
+ * resolveActionDecisionLineagePolicy for the actual per-action runtime
+ * rule, which every producer (including VARIES_BY_INSTANCE ones) is
+ * ultimately evaluated against; this field is the reviewed, audited
+ * classification a completeness check enforces, not itself consulted at
+ * request time.
+ */
+export type DecisionLineagePolicy =
+  | { kind: 'NOT_REQUIRED' }
+  | { kind: 'CONTEXT_CAPTURE_ONLY' }
+  | {
+      kind: 'DECISION_REQUIRED';
+      /** null when this producer's material instances are a genuine decision but no decision family exists for them yet — always fails closed. */
+      decisionDefinitionId: DecisionDefinitionId | null;
+    }
+  | { kind: 'VARIES_BY_INSTANCE'; rationale: string };
+
+export function validateDecisionLineagePolicyReferences(
+  producers: readonly { producerId: string; decisionLineagePolicy: DecisionLineagePolicy }[],
+): string[] {
+  const issues: string[] = [];
+  const knownDefinitionIds = new Set(Object.keys(DECISION_DEFINITIONS));
+  for (const producer of producers) {
+    const policy = producer.decisionLineagePolicy;
+    if (policy.kind === 'DECISION_REQUIRED' && policy.decisionDefinitionId && !knownDefinitionIds.has(policy.decisionDefinitionId)) {
+      issues.push(`homeActionProducerOwnership entry "${producer.producerId}" declares decisionLineagePolicy.decisionDefinitionId "${policy.decisionDefinitionId}", which is not a registered DecisionDefinition.`);
+    }
+    if (policy.kind === 'VARIES_BY_INSTANCE' && !policy.rationale.trim()) {
+      issues.push(`homeActionProducerOwnership entry "${producer.producerId}" declares decisionLineagePolicy VARIES_BY_INSTANCE with no rationale.`);
+    }
+  }
+  return issues;
+}
 
 /**
  * Home Intelligence Functional Completeness FRD §15 Phase 0 work item 2
@@ -92,6 +137,8 @@ export interface HomeActionProducerOwnershipEntry {
    */
   hasOutcomeAdapter: boolean;
   outcomeAdapterOwner: string | null;
+  /** HI-DEC-002 / Phase 3 review finding 4 — see DecisionLineagePolicy's own doc comment. Required so a new producer cannot be added without this being reviewed. */
+  decisionLineagePolicy: DecisionLineagePolicy;
   notes: string;
 }
 

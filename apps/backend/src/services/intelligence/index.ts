@@ -9,6 +9,7 @@ import { HOME_ACTION_ADAPTER_OWNERSHIP } from './homeActionAdapterOwnership';
 import {
   validateHomeActionProducerOwnership,
   validateHomeActionProducerKindConsistency,
+  validateDecisionLineagePolicyReferences,
 } from './homeActionProducerOwnership.contract';
 import { HOME_ACTION_PRODUCER_OWNERSHIP } from './homeActionProducerOwnership';
 import { validateCapabilitySkillGuidanceBridge } from './capabilitySkillGuidanceBridge.contract';
@@ -43,6 +44,7 @@ export function validateIntelligenceRegistries(): string[] {
     ...validateHomeActionAdapterOwnership(HOME_ACTION_ADAPTER_OWNERSHIP),
     ...validateHomeActionProducerOwnership(HOME_ACTION_PRODUCER_OWNERSHIP),
     ...validateHomeActionProducerKindConsistency(HOME_ACTION_PRODUCER_OWNERSHIP, HOME_ACTION_ADAPTER_OWNERSHIP),
+    ...validateDecisionLineagePolicyReferences(HOME_ACTION_PRODUCER_OWNERSHIP),
     ...validateCapabilitySkillGuidanceBridge(CAPABILITY_SKILL_GUIDANCE_BRIDGE, {
       capabilityExists: (capabilityId: string) => Boolean(canonicalCapabilityRegistry.getById(capabilityId)),
       operationExists: (operationId: AskOperationId) => operationId in ASK_OPERATION_DEFINITIONS,

@@ -78,6 +78,7 @@ import { COMPLETION_EVIDENCE_POLICY } from './intelligence/completionEvidencePol
 import {
   resolveDecisionFamilyRef,
   resolveHomeActionDecisionLineage,
+  resolveActionDecisionLineagePolicy,
   startOrResumeHomeActionDecisionThread,
   type HomeActionDecisionLineage,
 } from './decisionPlatform/homeActionDecisionLineage';
@@ -630,24 +631,82 @@ export async function linkWorkItemsAndReconcile(propertyId: string, actions: Ran
     }));
 }
 
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4.
+// Material CTA kinds per HomeActionSchema's own superRefine (homeAction
+// .contract.ts) -- a degraded action must not keep one of these, or the
+// schema's own "degraded recommendations may expose only review, evidence,
+// correction, or escalation actions" invariant would be violated even
+// though nothing re-validates the mutated object at runtime.
+const MATERIAL_CTA_KINDS: ReadonlySet<HomeAction['primaryCta']['kind']> =
+  new Set(['START', 'SCHEDULE', 'COMPARE', 'SELECT_PROVIDER', 'PURCHASE', 'FINANCE']);
+
+function degradeCtaForBlockedDecision<T extends HomeAction['primaryCta']>(cta: T): T {
+  return MATERIAL_CTA_KINDS.has(cta.kind) ? { ...cta, kind: 'REVIEW' } : cta;
+}
+
 /**
- * Home Intelligence Functional Completeness FRD Phase 3A (HI-DEC-002).
- * Read-only decision-family lineage resolution — mirrors
- * linkWorkItemsAndReconcile's shape but never creates anything, so it's
- * safe to run on every Home feed render. Only actions whose lineageId
- * matches a registered decision family (resolveDecisionFamilyRef) get a
- * non-null decisionLineage; every other action passes through unchanged.
+ * Home Intelligence Functional Completeness FRD Phase 3 review finding 4.
+ * A DECISION_REQUIRED action with no working lineage must not offer its
+ * normal commit CTA -- downgrades it the same way a degraded
+ * RecommendationResponseContract already requires (DATA_UNAVAILABLE +
+ * materialActionAllowed: false), reusing that existing contract rather
+ * than inventing a parallel "blocked" concept.
+ */
+function degradeActionForBlockedDecision(action: RankedHomeAction): RankedHomeAction {
+  return {
+    ...action,
+    primaryCta: degradeCtaForBlockedDecision(action.primaryCta),
+    secondaryCtas: action.secondaryCtas.map(degradeCtaForBlockedDecision),
+    recommendationResponse: {
+      status: 'DATA_UNAVAILABLE',
+      safetyTier: action.governance.safetyTier,
+      reasonCode: 'DECISION_LINEAGE_UNAVAILABLE',
+      message: 'This material recommendation needs a tracked decision, and none is available yet for this type of recommendation.',
+      safeNextAction: 'Review the available evidence and verify independently with a qualified professional before committing.',
+      missingFacts: [],
+      retryable: false,
+      materialActionAllowed: false,
+    },
+  };
+}
+
+// Lineage statuses that mean "no working Decision Thread lineage exists for
+// this DECISION_REQUIRED action" -- NOT_APPLICABLE is included: for a
+// DECISION_REQUIRED action, the one registered family not covering this
+// specific item is functionally the same absence of lineage as no family
+// existing at all (Phase 3 review finding 4).
+const BLOCKING_DECISION_LINEAGE_STATUSES = new Set(['AMBIGUOUS', 'UNAVAILABLE', 'NOT_APPLICABLE']);
+
+/**
+ * Home Intelligence Functional Completeness FRD Phase 3A/Phase 3 review
+ * finding 4. Read-only decision-lineage resolution and fail-closed
+ * enforcement — mirrors linkWorkItemsAndReconcile's shape but never
+ * creates a Decision Thread, so it's safe to run on every Home feed
+ * render. resolveActionDecisionLineagePolicy (not safetyTier alone)
+ * decides whether an action needs lineage at all; a DECISION_REQUIRED
+ * action with no working lineage gets degraded to a safe review-only CTA
+ * instead of silently keeping its commit CTA.
  */
 export async function linkDecisionLineage(propertyId: string, actions: RankedHomeAction[]): Promise<RankedHomeAction[]> {
   return Promise.all(actions.map(async (action) => {
+    const policy = resolveActionDecisionLineagePolicy(action);
+    if (policy.kind !== 'DECISION_REQUIRED') return action;
+    if (!policy.decisionDefinitionId) {
+      // No decision family is registered for this recommendation type at
+      // all -- nothing to look up, fail closed immediately.
+      return degradeActionForBlockedDecision(action);
+    }
     const ref = resolveDecisionFamilyRef(action);
-    if (!ref) return action;
+    if (!ref) return degradeActionForBlockedDecision(action);
     try {
       const decisionLineage = await resolveHomeActionDecisionLineage(propertyId, ref);
-      return { ...action, decisionLineage };
+      const withLineage = { ...action, decisionLineage };
+      return BLOCKING_DECISION_LINEAGE_STATUSES.has(decisionLineage.status)
+        ? degradeActionForBlockedDecision(withLineage)
+        : withLineage;
     } catch (err) {
-      logger.warn({ err, actionId: action.id, propertyId }, 'Decision lineage resolution failed; action stays unlinked this request');
-      return action;
+      logger.warn({ err, actionId: action.id, propertyId }, 'Decision lineage resolution failed; action degraded to a safe review CTA this request');
+      return degradeActionForBlockedDecision(action);
     }
   }));
 }

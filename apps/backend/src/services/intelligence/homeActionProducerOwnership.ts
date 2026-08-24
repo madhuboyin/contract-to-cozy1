@@ -60,7 +60,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only.',
+    decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
+    notes: 'ACKNOWLEDGE only. Governance is always lowConsequenceGovernance(\'environment-v1\') — never material, so decision lineage never applies.',
   },
   {
     producerId: 'loadGuidanceActions',
@@ -77,6 +78,10 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    decisionLineagePolicy: {
+      kind: 'VARIES_BY_INSTANCE',
+      rationale: 'guidanceGovernance() parses each step\'s own governanceJson (guidanceDefinition author-declared), so safetyTier can be anything -- LOW_CONSEQUENCE, SAFETY_EMERGENCY, MATERIAL_FINANCIAL, or REGULATED_COVERAGE. A material instance is a genuine decision (guidanceDecisionContract already builds assumptions/options/tradeoffs for it) but no decision-family engine covers general guidance journeys today, only the separate repair-replace producer -- resolved per-action by resolveActionDecisionLineagePolicy.',
+    },
     notes: 'ACKNOWLEDGE only via executeHomeActionCommand (COMMAND path has no completion adapter here). No fixed id prefix. Home Intelligence FRD Phase 4: a guidance journey\'s own completion (runJourneyCompletionHooks -> syncGuidanceWorkItemsOnCompletion, guidanceCompletionHooks.service.ts) now creates an OutcomeObservation when its work item reaches VERIFIED -- a genuine outcome adapter, just not one reachable through this producer\'s Home Action command surface, so hasCompletionAdapter/hasOutcomeAdapter stay false here per this table\'s command-path framing.',
   },
   {
@@ -94,7 +99,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE, plus CORRECT_FACT when critical (critical incidents restrict feedbackControls to [\'ACKNOWLEDGE\', \'CORRECT_FACT\'], a subset of the full set shown here).',
+    decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
+    notes: 'ACKNOWLEDGE, plus CORRECT_FACT when critical (critical incidents restrict feedbackControls to [\'ACKNOWLEDGE\', \'CORRECT_FACT\'], a subset of the full set shown here). Governance is LOW_CONSEQUENCE or, when critical, SAFETY_EMERGENCY -- never material, so decision lineage never applies (an emergency should not wait on a Decision Thread).',
   },
   {
     producerId: 'loadSeasonalChecklistActions',
@@ -111,7 +117,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'One aggregate action over many checklist items — mapping it to a single work item would be semantically wrong, so it is explicitly excluded from work-item eligibility (isSeasonalAggregate in homeActionWorkItem.adapter.ts) even though the MAINTENANCE kind is otherwise eligible. SNOOZE/NOT_RELEVANT only.',
+    decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
+    notes: 'One aggregate action over many checklist items — mapping it to a single work item would be semantically wrong, so it is explicitly excluded from work-item eligibility (isSeasonalAggregate in homeActionWorkItem.adapter.ts) even though the MAINTENANCE kind is otherwise eligible. SNOOZE/NOT_RELEVANT only. Governance is always lowConsequenceGovernance(\'phase2-seasonal-v1\') — never material.',
   },
   {
     producerId: 'loadRecallActions',
@@ -128,7 +135,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE, plus CORRECT_FACT when critical (same subset relationship as loadIncidentActions).',
+    decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
+    notes: 'ACKNOWLEDGE, plus CORRECT_FACT when critical (same subset relationship as loadIncidentActions). Governance is LOW_CONSEQUENCE or, when critical, SAFETY_EMERGENCY — never material, so decision lineage never applies.',
   },
   {
     producerId: 'loadInspectionFindingActions',
@@ -145,6 +153,10 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    decisionLineagePolicy: {
+      kind: 'VARIES_BY_INSTANCE',
+      rationale: 'A finding is LOW_CONSEQUENCE, SAFETY_EMERGENCY (isSafety), or MATERIAL_FINANCIAL (isMaterialMajor: MAJOR severity at/above the $1,500 cost threshold) depending on the specific finding. No decision-family engine covers inspection findings yet, so a material instance always fails closed today -- resolved per-action by resolveActionDecisionLineagePolicy.',
+    },
     notes: 'ACKNOWLEDGE, plus CORRECT_FACT when safety-relevant (same subset relationship as loadIncidentActions). Not yet promoted into a work item — later-phase work.',
   },
   {
@@ -162,7 +174,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only. No fixed id prefix.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+    notes: 'ACKNOWLEDGE only. No fixed id prefix. Governance is always fixed MATERIAL_FINANCIAL (a coverage question already carries real options/tradeoffs) — a genuine material decision, but no coverage decision-family engine is registered, so this fails closed today.',
   },
   {
     producerId: 'loadCoverageRenewalActions',
@@ -179,7 +192,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only. Added Phase 1 Slice 1 (Warranty/InsurancePolicy renewal) — the producer this Phase 0 pass adds a row for after it was missing from the original registry report.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+    notes: 'ACKNOWLEDGE only. Added Phase 1 Slice 1 (Warranty/InsurancePolicy renewal) — the producer this Phase 0 pass adds a row for after it was missing from the original registry report. Governance is always fixed MATERIAL_FINANCIAL (whether/how to renew) — a genuine material decision with no registered engine, so this fails closed today.',
   },
   {
     producerId: 'loadHealthInsightActions',
@@ -196,7 +210,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only. Added Phase 1 Slice 2 (health-score/appliance install-year gaps) — the producer this Phase 0 pass adds a row for after it was missing from the original registry report.',
+    decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
+    notes: 'ACKNOWLEDGE only. Added Phase 1 Slice 2 (health-score/appliance install-year gaps) — the producer this Phase 0 pass adds a row for after it was missing from the original registry report. Governance is always lowConsequenceGovernance(\'resolution-center-parity-v1\') — never material.',
   },
   {
     producerId: 'loadRepairReplaceDecisionActions',
@@ -213,7 +228,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only. Added Phase 1 Slice 2 (ReplaceRepairAnalysis) — the producer this Phase 0 pass adds a row for after it was missing from the original registry report.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'HVAC_REPAIR_REPLACE' },
+    notes: 'ACKNOWLEDGE only. Added Phase 1 Slice 2 (ReplaceRepairAnalysis) — the producer this Phase 0 pass adds a row for after it was missing from the original registry report. Governance is always fixed MATERIAL_FINANCIAL. The one producer with a real registered decision family (Phase 3A) — resolveActionDecisionLineagePolicy still fails closed per-item when the underlying InventoryItem is not actually HVAC (composeHvacDecisionContext\'s own eligibility gate).',
   },
   {
     producerId: 'loadPersonalizationActions',
@@ -230,6 +246,10 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: 'applyPersonalizationHomeActionLifecycle (modules/personalization/application/applyHomeActionLifecycle.usecase.ts), routed by source.kind === PERSONALIZATION in executeHomeActionCommand.',
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    decisionLineagePolicy: {
+      kind: 'VARIES_BY_INSTANCE',
+      rationale: 'safetyTier comes straight from PersonalizedRecommendationDefinition.governance.safetyTier, a reviewed but per-definition DB field — any tier is possible across the personalization catalog. No decision-family engine covers personalization recommendations, so a material instance always fails closed today -- resolved per-action by resolveActionDecisionLineagePolicy.',
+    },
     notes: 'The only producer with a real COMPLETE/ALREADY_DONE adapter declared at the source-kind level too — no id-prefix carve-out needed. (Safety-tier recommendations restrict feedbackControls to [\'COMPLETE\', \'ALREADY_DONE\', \'CORRECT_FACT\'], a subset of the full set shown here.)',
   },
   {
@@ -247,6 +267,10 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    decisionLineagePolicy: {
+      kind: 'VARIES_BY_INSTANCE',
+      rationale: 'projectGovernance() computes SAFETY_EMERGENCY (open safety issue), REGULATED_COVERAGE (coverage-funded), MATERIAL_FINANCIAL (contract amount/permit/HOA/credential/complexity signals), or LOW_CONSEQUENCE per project. No decision-family engine covers projects, so a material instance always fails closed today -- resolved per-action by resolveActionDecisionLineagePolicy.',
+    },
     notes: 'ACKNOWLEDGE only via executeHomeActionCommand. Home Intelligence FRD Phase 4: a project\'s own verified completion (syncJourneyWorkItemForProjectEvent / syncProjectExecutionWorkItemOnCompletion, projectWorkItemReconciliation.service.ts) now creates an OutcomeObservation when its work item reaches VERIFIED, same command-path caveat as loadGuidanceActions above.',
   },
   {
@@ -264,7 +288,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'Completion happens by the homeowner updating the self-reported condition on Sale Case, not a COMPLETE command against the promoted work item. Id is per-item with an "industry-guidance" suffix, not one fixed literal prefix.',
+    decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
+    notes: 'Completion happens by the homeowner updating the self-reported condition on Sale Case, not a COMPLETE command against the promoted work item. Id is per-item with an "industry-guidance" suffix, not one fixed literal prefix. Governance is always lowConsequenceGovernance(\'sale-prep-v1\') — never material.',
   },
   {
     producerId: 'loadRefinanceDataRequiredActions',
@@ -281,7 +306,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: 'markPropertyAsHavingNoMortgage (services/homeActions.service.ts) for the exact-id NO_MORTGAGE command only, by exact string match (not an id-prefix check) in executeHomeActionCommand; every other command falls through to the generic default.',
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE, plus a NO_MORTGAGE command handled directly by exact-id match in executeHomeActionCommand (markPropertyAsHavingNoMortgage). Note: NO_MORTGAGE does not short-circuit — the generic default handler still runs afterward for this command too.',
+    decisionLineagePolicy: { kind: 'CONTEXT_CAPTURE_ONLY' },
+    notes: 'ACKNOWLEDGE, plus a NO_MORTGAGE command handled directly by exact-id match in executeHomeActionCommand (markPropertyAsHavingNoMortgage). Note: NO_MORTGAGE does not short-circuit — the generic default handler still runs afterward for this command too. Governance is always lowConsequenceGovernance(\'refinance-data-required-v1\'); this is literally "add missing mortgage details," not yet a recommendation.',
   },
   {
     producerId: 'loadRefinanceOpportunityActions',
@@ -298,7 +324,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'ACKNOWLEDGE only. Id scheme varies per case (refinance-decision-review or a window id) rather than one fixed prefix.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+    notes: 'ACKNOWLEDGE only. Id scheme varies per case (refinance-decision-review or a window id) rather than one fixed prefix. Governance is always fixed MATERIAL_FINANCIAL — a genuine material decision (refinance or don\'t) with no registered engine, so this fails closed today (Phase 3 review finding 4).',
   },
   {
     producerId: 'loadHomeDigitalTwinFactReviewActions',
@@ -315,7 +342,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'DISMISS/SNOOZE/NOT_RELEVANT/CORRECT_FACT.',
+    decisionLineagePolicy: { kind: 'CONTEXT_CAPTURE_ONLY' },
+    notes: 'DISMISS/SNOOZE/NOT_RELEVANT/CORRECT_FACT. Governance is always lowConsequenceGovernance(\'home-digital-twin-fact-review-v1\') — a fact-review prompt, not a recommendation.',
   },
   {
     producerId: 'loadHomeCapitalTimelineMaterialWindowActions',
@@ -332,7 +360,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'DISMISS/SNOOZE/NOT_RELEVANT/CORRECT_FACT. Own id scheme keyed off recommendationVersion, not a fixed literal prefix.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+    notes: 'DISMISS/SNOOZE/NOT_RELEVANT/CORRECT_FACT. Own id scheme keyed off recommendationVersion, not a fixed literal prefix. Governance is always fixed MATERIAL_FINANCIAL (a capital-window financial decision) with no registered engine, so this fails closed today.',
   },
   {
     producerId: 'loadPropertyTaxAppealCaseActions',
@@ -349,7 +378,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'SNOOZE/DISMISS/NOT_RELEVANT.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+    notes: 'SNOOZE/DISMISS/NOT_RELEVANT. Governance is always fixed MATERIAL_FINANCIAL (whether/how to pursue an appeal) with no registered engine, so this fails closed today.',
   },
   {
     producerId: 'loadSavingsBenefitsActions',
@@ -366,7 +396,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'Two id-prefixed sub-shapes: "action" (SNOOZE/DEFER/DISMISS/NOT_RELEVANT) and "match" (ACKNOWLEDGE, DEFER, SNOOZE, DISMISS, NOT_RELEVANT, CORRECT_FACT). supportedCommands above is the union of both.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+    notes: 'Two id-prefixed sub-shapes: "action" (SNOOZE/DEFER/DISMISS/NOT_RELEVANT) and "match" (ACKNOWLEDGE, DEFER, SNOOZE, DISMISS, NOT_RELEVANT, CORRECT_FACT). supportedCommands above is the union of both. Both sub-shapes are always fixed MATERIAL_FINANCIAL, with no registered engine, so this fails closed today.',
   },
   {
     producerId: 'loadOwnershipCostChangeActions',
@@ -383,7 +414,8 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: 'ownershipCostDecisionService.record (services/ownershipCosts/ownershipCostDecision.service.ts), routed by OWNERSHIP_COST_CHANGE_ID_PREFIX in executeHomeActionCommand — owns every command for this producer, not completion only.',
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
-    notes: 'COMPLETE/ALREADY_DONE supported despite the SYSTEM source kind having no completion adapter at the kind level — this is one of the two id-prefix carve-outs executeHomeActionCommand checks explicitly (see OWNERSHIP_COST_CHANGE_ID_PREFIX above), now declared here instead of being an undeclared exception.',
+    decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: null },
+    notes: 'COMPLETE/ALREADY_DONE supported despite the SYSTEM source kind having no completion adapter at the kind level — this is one of the two id-prefix carve-outs executeHomeActionCommand checks explicitly (see OWNERSHIP_COST_CHANGE_ID_PREFIX above), now declared here instead of being an undeclared exception. Governance is always fixed MATERIAL_FINANCIAL; ownershipCostDecisionService.record already models RESOLVE/SNOOZE/NO_ACTION/DISMISS as a real decision, but no decision-family engine covers it, so this fails closed today.',
   },
   {
     producerId: 'adaptOrchestratedActionToHomeAction',
@@ -404,6 +436,10 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    decisionLineagePolicy: {
+      kind: 'VARIES_BY_INSTANCE',
+      rationale: 'safetyTier is critical ? SAFETY_EMERGENCY : hasSavedCoverageAnalysis ? MATERIAL_FINANCIAL : LOW_CONSEQUENCE per action. The MATERIAL_FINANCIAL branch already has an authoritative underlying output (the saved Coverage Analysis) an adapter could snapshot -- a real future decision family, not a from-scratch engine -- but none is registered yet, so it fails closed today -- resolved per-action by resolveActionDecisionLineagePolicy.',
+    },
     notes: 'Risk-assessment adapter. Computes source.kind per action (MAINTENANCE/COVERAGE/SYSTEM) from action.source/relatedEntity rather than emitting one fixed kind, and builds id from the raw action.actionKey with no producer prefix — the least identity-stable producer in the feed. ACKNOWLEDGE only.',
   },
   {
@@ -428,6 +464,10 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: 'recordFirstActionResolution (services/entryContext.service.ts), routed by ACTIVATION_ID_PREFIX in executeHomeActionCommand — applies only to the "activation:" id family. The "activation-context:" family this producer also emits (see notes) falls through to the generic default and has no COMPLETE control, so it never reaches this owner.',
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    decisionLineagePolicy: {
+      kind: 'VARIES_BY_INSTANCE',
+      rationale: 'Resolves to whatever the pointed-at domain record\'s own governance is (Incident/Warranty/InsurancePolicy/etc. via sourceAdapterForTrigger), so tier varies. This producer\'s job is driving first engagement, not itself computing a fresh material recommendation -- resolved per-action by resolveActionDecisionLineagePolicy like every other dynamic producer, so a genuinely material first-value trigger still fails closed rather than being silently exempted.',
+    },
     notes: 'Activation/first-value producer. source.kind is resolved dynamically per trigger type by sourceAdapterForTrigger (entryContext.service.ts) — can be MAINTENANCE, COVERAGE, INCIDENT, PROJECT, SYSTEM, or GUIDANCE. This is the other id-prefix carve-out executeHomeActionCommand checks explicitly (see ACTIVATION_ID_PREFIX above), now declared here instead of being an undeclared exception. isKindLevelCompletionException is still meaningful here even though sourceKind is null: whichever dynamic kind is resolved at runtime, none of them declare a kind-level completion adapter, so the exception always applies. This producer also emits a second, separate id family — "activation-context:${triggerId}" — for the missing-facts follow-up action. That family is NOT covered by idPrefixes above and intentionally has no COMPLETE control: recordFirstActionResolution is scoped to the single "activation:" trigger action and would misrecord firstActionResolvedAt if invoked for it. It self-resolves by dropping out of the feed once its `missing` list is empty. supportedCommands above is the "activation:" family only; the "activation-context:" family supports DEFER/DISMISS/NOT_RELEVANT/CORRECT_FACT.',
   },
   {
@@ -446,6 +486,7 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: 'completeAcceptedOperationalWorkItem (services/homeActionCompletion.service.ts) for COMPLETE/ALREADY_DONE on a maintenance-backed item; generic default otherwise.',
     hasOutcomeAdapter: true,
     outcomeAdapterOwner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) — OPERATIONAL_WORK_ITEM source type, created by completeAcceptedOperationalWorkItem.',
-    notes: 'Re-projects already-ACCEPTED OperationalWorkItem rows back into the feed with source.kind computed from the item\'s primary execution type (PROJECT/GUIDANCE/MAINTENANCE). Never routes through proposeWorkItemFromHomeAction — it already carries an existing work item reference, so workKeyEligible is not applicable rather than a real "no." Home Intelligence FRD Phase 4: COMPLETE/ALREADY_DONE is offered only when the primary execution is MAINTENANCE_TASK and the item\'s safetyTier completion-evidence policy permits attestation (LOW_CONSEQUENCE/MATERIAL_FINANCIAL) — REGULATED_COVERAGE/SAFETY_EMERGENCY items keep CORRECT_FACT/SNOOZE only, same as GUIDANCE/PROJECT-backed items, and must use "Manage action" instead.',
+    decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
+    notes: 'Re-projects already-ACCEPTED OperationalWorkItem rows back into the feed with source.kind computed from the item\'s primary execution type (PROJECT/GUIDANCE/MAINTENANCE). Never routes through proposeWorkItemFromHomeAction — it already carries an existing work item reference, so workKeyEligible is not applicable rather than a real "no." Home Intelligence FRD Phase 4: COMPLETE/ALREADY_DONE is offered only when the primary execution is MAINTENANCE_TASK and the item\'s safetyTier completion-evidence policy permits attestation (LOW_CONSEQUENCE/MATERIAL_FINANCIAL) — REGULATED_COVERAGE/SAFETY_EMERGENCY items keep CORRECT_FACT/SNOOZE only, same as GUIDANCE/PROJECT-backed items, and must use "Manage action" instead. Phase 3 review finding 4: exempted from decision lineage even when material — this is execution continuity on already-accepted work, not fresh decision creation (the decision, if any, already happened when the work was accepted); resolveActionDecisionLineagePolicy explicitly exempts the OPERATIONAL_WORK_ID_PREFIX id family for this reason.',
   },
 ] as const;
