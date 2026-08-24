@@ -36,6 +36,7 @@ function facts(overrides = {}) {
     primaryHeatingFuel: 'gas',
     hvacFilterState: 'current',
     unresolvedRoofIssue: false,
+    unresolvedGutterOrDrainageIssue: false,
     ...overrides,
   };
 }
@@ -179,4 +180,35 @@ test('open roof issue correlates only with provider-reported severe weather', ()
   assert.equal(highWind[0].ruleCode, 'SEVERE_WEATHER_OPEN_ROOF_ISSUE');
   assert.equal(highWind[0].sourceEvidence[0].severity, 'high');
   assert.deepEqual(highEarthquake, []);
+});
+
+// Home Intelligence FRD Phase 5 work item 2, rule 2 of 7 (HI-CMP-002).
+test('open gutter/drainage issue correlates only with water-management weather, not wind/hail', () => {
+  const heavyRain = evaluate(
+    [event('heavy_rain', { severity: 'critical' })],
+    facts({ unresolvedGutterOrDrainageIssue: true }),
+  );
+  const floodRisk = evaluate(
+    [event('flood_risk', { severity: 'severe' })],
+    facts({ unresolvedGutterOrDrainageIssue: true }),
+  );
+  const mediumRain = evaluate(
+    [event('heavy_rain', { severity: 'medium' })],
+    facts({ unresolvedGutterOrDrainageIssue: true }),
+  );
+  const highWind = evaluate(
+    [event('wind', { severity: 'high' })],
+    facts({ unresolvedGutterOrDrainageIssue: true }),
+  );
+  const noIssue = evaluate(
+    [event('heavy_rain', { severity: 'high' })],
+    facts({ unresolvedGutterOrDrainageIssue: false }),
+  );
+
+  assert.equal(heavyRain[0].ruleCode, 'HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE');
+  assert.equal(heavyRain[0].recommendedActions[0].code, 'CLEAR_GUTTERS_AND_DRAINAGE');
+  assert.equal(floodRisk[0].ruleCode, 'HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE');
+  assert.deepEqual(mediumRain, []);
+  assert.deepEqual(highWind, [], 'wind bears on roof integrity, not water management, so it must not trigger this rule');
+  assert.deepEqual(noIssue, []);
 });

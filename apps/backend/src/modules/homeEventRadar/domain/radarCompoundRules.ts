@@ -8,6 +8,14 @@ export const RADAR_COMPOUND_RULE_CODES = [
   'SMOKE_HVAC_FILTER',
   'FREEZE_OUTAGE_ELECTRIC_HEAT',
   'SEVERE_WEATHER_OPEN_ROOF_ISSUE',
+  // Home Intelligence FRD Phase 5 work item 2, rule 2 of 7 (HI-CMP-002) —
+  // "severe weather + unresolved maintenance or vulnerable home system."
+  // The four rules above already are instances of this family (roof issue,
+  // sump backup, electric heat on outage, HVAC filter); this is the fifth,
+  // extending the "unresolved maintenance" side to gutter/drainage work,
+  // the conventional water-intrusion vulnerability heavy rain or flood
+  // risk exposes.
+  'HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE',
 ] as const;
 
 export type RadarCompoundRuleCode = typeof RADAR_COMPOUND_RULE_CODES[number];
@@ -35,6 +43,7 @@ export type RadarCompoundPropertyFacts = {
   primaryHeatingFuel: string | null;
   hvacFilterState: 'current' | 'due' | 'unknown';
   unresolvedRoofIssue: boolean | null;
+  unresolvedGutterOrDrainageIssue: boolean | null;
 };
 
 export type RadarCompoundSourceEvidence = {
@@ -82,6 +91,10 @@ const WEATHER_ROOF_TYPES = new Set([
   'flood_risk',
 ]);
 const SEVERE_PROVIDER_LEVELS = new Set(['high', 'critical', 'severe', 'extreme']);
+// Water-intrusion weather types only — wind/hail are excluded because they
+// bear on the roof's structural integrity (WEATHER_ROOF_TYPES), not on
+// whether water is being carried away from the foundation.
+const WATER_MANAGEMENT_WEATHER_TYPES = new Set(['heavy_rain', 'flood_risk']);
 
 function asDate(value: Date | string | null | undefined): Date | null {
   if (value == null) return null;
@@ -331,6 +344,37 @@ export function evaluateRadarCompoundRules(input: {
             'Review the open roof issue and inspect safely after conditions pass',
             'high',
             'ROOF',
+          ),
+        ],
+      }));
+    }
+  }
+
+  if (input.facts.unresolvedGutterOrDrainageIssue === true) {
+    for (const weather of events) {
+      if (
+        !WATER_MANAGEMENT_WEATHER_TYPES.has(weather.eventType)
+        || !SEVERE_PROVIDER_LEVELS.has(weather.severity)
+      ) {
+        continue;
+      }
+      insights.push(insight({
+        propertyId: input.propertyId,
+        ruleCode: 'HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE',
+        title: 'Heavy rain overlaps an open gutter or drainage issue',
+        summary: 'A provider-reported heavy rain or flood-risk event overlaps an unresolved gutter or drainage maintenance issue.',
+        events: [weather],
+        facts: [{
+          factKey: 'maintenance.unresolvedGutterOrDrainageIssue',
+          state: 'confirmed',
+          value: true,
+        }],
+        actions: [
+          action(
+            'CLEAR_GUTTERS_AND_DRAINAGE',
+            'Clear gutters and drainage paths, or route water away from the foundation, before rain accumulates',
+            'high',
+            'BUILDING_EXTERIOR',
           ),
         ],
       }));

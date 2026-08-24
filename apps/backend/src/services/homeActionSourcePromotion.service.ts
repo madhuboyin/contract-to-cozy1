@@ -2346,20 +2346,33 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
   });
 }
 
-// Sale Readiness Value-Maximization Checklist plan §4.8/§10 Phase 4: only
-// the self-reported and generic-fallback Tier 2 checklist items (§4.3) get
-// promoted here — every other SaleReadinessItem source (inspection
-// findings, permits, projects, records, material specs, timeline events,
-// aging systems, lapsed maintenance, warranties, structural evidence,
-// upgrade-evidence confirms, confirmed-upgrade highlights) already has its
-// own real-world domain record and lifecycle elsewhere in the app (several
-// already flow through Home Actions themselves via projectHomeActions).
-// Promoting those too would double-track the same obligation under two
-// different sources. propertySaleCase.service.ts's projectHomeActions
-// filters obligationType 'SALE_PREP_TASK' back out of its own output so a
-// promoted item here never re-surfaces in Sale Case as a second, duplicate
-// HOME_ACTION-sourced item wrapping the very row that spawned it.
-const SALE_PREP_PROMOTABLE_SOURCE_TYPES = ['SALE_PREP_SELF_REPORT', 'SALE_PREP_GENERIC'] as const;
+// Sale Readiness Value-Maximization Checklist plan §4.8/§10 Phase 4
+// (extended by Home Intelligence FRD Phase 5 work item 2, rule 3 of 7,
+// HI-CMP-002 — "inspection/permit issue + active sale readiness"): only a
+// source type with no standalone Home Action of its own gets promoted
+// here — everything else already has its own real-world domain record and
+// Home Action lifecycle elsewhere in the app, and promoting it a second
+// time here would double-track the same obligation under two different
+// sources (inspection findings: loadInspectionFindingActions already
+// emits an independent INSPECTION_FINDING-kind action for the same open
+// finding; projects/records/material specs/timeline events/aging
+// systems/warranties: reachable through their own domain surfaces).
+// propertySaleCase.service.ts's projectHomeActions filters obligationType
+// 'SALE_PREP_TASK' back out of its own output so a promoted item here
+// never re-surfaces in Sale Case as a second, duplicate HOME_ACTION-sourced
+// item wrapping the very row that spawned it.
+//
+// PERMIT and PERMIT_UNPERMITTED_FLAG are the rule 3 addition: unlike
+// inspection findings, no producer anywhere promotes an unverified permit
+// or a possible-unpermitted-work flag into a Home Action on its own — the
+// compound significance HI-CMP-002 calls for is specifically that an
+// otherwise low-urgency permit-hygiene issue becomes a disclosure-risk/
+// buyer-confidence concern once there is an active, non-closed sale case,
+// which is exactly what loadSalePrepActions's existing sale-case gate
+// (below) already expresses for every source type it promotes.
+const SALE_PREP_PROMOTABLE_SOURCE_TYPES = [
+  'SALE_PREP_SELF_REPORT', 'SALE_PREP_GENERIC', 'PERMIT', 'PERMIT_UNPERMITTED_FLAG',
+] as const;
 
 async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
   if (!db.propertySaleCase || !db.saleReadinessItem) return [];
@@ -2473,7 +2486,17 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
         keyFacts: [
           { label: 'Sale stage', value: String(saleCase.status).toLowerCase().replace(/_/g, ' ') },
           ...(dateLabel ? [{ label: saleCase.status === 'PREPARING' ? 'Target list date' : 'Target close date', value: dateLabel }] : []),
-          { label: assessment ? 'Current assessment' : 'Item', value: (assessment || subject).slice(0, 240) },
+          // 'Item' is one of homeActionPresentationRegistry.ts's
+          // SALE_PREPARATION requiredFactLabels — must always be the label
+          // here, never swapped for 'Current assessment' (a title with a
+          // colon, which every SALE_PREP_SELF_REPORT title has, was
+          // silently failing that requirement and suppressing the action
+          // entirely from the Home feed before this fix). The assessment,
+          // when present, is folded into the value rather than added as a
+          // ninth keyFacts entry — HomeActionPresentationSchema caps
+          // keyFacts at 8, and the optional date/due/cost-range entries
+          // below can already reach 8 on their own.
+          { label: 'Item', value: (assessment ? `${subject} — ${assessment}` : subject).slice(0, 240) },
           { label: 'Source', value: isSelfReported ? 'Your Sale Readiness answers' : 'General sale-prep guidance' },
           { label: 'Category', value: category },
           { label: 'Impact', value: stage.outcome.slice(0, 240) },

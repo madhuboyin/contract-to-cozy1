@@ -42,7 +42,7 @@ function taskDate(value: Date | string | null | undefined): Date | null {
 export function compoundMaintenanceFacts(
   tasks: MaintenanceTaskSnapshot[],
   evaluatedAt: Date,
-): Pick<RadarCompoundPropertyFacts, 'hvacFilterState' | 'unresolvedRoofIssue'> {
+): Pick<RadarCompoundPropertyFacts, 'hvacFilterState' | 'unresolvedRoofIssue' | 'unresolvedGutterOrDrainageIssue'> {
   const filterTasks = tasks.filter((task) => {
     const text = normalizedTaskText(task);
     return text.includes('filter') && (
@@ -81,7 +81,17 @@ export function compoundMaintenanceFacts(
     const text = normalizedTaskText(task);
     return text.includes('roof') || text.includes('shingle') || text.includes('flashing');
   });
-  return { hvacFilterState, unresolvedRoofIssue };
+
+  const unresolvedGutterOrDrainageIssue = tasks.some((task) => {
+    if (!OPEN_TASK_STATUSES.has(String(task.status))) return false;
+    const text = normalizedTaskText(task);
+    return text.includes('gutter')
+      || text.includes('downspout')
+      || text.includes('drain')
+      || text.includes('grading');
+  });
+
+  return { hvacFilterState, unresolvedRoofIssue, unresolvedGutterOrDrainageIssue };
 }
 
 function compoundEventInput(match: any): RadarCompoundEventInput {

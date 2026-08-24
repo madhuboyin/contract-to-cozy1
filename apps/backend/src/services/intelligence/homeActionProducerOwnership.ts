@@ -312,7 +312,7 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
   {
     producerId: 'loadSalePrepActions',
     sourceFile: 'apps/backend/src/services/homeActionSourcePromotion.service.ts',
-    factSignalOrigin: 'PropertySaleCase (prisma.propertySaleCase.findUnique).',
+    factSignalOrigin: 'PropertySaleCase (prisma.propertySaleCase.findUnique) + SaleReadinessItem (prisma.saleReadinessItem.findMany, filtered to SALE_PREP_SELF_REPORT/SALE_PREP_GENERIC/PERMIT/PERMIT_UNPERMITTED_FLAG source types).',
     sourceKind: 'SALE_PREP',
     idPrefixes: [],
     hasCompletionAdapter: false,
@@ -325,7 +325,7 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
     decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
-    notes: 'Completion happens by the homeowner updating the self-reported condition on Sale Case, not a COMPLETE command against the promoted work item. Id is per-item with an "industry-guidance" suffix, not one fixed literal prefix. Governance is always lowConsequenceGovernance(\'sale-prep-v1\') — never material.',
+    notes: 'Completion happens by the homeowner updating the self-reported condition on Sale Case, not a COMPLETE command against the promoted work item. Id is per-item with an "industry-guidance" suffix, not one fixed literal prefix. Governance is always lowConsequenceGovernance(\'sale-prep-v1\') — never material. Home Intelligence FRD Phase 5 work item 2, rule 3 of 7 (HI-CMP-002) added PERMIT/PERMIT_UNPERMITTED_FLAG to the promotable source types.',
   },
   {
     producerId: 'loadRefinanceDataRequiredActions',

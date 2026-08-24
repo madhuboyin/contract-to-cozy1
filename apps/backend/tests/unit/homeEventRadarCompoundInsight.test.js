@@ -27,6 +27,7 @@ test('maintenance fact assembly distinguishes due/current filters and open roof 
   assert.deepEqual(due, {
     hvacFilterState: 'due',
     unresolvedRoofIssue: true,
+    unresolvedGutterOrDrainageIssue: false,
   });
 
   const current = compoundMaintenanceFacts([
@@ -45,7 +46,31 @@ test('maintenance fact assembly distinguishes due/current filters and open roof 
   assert.deepEqual(current, {
     hvacFilterState: 'current',
     unresolvedRoofIssue: false,
+    unresolvedGutterOrDrainageIssue: false,
   });
+});
+
+// Home Intelligence FRD Phase 5 work item 2, rule 2 of 7 (HI-CMP-002).
+test('maintenance fact assembly detects an open gutter/downspout/drainage task and ignores a completed one', () => {
+  const open = compoundMaintenanceFacts([
+    { title: 'Clean gutters and downspouts', category: 'EXTERIOR', status: 'PENDING' },
+  ], NOW);
+  assert.equal(open.unresolvedGutterOrDrainageIssue, true);
+
+  const completed = compoundMaintenanceFacts([
+    { title: 'Clean gutters and downspouts', category: 'EXTERIOR', status: 'COMPLETED' },
+  ], NOW);
+  assert.equal(completed.unresolvedGutterOrDrainageIssue, false);
+
+  const regrade = compoundMaintenanceFacts([
+    { title: 'Regrade soil away from foundation for drainage', category: 'EXTERIOR', status: 'NEEDS_REVIEW' },
+  ], NOW);
+  assert.equal(regrade.unresolvedGutterOrDrainageIssue, true);
+
+  const unrelated = compoundMaintenanceFacts([
+    { title: 'Replace furnace filter', category: 'HVAC', status: 'PENDING' },
+  ], NOW);
+  assert.equal(unrelated.unresolvedGutterOrDrainageIssue, false);
 });
 
 test('reconciliation upserts active insights and resolves absent prior correlations', async () => {
