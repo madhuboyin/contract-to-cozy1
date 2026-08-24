@@ -68,6 +68,12 @@ import {
   OWNERSHIP_COST_CHANGE_ID_PREFIX,
   ACTIVATION_ID_PREFIX,
 } from './intelligence/homeActionProducerOwnership';
+import {
+  resolveDecisionFamilyRef,
+  resolveHomeActionDecisionLineage,
+  startOrResumeHomeActionDecisionThread,
+  type HomeActionDecisionLineage,
+} from './decisionPlatform/homeActionDecisionLineage';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -218,6 +224,11 @@ export type RankedHomeAction = HomeAction & {
     mergedActionIds: string[];
   };
   workItem: HomeActionWorkItemLink | null;
+  // Home Intelligence Functional Completeness FRD Phase 3A (HI-DEC-002).
+  // Additive presentation annotation, same pattern as workItem above — null
+  // for the overwhelming majority of actions that have no registered
+  // decision family at all (see resolveDecisionFamilyRef).
+  decisionLineage: HomeActionDecisionLineage | null;
 };
 
 // ── Home Operations Item #12 (§5.16): empty-state reason ────────────────────
@@ -525,6 +536,7 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
         mergedActionIds: [...new Set(entry.ids)].filter((id) => id !== entry.winner.id),
       },
       workItem: null,
+      decisionLineage: null,
     }));
 }
 
@@ -602,6 +614,28 @@ export async function linkWorkItemsAndReconcile(propertyId: string, actions: Ran
       },
       workItem,
     }));
+}
+
+/**
+ * Home Intelligence Functional Completeness FRD Phase 3A (HI-DEC-002).
+ * Read-only decision-family lineage resolution — mirrors
+ * linkWorkItemsAndReconcile's shape but never creates anything, so it's
+ * safe to run on every Home feed render. Only actions whose lineageId
+ * matches a registered decision family (resolveDecisionFamilyRef) get a
+ * non-null decisionLineage; every other action passes through unchanged.
+ */
+export async function linkDecisionLineage(propertyId: string, actions: RankedHomeAction[]): Promise<RankedHomeAction[]> {
+  return Promise.all(actions.map(async (action) => {
+    const ref = resolveDecisionFamilyRef(action);
+    if (!ref) return action;
+    try {
+      const decisionLineage = await resolveHomeActionDecisionLineage(propertyId, ref);
+      return { ...action, decisionLineage };
+    } catch (err) {
+      logger.warn({ err, actionId: action.id, propertyId }, 'Decision lineage resolution failed; action stays unlinked this request');
+      return action;
+    }
+  }));
 }
 
 type AcceptedOperationalWorkCopyInput = {
@@ -749,6 +783,7 @@ async function appendAcceptedOperationalWork(
       ranking: { rank: 0, score: 0, explanation: 'Accepted work continuity', components: { consequence: 0, urgency: 0, confidence: 0, householdRelevance: 0, actionability: 0, missingContextPenalty: 0 } },
       deduplication: { canonicalKey: item.workKey, mergedActionIds: [] },
       workItem: { id: item.id, workKey: item.workKey, state: item.state, acceptanceState: item.acceptanceState, disposition: item.disposition },
+      decisionLineage: null,
     });
   }
   return [...actions, ...projected]
@@ -861,7 +896,8 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   const coverageConflictSuppressedCount = governedCoverage.actions.length - candidates.length;
 
   const linkedActions = await linkWorkItemsAndReconcile(propertyId, rankAndDeduplicateHomeActions(candidates));
-  const actionsWithAcceptedWork = await appendAcceptedOperationalWork(propertyId, linkedActions);
+  const actionsWithDecisions = await linkDecisionLineage(propertyId, linkedActions);
+  const actionsWithAcceptedWork = await appendAcceptedOperationalWork(propertyId, actionsWithDecisions);
   const actionsWithContinuity = addHomeActionLaunchContinuity(
     actionsWithAcceptedWork,
     orchestration.aggregationContext?.contextVersion ?? null,
@@ -986,7 +1022,19 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
       payload: { actionId: action.id },
     });
   }
-  return { actionId, interaction: 'OPENED' as const, recordedAt: new Date().toISOString() };
+
+  // HI-DEC-002: opening a decision-family-eligible Home Action is the
+  // genuine "starting a material recommendation" moment — create or resume
+  // the Decision Thread and persist a Recommendation Snapshot now, before
+  // the homeowner reaches a compare/commit surface, rather than on every
+  // passive Home feed render (linkDecisionLineage above stays read-only).
+  let decisionLineage: HomeActionDecisionLineage | null = null;
+  const decisionFamilyRef = resolveDecisionFamilyRef(action);
+  if (decisionFamilyRef) {
+    decisionLineage = await startOrResumeHomeActionDecisionThread({ propertyId, userId, ref: decisionFamilyRef });
+  }
+
+  return { actionId, interaction: 'OPENED' as const, recordedAt: new Date().toISOString(), decisionLineage };
 }
 
 export async function getUnifiedHome(propertyId: string, userId: string) {

@@ -26,6 +26,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { HomeActionDecisionDetail } from '@/components/home/HomeActionDecisionDetail';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 import { PersonalizedReadOnlySuggestions } from '@/components/personalization/PersonalizedReadOnlySuggestions';
 import type {
@@ -1010,6 +1011,7 @@ export function ActionCard({
               <p className="mt-1 text-sm text-amber-800">{action.confidence.missing.join(' · ')}</p>
             </div>
           )}
+          <HomeActionDecisionDetail action={action} />
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">

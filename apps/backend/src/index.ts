@@ -200,6 +200,7 @@ import { validateSkillDependencyRegistry } from './services/skills/skillDependen
 import { validateDecisionPreferenceRegistry } from './services/decisionPlatform/decisionPreferenceRegistry';
 import { validateDecisionContextContracts } from './services/decisionPlatform/decisionContextContracts';
 import { validateDecisionDefinitionRegistry } from './services/decisionPlatform/decisionDefinitionRegistry';
+import { validateDecisionFamilyAdapterRegistry } from './services/decisionPlatform/decisionFamilyAdapterRegistry';
 import { validateDecisionThreadTransitionContract } from './services/decisionPlatform/decisionThreadTransitions';
 import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
 import { validateIntelligenceRegistries } from './services/intelligence';
@@ -228,6 +229,7 @@ const decisionPlatformRegistryIssues = [
   ...validateDecisionPreferenceRegistry(),
   ...validateDecisionContextContracts(),
   ...validateDecisionDefinitionRegistry(),
+  ...validateDecisionFamilyAdapterRegistry(),
   ...validateDecisionThreadTransitionContract(),
   ...validateHomeIntelligenceGraphEdges(),
 ];

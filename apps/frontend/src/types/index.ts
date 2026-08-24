@@ -432,7 +432,53 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   state: 'OPEN' | 'IN_PROGRESS' | 'SNOOZED' | 'COMPLETED' | 'DEFERRED' | 'DISMISSED' | 'SUPERSEDED';
   job: 'STAY_AHEAD' | 'DECIDE' | 'MAJOR_MOMENT';
   source: { kind: string; entityId: string; version: string | null };
-  governance: { safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY' };
+  options: Array<{ id: string; label: string; summary: string; recommended: boolean }>;
+  tradeoffs: Array<{ optionId: string; dimension: string; summary: string }>;
+  // Home Intelligence Functional Completeness FRD HI-DEC-001: "recommendation
+  // availability or safe-next-action limitations" — degrades material CTAs
+  // when the underlying recommendation is not fully available.
+  recommendationResponse: {
+    status: 'AVAILABLE' | 'LOW_CONFIDENCE' | 'DATA_UNAVAILABLE' | 'UPSTREAM_FAILURE';
+    reasonCode: string;
+    message: string;
+    safeNextAction: string;
+    missingFacts: string[];
+    retryable: boolean;
+    materialActionAllowed: boolean;
+  };
+  governance: {
+    safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+    professionalBoundary: string | null;
+    jurisdictionCheck: { status: 'NOT_REQUIRED' | 'VERIFIED' | 'UNKNOWN'; jurisdiction: string | null; checkedAt: string | null; source: string | null };
+    conservativeFallback: string | null;
+    emergencyEscalation: string | null;
+    commercialDisclosure: {
+      involvesCommercialAction: boolean;
+      relationshipType: string;
+      compensationMayOccur: boolean;
+      rankingInfluenced: boolean;
+      summary: string;
+      selectionCriteria: string[];
+      nonCommercialAlternatives: string[];
+    };
+    reviewedBy: string[];
+    policyVersion: string;
+  };
+  // Home Intelligence Functional Completeness FRD Phase 3A (HI-DEC-002).
+  // null for every action with no registered decision family (the
+  // overwhelming majority) — see backend homeActionDecisionLineage.ts.
+  decisionLineage: {
+    status: 'LINKED' | 'NOT_STARTED' | 'AMBIGUOUS' | 'NOT_APPLICABLE' | 'UNAVAILABLE';
+    decisionDefinitionId: string;
+    primaryEntityId: string;
+    reason?: string;
+    thread?: {
+      decisionThreadId: string;
+      lifecycleStatus: string;
+      contextStatus: 'CURRENT' | 'STALE' | 'CONFLICTED';
+      currentRecommendationSnapshotId: string | null;
+    };
+  } | null;
   feedbackControls: HomeActionCommand[];
   ranking: {
     rank: number;

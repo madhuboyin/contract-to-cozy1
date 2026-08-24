@@ -19,7 +19,36 @@ function action(overrides: Partial<RankedHomeActionDTO> = {}): RankedHomeActionD
     primaryCta: { label: 'Schedule Service', href: '/dashboard/properties/property-1/fix' },
     secondaryCtas: [],
     source: { kind: 'SYSTEM', entityId: 'risk-hvac', version: 'phase2-v1' },
-    governance: { safetyTier: 'LOW_CONSEQUENCE' },
+    options: [],
+    tradeoffs: [],
+    recommendationResponse: {
+      status: 'AVAILABLE',
+      reasonCode: 'STANDARD',
+      message: 'Recommendation available.',
+      safeNextAction: 'Review the recommendation.',
+      missingFacts: [],
+      retryable: false,
+      materialActionAllowed: true,
+    },
+    governance: {
+      safetyTier: 'LOW_CONSEQUENCE',
+      professionalBoundary: null,
+      jurisdictionCheck: { status: 'NOT_REQUIRED', jurisdiction: null, checkedAt: null, source: null },
+      conservativeFallback: null,
+      emergencyEscalation: null,
+      commercialDisclosure: {
+        involvesCommercialAction: false,
+        relationshipType: 'NONE',
+        compensationMayOccur: false,
+        rankingInfluenced: false,
+        summary: 'No commercial relationship.',
+        selectionCriteria: [],
+        nonCommercialAlternatives: [],
+      },
+      reviewedBy: [],
+      policyVersion: 'test-fixture-v1',
+    },
+    decisionLineage: null,
     feedbackControls: ['COMPLETE'],
     ranking: {
       rank: 1,
@@ -80,7 +109,24 @@ describe('resolveHomeActionPrimaryHref', () => {
   it('does not bypass safety escalation destinations', () => {
     const safetyHref = '/dashboard/properties/property-1/fix?mode=emergency';
     expect(resolveHomeActionPrimaryHref(action({
-      governance: { safetyTier: 'SAFETY_EMERGENCY' },
+      governance: {
+        safetyTier: 'SAFETY_EMERGENCY',
+        professionalBoundary: null,
+        jurisdictionCheck: { status: 'NOT_REQUIRED', jurisdiction: null, checkedAt: null, source: null },
+        conservativeFallback: null,
+        emergencyEscalation: null,
+        commercialDisclosure: {
+          involvesCommercialAction: false,
+          relationshipType: 'NONE',
+          compensationMayOccur: false,
+          rankingInfluenced: false,
+          summary: 'No commercial relationship.',
+          selectionCriteria: [],
+          nonCommercialAlternatives: [],
+        },
+        reviewedBy: [],
+        policyVersion: 'test-fixture-v1',
+      },
       primaryCta: { label: 'Schedule Service', href: safetyHref },
     }), 'property-1')).toBe(safetyHref);
   });

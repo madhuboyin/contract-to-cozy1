@@ -36,7 +36,15 @@ import {
   RecommendationChangeDiff,
 } from './decisionPreferenceService';
 import { emitDecisionRecommendationChange } from './decisionPlatformChangeEmitter';
-import type { DecisionThreadContextStatus } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
+import type {
+  DecisionThreadContextStatus,
+  DecisionThreadLifecycleStatus,
+} from '../../productFramework/decisionPlatform/decisionPlatform.contract';
+import {
+  DecisionFamilyAmbiguousThreadError,
+  type DecisionFamilyAdapter,
+  type DecisionFamilyThreadLineage,
+} from './decisionFamilyAdapter';
 
 export class DecisionThreadVersionConflictError extends Error {
   constructor(threadId: string) {
@@ -147,7 +155,12 @@ interface CreateThreadInput {
   propertyId: string;
   userId: string;
   inventoryItemId: string;
-  askExecutionId: string;
+  // Optional so a non-Ask origin (Home Intelligence FRD Phase 3A: a
+  // homeowner opening a material Home Action directly on Home) can create a
+  // thread without a real AskExecution row to attribute — see the
+  // conditional DecisionThreadExecutionLink write below. Every existing Ask
+  // caller (askOrchestrator.service.ts) still always supplies one.
+  askExecutionId?: string;
 }
 
 interface RecommendationSkillLineage {
@@ -256,10 +269,16 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
     // createMany + skipDuplicates, not a bare create: DecisionThreadExecutionLink
     // has @@unique([decisionThreadId, askExecutionId]), so a retried request
     // reusing the same executionId must be idempotent, not throw P2002.
-    await tx.decisionThreadExecutionLink.createMany({
-      data: [{ decisionThreadId: thread.id, askExecutionId: input.askExecutionId, linkRole: 'CREATED' }],
-      skipDuplicates: true,
-    });
+    // Skipped entirely when there is no AskExecution to attribute (a
+    // Home-originated create — see CreateThreadInput's askExecutionId
+    // comment); the DecisionThread row's own identity is what makes
+    // resumption work either way, this link is supplementary audit lineage.
+    if (input.askExecutionId) {
+      await tx.decisionThreadExecutionLink.createMany({
+        data: [{ decisionThreadId: thread.id, askExecutionId: input.askExecutionId, linkRole: 'CREATED' }],
+        skipDuplicates: true,
+      });
+    }
 
     return { thread: updatedThread, snapshot, preferencesUsed: preferences };
   });
@@ -572,3 +591,63 @@ export async function abandonDecisionThread(threadId: string, propertyId: string
   if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(threadId);
   return prisma.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
 }
+
+// Home Intelligence Functional Completeness FRD Phase 3A (HI-DEC-002, work
+// item 1) — the DecisionFamilyAdapter this HVAC-specific service exposes to
+// generic callers (decisionFamilyAdapterRegistry.ts, and through it
+// homeActionDecisionLineage.ts) so a material Home Action never has to
+// import the HVAC engine directly. Every method here delegates to the
+// functions above; no lifecycle/evaluation logic is duplicated.
+function toDecisionFamilyLineage(thread: {
+  id: string;
+  lifecycleStatus: DecisionThreadLifecycleStatus;
+  contextStatus: DecisionThreadContextStatus;
+  currentRecommendationSnapshotId: string | null;
+}): DecisionFamilyThreadLineage {
+  return {
+    decisionThreadId: thread.id,
+    lifecycleStatus: thread.lifecycleStatus,
+    contextStatus: thread.contextStatus,
+    currentRecommendationSnapshotId: thread.currentRecommendationSnapshotId,
+  };
+}
+
+export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
+  decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+  primaryEntityType: 'InventoryItem',
+
+  async isEligiblePrimaryEntity(propertyId, primaryEntityId) {
+    // Same eligibility gate composeHvacDecisionContext enforces
+    // (hvacRepairReplaceEngine.service.ts) — checked directly here so
+    // read-only Home feed rendering doesn't pay for the full context
+    // composition (repair history + quote workspace lookups) just to know
+    // whether an item qualifies for this decision family at all.
+    const item = await prisma.inventoryItem.findFirst({
+      where: { id: primaryEntityId, propertyId, category: 'HVAC' },
+      select: { id: true },
+    });
+    return item !== null;
+  },
+
+  async selectThread(propertyId, primaryEntityId) {
+    const selection = await selectHvacDecisionThread(propertyId, primaryEntityId);
+    if (selection.kind === 'NONE') return { kind: 'NONE' };
+    if (selection.kind === 'AMBIGUOUS') {
+      return { kind: 'AMBIGUOUS', candidates: selection.candidates.map(toDecisionFamilyLineage) };
+    }
+    return { kind: 'UNIQUE', thread: toDecisionFamilyLineage(selection.thread) };
+  },
+
+  async createOrResumeThread({ propertyId, userId, primaryEntityId, askExecutionId }) {
+    const selection = await selectHvacDecisionThread(propertyId, primaryEntityId);
+    if (selection.kind === 'AMBIGUOUS') {
+      throw new DecisionFamilyAmbiguousThreadError('HVAC_REPAIR_REPLACE', primaryEntityId);
+    }
+    if (selection.kind === 'UNIQUE') {
+      const { thread } = await continueHvacDecisionThread(selection.thread.id, propertyId, askExecutionId);
+      return toDecisionFamilyLineage(thread);
+    }
+    const created = await createHvacDecisionThread({ propertyId, userId, inventoryItemId: primaryEntityId, askExecutionId });
+    return toDecisionFamilyLineage(created.thread);
+  },
+};
