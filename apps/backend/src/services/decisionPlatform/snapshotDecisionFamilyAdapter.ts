@@ -30,6 +30,8 @@ import {
   activeDecisionThreadIdentityKey,
   classifyThreadSelection,
   DecisionThreadVersionConflictError,
+  loadUnacknowledgedRecommendationChange,
+  acknowledgeCurrentSnapshot,
   type ThreadSelection,
 } from './decisionThreadService';
 import {
@@ -39,6 +41,7 @@ import {
 } from './decisionThreadTransitions';
 import { compareRecommendationSnapshots, type RecommendationChangeDiff } from './decisionPreferenceService';
 import { emitDecisionRecommendationChange } from './decisionPlatformChangeEmitter';
+import { recordHomeActionOriginLink } from './decisionThreadHomeActionLink';
 import {
   DecisionFamilyAmbiguousThreadError,
   type DecisionFamilyAdapter,
@@ -84,6 +87,10 @@ function toLineage(
     contextStatus: thread.contextStatus,
     currentRecommendationSnapshotId: thread.currentRecommendationSnapshotId,
     recommendationChange,
+    // Phase 3 review finding 5 is HVAC-specific (evaluateHvacRepairReplace
+    // vs. ReplaceRepairAnalysis) — none of these six domains has a second,
+    // independent evaluation of its own recommendation to diverge from.
+    limitationCodes: [],
   };
 }
 
@@ -142,7 +149,13 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       orderBy: { createdAt: 'asc' },
     });
     const selection = classifyThreadSelection(candidates);
-    if (selection.kind === 'UNIQUE') return { kind: 'UNIQUE', thread: toLineage(selection.thread, null) };
+    if (selection.kind === 'UNIQUE') {
+      // Phase 3 review finding 4: read-only, but not always null anymore —
+      // diffs two already-persisted snapshots when the homeowner hasn't
+      // acknowledged the current one yet. No recompute, no write.
+      const change = await loadUnacknowledgedRecommendationChange(selection.thread);
+      return { kind: 'UNIQUE', thread: toLineage(selection.thread, change) };
+    }
     if (selection.kind === 'AMBIGUOUS') return { kind: 'AMBIGUOUS', candidates: selection.candidates.map((c) => toLineage(c, null)) };
     return { kind: 'NONE' };
   }
@@ -151,7 +164,11 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
   // thread's last snapshot — a true no-op read otherwise. Mirrors
   // recomputeStaleThread's diff/supersede/emit shape (decisionThreadService.ts)
   // without the preference/scenario machinery HVAC alone needs.
-  async function resumeThread(threadId: string, source: SnapshotSourceState): Promise<DecisionFamilyThreadLineage> {
+  async function resumeThread(
+    threadId: string,
+    source: SnapshotSourceState,
+    homeActionOrigin?: HomeActionOriginRef,
+  ): Promise<DecisionFamilyThreadLineage> {
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
       const previousSnapshot = current.currentRecommendationSnapshotId
@@ -162,7 +179,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       }
 
       const newSnapshot = await tx.recommendationSnapshot.create({
-        data: buildSnapshotData(threadId, current.propertyId, source, undefined, current.currentRecommendationSnapshotId, 'DECISION_CONTINUE'),
+        data: buildSnapshotData(threadId, current.propertyId, source, homeActionOrigin, current.currentRecommendationSnapshotId, 'DECISION_CONTINUE'),
       });
 
       const nextContextStatus = computeContextStatus({ hasUnresolvedConflict: current.contextStatus === 'CONFLICTED', hasUnresolvedStale: false });
@@ -195,6 +212,14 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
         category: result.change?.category ?? null,
       });
     }
+    // Phase 3 review finding 3: record durably regardless of whether this
+    // resume produced a new snapshot -- a no-op (unchanged digest) resume
+    // is still a real "this Home Action version was open against this
+    // thread" event worth attributing later.
+    await recordHomeActionOriginLink(threadId, homeActionOrigin);
+    // Phase 3 review finding 4: the homeowner is looking at the (possibly
+    // just-recomputed) current snapshot right now — acknowledge it.
+    await acknowledgeCurrentSnapshot(threadId, result.thread.currentRecommendationSnapshotId);
     return toLineage(result.thread, result.change);
   }
 
@@ -254,7 +279,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       if (error?.code === 'P2002' && (error?.meta?.target as string[] | undefined)?.includes('activeIdentityKey')) {
         const resumeSelection = await selectThread(input.propertyId, input.primaryEntityId);
         if (resumeSelection.kind === 'UNIQUE') {
-          return resumeThread(resumeSelection.thread.decisionThreadId, input.source);
+          return resumeThread(resumeSelection.thread.decisionThreadId, input.source, input.homeActionOrigin);
         }
       }
       throw error;
@@ -268,6 +293,15 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       isFirstSnapshot: true,
       category: null,
     });
+    // Phase 3 review finding 3: also recorded on creation, not only resume
+    // — the first snapshot already embeds origin in its own
+    // signalReferences, but the durable link table is the one source
+    // every downstream consumer can query without re-parsing snapshot JSON.
+    await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
+    // Phase 3 review finding 4: the homeowner is looking at the first
+    // snapshot right now — acknowledge it so a later read never has
+    // anything to diff against.
+    await acknowledgeCurrentSnapshot(result.thread.id, result.snapshot.id);
     return toLineage(result.thread, null);
   }
 
@@ -290,7 +324,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       if (!source) throw new Error(`No current recommendation available for ${config.decisionDefinitionId}/${primaryEntityId}.`);
 
       if (selection.kind === 'UNIQUE') {
-        return resumeThread(selection.thread.decisionThreadId, source);
+        return resumeThread(selection.thread.decisionThreadId, source, homeActionOrigin);
       }
       return createThread({ propertyId, userId, primaryEntityId, homeActionOrigin, source });
     },

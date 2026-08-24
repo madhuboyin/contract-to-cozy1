@@ -1404,6 +1404,16 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
       whyItMatters: question.whyItMatters,
       recommendedAction: 'Review the confirmed policy fact and decide whether to ask your carrier',
       expectedOutcome: 'Resolve the material question using the controlling policy or licensed help.',
+      // Home Intelligence Functional Completeness FRD Phase 3 review
+      // finding 6: COVERAGE_INTELLIGENCE/ASSESS_PROPERTY_COVERAGE is a
+      // registered Property Context feature (featureRequirementRegistry.ts)
+      // for exactly this property-level coverage-completeness check, so
+      // the same inline capture panel repair-replace uses can launch here.
+      propertyContextFeature: {
+        featureKey: 'COVERAGE_INTELLIGENCE',
+        operationKey: 'ASSESS_PROPERTY_COVERAGE',
+        operationInput: {},
+      },
       presentation: {
         variant: 'COVERAGE_REVIEW',
         eyebrow: 'Coverage review',
@@ -3236,6 +3246,17 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       expectedOutcome: costRange
         ? `A ${costRange} planning range to budget against before ${label}'s replacement window.`
         : `A focused replacement plan for ${label} before its projected window.`,
+      // Home Intelligence Functional Completeness FRD Phase 3 review
+      // finding 6: this producer already computes missingFacts (age/
+      // condition gaps above) — CAPITAL_TIMELINE/RUN_TIMELINE is a
+      // registered Property Context feature (featureRequirementRegistry.ts)
+      // with exactly those two enhancement facts, so the same inline
+      // capture panel repair-replace uses can launch here too.
+      propertyContextFeature: {
+        featureKey: 'CAPITAL_TIMELINE',
+        operationKey: 'RUN_TIMELINE',
+        operationInput: {},
+      },
       presentation: {
         variant: 'ASSET_LIFECYCLE',
         eyebrow: 'Plan ahead',

@@ -28,6 +28,15 @@ export interface DecisionFamilyThreadLineage {
   // Ask-chat surface's RECOMMENDATION_CHANGE block) — a plain read-only
   // selectThread/resolve never produces one.
   recommendationChange: RecommendationChangeDiff | null;
+  // Home Intelligence Functional Completeness FRD Phase 3 review finding 5:
+  // the current snapshot's own limitationCodes, surfaced so a homeowner can
+  // actually see a disclosed limitation (e.g. SOURCE_CARD_VERDICT_DIVERGENCE
+  // — the HVAC engine's own evaluation disagreeing with the originating
+  // ReplaceRepairAnalysis verdict the Home Action card showed) rather than
+  // it sitting unread in the snapshot row. Always [] for every non-HVAC
+  // domain today — none has a second, independent evaluation to diverge
+  // from.
+  limitationCodes: string[];
 }
 
 export class DecisionFamilyAmbiguousThreadError extends Error {

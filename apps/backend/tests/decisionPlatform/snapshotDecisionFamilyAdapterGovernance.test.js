@@ -17,6 +17,7 @@ const {
   ownershipCostChangeDecisionFamilyAdapter,
   savingsBenefitMatchDecisionFamilyAdapter,
   coverageQuestionDecisionFamilyAdapter,
+  sellHoldRentDecisionFamilyAdapter,
 } = require('../../src/services/decisionPlatform/domainSnapshotAdapters.ts');
 
 const factorySource = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/snapshotDecisionFamilyAdapter.ts'), 'utf8');
@@ -90,13 +91,14 @@ test('the resume path recomputes only when the source digest changed, and is a t
   assert.match(factorySource, /recomputed:\s*false/);
 });
 
-test('all five snapshot adapters expose every method the DecisionFamilyAdapter contract requires', () => {
+test('all six snapshot adapters expose every method the DecisionFamilyAdapter contract requires', () => {
   for (const adapter of [
     refinanceOpportunityDecisionFamilyAdapter,
     homeCapitalTimelineWindowDecisionFamilyAdapter,
     ownershipCostChangeDecisionFamilyAdapter,
     savingsBenefitMatchDecisionFamilyAdapter,
     coverageQuestionDecisionFamilyAdapter,
+    sellHoldRentDecisionFamilyAdapter,
   ]) {
     assert.equal(typeof adapter.isEligiblePrimaryEntity, 'function');
     assert.equal(typeof adapter.selectThread, 'function');
@@ -104,4 +106,28 @@ test('all five snapshot adapters expose every method the DecisionFamilyAdapter c
     assert.equal(typeof adapter.decisionDefinitionId, 'string');
     assert.equal(typeof adapter.primaryEntityType, 'string');
   }
+});
+
+// Phase 3 review finding 3: homeActionOrigin must reach the durable link
+// table on every path that can produce a thread id, not just the initial
+// create — the P2002-catch-and-resume race-loser path included.
+test('recordHomeActionOriginLink is called from createThread (including its P2002 resume fallback) and resumeThread', () => {
+  assert.match(factorySource, /import \{ recordHomeActionOriginLink \} from '\.\/decisionThreadHomeActionLink';/);
+  const calls = [...factorySource.matchAll(/recordHomeActionOriginLink\(/g)];
+  assert.ok(calls.length >= 2, `expected at least 2 recordHomeActionOriginLink calls (createThread, resumeThread), found ${calls.length}`);
+  assert.match(factorySource, /resumeThread\(resumeSelection\.thread\.decisionThreadId, input\.source, input\.homeActionOrigin\)/, 'the P2002 catch-and-resume fallback must forward homeActionOrigin, not drop it');
+});
+
+// Phase 3 review finding 4: the read-only selectThread path must not
+// always hardcode recommendationChange to null anymore, and every
+// create/resume path that shows the homeowner a current snapshot must
+// acknowledge it.
+test('selectThread computes an unacknowledged-change diff instead of a hardcoded null for its UNIQUE branch', () => {
+  assert.match(factorySource, /const change = await loadUnacknowledgedRecommendationChange\(selection\.thread\);/);
+  assert.match(factorySource, /return \{ kind: 'UNIQUE', thread: toLineage\(selection\.thread, change\) \};/);
+});
+
+test('acknowledgeCurrentSnapshot is called from both createThread and resumeThread', () => {
+  const calls = [...factorySource.matchAll(/acknowledgeCurrentSnapshot\(/g)];
+  assert.ok(calls.length >= 2, `expected at least 2 acknowledgeCurrentSnapshot calls (createThread, resumeThread), found ${calls.length}`);
 });

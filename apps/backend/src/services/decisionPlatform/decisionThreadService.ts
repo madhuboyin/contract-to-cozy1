@@ -24,6 +24,7 @@ import {
   composeHvacDecisionContext,
   evaluateHvacRepairReplace,
   HvacDecisionContext,
+  type HvacRepairReplaceVerdict,
 } from './hvacRepairReplaceEngine.service';
 // Decision Platform Phase 10B (FRD §19.4). Resolves whatever weight set is
 // currently activated for this estimate family -- DEFAULT_HVAC_ENGINE_WEIGHTS
@@ -36,6 +37,7 @@ import {
   RecommendationChangeDiff,
 } from './decisionPreferenceService';
 import { emitDecisionRecommendationChange } from './decisionPlatformChangeEmitter';
+import { recordHomeActionOriginLink } from './decisionThreadHomeActionLink';
 import type {
   DecisionThreadContextStatus,
   DecisionThreadLifecycleStatus,
@@ -91,6 +93,10 @@ export async function selectHvacDecisionThread(propertyId: string, inventoryItem
       lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] },
     },
     orderBy: { createdAt: 'asc' },
+    // Phase 3 review finding 5: selectThread (read-only) needs the current
+    // snapshot's limitationCodes to surface a disclosed divergence — see
+    // sourceCardVerdictDivergenceLimitationCodes's doc comment.
+    include: { currentRecommendationSnapshot: { select: { limitationCodes: true } } },
   });
   return classifyThreadSelection(candidates);
 }
@@ -200,6 +206,41 @@ async function skillLineageForExecution(
     : null;
 }
 
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 5:
+// "HVAC still snapshots a different recommendation from the one shown on
+// Home." loadRepairReplaceDecisionActions (homeActionSourcePromotion
+// .service.ts) surfaces ReplaceRepairAnalysis's verdict (REPLACE_NOW /
+// REPLACE_SOON / REPAIR_AND_MONITOR / REPAIR_ONLY, a "lifespan engine"
+// scored from remaining years / failure probability / repair history), but
+// this file's own evaluateHvacRepairReplace (REPLACE / REPAIR / MONITOR)
+// is a genuinely different, independently-calibrated preference-aware
+// engine with its own inputs (condition/installedOn, repair spend,
+// registered quotes) — the two can and do disagree. Unifying them into one
+// engine is a real redesign this fix does not attempt (it would touch a
+// certified, golden-eval-suite-governed calibration this file's evaluation
+// pipeline depends on); instead this makes a disagreement honest rather
+// than silent — homeActionOrigin.sourceEntityId is the originating
+// ReplaceRepairAnalysis id (loadRepairReplaceDecisionActions's own
+// construction), so this is a read-only, best-effort cross-check with
+// nothing to fetch (and no limitation code) when there is no origin or the
+// two engines happen to agree.
+const REPLACE_LEANING_SOURCE_VERDICTS = new Set(['REPLACE_NOW', 'REPLACE_SOON']);
+
+async function sourceCardVerdictDivergenceLimitationCodes(
+  homeActionOrigin: HomeActionOriginRef | undefined,
+  engineVerdict: HvacRepairReplaceVerdict,
+): Promise<string[]> {
+  if (!homeActionOrigin) return [];
+  const sourceAnalysis = await prisma.replaceRepairAnalysis.findUnique({
+    where: { id: homeActionOrigin.sourceEntityId },
+    select: { verdict: true },
+  });
+  if (!sourceAnalysis) return [];
+  const sourceLeansReplace = REPLACE_LEANING_SOURCE_VERDICTS.has(sourceAnalysis.verdict);
+  const engineLeansReplace = engineVerdict === 'REPLACE';
+  return sourceLeansReplace !== engineLeansReplace ? ['SOURCE_CARD_VERDICT_DIVERGENCE'] : [];
+}
+
 export async function createHvacDecisionThread(input: CreateThreadInput) {
   const preferences = await getActiveHvacPreferences(input.propertyId, input.userId);
   const composed = await composeHvacDecisionContext(input.propertyId, input.inventoryItemId, {
@@ -211,7 +252,8 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
 
   const { weights, calibrationReleaseId } = await getActiveHvacEngineWeights();
   const evaluation = evaluateHvacRepairReplace(context, weights);
-  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
+  const divergenceLimitationCodes = await sourceCardVerdictDivergenceLimitationCodes(input.homeActionOrigin, evaluation.verdict);
+  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes, ...divergenceLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   const identityKey = activeDecisionThreadIdentityKey(input.propertyId, 'HVAC_REPAIR_REPLACE', 'InventoryItem', input.inventoryItemId);
@@ -330,7 +372,7 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
     if (error?.code === 'P2002' && (error?.meta?.target as string[] | undefined)?.includes('activeIdentityKey')) {
       const resumeSelection = await selectHvacDecisionThread(input.propertyId, input.inventoryItemId);
       if (resumeSelection.kind === 'UNIQUE') {
-        const { thread } = await continueHvacDecisionThread(resumeSelection.thread.id, input.propertyId, input.askExecutionId);
+        const { thread } = await continueHvacDecisionThread(resumeSelection.thread.id, input.propertyId, input.askExecutionId, input.homeActionOrigin);
         if (!thread.currentRecommendationSnapshotId) throw error;
         const snapshot = await prisma.recommendationSnapshot.findUnique({ where: { id: thread.currentRecommendationSnapshotId } });
         if (!snapshot) throw error;
@@ -351,8 +393,55 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
     isFirstSnapshot: true,
     category: null,
   });
+  // Phase 3 review finding 3: durable alongside the first snapshot's own
+  // embedded origin — see decisionThreadHomeActionLink.ts's doc comment.
+  await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
+  // Phase 3 review finding 4: the homeowner is looking at the first
+  // snapshot right now (it's brand new, never "changed" from anything) —
+  // acknowledge it so a later read never has anything to diff against.
+  await acknowledgeCurrentSnapshot(result.thread.id, result.snapshot.id);
 
   return result;
+}
+
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4:
+// "Snapshot-change presentation is effectively transient and unreachable
+// on Home." A read-only selectThread previously always returned
+// recommendationChange: null -- the diff only ever existed for the one
+// interaction response a create-or-resume call produced, discarded the
+// instant the homeowner navigated away. This recomputes nothing: it just
+// diffs two already-persisted snapshots (current + its own
+// supersedesSnapshotId predecessor) exactly like compareRecommendationSnapshots
+// already does inside recomputeStaleThread/resumeThread, and only when the
+// homeowner hasn't acknowledged the current one yet (DecisionThread
+// .lastChangeAcknowledgedSnapshotId) -- so it stops showing once they've
+// actually engaged with the thread again, not on some arbitrary timer.
+export async function loadUnacknowledgedRecommendationChange(thread: {
+  currentRecommendationSnapshotId: string | null;
+  lastChangeAcknowledgedSnapshotId: string | null;
+}): Promise<RecommendationChangeDiff | null> {
+  if (!thread.currentRecommendationSnapshotId) return null;
+  if (thread.currentRecommendationSnapshotId === thread.lastChangeAcknowledgedSnapshotId) return null;
+  const current = await prisma.recommendationSnapshot.findUnique({ where: { id: thread.currentRecommendationSnapshotId } });
+  if (!current?.supersedesSnapshotId) return null;
+  const previous = await prisma.recommendationSnapshot.findUnique({ where: { id: current.supersedesSnapshotId } });
+  if (!previous) return null;
+  return compareRecommendationSnapshots(previous, current, []);
+}
+
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 4:
+// the write side of the acknowledgment above -- called whenever the
+// homeowner actually engages with a thread (create, resume, or an Ask
+// continuation), regardless of whether that engagement produced a new
+// snapshot. See lastChangeAcknowledgedSnapshotId's schema comment for why
+// this is a plain write, not version-guarded like lifecycleStatus/
+// contextStatus.
+export async function acknowledgeCurrentSnapshot(threadId: string, currentRecommendationSnapshotId: string | null): Promise<void> {
+  if (!currentRecommendationSnapshotId) return;
+  await prisma.decisionThread.updateMany({
+    where: { id: threadId },
+    data: { lastChangeAcknowledgedSnapshotId: currentRecommendationSnapshotId },
+  });
 }
 
 export async function loadHvacDecisionThreadDetail(threadId: string, propertyId: string) {
@@ -379,13 +468,18 @@ export async function loadHvacDecisionThreadDetail(threadId: string, propertyId:
 //
 // Returns `change` (non-null only when a stale-triggered recompute actually
 // ran) so callers can render RECOMMENDATION_CHANGE.
-export async function continueHvacDecisionThread(threadId: string, propertyId: string, askExecutionId?: string) {
+export async function continueHvacDecisionThread(
+  threadId: string,
+  propertyId: string,
+  askExecutionId?: string,
+  homeActionOrigin?: HomeActionOriginRef,
+) {
   let thread = await loadHvacDecisionThreadDetail(threadId, propertyId);
   let change: RecommendationChangeDiff | null = null;
   let triggerReasonCodes: string[] = [];
 
   if (thread.contextStatus === 'STALE') {
-    const recomputed = await recomputeStaleThread(threadId, askExecutionId);
+    const recomputed = await recomputeStaleThread(threadId, askExecutionId, homeActionOrigin);
     change = recomputed.change;
     triggerReasonCodes = recomputed.triggerReasonCodes;
     thread = await loadHvacDecisionThreadDetail(threadId, propertyId);
@@ -401,6 +495,15 @@ export async function continueHvacDecisionThread(threadId: string, propertyId: s
     });
   }
 
+  // Phase 3 review finding 3: record durably regardless of whether this
+  // continuation actually recomputed a new snapshot -- see
+  // decisionThreadHomeActionLink.ts's doc comment. Ask-originated
+  // continuations omit homeActionOrigin, so this is a no-op for them.
+  await recordHomeActionOriginLink(threadId, homeActionOrigin);
+  // Phase 3 review finding 4: the homeowner is looking at the (possibly
+  // just-recomputed) current snapshot right now — acknowledge it.
+  await acknowledgeCurrentSnapshot(threadId, thread.currentRecommendationSnapshotId);
+
   return { thread, change, triggerReasonCodes };
 }
 
@@ -409,7 +512,7 @@ export async function continueHvacDecisionThread(threadId: string, propertyId: s
 // the previous snapshot (FRD §14.3), and restore contextStatus to CURRENT
 // only when no stale reason remains (delegated to computeContextStatus,
 // matching FRD §10.3's coexistence precedence rule).
-export async function recomputeStaleThread(threadId: string, askExecutionId?: string) {
+export async function recomputeStaleThread(threadId: string, askExecutionId?: string, homeActionOrigin?: HomeActionOriginRef) {
   const thread = await prisma.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
   if (!thread.primaryEntityId) throw new Error(`Decision thread ${threadId} has no primary entity to recompute against.`);
 
@@ -422,7 +525,8 @@ export async function recomputeStaleThread(threadId: string, askExecutionId?: st
   const { context, compositionLimitationCodes } = composed;
   const { weights, calibrationReleaseId } = await getActiveHvacEngineWeights();
   const evaluation = evaluateHvacRepairReplace(context, weights);
-  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
+  const divergenceLimitationCodes = await sourceCardVerdictDivergenceLimitationCodes(homeActionOrigin, evaluation.verdict);
+  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes, ...divergenceLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   const result = await prisma.$transaction(async (tx) => {
@@ -453,7 +557,19 @@ export async function recomputeStaleThread(threadId: string, askExecutionId?: st
           { entityType: 'INVENTORY_ITEM', entityId: current.primaryEntityId, fieldPath: 'installedOn' },
         ],
         preferenceReferenceIds: preferenceValueIds,
-        signalReferences: [],
+        // Phase 3 review finding 3: embed origin on the recomputed snapshot
+        // too, not just the first one — see createHvacDecisionThread's
+        // analogous write below. Empty for a system-triggered recompute
+        // (markThreadStaleOnFactCorrection) with no Home Action involved.
+        signalReferences: homeActionOrigin ? [{
+          type: 'HOME_ACTION_ORIGIN',
+          homeActionId: homeActionOrigin.homeActionId,
+          lineageId: homeActionOrigin.lineageId,
+          sourceEntityId: homeActionOrigin.sourceEntityId,
+          sourceVersion: homeActionOrigin.sourceVersion,
+          contextVersion: homeActionOrigin.contextVersion,
+          capturedAt: new Date().toISOString(),
+        }] as unknown as Prisma.InputJsonValue : [],
         evidenceReferences: [],
         resultPayloadVersion: '1.0',
         verdictCode: evaluation.verdict,
@@ -669,6 +785,7 @@ function toDecisionFamilyLineage(
     currentRecommendationSnapshotId: string | null;
   },
   recommendationChange: RecommendationChangeDiff | null = null,
+  limitationCodes: string[] = [],
 ): DecisionFamilyThreadLineage {
   return {
     decisionThreadId: thread.id,
@@ -676,6 +793,7 @@ function toDecisionFamilyLineage(
     contextStatus: thread.contextStatus,
     currentRecommendationSnapshotId: thread.currentRecommendationSnapshotId,
     recommendationChange,
+    limitationCodes,
   };
 }
 
@@ -700,9 +818,19 @@ export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
     const selection = await selectHvacDecisionThread(propertyId, primaryEntityId);
     if (selection.kind === 'NONE') return { kind: 'NONE' };
     if (selection.kind === 'AMBIGUOUS') {
-      return { kind: 'AMBIGUOUS', candidates: selection.candidates.map((candidate) => toDecisionFamilyLineage(candidate)) };
+      return {
+        kind: 'AMBIGUOUS',
+        candidates: selection.candidates.map((candidate) => toDecisionFamilyLineage(candidate, null, candidate.currentRecommendationSnapshot?.limitationCodes ?? [])),
+      };
     }
-    return { kind: 'UNIQUE', thread: toDecisionFamilyLineage(selection.thread) };
+    // Phase 3 review finding 4: read-only, but not always null anymore —
+    // diffs two already-persisted snapshots when the homeowner hasn't
+    // acknowledged the current one yet. No recompute, no write.
+    const change = await loadUnacknowledgedRecommendationChange(selection.thread);
+    return {
+      kind: 'UNIQUE',
+      thread: toDecisionFamilyLineage(selection.thread, change, selection.thread.currentRecommendationSnapshot?.limitationCodes ?? []),
+    };
   },
 
   async createOrResumeThread({ propertyId, userId, primaryEntityId, askExecutionId, homeActionOrigin }) {
@@ -711,10 +839,10 @@ export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
       throw new DecisionFamilyAmbiguousThreadError('HVAC_REPAIR_REPLACE', primaryEntityId);
     }
     if (selection.kind === 'UNIQUE') {
-      const { thread, change } = await continueHvacDecisionThread(selection.thread.id, propertyId, askExecutionId);
-      return toDecisionFamilyLineage(thread, change);
+      const { thread, change } = await continueHvacDecisionThread(selection.thread.id, propertyId, askExecutionId, homeActionOrigin);
+      return toDecisionFamilyLineage(thread, change, thread.currentRecommendationSnapshot?.limitationCodes ?? []);
     }
     const created = await createHvacDecisionThread({ propertyId, userId, inventoryItemId: primaryEntityId, askExecutionId, homeActionOrigin });
-    return toDecisionFamilyLineage(created.thread);
+    return toDecisionFamilyLineage(created.thread, null, created.snapshot.limitationCodes);
   },
 };

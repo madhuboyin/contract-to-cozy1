@@ -155,3 +155,59 @@ test('executionId is threaded from executeOperationCore through both HVAC contin
     assert.match(match[1], /executionId/, `continueHvacDecisionThread call does not pass executionId: ${match[0]}`);
   }
 });
+
+// Phase 3 review finding 3: homeActionOrigin must reach the durable link
+// table on every path that can produce a thread id — createHvacDecisionThread,
+// its own P2002-catch-and-resume race-loser path, and continueHvacDecisionThread
+// (which the P2002 fallback and hvacDecisionFamilyAdapter.createOrResumeThread
+// both call) — not just the initial-creation happy path.
+test('recordHomeActionOriginLink is called from createHvacDecisionThread (including its P2002 resume fallback) and continueHvacDecisionThread', () => {
+  assert.match(source, /import \{ recordHomeActionOriginLink \} from '\.\/decisionThreadHomeActionLink';/);
+  const calls = [...source.matchAll(/recordHomeActionOriginLink\(/g)];
+  assert.ok(calls.length >= 2, `expected at least 2 recordHomeActionOriginLink calls, found ${calls.length}`);
+  assert.match(source, /continueHvacDecisionThread\(resumeSelection\.thread\.id, input\.propertyId, input\.askExecutionId, input\.homeActionOrigin\)/, 'the P2002 catch-and-resume fallback must forward homeActionOrigin, not drop it');
+});
+
+test('hvacDecisionFamilyAdapter.createOrResumeThread forwards homeActionOrigin into its continueHvacDecisionThread call', () => {
+  assert.match(source, /continueHvacDecisionThread\(selection\.thread\.id, propertyId, askExecutionId, homeActionOrigin\)/, 'the UNIQUE-selection resume path must forward homeActionOrigin, not drop it');
+});
+
+// Phase 3 review finding 4: the read-only selectThread path must not
+// always hardcode recommendationChange to null anymore, and every
+// create/resume path that shows the homeowner a current snapshot must
+// acknowledge it.
+test('hvacDecisionFamilyAdapter.selectThread computes an unacknowledged-change diff instead of a hardcoded null for its UNIQUE branch', () => {
+  assert.match(source, /const change = await loadUnacknowledgedRecommendationChange\(selection\.thread\);/);
+  assert.match(source, /kind: 'UNIQUE',\s*\n\s*thread: toDecisionFamilyLineage\(selection\.thread, change,/);
+});
+
+test('acknowledgeCurrentSnapshot is called from both createHvacDecisionThread and continueHvacDecisionThread', () => {
+  const calls = [...source.matchAll(/acknowledgeCurrentSnapshot\(/g)];
+  assert.ok(calls.length >= 2, `expected at least 2 acknowledgeCurrentSnapshot calls, found ${calls.length}`);
+});
+
+// Phase 3 review finding 5: a disagreement between evaluateHvacRepairReplace
+// and the originating ReplaceRepairAnalysis verdict must be disclosed
+// (SOURCE_CARD_VERDICT_DIVERGENCE), not silently ignored -- on both the
+// initial create and every later recompute, since a recompute can newly
+// introduce or newly resolve a disagreement.
+test('sourceCardVerdictDivergenceLimitationCodes is called from both createHvacDecisionThread and recomputeStaleThread, and its result feeds into limitationCodes', () => {
+  const calls = [...source.matchAll(/sourceCardVerdictDivergenceLimitationCodes\(/g)];
+  assert.ok(calls.length >= 2, `expected at least 2 sourceCardVerdictDivergenceLimitationCodes calls, found ${calls.length}`);
+  const limitationCodesAssignments = [...source.matchAll(/const limitationCodes = Array\.from\(new Set\(\[([^\]]*)\]\)\)/g)];
+  assert.ok(limitationCodesAssignments.length >= 2, 'expected limitationCodes to be assembled at least twice');
+  for (const match of limitationCodesAssignments) {
+    assert.match(match[1], /divergenceLimitationCodes/, `limitationCodes assembly does not include divergenceLimitationCodes: ${match[0]}`);
+  }
+});
+
+test('toDecisionFamilyLineage threads limitationCodes through every call site inside hvacDecisionFamilyAdapter, not just some', () => {
+  const adapterStart = source.indexOf('export const hvacDecisionFamilyAdapter');
+  assert.ok(adapterStart >= 0, 'hvacDecisionFamilyAdapter not found');
+  const adapterBody = source.slice(adapterStart, source.indexOf('\n};', adapterStart));
+  const calls = [...adapterBody.matchAll(/toDecisionFamilyLineage\(([^)]*)\)/g)];
+  assert.ok(calls.length >= 4, `expected at least 4 toDecisionFamilyLineage call sites, found ${calls.length}`);
+  for (const match of calls) {
+    assert.match(match[1], /limitationCodes/, `toDecisionFamilyLineage call does not pass a limitationCodes argument: ${match[0]}`);
+  }
+});

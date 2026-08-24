@@ -27,6 +27,7 @@ describe('shouldBlockNavigationForLineage', () => {
         contextStatus: 'CURRENT',
         currentRecommendationSnapshotId: 'snapshot-1',
         recommendationChange: null,
+        limitationCodes: [],
       } : undefined,
     })).toBe(false);
   });

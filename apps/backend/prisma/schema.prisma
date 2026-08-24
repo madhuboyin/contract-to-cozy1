@@ -8353,6 +8353,25 @@ model DecisionThread {
   contextStatus                    DecisionThreadContextStatus   @default(CURRENT)
   contextIssueCodes                String[]                       @default([])
   currentRecommendationSnapshotId  String?                        @unique
+  // Home Intelligence Functional Completeness FRD Phase 3 review finding 4:
+  // "Snapshot-change presentation is effectively transient and unreachable
+  // on Home." The RecommendationChangeDiff a recompute produces was only
+  // ever returned in that one interaction response, discarded the moment
+  // the homeowner navigated away, and never reachable from a read-only
+  // Home feed render again. This is the homeowner's "read receipt" for
+  // recommendation changes: null or equal to currentRecommendationSnapshotId
+  // means nothing unacknowledged; anything else means
+  // resolveHomeActionDecisionLineage (read-only) can and should surface the
+  // diff between currentRecommendationSnapshot and its supersedesSnapshotId
+  // predecessor again on every render, not just the one moment it was
+  // computed. Set to currentRecommendationSnapshotId whenever the homeowner
+  // actually engages with the thread (create, resume, Ask continuation
+  // alike) — see decisionThreadHomeActionLink.ts-adjacent write sites.
+  // Deliberately NOT part of the version-guarded lifecycleStatus/
+  // contextStatus optimistic-concurrency contract: a race here only
+  // affects whether a "what changed" banner shows one render early or late,
+  // never correctness or safety, so a plain write is proportionate.
+  lastChangeAcknowledgedSnapshotId String?
   // Home Intelligence Functional Completeness FRD Phase 3 review finding 2:
   // "exactly one active Decision Thread per (propertyId, decisionDefinitionId,
   // primaryEntityType, primaryEntityId)" is not expressible as a normal
@@ -8385,6 +8404,7 @@ model DecisionThread {
   options                     DecisionThreadOption[]
   questions                     DecisionThreadQuestion[]
   executionLinks                  DecisionThreadExecutionLink[]
+  homeActionLinks                  DecisionThreadHomeActionLink[]
   scenarios                          Scenario[]
   recommendationSnapshots               RecommendationSnapshot[] @relation("DecisionThreadSnapshots")
 
@@ -8500,6 +8520,37 @@ model DecisionThreadExecutionLink {
 
   @@unique([decisionThreadId, askExecutionId])
   @@map("decision_thread_execution_links")
+}
+
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 3:
+// "Home Action origin is recorded only when a thread is first created...
+// The current action therefore still cannot be durably linked for
+// downstream acceptance or attribution." A RecommendationSnapshot is
+// immutable and only ever gets an origin at the moment it's created, so a
+// later resume that reuses the same snapshot (no new snapshot -- see
+// snapshotDecisionFamilyAdapter.ts's digest-unchanged no-op path) had
+// nowhere to record which Home Action opened it. This is the durable,
+// append-only record of every Home Action version that ever opened a
+// thread -- same shape and idempotency precedent as
+// DecisionThreadExecutionLink above, just for Home Action opens instead
+// of Ask executions. No FK on homeActionId/lineageId/sourceEntityId: Home
+// Actions are computed, not persisted rows, spanning many unrelated
+// domain tables (same reasoning as DecisionThreadFactReference).
+model DecisionThreadHomeActionLink {
+  id               String   @id @default(uuid())
+  decisionThreadId String
+  homeActionId     String
+  lineageId        String
+  sourceEntityId   String
+  sourceVersion    String?
+  contextVersion   String?
+  capturedAt       DateTime @default(now())
+
+  decisionThread DecisionThread @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionThreadId, homeActionId])
+  @@index([decisionThreadId, capturedAt])
+  @@map("decision_thread_home_action_links")
 }
 
 // FRD §13.1. definitionId references the code-based decision-engine schema

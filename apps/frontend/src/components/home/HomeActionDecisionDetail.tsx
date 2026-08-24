@@ -34,6 +34,22 @@ function RecommendationChangeNotice({ change }: { change: NonNullable<NonNullabl
   );
 }
 
+// Home Intelligence Functional Completeness FRD Phase 3 review finding 5:
+// the HVAC engine's own evaluation can disagree with the ReplaceRepairAnalysis
+// verdict shown on this same card — two independently-calibrated engines,
+// not one. Disclosed rather than silently reconciled.
+function LimitationCodeNotices({ limitationCodes }: { limitationCodes: string[] | undefined }) {
+  if (!limitationCodes?.includes('SOURCE_CARD_VERDICT_DIVERGENCE')) return null;
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 md:col-span-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Two estimates disagree</p>
+      <p className="mt-1 text-sm text-amber-800">
+        Our detailed comparison and this card&apos;s quick estimate reached different conclusions about repairing versus replacing. Review the full comparison below before deciding.
+      </p>
+    </div>
+  );
+}
+
 const LIFECYCLE_LABELS: Record<string, string> = {
   OPEN: 'Started',
   GATHERING_CONTEXT: 'Gathering context',
@@ -143,6 +159,7 @@ export function HomeActionDecisionDetail({
         </div>
       )}
       <RecommendationChangeNotice change={action.decisionLineage?.thread?.recommendationChange ?? null} />
+      <LimitationCodeNotices limitationCodes={action.decisionLineage?.thread?.limitationCodes} />
       <DecisionLineageStatus decisionLineage={action.decisionLineage} />
 
       {degraded && (

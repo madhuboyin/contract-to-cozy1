@@ -490,6 +490,10 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
         currentVerdict: string;
         changedFactors: string[];
       } | null;
+      // Phase 3 review finding 5 — e.g. SOURCE_CARD_VERDICT_DIVERGENCE when
+      // the HVAC engine's own evaluation disagrees with this card's own
+      // ReplaceRepairAnalysis verdict. Always [] for every non-HVAC domain.
+      limitationCodes: string[];
     };
   } | null;
   // Phase 3B work item 3 — set only by a producer whose recommendation
