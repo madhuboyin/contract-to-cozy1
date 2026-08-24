@@ -65,6 +65,19 @@ const prismaMock = {
       workSources.set(key, row);
       return row;
     },
+    findMany: async ({ where }) => {
+      return [...workSources.values()].filter((s) => {
+        if (where.workItemId && s.workItemId !== where.workItemId) return false;
+        if (where.sourceType && s.sourceType !== where.sourceType) return false;
+        return true;
+      });
+    },
+  },
+  // No test fixture in this file exercises a real repair/replace-derived
+  // GUIDANCE source, so assertDecisionLineageSatisfiedForAcceptance's
+  // lookup always misses here — that's the correct no-op default.
+  replaceRepairAnalysis: {
+    findUnique: async () => null,
   },
   operationalWorkEvent: {
     create: async ({ data }) => {

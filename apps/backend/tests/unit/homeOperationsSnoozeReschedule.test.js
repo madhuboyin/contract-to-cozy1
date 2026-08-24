@@ -38,6 +38,15 @@ const prismaMock = {
       return workEvents.get(`${k.workItemId}:${k.idempotencyKey}`) ?? null;
     },
   },
+  // No test fixture in this file seeds an OperationalWorkSource, so
+  // assertDecisionLineageSatisfiedForAcceptance's lookup always misses —
+  // that's the correct no-op default for these non-repair-replace items.
+  operationalWorkSource: {
+    findMany: async () => [],
+  },
+  replaceRepairAnalysis: {
+    findUnique: async () => null,
+  },
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');

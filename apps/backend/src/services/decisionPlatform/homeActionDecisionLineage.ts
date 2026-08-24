@@ -15,6 +15,8 @@
 // homeActionProducerOwnership.ts for command routing.
 
 import { logger } from '../../lib/logger';
+import { APIError } from '../../middleware/error.middleware';
+import type { WorkItemDb } from '../../modules/homeOperations/infrastructure/workItemRepository';
 import type { DecisionFamilyThreadLineage, HomeActionOriginRef } from './decisionFamilyAdapter';
 import { DecisionFamilyAmbiguousThreadError } from './decisionFamilyAdapter';
 import { getDecisionFamilyAdapter } from './decisionFamilyAdapterRegistry';
@@ -129,4 +131,65 @@ export function resolveActionDecisionLineagePolicy(
   }
   const ref = resolveDecisionFamilyRef(action);
   return { kind: 'DECISION_REQUIRED', decisionDefinitionId: ref?.decisionDefinitionId ?? null };
+}
+
+/**
+ * Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+ * delivery step 5: "Acceptance, booking, project creation, and other
+ * commitment APIs must independently reject the request without valid
+ * thread/snapshot lineage. Do not rely on the UI alone for fail-closed
+ * enforcement." CANDIDATE -> ACCEPTED (acceptanceState PROPOSED -> ACCEPTED,
+ * see domain/transitions.ts) is this codebase's own definition of external
+ * commitment, and every commitment path — explicit user acceptance, booking
+ * creation, project creation — funnels through transitionWorkItem.usecase.ts
+ * at that one edge, so it is the single chokepoint this guards.
+ *
+ * An OperationalWorkItem carries no direct inventoryItemId for a
+ * GUIDANCE-sourced obligation — resolveSubject in homeActionWorkItem
+ * .adapter.ts falls through to a PROPERTY subject for everything except
+ * coverage-shaped GUIDANCE actions — so the only reliable path back to the
+ * primary entity is the work item's own OperationalWorkSource
+ * (sourceType: GUIDANCE).sourceEntityId, which for
+ * loadRepairReplaceDecisionActions (homeActionSourcePromotion.service.ts)
+ * is the originating ReplaceRepairAnalysis id. A work item with no such
+ * source, or whose source doesn't resolve to a ReplaceRepairAnalysis, is
+ * not a repair/replace obligation and this is a no-op — the overwhelming
+ * majority of work items never reach the lookup below at all.
+ */
+export class DecisionLineageRequiredForAcceptanceError extends APIError {
+  constructor(message: string) {
+    super(message, 409, 'DECISION_LINEAGE_REQUIRED');
+    this.name = 'DecisionLineageRequiredForAcceptanceError';
+  }
+}
+
+export async function assertDecisionLineageSatisfiedForAcceptance(
+  propertyId: string,
+  workItemId: string,
+  db: WorkItemDb,
+): Promise<void> {
+  const sources = await db.operationalWorkSource.findMany({
+    where: { workItemId, sourceType: 'GUIDANCE' },
+    select: { sourceEntityId: true },
+  });
+  if (!sources.length) return;
+
+  for (const source of sources) {
+    const analysis = await db.replaceRepairAnalysis.findUnique({
+      where: { id: source.sourceEntityId },
+      select: { inventoryItemId: true },
+    });
+    if (!analysis) continue;
+
+    const lineage = await resolveHomeActionDecisionLineage(propertyId, {
+      decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+      primaryEntityId: analysis.inventoryItemId,
+    });
+    if (lineage.status !== 'LINKED') {
+      throw new DecisionLineageRequiredForAcceptanceError(
+        `This repair/replace decision needs a current recommendation before the work can be accepted (decision lineage status: ${lineage.status}).`,
+      );
+    }
+    return;
+  }
 }

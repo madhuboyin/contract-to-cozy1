@@ -3,6 +3,7 @@ import { applyTransition } from '../domain/transitions';
 import { findWorkItemById, recordWorkEvent, updateWorkItemState, type WorkItemDb } from '../infrastructure/workItemRepository';
 import { emitWorkItemLifecycleChange, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
 import { prisma } from '../../../lib/prisma';
+import { assertDecisionLineageSatisfiedForAcceptance } from '../../../services/decisionPlatform/homeActionDecisionLineage';
 
 /**
  * Maps a legal state transition to the event vocabulary the parent plan
@@ -69,6 +70,17 @@ export async function transitionWorkItem(
   if (!workItem) throw new Error(`OperationalWorkItem ${input.workItemId} not found.`);
 
   const result = applyTransition(workItem, input.to, { disposition: input.disposition });
+
+  // Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
+  // delivery step 5 — server-side commitment-boundary enforcement. Every
+  // commitment path (explicit accept, booking creation, project creation)
+  // funnels through this one CANDIDATE -> ACCEPTED edge regardless of
+  // actorType (booking-driven acceptance runs as actorType: 'SYSTEM'), so
+  // this is the single chokepoint that must independently reject an
+  // acceptance the UI failed to gate. See homeActionDecisionLineage.ts.
+  if (result.state === 'ACCEPTED' && workItem.state === 'CANDIDATE') {
+    await assertDecisionLineageSatisfiedForAcceptance(workItem.propertyId, input.workItemId, db);
+  }
 
   const timestampValue = result.timestampField && FORWARD_LOOKING_TIMESTAMP_FIELDS.has(result.timestampField)
     ? input.timestampValue
