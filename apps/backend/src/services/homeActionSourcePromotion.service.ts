@@ -39,7 +39,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -2347,6 +2347,169 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   });
 }
 
+// Home Intelligence Functional Completeness FRD §15 Phase 5 work item 2,
+// rule 7 of 7 (HI-CMP-002) — "document-promoted fact + existing
+// conflicting fact." Every document promotion into InsurancePolicyTerm/
+// InsurancePolicyFact (insurancePolicyRecord.service.ts's
+// stageExtractedPolicyTerm, invoked by homeRecordsExtraction.service.ts's
+// promoteInsurancePolicy) stages a brand-new PENDING_CONFIRMATION term
+// with PENDING facts, with no comparison against what the homeowner
+// already has confirmed on file — HI-DOC-004's conflict-exposure
+// requirement is not implemented anywhere in this pipeline. This producer
+// closes that gap: a pending term's fact is a conflict when a CONFIRMED
+// fact for the same factKey exists on a different, non-pending term of
+// the same policy with a different value. Two evidence entries per
+// conflicting fact (the new extraction, the existing confirmed value) so
+// neither is silently discarded, per HI-DOC-004's "retain both evidence
+// references."
+const POLICY_FACT_LABELS: Record<string, string> = {
+  POLICY_FORM: 'Policy form',
+  ANNUAL_PREMIUM: 'Annual premium',
+  ALL_PERIL_DEDUCTIBLE: 'Deductible',
+  DWELLING_LIMIT: 'Dwelling coverage limit',
+  PERSONAL_PROPERTY_LIMIT: 'Personal property limit',
+  LIABILITY_LIMIT: 'Liability limit',
+  VALUATION_BASIS: 'Valuation basis',
+  ENDORSEMENTS: 'Endorsements',
+  COVERAGE_LIMITS_RAW: 'Coverage limits',
+};
+
+type PolicyFactSnapshot = {
+  id: string;
+  factKey: string;
+  valueType: string;
+  amountValue: unknown;
+  textValue: string | null;
+  booleanValue: boolean | null;
+  jsonValue: unknown;
+  confidence: number | null;
+  confirmedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function policyFactEffectiveValue(fact: PolicyFactSnapshot): string | null {
+  switch (fact.valueType) {
+    case 'AMOUNT': return fact.amountValue != null ? String(fact.amountValue) : null;
+    case 'TEXT': return fact.textValue;
+    case 'BOOLEAN': return fact.booleanValue != null ? String(fact.booleanValue) : null;
+    case 'JSON': return fact.jsonValue != null ? JSON.stringify(fact.jsonValue) : null;
+    default: return null;
+  }
+}
+
+function formatPolicyFactValue(fact: PolicyFactSnapshot): string {
+  switch (fact.valueType) {
+    case 'AMOUNT': return fact.amountValue != null ? formatHomeActionCurrency(Number(fact.amountValue)) : 'unknown';
+    case 'BOOLEAN': return fact.booleanValue == null ? 'unknown' : (fact.booleanValue ? 'yes' : 'no');
+    case 'JSON': return fact.jsonValue != null ? JSON.stringify(fact.jsonValue) : 'unknown';
+    default: return fact.textValue ?? 'unknown';
+  }
+}
+
+async function loadInsurancePolicyFactConflictActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
+  if (!db.insurancePolicyTerm || !db.insurancePolicyFact) return [];
+  const now = evaluatedAt ?? new Date();
+  const pendingTerms = await db.insurancePolicyTerm.findMany({
+    where: { propertyId, status: 'PENDING_CONFIRMATION' },
+    include: {
+      facts: { where: { confirmationStatus: 'PENDING' } },
+      insurancePolicy: { select: { id: true, carrierName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+  if (pendingTerms.length === 0) return [];
+
+  const policyIds = [...new Set(pendingTerms.map((term) => term.insurancePolicyId))];
+  const confirmedFacts = await db.insurancePolicyFact.findMany({
+    where: {
+      confirmationStatus: 'CONFIRMED',
+      policyTerm: { insurancePolicyId: { in: policyIds }, status: { not: 'PENDING_CONFIRMATION' } },
+    },
+    include: { policyTerm: { select: { insurancePolicyId: true, termStart: true, createdAt: true } } },
+  });
+
+  const latestConfirmedByPolicyAndKey = new Map<string, PolicyFactSnapshot & { policyId: string; termTime: number }>();
+  for (const fact of confirmedFacts as any[]) {
+    const key = `${fact.policyTerm.insurancePolicyId}:${fact.factKey}`;
+    const termTime = (fact.policyTerm.termStart ?? fact.policyTerm.createdAt).getTime();
+    const existing = latestConfirmedByPolicyAndKey.get(key);
+    if (!existing || termTime > existing.termTime) {
+      latestConfirmedByPolicyAndKey.set(key, { ...fact, policyId: fact.policyTerm.insurancePolicyId, termTime });
+    }
+  }
+
+  return (pendingTerms as any[]).flatMap((term) => {
+    const conflicts = (term.facts as PolicyFactSnapshot[]).flatMap((pendingFact) => {
+      const confirmed = latestConfirmedByPolicyAndKey.get(`${term.insurancePolicyId}:${pendingFact.factKey}`);
+      if (!confirmed) return [];
+      if (policyFactEffectiveValue(pendingFact) === policyFactEffectiveValue(confirmed)) return [];
+      return [{ pending: pendingFact, confirmed }];
+    });
+    if (conflicts.length === 0) return [];
+
+    const carrierName = term.insurancePolicy.carrierName;
+    const conflictSummary = conflicts
+      .map(({ pending, confirmed }) =>
+        `${POLICY_FACT_LABELS[pending.factKey] ?? pending.factKey}: newly extracted ${formatPolicyFactValue(pending)}, currently confirmed ${formatPolicyFactValue(confirmed)}`)
+      .join('; ');
+
+    return [adaptHomeActionSource('SYSTEM', {
+      id: `insurance-fact-conflict:${term.id}`,
+      propertyId,
+      lineageId: `insurance-fact-conflict:${term.id}`,
+      sourceEntityId: term.id,
+      sourceVersion: term.updatedAt.toISOString(),
+      state: 'OPEN',
+      priority: 'SOON',
+      signal: `New ${carrierName} policy document conflicts with your confirmed policy details`,
+      whyItMatters: `A newly extracted policy document disagrees with what's already confirmed on file: ${conflictSummary}.`,
+      recommendedAction: 'Review the newly extracted details and confirm which value is correct.',
+      expectedOutcome: 'The policy record reflects one confirmed, correct value for each conflicting fact.',
+      timing: {
+        dueAt: null,
+        windowStart: null,
+        windowEnd: null,
+        rationale: 'Advisory — not tied to a specific deadline, but resolving it keeps coverage guidance accurate.',
+      },
+      evidence: conflicts.flatMap(({ pending, confirmed }) => [
+        {
+          id: pending.id,
+          type: 'DOCUMENT' as const,
+          label: `${POLICY_FACT_LABELS[pending.factKey] ?? pending.factKey} (newly extracted): ${formatPolicyFactValue(pending)}`,
+          source: 'Newly uploaded policy document',
+          observedAt: pending.createdAt.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: pending.confidence ?? 0.6,
+        },
+        {
+          id: confirmed.id,
+          type: 'USER_INPUT' as const,
+          label: `${POLICY_FACT_LABELS[pending.factKey] ?? pending.factKey} (currently confirmed): ${formatPolicyFactValue(confirmed)}`,
+          source: 'Confirmed policy record',
+          observedAt: (confirmed.confirmedAt ?? confirmed.updatedAt).toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 1,
+        },
+      ]),
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 0.7, label: confidenceLabel(0.7), missing: [] },
+      governance: lowConsequenceGovernance('insurance-fact-conflict-v1'),
+      primaryCta: {
+        kind: 'CORRECT_FACT',
+        label: 'Review conflicting policy details',
+        href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
+      },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: term.createdAt.toISOString(),
+      lastEvaluatedAt: now.toISOString(),
+    })];
+  });
+}
+
 async function loadPersonalizationActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
   const now = new Date();
   const recommendations = await db.personalizedRecommendation.findMany({
@@ -4571,6 +4734,7 @@ export async function getPromotedHomeActions(
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadCoverageRenewalActions(propertyId, db, options.evaluatedAt),
     loadRiskMitigationActions(propertyId, db, options.evaluatedAt),
+    loadInsurancePolicyFactConflictActions(propertyId, db, options.evaluatedAt),
     loadHealthInsightActions(propertyId, db, options.evaluatedAt),
     loadCompoundRadarInsightActions(propertyId, db, options.evaluatedAt),
     loadRepairReplaceDecisionActions(propertyId, db, options.evaluatedAt),

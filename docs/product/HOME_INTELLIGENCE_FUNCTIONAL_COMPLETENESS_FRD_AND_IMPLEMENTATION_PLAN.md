@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.23"
+version: "1.24"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.23 |
+| Version | 1.24 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1098,7 +1098,13 @@ When ready, the ownership-cost-change action's primary CTA redirects to the Mort
 
 When recurring, the action's `whyItMatters` gains a sentence naming the repair count, a new evidence entry is added, and priority elevates to `SOON` (matching the existing `REPLACE_NOW` verdict priority) — while `id`/`lineageId`/`sourceEntityId`/`decisionLineagePolicy` (the registered `HVAC_REPAIR_REPLACE` decision family) stay exactly as they were, so `resolveActionDecisionLineagePolicy`'s existing per-item HVAC eligibility gate is completely unaffected. Registered as `RECURRING_FAILURE_REPAIR_REPLACE_READINESS` in `COMPOUND_RULE_REGISTRY`. Test coverage: `tests/unit/homeActionRepairReplaceRecurringFailureEnrichment.test.js` (6 tests: 2+ events enrich, exactly 1 does not, zero events unchanged, `REPLACE_NOW` stays `SOON` without duplicate evidence, cross-item isolation, missing-table safety), plus the full pre-existing `homeActionRepairReplacePromotion.test.js` suite confirmed unaffected (5/5), all passing alongside the complete Phase 5 test set (95/95).
 
-Not yet done: work item 2's remaining rule family (document-promoted fact + conflicting fact); work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI — `homeRecordsExtraction.service.ts` has no conflict-detection call at all).
+**Work item 2 rule 7 of 7 — work item 2 complete (2026-08-24): document-promoted fact + existing conflicting fact.** Unlike rules 5 and 6, this is a new producer, not an enrichment of one — `InsurancePolicyTerm`/`InsurancePolicyFact` (`insurancePolicyRecord.service.ts`'s `stageExtractedPolicyTerm`, invoked by `homeRecordsExtraction.service.ts`'s `promoteInsurancePolicy`) had zero Home Action coverage of any kind before this rule, and every document promotion staged a new `PENDING_CONFIRMATION` term with `PENDING` facts without ever comparing them against what the homeowner already had `CONFIRMED` on file — HI-DOC-004's "if a promoted candidate conflicts with an active fact... expose `CONFLICTED`, retain both evidence references, request resolution" was implemented nowhere in this specific pipeline (Property Context's own generic `resolvePropertyFactCandidates`/`CONFLICTED` fact-state mechanism, `modules/propertyContext/domain/facts.ts`, is real and already used elsewhere, but document promotion into `InsurancePolicyTerm` never routes through it).
+
+New `loadInsurancePolicyFactConflictActions` batch-loads every `PENDING_CONFIRMATION` term's `PENDING` facts, cross-references them against `CONFIRMED` facts (same `factKey`) on other, non-pending terms of the same policy (most recent term wins when multiple confirmed values exist across terms), and — per HI-DOC-004 — emits one Home Action per pending term listing every conflicting fact with *both* the newly extracted and the currently confirmed value as separate evidence entries, so neither is silently discarded. A `POLICY_FORM`/`ANNUAL_PREMIUM`/`ALL_PERIL_DEDUCTIBLE`/etc. label map keeps the copy homeowner-readable; `SYSTEM`-kind, `CORRECT_FACT` primary CTA, advisory `LOW_CONSEQUENCE` governance — this producer surfaces the conflict, it does not resolve it (resolution stays `confirmPolicyFact`'s job). Registered as `DOCUMENT_PROMOTED_FACT_CONFLICT` in `COMPOUND_RULE_REGISTRY`. Test coverage: `tests/unit/homeActionInsurancePolicyFactConflictPromotion.test.js` (9 tests: conflict detection/non-detection, multi-fact aggregation, cross-policy isolation, most-recent-term-wins tiebreak, deterministic `sourceVersion`, missing-table safety), all passing alongside the complete Phase 5 test set (104/104).
+
+**All 7 HI-CMP-002 rule families are now landed.** `COMPOUND_RULE_REGISTRY` carries 8 entries total (the original 4 pre-existing Radar rules under one collective entry, plus 5 rules added across this work — 3 net-new producers for rules 1, 4, and 7; 2 enrichments of existing producers for rules 5 and 6; 1 net-new domain rule reusing the Radar pipeline for rule 2's fifth instance; rule 3 extended an existing allowlist). Every rule's `outputType` is `HOME_ACTION` — none needed HI-CMP-004's `PROPERTY_CHANGE`/`HOME_BRIEFING_ITEM` routing, since every correlation implemented turned out to be homeowner-actionable rather than merely informational; that routing path remains unexercised and should be revisited if a future rule genuinely needs it.
+
+Not yet done: work items 3–5 (no common document extraction envelope exists anywhere in the backend, and only 3 of the ~10 required promotion adapters — `promoteWarranty`/`promoteExpense`/`promoteInsurancePolicy` — exist; `inspectionExtraction.service.ts` still runs a separate, unconverged ingest path); and work item 6 (document-promotion conflicts are not routed into Property Context's existing `CONFLICTED` state/correction UI for the Warranty/Expense promotion paths — `homeRecordsExtraction.service.ts` has no conflict-detection call for those two; rule 7 above closes this specifically for `InsurancePolicyTerm`/`InsurancePolicyFact` only).
 
 ### Phase 6 — Skill and capability completion
 
