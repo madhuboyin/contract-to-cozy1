@@ -75,6 +75,26 @@ test('validateIntelligenceConsumerRegistry fails fast on a STATIC consumer that 
   assert.ok(issues.some((issue) => issue.includes('risk-assessment') && issue.includes('STATIC but declares a resolveTargets resolver')));
 });
 
+// Finding (Phase 2 follow-up review): a declared MARK_STALE/MARK_UNAVAILABLE
+// failureBehavior with no onPermanentFailure handler is an unenforced claim
+// — HI-REC-006's "existing output shall be marked stale" promise silently
+// wouldn't happen. Machine-verifiable now rather than only prose-documented.
+test('validateIntelligenceConsumerRegistry fails fast on MARK_STALE with no onPermanentFailure handler', () => {
+  const bad = INTELLIGENCE_CONSUMER_REGISTRY.map((entry) =>
+    entry.consumerKey === 'maintenance-prediction' ? { ...entry, failureBehavior: 'MARK_STALE', onPermanentFailure: undefined } : entry);
+  const issues = validateIntelligenceConsumerRegistry(bad);
+  assert.ok(issues.some((issue) => issue.includes('maintenance-prediction') && issue.includes('no onPermanentFailure handler')));
+});
+
+test('every real consumer\'s failureBehavior is honest: RETRY_ONLY unless a real onPermanentFailure handler is declared', () => {
+  assert.deepEqual(validateIntelligenceConsumerRegistry(INTELLIGENCE_CONSUMER_REGISTRY), []);
+  for (const entry of INTELLIGENCE_CONSUMER_REGISTRY) {
+    if (entry.failureBehavior !== 'RETRY_ONLY') {
+      assert.equal(typeof entry.onPermanentFailure, 'function', `${entry.consumerKey} declares ${entry.failureBehavior} and must have a real handler`);
+    }
+  }
+});
+
 test('the capability/skill/guidance bridge is non-empty and every entry declares an execution owner', () => {
   assert.ok(CAPABILITY_SKILL_GUIDANCE_BRIDGE.length > 0);
   for (const entry of CAPABILITY_SKILL_GUIDANCE_BRIDGE) {

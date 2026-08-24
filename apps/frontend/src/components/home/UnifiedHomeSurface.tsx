@@ -1156,6 +1156,14 @@ function IntelligenceRefreshBadge({ propertyId }: { propertyId: string }) {
     queryFn: () => api.getPropertyIntelligenceRefreshState(propertyId),
     staleTime: 60 * 1000,
     retry: false,
+    // Finding (Phase 2 follow-up review): with no refetchInterval, a badge
+    // that loaded mid-REFRESHING would keep showing that state until
+    // navigation, window focus, or another rerender — not actually live.
+    // Only poll while genuinely in flight; once CURRENT/UNKNOWN, stop.
+    refetchInterval: (query) => {
+      const state = query.state.data;
+      return state === 'REFRESHING' || state === 'PARTIALLY_REFRESHED' ? 10 * 1000 : false;
+    },
   });
   if (query.isError || !query.data || query.data === 'CURRENT' || query.data === 'UNKNOWN') return null;
 

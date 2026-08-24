@@ -1,5 +1,8 @@
 // apps/backend/src/services/domainEvents/domainEvents.service.ts
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+
+export type DomainEventDb = typeof prisma | Prisma.TransactionClient;
 
 export type EmitDomainEventInput = {
   type:
@@ -20,16 +23,26 @@ export type EmitDomainEventInput = {
 
 
 export class DomainEventsService {
-  static async emit(input: EmitDomainEventInput) {
+  /**
+   * db defaults to the global client but accepts a transaction client too —
+   * needed so a caller that wants the DomainEvent write to be durable with
+   * (atomic with) its own write can pass its own tx rather than emitting
+   * only after that transaction commits. See propertyChange.service.ts's
+   * emitPropertyChangeWithTransaction for why this matters: an event write
+   * that only happens post-commit, best-effort, has no recovery path if it
+   * fails — the canonical change is committed but the recompute request
+   * that should follow from it is silently lost forever.
+   */
+  static async emit(input: EmitDomainEventInput, db: DomainEventDb = prisma) {
     // If idempotencyKey is provided, we upsert-ish by unique key
     if (input.idempotencyKey) {
-      const existing = await prisma.domainEvent.findUnique({
+      const existing = await db.domainEvent.findUnique({
         where: { idempotencyKey: input.idempotencyKey },
       });
       if (existing) return existing;
     }
 
-    return prisma.domainEvent.create({
+    return db.domainEvent.create({
       data: {
         type: input.type as any,
         status: 'PENDING',

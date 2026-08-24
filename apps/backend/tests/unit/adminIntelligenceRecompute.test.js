@@ -66,10 +66,13 @@ const prismaMock = {
       matches.sort((a, b) => b.requestedAt - a.requestedAt);
       return matches[0] ?? null;
     },
-    findMany: async ({ where }) => {
+    findMany: async ({ where, take, include }) => {
       const matches = [...recomputeRuns.values()].filter((r) => r.propertyId === where.propertyId);
       matches.sort((a, b) => b.requestedAt - a.requestedAt);
-      return matches.slice(0, 10);
+      const limited = typeof take === 'number' ? matches.slice(0, take) : matches;
+      return include?.targets
+        ? limited.map((run) => ({ ...run, targets: [...recomputeTargets.values()].filter((t) => t.recomputeRunId === run.id) }))
+        : limited;
     },
   },
 };
@@ -92,6 +95,20 @@ test('triggerManualRefresh emits a MANUAL_REFRESH recompute request for an exist
   assert.equal(event.type, 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED');
   assert.equal(event.payload.triggerType, 'MANUAL_REFRESH');
   assert.equal(event.payload.propertyId, 'property-1');
+});
+
+// Finding (Phase 2 follow-up review): requestedContextVersion was
+// previously omitted, so every manual refresh for the same property shared
+// one constant idempotency key ('...:v0') — after the first call ever, all
+// later ones would silently return that same original DomainEvent instead
+// of starting a new run.
+test('triggerManualRefresh creates a distinct DomainEvent on each call for the same property', async () => {
+  properties.set('property-3', { id: 'property-3' });
+  const first = await triggerManualRefresh('property-3');
+  const second = await triggerManualRefresh('property-3');
+  assert.notEqual(first.eventId, second.eventId, 'a second manual refresh must not be deduped against the first');
+  assert.ok(domainEvents.get(first.eventId));
+  assert.ok(domainEvents.get(second.eventId));
 });
 
 test('triggerManualRefresh throws a typed PROPERTY_NOT_FOUND error for a missing property', async () => {
@@ -144,6 +161,12 @@ test('getAdminPropertyRefreshState reports UNKNOWN with no runs, and the latest 
   assert.deepEqual(before.recentRuns, []);
 
   recomputeRuns.set('run-2', { id: 'run-2', propertyId: 'property-2', status: 'PARTIAL', requestedAt: new Date() });
+  // getPropertyRefreshState now derives currentness from real target rows
+  // (not the run's own summary status directly) — give it one permanently
+  // failed and one succeeded real consumer so the derived state is
+  // genuinely PARTIALLY_REFRESHED, matching realistic data.
+  recomputeTargets.set('target-partial-1', { id: 'target-partial-1', recomputeRunId: 'run-2', consumerKey: 'risk-assessment', targetKey: 'PROPERTY', status: 'FAILED', attempts: 3, createdAt: new Date() });
+  recomputeTargets.set('target-partial-2', { id: 'target-partial-2', recomputeRunId: 'run-2', consumerKey: 'coverage', targetKey: 'PROPERTY', status: 'SUCCEEDED', attempts: 1, createdAt: new Date() });
   const after = await getAdminPropertyRefreshState('property-2');
   assert.equal(after.state, 'PARTIALLY_REFRESHED');
   assert.equal(after.recentRuns.length, 1);

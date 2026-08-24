@@ -4,7 +4,7 @@ import RiskAssessmentService from '../RiskAssessment.service';
 import { generateForecast } from '../maintenancePrediction.service';
 import { materializeRecommendationsForProperty } from '../../modules/personalization/application/materializeRecommendations.usecase';
 import { getSnapshotsReferencingFact } from '../decisionPlatform/homeIntelligenceGraph';
-import { markThreadsStaleByIds } from '../decisionPlatform/decisionThreadService';
+import { markThreadsStaleByIds, listActiveDecisionThreadsForProperty } from '../decisionPlatform/decisionThreadService';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
 import { refreshSaleReadinessForRecompute } from '../propertySaleCase.service';
 import { generateDueHomeBriefings } from '../../homeBriefing/homeBriefing.service';
@@ -83,7 +83,14 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     outputOwner: 'reconcileRadarCompoundInsightsForProperty (modules/homeEventRadar/services/radarCompoundInsight.service.ts) — writes PropertyRadarCompoundInsight rows.',
     timeoutMs: 15_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 60_000 },
-    failureBehavior: 'MARK_STALE',
+    // PropertyRadarCompoundInsight.status is RadarCompoundInsightStatus
+    // (active/resolved) — a resolution lifecycle, not a staleness concept.
+    // No real "mark this insight stale" mechanism exists, so declaring
+    // MARK_STALE here would be an unenforced claim (see intelligenceRecompute
+    // .service.ts's onPermanentFailure requirement) — RETRY_ONLY is honest
+    // about what actually happens on permanent failure today: nothing
+    // beyond the retries already exhausted.
+    failureBehavior: 'RETRY_ONLY',
     recompute: async ({ propertyId }) => {
       await reconcileRadarCompoundInsightsForProperty(propertyId);
     },
@@ -97,7 +104,10 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     outputOwner: 'RiskAssessmentService.calculateAndSaveReport (services/RiskAssessment.service.ts) — writes RiskAssessmentReport.',
     timeoutMs: 30_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 60_000 },
-    failureBehavior: 'MARK_STALE',
+    // RiskAssessmentReport has no status/staleness column at all — only
+    // lastCalculatedAt. There is nothing to mark; RETRY_ONLY is the honest
+    // declaration until/unless a real staleness field exists.
+    failureBehavior: 'RETRY_ONLY',
     recompute: async ({ propertyId }) => {
       // actorUserId omitted deliberately: calculateAndSaveReport's own
       // requireApplicableContext already falls back to the property's
@@ -115,7 +125,12 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     outputOwner: 'generateForecast (services/maintenancePrediction.service.ts) — writes MaintenancePrediction rows.',
     timeoutMs: 30_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 60_000 },
-    failureBehavior: 'MARK_STALE',
+    // MaintenancePrediction.status is PredictionStatus (PENDING/COMPLETED/
+    // DISMISSED/OVERDUE) — the homeowner's disposition toward the
+    // prediction, not a data-freshness flag; repurposing it to represent
+    // "recompute failed" would misrepresent a real homeowner decision.
+    // RETRY_ONLY is the honest declaration.
+    failureBehavior: 'RETRY_ONLY',
     recompute: async ({ propertyId }) => {
       await generateForecast(propertyId);
     },
@@ -132,7 +147,12 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     outputOwner: 'materializeRecommendationsForProperty (modules/personalization/application/materializeRecommendations.usecase.ts).',
     timeoutMs: 20_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 60_000 },
-    failureBehavior: 'MARK_STALE',
+    // PersonalizedRecommendation.status (ACTIVE/COMPLETED/DISMISSED/EXPIRED/
+    // SUPPRESSED) is a homeowner/evaluator lifecycle, already fully owned by
+    // materializeRecommendationsForProperty's own evaluation logic — there is
+    // no separate "stale" state to flip on a failed recompute without
+    // conflicting with that lifecycle. RETRY_ONLY is the honest declaration.
+    failureBehavior: 'RETRY_ONLY',
     recompute: async ({ propertyId }) => {
       await materializeRecommendationsForProperty(propertyId, 'INTELLIGENCE_RECOMPUTE');
     },
@@ -153,6 +173,18 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
         markItemCoverageAnalysesStale(propertyId),
       ]);
     },
+    // recompute above already IS the mark-stale action, so this is a
+    // best-effort second attempt at exactly the same real, idempotent DB
+    // update — not a distinct fabricated mechanism. Meaningful when
+    // recompute failed for a reason unrelated to the mark-stale calls
+    // themselves (e.g. a transient timeout on the first Promise.all before
+    // it settled).
+    onPermanentFailure: async ({ propertyId }) => {
+      await Promise.all([
+        markCoverageAnalysisStale(propertyId),
+        markItemCoverageAnalysesStale(propertyId),
+      ]);
+    },
   },
   {
     consumerKey: 'sale-readiness',
@@ -163,7 +195,10 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     outputOwner: 'refreshSaleReadinessForRecompute (services/propertySaleCase.service.ts) — writes SaleReadinessItem rows. No-op for a property with no PropertySaleCase, or one that is CLOSED/CANCELLED.',
     timeoutMs: 20_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 60_000 },
-    failureBehavior: 'MARK_STALE',
+    // SaleReadinessItem.status (OPEN/...) is the checklist item's own
+    // lifecycle, not a data-freshness flag — no real staleness mechanism to
+    // invoke on permanent failure. RETRY_ONLY is the honest declaration.
+    failureBehavior: 'RETRY_ONLY',
     recompute: async ({ propertyId }) => {
       await refreshSaleReadinessForRecompute(propertyId);
     },
@@ -207,13 +242,19 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     timeoutMs: 10_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 30_000 },
     failureBehavior: 'MARK_STALE',
-    resolveTargets: async ({ propertyId, triggerEntityType, triggerEntityId }) => {
-      const snapshots = await getSnapshotsReferencingFact(propertyId, triggerEntityType, triggerEntityId);
-      const threadIds = new Set(
-        snapshots
-          .map((snapshot) => snapshot.decisionThreadId)
-          .filter((id): id is string => Boolean(id)),
-      );
+    resolveTargets: async ({ propertyId, triggerType, triggerEntityType, triggerEntityId }) => {
+      // HI-REC-003: MANUAL_REFRESH must execute every applicable consumer,
+      // not just the ones an entity-specific query happens to match — a
+      // manual refresh has no single "changed entity" to resolve against.
+      // Every other trigger type keeps the real fact-reference containment
+      // query (bounded to the one entity that actually changed).
+      const threadIds = triggerType === 'MANUAL_REFRESH'
+        ? new Set((await listActiveDecisionThreadsForProperty(propertyId, 500)).map((thread) => thread.id))
+        : new Set(
+            (await getSnapshotsReferencingFact(propertyId, triggerEntityType, triggerEntityId))
+              .map((snapshot) => snapshot.decisionThreadId)
+              .filter((id): id is string => Boolean(id)),
+          );
       return [...threadIds].map((threadId) => ({
         targetKey: threadId,
         targetType: 'DecisionThread',
@@ -222,6 +263,13 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
       }));
     },
     recompute: async ({ target }) => {
+      if (!target.targetId) return;
+      await markThreadsStaleByIds([target.targetId], DEPENDENCY_CHANGED_STALE_REASON);
+    },
+    // Same rationale as coverage's onPermanentFailure above: recompute
+    // already IS the mark-stale action here, so this is a best-effort
+    // second attempt at the same real, idempotent update.
+    onPermanentFailure: async ({ target }) => {
       if (!target.targetId) return;
       await markThreadsStaleByIds([target.targetId], DEPENDENCY_CHANGED_STALE_REASON);
     },

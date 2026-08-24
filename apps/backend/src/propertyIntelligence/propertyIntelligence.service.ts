@@ -5,7 +5,6 @@ import {
   IntelligenceSourceReviewStatus,
   IntelligenceSourceRunStatus,
   Prisma,
-  type PropertyChangeType,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
@@ -22,19 +21,12 @@ import {
   assertObservationTypeSupported,
   evaluateSourceActivation,
 } from './sourceGovernance';
-import { emitPropertyChangeWithTransaction, requestRecomputeForChange } from '../propertyChanges/propertyChange.service';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 import {
   evaluateFamilyLaunchAuthorization,
   observationWithinReviewedCoverage,
   parseSourceFamilyLaunchPolicy,
 } from './launchGovernance';
-
-interface EmittedPropertyChangeRef {
-  propertyId: string;
-  sourceType: string;
-  sourceEntityId: string;
-  changeType: PropertyChangeType;
-}
 
 const normalizeKey = (value: string): string => value.trim().toUpperCase();
 const FAMILY_SETTING_PREFIX = 'property-intelligence:family-gate';
@@ -307,10 +299,9 @@ async function matchProperties(
     lifecycleAdvanced: boolean;
     previousObservationId: string | null;
   },
-): Promise<{ matchCount: number; emittedChanges: EmittedPropertyChangeRef[] }> {
+): Promise<number> {
   const properties = await candidateProperties(tx, observation);
   let matchCount = 0;
-  const emittedChanges: EmittedPropertyChangeRef[] = [];
 
   for (const property of properties) {
     const match = matchObservationToProperty(observation, property);
@@ -364,21 +355,14 @@ async function matchProperties(
     });
     const homeownerRelevant = match.matchConfidence >= 0.65
       && !['CANCELLED', 'STALE'].includes(observation.lifecycleStatus);
-    const sourceType = 'INTELLIGENCE_OBSERVATION';
-    const sourceEntityId = `${source.key}:${observation.externalId}`;
-    // FRD §15 Phase 2 work item 5: every other emitPropertyChange call site
-    // requests an intelligence recompute post-commit via
-    // requestRecomputeForChange (propertyChange.service.ts) — this one runs
-    // inside an external tx across a batch of properties, so it can't call
-    // that helper directly (its own requestRecompute is a real DB write
-    // that must not fire before the enclosing ingestIntelligenceBatch
-    // transaction actually commits). Instead it surfaces what it emitted;
-    // ingestIntelligenceBatch fires the recompute requests once, after
-    // commit, for every non-deduped change across the whole batch.
-    const { deduped } = await emitPropertyChangeWithTransaction(tx, {
+    // FRD §15 Phase 2 work item 5: emitPropertyChangeWithTransaction itself
+    // requests an intelligence recompute inside this same tx (see
+    // propertyChange.service.ts's requestRecomputeForChange) — atomic with
+    // this write, so no separate post-commit surfacing is needed here.
+    await emitPropertyChangeWithTransaction(tx, {
       propertyId: property.id,
-      sourceType,
-      sourceEntityId,
+      sourceType: 'INTELLIGENCE_OBSERVATION',
+      sourceEntityId: `${source.key}:${observation.externalId}`,
       sourceRevision: String(source.revision),
       sourceRevisionOrdinal: source.revision,
       changeType: source.changeType,
@@ -398,12 +382,9 @@ async function matchProperties(
       canonicalActionId: null,
       canonicalEventId: null,
     });
-    if (!deduped) {
-      emittedChanges.push({ propertyId: property.id, sourceType, sourceEntityId, changeType: source.changeType });
-    }
     matchCount += 1;
   }
-  return { matchCount, emittedChanges };
+  return matchCount;
 }
 
 export async function ingestIntelligenceBatch(input: {
@@ -475,7 +456,6 @@ export async function ingestIntelligenceBatch(input: {
       let unchanged = 0;
       let revisions = 0;
       let matches = 0;
-      const emittedChanges: EmittedPropertyChangeRef[] = [];
 
       for (const observation of input.observations) {
         if (!observationWithinReviewedCoverage(observation, source.coverages)) {
@@ -541,7 +521,7 @@ export async function ingestIntelligenceBatch(input: {
         });
         const lifecycleAdvanced = latest != null
           && latest.lifecycleStatus !== observation.lifecycleStatus;
-        const matchResult = await matchProperties(tx, created.id, observation, {
+        matches += await matchProperties(tx, created.id, observation, {
           key: source.key,
           revision: created.revision,
           changeType: lifecycleAdvanced
@@ -552,8 +532,6 @@ export async function ingestIntelligenceBatch(input: {
           lifecycleAdvanced,
           previousObservationId: latest?.id ?? null,
         });
-        matches += matchResult.matchCount;
-        emittedChanges.push(...matchResult.emittedChanges);
         if (latest) {
           await tx.propertyChange.updateMany({
             where: {
@@ -617,18 +595,9 @@ export async function ingestIntelligenceBatch(input: {
         unchanged,
         revisions,
         matches,
-        emittedChanges,
       };
     });
-    // FRD §15 Phase 2 work item 5: fired only after the transaction above
-    // has actually committed, matching every other emitPropertyChange call
-    // site's "side effects only after commit" convention (requestRecompute
-    // is itself a real DomainEvent row write, not safe to run mid-tx).
-    const { emittedChanges, ...publicResult } = result;
-    for (const change of emittedChanges) {
-      await requestRecomputeForChange(change);
-    }
-    return { runId: run.id, ...publicResult, checkedThrough: input.checkedThrough };
+    return { runId: run.id, ...result, checkedThrough: input.checkedThrough };
   } catch (error) {
     await prisma.$transaction([
       prisma.intelligenceSourceRun.update({

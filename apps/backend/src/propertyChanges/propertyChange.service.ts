@@ -207,6 +207,11 @@ export async function emitPropertyChangeWithTransaction(
     });
   }
 
+  // Durability (finding 3): inside the SAME transaction as the change
+  // write above — see requestRecomputeForChange's doc for why this, not a
+  // post-commit best-effort call, is the actual fix.
+  await requestRecomputeForChange(change, undefined, tx);
+
   return { change, deduped: false };
 }
 
@@ -229,35 +234,57 @@ const PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER: Record<PropertyChangeType, Inte
 };
 
 /**
- * Best-effort: a recompute request is a downstream refresh signal, not part
- * of the change record's own correctness — mirrors
- * decisionPlatformChangeEmitter.ts's "never fails the caller's actual
- * write" pattern. Only called for a genuinely new (non-deduped) change;
- * requestRecompute's own idempotency key would converge a replay anyway,
- * but skipping avoids the redundant DomainEvent lookup.
+ * requestedContextVersion is set to the PropertyChange's own sourceRevision
+ * — without it, computeRecomputeIdempotencyKey falls back to a constant
+ * 'v0' for every call sharing the same (triggerType, sourceType,
+ * sourceEntityId, propertyId), and DomainEventsService.emit returns the
+ * FIRST-ever matching DomainEvent row for a duplicate idempotencyKey — so
+ * the second and every later revision of the same entity would silently
+ * never request a new recompute at all. sourceRevision is exactly "the
+ * entity's own revision" HI-REC-005 asks the idempotency key to converge
+ * on, and PropertyChange already carries it.
+ *
+ * Durability (Phase 2 follow-up review finding 3): passing `tx` (the SAME
+ * transaction the PropertyChange write itself used, see
+ * emitPropertyChangeWithTransaction below) makes the DomainEvent write
+ * atomic with that change — either both commit or neither does, so a
+ * canonical change can never commit while silently losing the recompute
+ * request that should follow from it. A thrown error in that case is
+ * deliberately NOT caught here — it must propagate to roll back the whole
+ * transaction, which is the durability guarantee itself. Only when no `tx`
+ * is supplied (a caller not yet updated to pass its own transaction) does
+ * this fall back to the original best-effort, catch-and-log contract —
+ * mirrors decisionPlatformChangeEmitter.ts's "never fails the caller's
+ * actual write" pattern for that case.
  */
 export async function requestRecomputeForChange(
-  change: { propertyId: string; sourceType: string; sourceEntityId: string; changeType: PropertyChangeType },
+  change: { propertyId: string; sourceType: string; sourceEntityId: string; sourceRevision: string; changeType: PropertyChangeType },
   requestRecomputeFn: typeof requestRecompute = requestRecompute,
+  tx?: ChangeTransaction,
 ): Promise<void> {
+  const doRequest = () => requestRecomputeFn({
+    propertyId: change.propertyId,
+    triggerType: PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER[change.changeType],
+    triggerEntityType: change.sourceType,
+    triggerEntityId: change.sourceEntityId,
+    changedFactKeys: [],
+    requestedContextVersion: change.sourceRevision,
+  }, undefined, tx);
+
+  if (tx) {
+    await doRequest();
+    return;
+  }
   try {
-    await requestRecomputeFn({
-      propertyId: change.propertyId,
-      triggerType: PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER[change.changeType],
-      triggerEntityType: change.sourceType,
-      triggerEntityId: change.sourceEntityId,
-      changedFactKeys: [],
-    });
+    await doRequest();
   } catch (err) {
     logger.error({ err, propertyId: change.propertyId, sourceType: change.sourceType, sourceEntityId: change.sourceEntityId }, '[propertyChange.service] failed to request intelligence recompute');
   }
 }
 
-export async function emitPropertyChange(input: PropertyChangeEmissionInput) {
-  const result = await prisma.$transaction((tx) =>
+export function emitPropertyChange(input: PropertyChangeEmissionInput) {
+  return prisma.$transaction((tx) =>
     emitPropertyChangeWithTransaction(tx, input));
-  if (!result.deduped) await requestRecomputeForChange(result.change);
-  return result;
 }
 
 export async function linkCanonicalActionToChange(input: {

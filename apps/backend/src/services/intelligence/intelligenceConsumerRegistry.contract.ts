@@ -7,6 +7,7 @@
  * processing exists (see prisma/schema.prisma), so intelligenceConsumerRegistry.ts
  * stays empty until then rather than carrying no-op handlers.
  */
+import type { IntelligenceRecomputeTriggerType } from '@prisma/client';
 
 export type IntelligenceResolutionMode = 'STATIC' | 'DYNAMIC';
 
@@ -45,13 +46,36 @@ export interface IntelligenceConsumerDefinition {
    * is enough for STATIC consumers and simple key-matching but not for a
    * resolver that queries by entity identity.
    */
+  /**
+   * triggerType is threaded through separately from triggerEntityType/
+   * triggerEntityId because MANUAL_REFRESH has no single changed entity to
+   * resolve against — HI-REC-003 requires it to execute (and therefore
+   * resolve targets for) every applicable consumer, not just the ones whose
+   * entity-specific query happens to match. A DYNAMIC resolver that only
+   * implements entity-reference matching will silently under-resolve on
+   * MANUAL_REFRESH; branch on triggerType === 'MANUAL_REFRESH' to return
+   * every currently-relevant target instead.
+   */
   resolveTargets?: (input: {
     propertyId: string;
     changedFactKeys: readonly string[];
+    triggerType: IntelligenceRecomputeTriggerType;
     triggerEntityType: string;
     triggerEntityId: string;
   }) => Promise<IntelligenceRecomputeTargetHandle[]>;
   recompute: (input: { propertyId: string; target: IntelligenceRecomputeTargetHandle }) => Promise<void>;
+  /**
+   * HI-REC-006: "while an affected consumer is pending or failed, its
+   * existing output shall be marked stale or unavailable according to its
+   * safety policy." Called once a target's retryPolicy.maxAttempts is
+   * exhausted (permanent failure, not an in-flight retry) — see
+   * attemptTarget in intelligenceRecompute.service.ts. Required whenever
+   * failureBehavior is MARK_STALE or MARK_UNAVAILABLE; omit only for
+   * RETRY_ONLY, where there is nothing else to do. Best-effort: a failure
+   * inside this hook is logged, never allowed to fail the target-processing
+   * loop it's called from.
+   */
+  onPermanentFailure?: (input: { propertyId: string; target: IntelligenceRecomputeTargetHandle; failureBehavior: IntelligenceRecomputeFailureBehavior }) => Promise<void>;
 }
 
 export function validateIntelligenceConsumerRegistry(
@@ -75,6 +99,9 @@ export function validateIntelligenceConsumerRegistry(
     }
     if (entry.timeoutMs <= 0) {
       issues.push(`intelligenceConsumerRegistry entry "${entry.consumerKey}" must declare a positive timeoutMs.`);
+    }
+    if (entry.failureBehavior !== 'RETRY_ONLY' && !entry.onPermanentFailure) {
+      issues.push(`intelligenceConsumerRegistry entry "${entry.consumerKey}" declares failureBehavior "${entry.failureBehavior}" but no onPermanentFailure handler — nothing would actually mark its output stale/unavailable. Declare a real handler, or use RETRY_ONLY if there is genuinely nothing to mark.`);
     }
   }
   return issues;

@@ -28,6 +28,15 @@ function makeFakeDb() {
         if (orderBy?.requestedAt === 'desc') matches = matches.sort((a, b) => b.requestedAt - a.requestedAt);
         return matches[0] ?? null;
       },
+      findMany: async ({ where, orderBy, take, include }) => {
+        let matches = [...runs.values()].filter((r) => !where?.propertyId || r.propertyId === where.propertyId);
+        if (orderBy?.requestedAt === 'desc') matches = matches.sort((a, b) => b.requestedAt - a.requestedAt);
+        if (typeof take === 'number') matches = matches.slice(0, take);
+        if (include?.targets) {
+          matches = matches.map((run) => ({ ...run, targets: [...targets.values()].filter((t) => t.recomputeRunId === run.id) }));
+        }
+        return matches;
+      },
       create: async ({ data }) => {
         if (runsByIdempotencyKey.has(data.idempotencyKey)) {
           const err = new Error('Unique constraint failed on idempotencyKey');
@@ -52,6 +61,20 @@ function makeFakeDb() {
         runs.set(where.id, updated);
         runsByIdempotencyKey.set(updated.idempotencyKey, updated);
         return updated;
+      },
+      updateMany: async ({ where, data }) => {
+        const matchesClause = (row, clause) => {
+          if (clause.status && row.status !== clause.status) return false;
+          if (clause.startedAt?.lt && !(row.startedAt && row.startedAt < clause.startedAt.lt)) return false;
+          return true;
+        };
+        const row = runs.get(where.id);
+        if (!row) return { count: 0 };
+        const orMatches = !where.OR || where.OR.some((clause) => matchesClause(row, clause));
+        if (!orMatches) return { count: 0 };
+        runs.set(where.id, { ...row, ...data });
+        runsByIdempotencyKey.set(row.idempotencyKey, { ...row, ...data });
+        return { count: 1 };
       },
     },
     intelligenceRecomputeTarget: {
@@ -83,7 +106,14 @@ function makeFakeDb() {
       updateMany: async ({ where, data }) => {
         const row = targets.get(where.id);
         if (!row) return { count: 0 };
-        if (where.status?.in && !where.status.in.includes(row.status)) return { count: 0 };
+        const matchesClause = (clause) => {
+          if (clause.status?.in && !clause.status.in.includes(row.status)) return false;
+          if (clause.status && typeof clause.status === 'string' && row.status !== clause.status) return false;
+          if (clause.startedAt?.lt && !(row.startedAt && row.startedAt < clause.startedAt.lt)) return false;
+          return true;
+        };
+        const matched = where.OR ? where.OR.some(matchesClause) : matchesClause(where);
+        if (!matched) return { count: 0 };
         const updated = { ...row, ...data };
         if (data.attempts?.increment) updated.attempts = row.attempts + data.attempts.increment;
         targets.set(row.id, updated);
@@ -246,7 +276,7 @@ test('materializeTargets creates one PROPERTY target for a STATIC consumer and o
   assert.deepEqual(dynamicTargets.map((t) => t.targetKey).sort(), ['Snapshot:1', 'Snapshot:2']);
 });
 
-test('materializeTargets passes triggerEntityType/triggerEntityId through to a DYNAMIC consumer\'s resolveTargets', async () => {
+test('materializeTargets passes triggerType/triggerEntityType/triggerEntityId through to a DYNAMIC consumer\'s resolveTargets', async () => {
   const db = makeFakeDb();
   const run = await createOrClaimRecomputeRun(db, trigger());
   let received = null;
@@ -255,12 +285,39 @@ test('materializeTargets passes triggerEntityType/triggerEntityId through to a D
   });
   await materializeTargets(
     db,
-    { id: run.id, propertyId: run.propertyId, changedFactKeys: ['fact.a'], triggerEntityType: 'Incident', triggerEntityId: 'incident-9' },
+    { id: run.id, propertyId: run.propertyId, changedFactKeys: ['fact.a'], triggerType: 'SOURCE_RECORD_CHANGED', triggerEntityType: 'Incident', triggerEntityId: 'incident-9' },
     [consumer],
   );
+  assert.equal(received.triggerType, 'SOURCE_RECORD_CHANGED');
   assert.equal(received.triggerEntityType, 'Incident');
   assert.equal(received.triggerEntityId, 'incident-9');
   assert.deepEqual(received.changedFactKeys, ['fact.a']);
+});
+
+// Finding (Phase 2 follow-up review): manual full refresh has no single
+// changed entity, but a DYNAMIC resolver with no visibility into triggerType
+// could only ever run its entity-specific query — silently under-resolving
+// on MANUAL_REFRESH. triggerType is now threaded through so a resolver can
+// branch.
+test('materializeTargets passes triggerType through as MANUAL_REFRESH so a DYNAMIC resolver can implement full-refresh behavior', async () => {
+  const db = makeFakeDb();
+  const run = await createOrClaimRecomputeRun(db, trigger({ triggerType: 'MANUAL_REFRESH' }));
+  let received = null;
+  const consumer = dynamicConsumer({
+    resolveTargets: async (input) => {
+      received = input;
+      return input.triggerType === 'MANUAL_REFRESH'
+        ? [{ targetKey: 'a', targetType: 'X', targetId: 'a', targetVersion: null }, { targetKey: 'b', targetType: 'X', targetId: 'b', targetVersion: null }]
+        : [];
+    },
+  });
+  const handles = await materializeTargets(
+    db,
+    { id: run.id, propertyId: run.propertyId, changedFactKeys: [], triggerType: 'MANUAL_REFRESH', triggerEntityType: 'Property', triggerEntityId: run.propertyId },
+    [consumer],
+  );
+  assert.equal(received.triggerType, 'MANUAL_REFRESH');
+  assert.equal(handles.length, 2, 'a MANUAL_REFRESH-aware resolver can return every relevant target, not just an entity-matched subset');
 });
 
 test('materializeTargets is idempotent — re-materializing the same run/consumer/target does not duplicate or reset', async () => {
@@ -314,6 +371,20 @@ test('processTarget does not reclaim an already-PROCESSING target', async () => 
   await db.intelligenceRecomputeTarget.update({ where: { id: target.id }, data: { status: 'PROCESSING' } });
   const outcome = await processTarget(db, run.propertyId, target, staticConsumer());
   assert.equal(outcome, 'NOT_CLAIMED');
+});
+
+// Finding (Phase 2 follow-up review): a crashed process leaves a target
+// claimed PROCESSING forever — withTimeout only bounds an in-process await,
+// not a dead process. A target still PROCESSING well past a generous
+// multiple of the consumer's own timeoutMs must be reclaimable.
+test('processTarget reclaims a target stuck PROCESSING well past the consumer\'s timeoutMs (crash recovery)', async () => {
+  const db = makeFakeDb();
+  const run = await createOrClaimRecomputeRun(db, trigger());
+  const [target] = await materializeTargets(db, { id: run.id, propertyId: run.propertyId, changedFactKeys: ['fact.a'] }, [staticConsumer()]);
+  const longAgo = new Date(Date.now() - 10 * 60_000); // 10 minutes ago; default consumer timeoutMs is 1000ms
+  await db.intelligenceRecomputeTarget.update({ where: { id: target.id }, data: { status: 'PROCESSING', startedAt: longAgo } });
+  const outcome = await processTarget(db, run.propertyId, target, staticConsumer());
+  assert.equal(outcome, 'SUCCEEDED', 'a target stuck PROCESSING from a crashed process must be reclaimable, not stuck forever');
 });
 
 // --- deriveRunStatus ---
@@ -410,6 +481,45 @@ test('processRecomputeRequestedEvent: a redelivered (already-processed) event do
   assert.equal(targetsBefore.length, targetsAfter.length);
 });
 
+// Finding (Phase 2 follow-up review): a crash between marking the run
+// PROCESSING and it reaching a terminal status previously left it stuck
+// forever — a retry delivery would see status !== 'PENDING' and bail
+// immediately, and nothing would ever reclaim it.
+test('processRecomputeRequestedEvent: a run stuck PROCESSING from a crashed delivery is reclaimed and completed by a later delivery', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  const registry = [staticConsumer()];
+  const t = trigger();
+  const run = await createOrClaimRecomputeRun(db, t);
+  await db.intelligenceRecomputeRun.update({
+    where: { id: run.id },
+    data: { status: 'PROCESSING', startedAt: new Date(Date.now() - 60 * 60_000) }, // 1 hour ago
+  });
+
+  const result = await processRecomputeRequestedEvent(db, t, registry, emit);
+  assert.equal(result.status, 'SUCCEEDED', 'the stale run must be reclaimed and actually processed to completion, not left stuck');
+  const targets = await db.intelligenceRecomputeTarget.findMany({ where: { recomputeRunId: run.id } });
+  assert.equal(targets.length, 1);
+  assert.equal(targets[0].status, 'SUCCEEDED');
+});
+
+test('processRecomputeRequestedEvent: a run PROCESSING for only a short time is left alone (not stale yet)', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  const registry = [staticConsumer()];
+  const t = trigger();
+  const run = await createOrClaimRecomputeRun(db, t);
+  await db.intelligenceRecomputeRun.update({
+    where: { id: run.id },
+    data: { status: 'PROCESSING', startedAt: new Date() },
+  });
+
+  const result = await processRecomputeRequestedEvent(db, t, registry, emit);
+  assert.equal(result.status, 'PROCESSING', 'a freshly in-flight run must not be reclaimed out from under its real owner');
+  const targets = await db.intelligenceRecomputeTarget.findMany({ where: { recomputeRunId: run.id } });
+  assert.equal(targets.length, 0, 'no processing should have happened for the not-yet-stale run');
+});
+
 test('processRecomputeRequestedEvent: a failing consumer with retry budget remaining leaves the run PROCESSING and emits a retry request', async () => {
   const db = makeFakeDb();
   const { events, emit } = collectEmittedEvents();
@@ -428,6 +538,51 @@ test('processRecomputeRequestedEvent: a failing consumer with retry budget exhau
   const run = await processRecomputeRequestedEvent(db, trigger(), [failing], emit);
   assert.equal(run.status, 'FAILED');
   assert.equal(events.filter((e) => e.type === 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED').length, 0);
+});
+
+// Finding (Phase 2 follow-up review): every consumer declares
+// failureBehavior, but nothing read it — a permanently-failed target's
+// declared MARK_STALE/MARK_UNAVAILABLE policy never actually ran.
+test('processRecomputeRequestedEvent: onPermanentFailure fires once retry budget is exhausted, with the failureBehavior and target handle', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  let received = null;
+  const failing = staticConsumer({
+    retryPolicy: { maxAttempts: 1, backoffMs: 1000 },
+    failureBehavior: 'MARK_STALE',
+    recompute: async () => { throw new Error('boom'); },
+    onPermanentFailure: async (input) => { received = input; },
+  });
+  await processRecomputeRequestedEvent(db, trigger(), [failing], emit);
+  assert.ok(received, 'onPermanentFailure must be called once the target is permanently FAILED');
+  assert.equal(received.failureBehavior, 'MARK_STALE');
+  assert.equal(received.propertyId, 'property-1');
+  assert.equal(received.target.targetKey, 'PROPERTY');
+});
+
+test('processRecomputeRequestedEvent: onPermanentFailure does NOT fire while retry budget still remains', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  let calls = 0;
+  const failing = staticConsumer({
+    retryPolicy: { maxAttempts: 3, backoffMs: 1000 },
+    recompute: async () => { throw new Error('boom'); },
+    onPermanentFailure: async () => { calls += 1; },
+  });
+  await processRecomputeRequestedEvent(db, trigger(), [failing], emit);
+  assert.equal(calls, 0, 'a target still eligible for retry has not permanently failed yet');
+});
+
+test('processRecomputeRequestedEvent: a throwing onPermanentFailure handler does not affect the target\'s already-FAILED status', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  const failing = staticConsumer({
+    retryPolicy: { maxAttempts: 1, backoffMs: 1000 },
+    recompute: async () => { throw new Error('boom'); },
+    onPermanentFailure: async () => { throw new Error('handler itself broke'); },
+  });
+  const run = await processRecomputeRequestedEvent(db, trigger(), [failing], emit);
+  assert.equal(run.status, 'FAILED', 'onPermanentFailure failing must not mask the real target outcome');
 });
 
 test('processRecomputeRequestedEvent: one failing and one succeeding consumer (both retry-exhausted/terminal) rolls the run to PARTIAL', async () => {
@@ -475,4 +630,56 @@ test('getPropertyRefreshState reflects the most recently requested run\'s status
   await processRecomputeRequestedEvent(db, trigger(), [staticConsumer()], emit);
   const state = await getPropertyRefreshState(db, 'property-1');
   assert.equal(state, 'CURRENT');
+});
+
+// Finding (Phase 2 follow-up review): trusting only the latest RUN's own
+// rolled-up status is wrong — a later run triggered by an unrelated fact
+// change can resolve a completely different subset of consumers, succeed,
+// and mask an earlier run's still-permanently-failed consumer.
+test('getPropertyRefreshState is not masked by a later, unrelated run that succeeds for a different consumer', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  const failingCoverage = staticConsumer({
+    consumerKey: 'test.coverage', relevantFactKeys: ['fact.coverage'],
+    retryPolicy: { maxAttempts: 1, backoffMs: 1000 },
+    recompute: async () => { throw new Error('coverage boom'); },
+  });
+  const okPersonalization = staticConsumer({ consumerKey: 'test.personalization', relevantFactKeys: ['fact.personalization'] });
+  const registry = [failingCoverage, okPersonalization];
+
+  // Run 1: triggered by a fact only coverage cares about — permanently fails.
+  await processRecomputeRequestedEvent(db, trigger({ changedFactKeys: ['fact.coverage'], requestedContextVersion: 'v1' }), registry, emit);
+  // Run 2: triggered by an unrelated fact only personalization cares about — succeeds cleanly.
+  await processRecomputeRequestedEvent(db, trigger({ changedFactKeys: ['fact.personalization'], requestedContextVersion: 'v2' }), registry, emit);
+
+  const state = await getPropertyRefreshState(db, 'property-1', registry);
+  // Genuinely PARTIALLY_REFRESHED, not CURRENT: one consumer (personalization)
+  // is current, another (coverage) is permanently failed — the point of this
+  // test is that it is NOT simply "CURRENT" (which run 2 alone would report).
+  assert.equal(state, 'PARTIALLY_REFRESHED', 'coverage\'s permanent failure in run 1 must not be masked by run 2 succeeding for an unrelated consumer');
+});
+
+test('getPropertyRefreshState reports CURRENT once a previously-failed consumer later succeeds', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  let shouldFail = true;
+  const flaky = staticConsumer({
+    retryPolicy: { maxAttempts: 1, backoffMs: 1000 },
+    recompute: async () => { if (shouldFail) throw new Error('boom'); },
+  });
+  await processRecomputeRequestedEvent(db, trigger({ requestedContextVersion: 'v1' }), [flaky], emit);
+  assert.equal(await getPropertyRefreshState(db, 'property-1', [flaky]), 'DEGRADED');
+
+  // A real gap, not an arbitrary test delay: aggregation orders targets by
+  // requestedAt/createdAt (millisecond resolution, no monotonic sequence
+  // column) — two runs genuinely tied at the same millisecond have no
+  // reliable tiebreak. In production, distinct runs are triggered by
+  // distinct real-world domain events processed by a worker, not
+  // back-to-back synchronous calls, so this reflects realistic separation
+  // rather than papering over the assertion below.
+  await new Promise((resolve) => setTimeout(resolve, 2));
+
+  shouldFail = false;
+  await processRecomputeRequestedEvent(db, trigger({ requestedContextVersion: 'v2' }), [flaky], emit);
+  assert.equal(await getPropertyRefreshState(db, 'property-1', [flaky]), 'CURRENT', 'the same consumer\'s later success must supersede its earlier failure');
 });
