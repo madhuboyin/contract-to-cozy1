@@ -31,6 +31,7 @@ type DomainEventType =
   | 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED';
 
 export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
+export const DOMAIN_EVENT_LEASE_MS = 15 * 60_000;
 
 // W4 item 1: small, job-scoped dependency interface (see
 // reserveFundBalanceReminder.job.ts for the pattern).
@@ -60,10 +61,6 @@ function computeBackoffMinutes(attempts: number) {
   if (attempts === 4) return 10;
   if (attempts === 5) return 30;
   return 60;
-}
-
-function nowMinusMinutes(mins: number) {
-  return new Date(Date.now() - mins * 60 * 1000);
 }
 
 function mustHave<T>(v: T | null | undefined, msg: string): T {
@@ -268,6 +265,7 @@ function handleRecomputeRequested(ev: any, deps: ProcessDomainEventsDeps) {
   const triggerEntityType = ev.payload?.triggerEntityType;
   const triggerEntityId = ev.payload?.triggerEntityId;
   const changedFactKeys = Array.isArray(ev.payload?.changedFactKeys) ? ev.payload.changedFactKeys : [];
+  const changedReferences = Array.isArray(ev.payload?.changedReferences) ? ev.payload.changedReferences : [];
   const idempotencyKey = ev.payload?.idempotencyKey ?? ev.idempotencyKey;
 
   mustHave(propertyId, 'Recompute REQUESTED event missing propertyId');
@@ -282,6 +280,7 @@ function handleRecomputeRequested(ev: any, deps: ProcessDomainEventsDeps) {
     triggerEntityType,
     triggerEntityId,
     changedFactKeys,
+    changedReferences,
     requestedContextVersion: ev.payload?.requestedContextVersion ?? null,
     idempotencyKey,
   });
@@ -311,9 +310,14 @@ export async function processDomainEventsJob(
   const { prisma } = deps;
   const batchSize = opts?.batchSize ?? 25;
 
+  const now = new Date();
   const pending = await prisma.domainEvent.findMany({
     where: {
-      OR: [{ status: 'PENDING' as DomainEventStatus }, { status: 'FAILED' as DomainEventStatus }],
+      OR: [
+        { status: 'PENDING' as DomainEventStatus, availableAt: { lte: now } },
+        { status: 'FAILED' as DomainEventStatus, availableAt: { lte: now } },
+        { status: 'PROCESSING' as DomainEventStatus, leaseExpiresAt: { lte: now } },
+      ],
     },
     orderBy: { createdAt: 'asc' },
     take: batchSize,
@@ -326,22 +330,47 @@ export async function processDomainEventsJob(
   let deadLettered = 0;
 
   for (const ev of pending) {
-    if (ev.status === 'FAILED') {
-      const waitMins = computeBackoffMinutes(ev.attempts ?? 0);
-      const eligibleAfter = nowMinusMinutes(waitMins);
-      if (ev.updatedAt > eligibleAfter) continue;
-    }
+    // The database predicate is authoritative, but retain a defensive
+    // eligibility check for an event returned by a lagging replica/read or
+    // an older row that predates availableAt.
+    const eligibleAt = ev.availableAt instanceof Date
+      ? ev.availableAt
+      : ev.status === 'FAILED' && ev.updatedAt instanceof Date
+        ? new Date(ev.updatedAt.getTime() + computeBackoffMinutes(ev.attempts ?? 0) * 60_000)
+        : null;
+    if (eligibleAt && eligibleAt > now) continue;
 
-    // Acquire lock
+    // Acquire or reclaim the durable lease. A worker crash cannot strand a
+    // PROCESSING event because the expired lease makes it eligible again.
+    const claimedAt = new Date();
     const locked = await prisma.domainEvent.updateMany({
-      where: { id: ev.id, status: ev.status as DomainEventStatus },
+      where: {
+        id: ev.id,
+        status: ev.status as DomainEventStatus,
+        ...(ev.status === 'PROCESSING'
+          ? { leaseExpiresAt: { lte: claimedAt } }
+          : { availableAt: { lte: claimedAt } }),
+      },
       data: {
         status: 'PROCESSING' as DomainEventStatus,
         attempts: { increment: 1 },
         lastError: null,
+        processingStartedAt: claimedAt,
+        leaseExpiresAt: new Date(claimedAt.getTime() + DOMAIN_EVENT_LEASE_MS),
       },
     });
     if (locked.count !== 1) continue;
+
+    // Long fan-out recomputes can exceed the initial lease. Renew it while
+    // this worker is alive so another replica cannot reclaim the same event
+    // and overlap target processing. A crash stops the heartbeat naturally;
+    // the last lease then expires and makes the event recoverable.
+    const leaseHeartbeat = setInterval(() => {
+      void prisma.domainEvent.updateMany({
+        where: { id: ev.id, status: 'PROCESSING' as DomainEventStatus },
+        data: { leaseExpiresAt: new Date(Date.now() + DOMAIN_EVENT_LEASE_MS) },
+      }).catch(() => undefined);
+    }, Math.floor(DOMAIN_EVENT_LEASE_MS / 3));
 
     try {
       const type = ev.type as DomainEventType;
@@ -395,6 +424,8 @@ export async function processDomainEventsJob(
           status: 'PROCESSED' as DomainEventStatus,
           processedAt: new Date(),
           lastError: null,
+          processingStartedAt: null,
+          leaseExpiresAt: null,
           ...(processingOutcome
             ? {
                 payload: {
@@ -414,15 +445,23 @@ export async function processDomainEventsJob(
       const nextAttempts = (ev.attempts ?? 0) + 1;
       const terminalStatus: DomainEventStatus =
         nextAttempts >= MAX_DOMAIN_EVENT_ATTEMPTS ? 'DEAD_LETTER' : 'FAILED';
+      const availableAt = terminalStatus === 'FAILED'
+        ? new Date(Date.now() + computeBackoffMinutes(nextAttempts) * 60_000)
+        : new Date();
       await prisma.domainEvent.update({
         where: { id: ev.id },
         data: {
           status: terminalStatus,
           lastError: msg.slice(0, 2000),
+          availableAt,
+          processingStartedAt: null,
+          leaseExpiresAt: null,
         },
       });
       if (terminalStatus === 'DEAD_LETTER') deadLettered += 1;
       else failed += 1;
+    } finally {
+      clearInterval(leaseHeartbeat);
     }
   }
 

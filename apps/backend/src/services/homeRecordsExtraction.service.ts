@@ -17,6 +17,7 @@ import { documentIntelligenceService, type DocumentInsights } from './documentIn
 import { homeRecordsService } from './homeRecords.service';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 
 // Best-effort bridge into Home Operations (Slice 4 of the continuity
 // plan) — re-reads the record's freshly recomputed needsReview/
@@ -480,6 +481,21 @@ export class HomeRecordsExtractionService {
         },
       });
 
+      await emitPropertyChangeWithTransaction(tx, {
+        propertyId: input.propertyId,
+        sourceType: 'DOCUMENT',
+        sourceEntityId: version.id,
+        sourceRevision: `WARRANTY:${created.id}`,
+        changeType: 'DOCUMENT_PROMOTED',
+        changedFactKeys: ['coverage.warranty'],
+        canonicalReferences: [{ entityType: 'WARRANTY', entityId: created.id }],
+        occurredAt: new Date(),
+        detectedAt: new Date(),
+        confidence: 1,
+        sourceHealth: 'CURRENT',
+        signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
+      });
+
       return created;
     });
 
@@ -626,6 +642,21 @@ export class HomeRecordsExtractionService {
         },
       });
 
+      await emitPropertyChangeWithTransaction(tx, {
+        propertyId: input.propertyId,
+        sourceType: 'DOCUMENT',
+        sourceEntityId: version.id,
+        sourceRevision: `EXPENSE:${created.id}`,
+        changeType: 'DOCUMENT_PROMOTED',
+        changedFactKeys: ['financial.expense'],
+        canonicalReferences: [{ entityType: 'EXPENSE', entityId: created.id }],
+        occurredAt: new Date(),
+        detectedAt: new Date(),
+        confidence: 1,
+        sourceHealth: 'CURRENT',
+        signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
+      });
+
       return created;
     });
 
@@ -761,6 +792,23 @@ export class HomeRecordsExtractionService {
       // exact "invented certainty" failure mode the audit flagged. Once that
       // per-fact confirmation lands, the coverage/insurance surfaces already
       // reflect it directly.
+      await emitPropertyChangeWithTransaction(tx, {
+        propertyId: input.propertyId,
+        sourceType: 'DOCUMENT',
+        sourceEntityId: version.id,
+        sourceRevision: `INSURANCE_POLICY_TERM:${staged.term.id}`,
+        changeType: 'DOCUMENT_PROMOTED',
+        changedFactKeys: ['coverage.insurancePolicy'],
+        canonicalReferences: [
+          { entityType: 'INSURANCE_POLICY', entityId: staged.policy.id },
+          { entityType: 'INSURANCE_POLICY_TERM', entityId: staged.term.id },
+        ],
+        occurredAt: new Date(),
+        detectedAt: new Date(),
+        confidence: 0.9,
+        sourceHealth: 'CURRENT',
+        signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: false, urgentSafetyCondition: false, canonicalActionPriority: null },
+      });
     });
 
     return staged;

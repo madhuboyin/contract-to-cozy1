@@ -18,6 +18,7 @@ export type EmitDomainEventInput = {
   propertyId?: string | null;
   userId?: string | null;
   idempotencyKey?: string | null;
+  availableAt?: Date;
   payload: any;
 };
 
@@ -49,6 +50,7 @@ export class DomainEventsService {
         propertyId: input.propertyId ?? null,
         userId: input.userId ?? null,
         idempotencyKey: input.idempotencyKey ?? null,
+        availableAt: input.availableAt ?? new Date(),
         payload: input.payload,
       },
     });

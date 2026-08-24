@@ -2345,6 +2345,37 @@ export interface CreateBookingInput {
 // Home Intelligence Functional Completeness FRD HI-REC-007 — mirrors backend
 // PropertyRefreshState (intelligenceRecompute.service.ts).
 export type PropertyIntelligenceRefreshState = 'CURRENT' | 'REFRESHING' | 'PARTIALLY_REFRESHED' | 'DEGRADED' | 'UNKNOWN';
+export interface PropertyIntelligenceRefreshCapability {
+  consumerKey: string;
+  targetKey: string;
+  status: 'CURRENT' | 'REFRESHING' | 'STALE' | 'UNAVAILABLE';
+  reason: string | null;
+  lastError: string | null;
+  updatedAt: string;
+}
+export interface PropertyIntelligenceRefreshDetails {
+  propertyId: string;
+  state: PropertyIntelligenceRefreshState;
+  capabilities: PropertyIntelligenceRefreshCapability[];
+}
+export interface AdminIntelligenceRecomputeTarget {
+  id: string;
+  consumerKey: string;
+  targetKey: string;
+  status: 'PENDING' | 'PROCESSING' | 'SUCCEEDED' | 'SKIPPED' | 'FAILED';
+  attempts: number;
+  lastError: string | null;
+}
+export interface AdminIntelligenceRecomputeRun {
+  id: string;
+  status: 'PENDING' | 'PROCESSING' | 'PARTIAL' | 'SUCCEEDED' | 'FAILED';
+  triggerType: string;
+  requestedAt: string;
+  targets: AdminIntelligenceRecomputeTarget[];
+}
+export interface AdminIntelligenceRefreshDetails extends PropertyIntelligenceRefreshDetails {
+  recentRuns: AdminIntelligenceRecomputeRun[];
+}
 
 /**
  * Maintenance Task Template

@@ -13,7 +13,7 @@ import { prisma } from '../lib/prisma';
 import {
   requestRecompute,
   requestTargetRetry,
-  getPropertyRefreshState,
+  getPropertyRefreshDetails,
 } from './intelligenceRecompute/intelligenceRecompute.service';
 
 export class AdminIntelligenceRecomputeError extends Error {
@@ -63,7 +63,12 @@ export async function retryFailedTarget(recomputeRunId: string, targetId: string
   if (target.status !== 'FAILED') {
     throw new AdminIntelligenceRecomputeError('TARGET_NOT_FAILED', `Target "${targetId}" is "${target.status}", not FAILED — nothing to retry.`);
   }
-  const event = await requestTargetRetry({ recomputeRunId, targetId, attempts: target.attempts });
+  const event = await requestTargetRetry({
+    recomputeRunId,
+    targetId,
+    attempts: target.attempts,
+    requestId: randomUUID(),
+  });
   return { requested: true, eventId: event.id };
 }
 
@@ -72,12 +77,12 @@ export async function getAdminPropertyRefreshState(propertyId: string) {
   if (!property) {
     throw new AdminIntelligenceRecomputeError('PROPERTY_NOT_FOUND', `No property with id "${propertyId}".`);
   }
-  const state = await getPropertyRefreshState(prisma, propertyId);
+  const refresh = await getPropertyRefreshDetails(prisma, propertyId);
   const recentRuns = await prisma.intelligenceRecomputeRun.findMany({
     where: { propertyId },
     orderBy: { requestedAt: 'desc' },
     take: 10,
     include: { targets: true },
   });
-  return { propertyId, state, recentRuns };
+  return { propertyId, ...refresh, recentRuns };
 }

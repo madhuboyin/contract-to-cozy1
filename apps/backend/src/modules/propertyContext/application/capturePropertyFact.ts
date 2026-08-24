@@ -34,6 +34,7 @@ import {
   radarReconciliationReasonForFactKey,
   requestRadarPropertyReconciliation,
 } from '../../homeEventRadar/services/radarPropertyReconciliation.service';
+import { emitPropertyChangeWithTransaction } from '../../../propertyChanges/propertyChange.service';
 
 const nullableBoolean = z.boolean().nullable();
 const nullableNonNegativeNumber = z.number().nonnegative().nullable();
@@ -310,6 +311,26 @@ export async function capturePropertyFact(
         },
       });
       evidenceId = evidence.id;
+      await emitPropertyChangeWithTransaction(tx, {
+        propertyId,
+        sourceType: 'PROPERTY_FACT',
+        sourceEntityId: evidence.id,
+        sourceRevision: observedAt.toISOString(),
+        changeType: 'PROPERTY_FACT_CHANGED',
+        changedFactKeys: [factKey],
+        canonicalReferences: [{ entityType: 'PROPERTY', entityId: propertyId, fieldPath: factKey }],
+        occurredAt: observedAt,
+        detectedAt: observedAt,
+        confidence: evidence.confidence,
+        sourceHealth: 'CURRENT',
+        signals: {
+          homeownerRelevant: true,
+          lifecycleAdvanced: false,
+          propertyEffectConfirmed: !unknownAnswer,
+          urgentSafetyCondition: factKey.startsWith('safety.') && value === true,
+          canonicalActionPriority: null,
+        },
+      });
       if (radarReconciliationReason) {
         await requestRadarPropertyReconciliation(
           {

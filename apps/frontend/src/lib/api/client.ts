@@ -18,6 +18,7 @@ import {
   Booking,
   CreateBookingInput,
   PropertyIntelligenceRefreshState,
+  PropertyIntelligenceRefreshDetails,
   Review,
   CreateReviewInput,
   PaginationParams,
@@ -3087,11 +3088,41 @@ class APIClient {
   // property's intelligence outputs are current, refreshing, partially
   // refreshed, or degraded.
   async getPropertyIntelligenceRefreshState(propertyId: string): Promise<PropertyIntelligenceRefreshState> {
-    const response = await this.request<{ propertyId: string; state: PropertyIntelligenceRefreshState }>(
+    return (await this.getPropertyIntelligenceRefreshDetails(propertyId)).state;
+  }
+
+  async getPropertyIntelligenceRefreshDetails(propertyId: string): Promise<PropertyIntelligenceRefreshDetails> {
+    const response = await this.request<PropertyIntelligenceRefreshDetails>(
       `/api/properties/${propertyId}/intelligence-refresh-state`,
     );
-    if (response.success && response.data) return response.data.state;
+    if (response.success && response.data) return response.data;
     throw new APIError('Failed to load intelligence refresh state', 'INTELLIGENCE_REFRESH_STATE_ERROR');
+  }
+
+  async adminGetIntelligenceRefreshDetails(propertyId: string): Promise<import('@/types').AdminIntelligenceRefreshDetails> {
+    const response = await this.request<import('@/types').AdminIntelligenceRefreshDetails>(
+      `/api/admin/intelligence-recompute/properties/${propertyId}/refresh-state`,
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError('Failed to load intelligence recompute state', 'ADMIN_INTELLIGENCE_RECOMPUTE_ERROR');
+  }
+
+  async adminTriggerIntelligenceRefresh(propertyId: string): Promise<{ requested: boolean; eventId: string }> {
+    const response = await this.request<{ requested: boolean; eventId: string }>(
+      `/api/admin/intelligence-recompute/properties/${propertyId}/refresh`,
+      { method: 'POST' },
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError('Failed to trigger intelligence refresh', 'ADMIN_INTELLIGENCE_RECOMPUTE_ERROR');
+  }
+
+  async adminRetryIntelligenceTarget(runId: string, targetId: string): Promise<{ requested: boolean; eventId: string }> {
+    const response = await this.request<{ requested: boolean; eventId: string }>(
+      `/api/admin/intelligence-recompute/runs/${runId}/targets/${targetId}/retry`,
+      { method: 'POST' },
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError('Failed to retry intelligence target', 'ADMIN_INTELLIGENCE_RECOMPUTE_ERROR');
   }
 
   async getCapabilitySuggestions(

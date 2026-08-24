@@ -55,18 +55,21 @@ test('the attention-priority registry includes both Fix ranking owners and valid
   }
 });
 
-// FRD §15 Phase 2 work item 4 — 5 of the 10 "initial high-value consumers"
-// are registered for real this pass; the other 5 are deliberately deferred
-// (see intelligenceConsumerRegistry.ts's header) rather than stubbed.
-test('the intelligence consumer registry has exactly the 8 consumers registered so far (2 of the FRD\'s 10 remain deferred), each with a real recompute handler', () => {
+test('the intelligence consumer registry covers every Phase 2 intelligence projection with a real recompute handler', () => {
   const keys = INTELLIGENCE_CONSUMER_REGISTRY.map((entry) => entry.consumerKey).sort();
   assert.deepEqual(keys, [
+    'capability-suggestions',
     'compound-radar',
     'coverage',
+    'home-actions',
     'home-briefing',
     'maintenance-prediction',
+    'orchestration',
+    'ownership-cost-refinance',
     'personalization',
+    'property-context',
     'recommendation-snapshots',
+    'resolution-center',
     'risk-assessment',
     'sale-readiness',
   ]);
@@ -100,23 +103,17 @@ test('validateIntelligenceConsumerRegistry fails fast on a STATIC consumer that 
   assert.ok(issues.some((issue) => issue.includes('risk-assessment') && issue.includes('STATIC but declares a resolveTargets resolver')));
 });
 
-// Finding (Phase 2 follow-up review): a declared MARK_STALE/MARK_UNAVAILABLE
-// failureBehavior with no onPermanentFailure handler is an unenforced claim
-// — HI-REC-006's "existing output shall be marked stale" promise silently
-// wouldn't happen. Machine-verifiable now rather than only prose-documented.
-test('validateIntelligenceConsumerRegistry fails fast on MARK_STALE with no onPermanentFailure handler', () => {
+test('validateIntelligenceConsumerRegistry fails fast on RETRY_ONLY because permanent failure needs durable currentness', () => {
   const bad = INTELLIGENCE_CONSUMER_REGISTRY.map((entry) =>
-    entry.consumerKey === 'maintenance-prediction' ? { ...entry, failureBehavior: 'MARK_STALE', onPermanentFailure: undefined } : entry);
+    entry.consumerKey === 'maintenance-prediction' ? { ...entry, failureBehavior: 'RETRY_ONLY' } : entry);
   const issues = validateIntelligenceConsumerRegistry(bad);
-  assert.ok(issues.some((issue) => issue.includes('maintenance-prediction') && issue.includes('no onPermanentFailure handler')));
+  assert.ok(issues.some((issue) => issue.includes('maintenance-prediction') && issue.includes('RETRY_ONLY')));
 });
 
-test('every real consumer\'s failureBehavior is honest: RETRY_ONLY unless a real onPermanentFailure handler is declared', () => {
+test('every real consumer persists stale or unavailable currentness after permanent failure', () => {
   assert.deepEqual(validateIntelligenceConsumerRegistry(INTELLIGENCE_CONSUMER_REGISTRY), []);
   for (const entry of INTELLIGENCE_CONSUMER_REGISTRY) {
-    if (entry.failureBehavior !== 'RETRY_ONLY') {
-      assert.equal(typeof entry.onPermanentFailure, 'function', `${entry.consumerKey} declares ${entry.failureBehavior} and must have a real handler`);
-    }
+    assert.notEqual(entry.failureBehavior, 'RETRY_ONLY');
   }
 });
 

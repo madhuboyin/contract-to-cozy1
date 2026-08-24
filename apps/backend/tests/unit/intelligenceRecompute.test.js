@@ -15,9 +15,20 @@ function makeFakeDb() {
   const runsByIdempotencyKey = new Map();
   const targets = new Map(); // key: id
   const targetsByUniqueKey = new Map(); // key: `${recomputeRunId}:${consumerKey}:${targetKey}`
+  const currentness = new Map();
 
   const db = {
-    __store: { runs, targets },
+    __store: { runs, targets, currentness },
+    intelligenceConsumerCurrentness: {
+      upsert: async ({ where, create, update }) => {
+        const keyParts = where.propertyId_consumerKey_targetKey;
+        const key = `${keyParts.propertyId}:${keyParts.consumerKey}:${keyParts.targetKey}`;
+        const row = currentness.has(key) ? { ...currentness.get(key), ...update } : { ...create };
+        currentness.set(key, row);
+        return row;
+      },
+      findMany: async ({ where }) => [...currentness.values()].filter((row) => row.propertyId === where.propertyId),
+    },
     intelligenceRecomputeRun: {
       findUnique: async ({ where }) => {
         if (where.idempotencyKey) return runsByIdempotencyKey.get(where.idempotencyKey) ?? null;
@@ -478,8 +489,8 @@ test('requestTargetRetry emits a per-attempt idempotency key so successive failu
   await requestTargetRetry({ recomputeRunId: 'run-1', targetId: 'target-1', attempts: 1 }, emit);
   await requestTargetRetry({ recomputeRunId: 'run-1', targetId: 'target-1', attempts: 2 }, emit);
   assert.equal(events.length, 2);
-  assert.equal(events[0].idempotencyKey, 'recompute-retry:target-1:1');
-  assert.equal(events[1].idempotencyKey, 'recompute-retry:target-1:2');
+  assert.equal(events[0].idempotencyKey, 'recompute-retry:target-1:1:automatic');
+  assert.equal(events[1].idempotencyKey, 'recompute-retry:target-1:2:automatic');
 });
 
 // --- processRecomputeRequestedEvent (end-to-end orchestration) ---

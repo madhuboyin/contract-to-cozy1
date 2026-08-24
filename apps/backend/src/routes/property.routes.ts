@@ -12,7 +12,7 @@ import { prisma } from '../lib/prisma';
 import { deriveChecklistProgress } from '../utils/seasonalProgress';
 import { syncSeasonalChecklistStatus } from '../services/seasonalChecklistStatus.service';
 import { evaluateCoverageRecord } from '../services/coverage/contextPolicy';
-import { getPropertyRefreshState } from '../services/intelligenceRecompute/intelligenceRecompute.service';
+import { getPropertyRefreshDetails } from '../services/intelligenceRecompute/intelligenceRecompute.service';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   getPropertyContextCompleteness,
@@ -533,8 +533,8 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
 router.get('/:propertyId/intelligence-refresh-state', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const { propertyId } = req.params;
-    const state = await getPropertyRefreshState(prisma, propertyId);
-    return res.json({ success: true, data: { propertyId, state } });
+    const refresh = await getPropertyRefreshDetails(prisma, propertyId);
+    return res.json({ success: true, data: { propertyId, ...refresh } });
   } catch (error) {
     return res.status(500).json({ success: false, error: 'Failed to fetch intelligence refresh state' });
   }

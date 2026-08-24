@@ -14,12 +14,8 @@ import type {
 } from '../intelligence/intelligenceConsumerRegistry.contract';
 
 // Home Intelligence Functional Completeness FRD §8.2/§9.3/§9.4/§10.5/§11 —
-// orchestration plumbing for dependency-aware recomputation. This slice
-// wires the full request -> resolve -> materialize -> process -> retry ->
-// read-state pipeline against the already-empty intelligenceConsumerRegistry
-// (see intelligenceConsumerRegistry.ts). No real consumer is registered yet,
-// so this produces no user-visible refresh behavior on its own; Phase 2's
-// later slices register real consumers against this same pipeline.
+// Full request -> resolve -> materialize -> process -> retry -> currentness
+// pipeline for the dependency registry in intelligenceConsumerRegistry.ts.
 
 export type RecomputeDb = typeof prisma | Prisma.TransactionClient;
 
@@ -38,6 +34,7 @@ export interface RequestRecomputeInput {
   triggerEntityType: string;
   triggerEntityId: string;
   changedFactKeys: readonly string[];
+  changedReferences?: readonly { entityType: string; entityId: string; fieldPath?: string }[];
   requestedContextVersion?: string | null;
 }
 
@@ -99,6 +96,7 @@ export async function requestRecompute(input: RequestRecomputeInput, emit: EmitD
       triggerEntityType: input.triggerEntityType,
       triggerEntityId: input.triggerEntityId,
       changedFactKeys: [...input.changedFactKeys],
+      changedReferences: [...(input.changedReferences ?? [])],
       requestedContextVersion: input.requestedContextVersion ?? null,
       idempotencyKey,
     },
@@ -132,6 +130,7 @@ export async function createOrClaimRecomputeRun(db: RecomputeDb, trigger: Recomp
         triggerEntityType: trigger.triggerEntityType,
         triggerEntityId: trigger.triggerEntityId,
         changedFactKeys: [...trigger.changedFactKeys],
+        changedReferences: [...(trigger.changedReferences ?? [])] as Prisma.InputJsonValue,
         idempotencyKey: trigger.idempotencyKey,
         requestedContextVersion: trigger.requestedContextVersion ?? null,
         status: 'PENDING',
@@ -155,7 +154,7 @@ export async function createOrClaimRecomputeRun(db: RecomputeDb, trigger: Recomp
  */
 export async function materializeTargets(
   db: RecomputeDb,
-  run: { id: string; propertyId: string; changedFactKeys: readonly string[]; triggerType: IntelligenceRecomputeTriggerType; triggerEntityType: string; triggerEntityId: string },
+  run: { id: string; propertyId: string; changedFactKeys: readonly string[]; changedReferences?: readonly { entityType: string; entityId: string; fieldPath?: string }[]; triggerType: IntelligenceRecomputeTriggerType; triggerEntityType: string; triggerEntityId: string },
   consumers: readonly IntelligenceConsumerDefinition[],
 ): Promise<MaterializedTarget[]> {
   const result: MaterializedTarget[] = [];
@@ -172,6 +171,7 @@ export async function materializeTargets(
         const page = await consumer.resolveTargets!({
           propertyId: run.propertyId,
           changedFactKeys: run.changedFactKeys,
+          changedReferences: run.changedReferences ?? [],
           triggerType: run.triggerType,
           triggerEntityType: run.triggerEntityType,
           triggerEntityId: run.triggerEntityId,
@@ -218,23 +218,123 @@ export async function materializeTargets(
         },
         update: {},
       });
-      result.push(target as MaterializedTarget);
+      const materialized = target as MaterializedTarget;
+      await writeConsumerCurrentness(db, {
+        propertyId: run.propertyId,
+        consumer,
+        target: materialized,
+        status: 'REFRESHING',
+        reason: 'DEPENDENCY_CHANGED',
+      });
+      result.push(materialized);
     }
   }
   return result;
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, consumerKey: string): Promise<T> {
+function withTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  consumerKey: string,
+): Promise<T> {
   return new Promise((resolve, reject) => {
+    const controller = new AbortController();
     const timer = setTimeout(
-      () => reject(new Error(`Consumer "${consumerKey}" recompute timed out after ${timeoutMs}ms`)),
+      () => {
+        controller.abort(new Error(`Consumer "${consumerKey}" recompute timed out after ${timeoutMs}ms`));
+        reject(controller.signal.reason);
+      },
       timeoutMs,
     );
-    promise.then(
+    run(controller.signal).then(
       (value) => { clearTimeout(timer); resolve(value); },
       (err) => { clearTimeout(timer); reject(err); },
     );
   });
+}
+
+async function writeConsumerCurrentness(
+  db: RecomputeDb,
+  input: {
+    propertyId: string;
+    consumer: IntelligenceConsumerDefinition;
+    target: Pick<MaterializedTarget, 'id' | 'recomputeRunId' | 'targetKey'>;
+    status: 'CURRENT' | 'REFRESHING' | 'STALE' | 'UNAVAILABLE';
+    reason: string;
+    lastError?: string | null;
+  },
+): Promise<void> {
+  // Older unit fakes deliberately model only the run/target delegates. The
+  // production Prisma client always has this delegate after schema generation.
+  const repository = (db as any).intelligenceConsumerCurrentness;
+  if (!repository?.upsert) return;
+  const now = new Date();
+  await repository.upsert({
+    where: {
+      propertyId_consumerKey_targetKey: {
+        propertyId: input.propertyId,
+        consumerKey: input.consumer.consumerKey,
+        targetKey: input.target.targetKey,
+      },
+    },
+    create: {
+      propertyId: input.propertyId,
+      consumerKey: input.consumer.consumerKey,
+      consumerVersion: input.consumer.version,
+      targetKey: input.target.targetKey,
+      status: input.status,
+      reason: input.reason,
+      recomputeRunId: input.target.recomputeRunId,
+      recomputeTargetId: input.target.id,
+      lastError: input.lastError ?? null,
+      lastAttemptedAt: now,
+      ...(input.status === 'CURRENT' ? { lastSucceededAt: now } : {}),
+    },
+    update: {
+      consumerVersion: input.consumer.version,
+      status: input.status,
+      reason: input.reason,
+      recomputeRunId: input.target.recomputeRunId,
+      recomputeTargetId: input.target.id,
+      lastError: input.lastError ?? null,
+      lastAttemptedAt: now,
+      ...(input.status === 'CURRENT' ? { lastSucceededAt: now } : {}),
+    },
+  });
+}
+
+async function persistTargetOutcome(
+  db: RecomputeDb,
+  input: {
+    propertyId: string;
+    consumer: IntelligenceConsumerDefinition;
+    target: MaterializedTarget;
+    targetData: Record<string, unknown>;
+    currentnessStatus: 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+    reason: string;
+    lastError?: string | null;
+  },
+): Promise<void> {
+  const persist = async (writer: RecomputeDb) => {
+    await writer.intelligenceRecomputeTarget.update({
+      where: { id: input.target.id },
+      data: input.targetData,
+    });
+    await writeConsumerCurrentness(writer, {
+      propertyId: input.propertyId,
+      consumer: input.consumer,
+      target: input.target,
+      status: input.currentnessStatus,
+      reason: input.reason,
+      lastError: input.lastError,
+    });
+  };
+  const transaction = (db as any).$transaction;
+  if (typeof transaction === 'function') {
+    await transaction.call(db, (tx: Prisma.TransactionClient) => persist(tx));
+  } else {
+    await persist(db);
+  }
 }
 
 /**
@@ -246,7 +346,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, consumerKey: str
  * an in-process await, not a dead process. Reclaimable window is a multiple
  * of the consumer's own timeoutMs — a live claimant's withTimeout will have
  * already failed the target long before this elapses (today's largest
- * timeoutMs across the registry is 30s; this threshold is minutes), so by
+ * timeoutMs across the registry is under a minute; this threshold is minutes), so by
  * the time this condition can match, either the original claimant crashed,
  * or crashed after already timing out and failing to write the FAILED
  * update — no live process is still legitimately working the target.
@@ -288,18 +388,41 @@ export async function processTarget(
     targetVersion: target.targetVersion,
   };
 
+  await writeConsumerCurrentness(db, {
+    propertyId,
+    consumer,
+    target,
+    status: 'REFRESHING',
+    reason: 'RECOMPUTE_PROCESSING',
+  });
+
   try {
-    await withTimeout(consumer.recompute({ propertyId, target: handle }), consumer.timeoutMs, consumer.consumerKey);
-    await db.intelligenceRecomputeTarget.update({
-      where: { id: target.id },
-      data: { status: 'SUCCEEDED', completedAt: new Date(), lastError: null },
+    await withTimeout(
+      (signal) => consumer.recompute({ propertyId, target: handle, signal }),
+      consumer.timeoutMs,
+      consumer.consumerKey,
+    );
+    await persistTargetOutcome(db, {
+      propertyId,
+      consumer,
+      target,
+      targetData: { status: 'SUCCEEDED', completedAt: new Date(), lastError: null },
+      currentnessStatus: consumer.successCurrentnessStatus ?? 'CURRENT',
+      reason: consumer.successCurrentnessStatus && consumer.successCurrentnessStatus !== 'CURRENT'
+        ? 'OUTPUT_INVALIDATED'
+        : 'RECOMPUTE_SUCCEEDED',
     });
     return 'SUCCEEDED';
   } catch (err: any) {
     const message = err?.message ? String(err.message) : 'Unknown recompute error';
-    await db.intelligenceRecomputeTarget.update({
-      where: { id: target.id },
-      data: { status: 'FAILED', lastError: message.slice(0, 2000) },
+    await persistTargetOutcome(db, {
+      propertyId,
+      consumer,
+      target,
+      targetData: { status: 'FAILED', lastError: message.slice(0, 2000) },
+      currentnessStatus: consumer.failureBehavior === 'MARK_UNAVAILABLE' ? 'UNAVAILABLE' : 'STALE',
+      reason: 'RECOMPUTE_FAILED',
+      lastError: message.slice(0, 2000),
     });
     return 'FAILED';
   }
@@ -307,12 +430,13 @@ export async function processTarget(
 
 /** §11 item 5: "enqueue a retry request using the existing worker execution policy and lease conventions" — reuses processDomainEventsJob's own FAILED-status backoff schedule; the idempotency key is per-attempt so each successive failure gets a fresh, distinct retry request. */
 export async function requestTargetRetry(
-  input: { recomputeRunId: string; targetId: string; attempts: number },
+  input: { recomputeRunId: string; targetId: string; attempts: number; backoffMs?: number; requestId?: string },
   emit: EmitDomainEvent = DomainEventsService.emit,
 ) {
   return emit({
     type: 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED',
-    idempotencyKey: `recompute-retry:${input.targetId}:${input.attempts}`,
+    idempotencyKey: `recompute-retry:${input.targetId}:${input.attempts}:${input.requestId ?? 'automatic'}`,
+    availableAt: new Date(Date.now() + Math.max(0, input.backoffMs ?? 0)),
     payload: { recomputeRunId: input.recomputeRunId, targetId: input.targetId },
   });
 }
@@ -344,7 +468,14 @@ async function attemptTarget(
   if (outcome === 'FAILED') {
     const newAttempts = target.attempts + 1;
     if (newAttempts < consumer.retryPolicy.maxAttempts) {
-      await requestTargetRetry({ recomputeRunId: target.recomputeRunId, targetId: target.id, attempts: newAttempts }, emit);
+      await requestTargetRetry({
+        recomputeRunId: target.recomputeRunId,
+        targetId: target.id,
+        attempts: newAttempts,
+        // An aborted handler is cooperative: give it several timeout windows
+        // to observe the signal and unwind before another attempt starts.
+        backoffMs: Math.max(consumer.retryPolicy.backoffMs, consumer.timeoutMs * 4),
+      }, emit);
     } else if (consumer.onPermanentFailure) {
       // HI-REC-006: retry budget exhausted — this is a permanent failure,
       // not just an in-flight one, so the consumer's declared failureBehavior
@@ -472,6 +603,7 @@ export async function processRecomputeRequestedEvent(
       id: run.id,
       propertyId: run.propertyId,
       changedFactKeys: trigger.changedFactKeys,
+      changedReferences: trigger.changedReferences ?? [],
       triggerType: trigger.triggerType,
       triggerEntityType: trigger.triggerEntityType,
       triggerEntityId: trigger.triggerEntityId,
@@ -516,11 +648,8 @@ const RUN_STATUS_TO_REFRESH_STATE: Record<IntelligenceRecomputeRunStatus, Proper
   FAILED: 'DEGRADED',
 };
 
-// Bounded recency window for currentness aggregation below — not a hard
-// architectural limit, just a sane cap on how far back a single read needs
-// to scan. A property with more than this many recompute runs since its
-// oldest still-relevant target would need a materialized per-consumer
-// currentness table, not a wider query; not needed at today's volumes.
+// Backward-compatible fallback for deployments/tests that have not generated
+// the materialized IntelligenceConsumerCurrentness rows yet.
 const REFRESH_STATE_RUN_LOOKBACK = 50;
 
 /**
@@ -553,6 +682,21 @@ export async function getPropertyRefreshState(
   propertyId: string,
   registry: readonly IntelligenceConsumerDefinition[] = INTELLIGENCE_CONSUMER_REGISTRY,
 ): Promise<PropertyRefreshState> {
+  const currentnessRepository = (db as any).intelligenceConsumerCurrentness;
+  if (currentnessRepository?.findMany) {
+    const currentness = await currentnessRepository.findMany({
+      where: { propertyId },
+      select: { status: true },
+    }) as Array<{ status: 'CURRENT' | 'REFRESHING' | 'STALE' | 'UNAVAILABLE' }>;
+    if (currentness.length > 0) {
+      const statuses = new Set(currentness.map((row) => row.status));
+      if (statuses.has('REFRESHING')) return 'REFRESHING';
+      const hasProblem = statuses.has('STALE') || statuses.has('UNAVAILABLE');
+      if (!hasProblem) return 'CURRENT';
+      return statuses.has('CURRENT') ? 'PARTIALLY_REFRESHED' : 'DEGRADED';
+    }
+  }
+
   const runs = await db.intelligenceRecomputeRun.findMany({
     where: { propertyId },
     orderBy: { requestedAt: 'desc' },
@@ -573,4 +717,36 @@ export async function getPropertyRefreshState(
   }
 
   return RUN_STATUS_TO_REFRESH_STATE[deriveRunStatus([...latestByTarget.values()], registry)];
+}
+
+export interface PropertyRefreshCapabilityState {
+  consumerKey: string;
+  targetKey: string;
+  status: 'CURRENT' | 'REFRESHING' | 'STALE' | 'UNAVAILABLE';
+  reason: string | null;
+  lastError: string | null;
+  updatedAt: Date;
+}
+
+export async function getPropertyRefreshDetails(
+  db: RecomputeDb,
+  propertyId: string,
+  registry: readonly IntelligenceConsumerDefinition[] = INTELLIGENCE_CONSUMER_REGISTRY,
+): Promise<{ state: PropertyRefreshState; capabilities: PropertyRefreshCapabilityState[] }> {
+  const state = await getPropertyRefreshState(db, propertyId, registry);
+  const repository = (db as any).intelligenceConsumerCurrentness;
+  if (!repository?.findMany) return { state, capabilities: [] };
+  const capabilities = await repository.findMany({
+    where: { propertyId },
+    orderBy: [{ consumerKey: 'asc' }, { targetKey: 'asc' }],
+    select: {
+      consumerKey: true,
+      targetKey: true,
+      status: true,
+      reason: true,
+      lastError: true,
+      updatedAt: true,
+    },
+  });
+  return { state, capabilities };
 }

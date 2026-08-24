@@ -20,7 +20,6 @@ import {
   Milestone,
   PencilLine,
   Radar,
-  RefreshCw,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -52,6 +51,7 @@ import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLink
 import { WorkItemManageDrawer } from '@/components/home/WorkItemManageDrawer';
 import { track } from '@/lib/analytics/events';
 import { RecentOwnerAdvocacyPrompt } from '@/components/home/RecentOwnerAdvocacyPrompt';
+import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
 
 /**
  * Home Operations Item #13 (§ launch-review gap): last carried by the
@@ -1152,37 +1152,6 @@ function AttentionEntryCard({
 // for CURRENT/UNKNOWN (the overwhelming common case, and not yet
 // meaningfully distinct until real recompute triggers accumulate history)
 // so this never adds visual noise to an already-current Home.
-function IntelligenceRefreshBadge({ propertyId }: { propertyId: string }) {
-  const query = useQuery({
-    queryKey: ['intelligence-refresh-state', propertyId],
-    queryFn: () => api.getPropertyIntelligenceRefreshState(propertyId),
-    staleTime: 60 * 1000,
-    retry: false,
-    // Finding (Phase 2 follow-up review): with no refetchInterval, a badge
-    // that loaded mid-REFRESHING would keep showing that state until
-    // navigation, window focus, or another rerender — not actually live.
-    // Only poll while genuinely in flight; once CURRENT/UNKNOWN, stop.
-    refetchInterval: (query) => {
-      const state = query.state.data;
-      return state === 'REFRESHING' || state === 'PARTIALLY_REFRESHED' ? 10 * 1000 : false;
-    },
-  });
-  if (query.isError || !query.data || query.data === 'CURRENT' || query.data === 'UNKNOWN') return null;
-
-  const copy: Record<'REFRESHING' | 'PARTIALLY_REFRESHED' | 'DEGRADED', { label: string; className: string }> = {
-    REFRESHING: { label: 'Refreshing…', className: 'border-teal-200 bg-teal-50 text-teal-700' },
-    PARTIALLY_REFRESHED: { label: 'Partially refreshed', className: 'border-amber-200 bg-amber-50 text-amber-700' },
-    DEGRADED: { label: 'Some updates delayed', className: 'border-rose-200 bg-rose-50 text-rose-700' },
-  };
-  const { label, className } = copy[query.data];
-  return (
-    <Badge variant="outline" className={`rounded-full ${className}`}>
-      {query.data === 'REFRESHING' && <RefreshCw className="mr-1 h-3 w-3 animate-spin" />}
-      {label}
-    </Badge>
-  );
-}
-
 export function UnifiedHomeSurface({
   propertyId,
   properties = [],
@@ -1305,7 +1274,7 @@ export function UnifiedHomeSurface({
         <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600">
           <Badge variant="outline" className="rounded-full bg-white">{home.attention.totalCount} open actions</Badge>
           <Badge variant="outline" className="rounded-full bg-white">{home.glance.recordCompleteness}% record complete</Badge>
-          <IntelligenceRefreshBadge propertyId={propertyId} />
+          <IntelligenceRefreshStatus propertyId={propertyId} />
         </div>
       </header>
 

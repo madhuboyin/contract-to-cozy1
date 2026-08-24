@@ -16,6 +16,7 @@ import { evaluateFeatureContext } from './evaluateFeatureContext';
 import { PropertyContextAccessDeniedError } from './getPropertyContext';
 import type { ScalarCaptureInputSchema } from '../domain/contracts';
 import { executeRelationalCapture, type RelationalCaptureSelection } from './relationalCaptureAdapters';
+import { emitPropertyChangeWithTransaction } from '../../../propertyChanges/propertyChange.service';
 
 export const captureFeatureContextInputSchema = z.object({
   requirementId: z.string().trim().min(1).max(100),
@@ -263,6 +264,33 @@ async function captureFeatureContextInternal(propertyId: string, userId: string,
         evidenceIds.push(evidence.id);
       }
       await tx.propertyContextCaptureReceipt.update({ where: { id: receipt.id }, data: { evidenceIds } });
+      const canonicalReferences = selection
+        ? updatedFactKeys.map((factKey) => ({
+            entityType: selection!.entityType,
+            entityId: selection!.entityId,
+            fieldPath: factKey.split('.').at(-1) ?? factKey,
+          }))
+        : updatedFactKeys.map((factKey) => ({ entityType: 'PROPERTY', entityId: propertyId, fieldPath: factKey }));
+      await emitPropertyChangeWithTransaction(tx, {
+        propertyId,
+        sourceType: 'PROPERTY_FACT',
+        sourceEntityId: receipt.id,
+        sourceRevision: receipt.id,
+        changeType: 'PROPERTY_FACT_CHANGED',
+        changedFactKeys: updatedFactKeys,
+        canonicalReferences,
+        occurredAt: observedAt,
+        detectedAt: observedAt,
+        confidence: 0.9,
+        sourceHealth: 'CURRENT',
+        signals: {
+          homeownerRelevant: true,
+          lifecycleAdvanced: false,
+          propertyEffectConfirmed: true,
+          urgentSafetyCondition: updatedFactKeys.some((factKey) => factKey.startsWith('safety.')),
+          canonicalActionPriority: null,
+        },
+      });
     });
     for (const fact of factDefinitions) propertyContextCapturesTotal.inc({ scope: fact.scope, fact_key: fact.key, outcome: 'success' });
   } catch (error) {

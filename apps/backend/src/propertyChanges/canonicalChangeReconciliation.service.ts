@@ -60,6 +60,8 @@ export async function reconcileCanonicalPropertyChanges(input: {
       select: {
         id: true,
         factKey: true,
+        sourceEntityType: true,
+        sourceEntityId: true,
         observedAt: true,
         verifiedAt: true,
         confidence: true,
@@ -144,6 +146,12 @@ export async function reconcileCanonicalPropertyChanges(input: {
       detectedAt: fact.verifiedAt ?? fact.observedAt,
       confidence: fact.confidence,
       sourceHealth: 'CURRENT',
+      changedFactKeys: [fact.factKey],
+      canonicalReferences: [{
+        entityType: fact.sourceEntityType || 'PROPERTY',
+        entityId: fact.sourceEntityId || input.propertyId,
+        fieldPath: fact.factKey,
+      }],
       signals: {
         homeownerRelevant: fact.verifiedAt != null || (fact.confidence ?? 0) >= 0.5,
         lifecycleAdvanced: fact.verifiedAt != null,

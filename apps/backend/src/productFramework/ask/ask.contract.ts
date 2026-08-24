@@ -251,7 +251,7 @@ const ChangeSummaryBlockSchema = z.object({
   source: z.string(),
   changeType: z.enum([
     'SOURCE_RECORD_CREATED', 'SOURCE_RECORD_REVISED', 'SOURCE_LIFECYCLE_CHANGED',
-    'PROPERTY_FACT_CHANGED', 'ACTION_STATE_CHANGED', 'OUTCOME_CONFIRMED', 'SOURCE_HEALTH_CHANGED',
+    'PROPERTY_FACT_CHANGED', 'ACTION_STATE_CHANGED', 'OUTCOME_CONFIRMED', 'SOURCE_HEALTH_CHANGED', 'DOCUMENT_PROMOTED',
   ]),
   summary: z.string(),
   effectiveAt: z.string().nullable(),

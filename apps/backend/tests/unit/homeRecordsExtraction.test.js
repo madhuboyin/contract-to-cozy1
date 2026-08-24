@@ -101,6 +101,20 @@ require.cache[policyRecordPath] = {
   },
 };
 
+const propertyChangeCalls = [];
+const propertyChangePath = require.resolve('../../src/propertyChanges/propertyChange.service.ts');
+require.cache[propertyChangePath] = {
+  id: propertyChangePath,
+  filename: propertyChangePath,
+  loaded: true,
+  exports: {
+    emitPropertyChangeWithTransaction: async (_tx, input) => {
+      propertyChangeCalls.push(input);
+      return { change: { id: `change-${propertyChangeCalls.length}`, ...input }, deduped: false };
+    },
+  },
+};
+
 const { HomeRecordsExtractionService } = require('../../src/services/homeRecordsExtraction.service.ts');
 const service = new HomeRecordsExtractionService();
 

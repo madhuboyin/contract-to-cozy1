@@ -4299,6 +4299,7 @@ model Property {
   propertyChanges       PropertyChange[]
   propertyChangeCursors PropertyChangeSourceCursor[]
   intelligenceRecomputeRuns IntelligenceRecomputeRun[]
+  intelligenceConsumerCurrentness IntelligenceConsumerCurrentness[]
   homeBriefingPreferences HomeBriefingPreference[]
   homeBriefingDeliveries  HomeBriefingDelivery[]
   propertyBriefs          PropertyBrief[]
@@ -9565,11 +9566,19 @@ model DomainEvent {
   attempts  Int     @default(0)
   lastError String?
 
+  // Durable delivery lease and scheduling. availableAt delays retries without
+  // sleeping a worker; leaseExpiresAt makes a PROCESSING event reclaimable
+  // after a worker crash.
+  availableAt       DateTime @default(now())
+  processingStartedAt DateTime?
+  leaseExpiresAt    DateTime?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   processedAt DateTime?
 
-  @@index([status, createdAt])
+  @@index([status, availableAt, createdAt])
+  @@index([status, leaseExpiresAt])
   @@index([type, status])
   @@map("domain_events")
 }
@@ -9600,6 +9609,13 @@ enum IntelligenceRecomputeTargetStatus {
   FAILED
 }
 
+enum IntelligenceConsumerCurrentnessStatus {
+  CURRENT
+  REFRESHING
+  STALE
+  UNAVAILABLE
+}
+
 // Durable orchestration receipt for dependency-aware intelligence refreshes.
 // Domain records remain canonical; this model records why recomputation ran,
 // which registered consumers were evaluated, and whether each projection was
@@ -9611,6 +9627,7 @@ model IntelligenceRecomputeRun {
   triggerEntityType    String
   triggerEntityId      String
   changedFactKeys      String[]                         @default([])
+  changedReferences    Json?
   idempotencyKey       String                           @unique
   requestedContextVersion String?
   resultingContextVersion String?
@@ -9661,6 +9678,33 @@ model IntelligenceRecomputeTarget {
   @@index([consumerKey, status])
   @@index([targetType, targetId])
   @@map("intelligence_recompute_targets")
+}
+
+// Canonical freshness overlay for intelligence outputs. Domain lifecycle
+// fields remain untouched; every read surface can use this record to avoid
+// presenting an old material output as current after a dependency changes.
+model IntelligenceConsumerCurrentness {
+  id                  String                                @id @default(uuid())
+  propertyId          String
+  consumerKey         String
+  consumerVersion     String
+  targetKey           String
+  status              IntelligenceConsumerCurrentnessStatus @default(REFRESHING)
+  reason              String?
+  recomputeRunId      String?
+  recomputeTargetId   String?
+  lastError           String?                               @db.Text
+  lastAttemptedAt     DateTime?
+  lastSucceededAt     DateTime?
+  createdAt           DateTime                              @default(now())
+  updatedAt           DateTime                              @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, consumerKey, targetKey])
+  @@index([propertyId, status, updatedAt])
+  @@index([consumerKey, status])
+  @@map("intelligence_consumer_currentness")
 }
 
 // ============================================================================
@@ -15845,6 +15889,7 @@ enum PropertyChangeType {
   ACTION_STATE_CHANGED
   OUTCOME_CONFIRMED
   SOURCE_HEALTH_CHANGED
+  DOCUMENT_PROMOTED
 }
 
 enum PropertyChangeBriefingEligibility {
@@ -15861,6 +15906,8 @@ model PropertyChange {
   sourceRevision          String
   sourceRevisionOrdinal   Int
   changeType              PropertyChangeType
+  changedFactKeys         String[]                          @default([])
+  canonicalReferences     Json?
   occurredAt              DateTime?
   detectedAt              DateTime                          @default(now())
   materiality             IntelligenceAssessmentMateriality

@@ -23,6 +23,7 @@ import {
   Landmark,
   Receipt,
   BellRing,
+  RefreshCcw,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -112,6 +113,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/admin/release-gates',
     icon: ShieldEllipsis,
     description: 'Per-tool release gate and rollout status',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-intelligence-refresh',
+    name: 'Intelligence Refresh',
+    href: '/dashboard/admin/intelligence-refresh',
+    icon: RefreshCcw,
+    description: 'Inspect currentness, run a full refresh, and retry failed capabilities',
     engines: [],
     globalHref: true,
   },

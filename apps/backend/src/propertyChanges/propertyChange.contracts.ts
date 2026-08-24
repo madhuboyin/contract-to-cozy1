@@ -8,6 +8,7 @@ export const propertyChangeTypeSchema = z.enum([
   'ACTION_STATE_CHANGED',
   'OUTCOME_CONFIRMED',
   'SOURCE_HEALTH_CHANGED',
+  'DOCUMENT_PROMOTED',
 ]);
 
 export const propertyChangeSourceHealthSchema = z.enum([
@@ -38,6 +39,12 @@ export const propertyChangeEmissionSchema = z.object({
   // state-based sources omit it and receive a transaction-serialized ordinal.
   sourceRevisionOrdinal: z.number().int().nonnegative().optional(),
   changeType: propertyChangeTypeSchema,
+  changedFactKeys: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
+  canonicalReferences: z.array(z.object({
+    entityType: z.string().trim().min(1).max(120),
+    entityId: z.string().trim().min(1).max(300),
+    fieldPath: z.string().trim().min(1).max(300).optional(),
+  })).max(100).default([]),
   occurredAt: z.coerce.date().nullable().optional(),
   detectedAt: z.coerce.date().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
@@ -56,8 +63,14 @@ export const propertyChangeDeliverySchema = z.object({
   deliveredAt: z.coerce.date().optional(),
 });
 
-export type PropertyChangeEmissionInput =
-  z.infer<typeof propertyChangeEmissionSchema>;
+type ParsedPropertyChangeEmissionInput = z.infer<typeof propertyChangeEmissionSchema>;
+export type PropertyChangeEmissionInput = Omit<
+  ParsedPropertyChangeEmissionInput,
+  'changedFactKeys' | 'canonicalReferences'
+> & {
+  changedFactKeys?: ParsedPropertyChangeEmissionInput['changedFactKeys'];
+  canonicalReferences?: ParsedPropertyChangeEmissionInput['canonicalReferences'];
+};
 export type PropertyChangeSignals = z.infer<typeof propertyChangeSignalsSchema>;
 export type PropertyChangeSourceHealth =
   z.infer<typeof propertyChangeSourceHealthSchema>;

@@ -159,6 +159,8 @@ export async function emitPropertyChangeWithTransaction(
       ...identity,
       sourceRevisionOrdinal: revisionOrdinal,
       changeType: input.changeType as PropertyChangeType,
+      changedFactKeys: input.changedFactKeys ?? [],
+      canonicalReferences: (input.canonicalReferences ?? []) as Prisma.InputJsonValue,
       occurredAt: input.occurredAt ?? null,
       detectedAt: input.detectedAt ?? new Date(),
       materiality: materiality.materiality,
@@ -231,6 +233,7 @@ const PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER: Record<PropertyChangeType, Inte
   ACTION_STATE_CHANGED: 'ACTION_STATE_CHANGED',
   OUTCOME_CONFIRMED: 'OUTCOME_RECORDED',
   SOURCE_HEALTH_CHANGED: 'SOURCE_HEALTH_CHANGED',
+  DOCUMENT_PROMOTED: 'DOCUMENT_PROMOTED',
 };
 
 /**
@@ -258,7 +261,7 @@ const PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER: Record<PropertyChangeType, Inte
  * actual write" pattern for that case.
  */
 export async function requestRecomputeForChange(
-  change: { propertyId: string; sourceType: string; sourceEntityId: string; sourceRevision: string; changeType: PropertyChangeType },
+  change: { propertyId: string; sourceType: string; sourceEntityId: string; sourceRevision: string; changeType: PropertyChangeType; changedFactKeys?: string[]; canonicalReferences?: unknown },
   requestRecomputeFn: typeof requestRecompute = requestRecompute,
   tx?: ChangeTransaction,
 ): Promise<void> {
@@ -267,7 +270,10 @@ export async function requestRecomputeForChange(
     triggerType: PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER[change.changeType],
     triggerEntityType: change.sourceType,
     triggerEntityId: change.sourceEntityId,
-    changedFactKeys: [],
+    changedFactKeys: change.changedFactKeys ?? [],
+    changedReferences: Array.isArray(change.canonicalReferences)
+      ? change.canonicalReferences as Array<{ entityType: string; entityId: string; fieldPath?: string }>
+      : [],
     requestedContextVersion: change.sourceRevision,
   }, undefined, tx);
 
