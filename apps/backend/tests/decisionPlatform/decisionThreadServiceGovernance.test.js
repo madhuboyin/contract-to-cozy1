@@ -88,6 +88,43 @@ test('the transition contract itself still passes its own governance suite (sani
   assert.equal(isContextTransitionAllowed('CURRENT', 'STALE'), true);
 });
 
+// Phase 3 review finding 2: "exactly one active Decision Thread" is
+// DB-enforced via activeIdentityKey's unique constraint (schema.prisma),
+// set only while a thread is in the active lifecycle set. These two checks
+// catch a future ABANDONED/COMPLETED/ARCHIVED or reopen write site that
+// forgets to keep it in sync, the same way the lifecycleStatus-guard check
+// above catches a future write skipping isLifecycleTransitionAllowed.
+const TERMINAL_LIFECYCLE_STATUSES = new Set(['ABANDONED', 'COMPLETED', 'ARCHIVED']);
+
+test('every write into a terminal lifecycleStatus also clears activeIdentityKey', () => {
+  const blocks = updateCallBlocks(source).filter((block) => {
+    const match = block.text.match(/lifecycleStatus:\s*'([A-Z_]+)'/);
+    return match && TERMINAL_LIFECYCLE_STATUSES.has(match[1]);
+  });
+  assert.ok(blocks.length > 0, 'expected at least one terminal lifecycleStatus write to exist');
+  for (const block of blocks) {
+    assert.match(block.text, /activeIdentityKey:\s*null/, `terminal lifecycleStatus write does not clear activeIdentityKey: ${block.text.slice(0, 120)}`);
+  }
+});
+
+test('decisionThread.create always sets activeIdentityKey', () => {
+  const createIndex = source.indexOf('tx.decisionThread.create(');
+  assert.ok(createIndex >= 0, 'expected a decisionThread.create call');
+  const end = source.indexOf('});', createIndex);
+  const block = source.slice(createIndex, end);
+  assert.match(block, /activeIdentityKey:/, 'decisionThread.create does not set activeIdentityKey');
+});
+
+test('createHvacDecisionThread catches a P2002 on activeIdentityKey and resumes the winning thread instead of failing the request', () => {
+  assert.match(source, /error\?\.code === 'P2002'/);
+  assert.match(source, /activeIdentityKey/);
+  const catchIndex = source.indexOf("error?.code === 'P2002'");
+  const catchBlockEnd = source.indexOf('\n  }\n', catchIndex);
+  const catchBlock = source.slice(catchIndex, catchBlockEnd);
+  assert.match(catchBlock, /selectHvacDecisionThread/, 'P2002 recovery does not re-select the winning thread');
+  assert.match(catchBlock, /continueHvacDecisionThread/, 'P2002 recovery does not resume the winning thread');
+});
+
 // DecisionThreadExecutionLink has @@unique([decisionThreadId, askExecutionId])
 // (schema.prisma) -- a bare .create() would throw P2002 on any retried Ask
 // turn that reuses the same executionId against the same thread. Both link

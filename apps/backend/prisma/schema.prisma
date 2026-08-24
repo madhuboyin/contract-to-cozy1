@@ -8351,6 +8351,19 @@ model DecisionThread {
   contextStatus                    DecisionThreadContextStatus   @default(CURRENT)
   contextIssueCodes                String[]                       @default([])
   currentRecommendationSnapshotId  String?                        @unique
+  // Home Intelligence Functional Completeness FRD Phase 3 review finding 2:
+  // "exactly one active Decision Thread per (propertyId, decisionDefinitionId,
+  // primaryEntityType, primaryEntityId)" is not expressible as a normal
+  // @@unique here, since a thread may legally leave and later re-enter the
+  // active lifecycle set (ABANDONED/DECIDED/COMPLETED/ARCHIVED -> OPEN).
+  // Postgres/Prisma has no native partial/filtered unique index, so this is
+  // the standard workaround: `${propertyId}:${decisionDefinitionId}:
+  // ${primaryEntityType}:${primaryEntityId}`, set only while the thread is in
+  // decisionThreadService.ts's ACTIVE_LIFECYCLE_STATUSES and cleared to null
+  // the moment it leaves that set (NULL values never collide under a unique
+  // constraint) -- set/cleared exclusively alongside a guarded
+  // lifecycleStatus write, never independently.
+  activeIdentityKey                String?                        @unique
   version                          Int                            @default(1)
   createdAt                        DateTime                       @default(now())
   updatedAt                        DateTime                       @updatedAt

@@ -135,6 +135,18 @@ function inputDigestFor(context: HvacDecisionContext): string {
   return createHash('sha256').update(JSON.stringify(context)).digest('hex');
 }
 
+// Phase 3 review finding 2: the DB-enforced identity for "at most one
+// active thread for this (property, decision family, primary entity)" —
+// see DecisionThread.activeIdentityKey's schema comment.
+function activeDecisionThreadIdentityKey(
+  propertyId: string,
+  decisionDefinitionId: string,
+  primaryEntityType: string,
+  primaryEntityId: string,
+): string {
+  return `${propertyId}:${decisionDefinitionId}:${primaryEntityType}:${primaryEntityId}`;
+}
+
 function preferenceIdsFrom(preferences: { ownershipHorizonPreferenceId: string | null; repairReplaceApproachPreferenceId: string | null }): string[] {
   return [preferences.ownershipHorizonPreferenceId, preferences.repairReplaceApproachPreferenceId]
     .filter((id): id is string => id !== null);
@@ -202,7 +214,11 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
   const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
-  const result = await prisma.$transaction(async (tx) => {
+  const identityKey = activeDecisionThreadIdentityKey(input.propertyId, 'HVAC_REPAIR_REPLACE', 'InventoryItem', input.inventoryItemId);
+
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
     const skillLineage = await skillLineageForExecution(tx, input.askExecutionId);
     const thread = await tx.decisionThread.create({
       data: {
@@ -211,6 +227,7 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
         decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
         primaryEntityType: 'InventoryItem',
         primaryEntityId: input.inventoryItemId,
+        activeIdentityKey: identityKey,
         title: `Repair or replace: ${context.itemName}`,
         goalCode: 'HVAC_REPAIR_REPLACE_DECISION',
         lifecycleStatus: 'OPEN',
@@ -300,7 +317,31 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
     }
 
     return { thread: updatedThread, snapshot, preferencesUsed: preferences };
-  });
+    });
+  } catch (error: any) {
+    // Phase 3 review finding 2: two concurrent create-or-resume calls can
+    // both observe NONE from selectHvacDecisionThread and both reach here.
+    // Postgres lets only one activeIdentityKey insert win; the loser
+    // resumes the winner's thread instead of failing the whole request —
+    // same P2002-catch-and-resume idiom as workItemRepository.ts's
+    // createWorkItem. Caught outside the transaction: a P2002 aborts the
+    // interactive transaction, so any further query must use the plain
+    // `prisma` client, never the aborted `tx`.
+    if (error?.code === 'P2002' && (error?.meta?.target as string[] | undefined)?.includes('activeIdentityKey')) {
+      const resumeSelection = await selectHvacDecisionThread(input.propertyId, input.inventoryItemId);
+      if (resumeSelection.kind === 'UNIQUE') {
+        const { thread } = await continueHvacDecisionThread(resumeSelection.thread.id, input.propertyId, input.askExecutionId);
+        if (!thread.currentRecommendationSnapshotId) throw error;
+        const snapshot = await prisma.recommendationSnapshot.findUnique({ where: { id: thread.currentRecommendationSnapshotId } });
+        if (!snapshot) throw error;
+        return { thread, snapshot, preferencesUsed: preferences };
+      }
+      // AMBIGUOUS or NONE again here is a genuine anomaly (we just lost a
+      // uniqueness race, so a UNIQUE winner must exist) — fail closed with
+      // the original error rather than mask it with a confusing new one.
+    }
+    throw error;
+  }
 
   await emitDecisionRecommendationChange({
     propertyId: input.propertyId,
@@ -605,7 +646,10 @@ export async function abandonDecisionThread(threadId: string, propertyId: string
   }
   const updateResult = await prisma.decisionThread.updateMany({
     where: { id: threadId, version: thread.version },
-    data: { lifecycleStatus: 'ABANDONED', version: { increment: 1 } },
+    // Phase 3 review finding 2: ABANDONED leaves the active lifecycle set,
+    // so this identity must free up for a future create-or-resume — NULL
+    // never collides under activeIdentityKey's unique constraint.
+    data: { lifecycleStatus: 'ABANDONED', activeIdentityKey: null, version: { increment: 1 } },
   });
   if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(threadId);
   return prisma.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
