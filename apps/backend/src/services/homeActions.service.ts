@@ -67,7 +67,14 @@ import { SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER } from './intelligence/homeActi
 import {
   OWNERSHIP_COST_CHANGE_ID_PREFIX,
   ACTIVATION_ID_PREFIX,
+  OPERATIONAL_WORK_ID_PREFIX,
 } from './intelligence/homeActionProducerOwnership';
+import {
+  completeAcceptedOperationalWorkItem,
+  CompletionEvidencePolicyViolationError,
+  UnsupportedWorkItemCompletionError,
+} from './homeActionCompletion.service';
+import { COMPLETION_EVIDENCE_POLICY } from './intelligence/completionEvidencePolicy.registry';
 import {
   resolveDecisionFamilyRef,
   resolveHomeActionDecisionLineage,
@@ -98,6 +105,13 @@ export const HomeActionCommandSchema = z.object({
   reason: z.string().trim().min(1).max(1000).nullable().optional(),
   nextTriggerAt: z.string().datetime().nullable().optional(),
   consequenceAcknowledged: z.boolean().default(false),
+  // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-002/003).
+  // Only meaningful for COMPLETE/ALREADY_DONE; whether they're actually
+  // required depends on the action's safetyTier (completionEvidencePolicy
+  // .registry.ts), checked in executeHomeActionCommand once the action is
+  // loaded, not here — this schema stays permissive.
+  completionCostCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  completionObservedResult: z.enum(['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED']).nullable().optional(),
 }).superRefine((value, ctx) => {
   if (['DEFER', 'SNOOZE'].includes(value.command) && !value.nextTriggerAt) {
     ctx.addIssue({
@@ -689,6 +703,19 @@ async function appendAcceptedOperationalWork(
   for (const item of items) {
     if (represented.has(item.id)) continue;
     const primaryExecution = item.executions.find((entry) => entry.role === 'PRIMARY') ?? item.executions[0];
+    // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-002).
+    // Only a maintenance-backed item routes to a real completion adapter
+    // this slice (see homeActionCompletion.service.ts). The one-click "Mark
+    // done" control is offered only when the policy permits attestation
+    // alone (LOW_CONSEQUENCE) -- this card has no cost/result capture UI
+    // yet, so MATERIAL_FINANCIAL (attestation REQUIRED plus cost/result) and
+    // REGULATED_COVERAGE/SAFETY_EMERGENCY (attestation INSUFFICIENT) keep
+    // using the existing "Manage action" evidence drawer instead of a
+    // control that would only reject the request server-side.
+    const completionEvidencePolicy = COMPLETION_EVIDENCE_POLICY.find((entry) => entry.safetyTier === item.safetyTier);
+    const completionEligible = primaryExecution?.executionType === 'MAINTENANCE_TASK' &&
+      item.state !== 'REPORTED_COMPLETE' &&
+      completionEvidencePolicy?.attestation === 'PERMITTED';
     const sourceKind: HomeAction['source']['kind'] = primaryExecution?.executionType === 'PROJECT'
       ? 'PROJECT'
       : primaryExecution?.executionType === 'GUIDANCE'
@@ -773,7 +800,9 @@ async function appendAcceptedOperationalWork(
       },
       primaryCta: { kind: item.safetyTier === 'SAFETY_EMERGENCY' ? 'ESCALATE' : 'REVIEW', label: displayCopy.primaryCtaLabel, href },
       secondaryCtas: [],
-      feedbackControls: ['CORRECT_FACT', 'SNOOZE'],
+      feedbackControls: completionEligible
+        ? ['CORRECT_FACT', 'SNOOZE', 'COMPLETE', 'ALREADY_DONE']
+        : ['CORRECT_FACT', 'SNOOZE'],
       relatedJourneyId: primaryExecution?.executionType === 'GUIDANCE' ? primaryExecution.executionEntityId : null,
       createdAt: item.createdAt.toISOString(),
       lastEvaluatedAt: now,
@@ -1267,12 +1296,13 @@ export async function executeHomeActionCommand(
   if (
     ['COMPLETE', 'ALREADY_DONE'].includes(input.command) &&
     SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER.has(action.source.kind) &&
-    // ownership-cost-change and activation actions are promoted with a
-    // SYSTEM source.kind but are routed to a real completion adapter below
-    // by id prefix — declared as isKindLevelCompletionException entries in
+    // ownership-cost-change, activation, and accepted-maintenance-work
+    // actions are routed to a real completion adapter below by id prefix —
+    // declared as isKindLevelCompletionException entries in
     // homeActionProducerOwnership.ts, not part of the untracked-source guard.
     !action.id.startsWith(OWNERSHIP_COST_CHANGE_ID_PREFIX) &&
-    !action.id.startsWith(ACTIVATION_ID_PREFIX)
+    !action.id.startsWith(ACTIVATION_ID_PREFIX) &&
+    !action.id.startsWith(OPERATIONAL_WORK_ID_PREFIX)
   ) {
     throw new Error(
       `${input.command} is not supported for this home action; use ACKNOWLEDGE instead.`,
@@ -1346,6 +1376,38 @@ export async function executeHomeActionCommand(
         actorUserId: userId,
         idempotencyKey: `home-action-disposition:${action.workItem.id}:${input.command}`,
       });
+    }
+  }
+
+  // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-001/002/
+  // 004/005/006). Only appendAcceptedOperationalWork's re-projected accepted
+  // work carries this id prefix — see homeActionCompletion.service.ts for
+  // why this routes through PropertyMaintenanceTaskService rather than
+  // transitioning the work item directly.
+  if (action.id.startsWith(OPERATIONAL_WORK_ID_PREFIX) && action.workItem &&
+    (input.command === 'COMPLETE' || input.command === 'ALREADY_DONE')) {
+    try {
+      const result = await completeAcceptedOperationalWorkItem({
+        workItemId: action.workItem.id,
+        propertyId,
+        userId,
+        safetyTier: action.governance.safetyTier,
+        decisionLineage: action.decisionLineage,
+        costCents: input.completionCostCents ?? null,
+        observedResult: input.completionObservedResult ?? null,
+      });
+      return {
+        actionId,
+        command: input.command,
+        state: 'COMPLETED' as const,
+        alreadyComplete: result.alreadyComplete,
+        recordedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      if (error instanceof CompletionEvidencePolicyViolationError || error instanceof UnsupportedWorkItemCompletionError) {
+        throw new Error(error.message);
+      }
+      throw error;
     }
   }
 
