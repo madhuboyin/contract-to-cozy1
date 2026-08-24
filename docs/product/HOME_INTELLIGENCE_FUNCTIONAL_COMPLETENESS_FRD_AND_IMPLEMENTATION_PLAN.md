@@ -407,8 +407,19 @@ The live Home action detail shall render:
 **HI-DEC-002 — Material decision handoff**
 Starting a material recommendation shall create or resume a Decision Thread and persist an immutable Recommendation Snapshot before external commitment.
 
+External-commitment enforcement shall be server-side and shall not rely on the Home CTA gate. At minimum:
+
+- a decision-required Home Action whose lineage cannot be resolved, is ambiguous, is not applicable to the registered family, or is temporarily unavailable shall expose a truthy fail-closed lineage result and shall not navigate or commit;
+- `COMPLETE` and `ALREADY_DONE` commands for decision-required Home Actions shall require linked lineage;
+- the canonical `CANDIDATE -> ACCEPTED` Operational Work transition shall independently resolve every decision-required source attached to the work item and require one active Decision Thread with a non-null current Recommendation Snapshot;
+- decision-source resolution shall use durable `OperationalWorkSource` provenance, not title, timing, work-key similarity, or frontend-supplied family identifiers. The initial required mappings are `GUIDANCE / ReplaceRepairAnalysis -> HVAC_REPAIR_REPLACE / InventoryItem` and `COVERAGE / CoverageReview -> COVERAGE_QUESTION / primary questionKey`;
+- a CoverageReview source whose primary material question is no longer current shall fail closed and require the review to refresh; Warranty and InsurancePolicy renewal sources remain non-decision coverage obligations; and
+- the producer registry shall fail validation when a producer is both work-item eligible and decision-required but its `OperationalWorkSourceType` has no acceptance-lineage resolver.
+
 **HI-DEC-003 — Snapshot change explanation**
 If context changes, the next snapshot shall identify what changed, which assumptions or facts were affected, whether the recommendation changed, and which snapshot it supersedes.
+
+Recommendation-change visibility is a persisted read state, not a transient create/resume response. The current snapshot shall remain unacknowledged until the homeowner is shown the Home change notice and explicitly acknowledges that exact snapshot. Thread creation, resume, recomputation, CTA opening, navigation, and Ask continuation shall not implicitly consume the notice. Acknowledgment shall match property, Decision Thread, and current snapshot identifier atomically so a delayed action cannot acknowledge a newer unseen recommendation. Home shall automatically expose the detail containing an unread change and show the category, prior/current verdict where material, and changed factors.
 
 **HI-DEC-004 — Scenario isolation**
 Homeowner-edited assumptions used for a scenario shall remain on the Scenario or Decision Thread. They shall not update Property Context without an explicit separate fact-correction or capture operation.
@@ -620,6 +631,12 @@ All action commands shall accept:
 
 Version mismatch shall return a refresh-required response rather than mutating stale action state.
 
+Recommendation-change acknowledgment shall use:
+
+`POST /api/properties/:propertyId/home-actions/decision-threads/:threadId/recommendation-changes/:snapshotId/acknowledge`
+
+The route shall require authenticated property access and contributor authority. It shall update `lastChangeAcknowledgedSnapshotId` only when `threadId` belongs to `propertyId` and `snapshotId` is still the thread's `currentRecommendationSnapshotId`. A stale or mismatched request shall return a conflict response and shall not acknowledge any snapshot.
+
 ### 10.4 Booking write contract
 
 `POST /api/bookings` shall accept optional `originWorkItemId`. Its absence shall not block marketplace booking. The service shall resolve origin according to HI-ATT-010, create or reuse exactly one Operational Work Item inside the Booking transaction, and return `operationalWorkItemId` plus the origin resolution result.
@@ -738,8 +755,10 @@ These scenarios define working product behavior. They are not merely test cases.
 1. A coverage recommendation appears.
 2. Details show evidence, assumptions, two or more options, trade-offs, missing facts, and professional boundary.
 3. Starting the decision creates/resumes a Decision Thread and immutable snapshot.
-4. A corrected policy fact triggers a new snapshot and explains what changed.
-5. The homeowner records a decision and resulting policy outcome without the scenario assumptions becoming property facts.
+4. Accepting its canonical Operational Work Item resolves the attached CoverageReview to the primary coverage-question key and independently verifies linked lineage plus a current snapshot at the server transition boundary.
+5. A corrected policy fact triggers a superseding snapshot; returning to Home automatically exposes a persisted explanation of what changed.
+6. The notice remains visible until the homeowner explicitly acknowledges the exact current snapshot; opening or navigating away does not consume it.
+7. The homeowner records a decision and resulting policy outcome without the scenario assumptions becoming property facts.
 
 ### Scenario D — Completion from another surface
 
@@ -966,6 +985,10 @@ Explicitly **not** closed, left open by design:
 5. Expose the Decision Thread and current snapshot linkage to Home Action detail, acceptance, compound-result, and skill-handoff services.
 6. Fail closed with a safe-next-action response when no registered decision-family adapter can create the required lineage.
 
+**Implementation status (2026-08-24): Phase 3A complete.** The implementation was delivered across the Phase 3 commit series ending in `b09b82d0` (`Close remaining Phase 3 lineage gaps`). `DecisionFamilyAdapter` and its registry now provide one entry point for HVAC repair/replace plus snapshot-backed refinance opportunity, capital-timeline window, ownership-cost change, savings-benefit match, coverage question, and sell/hold/rent families. Active-thread identity is DB-enforced; creation and resume persist immutable snapshots, applicable Ask execution lineage, and append-only Home Action origin links. Material actions fail closed in both feed/click presentation and server commitment handling.
+
+The final acceptance-boundary closure is domain-aware rather than HVAC-only. `assertDecisionLineageSatisfiedForAcceptance()` resolves all attached decision-required work-item provenance through `OperationalWorkSource`: repair/replace guidance resolves via `ReplaceRepairAnalysis.inventoryItemId`, while coverage work resolves via `CoverageReview` and its current primary evidence-based high-priority question key. Acceptance requires `LINKED` lineage and a non-null `currentRecommendationSnapshotId`; a CoverageReview with no current primary question fails closed. Registry governance verifies that every work-item-eligible `DECISION_REQUIRED` producer has a supported source resolver, preventing a future producer from silently bypassing commitment enforcement.
+
 **Primary files:**
 
 - `apps/backend/src/services/decisionPlatform/decisionThreadService.ts`
@@ -988,6 +1011,10 @@ Explicitly **not** closed, left open by design:
 3. Integrate Property Context inline capture and resume.
 4. Consume the Phase 3A Decision Thread and Recommendation Snapshot linkage.
 5. Show snapshot changes when context changes.
+
+**Implementation status (2026-08-24): Phase 3B complete.** Home renders the reusable decision-detail contract, decision availability/safe-next-action state, Property Context capture for the registered recommendation contexts, durable Decision Thread status, and disclosed engine/source-card divergence. Snapshot changes are reconstructed on read from the immutable supersession chain and remain visible through `lastChangeAcknowledgedSnapshotId` until the homeowner selects **Got it**. Cards with unread changes expand automatically; the notice shows its change category, prior/current material verdict, and changed factors. The acknowledgment route is scoped to the exact property, thread, and still-current snapshot, so neither CTA navigation nor a delayed acknowledgment can consume an unseen newer change.
+
+The stale governance assertion for multiline HVAC continuation routing was also corrected without weakening the execution-lineage check. Phase 3 verification at closure included 57 passing focused backend decision-governance tests, 18 passing focused Home presentation tests, clean backend/frontend TypeScript checks, Prisma schema validation, and `git diff --check`.
 
 **Functional exit:** a material Home Action supports an understandable compare-and-decide flow without navigating to an unrelated tool merely to see its basis.
 
@@ -1171,8 +1198,8 @@ Home Intelligence functional completeness is achieved when:
 
 1. Home, Fix, Cozy, notifications, and Home Briefing use the same canonical action identity, ranking, lifecycle, and governance.
 2. A canonical fact/source/action/outcome/source-health change automatically and observably refreshes all applicable registered consumers.
-3. Material Home Actions display evidence, assumptions, alternatives, trade-offs, limitations, missing context, and correction paths.
-4. Accepted recommendations become one durable Operational Work Item or link to an existing one.
+3. Material Home Actions display evidence, assumptions, alternatives, trade-offs, limitations, missing context, correction paths, and persisted snapshot-change explanations that remain unread until explicitly acknowledged after presentation.
+4. Accepted recommendations become one durable Operational Work Item or link to an existing one, and the server independently verifies any required Decision Thread plus current Recommendation Snapshot before the acceptance transition commits.
 5. Every Booking, including a standalone marketplace Booking, creates or reuses exactly one Operational Work Item and remains lifecycle-consistent with it.
 6. Completion evidence is consequence-appropriate and reconciles every linked source without duplicate homeowner steps.
 7. Supported completions create provenance-bearing Outcome Observations and Recommendation Attributions.
