@@ -18,9 +18,11 @@ function makeFakeTx() {
   const guidanceJourneys = new Map();
   const priceFinalizations = new Map();
   const bookings = new Map();
+  const outcomeObservations = new Map();
+  const recommendationAttributions = new Map();
 
   const tx = {
-    __store: { workItems, workSources, workEvents, workExecutions, guidanceJourneys, priceFinalizations, bookings },
+    __store: { workItems, workSources, workEvents, workExecutions, guidanceJourneys, priceFinalizations, bookings, outcomeObservations, recommendationAttributions },
     $queryRaw: async () => [],
     operationalWorkItem: {
       findUnique: async ({ where }) => {
@@ -157,6 +159,31 @@ function makeFakeTx() {
           if (where.status?.not && b.status === where.status.not) return false;
           return true;
         });
+      },
+    },
+    // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005/006)
+    // — recordOperationalWorkOutcome's own model calls.
+    outcomeObservation: {
+      findFirst: async ({ where }) => {
+        return [...outcomeObservations.values()].find((o) =>
+          o.propertyId === where.propertyId &&
+          o.sourceType === where.sourceType &&
+          o.sourceEntityType === where.sourceEntityType &&
+          o.sourceEntityId === where.sourceEntityId) ?? null;
+      },
+      create: async ({ data }) => {
+        const row = { id: crypto.randomUUID(), createdAt: new Date(), ...data };
+        outcomeObservations.set(row.id, row);
+        return row;
+      },
+    },
+    recommendationAttribution: {
+      createMany: async ({ data }) => {
+        for (const entry of data) {
+          const row = { id: crypto.randomUUID(), createdAt: new Date(), ...entry };
+          recommendationAttributions.set(row.id, row);
+        }
+        return { count: data.length };
       },
     },
   };
@@ -509,6 +536,15 @@ test('reconcileBookingLifecycle: CONFIRMED -> SCHEDULED, STARTED -> IN_PROGRESS,
   await reconcileBookingLifecycle(tx, { id: 'booking-1' }, 'STARTED', onLifecycleEvent);
   assert.equal(tx.__store.workItems.get(created.id).state, 'IN_PROGRESS');
 
-  await reconcileBookingLifecycle(tx, { id: 'booking-1' }, 'COMPLETED', onLifecycleEvent);
+  await reconcileBookingLifecycle(tx, { id: 'booking-1', finalPriceCents: 45000 }, 'COMPLETED', onLifecycleEvent);
   assert.equal(tx.__store.workItems.get(created.id).state, 'VERIFIED');
+
+  // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005) —
+  // a completed booking now records an OutcomeObservation atomically with
+  // the VERIFIED transition.
+  const outcome = [...tx.__store.outcomeObservations.values()].find((o) => o.sourceEntityId === created.id);
+  assert.ok(outcome, 'expected an OutcomeObservation for the completed booking work item');
+  assert.equal(outcome.sourceType, 'OPERATIONAL_WORK_ITEM');
+  assert.equal(outcome.verificationStatus, 'CORROBORATED');
+  assert.equal(outcome.observedPayload.costCents, 45000);
 });

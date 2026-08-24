@@ -17,6 +17,7 @@ import type {
   RecommendationAttribution,
   RecommendationAttributionRelationshipType,
 } from '@prisma/client';
+import type { WorkItemDb } from '../../modules/homeOperations/infrastructure/workItemRepository';
 
 export class OutcomeObservationNotFoundError extends Error {
   constructor(id: string) {
@@ -55,9 +56,10 @@ export async function attachAttributions(
   outcomeObservationId: string,
   recommendationSnapshotId: string | null,
   relationshipTypes: RecommendationAttributionRelationshipType[],
+  db: WorkItemDb = prisma,
 ): Promise<void> {
   if (!recommendationSnapshotId || !relationshipTypes.length) return;
-  await prisma.recommendationAttribution.createMany({
+  await db.recommendationAttribution.createMany({
     data: relationshipTypes.map((relationshipType) => ({
       recommendationSnapshotId,
       outcomeObservationId,
@@ -212,10 +214,16 @@ interface RecordOperationalWorkOutcomeInput {
   recommendationSnapshotId: string | null;
 }
 
+// db defaults to the global client but accepts a caller's own transaction
+// (e.g. bookingWorkReconciliation.service.ts's reconcileBookingLifecycle,
+// which must record the outcome atomically with the booking completion
+// write it runs inside) — same convention as transitionWorkItem's own db
+// parameter.
 export async function recordOperationalWorkOutcome(
   input: RecordOperationalWorkOutcomeInput,
+  db: WorkItemDb = prisma,
 ): Promise<OutcomeObservation> {
-  const existing = await prisma.outcomeObservation.findFirst({
+  const existing = await db.outcomeObservation.findFirst({
     where: {
       propertyId: input.propertyId,
       sourceType: 'OPERATIONAL_WORK_ITEM',
@@ -226,7 +234,7 @@ export async function recordOperationalWorkOutcome(
   if (existing) return existing;
 
   const hasCost = input.costCents != null;
-  const observation = await prisma.outcomeObservation.create({
+  const observation = await db.outcomeObservation.create({
     data: {
       propertyId: input.propertyId,
       sourceType: 'OPERATIONAL_WORK_ITEM',
@@ -246,7 +254,7 @@ export async function recordOperationalWorkOutcome(
     },
   });
 
-  await attachAttributions(observation.id, input.recommendationSnapshotId, relationshipTypesFor('COMPLETED', hasCost));
+  await attachAttributions(observation.id, input.recommendationSnapshotId, relationshipTypesFor('COMPLETED', hasCost), db);
   return observation;
 }
 

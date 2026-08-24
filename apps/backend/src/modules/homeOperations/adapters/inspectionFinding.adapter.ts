@@ -5,6 +5,7 @@ import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { findWorkItemsLinkedToExecution } from '../infrastructure/workItemRepository';
 import { transitionWorkItem } from '../application/transitionWorkItem.usecase';
+import { recordOperationalWorkOutcome } from '../../../services/decisionPlatform/outcomeObservationService';
 
 /**
  * Home Operations Slice 5: a raw-record adapter (like maintenanceTask
@@ -181,10 +182,22 @@ export async function propagateFindingResolutionFromExecution(
       // methods for "resolved via tracked Home Operations work"; none is a
       // precise match, same class of imprecision Slice 4 already documented
       // for its own disposition mapping.
-      if (current.state === 'VERIFIED') await prisma.inspectionFinding.updateMany({
-        where: { id: workItem.subjectId, status: 'OPEN' },
-        data: { status: 'RESOLVED', resolutionMethod: 'CONTRACTOR_WORK', resolvedAt: new Date() },
-      });
+      if (current.state === 'VERIFIED') {
+        await prisma.inspectionFinding.updateMany({
+          where: { id: workItem.subjectId, status: 'OPEN' },
+          data: { status: 'RESOLVED', resolutionMethod: 'CONTRACTOR_WORK', resolvedAt: new Date() },
+        });
+        // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005/
+        // 006). No attribution attempt -- a finding resolution has no
+        // reliable path back to a Decision Thread.
+        await recordOperationalWorkOutcome({
+          propertyId: workItem.propertyId,
+          workItemId: current.id,
+          userId: null,
+          costCents: null,
+          recommendationSnapshotId: null,
+        });
+      }
     }
   } catch (err) {
     logger.warn({ err, executionType, executionEntityId }, 'Home Operations finding resolution propagation failed; execution mutation proceeds regardless');

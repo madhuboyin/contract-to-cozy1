@@ -19,6 +19,7 @@ import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { resolveGuidanceJourneyWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import type { ProposedWorkItem } from '../modules/homeOperations/domain/sourceAdapter';
+import { recordOperationalWorkOutcome } from './decisionPlatform/outcomeObservationService';
 
 export type OriginResolutionMethod =
   | 'EXPLICIT_LINEAGE'
@@ -484,7 +485,7 @@ export async function reconcileBookingCancelled(
 
 export async function reconcileBookingLifecycle(
   tx: WorkItemDb,
-  booking: { id: string },
+  booking: { id: string; finalPriceCents?: number | null },
   event: 'CONFIRMED' | 'STARTED' | 'COMPLETED',
   onLifecycleEvent: WorkItemLifecycleEventCallback,
 ): Promise<void> {
@@ -512,5 +513,19 @@ export async function reconcileBookingLifecycle(
       idempotencyKey: `booking-verified:${booking.id}`,
       payload: { bookingId: booking.id, evidenceSource: 'BOOKING' },
     }, tx, onLifecycleEvent);
+
+    // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-005/
+    // 006). Recorded inside this same transaction (tx), not the global
+    // client -- if the booking-completion transaction rolls back, no
+    // outcome should exist either. No attribution attempt here (unlike the
+    // maintenance/guidance/project paths) -- a marketplace booking has no
+    // reliable path back to a Decision Thread yet.
+    await recordOperationalWorkOutcome({
+      propertyId: workItem.propertyId,
+      workItemId: workItem.id,
+      userId: null,
+      costCents: booking.finalPriceCents ?? null,
+      recommendationSnapshotId: null,
+    }, tx);
   }
 }

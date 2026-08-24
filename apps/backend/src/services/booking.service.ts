@@ -1071,7 +1071,10 @@ export class BookingService {
       // HI-ATT-010: the Booking is authoritative domain evidence for
       // REPORTED_COMPLETE -> VERIFIED — reconciled in this same transaction
       // as the completion write, not a separate one.
-      await reconcileBookingLifecycle(tx, { id: bookingId }, 'COMPLETED', (workItem, event) => {
+      await reconcileBookingLifecycle(tx, {
+        id: bookingId,
+        finalPriceCents: completedBooking.finalPrice != null ? Math.round(Number(completedBooking.finalPrice) * 100) : null,
+      }, 'COMPLETED', (workItem, event) => {
         completedPendingEvents.push({ workItem, event });
       });
 
