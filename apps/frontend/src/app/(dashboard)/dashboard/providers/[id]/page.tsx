@@ -64,6 +64,7 @@ export default function ProviderDetailPage() {
   const insightFactor = searchParams.get('insightFactor');
   const category = searchParams.get('category');
   const predictionId = searchParams.get('predictionId');
+  const originWorkItemId = searchParams.get('originWorkItemId');
   const itemId = searchParams.get('itemId');
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
@@ -317,6 +318,7 @@ export default function ProviderDetailPage() {
     if (category) queryParams.append('category', category);
     if (workCategory) queryParams.append('workCategory', workCategory);
     if (predictionId) queryParams.append('predictionId', predictionId);
+    if (originWorkItemId) queryParams.append('originWorkItemId', originWorkItemId);
     if (itemId) queryParams.append('itemId', itemId);
     if (guidanceJourneyId) queryParams.append('guidanceJourneyId', guidanceJourneyId);
     if (guidanceStepKey) queryParams.append('guidanceStepKey', guidanceStepKey);

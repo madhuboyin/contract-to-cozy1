@@ -1658,23 +1658,34 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
   if (!property) return [];
 
   const healthScore = calculateHealthScore(property as any, documentCount, activeBookings as any);
-  const inventoryItems = (property as any).inventoryItems as Array<{ id: string; name: string; category: string; installedOn: Date | null }> ?? [];
+  const inventoryItems = (property as any).inventoryItems as Array<{ id: string; name: string; assetType: string | null; category: string; installedOn: Date | null }> ?? [];
   const applianceRecords = inventoryItems.filter((item) => item.category === 'APPLIANCE');
   const appliancesMissingInstallYear = applianceRecords.filter((item) => !item.installedOn);
+  const warranties = (property as any).warranties as Array<{ id: string; expiryDate: Date | string | null }> ?? [];
 
   // Deterministic sourceVersion (HI-ATT-007 stable-version requirement) —
   // previously null, which stamped every evaluation as a fresh change
   // regardless of whether the contributing facts actually moved.
   // property.updatedAt already captures every scalar field
-  // calculateHealthScore reads (yearBuilt, dwellingType, roofType, install
-  // years, etc. — any change to those bumps it automatically); documentCount,
-  // activeBookings, and per-item installedOn/category are separate records
-  // that don't, so each is folded into the hash explicitly.
+  // calculateHealthScore reads directly off property (yearBuilt, dwellingType,
+  // roofType, install years, etc. — any change to those bumps it
+  // automatically). Everything else calculateHealthScore/this function reads
+  // from a separate record — documentCount; per-warranty expiryDate
+  // (propertyScore.util.ts's hasActiveHomeWarranty, which flips as expiry
+  // dates cross "now" even with no warranty row changing); per-booking
+  // insightFactor, not just booking id (propertyScore.util.ts's
+  // isInsightBeingAddressed — an existing booking's insightFactor can change
+  // without the booking id set changing); and per-item name/assetType, not
+  // just category/installedOn (feeds the "${assetName} aging" insight factor
+  // name directly, which becomes the generated action's title/id) — each
+  // folded into the hash explicitly so a real change to any of them changes
+  // the version too.
   const healthInsightVersion = createHash('sha256').update(JSON.stringify({
     propertyUpdatedAt: (property as any).updatedAt?.toISOString?.() ?? null,
     documentCount,
-    activeBookingIds: activeBookings.map((b: any) => b.id).sort(),
-    items: inventoryItems.map((item) => `${item.id}:${item.category}:${item.installedOn?.toISOString() ?? ''}`).sort(),
+    activeBookings: activeBookings.map((b: any) => `${b.id}:${b.insightFactor ?? ''}`).sort(),
+    warranties: warranties.map((w) => `${w.id}:${w.expiryDate ? new Date(w.expiryDate).toISOString() : ''}`).sort(),
+    items: inventoryItems.map((item) => `${item.id}:${item.category}:${item.installedOn?.toISOString() ?? ''}:${item.name}:${item.assetType ?? ''}`).sort(),
   })).digest('hex');
 
   const actions: HomeAction[] = [];

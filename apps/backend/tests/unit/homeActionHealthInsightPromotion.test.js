@@ -158,6 +158,59 @@ test('sourceVersion changes when a contributing fact (documentCount) changes', a
   assert.notEqual(before.actions[0].source.version, after.actions[0].source.version);
 });
 
+// Finding (Phase 1 follow-up review): the first version of this hash
+// omitted warranty expiry state, booking insightFactor (vs. just booking
+// id), and inventory item name/assetType — each a real
+// calculateHealthScore/insight-generation input that can change the
+// resulting actions while leaving an id-and-category-only hash unchanged.
+test('sourceVersion changes when a warranty\'s expiryDate changes, even when hasActiveHomeWarranty (still expired either way) doesn\'t flip', async () => {
+  // Both dates are expired relative to NOW, so hasActiveHomeWarranty is
+  // false in both cases and the produced "aging" action is identical in
+  // content — this isolates the hash's sensitivity to the warranty's own
+  // expiryDate from any visible change in the score/action itself.
+  const before = await getPromotedHomeActions('property-1', stubSources({
+    property: baseProperty({
+      inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }],
+      warranties: [{ id: 'w-1', expiryDate: new Date('2019-01-01') }],
+    }),
+  }), { evaluatedAt: NOW, includePersonalization: false });
+  const after = await getPromotedHomeActions('property-1', stubSources({
+    property: baseProperty({
+      inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }],
+      warranties: [{ id: 'w-1', expiryDate: new Date('2020-06-01') }],
+    }),
+  }), { evaluatedAt: NOW, includePersonalization: false });
+
+  assert.equal(before.actions.length, 1);
+  assert.equal(after.actions.length, 1);
+  assert.equal(before.actions[0].id, after.actions[0].id, 'the produced action itself is identical in content');
+  assert.notEqual(before.actions[0].source.version, after.actions[0].source.version, 'the same warranty id with a different (still-expired) expiryDate must still change the version');
+});
+
+test('sourceVersion changes when an existing active booking\'s insightFactor changes', async () => {
+  const property = baseProperty({
+    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: null }],
+  });
+  const before = await getPromotedHomeActions('property-1', stubSources({ property, bookings: [{ id: 'booking-1', insightFactor: 'Roof Age' }] }), { evaluatedAt: NOW, includePersonalization: false });
+  const after = await getPromotedHomeActions('property-1', stubSources({ property, bookings: [{ id: 'booking-1', insightFactor: 'HVAC Age' }] }), { evaluatedAt: NOW, includePersonalization: false });
+
+  assert.notEqual(before.actions[0].source.version, after.actions[0].source.version, 'the same booking id with a different insightFactor must change the version');
+});
+
+test('sourceVersion changes when an inventory item\'s name changes (feeds the generated action title/id directly)', async () => {
+  const before = await getPromotedHomeActions('property-1', stubSources({
+    property: baseProperty({ inventoryItems: [{ id: 'item-1', name: 'Fridge', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }] }),
+  }), { evaluatedAt: NOW, includePersonalization: false });
+  const after = await getPromotedHomeActions('property-1', stubSources({
+    property: baseProperty({ inventoryItems: [{ id: 'item-1', name: 'Kitchen Refrigerator', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }] }),
+  }), { evaluatedAt: NOW, includePersonalization: false });
+
+  const versionBefore = before.actions.find((a) => a.id.includes('aging'))?.source.version;
+  const versionAfter = after.actions.find((a) => a.id.includes('aging'))?.source.version;
+  assert.ok(versionBefore, 'expected a criticallyAging insight for a 21-year-old appliance');
+  assert.notEqual(versionBefore, versionAfter, 'the same item id with a different name must change the version, since the name feeds the action title/factorSlug directly');
+});
+
 test('a db stub without property/document/booking tables does not throw and yields no health-insight actions', async () => {
   const db = {
     guidanceJourney: { findMany: async () => [] },
