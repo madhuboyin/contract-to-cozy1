@@ -2,6 +2,7 @@ import { canonicalCapabilityRegistry } from '../../productFramework/capabilities
 import type { AskOperationId } from '../ask/askOperationRegistry';
 import { getSkillForOperation, type SkillId } from '../skills/skillRegistry';
 import { HOME_ACTION_ADAPTER_OWNERSHIP } from './homeActionAdapterOwnership';
+import { HOME_ACTION_PRODUCER_OWNERSHIP } from './homeActionProducerOwnership';
 import type { CapabilitySkillGuidanceBridgeEntry } from './capabilitySkillGuidanceBridge.contract';
 
 /**
@@ -92,6 +93,14 @@ function buildEntry(capabilityId: string, operationIds: readonly AskOperationId[
   const ownershipEntry = singleSourceKind
     ? ownership.find((entry) => entry.sourceKind === singleSourceKind) ?? null
     : null;
+  const producerOutcomeOwners = singleSourceKind
+    ? [...new Set(HOME_ACTION_PRODUCER_OWNERSHIP
+      .filter((entry) => entry.sourceKind === singleSourceKind)
+      .flatMap((entry) => [
+        ...(entry.outcomeAdapterOwner ? [entry.outcomeAdapterOwner] : []),
+        ...(entry.endToEndOutcomeAdapters ?? []).map((adapter) => adapter.owner),
+      ]))]
+    : [];
 
   const phase6 = PHASE6_METADATA[capabilityId];
   return {
@@ -106,12 +115,12 @@ function buildEntry(capabilityId: string, operationIds: readonly AskOperationId[
       ? 'Ask operation execution (askOrchestrator.service.ts executeOperation)'
       : 'Home Action promotion only (homeActionSourcePromotion.service.ts) — not Ask-reachable',
     completionOwner: phase6?.completionOwner ?? ownershipEntry?.completionAdapterOwner ?? 'Not declared — no single Home Action source kind resolves for this capability today',
-    // Derived from the same ownershipEntry lookup as completionOwner rather
-    // than hardcoded, so this stops being null the moment any Home Action
-    // source kind actually gets an outcome adapter (HI-OUT-005) — see
-    // homeActionAdapterOwnership.ts's hasOutcomeAdapter field doc for why
-    // every kind is null today.
-    outcomeAdapter: phase6?.outcomeAdapter ?? ownershipEntry?.outcomeAdapterOwner ?? null,
+    // Capability-level outcome ownership includes both command-path adapters
+    // and domain/reconciliation adapters declared by producers of the single
+    // source kind. Priority Phase 6 metadata remains authoritative when a
+    // capability spans more than that Home Action mapping can express.
+    outcomeAdapter: phase6?.outcomeAdapter
+      ?? (producerOutcomeOwners.length > 0 ? producerOutcomeOwners.join(' / ') : ownershipEntry?.outcomeAdapterOwner ?? null),
   };
 }
 

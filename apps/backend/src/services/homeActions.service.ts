@@ -780,6 +780,7 @@ export function acceptedOperationalWorkHomeCopy(item: AcceptedOperationalWorkCop
   };
 }
 
+/** @homeActionProducer Appends accepted-work Home Actions to the supplied feed array. */
 async function appendAcceptedOperationalWork(
   propertyId: string,
   actions: RankedHomeAction[],

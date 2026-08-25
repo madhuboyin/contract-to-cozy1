@@ -477,6 +477,7 @@ function environmentInsightExpiry(insight: EnvironmentInsight): Date | null {
   return boundary;
 }
 
+/** @homeActionProducer Produces environment Home Actions while consulting incident actions for deduplication. */
 export function adaptEnvironmentInsightsToHomeActions(
   propertyId: string,
   insights: readonly EnvironmentInsight[],

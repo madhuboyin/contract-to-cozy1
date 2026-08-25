@@ -69,25 +69,32 @@ function producerTable(): string {
           : 'No';
     const prefixes = entry.idPrefixes.length > 0 ? entry.idPrefixes.map((p: string) => `\`${p}\``).join(', ') : '_none_';
     const commands = entry.supportedCommands.map((c: string) => `\`${c}\``).join(', ');
-    const outcome = entry.hasOutcomeAdapter ? `Yes — ${entry.outcomeAdapterOwner}` : 'No';
-    return `| \`${entry.producerId}\` | \`${entry.sourceFile}\` | ${entry.factSignalOrigin} | ${kind} | ${commands} | ${entry.commandOwner} | ${completion} | ${outcome} | ${workItem} | ${prefixes} |`;
+    const commandOutcome = entry.hasOutcomeAdapter ? `Yes — ${entry.outcomeAdapterOwner}` : 'No';
+    const endToEndOutcome = (entry.endToEndOutcomeAdapters ?? []).length > 0
+      ? entry.endToEndOutcomeAdapters!.map((adapter) => `${adapter.owner}<br>Path: ${adapter.completionPath}<br>Conditions: ${adapter.conditions}`).join('<br><br>')
+      : entry.hasOutcomeAdapter
+        ? `Same as command path — ${entry.outcomeAdapterOwner}`
+        : 'No verified path declared';
+    return `| \`${entry.producerId}\` | \`${entry.sourceFile}\` | ${entry.factSignalOrigin} | ${kind} | ${commands} | ${entry.commandOwner} | ${completion} | ${commandOutcome} | ${endToEndOutcome} | ${workItem} | ${prefixes} |`;
   });
   return [
-    '| Producer | Source file | Fact/signal origin | Source kind | Supported commands | Command owner | Completion adapter | Outcome owner | Work-item eligible | Id prefix(es) |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Producer | Source file | Fact/signal origin | Source kind | Supported commands | Command owner | Completion adapter | Command-path outcome | End-to-end outcome owner | Work-item eligible | Id prefix(es) |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...rows,
   ].join('\n');
 }
 
 function outcomeObservationRealitySection(): string {
-  const producersWithOutcomeAdapter = HOME_ACTION_PRODUCER_OWNERSHIP.filter((entry: HomeActionProducerOwnershipEntry) => entry.hasOutcomeAdapter).length;
+  const producersWithCommandOutcomeAdapter = HOME_ACTION_PRODUCER_OWNERSHIP.filter((entry: HomeActionProducerOwnershipEntry) => entry.hasOutcomeAdapter).length;
+  const producersWithEndToEndOutcomeAdapter = HOME_ACTION_PRODUCER_OWNERSHIP.filter((entry: HomeActionProducerOwnershipEntry) =>
+    entry.hasOutcomeAdapter || (entry.endToEndOutcomeAdapters ?? []).length > 0).length;
   return `## 6. Outcome observation reality (FRD §8.5 HI-OUT-005)
 
-The FRD §15 Phase 0 functional exit criterion asks the registry report to trace every active recommendation source through to its "outcome owner." The honest answer today: **${producersWithOutcomeAdapter} of ${HOME_ACTION_PRODUCER_OWNERSHIP.length}** Home Action producers have one.
+The FRD §15 Phase 0 functional exit criterion asks the registry report to trace every active recommendation source through to its "outcome owner." Command completion and authoritative domain completion are different paths: **${producersWithCommandOutcomeAdapter} of ${HOME_ACTION_PRODUCER_OWNERSHIP.length}** producers create an outcome directly from their Home Action COMPLETE/ALREADY_DONE command, while **${producersWithEndToEndOutcomeAdapter} of ${HOME_ACTION_PRODUCER_OWNERSHIP.length}** have at least one verified command or domain/reconciliation path to an outcome. Each domain path's linkage and VERIFIED-state conditions are explicit in §1; a declared path does not imply that every emitted recommendation has already created an outcome.
 
-\`OutcomeObservationSourceType\` (prisma/schema.prisma) already declares all 9 source types HI-OUT-005 calls for (\`HOMEOWNER_REPORTED\`, \`COMPLETED_MAINTENANCE_RECORD\`, \`OPERATIONAL_WORK_ITEM\`, \`PROJECT_RECORD\`, \`BOOKING_RECORD\`, \`CLAIM_RECORD\`, \`INSPECTION_FINDING\`, \`DOCUMENT_PROMOTION\`, \`COVERAGE_DECISION\`, \`HOME_EVENT\`), but \`outcomeObservationService.ts\` only implements creation for 2 of them: \`recordHomeownerReportedOutcome\` (reachable only from Ask/Cozy chat, \`askOrchestrator.service.ts\`) and \`recordCompletedMaintenanceOutcome\` (implemented, but has zero callers anywhere in the codebase). Neither is wired into \`executeHomeActionCommand\`'s COMPLETE path for any producer — completing a Home Action never creates an OutcomeObservation today, regardless of source.
+\`OutcomeObservationSourceType\` declares **10** source types. \`outcomeObservationService.ts\` implements seven idempotent creation adapters: \`recordHomeownerReportedOutcome\`, \`recordCompletedMaintenanceOutcome\`, \`recordOperationalWorkOutcome\`, \`recordClaimOutcome\`, \`recordDocumentPromotionOutcome\`, \`recordCoverageDecisionOutcome\`, and \`recordHomeEventOutcome\`. \`PROJECT_RECORD\`, \`BOOKING_RECORD\`, and \`INSPECTION_FINDING\` remain deliberately unused as direct source types because project, booking, guidance, inspection, incident, sale-readiness, and maintenance execution converge on the consistently shaped \`OPERATIONAL_WORK_ITEM\` outcome.
 
-This is real, verified functionality that HI-OUT-005 still needs to build — expanding outcome creation to the other 7 source types and wiring it into the Home Action completion path is a later-phase implementation project, not a Phase 0 registry-and-ownership gap. Phase 0's job here is honest declaration: \`hasOutcomeAdapter\`/\`outcomeAdapterOwner\` in \`homeActionProducerOwnership.ts\` and \`homeActionAdapterOwnership.ts\`, and the derived \`outcomeAdapter\` field in \`capabilitySkillGuidanceBridge.registry.ts\`, all resolve to false/null today — mechanically consistent with each other (validated at boot) and traceable in the table above, rather than a hardcoded placeholder.`;
+\`hasOutcomeAdapter\`/\`outcomeAdapterOwner\` now retain their narrow command-surface meaning. \`endToEndOutcomeAdapters\` records authoritative domain/reconciliation ownership separately, and the capability bridge derives fallback outcome ownership from both. Booking is an execution adapter rather than a Home Action producer, so its outcome is reported on the originating recommendation's path when that booking reuses a linked work item.`;
 }
 
 function capabilityBridgeTable(): string {
@@ -97,11 +104,11 @@ function capabilityBridgeTable(): string {
     .map((entry: CapabilitySkillGuidanceBridgeEntry) => {
       const operations = entry.operationIds.length > 0 ? entry.operationIds.join(', ') : '_none — Home Action only_';
       const skills = entry.skillIds.length > 0 ? entry.skillIds.join(', ') : '—';
-      return `| \`${entry.capabilityId}\` | ${operations} | ${skills} |`;
+      return `| \`${entry.capabilityId}\` | ${operations} | ${skills} | ${entry.completionOwner} | ${entry.outcomeAdapter ?? 'No verified adapter declared'} |`;
     });
   return [
-    '| Capability | Operations | Skill(s) resolved |',
-    '| --- | --- | --- |',
+    '| Capability | Operations | Skill(s) resolved | Completion owner | Outcome adapter |',
+    '| --- | --- | --- | --- | --- |',
     ...rows,
   ].join('\n');
 }
@@ -152,7 +159,7 @@ The compound-rule registry remains contract-only until Phase 5. The recompute an
 
 ## 1. Home Action producer inventory and ownership
 
-\`getHomeActionFeed()\` (\`apps/backend/src/services/homeActions.service.ts\`) has no dynamic adapter registry today — it concatenates output from three call sites, the largest of which (\`getPromotedHomeActions()\` in \`homeActionSourcePromotion.service.ts\`) runs the producers below. All producers normalize through \`adaptHomeActionSource()\`. \`apps/backend/src/services/intelligence/homeActionProducerOwnership.ts\` is the single source of truth for per-producer completion and work-item ownership; \`homeActionAdapterOwnership.ts\`'s source-kind-level table is derived from it, not maintained independently.
+\`getHomeActionFeed()\` (\`apps/backend/src/services/homeActions.service.ts\`) concatenates output from three call sites, the largest of which (\`getPromotedHomeActions()\` in \`homeActionSourcePromotion.service.ts\`) runs the producers below. All producers normalize through \`adaptHomeActionSource()\`. \`apps/backend/src/services/intelligence/homeActionProducerOwnership.ts\` is the single source of truth at producer granularity. \`homeActionAdapterOwnership.ts\` retains source-kind command defaults and derives work-item-eligible kinds/source mappings from the producer rows.
 
 ${producerTable()}
 
@@ -168,7 +175,7 @@ No formal three-way capability↔skill↔guidance link existed before Phase 0. \
 
 ${capabilityBridgeTable()}
 
-**Known gaps this registry documents but does not close:** \`guidanceJourneyTypeKeys\` is empty for every entry above. No real capability↔guidance-journey linkage exists anywhere in the codebase today — guidance journeys are keyed by \`signalIntentFamilies\`, not capability id, and journey step \`toolKey\` strings are informal/free-text, not validated against \`canonicalCapabilityRegistry\`. Filling this in is HI-SKL work for a later phase, not Phase 0 — populating it now would mean inventing mappings not backed by real behavior. \`outcomeAdapter\` is also \`null\` for every entry above — see §6.
+**Known limitation:** capabilities without Phase 6 metadata derive completion and outcome ownership only when their canonical recommendation contract resolves to one Home Action source kind. A capability with multiple or empty \`sourceKinds\` still requires an explicit capability-level mapping; the table says “No verified adapter declared” instead of inventing one.
 
 ---
 
@@ -182,7 +189,7 @@ Defined in \`apps/backend/src/services/intelligence/completionEvidencePolicy.reg
 
 ${completionEvidenceTable()}
 
-Not yet consumed anywhere (a later phase wires it into the completion UI); defined now so that phase has a validated contract to build against.
+Consumed by the shared Home/Fix completion flow and material-approval evidence validation; registry validation protects the minimums each safety tier requires.
 
 ---
 

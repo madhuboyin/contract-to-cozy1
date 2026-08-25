@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const ts = require('typescript');
 
 require('ts-node/register');
 
@@ -100,6 +101,15 @@ test('validateHomeActionProducerOwnership fails fast when hasOutcomeAdapter is t
   assert.ok(issues.some((issue) => issue.includes('loadProjectActions') && issue.includes('no completion adapter to observe')));
 });
 
+test('validateHomeActionProducerOwnership rejects incomplete end-to-end outcome ownership', () => {
+  const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadIncidentActions'
+      ? { ...entry, endToEndOutcomeAdapters: [{ owner: '', completionPath: 'syncIncidentWorkItem', conditions: '' }] }
+      : entry);
+  const issues = validateHomeActionProducerOwnership(bad);
+  assert.ok(issues.some((issue) => issue.includes('loadIncidentActions') && issue.includes('incomplete end-to-end')));
+});
+
 test('validateHomeActionProducerKindConsistency fails fast when a producer claims an outcome adapter its kind does not have', () => {
   const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
     entry.producerId === 'loadIncidentActions' ? { ...entry, hasOutcomeAdapter: true, outcomeAdapterOwner: 'made up for this test' } : entry);
@@ -107,34 +117,72 @@ test('validateHomeActionProducerKindConsistency fails fast when a producer claim
   assert.ok(issues.some((issue) => issue.includes('loadIncidentActions') && issue.includes('no outcome adapter at the kind level')));
 });
 
-/**
- * Loaders aren't dynamically enumerable from any object in the codebase —
- * homeActionSourcePromotion.service.ts's ~19 producer functions are plain
- * module-level declarations, not entries in a registry. This is the CI-time
- * completeness guardrail Phase 0 needs in place of a boot-time check: it
- * reads the real producer source files and asserts every declared
- * Home-Action-producing function has a row in HOME_ACTION_PRODUCER_OWNERSHIP,
- * so a new loader added without registering it fails here instead of
- * silently missing ownership.
- */
-const PRODUCER_SOURCE_FILES = [
-  '../../src/services/homeActionSourcePromotion.service.ts',
-  '../../src/services/orchestration.service.ts',
-  '../../src/services/entryContext.service.ts',
-  '../../src/services/homeActions.service.ts',
-];
+function functionLikeDeclaration(node) {
+  if (ts.isFunctionDeclaration(node) && node.name) return { name: node.name.text, declaration: node };
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+    && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+    return { name: node.name.text, declaration: node.initializer, jsDocNode: node };
+  }
+  return null;
+}
 
-const PRODUCER_FUNCTION_PATTERN = /(?:export\s+)?(?:async\s+)?function\s+((?:load\w+Actions)|adaptEnvironmentInsightsToHomeActions|adaptOrchestratedActionToHomeAction|getActivationFirstValue|appendAcceptedOperationalWork)\s*\(/g;
+function returnsHomeActionDirectly(declaration, sourceFile) {
+  if (!declaration.type) return false;
+  const returnType = declaration.type.getText(sourceFile).replace(/\s+/g, '');
+  const unwrapped = returnType.startsWith('Promise<') && returnType.endsWith('>')
+    ? returnType.slice('Promise<'.length, -1)
+    : returnType;
+  const returnsHomeAction = unwrapped === 'HomeAction'
+    || unwrapped === 'HomeAction[]'
+    || unwrapped === 'readonlyHomeAction[]'
+    || unwrapped === 'Array<HomeAction>'
+    || unwrapped === 'ReadonlyArray<HomeAction>';
+  if (!returnsHomeAction) return false;
 
-test('every Home-Action-producing function declared in the source files has a homeActionProducerOwnership entry', () => {
+  // A function that consumes HomeAction and returns HomeAction is a pipeline
+  // transformer, not an independent recommendation source.
+  return !declaration.parameters.some((parameter) => /\bHomeAction\b/.test(parameter.type?.getText(sourceFile) ?? ''));
+}
+
+function hasHomeActionProducerTag(node) {
+  return ts.getJSDocTags(node).some((tag) => tag.tagName.text === 'homeActionProducer');
+}
+
+function producerNamesInSource(source, fileName = 'producer.ts') {
+  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const producers = new Set();
+  function visit(node) {
+    const functionLike = functionLikeDeclaration(node);
+    if (functionLike) {
+      const tagged = hasHomeActionProducerTag(functionLike.jsDocNode ?? functionLike.declaration)
+        || hasHomeActionProducerTag(functionLike.declaration);
+      if (tagged || returnsHomeActionDirectly(functionLike.declaration, sourceFile)) producers.add(functionLike.name);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return producers;
+}
+
+function serviceSourceFiles(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return serviceSourceFiles(fullPath);
+    return entry.isFile() && entry.name.endsWith('.ts') ? [fullPath] : [];
+  });
+}
+
+test('every typed or tagged Home Action producer across backend services has an ownership entry', () => {
   const declaredProducerIds = new Set(HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) => entry.producerId));
   const foundProducerIds = new Set();
+  const foundLocations = new Map();
+  const servicesRoot = path.join(__dirname, '../../src/services');
 
-  for (const relativePath of PRODUCER_SOURCE_FILES) {
-    const filePath = path.join(__dirname, relativePath);
+  for (const filePath of serviceSourceFiles(servicesRoot)) {
     const source = fs.readFileSync(filePath, 'utf8');
-    for (const match of source.matchAll(PRODUCER_FUNCTION_PATTERN)) {
-      foundProducerIds.add(match[1]);
+    for (const producerId of producerNamesInSource(source, filePath)) {
+      foundProducerIds.add(producerId);
+      foundLocations.set(producerId, path.relative(path.join(__dirname, '../../../..'), filePath));
     }
   }
 
@@ -143,4 +191,20 @@ test('every Home-Action-producing function declared in the source files has a ho
 
   const stale = [...declaredProducerIds].filter((id) => !foundProducerIds.has(id));
   assert.deepEqual(stale, [], `homeActionProducerOwnership entry/entries reference producer function(s) no longer found in source: ${stale.join(', ')}`);
+
+  const wrongSourceFiles = HOME_ACTION_PRODUCER_OWNERSHIP
+    .filter((entry) => foundLocations.get(entry.producerId) !== entry.sourceFile)
+    .map((entry) => `${entry.producerId}: registry=${entry.sourceFile}, source=${foundLocations.get(entry.producerId)}`);
+  assert.deepEqual(wrongSourceFiles, [], `Producer sourceFile ownership drift: ${wrongSourceFiles.join('; ')}`);
+});
+
+test('producer discovery is type/tag based rather than function-name or fixed-file based', () => {
+  const discovered = producerNamesInSource(`
+    const deriveMitigationPlan = async (): Promise<HomeAction[]> => [];
+    function buildRecommendation(): HomeAction { throw new Error('fixture'); }
+    /** @homeActionProducer */
+    function appendRecommendation(target: HomeAction[]): void { void target; }
+    function transformExisting(actions: HomeAction[]): HomeAction[] { return actions; }
+  `, 'services/a-new-fifth-file.ts');
+  assert.deepEqual([...discovered].sort(), ['appendRecommendation', 'buildRecommendation', 'deriveMitigationPlan']);
 });

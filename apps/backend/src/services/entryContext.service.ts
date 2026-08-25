@@ -612,6 +612,7 @@ export type ActivationFirstValue = {
   } | null;
 };
 
+/** @homeActionProducer Produces activation Home Actions through a composite return contract. */
 export async function getActivationFirstValue(
   propertyId: string,
   userId: string,

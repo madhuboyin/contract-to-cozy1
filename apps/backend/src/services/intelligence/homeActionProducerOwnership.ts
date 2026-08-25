@@ -78,11 +78,16 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    endToEndOutcomeAdapters: [{
+      owner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts)',
+      completionPath: 'runJourneyCompletionHooks → syncGuidanceWorkItemsOnCompletion (services/guidanceEngine/guidanceCompletionHooks.service.ts)',
+      conditions: 'A linked Guidance Operational Work Item exists and authoritative journey completion advances it to VERIFIED.',
+    }],
     decisionLineagePolicy: {
       kind: 'VARIES_BY_INSTANCE',
       rationale: 'guidanceGovernance() parses each step\'s own governanceJson (guidanceDefinition author-declared), so safetyTier can be anything -- LOW_CONSEQUENCE, SAFETY_EMERGENCY, MATERIAL_FINANCIAL, or REGULATED_COVERAGE. A material instance is a genuine decision (guidanceDecisionContract already builds assumptions/options/tradeoffs for it) but no decision-family engine covers general guidance journeys today, only the separate repair-replace producer -- resolved per-action by resolveActionDecisionLineagePolicy.',
     },
-    notes: 'ACKNOWLEDGE only via executeHomeActionCommand (COMMAND path has no completion adapter here). No fixed id prefix. Home Intelligence FRD Phase 4: a guidance journey\'s own completion (runJourneyCompletionHooks -> syncGuidanceWorkItemsOnCompletion, guidanceCompletionHooks.service.ts) now creates an OutcomeObservation when its work item reaches VERIFIED -- a genuine outcome adapter, just not one reachable through this producer\'s Home Action command surface, so hasCompletionAdapter/hasOutcomeAdapter stay false here per this table\'s command-path framing.',
+    notes: 'ACKNOWLEDGE only via executeHomeActionCommand (the command path has no completion or outcome adapter). No fixed id prefix; authoritative journey completion owns the separate end-to-end outcome path declared above.',
   },
   {
     producerId: 'loadIncidentActions',
@@ -99,6 +104,11 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    endToEndOutcomeAdapters: [{
+      owner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts)',
+      completionPath: 'syncIncidentWorkItem (services/incidents/incidentWorkReconciliation.service.ts)',
+      conditions: 'An Incident-linked Operational Work Item exists and the Incident reaches RESOLVED or MITIGATED, advancing the item to VERIFIED.',
+    }],
     decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
     notes: 'ACKNOWLEDGE, plus CORRECT_FACT when critical (critical incidents restrict feedbackControls to [\'ACKNOWLEDGE\', \'CORRECT_FACT\'], a subset of the full set shown here). Governance is LOW_CONSEQUENCE or, when critical, SAFETY_EMERGENCY -- never material, so decision lineage never applies (an emergency should not wait on a Decision Thread).',
   },
@@ -153,6 +163,11 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    endToEndOutcomeAdapters: [{
+      owner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts)',
+      completionPath: 'propagateResolutionToFinding (modules/homeOperations/adapters/inspectionFinding.adapter.ts)',
+      conditions: 'A separately execution-linked finding Operational Work Item reaches VERIFIED; loadInspectionFindingActions itself remains non-work-item-eligible.',
+    }],
     decisionLineagePolicy: {
       kind: 'VARIES_BY_INSTANCE',
       rationale: 'A finding is LOW_CONSEQUENCE, SAFETY_EMERGENCY (isSafety), or MATERIAL_FINANCIAL (isMaterialMajor: MAJOR severity at/above the $1,500 cost threshold) depending on the specific finding. No decision-family engine covers inspection findings yet, so a material instance always fails closed today -- resolved per-action by resolveActionDecisionLineagePolicy.',
@@ -192,6 +207,11 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    endToEndOutcomeAdapters: [{
+      owner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts)',
+      completionPath: 'approveMaterialWorkHandler / completeWorkItemHandler (modules/homeOperations/api/homeOperations.controller.ts), or booking completion reconciliation',
+      conditions: 'A Coverage recommendation has a linked Operational Work Item and an evidence-governed completion path advances it to VERIFIED.',
+    }],
     decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'COVERAGE_QUESTION' },
     notes: 'ACKNOWLEDGE only. No fixed id prefix (lineageId is `coverage-review:${questionKey}`). Governance is always fixed MATERIAL_FINANCIAL (a coverage question already carries real options/tradeoffs). Phase 3 review finding 4 delivery step 6: coverageQuestionDecisionFamilyAdapter (domainSnapshotAdapters.ts) wraps the primary open CoverageReviewQuestion.',
   },
@@ -336,6 +356,11 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    endToEndOutcomeAdapters: [{
+      owner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts)',
+      completionPath: 'Guidance/project/booking reconciliation for the related repair-replace journey',
+      conditions: 'The analysis is linked through its related Guidance Journey to an Operational Work Item that reaches VERIFIED.',
+    }],
     decisionLineagePolicy: { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'HVAC_REPAIR_REPLACE' },
     notes: 'ACKNOWLEDGE only. Added Phase 1 Slice 2 (ReplaceRepairAnalysis) — the producer this Phase 0 pass adds a row for after it was missing from the original registry report. Governance is always fixed MATERIAL_FINANCIAL. The one producer with a real registered decision family (Phase 3A) — resolveActionDecisionLineagePolicy still fails closed per-item when the underlying InventoryItem is not actually HVAC (composeHvacDecisionContext\'s own eligibility gate). Home Intelligence FRD Phase 5 work item 2, rule 6 of 7 (HI-CMP-002): also batch-checks HomeEvent REPAIR/MAINTENANCE history per inventoryItemId (countRecentRepairEventsByInventoryItem, 30-month lookback, 2+ events) and enriches priority/evidence/whyItMatters when a recurring-failure pattern exists — id/lineageId/decisionLineagePolicy are unaffected.',
   },
@@ -375,11 +400,16 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    endToEndOutcomeAdapters: [{
+      owner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts)',
+      completionPath: 'syncJourneyWorkItemForProjectEvent / syncProjectExecutionWorkItemOnCompletion (services/projectWorkItemReconciliation.service.ts)',
+      conditions: 'A linked Project Operational Work Item reaches VERIFIED after authoritative project completion.',
+    }],
     decisionLineagePolicy: {
       kind: 'VARIES_BY_INSTANCE',
       rationale: 'projectGovernance() computes SAFETY_EMERGENCY (open safety issue), REGULATED_COVERAGE (coverage-funded), MATERIAL_FINANCIAL (contract amount/permit/HOA/credential/complexity signals), or LOW_CONSEQUENCE per project. No decision-family engine covers projects, so a material instance always fails closed today -- resolved per-action by resolveActionDecisionLineagePolicy.',
     },
-    notes: 'ACKNOWLEDGE only via executeHomeActionCommand. Home Intelligence FRD Phase 4: a project\'s own verified completion (syncJourneyWorkItemForProjectEvent / syncProjectExecutionWorkItemOnCompletion, projectWorkItemReconciliation.service.ts) now creates an OutcomeObservation when its work item reaches VERIFIED, same command-path caveat as loadGuidanceActions above.',
+    notes: 'ACKNOWLEDGE only via executeHomeActionCommand; the command path has no completion or outcome adapter. Authoritative project completion owns the separate end-to-end outcome path declared above.',
   },
   {
     producerId: 'loadSalePrepActions',
@@ -396,6 +426,11 @@ export const HOME_ACTION_PRODUCER_OWNERSHIP: readonly HomeActionProducerOwnershi
     commandOwner: GENERIC_DEFAULT_COMMAND_OWNER,
     hasOutcomeAdapter: false,
     outcomeAdapterOwner: null,
+    endToEndOutcomeAdapters: [{
+      owner: 'recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts)',
+      completionPath: 'syncSaleReadinessItemWorkItem (services/saleReadinessWorkReconciliation.service.ts)',
+      conditions: 'A linked Sale Readiness Operational Work Item exists and the homeowner resolves the authoritative SaleReadinessItem, advancing the item to VERIFIED.',
+    }],
     decisionLineagePolicy: { kind: 'NOT_REQUIRED' },
     notes: 'Completion happens by the homeowner updating the self-reported condition on Sale Case, not a COMPLETE command against the promoted work item. Id is per-item with an "industry-guidance" suffix, not one fixed literal prefix. Governance is always lowConsequenceGovernance(\'sale-prep-v1\') — never material. Home Intelligence FRD Phase 5 work item 2, rule 3 of 7 (HI-CMP-002) added PERMIT/PERMIT_UNPERMITTED_FLAG to the promotable source types.',
   },

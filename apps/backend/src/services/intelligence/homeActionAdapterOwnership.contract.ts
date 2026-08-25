@@ -26,10 +26,10 @@ export interface HomeActionAdapterOwnershipEntry {
   workKeyEligible: boolean;
   workItemSourceType: OperationalWorkSourceType | null;
   /**
-   * Whether completing an action of this kind creates an OutcomeObservation
-   * (HI-OUT-005) — false for every kind today, cross-checked against the
-   * per-producer hasOutcomeAdapter rows in homeActionProducerOwnership.ts.
-   * See that file's field doc for why this is uniformly false.
+   * Whether COMPLETE/ALREADY_DONE on the Home Action command surface creates
+   * an OutcomeObservation. Domain reconciliation outcomes live at producer
+   * granularity in homeActionProducerOwnership.ts and are intentionally not
+   * collapsed into this source-kind command default.
    */
   hasOutcomeAdapter: boolean;
   outcomeAdapterOwner: string | null;

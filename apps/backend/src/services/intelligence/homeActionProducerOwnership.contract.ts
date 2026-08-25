@@ -29,6 +29,19 @@ export type DecisionLineagePolicy =
     }
   | { kind: 'VARIES_BY_INSTANCE'; rationale: string };
 
+/**
+ * A real OutcomeObservation creation path reached after the underlying
+ * obligation progresses outside the Home Action command surface. Keeping
+ * this separate from hasOutcomeAdapter prevents an ACKNOWLEDGE-only card
+ * from being reported as having no outcome when its authoritative domain
+ * record or linked Operational Work Item later reaches VERIFIED.
+ */
+export interface EndToEndOutcomeAdapterOwnership {
+  owner: string;
+  completionPath: string;
+  conditions: string;
+}
+
 export function validateDecisionLineagePolicyReferences(
   producers: readonly { producerId: string; decisionLineagePolicy: DecisionLineagePolicy }[],
 ): string[] {
@@ -123,20 +136,20 @@ export interface HomeActionProducerOwnershipEntry {
    */
   commandOwner: string;
   /**
-   * Whether completing this producer's obligation creates an
-   * OutcomeObservation (HI-OUT-005) — the FRD §15 Phase 0 exit criterion's
-   * "outcome owner." As of this pass, false for every producer: the two
-   * outcomeObservationService.ts functions that create one
-   * (recordHomeownerReportedOutcome, recordCompletedMaintenanceOutcome)
-   * are reachable only from Ask/Cozy chat (askOrchestrator.service.ts) and
-   * never called at all, respectively — neither is wired to
-   * executeHomeActionCommand's COMPLETE path for any producer. This is a
-   * real, verified functional gap (HI-OUT-005 work, not Phase 0 scope to
-   * close) documented here rather than left implicit — see the Phase 0
-   * registry report.
+   * True only when this producer's own Home Action COMPLETE/ALREADY_DONE
+   * command creates an OutcomeObservation. This is intentionally narrower
+   * than endToEndOutcomeAdapters: most domain obligations complete through
+   * reconciliation rather than through executeHomeActionCommand.
    */
   hasOutcomeAdapter: boolean;
   outcomeAdapterOwner: string | null;
+  /**
+   * Domain/reconciliation paths that create an OutcomeObservation for the
+   * obligation represented by this producer. Empty means no verified path
+   * is currently known. Conditions must state linkage/state requirements so
+   * the generated report never implies that every emitted card completes.
+   */
+  endToEndOutcomeAdapters?: readonly EndToEndOutcomeAdapterOwnership[];
   /** HI-DEC-002 / Phase 3 review finding 4 — see DecisionLineagePolicy's own doc comment. Required so a new producer cannot be added without this being reviewed. */
   decisionLineagePolicy: DecisionLineagePolicy;
   notes: string;
@@ -258,6 +271,17 @@ export function validateHomeActionProducerOwnership(
     }
     if (entry.hasOutcomeAdapter && !entry.hasCompletionAdapter) {
       issues.push(`homeActionProducerOwnership entry "${entry.producerId}" hasOutcomeAdapter but has no completion adapter to observe the outcome of.`);
+    }
+    const seenEndToEndOwners = new Set<string>();
+    for (const adapter of entry.endToEndOutcomeAdapters ?? []) {
+      if (!adapter.owner.trim() || !adapter.completionPath.trim() || !adapter.conditions.trim()) {
+        issues.push(`homeActionProducerOwnership entry "${entry.producerId}" has an incomplete end-to-end outcome adapter declaration.`);
+      }
+      const identity = `${adapter.owner}\u0000${adapter.completionPath}`;
+      if (seenEndToEndOwners.has(identity)) {
+        issues.push(`homeActionProducerOwnership entry "${entry.producerId}" declares duplicate end-to-end outcome adapter "${adapter.owner}".`);
+      }
+      seenEndToEndOwners.add(identity);
     }
     for (const prefix of entry.idPrefixes) {
       const existingOwner = seenPrefixes.get(prefix);
