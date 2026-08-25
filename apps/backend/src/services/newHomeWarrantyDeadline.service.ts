@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { NotificationService } from './notification.service';
+import { reconcileMaintenanceTaskWork } from './maintenanceTaskCanonicalReconciliation.service';
 import { isPropertyAllowlisted } from '../config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '../lib/smokeTestCorrelation';
 import { newHomeWarrantyPlanUrl } from '../lib/notificationDeepLinks';
@@ -107,6 +108,10 @@ export async function processNewHomeWarrantyDeadlines(options: {
       },
     });
     promoted += 1;
+
+    // Do not send a deadline notification until the canonical maintenance
+    // obligation is represented in Operational Work/Home Actions.
+    await reconcileMaintenanceTaskWork(task.id);
 
     let notifiedAt = right.notifiedAt;
     if (willNotify) {

@@ -90,6 +90,7 @@ export async function createTasksFromRiskAssessment(
         userId,
         propertyId,
         {
+          source: 'RISK_ASSESSMENT',
           title: rec.title,
           description: rec.description,
           assetType: rec.assetType,

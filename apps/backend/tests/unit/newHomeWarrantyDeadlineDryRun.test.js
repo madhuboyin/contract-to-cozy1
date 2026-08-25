@@ -37,6 +37,7 @@ function loadService({ rights, expiredCount = 0 }) {
   const upsertCalls = [];
   const rightUpdateCalls = [];
   const createCalls = [];
+  const reconciliationCalls = [];
 
   const prismaMock = {
     newHomeWarrantyRight: {
@@ -79,6 +80,18 @@ function loadService({ rights, expiredCount = 0 }) {
     },
   };
 
+  const reconciliationServicePath = require.resolve('../../src/services/maintenanceTaskCanonicalReconciliation.service.ts');
+  require.cache[reconciliationServicePath] = {
+    id: reconciliationServicePath,
+    filename: reconciliationServicePath,
+    loaded: true,
+    exports: {
+      reconcileMaintenanceTaskWork: async (taskId) => {
+        reconciliationCalls.push(taskId);
+      },
+    },
+  };
+
   const servicePath = require.resolve('../../src/services/newHomeWarrantyDeadline.service.ts');
   delete require.cache[servicePath];
   return {
@@ -88,6 +101,7 @@ function loadService({ rights, expiredCount = 0 }) {
     getUpsertCalls: () => upsertCalls,
     getRightUpdateCalls: () => rightUpdateCalls,
     getCreateCalls: () => createCalls,
+    getReconciliationCalls: () => reconciliationCalls,
   };
 }
 
@@ -122,12 +136,13 @@ test('dry run: counts promoted/notified but performs zero writes', async () => {
 });
 
 test('no opts (the daily cron tick): behaves exactly like a real run', async () => {
-  const { service, getUpsertCalls, getCreateCalls } = loadService({ rights: [right()] });
+  const { service, getUpsertCalls, getCreateCalls, getReconciliationCalls } = loadService({ rights: [right()] });
 
   const result = await service.processNewHomeWarrantyDeadlines();
 
   assert.equal(getUpsertCalls().length, 1);
   assert.equal(getCreateCalls().length, 1);
+  assert.deepEqual(getReconciliationCalls(), ['task-1']);
   assert.equal(result.promoted, 1);
 });
 

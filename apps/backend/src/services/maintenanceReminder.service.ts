@@ -19,6 +19,7 @@ import { areWorkerOutboundNotificationsEnabled } from '../config/workerExecution
 import { logger } from '../lib/logger';
 import { createAskNotificationContinuation } from './ask/askNotificationContinuation.service';
 import { operatingModeForOwnershipState } from './skills/context/propertyJourneyContext.contract';
+import { reconcileMaintenanceTaskWork } from './maintenanceTaskCanonicalReconciliation.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -94,6 +95,10 @@ export async function processMaintenanceReminders(options: {
     // WKR-008: isolate per-task failures so one bad reminder doesn't abort
     // every other homeowner's reminder for the rest of this run.
     try {
+      // A reminder must never outrun canonical Home/Fix/Cozy representation.
+      // This also heals tasks created by older/raw system-owned write paths.
+      await reconcileMaintenanceTaskWork(task.id);
+
       const daysUntilDue = Math.round((dueAt.getTime() - now.getTime()) / DAY_MS);
       const isMaterial = daysUntilDue <= MATERIAL_DEADLINE_DAYS;
       const dueLabel =

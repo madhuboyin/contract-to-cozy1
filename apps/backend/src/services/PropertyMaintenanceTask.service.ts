@@ -292,13 +292,16 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         estimatedCost?: number;
         nextDueDate: string;
         actionKey?: string; // 🔑 ADD: Accept actionKey from caller
+        /** Preserve the recommendation's real provenance instead of flattening every producer to ACTION_CENTER. */
+        source?: 'ACTION_CENTER' | 'RISK_ASSESSMENT';
       }
     ): Promise<{ task: PropertyMaintenanceTask; deduped: boolean }> {
       // Verify property access (CONTRIBUTOR+ required to create tasks)
       await this.verifyPropertyOwnership(userId, propertyId, 'CONTRIBUTOR');
 
       // 🔑 FIX: Use provided actionKey OR fallback to generated one
-      const actionKey = data.actionKey || `${propertyId}:ACTION_CENTER:${data.assetType}`;
+      const source = data.source ?? 'ACTION_CENTER';
+      const actionKey = data.actionKey || `${propertyId}:${source}:${data.assetType}`;
 
       // Check if task already exists
       const existing = await prisma.propertyMaintenanceTask.findUnique({
@@ -331,7 +334,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
             title: data.title,
             description: data.description ?? null,
             status: 'PENDING',
-            source: 'ACTION_CENTER',
+            source,
             actionKey, // Use the correct actionKey
             assetType: data.assetType,
             priority: data.priority,
@@ -1088,6 +1091,34 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       const task = await prisma.propertyMaintenanceTask.findUnique({ where: { id: taskId } });
       if (!task) throw new Error('Maintenance task no longer exists.');
       await this.syncTaskWorkItem(null, task, false, task.status === 'COMPLETED', null, null, true);
+    }
+
+    /**
+     * HI-ATT-008 maintenance source parity.
+     *
+     * Some system-owned producers create tasks inside their own domain
+     * transaction and cannot call the interactive task creation methods.
+     * Reconcile every active canonical task at the shared Home-feed boundary
+     * so historical and future system writes cannot silently disappear from
+     * Home/Fix/Cozy because their original write missed the best-effort hook.
+     *
+     * Failures propagate: returning a partially authoritative feed would
+     * recreate the cross-surface disagreement this boundary prevents. The
+     * reconciliation record still retains retry evidence.
+     */
+    static async reconcileActiveTaskWorkItems(propertyId: string): Promise<number> {
+      const tasks = await prisma.propertyMaintenanceTask.findMany({
+        where: {
+          propertyId,
+          status: { in: ['PENDING', 'IN_PROGRESS', 'NEEDS_REVIEW'] },
+        },
+        orderBy: { id: 'asc' },
+      });
+
+      for (const task of tasks) {
+        await this.syncTaskWorkItem(null, task, false, false, null, null, true);
+      }
+      return tasks.length;
     }
 
     static async updateTaskStatus(

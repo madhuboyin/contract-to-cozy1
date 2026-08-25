@@ -19,6 +19,7 @@ import { publishOrchestrationSnoozeSignal, snoozeAction } from './orchestrationS
 import { filterGroundedHomeActions, getPromotedHomeActions } from './homeActionSourcePromotion.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { NewHomeSetupService } from './newHomeSetup.service';
+import { reconcileActiveMaintenanceTaskWork } from './maintenanceTaskCanonicalReconciliation.service';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinancialContext.service';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
@@ -974,6 +975,11 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   // so the property does not depend on a buyer dashboard or a separate cron.
   await BuyerAcquisitionService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
   await NewHomeSetupService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
+  // HI-ATT-008: PropertyMaintenanceTask is the ownership-care authority.
+  // Heal legacy/raw system writes before materializing the shared feed so an
+  // active task cannot notify or appear on Maintenance while disappearing
+  // from Home, Fix, and Cozy's canonical action/work projection.
+  await reconcileActiveMaintenanceTaskWork(propertyId);
   const environmentReportPromise = getEnvironmentReportForProperty(propertyId, userId).catch((error) => {
     logger.warn({ err: error, propertyId, userId }, 'Unified Home environment insight evaluation failed closed');
     return null;

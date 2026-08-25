@@ -11,8 +11,9 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadService({ tasks, existingUpdateShouldFail = false, createImpl } = {}) {
+function loadService({ tasks, existingUpdateShouldFail = false, createImpl, reconcileImpl } = {}) {
   const updateCalls = [];
+  const reconciliationCalls = [];
   const prismaMock = {
     propertyMaintenanceTask: {
       findMany: async () => tasks,
@@ -49,12 +50,34 @@ function loadService({ tasks, existingUpdateShouldFail = false, createImpl } = {
     },
   };
 
+  const reconciliationServicePath = require.resolve('../../src/services/maintenanceTaskCanonicalReconciliation.service.ts');
+  require.cache[reconciliationServicePath] = {
+    id: reconciliationServicePath,
+    filename: reconciliationServicePath,
+    loaded: true,
+    exports: {
+      reconcileMaintenanceTaskWork: async (taskId) => {
+        reconciliationCalls.push(taskId);
+        if (reconcileImpl) return reconcileImpl(taskId);
+      },
+    },
+  };
+
+  const askContinuationPath = require.resolve('../../src/services/ask/askNotificationContinuation.service.ts');
+  require.cache[askContinuationPath] = {
+    id: askContinuationPath,
+    filename: askContinuationPath,
+    loaded: true,
+    exports: { createAskNotificationContinuation: async () => null },
+  };
+
   const servicePath = require.resolve('../../src/services/maintenanceReminder.service.ts');
   delete require.cache[servicePath];
   return {
     service: require(servicePath),
     getCreateCalls: () => createCalls,
     getUpdateCalls: () => updateCalls,
+    getReconciliationCalls: () => reconciliationCalls,
     setCreateReturnValue: (v) => {
       createReturnValue = v;
     },
@@ -76,16 +99,17 @@ function task(overrides = {}) {
   };
 }
 
-test('creates a governed notification for a due task and stamps remindedForDueDate', async () => {
+test('reconciles canonical work before creating a governed notification for a due task', async () => {
   delete process.env.WORKER_OUTBOUND_NOTIFICATIONS_ENABLED;
   const now = new Date('2026-07-19T00:00:00.000Z');
-  const { service, getCreateCalls, getUpdateCalls } = loadService({ tasks: [task()] });
+  const { service, getCreateCalls, getUpdateCalls, getReconciliationCalls } = loadService({ tasks: [task()] });
 
   const result = await service.processMaintenanceReminders({ now });
 
   assert.equal(result.examined, 1);
   assert.equal(result.notified, 1);
   assert.equal(result.skipped, 0);
+  assert.deepEqual(getReconciliationCalls(), ['task-1']);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1);
@@ -217,4 +241,18 @@ test('WKR-008: rejects the run when every task fails, instead of reporting false
     () => service.processMaintenanceReminders({ now: new Date('2026-07-19T00:00:00.000Z') }),
     /All 1 task\(s\) failed/,
   );
+});
+
+test('does not notify when canonical work reconciliation fails', async () => {
+  const { service, getCreateCalls, getUpdateCalls } = loadService({
+    tasks: [task()],
+    reconcileImpl: async () => { throw new Error('work reconciliation unavailable'); },
+  });
+
+  await assert.rejects(
+    () => service.processMaintenanceReminders({ now: new Date('2026-07-19T00:00:00.000Z') }),
+    /All 1 task\(s\) failed/,
+  );
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(getUpdateCalls().length, 0);
 });
