@@ -4,6 +4,7 @@ import {
   PropertyMortgageStatus,
   RefinanceDecisionStatus,
 } from '@prisma/client';
+import type { RecommendationAttributionRelationshipType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -200,17 +201,17 @@ async function loadDecision(tx: Prisma.TransactionClient, decisionId: string) {
 export function refinanceDecisionAttributionRelationships(
   status: RefinanceDecisionStatus,
   hasObservedCost: boolean,
-) {
-  const relationships = status === RefinanceDecisionStatus.KEEP_CURRENT_LOAN
+): RecommendationAttributionRelationshipType[] {
+  const relationships: RecommendationAttributionRelationshipType[] = status === RefinanceDecisionStatus.KEEP_CURRENT_LOAN
     || status === RefinanceDecisionStatus.OFFER_SELECTED
-    ? ['SELECTED_OPTION' as const]
+    ? ['SELECTED_OPTION']
     : status === RefinanceDecisionStatus.PROCEEDING
       || status === RefinanceDecisionStatus.APPLICATION_IN_PROGRESS
-      ? ['ACTION_STARTED' as const]
+      ? ['ACTION_STARTED']
       : status === RefinanceDecisionStatus.DEFERRED
-        ? ['TIMING_OBSERVED' as const]
+        ? ['TIMING_OBSERVED']
         : OUTCOME_STATUSES.has(status)
-          ? ['ACTION_COMPLETED' as const, 'RESULT_OBSERVED' as const]
+          ? ['ACTION_COMPLETED', 'RESULT_OBSERVED']
           : [];
   if (hasObservedCost) relationships.push('COST_OBSERVED');
   return relationships;
