@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const { resolveAskAudienceContext } = require('../../src/services/ask/askAudienceContext.ts');
-const { evaluateAskAudienceApplicability, getAskAudiencePolicy, isAskOperationDiscoverableForAudience } = require('../../src/services/ask/askAudiencePolicy.ts');
+const { evaluateAskAudienceApplicability, getAskAudiencePolicy, isAskOperationDiscoverableForAudience, validateAskAudiencePolicies } = require('../../src/services/ask/askAudiencePolicy.ts');
 const { applyAskAudiencePresentation } = require('../../src/services/ask/askAudiencePresentation.ts');
 const { propertyScopeForAskRouting, resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 
@@ -47,6 +47,29 @@ test('semantic discovery excludes lifecycle-inapplicable and unauthorized operat
   assert.equal(isAskOperationDiscoverableForAudience({
     operationId: 'MAINTENANCE_STATUS', accountRole: 'HOMEOWNER', householdRole: 'VIEWER', operatingMode: 'BUYING',
   }), true);
+});
+
+test('buyer-closing operations have complete BUYING-only audience policies', () => {
+  const buyerOperations = [
+    'BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_DOCUMENT_READINESS', 'BUYER_INSPECTION_REVIEW',
+    'BUYER_TASK_COMPLETE', 'BUYER_TASK_CREATE', 'BUYER_TASK_UPDATE', 'BUYER_MOVE_STATUS',
+    'BUYER_FINANCING_READINESS', 'BUYER_TITLE_ESCROW_READINESS', 'BUYER_WALKTHROUGH_READINESS',
+    'BUYER_DISCLOSURE_FUNDS_READINESS', 'BUYER_CLOSING_DAY_READINESS', 'BUYER_CONTRACT_TIMELINE',
+    'BUYER_NEGOTIATION_READINESS', 'BUYER_COST_READINESS', 'BUYER_FINDING_DISPOSITION',
+    'BUYER_LIFECYCLE_UPDATE',
+  ];
+
+  assert.deepEqual(validateAskAudiencePolicies(), []);
+  for (const operationId of buyerOperations) {
+    const policy = getAskAudiencePolicy(operationId);
+    assert.deepEqual(policy.eligibleOperatingModes, ['BUYING'], operationId);
+    assert.equal(evaluateAskAudienceApplicability({
+      policy, accountRole: 'HOMEOWNER', householdRole: 'OWNER', operatingMode: 'BUYING', purpose: 'EXECUTION',
+    }).allowed, true, operationId);
+    assert.equal(isAskOperationDiscoverableForAudience({
+      operationId, accountRole: 'HOMEOWNER', householdRole: 'OWNER', operatingMode: 'OWNING',
+    }), false, operationId);
+  }
 });
 
 test('safety routing removes untrusted property scope before authorization-dependent work', () => {

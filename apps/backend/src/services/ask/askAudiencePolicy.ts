@@ -122,6 +122,28 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('PROPERTY_TAX_APPEAL_READINESS', ALL_MODES),
   definePolicy('RENOVATION_PERMIT_READINESS', KNOWN_MODES),
   definePolicy('MAJOR_EVENT_ENTRY', OWNER_LIFECYCLE_MODES),
+  // Buyer & Closing is transaction-scoped. These operations require an
+  // active BUYING journey; UNKNOWN receives the standard context-required
+  // explanation and OWNING/SELLING audiences do not discover them. Command
+  // role floors still come from the immutable operation definitions.
+  definePolicy('BUYER_PLAN_STATUS', ['BUYING']),
+  definePolicy('BUYER_DEADLINES', ['BUYING']),
+  definePolicy('BUYER_DOCUMENT_READINESS', ['BUYING']),
+  definePolicy('BUYER_INSPECTION_REVIEW', ['BUYING']),
+  definePolicy('BUYER_TASK_COMPLETE', ['BUYING']),
+  definePolicy('BUYER_TASK_CREATE', ['BUYING']),
+  definePolicy('BUYER_TASK_UPDATE', ['BUYING']),
+  definePolicy('BUYER_MOVE_STATUS', ['BUYING']),
+  definePolicy('BUYER_FINANCING_READINESS', ['BUYING']),
+  definePolicy('BUYER_TITLE_ESCROW_READINESS', ['BUYING']),
+  definePolicy('BUYER_WALKTHROUGH_READINESS', ['BUYING']),
+  definePolicy('BUYER_DISCLOSURE_FUNDS_READINESS', ['BUYING']),
+  definePolicy('BUYER_CLOSING_DAY_READINESS', ['BUYING']),
+  definePolicy('BUYER_CONTRACT_TIMELINE', ['BUYING']),
+  definePolicy('BUYER_NEGOTIATION_READINESS', ['BUYING']),
+  definePolicy('BUYER_COST_READINESS', ['BUYING']),
+  definePolicy('BUYER_FINDING_DISPOSITION', ['BUYING']),
+  definePolicy('BUYER_LIFECYCLE_UPDATE', ['BUYING']),
 ];
 
 export const ASK_AUDIENCE_POLICIES: Readonly<Record<string, AskAudiencePolicy>> = Object.freeze(
