@@ -9542,6 +9542,10 @@ model IntelligenceRecomputeRun {
   triggerEntityId      String
   changedFactKeys      String[]                         @default([])
   changedReferences    Json?
+  // Health carried by SOURCE_HEALTH_CHANGED triggers so successful consumer
+  // validation cannot incorrectly mark source-dependent output CURRENT while
+  // its underlying source remains degraded or unavailable.
+  sourceHealth         String?
   idempotencyKey       String                           @unique
   requestedContextVersion String?
   resultingContextVersion String?

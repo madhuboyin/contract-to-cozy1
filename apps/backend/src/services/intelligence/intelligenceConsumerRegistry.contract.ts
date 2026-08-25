@@ -44,6 +44,14 @@ export interface IntelligenceConsumerDefinition {
   resolutionMode: IntelligenceResolutionMode;
   relevantFactKeys: readonly string[];
   relevantSourceEntityTypes: readonly string[];
+  /**
+   * Source identities whose health transitions affect this consumer. These
+   * are deliberately separate from relevantSourceEntityTypes: RADAR_SOURCE,
+   * for example, is a dependency identity rather than a canonical Home Event
+   * record. Keeping the declarations separate prevents a health transition
+   * from relying on an accidental domain-entity-name match.
+   */
+  relevantSourceHealthEntityTypes?: readonly string[];
   outputOwner: string;
   timeoutMs: number;
   retryPolicy: { maxAttempts: number; backoffMs: number };

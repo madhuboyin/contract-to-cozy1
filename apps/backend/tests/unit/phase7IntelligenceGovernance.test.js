@@ -13,8 +13,11 @@ const {
 } = require('../../src/services/ai/aiRequestGovernance.service.ts');
 const {
   AI_SOURCE_REGISTRY,
+  PLATFORM_EXTERNAL_SOURCE_REGISTRY,
   validateIntelligenceSourceRegistry,
 } = require('../../src/services/intelligence/sourceRegistry.ts');
+const { INTELLIGENCE_CONSUMER_REGISTRY } = require('../../src/services/intelligence/intelligenceConsumerRegistry.ts');
+const { resolveApplicableConsumers } = require('../../src/services/intelligenceRecompute/intelligenceRecompute.service.ts');
 const { runPhase7EvaluationHarness } = require('../../src/services/intelligence/phase7EvaluationHarness.ts');
 
 test('Phase 7 deterministic evaluation harness covers every required category and passes', () => {
@@ -35,6 +38,32 @@ test('AI source registry is complete and every direct model-call file uses the g
     const source = fs.readFileSync(path.join(repositoryRoot, entry.sourceFile), 'utf8');
     assert.match(source, /executeGovernedAIRequest/, `${entry.sourceId} bypasses AI request governance`);
     assert.match(source, new RegExp(entry.sourceId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+});
+
+test('production source-health identities resolve to their declared recompute consumers', () => {
+  const expectedBySourceType = new Map([
+    ['RADAR_SOURCE', ['compound-radar', 'home-actions', 'home-briefing']],
+    ['SERVICE_PRICE_BENCHMARK_SOURCE', ['service-price-radar']],
+    ['PROPERTY_INTELLIGENCE_SOURCE', ['capability-suggestions', 'compound-radar', 'home-actions', 'home-briefing', 'property-context']],
+  ]);
+
+  for (const [sourceType, expected] of expectedBySourceType) {
+    const matched = resolveApplicableConsumers(INTELLIGENCE_CONSUMER_REGISTRY, {
+      triggerType: 'SOURCE_HEALTH_CHANGED',
+      changedFactKeys: [],
+      sourceEntityTypes: [sourceType],
+    }).map((consumer) => consumer.consumerKey).sort();
+    assert.deepEqual(matched, expected, `${sourceType} must have an effective production recompute route`);
+  }
+
+  for (const source of PLATFORM_EXTERNAL_SOURCE_REGISTRY) {
+    const matched = resolveApplicableConsumers(INTELLIGENCE_CONSUMER_REGISTRY, {
+      triggerType: 'SOURCE_HEALTH_CHANGED',
+      changedFactKeys: [],
+      sourceEntityTypes: [source.healthEntityType],
+    }).map((consumer) => consumer.consumerKey).sort();
+    assert.deepEqual(matched, [...source.recomputeConsumerKeys].sort(), `${source.sourceId} registry mapping drifted from consumer declarations`);
   }
 });
 

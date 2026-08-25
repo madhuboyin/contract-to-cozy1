@@ -165,6 +165,7 @@ function staticConsumer(overrides = {}) {
     resolutionMode: 'STATIC',
     relevantFactKeys: ['fact.a'],
     relevantSourceEntityTypes: [],
+    relevantSourceHealthEntityTypes: [],
     outputOwner: 'test',
     timeoutMs: 1000,
     retryPolicy: { maxAttempts: 2, backoffMs: 1000 },
@@ -210,6 +211,7 @@ const {
   processRecomputeRequestedEvent,
   processRecomputeRetryRequestedEvent,
   getPropertyRefreshState,
+  successfulConsumerCurrentness,
 } = require('../../src/services/intelligenceRecompute/intelligenceRecompute.service.ts');
 
 function trigger(overrides = {}) {
@@ -258,6 +260,19 @@ test('resolveApplicableConsumers matches on relevantSourceEntityTypes intersecti
   const registry = [staticConsumer({ consumerKey: 'a', relevantFactKeys: [], relevantSourceEntityTypes: ['Booking'] })];
   const matched = resolveApplicableConsumers(registry, { triggerType: 'SOURCE_RECORD_CHANGED', changedFactKeys: [], sourceEntityTypes: ['Booking'] });
   assert.deepEqual(matched.map((c) => c.consumerKey), ['a']);
+});
+
+test('resolveApplicableConsumers uses explicit source-health dependencies for SOURCE_HEALTH_CHANGED', () => {
+  const registry = [
+    staticConsumer({ consumerKey: 'health', relevantFactKeys: [], relevantSourceHealthEntityTypes: ['RADAR_SOURCE'] }),
+    staticConsumer({ consumerKey: 'domain-only', relevantFactKeys: [], relevantSourceEntityTypes: ['RADAR_SOURCE'] }),
+  ];
+  const matched = resolveApplicableConsumers(registry, {
+    triggerType: 'SOURCE_HEALTH_CHANGED',
+    changedFactKeys: [],
+    sourceEntityTypes: ['RADAR_SOURCE'],
+  });
+  assert.deepEqual(matched.map((consumer) => consumer.consumerKey), ['health']);
 });
 
 test('resolveApplicableConsumers returns every entry for MANUAL_REFRESH regardless of changed facts', () => {
@@ -397,6 +412,12 @@ test('processTarget marks a target SUCCEEDED when the consumer recompute handler
   assert.equal(db.__store.targets.get(target.id).status, 'SUCCEEDED');
 });
 
+test('successful source-health recompute preserves stale/unavailable policy until source recovery', () => {
+  assert.equal(successfulConsumerCurrentness(staticConsumer({ failureBehavior: 'MARK_STALE' }), 'DEGRADED'), 'STALE');
+  assert.equal(successfulConsumerCurrentness(staticConsumer({ failureBehavior: 'MARK_UNAVAILABLE' }), 'UNAVAILABLE'), 'UNAVAILABLE');
+  assert.equal(successfulConsumerCurrentness(staticConsumer({ failureBehavior: 'MARK_UNAVAILABLE' }), 'CURRENT'), 'CURRENT');
+});
+
 test('processTarget marks a target FAILED and records lastError when the consumer recompute handler rejects', async () => {
   const db = makeFakeDb();
   const run = await createOrClaimRecomputeRun(db, trigger());
@@ -521,6 +542,45 @@ test('processRecomputeRequestedEvent: a trigger matching zero consumers still pr
   const { emit } = collectEmittedEvents();
   const run = await processRecomputeRequestedEvent(db, trigger({ changedFactKeys: ['fact.unrelated'] }), [staticConsumer()], emit);
   assert.equal(run.status, 'SUCCEEDED');
+});
+
+test('processRecomputeRequestedEvent: a production-shaped source-health trigger materializes a target and marks its output stale', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  const consumer = staticConsumer({
+    consumerKey: 'compound-radar',
+    relevantFactKeys: [],
+    relevantSourceHealthEntityTypes: ['RADAR_SOURCE'],
+  });
+  const run = await processRecomputeRequestedEvent(db, trigger({
+    triggerType: 'SOURCE_HEALTH_CHANGED',
+    triggerEntityType: 'RADAR_SOURCE',
+    triggerEntityId: 'weather-provider',
+    changedFactKeys: [],
+    sourceHealth: 'DEGRADED',
+  }), [consumer], emit);
+  assert.equal(run.status, 'SUCCEEDED');
+  const targets = await db.intelligenceRecomputeTarget.findMany({ where: { recomputeRunId: run.id } });
+  assert.equal(targets.length, 1);
+  const currentness = [...db.__store.currentness.values()][0];
+  assert.equal(currentness.status, 'STALE');
+  assert.equal(currentness.reason, 'SOURCE_DEGRADED');
+});
+
+test('processRecomputeRequestedEvent: an unmapped source-health trigger fails visibly instead of succeeding with zero targets', async () => {
+  const db = makeFakeDb();
+  const { emit } = collectEmittedEvents();
+  const run = await processRecomputeRequestedEvent(db, trigger({
+    triggerType: 'SOURCE_HEALTH_CHANGED',
+    triggerEntityType: 'UNKNOWN_SOURCE',
+    triggerEntityId: 'unknown',
+    changedFactKeys: [],
+    sourceHealth: 'UNAVAILABLE',
+  }), [staticConsumer()], emit);
+  assert.equal(run.status, 'FAILED');
+  assert.match(run.errorSummary, /No intelligence consumer declares source-health dependency/);
+  const targets = await db.intelligenceRecomputeTarget.findMany({ where: { recomputeRunId: run.id } });
+  assert.equal(targets.length, 0);
 });
 
 test('processRecomputeRequestedEvent: a redelivered (already-processed) event does not reprocess', async () => {

@@ -45,6 +45,7 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
   {
     consumerKey: 'property-context', version: '1.0', resolutionMode: 'STATIC',
     relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
+    relevantSourceHealthEntityTypes: ['PROPERTY_INTELLIGENCE_SOURCE'],
     outputOwner: 'Property Context aggregation/facades — validates the complete canonical context snapshot.',
     timeoutMs: 20_000, retryPolicy: { maxAttempts: 3, backoffMs: 30_000 }, failureBehavior: 'MARK_STALE',
     recompute: async ({ propertyId, signal }) => {
@@ -55,6 +56,7 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
   {
     consumerKey: 'home-actions', version: '1.0', resolutionMode: 'STATIC',
     relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
+    relevantSourceHealthEntityTypes: ['RADAR_SOURCE', 'PROPERTY_INTELLIGENCE_SOURCE'],
     outputOwner: 'getHomeActionFeed — live canonical Home Action materialization/read validation.',
     timeoutMs: 30_000, retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, failureBehavior: 'MARK_STALE',
     recompute: async ({ propertyId, signal }) => {
@@ -69,6 +71,7 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     resolutionMode: 'STATIC',
     relevantFactKeys: [],
     relevantSourceEntityTypes: ['HOME_EVENT', 'INTELLIGENCE_OBSERVATION'],
+    relevantSourceHealthEntityTypes: ['RADAR_SOURCE', 'PROPERTY_INTELLIGENCE_SOURCE'],
     outputOwner: 'reconcileRadarCompoundInsightsForProperty (modules/homeEventRadar/services/radarCompoundInsight.service.ts) — writes PropertyRadarCompoundInsight rows.',
     timeoutMs: 15_000,
     retryPolicy: { maxAttempts: 3, backoffMs: 60_000 },
@@ -223,6 +226,7 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     resolutionMode: 'STATIC',
     relevantFactKeys: [],
     relevantSourceEntityTypes: ['PROPERTY_FACT', 'HOME_EVENT', 'MAINTENANCE_RECORD', 'CLAIM_RECORD', 'PROJECT_RECORD'],
+    relevantSourceHealthEntityTypes: ['RADAR_SOURCE', 'PROPERTY_INTELLIGENCE_SOURCE'],
     outputOwner: 'generateDueHomeBriefings (homeBriefing/homeBriefing.service.ts) — same function apps/workers/src/jobs/homeBriefingDelivery.job.ts already calls on a schedule; its deliveryKey dedup makes a repeat call within the same window a no-op.',
     timeoutMs: 20_000,
     retryPolicy: { maxAttempts: 2, backoffMs: 60_000 },
@@ -236,12 +240,35 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
   {
     consumerKey: 'capability-suggestions', version: '1.0', resolutionMode: 'STATIC',
     relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
+    relevantSourceHealthEntityTypes: ['PROPERTY_INTELLIGENCE_SOURCE'],
     outputOwner: 'getCapabilitySuggestions — capability readiness/suggestion projection.',
     timeoutMs: 30_000, retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, failureBehavior: 'MARK_STALE',
     recompute: async ({ propertyId, signal }) => {
       const userId = await homeownerForProperty(propertyId); throwIfAborted(signal);
       const { getCapabilitySuggestions } = await import('../capabilityRecommendation.service'); throwIfAborted(signal);
       await getCapabilitySuggestions({ propertyId, userId, surface: 'HOME', recordEligibility: false });
+      throwIfAborted(signal);
+    },
+  },
+  {
+    consumerKey: 'service-price-radar',
+    version: '1.0',
+    resolutionMode: 'STATIC',
+    relevantFactKeys: [],
+    relevantSourceEntityTypes: [],
+    relevantSourceHealthEntityTypes: ['SERVICE_PRICE_BENCHMARK_SOURCE'],
+    outputOwner: 'ServiceRadarCheck persisted quote-comparison results — source-health transitions invalidate or restore their property-level currentness overlay.',
+    timeoutMs: 10_000,
+    retryPolicy: { maxAttempts: 3, backoffMs: 30_000 },
+    failureBehavior: 'MARK_UNAVAILABLE',
+    recompute: async ({ propertyId, signal }) => {
+      // Existing checks are immutable decision records and cannot be rebuilt
+      // without repeating the homeowner's original comparison. Validate that
+      // the property-scoped projection remains queryable; orchestration keeps
+      // it STALE/UNAVAILABLE while the benchmark source is unhealthy and
+      // restores CURRENT only after a healthy-source transition succeeds.
+      throwIfAborted(signal);
+      await prisma.serviceRadarCheck.count({ where: { propertyId } });
       throwIfAborted(signal);
     },
   },

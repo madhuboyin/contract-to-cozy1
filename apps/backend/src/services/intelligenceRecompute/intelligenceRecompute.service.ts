@@ -12,6 +12,7 @@ import type {
   IntelligenceConsumerDefinition,
   IntelligenceRecomputeTargetHandle,
 } from '../intelligence/intelligenceConsumerRegistry.contract';
+import type { PropertyChangeSourceHealth } from '../../propertyChanges/propertyChange.contracts';
 
 // Home Intelligence Functional Completeness FRD §8.2/§9.3/§9.4/§10.5/§11 —
 // Full request -> resolve -> materialize -> process -> retry -> currentness
@@ -35,6 +36,7 @@ export interface RequestRecomputeInput {
   triggerEntityId: string;
   changedFactKeys: readonly string[];
   changedReferences?: readonly { entityType: string; entityId: string; fieldPath?: string }[];
+  sourceHealth?: PropertyChangeSourceHealth | null;
   requestedContextVersion?: string | null;
 }
 
@@ -43,6 +45,7 @@ export interface RecomputeRunTrigger extends RequestRecomputeInput {
 }
 
 export type ProcessTargetOutcome = 'SUCCEEDED' | 'FAILED' | 'NOT_CLAIMED';
+type ConsumerCurrentnessStatus = 'CURRENT' | 'STALE' | 'UNAVAILABLE';
 
 export const DYNAMIC_TARGET_PAGE_SIZE = 100;
 export const MAX_DYNAMIC_TARGET_PAGES = 100;
@@ -97,6 +100,7 @@ export async function requestRecompute(input: RequestRecomputeInput, emit: EmitD
       triggerEntityId: input.triggerEntityId,
       changedFactKeys: [...input.changedFactKeys],
       changedReferences: [...(input.changedReferences ?? [])],
+      sourceHealth: input.sourceHealth ?? null,
       requestedContextVersion: input.requestedContextVersion ?? null,
       idempotencyKey,
     },
@@ -111,11 +115,13 @@ export function resolveApplicableConsumers(
   if (input.triggerType === 'MANUAL_REFRESH') return [...registry];
   const factKeys = new Set(input.changedFactKeys);
   const sourceTypes = new Set(input.sourceEntityTypes ?? []);
-  return registry.filter(
-    (entry) =>
-      entry.relevantFactKeys.some((k) => factKeys.has(k)) ||
-      entry.relevantSourceEntityTypes.some((t) => sourceTypes.has(t)),
-  );
+  return registry.filter((entry) => {
+    if (input.triggerType === 'SOURCE_HEALTH_CHANGED') {
+      return (entry.relevantSourceHealthEntityTypes ?? []).some((t) => sourceTypes.has(t));
+    }
+    return entry.relevantFactKeys.some((k) => factKeys.has(k))
+      || entry.relevantSourceEntityTypes.some((t) => sourceTypes.has(t));
+  });
 }
 
 /** §11 item 3: "the worker shall create/claim the recompute run." Idempotent on IntelligenceRecomputeRun.idempotencyKey. */
@@ -131,6 +137,7 @@ export async function createOrClaimRecomputeRun(db: RecomputeDb, trigger: Recomp
         triggerEntityId: trigger.triggerEntityId,
         changedFactKeys: [...trigger.changedFactKeys],
         changedReferences: [...(trigger.changedReferences ?? [])] as Prisma.InputJsonValue,
+        sourceHealth: trigger.sourceHealth ?? null,
         idempotencyKey: trigger.idempotencyKey,
         requestedContextVersion: trigger.requestedContextVersion ?? null,
         status: 'PENDING',
@@ -367,6 +374,7 @@ export async function processTarget(
   propertyId: string,
   target: MaterializedTarget,
   consumer: IntelligenceConsumerDefinition,
+  sourceHealth: PropertyChangeSourceHealth | null = null,
 ): Promise<ProcessTargetOutcome> {
   const staleBefore = new Date(Date.now() - staleProcessingReclaimThresholdMs(consumer));
   const locked = await db.intelligenceRecomputeTarget.updateMany({
@@ -402,15 +410,16 @@ export async function processTarget(
       consumer.timeoutMs,
       consumer.consumerKey,
     );
+    const currentnessStatus = successfulConsumerCurrentness(consumer, sourceHealth);
     await persistTargetOutcome(db, {
       propertyId,
       consumer,
       target,
       targetData: { status: 'SUCCEEDED', completedAt: new Date(), lastError: null },
-      currentnessStatus: consumer.successCurrentnessStatus ?? 'CURRENT',
-      reason: consumer.successCurrentnessStatus && consumer.successCurrentnessStatus !== 'CURRENT'
-        ? 'OUTPUT_INVALIDATED'
-        : 'RECOMPUTE_SUCCEEDED',
+      currentnessStatus,
+      reason: sourceHealth && sourceHealth !== 'CURRENT'
+        ? `SOURCE_${sourceHealth}`
+        : currentnessStatus !== 'CURRENT' ? 'OUTPUT_INVALIDATED' : 'RECOMPUTE_SUCCEEDED',
     });
     return 'SUCCEEDED';
   } catch (err: any) {
@@ -426,6 +435,28 @@ export async function processTarget(
     });
     return 'FAILED';
   }
+}
+
+/**
+ * A handler succeeding means its code ran successfully; it does not make an
+ * unhealthy dependency healthy. Preserve an honest stale/unavailable overlay
+ * until a later CURRENT source-health transition successfully validates the
+ * consumer again.
+ */
+export function successfulConsumerCurrentness(
+  consumer: Pick<IntelligenceConsumerDefinition, 'failureBehavior' | 'successCurrentnessStatus'>,
+  sourceHealth: PropertyChangeSourceHealth | null | undefined,
+): ConsumerCurrentnessStatus {
+  if (!sourceHealth || sourceHealth === 'CURRENT') {
+    return consumer.successCurrentnessStatus ?? 'CURRENT';
+  }
+  if (
+    (sourceHealth === 'UNAVAILABLE' || sourceHealth === 'NOT_CONFIGURED')
+    && consumer.failureBehavior === 'MARK_UNAVAILABLE'
+  ) {
+    return 'UNAVAILABLE';
+  }
+  return 'STALE';
 }
 
 /** §11 item 5: "enqueue a retry request using the existing worker execution policy and lease conventions" — reuses processDomainEventsJob's own FAILED-status backoff schedule; the idempotency key is per-attempt so each successive failure gets a fresh, distinct retry request. */
@@ -447,6 +478,7 @@ async function attemptTarget(
   target: MaterializedTarget,
   registry: readonly IntelligenceConsumerDefinition[],
   emit: EmitDomainEvent,
+  sourceHealth: PropertyChangeSourceHealth | null = null,
 ): Promise<ProcessTargetOutcome> {
   const consumer = registry.find((c) => c.consumerKey === target.consumerKey);
   if (!consumer) {
@@ -464,7 +496,7 @@ async function attemptTarget(
     return locked.count === 1 ? 'FAILED' : 'NOT_CLAIMED';
   }
 
-  const outcome = await processTarget(db, propertyId, target, consumer);
+  const outcome = await processTarget(db, propertyId, target, consumer, sourceHealth);
   if (outcome === 'FAILED') {
     const newAttempts = target.attempts + 1;
     if (newAttempts < consumer.retryPolicy.maxAttempts) {
@@ -597,6 +629,16 @@ export async function processRecomputeRequestedEvent(
     // every possible changed field as a factKey.
     sourceEntityTypes: [trigger.triggerEntityType],
   });
+  if (trigger.triggerType === 'SOURCE_HEALTH_CHANGED' && consumers.length === 0) {
+    return db.intelligenceRecomputeRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'FAILED',
+        completedAt: new Date(),
+        errorSummary: `No intelligence consumer declares source-health dependency "${trigger.triggerEntityType}".`,
+      },
+    });
+  }
   const targets = await materializeTargets(
     db,
     {
@@ -611,8 +653,19 @@ export async function processRecomputeRequestedEvent(
     consumers,
   );
 
+  if (trigger.triggerType === 'SOURCE_HEALTH_CHANGED' && targets.length === 0) {
+    return db.intelligenceRecomputeRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'FAILED',
+        completedAt: new Date(),
+        errorSummary: `Source-health dependency "${trigger.triggerEntityType}" resolved consumers but materialized no targets.`,
+      },
+    });
+  }
+
   for (const target of targets) {
-    await attemptTarget(db, run.propertyId, target, registry, emit);
+    await attemptTarget(db, run.propertyId, target, registry, emit, trigger.sourceHealth ?? null);
   }
 
   return updateRunStatusFromTargets(db, run.id, registry);
@@ -634,7 +687,14 @@ export async function processRecomputeRetryRequestedEvent(
     throw new Error(`Recompute retry event references an unknown run ${input.recomputeRunId}`);
   }
 
-  await attemptTarget(db, run.propertyId, target as MaterializedTarget, registry, emit);
+  await attemptTarget(
+    db,
+    run.propertyId,
+    target as MaterializedTarget,
+    registry,
+    emit,
+    (run.sourceHealth as PropertyChangeSourceHealth | null) ?? null,
+  );
   return updateRunStatusFromTargets(db, input.recomputeRunId, registry);
 }
 

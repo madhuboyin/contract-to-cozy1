@@ -5,6 +5,10 @@ export interface IntelligenceSourceRegistryEntry {
   kind: IntelligenceSourceKind;
   owner: string;
   capabilityConsumers: readonly string[];
+  /** PropertyChange source type used when this source's health changes. */
+  healthEntityType?: string;
+  /** Exact intelligenceConsumerRegistry keys affected by that transition. */
+  recomputeConsumerKeys?: readonly string[];
   freshnessSlaSeconds: number;
   credentialConfigRequirements: readonly string[];
   retryPolicy: { maxAttempts: number; backoffMs: number };
@@ -43,8 +47,8 @@ export const AI_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Ob
 ]);
 
 export const PLATFORM_EXTERNAL_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Object.freeze([
-  { sourceId: 'external:home-event-radar', kind: 'EXTERNAL', owner: 'Home Event Radar', capabilityConsumers: ['home-event-radar', 'home-actions', 'home-briefing'], freshnessSlaSeconds: 3600, credentialConfigRequirements: ['source-specific adapter configuration'], retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, fallbackBehavior: 'Mark matching evidence stale and suppress source-dependent compound outputs.', userVisibleDegradationMessage: 'Around-your-home updates may be delayed because a source is stale or unavailable.', operationalRunbook: 'docs/product/HOME_EVENT_RADAR_IMPLEMENTATION_PLAN.md' },
-  { sourceId: 'external:service-price-benchmark', kind: 'EXTERNAL', owner: 'Service Price Radar', capabilityConsumers: ['service-price-radar', 'quote-comparison'], freshnessSlaSeconds: 86_400, credentialConfigRequirements: ['approved benchmark source and active release'], retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, fallbackBehavior: 'Do not claim quote comparability; retain rough budgeting guidance only.', userVisibleDegradationMessage: 'Qualified local price benchmarks are temporarily unavailable.', operationalRunbook: 'docs/operations/SERVICE_PRICE_BENCHMARK_SOURCE_OPERATIONS_RUNBOOK.md' },
+  { sourceId: 'external:home-event-radar', kind: 'EXTERNAL', owner: 'Home Event Radar', capabilityConsumers: ['home-event-radar', 'home-actions', 'home-briefing'], healthEntityType: 'RADAR_SOURCE', recomputeConsumerKeys: ['compound-radar', 'home-actions', 'home-briefing'], freshnessSlaSeconds: 3600, credentialConfigRequirements: ['source-specific adapter configuration'], retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, fallbackBehavior: 'Mark matching evidence stale and suppress source-dependent compound outputs.', userVisibleDegradationMessage: 'Around-your-home updates may be delayed because a source is stale or unavailable.', operationalRunbook: 'docs/product/HOME_EVENT_RADAR_IMPLEMENTATION_PLAN.md' },
+  { sourceId: 'external:service-price-benchmark', kind: 'EXTERNAL', owner: 'Service Price Radar', capabilityConsumers: ['service-price-radar', 'quote-comparison'], healthEntityType: 'SERVICE_PRICE_BENCHMARK_SOURCE', recomputeConsumerKeys: ['service-price-radar'], freshnessSlaSeconds: 86_400, credentialConfigRequirements: ['approved benchmark source and active release'], retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, fallbackBehavior: 'Do not claim quote comparability; retain rough budgeting guidance only.', userVisibleDegradationMessage: 'Qualified local price benchmarks are temporarily unavailable.', operationalRunbook: 'docs/operations/SERVICE_PRICE_BENCHMARK_SOURCE_OPERATIONS_RUNBOOK.md' },
 ]);
 
 export const INTELLIGENCE_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Object.freeze([...PLATFORM_EXTERNAL_SOURCE_REGISTRY, ...AI_SOURCE_REGISTRY]);
@@ -57,6 +61,9 @@ export function validateIntelligenceSourceRegistry(entries: readonly Intelligenc
     ids.add(entry.sourceId);
     if (!entry.owner.trim()) issues.push(`${entry.sourceId}: missing owner`);
     if (!entry.capabilityConsumers.length) issues.push(`${entry.sourceId}: missing capability consumers`);
+    if (entry.kind === 'EXTERNAL' && (!entry.healthEntityType || !entry.recomputeConsumerKeys?.length)) {
+      issues.push(`${entry.sourceId}: missing source-health recompute mapping`);
+    }
     if (entry.freshnessSlaSeconds < 0) issues.push(`${entry.sourceId}: invalid freshness SLA`);
     if (!entry.credentialConfigRequirements.length) issues.push(`${entry.sourceId}: missing credential/config requirements`);
     if (entry.retryPolicy.maxAttempts < 1 || entry.retryPolicy.backoffMs < 0) issues.push(`${entry.sourceId}: invalid retry policy`);

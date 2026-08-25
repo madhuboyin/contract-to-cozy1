@@ -158,7 +158,7 @@ test('emission is replay-safe, supersedes only older ordinals, and never creates
   const service = read('src/propertyChanges/propertyChange.service.ts');
   assert.match(service, /propertyId_sourceType_sourceEntityId_sourceRevision/);
   assert.match(service, /propertyChangeSourceCursor\.upsert/);
-  assert.match(service, /cursor\.latestRevisionOrdinal > input\.sourceRevisionOrdinal/);
+  assert.match(service, /cursor\.latestRevisionOrdinal > revisionOrdinal/);
   assert.match(service, /PROPERTY_CHANGE_REVISION_ORDINAL_COLLISION/);
   assert.match(service, /supersededByChangeId/);
   assert.match(service, /briefingReasonCodes: \['CHANGE_SUPERSEDED'\]/);
@@ -240,6 +240,21 @@ test('requestRecomputeForChange passes the PropertyChange\'s own sourceRevision 
   assert.equal(received.requestedContextVersion, '3');
 });
 
+test('requestRecomputeForChange carries source health only for source-health triggers', async () => {
+  const received = [];
+  const capture = async (input) => { received.push(input); };
+  await requestRecomputeForChange(
+    { propertyId: 'prop-1', sourceType: 'RADAR_SOURCE', sourceEntityId: 'weather', sourceRevision: 'degraded:1', changeType: 'SOURCE_HEALTH_CHANGED', sourceHealth: 'DEGRADED' },
+    capture,
+  );
+  await requestRecomputeForChange(
+    { propertyId: 'prop-1', sourceType: 'HOME_EVENT', sourceEntityId: 'evt-1', sourceRevision: '2', changeType: 'SOURCE_RECORD_REVISED', sourceHealth: 'CURRENT' },
+    capture,
+  );
+  assert.equal(received[0].sourceHealth, 'DEGRADED');
+  assert.equal(received[1].sourceHealth, null);
+});
+
 test('requestRecomputeForChange produces a different idempotency key for two different revisions of the same entity', async () => {
   const { computeRecomputeIdempotencyKey } = require('../../src/services/intelligenceRecompute/intelligenceRecompute.service.ts');
   const inputs = [];
@@ -290,7 +305,7 @@ test('requestRecomputeForChange forwards the supplied tx through to requestRecom
 // path (after the change upsert), never on either deduped early return.
 test('emitPropertyChangeWithTransaction requests a recompute inside its own transaction, only on the genuinely-new path', () => {
   const service = read('src/propertyChanges/propertyChange.service.ts');
-  assert.match(service, /await requestRecomputeForChange\(change, undefined, tx\);\s*\n\s*return \{ change, deduped: false \};/);
+  assert.match(service, /await requestRecomputeForChange\(\{ \.\.\.change, sourceHealth: input\.sourceHealth \}, undefined, tx\);\s*\n\s*return \{ change, deduped: false \};/);
   // Both early-return (deduped) paths must not call it.
   const dedupedReturns = service.match(/if \(existing\) return \{ change: existing, deduped: true \};|if \(replayed\) return \{ change: replayed, deduped: true \};/g);
   assert.equal(dedupedReturns.length, 2);

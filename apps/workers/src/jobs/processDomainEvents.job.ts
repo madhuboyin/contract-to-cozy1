@@ -281,6 +281,7 @@ function handleRecomputeRequested(ev: any, deps: ProcessDomainEventsDeps) {
     triggerEntityId,
     changedFactKeys,
     changedReferences,
+    sourceHealth: ev.payload?.sourceHealth ?? null,
     requestedContextVersion: ev.payload?.requestedContextVersion ?? null,
     idempotencyKey,
   });

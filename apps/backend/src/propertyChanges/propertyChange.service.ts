@@ -8,7 +8,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
-import type { PropertyChangeEmissionInput } from './propertyChange.contracts';
+import type { PropertyChangeEmissionInput, PropertyChangeSourceHealth } from './propertyChange.contracts';
 import {
   deriveBriefingEligibility,
   derivePropertyChangeMateriality,
@@ -212,7 +212,7 @@ export async function emitPropertyChangeWithTransaction(
   // Durability (finding 3): inside the SAME transaction as the change
   // write above — see requestRecomputeForChange's doc for why this, not a
   // post-commit best-effort call, is the actual fix.
-  await requestRecomputeForChange(change, undefined, tx);
+  await requestRecomputeForChange({ ...change, sourceHealth: input.sourceHealth }, undefined, tx);
 
   return { change, deduped: false };
 }
@@ -261,7 +261,7 @@ const PROPERTY_CHANGE_TYPE_TO_RECOMPUTE_TRIGGER: Record<PropertyChangeType, Inte
  * actual write" pattern for that case.
  */
 export async function requestRecomputeForChange(
-  change: { propertyId: string; sourceType: string; sourceEntityId: string; sourceRevision: string; changeType: PropertyChangeType; changedFactKeys?: string[]; canonicalReferences?: unknown },
+  change: { propertyId: string; sourceType: string; sourceEntityId: string; sourceRevision: string; changeType: PropertyChangeType; changedFactKeys?: string[]; canonicalReferences?: unknown; sourceHealth?: PropertyChangeSourceHealth },
   requestRecomputeFn: typeof requestRecompute = requestRecompute,
   tx?: ChangeTransaction,
 ): Promise<void> {
@@ -274,6 +274,9 @@ export async function requestRecomputeForChange(
     changedReferences: Array.isArray(change.canonicalReferences)
       ? change.canonicalReferences as Array<{ entityType: string; entityId: string; fieldPath?: string }>
       : [],
+    sourceHealth: change.changeType === 'SOURCE_HEALTH_CHANGED'
+      ? change.sourceHealth ?? null
+      : null,
     requestedContextVersion: change.sourceRevision,
   }, undefined, tx);
 
