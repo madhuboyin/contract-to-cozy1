@@ -84,6 +84,7 @@ import {
   assertHomeActionDecisionLineageSatisfiedForCommitment,
   type HomeActionDecisionLineage,
 } from './decisionPlatform/homeActionDecisionLineage';
+import { getSuppressedHomeActionIds } from './decisionPlatform/homeActionUsefulnessFeedback.service';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -254,6 +255,18 @@ export type RankedHomeAction = HomeAction & {
   // for the overwhelming majority of actions that have no registered
   // decision family at all (see resolveDecisionFamilyRef).
   decisionLineage: HomeActionDecisionLineage | null;
+  // Home Intelligence Functional Completeness FRD Phase 7 (HI-FBK-002 /
+  // HI-ATT-003): "a 'not useful' response in Cozy shall be visible to the
+  // Home feed policy immediately." Before this field existed,
+  // getSuppressedHomeActionIds() was only ever consulted by the Ask/Cozy
+  // PRIORITY_LIST path and proactive notification delivery — Home, Fix, and
+  // getUnifiedHome all read this same feed directly and never saw the
+  // signal, so a "not useful" rating given in Cozy was invisible everywhere
+  // else. Computed once here so every surface that reads getHomeActionFeed
+  // sees the identical decoration — display-only, never filters the feed
+  // or overrides a SAFETY_EMERGENCY floor (mapConsumerPriorityCategory
+  // already hard-floors that independently of this flag).
+  fatigueSuppressed: boolean;
 };
 
 // ── Home Operations Item #12 (§5.16): empty-state reason ────────────────────
@@ -562,6 +575,7 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
       },
       workItem: null,
       decisionLineage: null,
+      fatigueSuppressed: false,
     }));
 }
 
@@ -895,6 +909,7 @@ async function appendAcceptedOperationalWork(
       deduplication: { canonicalKey: item.workKey, mergedActionIds: [] },
       workItem: { id: item.id, workKey: item.workKey, state: item.state, acceptanceState: item.acceptanceState, disposition: item.disposition },
       decisionLineage: null,
+      fatigueSuppressed: false,
     });
   }
   return [...actions, ...projected]
@@ -1022,9 +1037,18 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     source: 'home_action_final_eligibility_gate',
     additionalReasons: homeActionLaunchEligibilityReasons,
   });
-  const actions = (finalEligibility.actions as RankedHomeAction[]).map((action, index) => ({
+  const rankedActions = (finalEligibility.actions as RankedHomeAction[]).map((action, index) => ({
     ...action,
     ranking: { ...action.ranking, rank: index + 1 },
+  }));
+  const fatigueSuppressedIds = await getSuppressedHomeActionIds({
+    userId,
+    propertyId,
+    homeActionIds: rankedActions.map((action) => action.id),
+  });
+  const actions = rankedActions.map((action) => ({
+    ...action,
+    fatigueSuppressed: fatigueSuppressedIds.has(action.id),
   }));
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
   for (const action of actions) {

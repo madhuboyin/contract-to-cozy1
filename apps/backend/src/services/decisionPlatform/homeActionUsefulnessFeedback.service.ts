@@ -8,6 +8,8 @@
 // required for this slice.
 
 import { prisma } from '../../lib/prisma';
+import { recordTypedFeedback } from '../feedback/typedFeedback.service';
+import type { FeedbackReasonCode } from '../feedback/feedbackContract';
 
 // FRD §17.2: engagement (a "not useful" rating) cannot override safety or
 // consent -- this cooldown only ever threads a `suppressed` display flag
@@ -31,13 +33,20 @@ export async function recordHomeActionUsefulnessFeedback(params: {
   homeActionId: string;
   rating: UsefulnessRating;
   comment?: string | null;
+  reasonCodes?: readonly FeedbackReasonCode[];
 }): Promise<{ id: string; rating: UsefulnessRating }> {
   const page = homeActionFeedbackPage(params.homeActionId);
-  const existing = await prisma.feedback.findFirst({ where: { userId: params.userId, page }, orderBy: { createdAt: 'desc' } });
-  const rating = toFeedbackRating(params.rating);
-  const saved = existing
-    ? await prisma.feedback.update({ where: { id: existing.id }, data: { rating, comment: params.comment ?? null, propertyId: params.propertyId } })
-    : await prisma.feedback.create({ data: { userId: params.userId, propertyId: params.propertyId, rating, comment: params.comment ?? null, page } });
+  const saved = await recordTypedFeedback({
+    userId: params.userId,
+    propertyId: params.propertyId,
+    page,
+    rating: toFeedbackRating(params.rating),
+    comment: params.comment ?? null,
+    targetType: 'HOME_ACTION',
+    targetId: params.homeActionId,
+    surface: 'COZY',
+    reasonCodes: [...new Set<FeedbackReasonCode>([params.rating === 'USEFUL' ? 'USEFUL' : 'NOT_USEFUL', ...(params.reasonCodes ?? [])])],
+  });
   return { id: saved.id, rating: params.rating };
 }
 

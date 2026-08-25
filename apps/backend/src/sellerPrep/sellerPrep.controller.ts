@@ -5,6 +5,7 @@ import { SellerPrepService } from './sellerPrep.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
+import { recordTypedFeedback } from '../services/feedback/typedFeedback.service';
 
 function optionalLineageId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -265,14 +266,17 @@ export class SellerPrepController {
         });
       }
   
-      const feedback = await prisma.feedback.create({
-        data: {
-          userId,
-          propertyId,
-          rating,
-          comment: comment || null,
-          page: page || 'seller-prep',
-        },
+      const resolvedPage = page || 'seller-prep';
+      const feedback = await recordTypedFeedback({
+        userId,
+        propertyId,
+        page: resolvedPage,
+        rating,
+        comment: comment || null,
+        targetType: 'OTHER',
+        targetId: resolvedPage,
+        surface: 'TOOL',
+        reasonCodes: [rating === 'helpful' ? 'USEFUL' : 'NOT_USEFUL'],
       });
   
       res.json({

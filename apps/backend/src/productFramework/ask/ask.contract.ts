@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FEEDBACK_REASON_CODES } from '../feedback.contract';
 
 export const ASK_RESPONSE_SCHEMA_VERSION = '1.0' as const;
 
@@ -378,9 +379,16 @@ export const SubmitAskConfirmationSchema = z.object({
   consentConfirmed: z.literal(true),
 }).strict();
 
+// Home Intelligence Functional Completeness FRD Phase 7 (HI-FBK-003):
+// optional elaboration on why the rating was given, drawn from the one
+// platform-wide reason-code vocabulary. Bounded to 3 — this is a quick
+// reason chip selection, not a free-form list.
+const FeedbackReasonCodesSchema = z.array(z.enum(FEEDBACK_REASON_CODES)).max(3).optional();
+
 export const SubmitAskFeedbackSchema = z.object({
   rating: z.enum(['UP', 'DOWN']),
   comment: z.string().trim().max(1000).optional(),
+  reasonCodes: FeedbackReasonCodesSchema,
 }).strict();
 
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable.
@@ -389,6 +397,7 @@ export const SubmitAskFeedbackSchema = z.object({
 export const SubmitHomeActionUsefulnessFeedbackSchema = z.object({
   rating: z.enum(['USEFUL', 'NOT_USEFUL']),
   comment: z.string().trim().max(1000).optional(),
+  reasonCodes: FeedbackReasonCodesSchema,
 }).strict();
 
 export const RequestAskCorrectionSchema = z.object({

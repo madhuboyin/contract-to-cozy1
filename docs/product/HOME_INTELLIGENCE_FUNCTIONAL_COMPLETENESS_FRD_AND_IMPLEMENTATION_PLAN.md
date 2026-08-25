@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.30"
+version: "1.31"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.30 |
+| Version | 1.31 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1233,6 +1233,28 @@ Remaining Phase 6 scope: Claims filing/transition operations, an inspection-find
 7. Feed verified outcomes into reviewed calibration datasets only through the existing calibration approval and activation workflow.
 
 **Functional exit:** product operators can identify which intelligence is useful, incorrect, stale, degraded, or failing, while production rules remain unchanged until a reviewed release is approved.
+
+**Status: first vertical slice landed 2026-08-24 — work items 1, 2, and 4 done; 3 partial; 5–7 not started.**
+
+Before this phase began, `Feedback` already had every typed field HI-FBK-001 requires (`targetType`, `targetId`, `surface`, `reasonCodes`, `contextVersion`, `recommendationSnapshotId`, `outcomeObservationId` — added in an earlier phase), but all 4 writers that actually create `Feedback` rows (`homeActionUsefulnessFeedback.service.ts`'s Home Action usefulness rating, `askOrchestrator.service.ts`'s whole-execution UP/DOWN, the generic app-wide feedback widget, and seller-prep feedback) wrote only the legacy `rating`/`comment`/`page` fields — every typed field was permanently null.
+
+**Work item 1 (done):** `productFramework/feedback.contract.ts` defines the code-owned HI-FBK-003 vocabulary (`FEEDBACK_REASON_CODES`: `USEFUL`, `NOT_USEFUL`, `ALREADY_HANDLED`, `WRONG_FACT`, `WRONG_TIMING`, `NOT_APPLICABLE`, `DUPLICATE`, `UNCLEAR_EXPLANATION`, `UNSAFE_OR_INAPPROPRIATE`) plus `isSafetySensitiveFeedback()` for HI-FBK-002. `services/feedback/typedFeedback.service.ts`'s `recordTypedFeedback()` is now the one canonical write path — it populates the typed fields alongside `page`/`rating` (not migrating away from `page`, since existing readers like the suppression-cooldown query still key off it) and validates every `reasonCodes` entry against the registry. All 4 writers now call it. `SubmitAskFeedbackSchema`/`SubmitHomeActionUsefulnessFeedbackSchema` gained an optional, 3-bounded `reasonCodes` array so a caller can elaborate beyond the binary rating; both call sites merge it with the auto-derived USEFUL/NOT_USEFUL code rather than replacing it. Test coverage: `tests/unit/typedFeedbackConvergence.test.js` (6 tests: registry completeness, safety-sensitivity, data-building, schema bounds).
+
+**Work item 2 (done for the concrete gap found):** auditing HI-ATT-003 ("a 'not useful' response in Cozy shall be visible to the Home feed policy immediately") found `getSuppressedHomeActionIds()` was only ever consulted by the Ask/Cozy PRIORITY_LIST path (`askOrchestrator.service.ts`) and proactive notification delivery — `getHomeActionFeed()` itself, which Home's REST route, `getUnifiedHome()`, and Resolution Center/Fix (`resolutionCenter.service.ts`) all read directly, never computed or exposed the signal at all. A "not useful" rating given in Cozy was therefore invisible on Home and Fix. Fixed by computing `fatigueSuppressed` once inside `getHomeActionFeed()` itself and adding it to `RankedHomeAction` — every surface that reads the feed (confirmed: `capabilityRecommendation.service.ts`, `resolutionCenter.service.ts`, `askOrchestrator.service.ts`, `homeActionProactiveDelivery.service.ts`) now sees the identical decoration from one computation. Purely additive and display-only, same as the existing `workItem`/`decisionLineage` annotations — it does not filter the feed or affect `mapConsumerPriorityCategory`'s independent SAFETY_EMERGENCY floor. Frontend consumption on Home/Fix (a visual "you said this wasn't useful" treatment) is not part of this pass — see remaining work below.
+
+**Work item 3 (partial):** `services/feedback/feedbackQualityAggregates.service.ts` aggregates usefulness rate, reason-code distribution, and safety-sensitive count by `targetType`, exposed read-only at `GET /api/admin/feedback-quality` (ANALYTICS_VIEW). This is one real, usable slice of HI-FBK-005, not the full metric set: dismissal reasons, correction rates, completion conversion, verified outcome rate, stale-output incidents, cross-surface inconsistencies, and generated-content evaluation results all live in other tables (`OperationalWorkItem`, `OutcomeObservation`, etc.) this aggregate does not join against, and it groups by `targetType` only, not "by capability and version." Test coverage: `tests/unit/feedbackQualityAggregates.test.js` (5 tests).
+
+**Work item 4 (done):** `services/intelligence/sourceHealthProjection.service.ts` normalizes `RadarSourceHealth` (lowercase `healthy`/`degraded`/`failed`/`stale`/`disabled`/`unknown`) and `ServicePriceBenchmarkSourceHealth` (uppercase `UNKNOWN`/`HEALTHY`/`DEGRADED`/`UNHEALTHY`) into one `UnifiedSourceHealthStatus` vocabulary and one read, per HI-SRC-002 — neither domain table is replaced or has its own staleness logic (e.g. Radar's `freshnessSeconds`-based check in `radarAdminOperations.service.ts`) reproduced here; this only normalizes each domain's own recorded `status`. Exposed at `GET /api/admin/source-health` (WORKER_JOB_VIEW) with a `summarizeSourceHealth()` count/degraded-list rollup. HI-SRC-003 (source health changes triggering recomputation and reducing confidence) is not wired — this phase only builds the read projection. Test coverage: `tests/unit/sourceHealthProjection.test.js` (5 tests) and `tests/unit/adminSourceHealth.test.js` (3 tests, incl. a mocked-Prisma integration case).
+
+**Not started this pass:**
+
+- **Work item 5 (AI route standardization)** — no audit of existing Gemini call sites against centralized model configuration, structured output, rate limiting, cost accounting, and kill-switch controls was done.
+- **Work item 6 (evaluation harness expansion)** — no new golden scenarios were added for ranking, decisions, extraction, compound rules, or generated explanations.
+- **Work item 7 (calibration feed)** — verified-outcome-to-calibration-dataset wiring was not touched; the existing calibration approval/activation workflow (referenced by Personalization Engine memory) was not inspected for this phase.
+- **HI-SRC-001 (full source registry)** — the unified projection (work item 4) reads the two existing health tables but does not add the fuller per-source registry (owner, freshness SLA, credential requirements, retry policy, runbook) HI-SRC-001 separately describes.
+- **Frontend consumption of `fatigueSuppressed`** — the backend signal now reaches Home/Fix, but no UI change renders it there yet.
+
+Remaining Phase 7 scope: the three untouched work items above, HI-FBK-005's remaining metrics (dismissal/correction/completion/outcome/staleness/cross-surface/generated-content), HI-SRC-001's full registry, HI-SRC-003's recomputation wiring, and Home/Fix frontend treatment of the fatigue-suppression signal.
 
 ### Phase 8 — Remove superseded paths
 

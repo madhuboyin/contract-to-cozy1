@@ -117,6 +117,8 @@ import { listPropertyChanges } from '../../propertyChanges/propertyChange.servic
 import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/homeChangeSummaryMapping';
 import { buildPriorityListView } from '../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds, recordHomeActionUsefulnessFeedback } from '../decisionPlatform/homeActionUsefulnessFeedback.service';
+import { recordTypedFeedback } from '../feedback/typedFeedback.service';
+import type { FeedbackReasonCode } from '../feedback/feedbackContract';
 import type { ConciergeHomeView } from '../../productFramework/conciergeHome.contract';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
@@ -8808,10 +8810,17 @@ export async function submitAskExecutionFeedback(userId: string, executionId: st
     throw error;
   }
   const page = `ask:execution:${execution.id}`;
-  const existing = await prisma.feedback.findFirst({ where: { userId, page }, orderBy: { createdAt: 'desc' } });
-  const saved = existing
-    ? await prisma.feedback.update({ where: { id: existing.id }, data: { rating: input.rating.toLowerCase(), comment: input.comment ?? null, propertyId: execution.propertyId } })
-    : await prisma.feedback.create({ data: { userId, propertyId: execution.propertyId, rating: input.rating.toLowerCase(), comment: input.comment ?? null, page } });
+  const saved = await recordTypedFeedback({
+    userId,
+    propertyId: execution.propertyId,
+    page,
+    rating: input.rating.toLowerCase(),
+    comment: input.comment ?? null,
+    targetType: 'ASK_EXECUTION',
+    targetId: execution.id,
+    surface: 'COZY',
+    reasonCodes: [...new Set<FeedbackReasonCode>([input.rating === 'UP' ? 'USEFUL' : 'NOT_USEFUL', ...(input.reasonCodes ?? [])])],
+  });
   askFeedbackTotal.inc({ rating: input.rating.toLowerCase() });
   return { id: saved.id, rating: input.rating };
 }
@@ -8836,6 +8845,7 @@ export async function submitHomeActionUsefulnessFeedback(
   }
   return recordHomeActionUsefulnessFeedback({
     userId, propertyId: execution.propertyId, homeActionId, rating: input.rating, comment: input.comment ?? null,
+    reasonCodes: input.reasonCodes,
   });
 }
 

@@ -6,9 +6,9 @@
 // this and writes to the same `Feedback` table with a required propertyId.
 import { Response } from 'express';
 import { AuthRequest } from '../types/auth.types';
-import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { getEmailNotificationQueue } from '../services/JobQueue.service';
+import { recordTypedFeedback } from '../services/feedback/typedFeedback.service';
 
 // Placeholder team alias for pilot feedback alerts — override via env in
 // any environment where a real monitored inbox exists.
@@ -37,13 +37,16 @@ export class FeedbackController {
         });
       }
 
-      const feedback = await prisma.feedback.create({
-        data: {
-          userId,
-          rating,
-          comment: comment || null,
-          page,
-        },
+      const feedback = await recordTypedFeedback({
+        userId,
+        propertyId: null,
+        page,
+        rating,
+        comment: comment || null,
+        targetType: 'OTHER',
+        targetId: page,
+        surface: 'OTHER',
+        reasonCodes: [rating === 'up' ? 'USEFUL' : 'NOT_USEFUL'],
       });
 
       // Fire-and-forget: notify the pilot feedback alias by email. A failed

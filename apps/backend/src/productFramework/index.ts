@@ -1,4 +1,5 @@
 export * from './entryContext.contract';
+export * from './feedback.contract';
 export * from './homeAction.contract';
 export * from './homeActionSourceAdapters';
 export * from './homeActionPresentationRegistry';
