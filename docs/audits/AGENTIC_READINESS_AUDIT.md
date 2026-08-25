@@ -7,6 +7,8 @@
 
 **Revisions (2026-08-25, after external review):** Three refinements accepted and folded into the sections below, each softening or sharpening a recommendation rather than overturning a finding — the underlying evidence is unchanged. (1) The event-bus gap ([§6](#6-gap-analysis), [§9](#9-recommended-foundation-before-agents)) is downgraded from an absolute prerequisite to a conditional one: prove the existing BullMQ/`DomainEvent` infrastructure can't meet real latency/reliability needs before building new event plumbing — nothing in the codebase's actual domains (weather alerts, refinance opportunities, maintenance) needs sub-minute reaction time. (2) The insight-unification recommendation ([§4](#4-component-classification-matrix), [§9](#9-recommended-foundation-before-agents)) is reframed from eventual schema consolidation to a **C2C Intelligence Envelope** — a common read-side contract (type · subject · source · confidence · severity · priority · evidence · freshness · expiry · status · provenance) that the five existing stores expose through, keeping their specialized persistence underneath. (3) The candidate-first-agents list ([§10](#10-candidate-first-agents)) is reordered: a **Home Intelligence Watcher / Attention Agent** — the unified priority-ranking engine already flagged Critical in [§6](#6-gap-analysis), wrapped in continuous background execution with an LLM added only for "why this, why now" narration — now leads, because it proves C2C's Job 1 ("tell me what needs my attention") rather than assisting a decision the homeowner already initiated. HVAC Repair/Replace Advisor becomes its first specialist consumer rather than the standalone first build. Stage 3 is retitled accordingly: **C2C Intelligence & Agentic Evolution Architecture**, not "Agent Architecture" — the missing piece this audit found is convergence and coordination, not agents per se.
 
+**Second round (2026-08-25):** Added [§9.1](#91-the-execution-rule-context-first-deterministic-first-llm-as-escalation), an explicit rule requiring every future agent to exhaust internal C2C context, deterministic services, rules, and existing intelligence (a 4-level escalation ladder) before invoking an LLM — generalizing the discipline already visible in Ask into a rule Stage 3 must design against by default, rather than leaving it implicit.
+
 **At a glance**
 
 | | |
@@ -340,6 +342,23 @@ The minimum architectural foundation — not the full agent ecosystem design, wh
 7. **Give `propertyContext` a formal, versioned, agent-facing contract** rather than relying on internal service-to-service imports, so agents don't couple directly to backend internals.
 8. **Add trace-level observability** across the `DomainEvent → job → service` chain, so an orchestrator's decisions remain debuggable as agent count grows.
 
+### 9.1 The execution rule: context-first, deterministic-first, LLM as escalation
+
+*Added 2026-08-25, after a second round of external review.* Everything above assumes agents pull intelligence primarily from C2C's own accumulated understanding of the home — not from asking a model what it thinks. This was implicit in the deterministic-first observations throughout this audit ([§3.1](#3-existing-agentic-building-blocks), [§4](#4-component-classification-matrix)'s `askResultSynthesis.service.ts` exemplar, Q6 of [§11](#11-final-conclusion)); it should be stated as an explicit rule Stage 3 is required to follow, not left implicit.
+
+> **C2C agents must be context-first and deterministic-first. An LLM is an escalation capability, not the intelligence engine.** Agents must exhaust trusted C2C context, domain services, rules, tools, and existing intelligence before invoking an LLM. LLM-generated output must never become authoritative C2C state without validation and provenance.
+
+The default execution path, and the escalation ladder above it:
+
+| Level | Source | What it covers | C2C precedent already in the code |
+|---|---|---|---|
+| **1 — Internal facts** | `modules/propertyContext`, documents, maintenance history, insurance, warranties, ownership lifecycle, personalization, already-ingested external data | Everything C2C already knows about this property and homeowner | 27+ real callers of `getPropertyContext`; `PropertyFactEvidence`'s KNOWN/UNKNOWN/STALE/CONFLICTED states |
+| **2 — Internal intelligence** | Scoring/decision engines, rules, ranking, Skills, Radar, recommendations, historical outcomes | Deterministic computation over Level 1 facts | `hvacRepairReplaceEngine.service.ts`, `compoundRuleRegistry.ts`, the Signal bus, `RecommendationSnapshot` lineage |
+| **3 — Agent coordination / reasoning** | Combining Level 1 + 2 outputs to decide what matters | The orchestration layer itself — still no LLM required | `decisionPlatform`'s DecisionThread lifecycle; `priorityListPolicy.ts` |
+| **4 — LLM, only when necessary** | Ambiguous language understanding, complex explanation, unstructured-document reasoning, a genuinely novel question, or homeowner-friendly communication | The escalation tier — narrow, structured-output-only, provenance-tracked | `askResultSynthesis.service.ts`'s hallucination guard; `aiRequestGovernance`'s `AI_STRUCTURE_REQUIRED` enforcement; Ask's own 5-stage cascade (`SAFETY → DETERMINISTIC → LOCAL_CLASSIFIER → CLARIFICATION → REMOTE_FALLBACK`) already puts every deterministic option ahead of a model call |
+
+This is not a new pattern to invent — it is the pattern already visible in Ask, generalized into a rule every future agent inherits by default rather than reproducing ad hoc. It is also the sharpest form of C2C's actual differentiation: the intelligence comes from the accumulated understanding of the home, and the LLM's role is to reason at the edges of that understanding and communicate it well — never to originate it.
+
 ---
 
 ## 10. Candidate First Agents
@@ -475,8 +494,11 @@ A real event bus / pub-sub. Nothing in the domains this audit examined (weather 
 **Strongest first-agent candidates**
 The Home Intelligence Watcher / Attention Agent leads — it's the unified ranking engine already required by "must unify first" above, wrapped in continuous background execution, and it proves C2C's Job 1 (noticing something before being asked) rather than assisting an already-initiated decision. HVAC Repair/Replace Advisor is its first specialist hand-off target. Ask Concierge extends an existing, evidence-rich subsystem. Document Intelligence is the strongest multi-step-reasoning proof point.
 
+**Governing rule (non-negotiable, [§9.1](#91-the-execution-rule-context-first-deterministic-first-llm-as-escalation))**
+Every agent designed in Stage 3 is context-first and deterministic-first by default: exhaust Level 1 (internal facts) and Level 2 (internal intelligence — scoring/decision engines, rules, ranking, Skills, Radar, historical outcomes) before Level 3 (agent coordination over those outputs), and escalate to Level 4 (the LLM Gateway) only for ambiguous language, complex explanation, unstructured-document reasoning, a genuinely novel question, or homeowner-facing communication. LLM output never becomes authoritative C2C state without validation and provenance — the same discipline `askResultSynthesis.service.ts` already enforces today.
+
 **Constraints to design within**
-No production-user migration constraint (confirmed) — but real working code exists at every layer and should not be discarded. Preserve the deterministic-first / LLM-for-phrasing-only discipline. Preserve the frontend's thin-client boundary.
+No production-user migration constraint (confirmed) — but real working code exists at every layer and should not be discarded. Preserve the frontend's thin-client boundary.
 
 ---
 
