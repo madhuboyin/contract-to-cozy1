@@ -27,9 +27,13 @@ export const ATTENTION_PRIORITY_OWNERS: readonly AttentionPriorityOwner[] = [
   },
   {
     ownerKey: 'guidance-priority',
-    sourceFiles: ['apps/backend/src/services/guidanceEngine/guidancePriority.service.ts'],
-    surface: 'Dashboard hero and Morning Pulse backend',
-    calculation: 'GuidancePriorityService independently scores severity, urgency, financial impact, safety, confidence, and readiness.',
+    sourceFiles: [
+      'apps/backend/src/services/guidanceEngine/guidancePriority.service.ts',
+      'apps/backend/src/services/guidanceEngine/guidanceSuppression.service.ts',
+    ],
+    surface: 'Guidance Overview and embedded Guidance panels',
+    calculation:
+      'GuidancePriorityService scores active journeys; GuidanceSuppressionService uses that score for Guidance-only deduplication, conflict resolution, suppression winners, and final portfolio ordering. It does not re-rank canonical Home Actions.',
   },
   {
     ownerKey: 'notification-fallback',

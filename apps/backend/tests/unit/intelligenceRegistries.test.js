@@ -42,11 +42,22 @@ test('completion evidence policies expose enforceable fields, not display prose 
   assert.equal(emergency.simpleDismissalAllowed, false);
 });
 
-test('the attention-priority registry includes both Fix ranking owners and validates cleanly', () => {
+test('the attention-priority registry excludes deleted Fix owners and accurately scopes remaining policies', () => {
   assert.deepEqual(validateAttentionPriorityOwners(ATTENTION_PRIORITY_OWNERS), []);
   const keys = new Set(ATTENTION_PRIORITY_OWNERS.map((entry) => entry.ownerKey));
-  assert.ok(keys.has('fix-backend-resolution-center'));
-  assert.ok(keys.has('fix-frontend-resolution-center'));
+  assert.equal(keys.has('fix-backend-resolution-center'), false);
+  assert.equal(keys.has('fix-frontend-resolution-center'), false);
+
+  const guidanceOwner = ATTENTION_PRIORITY_OWNERS.find((entry) => entry.ownerKey === 'guidance-priority');
+  assert.ok(guidanceOwner);
+  assert.equal(guidanceOwner.surface, 'Guidance Overview and embedded Guidance panels');
+  assert.match(guidanceOwner.calculation, /Guidance-only/);
+  assert.match(guidanceOwner.calculation, /does not re-rank canonical Home Actions/);
+  assert.deepEqual(guidanceOwner.sourceFiles, [
+    'apps/backend/src/services/guidanceEngine/guidancePriority.service.ts',
+    'apps/backend/src/services/guidanceEngine/guidanceSuppression.service.ts',
+  ]);
+
   const repoRoot = path.resolve(__dirname, '../../../..');
   for (const owner of ATTENTION_PRIORITY_OWNERS) {
     for (const sourceFile of owner.sourceFiles) {
@@ -64,14 +75,13 @@ test('the intelligence consumer registry covers every Phase 2 intelligence proje
     'home-actions',
     'home-briefing',
     'maintenance-prediction',
-    'orchestration',
     'ownership-cost-refinance',
     'personalization',
     'property-context',
     'recommendation-snapshots',
-    'resolution-center',
     'risk-assessment',
     'sale-readiness',
+    'service-price-radar',
   ]);
   for (const entry of INTELLIGENCE_CONSUMER_REGISTRY) {
     assert.equal(typeof entry.recompute, 'function', `${entry.consumerKey} must declare a recompute handler`);
