@@ -7,13 +7,9 @@ import { prisma } from '../lib/prisma';
 // Now consumed by three places that must never disagree about the answer:
 //   1. The advisory Home Actions themselves (discovery/notification).
 //   2. propertyContext's Coverage assembler, so `coverage.insurancePolicies`
-//      / `coverage.warranties` report a real CONFLICTED state — which
-//      `evaluateFeatureContext` already turns into `CONFLICT_REVIEW_REQUIRED`
-//      / `canExecute: false` for any feature contract that requires them
-//      (e.g. CLAIMS: FILE_INSURANCE_CLAIM / FILE_WARRANTY_CLAIM) with no
-//      further changes needed there.
-//   3. Direct domain readers that bypass Property Context entirely (e.g.
-//      coverageReviewRules.ts via coverageReview.service.ts).
+//      / `coverage.warranties` report a real, selection-aware CONFLICTED state.
+//   3. Material domain readers that bypass Property Context, through
+//      assertCoverageConflictFree.
 export type CoverageConflictDb = Partial<Pick<typeof prisma, 'insurancePolicyTerm' | 'insurancePolicyFact' | 'warranty'>>;
 
 export interface PolicyFactConflictSnapshot {
@@ -186,4 +182,53 @@ export async function isWarrantyConflicted(
 ): Promise<boolean> {
   const groups = await getConflictedWarrantyGroups(propertyId, db, now);
   return groups.some((group) => group.warranties.some((warranty) => warranty.id === warrantyId));
+}
+
+export interface CoverageConflictSelection {
+  insurancePolicyId?: string | null;
+  warrantyId?: string | null;
+  /** Aggregate consumers depend on every active coverage record. */
+  requireAllInsurancePolicies?: boolean;
+  requireAllWarranties?: boolean;
+}
+
+/**
+ * Material consumers call this before reading canonical coverage records. It
+ * fails closed with the affected identities and a real resolution path instead
+ * of allowing each consumer to pick an arbitrary record.
+ */
+export async function assertCoverageConflictFree(
+  propertyId: string,
+  db: CoverageConflictDb,
+  selection: CoverageConflictSelection,
+): Promise<void> {
+  const [policyTerms, warrantyGroups] = await Promise.all([
+    selection.insurancePolicyId || selection.requireAllInsurancePolicies
+      ? getConflictedInsurancePolicyTerms(propertyId, db)
+      : Promise.resolve([]),
+    selection.warrantyId || selection.requireAllWarranties
+      ? getConflictedWarrantyGroups(propertyId, db)
+      : Promise.resolve([]),
+  ]);
+  const policyConflicts = policyTerms.filter((term) =>
+    selection.requireAllInsurancePolicies || term.policyId === selection.insurancePolicyId);
+  const warrantyConflicts = warrantyGroups.filter((group) =>
+    selection.requireAllWarranties
+    || group.warranties.some((warranty) => warranty.id === selection.warrantyId));
+  if (policyConflicts.length === 0 && warrantyConflicts.length === 0) return;
+
+  throw Object.assign(
+    new Error('Resolve conflicting coverage records before using them for this decision.'),
+    {
+      statusCode: 409,
+      code: 'COVERAGE_CONFLICT_REVIEW_REQUIRED',
+      details: {
+        policyIds: policyConflicts.map((term) => term.policyId),
+        warrantyIds: warrantyConflicts.flatMap((group) => group.warranties.map((warranty) => warranty.id)),
+        resolutionPath: policyConflicts.length > 0
+          ? `/dashboard/insurance?propertyId=${encodeURIComponent(propertyId)}&resolveConflict=1`
+          : `/dashboard/warranties?propertyId=${encodeURIComponent(propertyId)}&resolveConflict=1`,
+      },
+    },
+  );
 }

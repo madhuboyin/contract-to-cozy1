@@ -9,6 +9,7 @@ import {
   type RefinanceLoanEstimateInput,
 } from './refinanceLoanEstimateComparison';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
+import { verifyLoanEstimateExtractionAttestation } from './refinanceLoanEstimateExtractionAttestation';
 
 export interface SavedRefinanceLoanEstimateComparison {
   id: string;
@@ -43,6 +44,13 @@ export async function saveRefinanceLoanEstimateComparison(input: {
 }): Promise<SavedRefinanceLoanEstimateComparison> {
   const comparison = compareRefinanceLoanEstimates(input.offers);
   const extractedOffers = input.offers.filter((offer) => offer.extractionProvenance);
+  for (const offer of extractedOffers) {
+    verifyLoanEstimateExtractionAttestation(
+      input.propertyId,
+      offer.extractionProvenance!.envelope,
+      offer.extractionProvenance!.serverAttestation,
+    );
+  }
 
   // HI-DOC-003/005 (Home Intelligence FRD §8.7, Phase 5 remediation item d)
   // — this is the registered LOAN_ESTIMATE promotion adapter: the
@@ -72,7 +80,9 @@ export async function saveRefinanceLoanEstimateComparison(input: {
       detectedAt: new Date(),
       confidence: extractedOffers.length > 0
         ? Math.min(...extractedOffers.map((offer) => {
-            const values = Object.values(offer.extractionProvenance!.fieldConfidence);
+            const values = offer.extractionProvenance!.envelope.fields
+              .map((field) => field.confidence)
+              .filter((value): value is number => value != null);
             return values.length > 0 ? Math.min(...values) : 0.5;
           }))
         : 1,

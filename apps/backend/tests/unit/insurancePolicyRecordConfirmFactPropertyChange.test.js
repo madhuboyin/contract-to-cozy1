@@ -6,9 +6,8 @@ require('ts-node/register');
 // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-005) —
 // confirmPolicyFact now emits a PropertyChange (and, by extension,
 // requests recomputation, since emitPropertyChangeWithTransaction does
-// that internally) whenever it confirms a fact that changed a canonical
-// InsurancePolicy field. Found missing by an independent review of the
-// Phase 5 "complete" claim; this pins the fix.
+// that internally) for either resolution choice. Rejecting keeps the prior
+// canonical value but still clears CONFLICTED state, which must recompute.
 
 let factForFind = null;
 
@@ -88,7 +87,7 @@ test('confirming a policy fact emits a PropertyChange referencing the policy and
   assert.ok(call.canonicalReferences.some((ref) => ref.entityType === 'INSURANCE_POLICY_TERM' && ref.entityId === 'term-1'));
 });
 
-test('rejecting a policy fact does not emit a PropertyChange — canonical values are untouched', async () => {
+test('rejecting a conflicting policy fact emits a lifecycle PropertyChange so consumers unblock', async () => {
   factForFind = fact();
   propertyChangeCalls.length = 0;
 
@@ -100,5 +99,7 @@ test('rejecting a policy fact does not emit a PropertyChange — canonical value
     confirmationStatus: 'REJECTED',
   });
 
-  assert.equal(propertyChangeCalls.length, 0);
+  assert.equal(propertyChangeCalls.length, 1);
+  assert.equal(propertyChangeCalls[0].sourceRevision, 'REJECTED');
+  assert.deepEqual(propertyChangeCalls[0].changedFactKeys, ['coverage.insurancePolicy.annual_premium']);
 });

@@ -355,12 +355,23 @@ export type RefinanceDecisionDTO = {
 // same per-field confidence/sourceLabel data, so no new backend response
 // field is needed to plumb this through.
 export type RefinanceLoanEstimateExtractionProvenance = {
+  envelope: LoanEstimateExtractionEnvelope;
+  serverAttestation: string;
+};
+
+export type LoanEstimateExtractionEnvelope = {
+  documentId: string | null;
+  documentVersionId: string | null;
   extractorId: string;
   extractorVersion: string;
+  modelId: string | null;
+  candidateEntityType: string;
+  fields: Array<{ fieldKey: string; value: string | number | boolean | string[] | null; confidence: number | null; evidence?: { page?: number | null; excerpt?: string | null; excerptHash?: string | null } }>;
+  overallConfidence: number | null;
   parseStatus: 'PARSED' | 'FALLBACK_UNSTRUCTURED' | 'FAILED';
+  warnings: string[];
   extractedAt: string;
-  fieldConfidence: Record<string, number>;
-  fieldEvidence: Record<string, string>;
+  isBatch?: boolean;
 };
 
 export type RefinanceLoanEstimateInput = {
@@ -440,6 +451,8 @@ export type LoanEstimateExtractedField<T> = {
 };
 
 export type RefinanceLoanEstimateExtraction = {
+  serverEnvelope: LoanEstimateExtractionEnvelope;
+  serverAttestation: string;
   fields: {
     loanAmountUsd: LoanEstimateExtractedField<number>;
     loanTermYears: LoanEstimateExtractedField<number>;
@@ -718,6 +731,8 @@ export async function extractRefinanceLoanEstimate(
   files.forEach((file) => form.append('files', file));
   const res = await api.postFormData<{
     extraction: RefinanceLoanEstimateExtraction;
+    envelope: LoanEstimateExtractionEnvelope;
+    serverAttestation: string;
   }>(
     `/api/properties/${propertyId}/refinance-radar/loan-estimates/extract`,
     form,
@@ -725,7 +740,11 @@ export async function extractRefinanceLoanEstimate(
   if (!res.success || !('data' in res)) {
     throw new Error('The Loan Estimate could not be extracted.');
   }
-  return res.data.extraction;
+  return {
+    ...res.data.extraction,
+    serverEnvelope: res.data.envelope,
+    serverAttestation: res.data.serverAttestation,
+  };
 }
 
 export async function saveRefinanceLoanEstimateComparison(

@@ -6,12 +6,8 @@
 // already computes; stored verbatim in offersJson (an existing JSON
 // column), so no schema migration is needed for this to be durable.
 export interface RefinanceLoanEstimateExtractionProvenance {
-  extractorId: string;
-  extractorVersion: string;
-  parseStatus: 'PARSED' | 'FALLBACK_UNSTRUCTURED' | 'FAILED';
-  extractedAt: string;
-  fieldConfidence: Record<string, number>;
-  fieldEvidence: Record<string, string>;
+  envelope: import('../services/intelligence/extractionEnvelope.contract').ExtractionEnvelope;
+  serverAttestation: string;
 }
 
 export interface RefinanceLoanEstimateInput {

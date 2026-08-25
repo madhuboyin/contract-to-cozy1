@@ -16,6 +16,7 @@ import {
 } from './assumptionSet.service';
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { isCoverageActive } from './coverage/contextPolicy';
+import { assertCoverageConflictFree } from './coverageConflict.service';
 
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -693,6 +694,10 @@ export class CoverageIntelligenceService {
     homeownerProfileId: string;
   }> {
     const property = await assertPropertyForUser(propertyId, userId);
+    await assertCoverageConflictFree(propertyId, prisma, {
+      requireAllInsurancePolicies: true,
+      requireAllWarranties: true,
+    });
     const homeownerProfileId = property.homeownerProfileId;
     const evaluatedAt = new Date();
 
@@ -1130,6 +1135,9 @@ export class CoverageIntelligenceService {
   }> {
     const property = await assertPropertyForUser(propertyId, userId);
     const item = await this.assertItemForProperty(propertyId, itemId);
+    await assertCoverageConflictFree(propertyId, prisma, {
+      warrantyId: item.warranty?.id ?? null,
+    });
     const homeownerProfileId = property.homeownerProfileId;
 
     const lookback = new Date();
@@ -1593,6 +1601,10 @@ export class CoverageIntelligenceService {
     userId: string
   ): Promise<{ exists: false } | { exists: true; analysis: CoverageAnalysisDTO }> {
     await assertPropertyForUser(propertyId, userId);
+    await assertCoverageConflictFree(propertyId, prisma, {
+      requireAllInsurancePolicies: true,
+      requireAllWarranties: true,
+    });
 
     const latest = await prisma.coverageAnalysis.findFirst({
       where: { propertyId, inventoryItemId: null },
@@ -1617,6 +1629,9 @@ export class CoverageIntelligenceService {
   ): Promise<{ exists: false } | { exists: true; analysis: ItemCoverageAnalysisDTO }> {
     await assertPropertyForUser(propertyId, userId);
     const item = await this.assertItemForProperty(propertyId, itemId);
+    await assertCoverageConflictFree(propertyId, prisma, {
+      warrantyId: item.warranty?.id ?? null,
+    });
 
     const latestForItem = await prisma.coverageAnalysis.findFirst({
       where: { propertyId, inventoryItemId: itemId },

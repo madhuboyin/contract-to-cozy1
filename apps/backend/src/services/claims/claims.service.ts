@@ -27,6 +27,45 @@ import {
   type ClaimCoverageInput,
 } from '../coverage/contextPolicy';
 import { reconcileClaimCreated, reconcileClaimStatusChanged } from '../claimWorkReconciliation.service';
+import { emitPropertyChangeWithTransaction } from '../../propertyChanges/propertyChange.service';
+import { claimDocumentToExtractionEnvelope } from './claimDocumentExtractionEnvelope.adapter';
+
+async function emitClaimDocumentPromotedChange(
+  tx: Parameters<typeof emitPropertyChangeWithTransaction>[0],
+  input: {
+    propertyId: string;
+    claimId: string;
+    claimDocumentId: string;
+    documentId: string;
+    revision: string;
+    occurredAt: Date;
+  },
+) {
+  await emitPropertyChangeWithTransaction(tx, {
+    propertyId: input.propertyId,
+    sourceType: 'DOCUMENT',
+    sourceEntityId: input.documentId,
+    sourceRevision: input.revision,
+    changeType: 'DOCUMENT_PROMOTED',
+    changedFactKeys: ['claims.documents'],
+    canonicalReferences: [
+      { entityType: 'CLAIM', entityId: input.claimId },
+      { entityType: 'CLAIM_DOCUMENT', entityId: input.claimDocumentId },
+      { entityType: 'DOCUMENT', entityId: input.documentId },
+    ],
+    occurredAt: input.occurredAt,
+    detectedAt: input.occurredAt,
+    confidence: 1,
+    sourceHealth: 'CURRENT',
+    signals: {
+      homeownerRelevant: true,
+      lifecycleAdvanced: true,
+      propertyEffectConfirmed: true,
+      urgentSafetyCondition: false,
+      canonicalActionPriority: null,
+    },
+  });
+}
 
 
 type UploadAndAttachArgs = {
@@ -114,84 +153,86 @@ export async function uploadAndAttachChecklistItemDocument(args: UploadAndAttach
     claimId,
   });
 
-  // 3) Create Document row
-  // IMPORTANT: Your Document model uses DocumentType (not provided in this batch).
-  // We keep it safe: set type = OTHER (or map from mimetype if you want).
-  const document = await prisma.document.create({
-    data: {
-      uploadedBy: userId,
-      propertyId,
-      type: 'OTHER' as any, // ⬅️ map to your DocumentType enum if desired
-      name: uploaded.name,
-      description: null,
-      fileUrl: uploaded.fileUrl,
-      fileSize: uploaded.fileSize,
-      mimeType: uploaded.mimeType,
-      metadata: uploaded.metadata ?? null,
-    },
-    select: { id: true, fileUrl: true, name: true, mimeType: true },
-  });
-
-  // 4) Create or reuse ClaimDocument join row (unique claimId+documentId exists)
-  const claimDoc = await prisma.claimDocument.upsert({
-    where: { claimId_documentId: { claimId, documentId: document.id } },
-    update: {
-      type: args.claimDocumentType ?? ClaimDocumentType.OTHER,
-      title: args.title,
-      notes: args.notes,
-    },
-    create: {
-      claimId,
-      documentId: document.id,
-      type: args.claimDocumentType ?? ClaimDocumentType.OTHER,
-      title: args.title,
-      notes: args.notes,
-    },
-    select: { id: true },
-  });
-
-  // 5) Link to checklist item (many-to-many)
-  await prisma.claimChecklistItemDocument.upsert({
-    where: {
-      claimChecklistItemId_claimDocumentId: {
-        claimChecklistItemId: itemId,
-        claimDocumentId: claimDoc.id,
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    const document = await tx.document.create({
+      data: {
+        uploadedBy: userId,
+        propertyId,
+        type: 'OTHER' as any,
+        name: uploaded.name,
+        description: null,
+        fileUrl: uploaded.fileUrl,
+        fileSize: uploaded.fileSize,
+        mimeType: uploaded.mimeType,
+        metadata: uploaded.metadata ?? null,
       },
-    },
-    update: {},
-    create: {
-      claimChecklistItemId: itemId,
-      claimDocumentId: claimDoc.id,
-    },
-  });
-
-  // 6) Set primary doc if empty (nice UX)
-  if (!item.primaryClaimDocumentId) {
-    await prisma.claimChecklistItem.update({
-      where: { id: itemId },
-      data: { primaryClaimDocumentId: claimDoc.id },
+      select: { id: true },
     });
-  }
-
-  // 7) Timeline event
-  await prisma.claimTimelineEvent.create({
-    data: {
-      claimId,
+    const extractionEnvelope = claimDocumentToExtractionEnvelope({
+      documentId: document.id,
+      claimDocumentType: args.claimDocumentType ?? ClaimDocumentType.OTHER,
+      fileName: uploaded.name,
+      mimeType: uploaded.mimeType,
+      title: args.title,
+      notes: args.notes,
+      extractedAt: now,
+    });
+    await tx.document.update({
+      where: { id: document.id },
+      data: {
+        metadata: {
+          ...(uploaded.metadata && typeof uploaded.metadata === 'object' && !Array.isArray(uploaded.metadata)
+            ? uploaded.metadata
+            : {}),
+          extractionEnvelope,
+        },
+      },
+    });
+    const claimDoc = await tx.claimDocument.create({
+      data: {
+        claimId,
+        documentId: document.id,
+        type: args.claimDocumentType ?? ClaimDocumentType.OTHER,
+        title: args.title,
+        notes: args.notes,
+      },
+      select: { id: true },
+    });
+    await tx.claimChecklistItemDocument.create({
+      data: { claimChecklistItemId: itemId, claimDocumentId: claimDoc.id },
+    });
+    if (!item.primaryClaimDocumentId) {
+      await tx.claimChecklistItem.update({
+        where: { id: itemId },
+        data: { primaryClaimDocumentId: claimDoc.id },
+      });
+    }
+    await tx.claimTimelineEvent.create({
+      data: {
+        claimId,
+        propertyId,
+        createdBy: userId,
+        type: ClaimTimelineEventType.DOCUMENT_ADDED,
+        title: 'Document added',
+        description: args.title || file.originalname,
+        claimDocumentId: claimDoc.id,
+        meta: { checklistItemId: itemId },
+        occurredAt: now,
+      },
+    });
+    await tx.claim.update({
+      where: { id: claimId },
+      data: { lastActivityAt: now },
+    });
+    await emitClaimDocumentPromotedChange(tx, {
       propertyId,
-      createdBy: userId,
-      type: ClaimTimelineEventType.DOCUMENT_ADDED,
-      title: 'Document added',
-      description: args.title || file.originalname,
+      claimId,
       claimDocumentId: claimDoc.id,
-      meta: { checklistItemId: itemId },
-      occurredAt: new Date(),
-    },
-  });
-
-  // 8) Update claim lastActivityAt
-  await prisma.claim.update({
-    where: { id: claimId },
-    data: { lastActivityAt: new Date() },
+      documentId: document.id,
+      revision: `uploaded:${claimDoc.id}`,
+      occurredAt: now,
+    });
   });
 
   // Return updated claim (recommended) so UI can refresh cheaply.
@@ -359,6 +400,10 @@ async function assertSharedClaimCoverage(propertyId: string, userId: string, inp
   const evaluation = await evaluateFeatureContext(propertyId, userId, {
     featureKey: 'CLAIMS',
     operationKey: requiredKind === 'INSURANCE' ? 'FILE_INSURANCE_CLAIM' : 'FILE_WARRANTY_CLAIM',
+    operationInput: {
+      insurancePolicyId: input.insurancePolicyId ?? null,
+      warrantyId: input.warrantyId ?? null,
+    },
   });
   if (!evaluation.canExecute) {
     throw Object.assign(new Error('Add an active coverage record before starting this claim path.'), {
@@ -967,56 +1012,80 @@ export class ClaimsService {
     mustHave(input.mimeType, 'mimeType is required');
     mustHave(input.type, 'Document.type is required');
 
-    // Create a Document (reusing your existing generic Document table)
-    const doc = await prisma.document.create({
-      data: {
-        propertyId: claim.propertyId, // IMPORTANT: keep Property.documents consistent
-        uploadedBy: userId,
-        type: input.type as any,
-        name: input.name,
-        description: input.description ?? null,
-        fileUrl: input.fileUrl,
-        fileSize: input.fileSize,
-        mimeType: input.mimeType,
-        metadata: input.metadata ?? undefined,
-
-        // optional: attach to claim-linked coverage objects too
-        policyId: input.attachToPolicy ? (claim.insurancePolicyId ?? null) : null,
-        warrantyId: input.attachToWarranty ? (claim.warrantyId ?? null) : null,
-      },
-    });
-
-    const claimDoc = await prisma.claimDocument.create({
-      data: {
-        claimId,
+    const now = new Date();
+    return prisma.$transaction(async (tx) => {
+      const doc = await tx.document.create({
+        data: {
+          propertyId: claim.propertyId,
+          uploadedBy: userId,
+          type: input.type as any,
+          name: input.name,
+          description: input.description ?? null,
+          fileUrl: input.fileUrl,
+          fileSize: input.fileSize,
+          mimeType: input.mimeType,
+          metadata: input.metadata ?? undefined,
+          policyId: input.attachToPolicy ? (claim.insurancePolicyId ?? null) : null,
+          warrantyId: input.attachToWarranty ? (claim.warrantyId ?? null) : null,
+        },
+      });
+      const extractionEnvelope = claimDocumentToExtractionEnvelope({
         documentId: doc.id,
-        type: (input.claimDocumentType ?? 'OTHER') as any,
-        title: input.title ?? null,
-        notes: input.notes ?? null,
-      },
-      include: { document: true },
-    });
-
-    await prisma.claimTimelineEvent.create({
-      data: {
-        claimId,
+        claimDocumentType: input.claimDocumentType ?? 'OTHER',
+        fileName: input.name,
+        mimeType: input.mimeType,
+        title: input.title,
+        notes: input.notes,
+        extractedAt: now,
+      });
+      await tx.document.update({
+        where: { id: doc.id },
+        data: {
+          metadata: {
+            ...(input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)
+              ? input.metadata
+              : {}),
+            extractionEnvelope,
+          },
+        },
+      });
+      const claimDoc = await tx.claimDocument.create({
+        data: {
+          claimId,
+          documentId: doc.id,
+          type: (input.claimDocumentType ?? 'OTHER') as any,
+          title: input.title ?? null,
+          notes: input.notes ?? null,
+        },
+        include: { document: true },
+      });
+      await tx.claimTimelineEvent.create({
+        data: {
+          claimId,
+          propertyId,
+          createdBy: userId,
+          type: 'DOCUMENT_ADDED',
+          title: 'Document added',
+          description: input.title ?? input.name,
+          occurredAt: now,
+          claimDocumentId: claimDoc.id,
+          meta: { documentId: doc.id, claimDocumentType: claimDoc.type },
+        },
+      });
+      await tx.claim.update({
+        where: { id: claimId },
+        data: { lastActivityAt: now },
+      });
+      await emitClaimDocumentPromotedChange(tx, {
         propertyId,
-        createdBy: userId,
-        type: 'DOCUMENT_ADDED',
-        title: 'Document added',
-        description: input.title ?? input.name,
-        occurredAt: new Date(),
+        claimId,
         claimDocumentId: claimDoc.id,
-        meta: { documentId: doc.id, claimDocumentType: claimDoc.type },
-      },
+        documentId: doc.id,
+        revision: `uploaded:${claimDoc.id}`,
+        occurredAt: now,
+      });
+      return { ...claimDoc, extractionEnvelope };
     });
-
-    await prisma.claim.update({
-      where: { id: claimId },
-      data: { lastActivityAt: new Date() },
-    });
-
-    return claimDoc;
   }
 
   static async addTimelineEvent(propertyId: string, claimId: string, userId: string, input: AddTimelineEventInput) {
@@ -1533,6 +1602,26 @@ export class ClaimsService {
             warrantyId: it.attachToWarranty ? (claim.warrantyId ?? null) : null,
           },
         });
+        const extractionEnvelope = claimDocumentToExtractionEnvelope({
+          documentId: doc.id,
+          claimDocumentType: it.claimDocumentType ?? ClaimDocumentType.OTHER,
+          fileName: uploaded.name,
+          mimeType: uploaded.mimeType,
+          title: it.title,
+          notes: it.notes,
+          extractedAt: now,
+        });
+        await tx.document.update({
+          where: { id: doc.id },
+          data: {
+            metadata: {
+              ...(uploaded.metadata && typeof uploaded.metadata === 'object' && !Array.isArray(uploaded.metadata)
+                ? uploaded.metadata
+                : {}),
+              extractionEnvelope,
+            },
+          },
+        });
 
         // 3) Create ClaimDocument row
         const claimDoc = await tx.claimDocument.create({
@@ -1560,8 +1649,16 @@ export class ClaimsService {
             occurredAt: now,
           },
         });
+        await emitClaimDocumentPromotedChange(tx, {
+          propertyId,
+          claimId,
+          claimDocumentId: claimDoc.id,
+          documentId: doc.id,
+          revision: `uploaded:${claimDoc.id}`,
+          occurredAt: now,
+        });
 
-        results.push(claimDoc);
+        results.push({ ...claimDoc, extractionEnvelope });
       }
 
       // 5) bump claim lastActivityAt once
@@ -1624,6 +1721,7 @@ export class ClaimsService {
         documentId: string;
         fileUrl: string;
         name: string;
+        extractionEnvelope: ReturnType<typeof claimDocumentToExtractionEnvelope>;
       }> = [];
 
       for (const it of inputs) {
@@ -1654,6 +1752,26 @@ export class ClaimsService {
             metadata: uploaded.metadata ?? null,
           },
           select: { id: true, fileUrl: true, name: true },
+        });
+        const extractionEnvelope = claimDocumentToExtractionEnvelope({
+          documentId: doc.id,
+          claimDocumentType: it.claimDocumentType ?? ClaimDocumentType.OTHER,
+          fileName: uploaded.name,
+          mimeType: uploaded.mimeType,
+          title: it.title,
+          notes: it.notes,
+          extractedAt: now,
+        });
+        await tx.document.update({
+          where: { id: doc.id },
+          data: {
+            metadata: {
+              ...(uploaded.metadata && typeof uploaded.metadata === 'object' && !Array.isArray(uploaded.metadata)
+                ? uploaded.metadata
+                : {}),
+              extractionEnvelope,
+            },
+          },
         });
 
         // 3) Create ClaimDocument row (unique claimId+documentId constraint exists in your other function,
@@ -1717,6 +1835,14 @@ export class ClaimsService {
             occurredAt: now,
           },
         });
+        await emitClaimDocumentPromotedChange(tx, {
+          propertyId,
+          claimId,
+          claimDocumentId: claimDoc.id,
+          documentId: doc.id,
+          revision: `uploaded:${claimDoc.id}`,
+          occurredAt: now,
+        });
         
 
         results.push({
@@ -1725,6 +1851,7 @@ export class ClaimsService {
           documentId: doc.id,
           fileUrl: doc.fileUrl,
           name: doc.name,
+          extractionEnvelope,
         });
       }
 

@@ -53,6 +53,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -890,6 +891,13 @@ export default function InsurancePage() {
           </Dialog>
         }
       />
+
+      {searchParams.get('resolveConflict') === '1' && createPrefill?.propertyId && (
+        <PolicyRecordReadinessPanel
+          propertyId={createPrefill.propertyId}
+          policyId={searchParams.get('policyId')}
+        />
+      )}
       
       {isLoading && (
         <div className="text-center py-10">

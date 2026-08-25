@@ -5,6 +5,8 @@ import {
   deleteDocumentObject,
   uploadDocumentBuffer,
 } from '../storage/reportStorage';
+import { propertyTaxFieldsToExtractionEnvelope } from './propertyTaxExtractionEnvelope.adapter';
+import { emitPropertyChangeWithTransaction } from '../../propertyChanges/propertyChange.service';
 
 export const PROPERTY_TAX_PRIVACY_CONSENT_VERSION = 'property-tax-vault-v1';
 
@@ -142,6 +144,7 @@ export class PropertyTaxDocumentIntakeService {
     private readonly db = prisma,
     private readonly upload = uploadDocumentBuffer,
     private readonly removeUpload = deleteDocumentObject,
+    private readonly emitChange = emitPropertyChangeWithTransaction,
   ) {}
 
   async createVaultIntake(input: {
@@ -254,14 +257,20 @@ export class PropertyTaxDocumentIntakeService {
         propertyId,
         property: { homeownerProfile: { userId } },
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, documentId: true },
     });
     if (!intake) throw new Error('Tax document intake not found');
     if (intake.status === 'CONFIRMED' || intake.status === 'REJECTED') {
       throw new Error('Confirmed or rejected intake cannot be restaged');
     }
 
-    return this.db.$transaction(async (tx) => {
+    const extractionEnvelope = propertyTaxFieldsToExtractionEnvelope({
+      documentId: intake.documentId,
+      fields,
+      method: 'MANUAL',
+      extractedAt: now,
+    });
+    const updated = await this.db.$transaction(async (tx) => {
       for (const field of fields) {
         if (!ALL_FIELDS.has(field.fieldKey)) {
           throw new Error(`Unsupported property tax field: ${field.fieldKey}`);
@@ -318,6 +327,7 @@ export class PropertyTaxDocumentIntakeService {
         include: { document: true, fields: { orderBy: { fieldKey: 'asc' } } },
       });
     });
+    return { ...updated, extractionEnvelope };
   }
 
   async confirm(
@@ -560,6 +570,26 @@ export class PropertyTaxDocumentIntakeService {
           verifiedByUserId: userId,
           parserVersion: 'property-tax-manual-v1',
         },
+      });
+      await this.emitChange(tx, {
+        propertyId,
+        sourceType: 'DOCUMENT',
+        sourceEntityId: intake.documentId,
+        sourceRevision: `confirmed:${intake.id}:${now.toISOString()}`,
+        changeType: 'DOCUMENT_PROMOTED',
+        changedFactKeys: [
+          ...(assessmentRecordId ? ['financial.propertyTaxAssessment'] : []),
+          ...(billRecordId ? ['financial.propertyTaxBill'] : []),
+        ],
+        canonicalReferences: [
+          ...(assessmentRecordId ? [{ entityType: 'PROPERTY_TAX_ASSESSMENT_RECORD', entityId: assessmentRecordId }] : []),
+          ...(billRecordId ? [{ entityType: 'PROPERTY_TAX_BILL_RECORD', entityId: billRecordId }] : []),
+        ],
+        occurredAt: now,
+        detectedAt: now,
+        confidence: 1,
+        sourceHealth: 'CURRENT',
+        signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
       });
       return tx.propertyTaxDocumentIntake.update({
         where: { id: intake.id },

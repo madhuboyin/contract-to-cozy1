@@ -11,6 +11,7 @@ import {
   RiskPremiumOptimizationStatus,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { assertCoverageConflictFree } from './coverageConflict.service';
 import {
   AssumptionSetService,
   extractAssumptionOverrides,
@@ -586,6 +587,7 @@ export class RiskPremiumOptimizerService {
 
   async getLatest(propertyId: string, userId: string) {
     await assertPropertyForUser(propertyId, userId);
+    await assertCoverageConflictFree(propertyId, prisma, { requireAllInsurancePolicies: true });
     const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'RISK_PREMIUM_OPTIMIZER');
 
     const latest = await prisma.riskPremiumOptimizationAnalysis.findFirst({
@@ -627,6 +629,7 @@ export class RiskPremiumOptimizerService {
     options?: RiskPremiumRunOptions
   ) {
     const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'RISK_PREMIUM_OPTIMIZER');
+    await assertCoverageConflictFree(propertyId, prisma, { requireAllInsurancePolicies: true });
     const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);
     let assumptionSetId: string | null = null;
     let assumptionOverrides: RiskPremiumOptimizerOverrides = {};

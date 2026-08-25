@@ -227,6 +227,22 @@ export const deleteWarranty = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
+export const resolveWarrantyConflict = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const selectedWarrantyId = req.body?.selectedWarrantyId;
+    if (typeof selectedWarrantyId !== 'string' || !selectedWarrantyId.trim()) {
+      throw new APIError('selectedWarrantyId is required', 400, 'WARRANTY_SELECTION_REQUIRED');
+    }
+    const result = await HomeManagementService.resolveWarrantyConflict(
+      selectedWarrantyId,
+      getHomeownerId(req),
+    );
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // --- INSURANCE POLICY CONTROLLERS (Similar CRUD structure) ---
 
 export const postInsurancePolicy = async (req: AuthRequest, res: Response, next: NextFunction) => {

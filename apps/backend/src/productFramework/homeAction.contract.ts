@@ -207,7 +207,9 @@ export const HomeActionSchema = z.object({
     windowEnd: z.string().datetime().nullable(),
     rationale: z.string().trim().min(1).max(600),
   }),
-  evidence: z.array(EvidenceReferenceSchema).min(1).max(50),
+  // Canonical compound actions retain every contributor; clients may collapse
+  // presentation but cannot truncate the stored reasoning basis.
+  evidence: z.array(EvidenceReferenceSchema).min(1),
   assumptions: z.array(AssumptionSchema).max(30),
   options: z.array(DecisionOptionSchema).max(20),
   tradeoffs: z.array(TradeoffSchema).max(50),

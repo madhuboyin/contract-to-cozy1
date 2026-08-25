@@ -1353,7 +1353,7 @@ const WARRANTY_CATEGORY_HOME_SYSTEMS: Record<string, readonly string[]> = {
 async function loadInspectionCoverageActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
   if (!db.inspectionFinding || !db.warranty) return [];
   const now = evaluatedAt ?? new Date();
-  const [findings, warranties] = await Promise.all([
+  const [findings, warranties, conflictedWarrantyGroups] = await Promise.all([
     db.inspectionFinding.findMany({
       where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' }, report: { status: 'CONFIRMED' } },
       select: { id: true, reportId: true, homeSystem: true, severity: true, createdAt: true, updatedAt: true },
@@ -1362,11 +1362,15 @@ async function loadInspectionCoverageActions(propertyId: string, db: HomeActionS
       where: { propertyId, startDate: { lte: now }, expiryDate: { gte: now } },
       select: { id: true, category: true, providerName: true, expiryDate: true, updatedAt: true },
     }),
+    getConflictedWarrantyGroups(propertyId, db, now),
   ]);
+  const conflictedWarrantyIds = new Set(
+    conflictedWarrantyGroups.flatMap((group) => group.warranties.map((warranty) => warranty.id)),
+  );
   if (findings.length === 0 || warranties.length === 0) return [];
 
   return findings.flatMap((finding) => {
-    const matches = warranties.filter((warranty) =>
+    const matches = warranties.filter((warranty) => !conflictedWarrantyIds.has(warranty.id) &&
       (WARRANTY_CATEGORY_HOME_SYSTEMS[String(warranty.category)] ?? []).includes(finding.homeSystem));
     if (matches.length === 0) return [];
 
@@ -1459,11 +1463,15 @@ type PremiumDriverSnapshot = {
 async function loadRiskMitigationActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
   if (!db.riskPremiumOptimizationAnalysis) return [];
   const now = evaluatedAt ?? new Date();
-  const analysis = await db.riskPremiumOptimizationAnalysis.findFirst({
-    where: { propertyId },
-    include: { planItems: { where: { status: 'RECOMMENDED' } } },
-    orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
-  });
+  const [analysis, policyConflicts] = await Promise.all([
+    db.riskPremiumOptimizationAnalysis.findFirst({
+      where: { propertyId },
+      include: { planItems: { where: { status: 'RECOMMENDED' } } },
+      orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
+    }),
+    getConflictedInsurancePolicyTerms(propertyId, db),
+  ]);
+  if (policyConflicts.length > 0) return [];
   if (!analysis || analysis.status !== 'READY') return [];
 
   const premiumDrivers = (Array.isArray(analysis.premiumDrivers) ? analysis.premiumDrivers : []) as PremiumDriverSnapshot[];
@@ -1731,7 +1739,7 @@ async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSour
   if (!db.warranty || !db.insurancePolicy) return [];
 
   const now = evaluatedAt ?? new Date();
-  const [warranties, insurancePolicies] = await Promise.all([
+  const [warranties, insurancePolicies, conflictedWarrantyGroups, conflictedPolicyTerms] = await Promise.all([
     db.warranty.findMany({
       where: { propertyId },
       select: { id: true, providerName: true, expiryDate: true, updatedAt: true, inventoryItemId: true },
@@ -1740,7 +1748,13 @@ async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSour
       where: { propertyId },
       select: { id: true, carrierName: true, expiryDate: true, updatedAt: true },
     }),
+    getConflictedWarrantyGroups(propertyId, db, now),
+    getConflictedInsurancePolicyTerms(propertyId, db),
   ]);
+  const conflictedWarrantyIds = new Set(
+    conflictedWarrantyGroups.flatMap((group) => group.warranties.map((warranty) => warranty.id)),
+  );
+  const conflictedPolicyIds = new Set(conflictedPolicyTerms.map((term) => term.policyId));
 
   const actions: HomeAction[] = [];
 
@@ -1813,7 +1827,7 @@ async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSour
     }));
   };
 
-  warranties.forEach((warranty) => buildAction({
+  warranties.filter((warranty) => !conflictedWarrantyIds.has(warranty.id)).forEach((warranty) => buildAction({
     id: warranty.id,
     expiryDate: warranty.expiryDate,
     updatedAt: warranty.updatedAt,
@@ -1821,7 +1835,7 @@ async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSour
     entityType: 'Warranty',
     href: `/dashboard/properties/${propertyId}/inventory?tab=coverage${warranty.inventoryItemId ? `&highlight=${encodeURIComponent(warranty.inventoryItemId)}` : ''}`,
   }));
-  insurancePolicies.forEach((policy) => buildAction({
+  insurancePolicies.filter((policy) => !conflictedPolicyIds.has(policy.id)).forEach((policy) => buildAction({
     id: policy.id,
     expiryDate: policy.expiryDate,
     updatedAt: policy.updatedAt,
@@ -2196,11 +2210,9 @@ const RECURRING_FAILURE_MIN_EVENT_COUNT = 2;
 // time, freshness, and confidence" — an aggregate count alone (the prior
 // shape here) does not satisfy that; each contributing HomeEvent's own
 // identity and occurredAt now flow through so the Home Action below can
-// cite them individually, capped per item (EVIDENCE_PER_ITEM_CAP) so a
-// long repair history can't overflow HomeActionSchema's 50-entry evidence
-// array — the narrative sentence still reports the true total count.
+// cite them individually. Presentation may compact a long history, but the
+// canonical action retains all contributors for reasoning and audit.
 type RepairEventContributor = { id: string; type: string; occurredAt: Date };
-const RECURRING_FAILURE_EVIDENCE_CAP = 10;
 
 async function findRecentRepairEventsByInventoryItem(
   db: HomeActionSourceDb,
@@ -2321,11 +2333,9 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
           confidence: confidenceScore,
         },
         // HI-CMP-003: one evidence entry per contributing HomeEvent (its
-        // own id and observation time), not an aggregate summary — capped
-        // to the most recent RECURRING_FAILURE_EVIDENCE_CAP; the sentence
-        // above already states the true total count.
+        // own id and observation time), not an aggregate summary.
         ...(hasRecurringFailure
-          ? contributingRepairEvents.slice(0, RECURRING_FAILURE_EVIDENCE_CAP).map((event) => ({
+          ? contributingRepairEvents.map((event) => ({
               id: event.id,
               type: 'HOME_EVENT' as const,
               label: event.type === 'REPAIR' ? 'Repair logged' : 'Maintenance logged',
@@ -4001,7 +4011,8 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
 ): Promise<HomeAction[]> {
   if (!db.homeCapitalTimelineAnalysis) return [];
 
-  const analysis = await db.homeCapitalTimelineAnalysis.findFirst({
+  const [analysis, conflictedWarrantyGroups, conflictedPolicyTerms] = await Promise.all([
+    db.homeCapitalTimelineAnalysis.findFirst({
     where: { propertyId, status: 'READY' },
     orderBy: { computedAt: 'desc' },
     select: {
@@ -4049,16 +4060,31 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
         },
       },
     },
-  });
+    }),
+    getConflictedWarrantyGroups(propertyId, db),
+    getConflictedInsurancePolicyTerms(propertyId, db),
+  ]);
   if (!analysis || analysis.items.length === 0) return [];
+  const conflictedWarrantyIds = new Set(
+    conflictedWarrantyGroups.flatMap((group) => group.warranties.map((warranty) => warranty.id)),
+  );
+  const conflictedPolicyIds = new Set(conflictedPolicyTerms.map((term) => term.policyId));
 
   const contextVersion = capitalContextVersion(analysis.inputsSnapshot);
 
   // A capital recommendation belongs to one physical asset. Similar timing may
   // inform the destination's portfolio view, but must not erase item identity
   // or turn several distinct homeowner decisions into one homepage card.
-  return analysis.items.map((item) => {
+  return analysis.items.flatMap((item) => {
     const record = item.inventoryItem;
+    const linkedWarrantyIds = [
+      record?.warranty?.id,
+      ...(record?.linkedWarranties?.map((warranty) => warranty.id) ?? []),
+    ].filter((id): id is string => Boolean(id));
+    if (linkedWarrantyIds.some((id) => conflictedWarrantyIds.has(id))
+      || (record?.insurancePolicy?.id && conflictedPolicyIds.has(record.insurancePolicy.id))) {
+      return [];
+    }
     const label = (record?.name ?? CAPITAL_TIMELINE_CATEGORY_LABEL[item.category] ?? 'Home system').slice(0, 160).trim() || 'Home system';
     const subjectId = item.inventoryItemId ?? item.id;
     const costRange = item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null
@@ -4115,7 +4141,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
     if (item.inventoryItemId) launchParams.set('itemId', item.inventoryItemId);
     if (contextVersion) launchParams.set('contextVersion', contextVersion);
 
-    return adaptHomeActionSource('SYSTEM', {
+    return [adaptHomeActionSource('SYSTEM', {
       id: actionId,
       propertyId,
       lineageId: actionId,
@@ -4252,7 +4278,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       relatedJourneyId: null,
       createdAt: analysis.computedAt.toISOString(),
       lastEvaluatedAt: analysis.computedAt.toISOString(),
-    });
+    })];
   });
 }
 

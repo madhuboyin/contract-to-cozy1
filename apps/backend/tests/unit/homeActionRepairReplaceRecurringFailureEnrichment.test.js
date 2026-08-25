@@ -88,7 +88,7 @@ test('two or more repair/maintenance events in the lookback window bumps priorit
   assert.equal(action.lineageId, 'repair-replace:item-1');
 });
 
-test('more contributing events than the evidence cap still report the true count in the narrative, with evidence capped', async () => {
+test('all contributing events remain in canonical evidence even for a long repair history', async () => {
   const events = Array.from({ length: 15 }, (_, index) => repairEvent({
     id: `home-event-${index}`,
     occurredAt: new Date(2026, 0, index + 1),
@@ -97,7 +97,7 @@ test('more contributing events than the evidence cap still report the true count
   const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
 
   assert.ok(actions[0].whyItMatters.includes('15 logged repair or maintenance events'));
-  assert.equal(actions[0].evidence.length, 11, 'base analysis evidence plus the 10-event evidence cap');
+  assert.equal(actions[0].evidence.length, 16, 'base analysis evidence plus every contributing event');
 });
 
 test('exactly one repair event does not count as a recurring pattern', async () => {

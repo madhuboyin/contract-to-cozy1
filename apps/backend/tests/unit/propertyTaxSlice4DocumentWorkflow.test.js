@@ -252,6 +252,8 @@ test('homeowner confirmation creates document-backed canonical assessment and bi
     async $transaction(callback) {
       return callback(tx);
     },
+  }, undefined, undefined, async (_tx, input) => {
+    calls.propertyChange = input;
   });
 
   const result = await service.confirm(
@@ -277,6 +279,11 @@ test('homeowner confirmation creates document-backed canonical assessment and bi
   assert.equal(calls.document[0].data.verificationStatus, 'VERIFIED');
   assert.equal(result.confirmedAssessmentRecordId, 'assessment-1');
   assert.equal(result.confirmedBillRecordId, 'bill-1');
+  assert.equal(calls.propertyChange.changeType, 'DOCUMENT_PROMOTED');
+  assert.deepEqual(calls.propertyChange.changedFactKeys, [
+    'financial.propertyTaxAssessment',
+    'financial.propertyTaxBill',
+  ]);
 });
 
 test('reviewed rules create exemption and correction checklists without eligibility conclusions', async () => {

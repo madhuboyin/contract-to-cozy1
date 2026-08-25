@@ -372,29 +372,26 @@ export async function confirmPolicyFact(params: {
     });
 
     // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-005) —
-    // confirming this fact just updated the canonical InsurancePolicy
-    // (and possibly InsurancePolicyTerm/coverageReview staleness above);
-    // a REJECTED fact leaves canonical values untouched, so only CONFIRMED
-    // emits a change worth recomputing dependents over.
-    if (params.confirmationStatus === 'CONFIRMED') {
-      await emitPropertyChangeWithTransaction(tx, {
-        propertyId: fact.policyTerm.propertyId,
-        sourceType: 'DOCUMENT',
-        sourceEntityId: fact.id,
-        sourceRevision: 'CONFIRMED',
-        changeType: 'SOURCE_LIFECYCLE_CHANGED',
-        changedFactKeys: [`coverage.insurancePolicy.${fact.factKey.toLowerCase()}`],
-        canonicalReferences: [
-          { entityType: 'INSURANCE_POLICY', entityId: params.policyId },
-          { entityType: 'INSURANCE_POLICY_TERM', entityId: fact.policyTermId },
-        ],
-        occurredAt: new Date(),
-        detectedAt: new Date(),
-        confidence: 1,
-        sourceHealth: 'CURRENT',
-        signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
-      });
-    }
+    // Both choices resolve the pending-vs-confirmed conflict. CONFIRMED may
+    // change the canonical value; REJECTED keeps it, but still changes the
+    // Property Context state from CONFLICTED and must recompute consumers.
+    await emitPropertyChangeWithTransaction(tx, {
+      propertyId: fact.policyTerm.propertyId,
+      sourceType: 'DOCUMENT',
+      sourceEntityId: fact.id,
+      sourceRevision: params.confirmationStatus,
+      changeType: 'SOURCE_LIFECYCLE_CHANGED',
+      changedFactKeys: [`coverage.insurancePolicy.${fact.factKey.toLowerCase()}`],
+      canonicalReferences: [
+        { entityType: 'INSURANCE_POLICY', entityId: params.policyId },
+        { entityType: 'INSURANCE_POLICY_TERM', entityId: fact.policyTermId },
+      ],
+      occurredAt: new Date(),
+      detectedAt: new Date(),
+      confidence: 1,
+      sourceHealth: 'CURRENT',
+      signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
+    });
 
     await tx.auditLog.create({
       data: {

@@ -137,11 +137,16 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     hasBuffer: !!file.buffer?.length,
   }, '[inventoryOcr] upload');
   // 3) Extract canonical values
-  const manufacturer = fields.find((f) => f.key === 'manufacturer')?.value ?? null;
-  const modelNumber = fields.find((f) => f.key === 'modelNumber')?.value ?? null;
-  const serialNumber = fields.find((f) => f.key === 'serialNumber')?.value ?? null;
-  const upc = fields.find((f) => f.key === 'upc')?.value ?? null;
-  const sku = fields.find((f) => f.key === 'sku')?.value ?? null;
+  const envelopeValues = new Map(envelope.fields.map((field) => [field.fieldKey, field.value]));
+  const envelopeString = (key: string) => {
+    const value = envelopeValues.get(key);
+    return typeof value === 'string' && value.trim() ? value : null;
+  };
+  const manufacturer = envelopeString('manufacturer');
+  const modelNumber = envelopeString('modelNumber');
+  const serialNumber = envelopeString('serialNumber');
+  const upc = envelopeString('upc');
+  const sku = envelopeString('sku');
   logger.info({ manufacturer }, 'manufacturer');
   logger.info({ modelNumber }, 'modelNumber');
   logger.info({ serialNumber }, 'serialNumber');
@@ -159,7 +164,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     serialNumber,
     upc,
     sku,
-    confidenceJson: ocr.confidenceByField,
+    confidenceJson: Object.fromEntries(envelope.fields.map((field) => [field.fieldKey, field.confidence])),
   });
   
   logger.info({ draft }, 'draft');
@@ -179,6 +184,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     extracted: { manufacturer, modelNumber, serialNumber, upc, sku },
     confidence: ocr.confidenceByField,
     rawText: ocr.rawText,
+    envelope,
     ...(ocr.debug ? { debug: ocr.debug } : {}),
   });  
   

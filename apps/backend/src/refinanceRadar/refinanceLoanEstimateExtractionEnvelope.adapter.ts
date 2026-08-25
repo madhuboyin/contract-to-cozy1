@@ -5,11 +5,9 @@
 // matching, not AI-backed), unlike documentIntelligenceService — a
 // separate adapter rather than reusing
 // documentIntelligenceExtractionEnvelope.adapter.ts's AI-specific one.
-// Purely additive: the extraction logic and RefinanceLoanEstimateExtraction
-// shape are untouched. Not yet wired into refinanceRadar.controller.ts's
-// response — that already returns the raw extraction object to the
-// frontend today, and reshaping the response contract needs a coordinated
-// frontend change this backend-only pass does not make.
+// The live controller returns this envelope alongside the editable raw
+// extraction and a server attestation. The homeowner may correct prefilled
+// offer values, but cannot fabricate document-derived provenance at save.
 import type { RefinanceLoanEstimateExtraction } from './refinanceLoanEstimateExtraction.service';
 import type { ExtractionCandidateField, ExtractionEnvelope, ExtractionParseStatus } from '../services/intelligence/extractionEnvelope.contract';
 

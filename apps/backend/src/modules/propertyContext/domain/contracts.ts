@@ -38,6 +38,26 @@ export type PropertyFactSource =
   | 'INTEGRATION'
   | 'SYSTEM_DERIVED';
 
+export interface PropertyFactConflictEvidence {
+  id: string;
+  entityType: string;
+  entityId: string;
+  fieldKey: string | null;
+  value: unknown;
+  source: PropertyFactSource;
+  observedAt: string;
+  confidence: number | null;
+  verified: boolean;
+}
+
+export interface PropertyFactConflict {
+  id: string;
+  kind: 'COMPETING_FACT' | 'COMPETING_RECORD';
+  affectedEntityIds: string[];
+  evidence: PropertyFactConflictEvidence[];
+  resolutionPath: string;
+}
+
 export interface PropertyFact<T = unknown> {
   key: string;
   value: T | null;
@@ -48,6 +68,8 @@ export interface PropertyFact<T = unknown> {
   observedAt: string | null;
   validUntil: string | null;
   correctionPath: string | null;
+  /** Present only when state is CONFLICTED; never discard either candidate. */
+  conflicts?: PropertyFactConflict[];
 }
 export interface PropertyContextWarning {
   code: 'CONFLICT' | 'STALE_SOURCE' | 'PARTIAL_SCOPE';

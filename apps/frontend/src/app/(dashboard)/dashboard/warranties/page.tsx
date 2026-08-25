@@ -851,6 +851,7 @@ export default function WarrantiesPage() {
   const [isUploadModalOpen, setIsUploadModal] = useState(false);
   const [uploadingToWarrantyId, setUploadingToWarrantyId] = useState<string | null>(null);
   const [expandedWarrantyIds, setExpandedWarrantyIds] = useState<Record<string, boolean>>({});
+  const [resolvingWarrantyId, setResolvingWarrantyId] = useState<string | null>(null);
 
   const { toast } = useToast();
   const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
@@ -1154,6 +1155,44 @@ export default function WarrantiesPage() {
     });
   }, [warranties]);
 
+  const warrantyConflictGroups = useMemo(() => {
+    const active = warranties.filter((warranty) => {
+      const expiry = new Date(warranty.expiryDate).getTime();
+      return warranty.propertyId && warranty.category !== 'OTHER' && Number.isFinite(expiry) && expiry >= Date.now();
+    });
+    const grouped = new Map<string, Warranty[]>();
+    for (const warranty of active) {
+      const key = `${warranty.propertyId}:${warranty.category}`;
+      grouped.set(key, [...(grouped.get(key) ?? []), warranty]);
+    }
+    return [...grouped.values()].filter((group) => {
+      if (group.length < 2) return false;
+      const providers = new Set(group.map((warranty) => warranty.providerName));
+      const expiries = group.map((warranty) => new Date(warranty.expiryDate).getTime());
+      const spreadDays = (Math.max(...expiries) - Math.min(...expiries)) / 86_400_000;
+      return providers.size > 1 || spreadDays > 30;
+    });
+  }, [warranties]);
+
+  const handleResolveWarrantyConflict = async (selected: Warranty, group: Warranty[]) => {
+    const removed = group.filter((warranty) => warranty.id !== selected.id);
+    const confirmed = await requestConfirmation({
+      title: `Keep ${selected.providerName} as the current warranty?`,
+      description: `This keeps the selected ${getWarrantyCategoryLabel(selected.category)} record and removes ${removed.length} competing record${removed.length === 1 ? '' : 's'}.`,
+      confirmLabel: 'Keep selected warranty',
+    });
+    if (!confirmed) return;
+    setResolvingWarrantyId(selected.id);
+    const response = await api.resolveWarrantyConflict(selected.id);
+    if (response.success) {
+      toast({ title: 'Warranty conflict resolved', description: 'Dependent coverage guidance can now recompute from the selected record.' });
+      await fetchDependencies();
+    } else {
+      toast({ title: 'Resolution failed', description: response.error?.message ?? response.message, variant: 'destructive' });
+    }
+    setResolvingWarrantyId(null);
+  };
+
   const warrantyStatusMeta = useMemo(
     () =>
       sortedWarranties.map((warranty) => ({
@@ -1276,6 +1315,39 @@ export default function WarrantiesPage() {
           </Dialog>
         }
       />
+
+      {!isLoading && warrantyConflictGroups.map((group) => (
+        <Card key={`${group[0].propertyId}:${group[0].category}`} className="border-amber-300 bg-amber-50/70">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertCircle className="h-5 w-5 text-amber-700" />
+              Choose the current {getWarrantyCategoryLabel(group[0].category)} warranty
+            </CardTitle>
+            <CardDescription>
+              These active records disagree. Coverage decisions remain blocked until you select the record to keep.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            {group.map((warranty) => (
+              <div key={warranty.id} className="rounded-lg border border-amber-200 bg-white p-3">
+                <p className="font-medium">{warranty.providerName}</p>
+                <p className="text-sm text-muted-foreground">
+                  {warranty.policyNumber ? `Policy ${warranty.policyNumber} · ` : ''}expires {format(parseISO(warranty.expiryDate), 'MMM dd, yyyy')}
+                </p>
+                <Button
+                  className="mt-3"
+                  size="sm"
+                  disabled={resolvingWarrantyId !== null}
+                  onClick={() => void handleResolveWarrantyConflict(warranty, group)}
+                >
+                  {resolvingWarrantyId === warranty.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Keep this warranty
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ))}
 
       {isLoading && (
         <div className="text-center py-10">

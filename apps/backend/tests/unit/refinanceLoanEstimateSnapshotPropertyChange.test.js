@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+process.env.LOAN_ESTIMATE_ATTESTATION_SECRET = 'unit-test-loan-estimate-secret';
 
 // Home Intelligence FRD §15 Phase 5 remediation item (d): saveRefinanceLoanEstimateComparison
 // is now the registered LOAN_ESTIMATE promotion adapter — transactional,
@@ -54,6 +55,7 @@ require.cache[propertyChangePath] = {
 
 const { saveRefinanceLoanEstimateComparison } = require('../../src/refinanceRadar/refinanceLoanEstimateSnapshot.service.ts');
 const { saveLoanEstimateComparisonSchema } = require('../../src/refinanceRadar/validators/refinanceRadar.validators.ts');
+const { createLoanEstimateExtractionAttestation } = require('../../src/refinanceRadar/refinanceLoanEstimateExtractionAttestation.ts');
 
 function handTypedOffer(overrides = {}) {
   return {
@@ -72,17 +74,29 @@ function handTypedOffer(overrides = {}) {
   };
 }
 
-function extractedOffer(overrides = {}) {
+function extractedOffer(overrides = {}, propertyId = 'property-1') {
+  const envelope = {
+    documentId: null,
+    documentVersionId: null,
+    extractorId: 'refinance-loan-estimate-parser',
+    extractorVersion: 'v1',
+    modelId: null,
+    candidateEntityType: 'LOAN_ESTIMATE',
+    fields: [
+      { fieldKey: 'loanAmountUsd', value: 350000, confidence: 0.9, evidence: { excerpt: 'Loan Amount $350,000' } },
+      { fieldKey: 'noteRatePct', value: 6.25, confidence: 0.6, evidence: {} },
+    ],
+    overallConfidence: 0.6,
+    parseStatus: 'PARSED',
+    warnings: [],
+    extractedAt: '2026-08-24T11:00:00.000Z',
+  };
   return handTypedOffer({
     id: 'offer-2',
     lenderName: 'Beta Mortgage',
     extractionProvenance: {
-      extractorId: 'refinance-loan-estimate-parser',
-      extractorVersion: 'v1',
-      parseStatus: 'PARSED',
-      extractedAt: '2026-08-24T11:00:00.000Z',
-      fieldConfidence: { loanAmountUsd: 0.9, noteRatePct: 0.6 },
-      fieldEvidence: { loanAmountUsd: 'Loan Amount $350,000' },
+      envelope,
+      serverAttestation: createLoanEstimateExtractionAttestation(propertyId, envelope),
     },
     ...overrides,
   });
@@ -109,6 +123,18 @@ test('a comparison with at least one extracted offer emits a DOCUMENT_PROMOTED P
   assert.equal(call.confidence, 0.6);
 });
 
+test('forged or cross-property extraction provenance is rejected before persistence', async () => {
+  createdSnapshots.length = 0;
+  await assert.rejects(
+    saveRefinanceLoanEstimateComparison({
+      propertyId: 'property-2',
+      offers: [extractedOffer()],
+    }),
+    /does not match this property or envelope/,
+  );
+  assert.equal(createdSnapshots.length, 0);
+});
+
 test('an all-hand-typed comparison emits a SOURCE_RECORD_CREATED PropertyChange with full confidence', async () => {
   createdSnapshots.length = 0;
   propertyChangeCalls.length = 0;
@@ -129,10 +155,11 @@ test('an all-hand-typed comparison emits a SOURCE_RECORD_CREATED PropertyChange 
 // without it, the field would have been dropped before ever reaching the
 // service, silently discarding every extraction-sourced offer's provenance.
 test('saveLoanEstimateComparisonSchema accepts and round-trips extractionProvenance', () => {
+  const extracted = extractedOffer();
   const parsed = saveLoanEstimateComparisonSchema.parse({
-    offers: [handTypedOffer(), extractedOffer()],
+    offers: [handTypedOffer(), extracted],
   });
-  assert.deepEqual(parsed.offers[1].extractionProvenance, extractedOffer().extractionProvenance);
+  assert.deepEqual(parsed.offers[1].extractionProvenance, extracted.extractionProvenance);
   assert.equal(parsed.offers[0].extractionProvenance, undefined, 'a hand-typed offer must not gain provenance from nowhere');
 });
 

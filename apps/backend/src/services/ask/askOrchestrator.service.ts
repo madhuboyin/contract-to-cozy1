@@ -78,6 +78,7 @@ import {
   type AskOperationResult,
 } from './askOperationRegistry';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
+import { assertCoverageConflictFree } from '../coverageConflict.service';
 import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
 import { getFinancialContextDecisions } from '../financialContext/context';
 import { getProfile, upsertProfile } from '../financing.service';
@@ -1363,6 +1364,26 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
         allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Saved to the selected insurance policy', confirmationText: null,
         expectedContextVersion: contextVersion,
       }] : [], suggestions: [],
+    };
+  }
+  try {
+    await assertCoverageConflictFree(propertyId, prisma, warranty
+      ? { warrantyId: warranty.id }
+      : { insurancePolicyId: policy!.id });
+  } catch (error) {
+    const details = (error as { details?: { resolutionPath?: string } }).details;
+    return {
+      status: 'NEEDS_CONTEXT',
+      reasonCode: 'COVERAGE_CONFLICT_REVIEW_REQUIRED',
+      contextVersion: createHash('sha256').update(`coverage-conflict:${source.id}`).digest('hex'),
+      parameters: {},
+      blocks: [{
+        type: 'SUMMARY', id: 'coverage-conflict', title: 'Resolve the coverage conflict first',
+        body: 'Two records disagree, so Ask will not choose one for an expiration reminder. Review both sources and select the correct record.',
+        tone: 'CAUTION',
+        actions: [{ id: 'resolve-coverage-conflict', label: 'Resolve coverage conflict', href: details?.resolutionPath ?? '/dashboard/insurance', style: 'PRIMARY' }],
+      }],
+      captureRequests: [], suggestions: [],
     };
   }
   const expiry = source.expiryDate!;
@@ -7022,6 +7043,9 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
         throw error;
       }
+      await assertCoverageConflictFree(execution.propertyId, prisma, {
+        insurancePolicyId: candidate.data.policyId,
+      });
       const property = await prisma.property.findUnique({ where: { id: execution.propertyId }, select: { homeownerProfileId: true } });
       if (!property) {
         const error = new Error('The selected home is no longer available.');
@@ -8199,6 +8223,9 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       const currentSource = candidate.data.sourceType === 'WARRANTY'
         ? await prisma.warranty.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } })
         : await prisma.insurancePolicy.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } });
+      await assertCoverageConflictFree(execution.propertyId, prisma, candidate.data.sourceType === 'WARRANTY'
+        ? { warrantyId: candidate.data.sourceId }
+        : { insurancePolicyId: candidate.data.sourceId });
       if (!currentSource || !currentSource.expiryDate || parameters.homeDeadlineSourceVersion !== homeDeadlineSourceVersion(currentSource as { id: string; expiryDate: Date | null; updatedAt: Date })) {
         const error = new Error(`This ${candidate.data.sourceType === 'WARRANTY' ? 'warranty' : 'insurance policy'} changed while confirmation was open. Review the current record and try again.`);
         (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';

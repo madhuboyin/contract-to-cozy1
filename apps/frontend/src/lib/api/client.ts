@@ -2051,6 +2051,13 @@ class APIClient {
     return this.request<void>(`/api/home-management/warranties/${warrantyId}`, { method: 'DELETE' });
   }
 
+  async resolveWarrantyConflict(selectedWarrantyId: string): Promise<APIResponse<{ keptWarrantyId: string; removedWarrantyIds: string[]; propertyId: string }>> {
+    return this.request('/api/home-management/warranties/conflicts/resolve', {
+      method: 'POST',
+      body: { selectedWarrantyId },
+    });
+  }
+
   // --- INSURANCE POLICIES ---
   async createInsurancePolicy(data: CreateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
     return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data });

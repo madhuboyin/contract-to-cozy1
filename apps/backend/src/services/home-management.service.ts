@@ -18,6 +18,8 @@ import { uploadDocumentBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
 import { evaluateCoverageRecord } from './coverage/contextPolicy';
 import { markCoverageReviewsStale } from './coverageReview.service';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
+import { getConflictedWarrantyGroups } from './coverageConflict.service';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -405,6 +407,57 @@ export async function deleteWarranty(
   // 🔑 END NEW SECTION
 
   return mapRawWarrantyToWarranty(rawDeletedWarranty);
+}
+
+/** Explicit homeowner resolution for a relational warranty conflict. */
+export async function resolveWarrantyConflict(
+  selectedWarrantyId: string,
+  homeownerProfileId: string,
+): Promise<{ keptWarrantyId: string; removedWarrantyIds: string[]; propertyId: string }> {
+  const selected = await prisma.warranty.findFirst({
+    where: { id: selectedWarrantyId, homeownerProfileId },
+    select: { id: true, propertyId: true, category: true },
+  });
+  if (!selected?.propertyId) throw new Error('Property-linked warranty not found');
+  const groups = await getConflictedWarrantyGroups(selected.propertyId, prisma);
+  const group = groups.find((candidate) => candidate.warranties.some((warranty) => warranty.id === selected.id));
+  if (!group) throw new Error('This warranty is not part of an unresolved conflict');
+  const removedWarrantyIds = group.warranties
+    .map((warranty) => warranty.id)
+    .filter((id) => id !== selected.id);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.warranty.deleteMany({
+      where: {
+        id: { in: removedWarrantyIds },
+        homeownerProfileId,
+        propertyId: selected.propertyId,
+      },
+    });
+    await emitPropertyChangeWithTransaction(tx, {
+      propertyId: selected.propertyId!,
+      sourceType: 'USER',
+      sourceEntityId: selected.id,
+      sourceRevision: `warranty-conflict-resolved:${removedWarrantyIds.sort().join(',')}`,
+      changeType: 'SOURCE_LIFECYCLE_CHANGED',
+      changedFactKeys: ['coverage.warranties'],
+      canonicalReferences: [{ entityType: 'WARRANTY', entityId: selected.id }],
+      occurredAt: new Date(),
+      detectedAt: new Date(),
+      confidence: 1,
+      sourceHealth: 'CURRENT',
+      signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
+    });
+  });
+
+  await Promise.all([
+    markCoverageAnalysisStale(selected.propertyId),
+    markItemCoverageAnalysesStale(selected.propertyId),
+    markRiskPremiumOptimizerStale(selected.propertyId),
+    markDoNothingRunsStale(selected.propertyId),
+    markCoverageReviewsStale(selected.propertyId),
+  ]);
+  return { keptWarrantyId: selected.id, removedWarrantyIds, propertyId: selected.propertyId };
 }
 
 // --- INSURANCE POLICY SERVICE LOGIC (USING MAPPED HELPERS) ---

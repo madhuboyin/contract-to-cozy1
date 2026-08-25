@@ -1,7 +1,7 @@
 import { PropertyFactEvidence, PropertyFactSourceType, PropertyResponsibilityScope } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { getFactDefinitionsForScope } from '../catalog/factCatalog';
-import { PropertyContextActor, PropertyContextScope, PropertyFact } from '../domain/contracts';
+import { PropertyContextActor, PropertyContextScope, PropertyFact, PropertyFactConflict } from '../domain/contracts';
 import { createPropertyFact, FactEvidenceMetadata } from '../domain/facts';
 import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from '../../../services/coverageConflict.service';
 
@@ -547,11 +547,10 @@ export const coverageAssembler: PropertyContextAssembler = {
       // disagreeing with each other, means this collection cannot be
       // trusted as a single value yet — CONFLICTED, not KNOWN. Detection is
       // shared with the advisory conflict Home Actions (single source of
-      // truth); this is what makes the state real for every feature
-      // contract that requires these fact keys (e.g. CLAIMS:
-      // FILE_INSURANCE_CLAIM / FILE_WARRANTY_CLAIM), via
-      // evaluateFeatureContext's existing CONFLICT_REVIEW_REQUIRED /
-      // canExecute:false gating — no changes needed there.
+      // truth); this makes the state real for every feature contract that
+      // requires these fact keys. evaluateFeatureContext scopes the block to
+      // a selected policy/warranty when the operation identifies one, and
+      // otherwise fails closed for aggregate consumers.
       getConflictedInsurancePolicyTerms(propertyId, prisma),
       getConflictedWarrantyGroups(propertyId, prisma, now),
     ]);
@@ -565,13 +564,66 @@ export const coverageAssembler: PropertyContextAssembler = {
     );
     const insurancePoliciesFact = createPropertyFact('coverage.insurancePolicies', insurancePolicies.map((row) => serialize(row)), undefined, now);
     const warrantiesFact = createPropertyFact('coverage.warranties', warranties.map((row) => serialize(row)), undefined, now);
+    const policyConflicts: PropertyFactConflict[] = conflictedPolicyTerms.flatMap((term) =>
+      term.conflicts.map((conflict) => ({
+        id: `insurance-policy:${term.termId}:${conflict.factKey}`,
+        kind: 'COMPETING_FACT' as const,
+        affectedEntityIds: [term.policyId],
+        resolutionPath: `/dashboard/insurance?propertyId=${encodeURIComponent(propertyId)}&policyId=${encodeURIComponent(term.policyId)}&resolveConflict=1`,
+        evidence: [
+          {
+            id: conflict.pending.id,
+            entityType: 'INSURANCE_POLICY_FACT',
+            entityId: conflict.pending.id,
+            fieldKey: conflict.factKey,
+            value: conflict.pending,
+            source: 'DOCUMENT' as const,
+            observedAt: conflict.pending.updatedAt.toISOString(),
+            confidence: conflict.pending.confidence,
+            verified: false,
+          },
+          {
+            id: conflict.confirmed.id,
+            entityType: 'INSURANCE_POLICY_FACT',
+            entityId: conflict.confirmed.id,
+            fieldKey: conflict.factKey,
+            value: conflict.confirmed,
+            source: 'DOCUMENT' as const,
+            observedAt: conflict.confirmed.updatedAt.toISOString(),
+            confidence: conflict.confirmed.confidence,
+            verified: true,
+          },
+        ],
+      })),
+    );
+    const warrantyConflicts: PropertyFactConflict[] = conflictedWarrantyGroups.map((group) => ({
+      id: `warranty:${group.category}:${group.warranties.map((warranty) => warranty.id).sort().join(':')}`,
+      kind: 'COMPETING_RECORD' as const,
+      affectedEntityIds: group.warranties.map((warranty) => warranty.id),
+      resolutionPath: `/dashboard/warranties?propertyId=${encodeURIComponent(propertyId)}&resolveConflict=1`,
+      evidence: group.warranties.map((warranty) => ({
+        id: warranty.id,
+        entityType: 'WARRANTY',
+        entityId: warranty.id,
+        fieldKey: group.category,
+        value: {
+          category: warranty.category,
+          providerName: warranty.providerName,
+          expiryDate: warranty.expiryDate.toISOString(),
+        },
+        source: 'DOCUMENT' as const,
+        observedAt: warranty.updatedAt.toISOString(),
+        confidence: 1,
+        verified: true,
+      })),
+    }));
     return [
       withPropertyId(
-        conflictedPolicyTerms.length > 0 ? { ...insurancePoliciesFact, state: 'CONFLICTED' } : insurancePoliciesFact,
+        policyConflicts.length > 0 ? { ...insurancePoliciesFact, state: 'CONFLICTED', conflicts: policyConflicts } : insurancePoliciesFact,
         propertyId,
       ),
       withPropertyId(
-        conflictedWarrantyGroups.length > 0 ? { ...warrantiesFact, state: 'CONFLICTED' } : warrantiesFact,
+        warrantyConflicts.length > 0 ? { ...warrantiesFact, state: 'CONFLICTED', conflicts: warrantyConflicts } : warrantiesFact,
         propertyId,
       ),
       withPropertyId(createPropertyFact('coverage.activeClaims', claims.map((row) => serialize(row)), undefined, now), propertyId),

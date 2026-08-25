@@ -88,7 +88,22 @@ function requirementState(
     return fact?.state === 'KNOWN' ? 'STALE' : (fact?.state ?? 'UNKNOWN');
   }
   if (!fact) return 'UNKNOWN';
-  if (fact.state !== 'KNOWN') return fact.state;
+  if (fact.state === 'CONFLICTED') {
+    // Collection conflicts are scoped to the selected relational record. A
+    // conflict on policy A must not block a claim explicitly filed against
+    // clean policy B. With no selected record, fail closed.
+    const selectedEntityId = typeof operationInput?.insurancePolicyId === 'string'
+      ? operationInput.insurancePolicyId
+      : typeof operationInput?.warrantyId === 'string'
+        ? operationInput.warrantyId
+        : null;
+    if (!selectedEntityId) return 'CONFLICTED';
+    const selectedIsConflicted = (fact.conflicts ?? []).some((conflict) =>
+      conflict.affectedEntityIds.includes(selectedEntityId));
+    if (selectedIsConflicted) return 'CONFLICTED';
+    // Continue evaluating the otherwise-known collection for the selected
+    // clean record.
+  } else if (fact.state !== 'KNOWN') return fact.state;
   let collectionValue = fact.value;
   if (requirement.collectionPredicate === 'ACTIVE_DATE_RANGE' && Array.isArray(collectionValue)) {
     const now = Date.now();

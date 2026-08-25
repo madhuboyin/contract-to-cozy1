@@ -10,6 +10,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { assertCoverageConflictFree } from './coverageConflict.service';
 import {
   AssumptionSetService,
   extractAssumptionOverrides,
@@ -544,6 +545,7 @@ export class DoNothingSimulatorService {
     params?: { scenarioId?: string; horizonMonths?: number }
   ) {
     const property = await assertPropertyForUser(propertyId, userId);
+    await assertCoverageConflictFree(propertyId, prisma, { requireAllInsurancePolicies: true });
 
     if (params?.scenarioId) {
       await assertScenarioForProperty(propertyId, property.homeownerProfileId, params.scenarioId);
@@ -570,6 +572,7 @@ export class DoNothingSimulatorService {
 
   async run(propertyId: string, userId: string, input: RunDoNothingSimulationInput) {
     const property = await assertPropertyForUser(propertyId, userId);
+    await assertCoverageConflictFree(propertyId, prisma, { requireAllInsurancePolicies: true });
     const financialContext = await getFinancialContextDecisions(propertyId, userId, 'DO_NOTHING');
     const horizonMonths = normalizeHorizon(input.horizonMonths);
     const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);

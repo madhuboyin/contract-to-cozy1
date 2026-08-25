@@ -63,53 +63,12 @@ type OfferDraft = {
   extractionProvenance?: RefinanceLoanEstimateExtractionProvenance;
 };
 
-// Home Intelligence FRD §8.7 (HI-DOC-001/005), Phase 5 remediation item (d)
-// — mirrors refinanceLoanEstimateExtractionEnvelope.adapter.ts's own
-// CONFIDENCE_BY_TIER / extractor id+version exactly, so a saved offer's
-// provenance matches what the backend's ExtractionEnvelope would compute
-// for the same extraction.
-const LOAN_ESTIMATE_EXTRACTOR_ID = 'refinance-loan-estimate-parser';
-const LOAN_ESTIMATE_EXTRACTOR_VERSION = 'v1';
-const CONFIDENCE_BY_TIER: Record<'HIGH' | 'MEDIUM', number> = {
-  HIGH: 0.9,
-  MEDIUM: 0.6,
-};
-
-function resolveExtractionParseStatus(
-  extraction: RefinanceLoanEstimateExtraction,
-): RefinanceLoanEstimateExtractionProvenance['parseStatus'] {
-  if (
-    extraction.pageIntegrity?.status === 'UNVERIFIED' ||
-    extraction.requiredFieldsFound === 0
-  ) {
-    return 'FAILED';
-  }
-  if (
-    (extraction.pageIntegrity && extraction.pageIntegrity.status !== 'COMPLETE') ||
-    extraction.requiredFieldsFound < extraction.requiredFieldCount
-  ) {
-    return 'FALLBACK_UNSTRUCTURED';
-  }
-  return 'PARSED';
-}
-
 function buildExtractionProvenance(
   extraction: RefinanceLoanEstimateExtraction,
 ): RefinanceLoanEstimateExtractionProvenance {
-  const fieldConfidence: Record<string, number> = {};
-  const fieldEvidence: Record<string, string> = {};
-  for (const [fieldKey, field] of Object.entries(extraction.fields)) {
-    if (field.confidence === 'MISSING' || field.value == null) continue;
-    fieldConfidence[fieldKey] = CONFIDENCE_BY_TIER[field.confidence];
-    if (field.sourceLabel) fieldEvidence[fieldKey] = field.sourceLabel;
-  }
   return {
-    extractorId: LOAN_ESTIMATE_EXTRACTOR_ID,
-    extractorVersion: LOAN_ESTIMATE_EXTRACTOR_VERSION,
-    parseStatus: resolveExtractionParseStatus(extraction),
-    extractedAt: new Date().toISOString(),
-    fieldConfidence,
-    fieldEvidence,
+    envelope: extraction.serverEnvelope,
+    serverAttestation: extraction.serverAttestation,
   };
 }
 

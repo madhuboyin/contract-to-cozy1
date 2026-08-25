@@ -19,16 +19,16 @@ test('the real document promotion adapter registry validates cleanly and covers 
   }
 });
 
-test('the real registry reflects verified adapter status: 7 implemented, 2 missing (Phase 5 remediation item d: INVENTORY + LOAN_ESTIMATE corrected + hardened)', () => {
+test('the real registry has a promotion adapter for every target domain', () => {
   const implemented = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.filter((e) => e.adapterExists).map((e) => e.targetDomain).sort();
   const missing = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.filter((e) => !e.adapterExists).map((e) => e.targetDomain).sort();
-  assert.deepEqual(implemented, ['EXPENSE', 'INSPECTION_FINDING', 'INSURANCE_POLICY', 'INVENTORY', 'LOAN_ESTIMATE', 'MATERIAL_SPEC', 'WARRANTY']);
-  assert.deepEqual(missing, ['CLAIM', 'PROPERTY_TAX']);
+  assert.deepEqual(implemented, ['CLAIM', 'EXPENSE', 'INSPECTION_FINDING', 'INSURANCE_POLICY', 'INVENTORY', 'LOAN_ESTIMATE', 'MATERIAL_SPEC', 'PROPERTY_TAX', 'WARRANTY']);
+  assert.deepEqual(missing, []);
 });
 
-test('WARRANTY, INSURANCE_POLICY, and EXPENSE declare conflict detection after Phase 5 work item 6', () => {
+test('domains with competing canonical facts declare conflict detection', () => {
   const withConflictDetection = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.filter((e) => e.conflictDetection).map((e) => e.targetDomain).sort();
-  assert.deepEqual(withConflictDetection, ['EXPENSE', 'INSURANCE_POLICY', 'WARRANTY']);
+  assert.deepEqual(withConflictDetection, ['EXPENSE', 'INSURANCE_POLICY', 'PROPERTY_TAX', 'WARRANTY']);
 });
 
 test('validateDocumentPromotionAdapterRegistry fails fast on a missing target domain', () => {
@@ -49,13 +49,13 @@ test('validateDocumentPromotionAdapterRegistry fails fast when adapterExists and
   assert.ok(validateDocumentPromotionAdapterRegistry(missingFn).some((i) => i.includes('WARRANTY') && i.includes('no adapterFunction')));
 
   const unexpectedFn = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.map((e) =>
-    e.targetDomain === 'PROPERTY_TAX' ? { ...e, adapterFunction: 'madeUpFn' } : e);
+    e.targetDomain === 'PROPERTY_TAX' ? { ...e, adapterExists: false } : e);
   assert.ok(validateDocumentPromotionAdapterRegistry(unexpectedFn).some((i) => i.includes('PROPERTY_TAX') && i.includes('adapterExists=false')));
 });
 
-test('validateDocumentPromotionAdapterRegistry fails fast when a domain with no adapter claims REVIEW_GATED_CANDIDATE', () => {
+test('validateDocumentPromotionAdapterRegistry fails fast when a disabled adapter claims REVIEW_GATED_CANDIDATE', () => {
   const bad = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.map((e) =>
-    e.targetDomain === 'PROPERTY_TAX' ? { ...e, reviewGate: 'REVIEW_GATED_CANDIDATE' } : e);
+    e.targetDomain === 'PROPERTY_TAX' ? { ...e, adapterExists: false, adapterFunction: null } : e);
   const issues = validateDocumentPromotionAdapterRegistry(bad);
   assert.ok(issues.some((i) => i.includes('PROPERTY_TAX') && i.includes('REVIEW_GATED_CANDIDATE')));
 });
@@ -67,9 +67,9 @@ test('validateDocumentPromotionAdapterRegistry fails fast when an existing adapt
   assert.ok(issues.some((i) => i.includes('WARRANTY') && i.includes('reviewGate NONE')));
 });
 
-test('validateDocumentPromotionAdapterRegistry fails fast when a domain with no adapter claims to consume the extraction envelope', () => {
+test('validateDocumentPromotionAdapterRegistry fails fast when a disabled adapter claims to consume the extraction envelope', () => {
   const bad = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.map((e) =>
-    e.targetDomain === 'CLAIM' ? { ...e, consumesExtractionEnvelope: true } : e);
+    e.targetDomain === 'CLAIM' ? { ...e, adapterExists: false, adapterFunction: null } : e);
   const issues = validateDocumentPromotionAdapterRegistry(bad);
   assert.ok(issues.some((i) => i.includes('CLAIM') && i.includes('extraction envelope')));
 });

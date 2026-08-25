@@ -178,12 +178,30 @@ const loanEstimateDateSchema = z
 // extraction that produced it. Absent for a hand-typed offer.
 const loanEstimateExtractionProvenanceSchema = z
   .object({
-    extractorId: z.string().trim().min(1).max(120),
-    extractorVersion: z.string().trim().min(1).max(40),
-    parseStatus: z.enum(['PARSED', 'FALLBACK_UNSTRUCTURED', 'FAILED']),
-    extractedAt: z.string().trim().min(1).max(60),
-    fieldConfidence: z.record(z.string(), z.number().min(0).max(1)).default({}),
-    fieldEvidence: z.record(z.string(), z.string().max(500)).default({}),
+    envelope: z.object({
+      documentId: z.string().nullable(),
+      documentVersionId: z.string().nullable(),
+      extractorId: z.string().trim().min(1).max(120),
+      extractorVersion: z.string().trim().min(1).max(40),
+      modelId: z.string().nullable(),
+      candidateEntityType: z.string().trim().min(1).max(120),
+      fields: z.array(z.object({
+        fieldKey: z.string().trim().min(1).max(120),
+        value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]),
+        confidence: z.number().min(0).max(1).nullable(),
+        evidence: z.object({
+          page: z.number().int().positive().nullable().optional(),
+          excerpt: z.string().max(500).nullable().optional(),
+          excerptHash: z.string().max(128).nullable().optional(),
+        }).strict().optional(),
+      }).strict()).max(100),
+      overallConfidence: z.number().min(0).max(1).nullable(),
+      parseStatus: z.enum(['PARSED', 'FALLBACK_UNSTRUCTURED', 'FAILED']),
+      warnings: z.array(z.string().max(500)).max(50),
+      extractedAt: z.string().datetime(),
+      isBatch: z.boolean().optional(),
+    }).strict(),
+    serverAttestation: z.string().min(20).max(4_000),
   })
   .strict();
 

@@ -26,6 +26,13 @@ function formatFactValue(fact: InsurancePolicyFact) {
   return fact.textValue ?? 'Unknown';
 }
 
+function comparableFactValue(fact: InsurancePolicyFact): string | null {
+  if (fact.valueType === 'AMOUNT') return fact.amountValue == null ? null : String(fact.amountValue);
+  if (fact.valueType === 'BOOLEAN') return fact.booleanValue == null ? null : String(fact.booleanValue);
+  if (fact.valueType === 'JSON') return fact.jsonValue == null ? null : JSON.stringify(fact.jsonValue);
+  return fact.textValue ?? null;
+}
+
 function formatDate(value: string | null) {
   if (!value) return 'unknown';
   return new Date(value).toLocaleDateString('en-US', {
@@ -35,7 +42,7 @@ function formatDate(value: string | null) {
   });
 }
 
-export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId: string }) {
+export default function PolicyRecordReadinessPanel({ propertyId, policyId }: { propertyId: string; policyId?: string | null }) {
   const [record, setRecord] = useState<InsurancePolicyRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +58,7 @@ export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId:
       return;
     }
     const policy =
+      (policyId ? policiesResponse.data.policies.find((candidate) => candidate.id === policyId) : undefined) ??
       policiesResponse.data.policies.find(
         (candidate) => candidate.applicability?.status === 'APPLICABLE'
       ) ??
@@ -70,7 +78,7 @@ export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId:
     }
     setRecord(recordResponse.data);
     setLoading(false);
-  }, [propertyId]);
+  }, [policyId, propertyId]);
 
   useEffect(() => {
     void load();
@@ -78,13 +86,32 @@ export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId:
 
   const currentTerm = record?.terms[0] ?? null;
   const pendingFacts = useMemo(
-    () => currentTerm?.facts.filter((fact) => fact.confirmationStatus === 'PENDING') ?? [],
-    [currentTerm]
+    () => record?.terms.flatMap((term) => term.facts.filter((fact) => fact.confirmationStatus === 'PENDING')) ?? [],
+    [record]
   );
   const confirmedFacts = useMemo(
     () => currentTerm?.facts.filter((fact) => fact.confirmationStatus === 'CONFIRMED') ?? [],
     [currentTerm]
   );
+  const confirmedByKey = useMemo(() => {
+    const result = new Map<string, InsurancePolicyFact>();
+    for (const term of record?.terms ?? []) {
+      for (const fact of term.facts) {
+        if (fact.confirmationStatus === 'CONFIRMED' && !result.has(fact.factKey)) {
+          result.set(fact.factKey, fact);
+        }
+      }
+    }
+    return result;
+  }, [record]);
+  const conflictedFactIds = useMemo(() => new Set(
+    pendingFacts
+      .filter((fact) => {
+        const confirmed = confirmedByKey.get(fact.factKey);
+        return confirmed && comparableFactValue(confirmed) !== comparableFactValue(fact);
+      })
+      .map((fact) => fact.id),
+  ), [confirmedByKey, pendingFacts]);
 
   async function setFactStatus(fact: InsurancePolicyFact, status: 'CONFIRMED' | 'REJECTED') {
     if (!record) return;
@@ -149,13 +176,19 @@ export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId:
 
       {pendingFacts.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold">Confirm extracted facts</h3>
+          <h3 className="text-sm font-semibold">Resolve extracted policy facts</h3>
           {pendingFacts.map((fact) => (
-            <div key={fact.id} className="rounded-lg border border-border p-3">
+            <div key={fact.id} className={`rounded-lg border p-3 ${conflictedFactIds.has(fact.id) ? 'border-amber-300 bg-amber-50/70' : 'border-border'}`}>
+              {conflictedFactIds.has(fact.id) && (
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-800">Conflicting values — choose one</p>
+              )}
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">{FACT_LABELS[fact.factKey] ?? fact.factKey}</p>
-                  <p className="text-sm">{formatFactValue(fact)}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">New document:</span> {formatFactValue(fact)}</p>
+                  {conflictedFactIds.has(fact.id) && confirmedByKey.get(fact.factKey) && (
+                    <p className="text-sm"><span className="text-muted-foreground">Existing confirmed record:</span> {formatFactValue(confirmedByKey.get(fact.factKey)!)}</p>
+                  )}
                   <p className="mt-1 text-xs text-muted-foreground">
                     Source: {fact.sourceDocument?.name ?? 'Policy document'}
                     {fact.sourcePage ? `, page ${fact.sourcePage}` : ', page not captured'}
@@ -171,7 +204,7 @@ export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId:
                     onClick={() => void setFactStatus(fact, 'REJECTED')}
                     className="rounded-md border border-border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
                   >
-                    Not correct
+                    {conflictedFactIds.has(fact.id) ? 'Keep existing' : 'Not correct'}
                   </button>
                   <button
                     type="button"
@@ -179,7 +212,7 @@ export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId:
                     onClick={() => void setFactStatus(fact, 'CONFIRMED')}
                     className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
                   >
-                    Confirm
+                    {conflictedFactIds.has(fact.id) ? 'Use extracted value' : 'Confirm'}
                   </button>
                 </div>
               </div>

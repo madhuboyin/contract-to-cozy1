@@ -325,6 +325,8 @@ router.route('/warranties')
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
+router.post('/warranties/conflicts/resolve', HomeManagementController.resolveWarrantyConflict);
+
 router.route('/warranties/:warrantyId')
   .patch(HomeManagementController.patchWarranty)
   .delete(HomeManagementController.deleteWarranty);

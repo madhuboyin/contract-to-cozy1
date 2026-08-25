@@ -23,6 +23,8 @@ import {
 } from './validators/refinanceRadar.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { APIError } from '../middleware/error.middleware';
+import { loanEstimateExtractionToEnvelope } from './refinanceLoanEstimateExtractionEnvelope.adapter';
+import { createLoanEstimateExtractionAttestation } from './refinanceLoanEstimateExtractionAttestation';
 import {
   assertFinancialContextApplicable,
   getFinancialContextDecisions,
@@ -162,6 +164,8 @@ export class RefinanceRadarController {
         );
       }
       const extraction = combineLoanEstimateExtractions(pageExtractions);
+      const envelope = loanEstimateExtractionToEnvelope(extraction);
+      const serverAttestation = createLoanEstimateExtractionAttestation(propertyId, envelope);
       analyticsEmitter.track({
         eventType: AnalyticsEvent.ACTION_COMPLETED,
         eventName: 'refinance_loan_estimate_extracted',
@@ -184,7 +188,7 @@ export class RefinanceRadarController {
           pageSetStatus: extraction.pageIntegrity.status,
         },
       });
-      res.json({ success: true, data: { extraction } });
+      res.json({ success: true, data: { extraction, envelope, serverAttestation } });
     } catch (err) {
       next(err);
     }

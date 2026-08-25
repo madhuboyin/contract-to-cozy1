@@ -1943,6 +1943,23 @@ export interface PropertyContextFact<T = unknown> {
   observedAt: string | null;
   validUntil: string | null;
   correctionPath: string | null;
+  conflicts?: Array<{
+    id: string;
+    kind: 'COMPETING_FACT' | 'COMPETING_RECORD';
+    affectedEntityIds: string[];
+    evidence: Array<{
+      id: string;
+      entityType: string;
+      entityId: string;
+      fieldKey: string | null;
+      value: unknown;
+      source: PropertyContextFact['source'] extends infer S ? Exclude<S, null> : never;
+      observedAt: string;
+      confidence: number | null;
+      verified: boolean;
+    }>;
+    resolutionPath: string;
+  }>;
 }
 
 export interface PropertyContextSnapshot {
