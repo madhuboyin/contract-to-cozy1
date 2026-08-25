@@ -350,9 +350,15 @@ export function assertHomeActionDecisionLineageSatisfiedForCommitment(
   action: { decisionLineage: HomeActionDecisionLineage | null },
 ): void {
   if (!action.decisionLineage) return;
-  if (action.decisionLineage.status !== 'LINKED') {
+  if (
+    action.decisionLineage.status !== 'LINKED'
+    || !action.decisionLineage.thread.currentRecommendationSnapshotId
+  ) {
+    const status = action.decisionLineage.status === 'LINKED'
+      ? 'MISSING_CURRENT_SNAPSHOT'
+      : action.decisionLineage.status;
     throw new DecisionLineageRequiredForAcceptanceError(
-      `This recommendation needs a current, tracked decision before it can be completed (decision lineage status: ${action.decisionLineage.status}).`,
+      `This recommendation needs a current, tracked decision before it can be completed (decision lineage status: ${status}).`,
     );
   }
 }

@@ -72,6 +72,24 @@ test('assertHomeActionDecisionLineageSatisfiedForCommitment passes for LINKED li
   }));
 });
 
+test('assertHomeActionDecisionLineageSatisfiedForCommitment rejects LINKED lineage without a current recommendation snapshot', () => {
+  assert.throws(
+    () => assertHomeActionDecisionLineageSatisfiedForCommitment({
+      decisionLineage: {
+        status: 'LINKED',
+        decisionDefinitionId: 'OWNERSHIP_COST_CHANGE',
+        primaryEntityId: 'property-1:UTILITIES',
+        thread: { decisionThreadId: 't1', lifecycleStatus: 'RECOMMENDATION_AVAILABLE', contextStatus: 'CURRENT', currentRecommendationSnapshotId: null, recommendationChange: null },
+      },
+    }),
+    (error) => {
+      assert.ok(error instanceof DecisionLineageRequiredForAcceptanceError);
+      assert.match(error.message, /decision lineage status: MISSING_CURRENT_SNAPSHOT/);
+      return true;
+    },
+  );
+});
+
 for (const status of ['NOT_STARTED', 'AMBIGUOUS', 'NOT_APPLICABLE', 'UNAVAILABLE']) {
   test(`assertHomeActionDecisionLineageSatisfiedForCommitment throws DecisionLineageRequiredForAcceptanceError for ${status}`, () => {
     assert.throws(
