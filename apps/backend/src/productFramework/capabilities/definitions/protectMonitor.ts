@@ -2,7 +2,7 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 
 export const PROTECT_MONITOR_CAPABILITIES = buildCapabilityDefinitions(([
   ['appreciation', 'Value Tracker', 'Monitor home value and trendlines.', '/dashboard/appreciation', 'VALUE_TRACKER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
-  ['claims', 'Claims', 'Review the status of filed insurance and incident claims for this home.', '/dashboard/properties/[id]/claims', 'CLAIMS', 'ACTIVE', 'REGULATED_COVERAGE', 'CATALOG_ONLY'],
+  ['claims', 'Claims', 'Review the status of filed insurance and incident claims for this home.', '/dashboard/properties/[id]/claims', 'CLAIMS', 'ACTIVE', 'REGULATED_COVERAGE', 'CONTEXTUAL'],
   ['energy', 'Energy Audit', 'Review efficiency and utility optimization opportunities.', '/dashboard/energy', 'ENERGY_AUDIT', 'BETA', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['guidance-overview', 'Guidance Overview', 'Work through an active home decision step by step.', '/dashboard/properties/[id]/tools/guidance-overview', 'GUIDANCE_OVERVIEW', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['home-event-radar', 'Home Event Radar', 'Track current signals affecting this home.', '/dashboard/properties/[id]/tools/home-event-radar', 'HOME_EVENT_RADAR', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],

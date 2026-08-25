@@ -19,6 +19,7 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
       'home-briefing',
       'home-habit-coach',
       'home-risk-replay',
+      'claims',
       'neighborhood-change-radar',
       'service-price-radar',
       'status-board',
@@ -28,7 +29,7 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
   {
     id: 'sparse-new-home',
     description: 'A new home with sparse verified facts and no tracked systems.',
-    contextualCapabilityIds: ['savings-benefits'],
+    contextualCapabilityIds: ['buyer-closing', 'savings-benefits'],
     needsContextCapabilityIds: [],
   },
   {
@@ -155,8 +156,9 @@ readonly CapabilityGoldenRankingExpectation[] = [
     fixtureId: 'sparse-new-home',
     ineligibleCapabilityId: 'seller-prep',
     duplicateCapabilityId: 'savings-benefits',
-    expectedTopCapabilityIds: ['savings-benefits'],
+    expectedTopCapabilityIds: ['buyer-closing', 'savings-benefits'],
     expectedReasonCodes: {
+      'buyer-closing': 'BUYER_JOURNEY_ACTIVE',
       'savings-benefits': 'PROPERTY_BENEFIT_EXPLORATION',
     },
   }),

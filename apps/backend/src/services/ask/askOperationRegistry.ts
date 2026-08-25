@@ -23,11 +23,19 @@ export type AskOperationId =
   | 'MAINTENANCE_TASK_UPDATE'
   | 'COVERAGE_GAPS'
   | 'INCIDENT_CLAIM_STATUS'
+  | 'CLAIM_FILE'
+  | 'CLAIM_TRANSITION'
+  | 'INCIDENT_CONTINUATION'
   | 'SAVINGS_OPPORTUNITIES'
   | 'OWNERSHIP_COSTS'
   | 'INVENTORY_LOOKUP'
   | 'PROPERTY_SUMMARY'
   | 'HOME_ACTIONS'
+  | 'OPERATIONAL_WORK_UPDATE'
+  | 'INSPECTION_FINDINGS'
+  | 'INSPECTION_FINDING_UPDATE'
+  | 'DOCUMENT_PROMOTION_REVIEW'
+  | 'DOCUMENT_PROMOTION_CONFIRM'
   | 'CAPABILITY_DISCOVERY'
   | 'REPLACEMENT_GUIDANCE'
   | 'REFINANCE_ANALYSIS'
@@ -160,6 +168,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MAINTENANCE_TASK_UPDATE: definition('MAINTENANCE_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
   COVERAGE_GAPS: definition('COVERAGE_GAPS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
   INCIDENT_CLAIM_STATUS: definition('INCIDENT_CLAIM_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'incident-claim.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
+  CLAIM_FILE: definition('CLAIM_FILE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'incident-claim.file', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  CLAIM_TRANSITION: definition('CLAIM_TRANSITION', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'incident-claim.transition', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  INCIDENT_CONTINUATION: definition('INCIDENT_CONTINUATION', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'incident-claim.continuation', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   SAVINGS_OPPORTUNITIES: definition('SAVINGS_OPPORTUNITIES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'savings.opportunities', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   OWNERSHIP_COSTS: definition('OWNERSHIP_COSTS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'ownership.costs', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   INVENTORY_LOOKUP: definition('INVENTORY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inventory.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
@@ -170,6 +181,11 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // views of Home Actions (FRD Phase 9B exit criterion: "no competing
   // action source").
   HOME_ACTIONS: definition('HOME_ACTIONS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'home-actions.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'PRIORITY_LIST', 'BOUNDARY']),
+  OPERATIONAL_WORK_UPDATE: definition('OPERATIONAL_WORK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'home-operations.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  INSPECTION_FINDINGS: definition('INSPECTION_FINDINGS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-findings.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
+  INSPECTION_FINDING_UPDATE: definition('INSPECTION_FINDING_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-findings.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  DOCUMENT_PROMOTION_REVIEW: definition('DOCUMENT_PROMOTION_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'document-promotion.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
+  DOCUMENT_PROMOTION_CONFIRM: definition('DOCUMENT_PROMOTION_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'document-promotion.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPABILITY_DISCOVERY: definition('CAPABILITY_DISCOVERY', 'CAPABILITY_DISCOVERY', false, 'DETERMINISTIC', 'STANDARD', null, 'capability.discovery', ['SUMMARY', 'CAPABILITY_LIST']),
   REPLACEMENT_GUIDANCE: definition('REPLACEMENT_GUIDANCE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'inventory.replacement', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   REFINANCE_ANALYSIS: definition('REFINANCE_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'refinance.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
@@ -326,6 +342,14 @@ const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty c
 // start/navigate a claim, not a query about existing recorded ones -- that
 // pattern is checked earlier in the cascade and wins for that overlap.
 const incidentClaimStatusPattern = /\b(?:status of|track|do i have|open|active|recent|pending|filed|submitted)\b.{0,40}\b(?:insurance )?claims?\b|\bclaims?\b.{0,40}\b(?:status|open|active|pending|filed|submitted|history|recorded)\b|\b(?:recorded|logged|detected|any|active|recent|open|new)\b.{0,40}\bincidents?\b|\bincidents?\b.{0,40}\b(?:recorded|logged|detected|history|status|active|recent)\b|\bwhat incidents?\b/i;
+const claimFilePattern = /\b(?:file|start|create|open|prepare)\b.{0,60}\b(?:insurance|warranty|manufacturer)?\s*claim\b/i;
+const claimTransitionPattern = /\b(?:submit|advance|move|transition|approve|deny|close|reopen)\b.{0,80}\bclaim\b|\bclaim\b.{0,80}\b(?:submit|submitted|under review|approve|approved|deny|denied|close|closed)\b/i;
+const incidentContinuationPattern = /\b(?:emergency|incident)\b.{0,80}\b(?:over|contained|resolved|document|record|follow up|claim)\b|\b(?:document|record|follow up on)\b.{0,60}\b(?:emergency|incident)\b/i;
+const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)\b.{0,80}\binspection (?:finding|issue)\b|\binspection (?:finding|issue)\b.{0,80}\b(?:accept|dismiss|resolve|close|track)\b/i;
+const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
+const documentPromotionConfirmPattern = /\b(?:confirm|reject|promote|apply)\b.{0,80}\b(?:document|extraction|extracted|policy fact|inspection report)\b/i;
+const documentPromotionReviewPattern = /(?:\b(?:show|review|list|what)\b.{0,80}\b(?:document|documnt|extraction|extracted)\b.{0,50}\b(?:review|confirmation|pending|promotion|facts?)\b|\b(?:review|show|list)\b.{0,40}\bpending\b.{0,40}\b(?:document|documnt|extraction)\b)/i;
+const operationalWorkUpdatePattern = /\b(?:accept|defer|snooze|complete|finish|dismiss)\b.{0,80}\b(?:operational work|work item|home work|tracked work)\b|\b(?:operational work|work item|tracked work)\b.{0,80}\b(?:accept|defer|snooze|complete|finish|dismiss)\b/i;
 const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b/i;
 const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of owning\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
 const inventoryLookupPattern = /\b(?:what do you know about|tell me about|show|find|list|which|do i have)\b.{0,65}\b(?:inventory|appliances?|systems?|equipment|hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b|\b(?:inventory|appliance|system|equipment)\s+(?:record|records|details|items|list)\b|\b(?:incomplete|missing)\b.{0,35}\b(?:inventory|appliance|system)\s+(?:record|records|details|information)\b|\b(?:my|the|this)\s+(?:hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b.{0,45}\b(?:history|record|details|information|know)\b|\b(?:systems?|equipment|appliances?)\b.{0,45}\b(?:end of life|expiry|expire|incomplete)\b/i;
@@ -344,7 +368,7 @@ const PROPERTY_COMPLETENESS_PATTERNS = [
 export function isPropertyCompletenessRequest(message: string): boolean {
   return PROPERTY_COMPLETENESS_PATTERNS.some((pattern) => pattern.test(message));
 }
-const homeActionsPattern = /\b(?:what should i do next|what should i do before closing|what needs (?:my |our )?attention|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
+const homeActionsPattern = /\b(?:what should i do next|what should i do before closing|what needs (?:my |our )?(?:attention|attension)|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
 // Ask Intelligence FRD Phase 9A ("What changed?", §16). Deliberately excludes
 // any message mentioning "decision" (checked at the call site) -- a phrase
 // like "what changed about this decision" is a Decision Thread continuity
@@ -538,9 +562,17 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (coveragePattern.test(message)) {
     return resolved('COVERAGE_GAPS', 0.96);
   }
+  if (claimTransitionPattern.test(message)) return resolved('CLAIM_TRANSITION', 0.98);
+  if (claimFilePattern.test(message)) return resolved('CLAIM_FILE', 0.98);
+  if (incidentContinuationPattern.test(message)) return resolved('INCIDENT_CONTINUATION', 0.97);
   if (incidentClaimStatusPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INCIDENT_CLAIM_STATUS', 0.95);
   }
+  if (inspectionFindingUpdatePattern.test(message)) return resolved('INSPECTION_FINDING_UPDATE', 0.98);
+  if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
+  if (documentPromotionConfirmPattern.test(message)) return resolved('DOCUMENT_PROMOTION_CONFIRM', 0.98);
+  if (documentPromotionReviewPattern.test(message)) return resolved('DOCUMENT_PROMOTION_REVIEW', 0.96);
+  if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
   if (savingsOpportunitiesPattern.test(message)) {
     return resolved('SAVINGS_OPPORTUNITIES', 0.97);
   }

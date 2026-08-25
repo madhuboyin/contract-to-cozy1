@@ -16,6 +16,8 @@ import { SELLER_PREPARATION_SKILL_EVALUATION } from './seller-preparation';
 import { BUYER_CLOSING_SKILL_EVALUATION } from './buyer-closing';
 import { INCIDENT_CLAIM_SKILL_EVALUATION } from './incident-claim';
 import { HOME_OPERATIONS_SKILL_EVALUATION } from './home-operations';
+import { INSPECTION_FINDINGS_SKILL_EVALUATION } from './inspection-findings';
+import { DOCUMENT_PROMOTION_SKILL_EVALUATION } from './document-promotion';
 
 export type SkillRoutingFixtureMode = 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL' | 'MISSPELLED';
 export type SkillContextFixtureState = 'KNOWN' | 'MISSING' | 'STALE' | 'CONFLICTING' | 'UNAUTHORIZED' | 'UNAVAILABLE';
@@ -116,6 +118,8 @@ const refinance = SKILL_DEFINITIONS.refinance;
 const propertyRecord = SKILL_DEFINITIONS['property-record'];
 
 export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationPackage>> = Object.freeze({
+  [INSPECTION_FINDINGS_SKILL_EVALUATION.id]: INSPECTION_FINDINGS_SKILL_EVALUATION,
+  [DOCUMENT_PROMOTION_SKILL_EVALUATION.id]: DOCUMENT_PROMOTION_SKILL_EVALUATION,
   [CAPITAL_PLANNING_SKILL_EVALUATION.id]: CAPITAL_PLANNING_SKILL_EVALUATION,
   [COVERAGE_SKILL_EVALUATION.id]: COVERAGE_SKILL_EVALUATION,
   [HOUSEHOLD_SKILL_EVALUATION.id]: HOUSEHOLD_SKILL_EVALUATION,
@@ -205,6 +209,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'PARAPHRASED', message: 'Show my appliance inventory', expectedOperationId: 'INVENTORY_LOOKUP' },
       { mode: 'COLLOQUIAL', message: 'Are there any pending details to be filled for the home?', expectedOperationId: 'PROPERTY_SUMMARY' },
       { mode: 'MISSPELLED', message: 'Summarize my property recrod', expectedOperationId: 'PROPERTY_SUMMARY' },
+      { mode: 'EXACT', message: 'What changed around my home lately?', expectedOperationId: 'HOME_CHANGE_SUMMARY' },
     ],
     ambiguityCases: [{ message: 'Show my home record and item details', candidateOperationIds: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [

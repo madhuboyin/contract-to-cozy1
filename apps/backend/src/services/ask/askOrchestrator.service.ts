@@ -155,6 +155,19 @@ import { attachAskAuthoritativeSourceEvidence, includeAskContextSourceEvidence }
 import type { AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 import { isIncompleteInventoryRequest } from './askInventoryIntent';
+import { ClaimsService } from '../claims/claims.service';
+import type { ClaimStatus, ClaimType } from '../../types/claims.types';
+import { isValidTransition as isValidClaimTransition } from '../claims/claims.transitions';
+import { acceptFindingAsWork, dismissFinding, resolveFinding } from '../inspectionHub.service';
+import { applyWriteBacks } from '../inspectionWriteBack.service';
+import { MaterialSpecService } from '../materialSpec.service';
+import { confirmPolicyFact } from '../insurancePolicyRecord.service';
+import { listWorkItems } from '../../modules/homeOperations/application/listWorkItems.usecase';
+import { transitionWorkItem } from '../../modules/homeOperations/application/transitionWorkItem.usecase';
+import { assertUserWorkItemTransition } from '../../modules/homeOperations/domain/userGovernance';
+import { snoozeWorkItem } from '../../modules/homeOperations/application/snoozeWorkItem.usecase';
+import { completeAcceptedOperationalWorkItem } from '../homeActionCompletion.service';
+import { recordDocumentPromotionOutcome } from '../decisionPlatform/outcomeObservationService';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -167,6 +180,7 @@ const inventoryService = new InventoryService();
 const replaceRepairService = new ReplaceRepairService();
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
 const permitTrackerService = new PermitTrackerService();
+const materialSpecService = new MaterialSpecService();
 
 function journeyContextFrom(composedContext: ComposedSkillContext | null): PropertyJourneyContext | null {
   if (!composedContext) return null;
@@ -2401,6 +2415,215 @@ async function hvacPreferenceForgetResult(userId: string, propertyId: string, me
     },
     suggestions: [],
   };
+}
+
+const CLAIM_TYPE_PATTERNS: readonly [RegExp, ClaimType][] = [
+  [/water|leak|flood|plumb/i, 'WATER_DAMAGE'], [/fire|smoke/i, 'FIRE_SMOKE'],
+  [/storm|wind|hail|roof/i, 'STORM_WIND_HAIL'], [/theft|stolen|vandal/i, 'THEFT_VANDALISM'],
+  [/liability|injur/i, 'LIABILITY'], [/hvac|furnace|air condition|heat pump/i, 'HVAC'],
+  [/electrical|wiring|breaker/i, 'ELECTRICAL'], [/appliance|refrigerator|washer|dryer/i, 'APPLIANCE'],
+];
+
+function claimTypeFromMessage(message: string): ClaimType | null {
+  return CLAIM_TYPE_PATTERNS.find(([pattern]) => pattern.test(message))?.[1]
+    ?? (/\bother\b/i.test(message) ? 'OTHER' : null);
+}
+
+function claimTitleFromMessage(message: string, type: ClaimType): string {
+  const explicit = message.match(/\b(?:titled?|called)\s+["']?([^"'.]{3,120})/i)?.[1]?.trim();
+  if (explicit) return explicit;
+  const labels: Record<ClaimType, string> = {
+    WATER_DAMAGE: 'Water damage claim', FIRE_SMOKE: 'Fire or smoke claim', STORM_WIND_HAIL: 'Storm, wind, or hail claim',
+    THEFT_VANDALISM: 'Theft or vandalism claim', LIABILITY: 'Liability claim', HVAC: 'HVAC claim', PLUMBING: 'Plumbing claim',
+    ELECTRICAL: 'Electrical claim', APPLIANCE: 'Appliance claim', OTHER: 'Home incident claim',
+  };
+  return labels[type];
+}
+
+function nextClaimStatus(message: string): ClaimStatus | null {
+  if (/\bunder review\b/i.test(message)) return 'UNDER_REVIEW';
+  if (/\bapprove(?:d)?\b/i.test(message)) return 'APPROVED';
+  if (/\bden(?:y|ied)\b/i.test(message)) return 'DENIED';
+  if (/\bclose(?:d)?\b/i.test(message)) return 'CLOSED';
+  if (/\bsubmit(?:ted)?\b/i.test(message)) return 'SUBMITTED';
+  if (/\b(?:start|in progress)\b/i.test(message)) return 'IN_PROGRESS';
+  return null;
+}
+
+function exactEntityMatch<T extends { id: string }>(rows: readonly T[], message: string, launchContext?: CreateAskExecutionRequest['launchContext']): T | null {
+  const launched = launchContext?.entityId ? rows.find((row) => row.id === launchContext.entityId) : null;
+  if (launched) return launched;
+  const normalized = message.toLowerCase();
+  const matches = rows.filter((row) => {
+    const label = 'title' in row && typeof row.title === 'string' ? row.title : 'homeSystem' in row && typeof row.homeSystem === 'string' ? row.homeSystem : '';
+    return normalized.includes(row.id.toLowerCase()) || (label.length >= 3 && normalized.includes(label.toLowerCase()));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function claimFileResult(propertyId: string, message: string): Promise<AskOperationResult> {
+  const type = claimTypeFromMessage(message);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
+  if (!type) return {
+    status: 'NEEDS_CLARIFICATION', reasonCode: 'CLAIM_TYPE_REQUIRED',
+    ...durableFreeTextClarification('CLAIM_FILE', 'What happened? Include the incident type, such as water damage, storm/hail, fire/smoke, theft, HVAC, electrical, appliance, or other.'),
+    blocks: [{ type: 'SUMMARY', id: 'claim-type-required', title: 'Describe the incident before filing', body: 'Ask will create only a draft canonical claim after you identify the incident type and confirm. It will not submit anything to an insurer.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }], suggestions: [],
+  };
+  const title = claimTitleFromMessage(message, type);
+  const contextVersion = createHash('sha256').update(JSON.stringify({ propertyId, title, type })).digest('hex');
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'CLAIM_FILE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { claimTitle: title, claimType: type, claimDescription: message, claimSourceType: /warranty/i.test(message) ? 'HOME_WARRANTY' : /insurance/i.test(message) ? 'INSURANCE' : 'UNKNOWN', confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'claim-file-review', title: 'Review the draft claim', body: 'Confirming creates a draft claim, its checklist, timeline event, and linked Operational Work Item. It does not transmit the claim to an insurer or warranty provider.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims instead', href, style: 'SECONDARY' }] }],
+    confirmation: { confirmationId: `claim-file-${contextVersion.slice(0, 16)}`, version: 1, title: 'Create this draft claim?', description: 'The claim stays in ContractToCozy until you separately submit it through the appropriate provider channel.', fields: [{ label: 'Title', value: title }, { label: 'Incident type', value: type.toLowerCase().replace(/_/g, ' ') }, { label: 'Initial status', value: 'Draft' }], confirmLabel: 'Create draft claim', consentText: 'I confirm this incident record is accurate and authorize creating the draft claim and linked home work.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+  };
+}
+
+async function claimTransitionResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const claims = await prisma.claim.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, title: true, status: true, updatedAt: true } });
+  const selected = exactEntityMatch(claims, message, launchContext);
+  const nextStatus = nextClaimStatus(message);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
+  if (!selected || !nextStatus) return {
+    status: 'NEEDS_ENTITY', reasonCode: 'CLAIM_TRANSITION_TARGET_REQUIRED',
+    blocks: [{ type: 'GROUPED_LIST', id: 'claim-transition-targets', title: 'Choose a claim and valid next status', description: 'Use the exact claim title and say submit, move to under review, approve, deny, or close. Ask will recheck the legal transition before saving.', sections: [{ id: 'claims', title: 'Recorded claims', count: claims.length, items: claims.map((claim) => ({ id: claim.id, title: claim.title, description: `Current status: ${String(claim.status).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(claim.status), href: `${href}/${claim.id}` })) }], actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }], suggestions: [],
+  };
+  if (!isValidClaimTransition(selected.status as ClaimStatus, nextStatus)) return {
+    status: 'BLOCKED', reasonCode: 'CLAIM_TRANSITION_NOT_ALLOWED',
+    blocks: [{ type: 'BOUNDARY', id: 'claim-transition-boundary', title: 'That claim status change is not allowed', severity: 'INFO', body: `The canonical claim lifecycle does not allow ${String(selected.status).toLowerCase().replace(/_/g, ' ')} → ${nextStatus.toLowerCase().replace(/_/g, ' ')}. No record was changed.`, suggestions: ['Review the claim and choose its next valid lifecycle step.'] }],
+    suggestions: ['Show my open claims'],
+  };
+  const contextVersion = createHash('sha256').update(`${selected.id}:${selected.status}:${selected.updatedAt.toISOString()}`).digest('hex');
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'CLAIM_TRANSITION_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { claimId: selected.id, claimTitle: selected.title, claimFromStatus: selected.status, claimToStatus: nextStatus, claimContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle and reconcile the linked Operational Work Item and outcome.', tone: ['APPROVED', 'DENIED', 'CLOSED'].includes(nextStatus) ? 'CAUTION' : 'DEFAULT', actions: [{ id: 'open-claim', label: 'Open claim', href: `${href}/${selected.id}`, style: 'SECONDARY' }] }],
+    confirmation: { confirmationId: `claim-transition-${selected.id}-1`, version: 1, title: `Change ${selected.title} to ${nextStatus.toLowerCase().replace(/_/g, ' ')}?`, description: 'This changes the shared claim record and its downstream work/outcome reconciliation.', fields: [{ label: 'Current status', value: String(selected.status).toLowerCase().replace(/_/g, ' ') }, { label: 'New status', value: nextStatus.toLowerCase().replace(/_/g, ' ') }], confirmLabel: 'Change claim status', consentText: 'I confirm this status reflects the provider or claim process and authorize updating the shared record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+  };
+}
+
+async function incidentContinuationResult(propertyId: string): Promise<AskOperationResult> {
+  const [incidents, claims] = await Promise.all([
+    prisma.incident.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, updatedAt: true } }),
+    prisma.claim.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, updatedAt: true } }),
+  ]);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
+  return { status: 'ANSWERED', reasonCode: 'INCIDENT_CONTINUATION_READY', blocks: [
+    { type: 'BOUNDARY', id: 'incident-continuation-boundary', title: 'Continue only after immediate danger has passed', severity: 'CAUTION', body: 'If anyone may still be in danger, contact emergency responders or the appropriate utility first. This workflow records what happened; it is not emergency response.', suggestions: [] },
+    { type: 'GROUPED_LIST', id: 'incident-continuation-records', title: 'Recorded incident and claim follow-up', description: 'Use an existing record or start a draft claim. Filing with an insurer remains a separate provider action.', sections: [
+      { id: 'incidents', title: 'Incidents', count: incidents.length, items: incidents.map((row) => ({ id: row.id, title: row.title, description: String(row.status), meta: [], status: String(row.status), href })) },
+      { id: 'claims', title: 'Claims', count: claims.length, items: claims.map((row) => ({ id: row.id, title: row.title, description: String(row.status), meta: [], status: String(row.status), href: `${href}/${row.id}` })) },
+    ], actions: [{ id: 'open-claims', label: 'Open incident and claims records', href, style: 'PRIMARY' }] },
+  ], suggestions: ['File a water damage claim', 'What is the status of my open claim?'] };
+}
+
+async function inspectionFindingsResult(propertyId: string): Promise<AskOperationResult> {
+  const findings = await prisma.inspectionFinding.findMany({
+    where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } },
+    orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
+    include: { report: { select: { inspectionDate: true, inspectorName: true } } },
+  });
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection`;
+  if (findings.length === 0) return {
+    status: 'ANSWERED', reasonCode: 'NO_OPEN_INSPECTION_FINDINGS',
+    blocks: [{ type: 'EMPTY_STATE', id: 'inspection-findings-empty', title: 'No open confirmed inspection findings', body: 'Ask found no unresolved findings from a homeowner-confirmed inspection report.', actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'PRIMARY' }] }], suggestions: [],
+  };
+  return {
+    status: 'ANSWERED', reasonCode: 'INSPECTION_FINDINGS_FOUND',
+    blocks: [{ type: 'GROUPED_LIST', id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Use the exact system or finding id to accept, dismiss, or resolve one.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }],
+    suggestions: findings.slice(0, 2).map((finding) => `Accept ${finding.homeSystem} finding ${finding.id} as work`),
+  };
+}
+
+function inspectionFindingAction(message: string): 'ACCEPT' | 'DISMISS' | 'RESOLVE' | null {
+  if (/\baccept|track|make (?:this )?work\b/i.test(message)) return 'ACCEPT';
+  if (/\bdismiss|not applicable|ignore\b/i.test(message)) return 'DISMISS';
+  if (/\bresolve|already (?:fixed|resolved)|completed\b/i.test(message)) return 'RESOLVE';
+  return null;
+}
+
+async function inspectionFindingUpdateResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const findings = await prisma.inspectionFinding.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } }, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, reportId: true, homeSystem: true, inspectorDescription: true, severity: true, status: true, workDisposition: true, updatedAt: true } });
+  const selected = exactEntityMatch(findings.map((finding) => ({ ...finding, title: `${finding.homeSystem}: ${finding.inspectorDescription}` })), message, launchContext);
+  const action = inspectionFindingAction(message);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection`;
+  if (!selected || !action) return {
+    status: 'NEEDS_ENTITY', reasonCode: 'INSPECTION_FINDING_TARGET_REQUIRED',
+    blocks: [{ type: 'GROUPED_LIST', id: 'inspection-finding-targets', title: 'Choose a finding and action', description: 'Use the finding id or exact system/description and say accept, dismiss, or resolve.', sections: [{ id: 'findings', title: 'Open confirmed findings', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: String(finding.severity).toLowerCase(), meta: [], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }], suggestions: [],
+  };
+  const contextVersion = createHash('sha256').update(`${selected.id}:${selected.status}:${selected.workDisposition}:${selected.updatedAt.toISOString()}`).digest('hex');
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { inspectionFindingId: selected.id, inspectionReportId: selected.reportId, inspectionFindingAction: action, inspectionFindingContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-review', title: `Review ${action.toLowerCase()} action`, body: action === 'ACCEPT' ? 'Accepting creates or reuses canonical Operational Work and routes it to the appropriate maintenance, guidance, or project workflow.' : action === 'DISMISS' ? 'Dismissing marks this canonical finding not active and reconciles linked work.' : 'Resolving records a homeowner-confirmed outcome on this canonical finding.', tone: 'CAUTION', actions: [{ id: 'open-finding', label: 'Review in Inspection Hub', href, style: 'SECONDARY' }] }],
+    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: selected.inspectorDescription, fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+  };
+}
+
+type DocumentPromotionCandidate = { id: string; kind: 'MATERIAL_EXTRACTION_REVIEW' | 'INSPECTION_REPORT' | 'INSURANCE_POLICY_FACT'; title: string; description: string; updatedAt: Date; parentId: string; candidateFields?: Record<string, unknown> };
+
+async function pendingDocumentPromotionCandidates(propertyId: string): Promise<DocumentPromotionCandidate[]> {
+  const [materialReviews, inspectionReports, policyFacts] = await Promise.all([
+    prisma.materialExtractionReview.findMany({ where: { propertyId, status: 'NEEDS_REVIEW' }, orderBy: { updatedAt: 'desc' }, take: 25, include: { materialSpec: { select: { id: true, label: true } } } }),
+    prisma.inspectionReport.findMany({ where: { propertyId, status: 'REVIEW_PENDING' }, orderBy: { updatedAt: 'desc' }, take: 25, select: { id: true, reportType: true, inspectionDate: true, totalFindings: true, updatedAt: true } }),
+    prisma.insurancePolicyFact.findMany({ where: { confirmationStatus: 'PENDING', policyTerm: { propertyId } }, orderBy: { updatedAt: 'desc' }, take: 25, include: { policyTerm: { include: { insurancePolicy: { select: { id: true, carrierName: true, homeownerProfileId: true } } } } } }),
+  ]);
+  return [
+    ...materialReviews.map((review): DocumentPromotionCandidate => ({ id: review.id, kind: 'MATERIAL_EXTRACTION_REVIEW', title: `Material review: ${review.materialSpec.label}`, description: `${Object.keys(review.candidateFields as Record<string, unknown>).length} extracted fields awaiting review`, updatedAt: review.updatedAt, parentId: review.materialSpecId, candidateFields: review.candidateFields as Record<string, unknown> })),
+    ...inspectionReports.map((report): DocumentPromotionCandidate => ({ id: report.id, kind: 'INSPECTION_REPORT', title: `${String(report.reportType).toLowerCase().replace(/_/g, ' ')} inspection report`, description: `${report.totalFindings} extracted findings · ${humanDate(report.inspectionDate) ?? 'date unavailable'}`, updatedAt: report.updatedAt, parentId: report.id })),
+    ...policyFacts.map((fact): DocumentPromotionCandidate => {
+      const value = fact.amountValue?.toString() ?? fact.textValue ?? (fact.booleanValue == null ? 'extracted value' : String(fact.booleanValue));
+      return { id: fact.id, kind: 'INSURANCE_POLICY_FACT', title: `${fact.policyTerm.insurancePolicy.carrierName}: ${fact.factKey.toLowerCase().replace(/_/g, ' ')}`, description: `Candidate value: ${value}`, updatedAt: fact.updatedAt, parentId: fact.policyTerm.insurancePolicy.id, candidateFields: { homeownerProfileId: fact.policyTerm.insurancePolicy.homeownerProfileId, factKey: fact.factKey } };
+    }),
+  ].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
+
+async function documentPromotionReviewResult(propertyId: string): Promise<AskOperationResult> {
+  const candidates = await pendingDocumentPromotionCandidates(propertyId);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
+  if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }], suggestions: [] };
+  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: candidates.slice(0, 2).map((candidate) => `Confirm document candidate ${candidate.id}`) };
+}
+
+async function documentPromotionConfirmResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const candidates = await pendingDocumentPromotionCandidates(propertyId);
+  const selected = exactEntityMatch(candidates, message, launchContext);
+  const decision = /\breject|discard\b/i.test(message) ? 'REJECT' : /\bconfirm|promote|apply\b/i.test(message) ? 'CONFIRM' : null;
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
+  if (!selected || !decision) return { status: 'NEEDS_ENTITY', reasonCode: 'DOCUMENT_PROMOTION_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', id: 'document-promotion-targets', title: 'Choose an exact candidate and decision', description: 'Use the candidate id or exact title and say confirm or reject.', sections: [{ id: 'pending', title: 'Pending candidates', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Review Documents', href, style: 'SECONDARY' }] }], suggestions: [] };
+  if (selected.kind === 'INSPECTION_REPORT' && decision === 'REJECT') return { status: 'BLOCKED', reasonCode: 'INSPECTION_REPORT_REJECTION_REQUIRES_REVIEW_UI', blocks: [{ type: 'BOUNDARY', id: 'inspection-report-rejection-boundary', title: 'Review corrections in Inspection Hub', severity: 'INFO', body: 'Ask can confirm the reviewed report, but rejecting or correcting individual extracted findings requires the report review screen so the exact edits and evidence remain visible.', suggestions: [] }], suggestions: [] };
+  const contextVersion = createHash('sha256').update(`${selected.kind}:${selected.id}:${selected.updatedAt.toISOString()}`).digest('hex');
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [{ id: 'open-documents', label: 'Review source', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
+}
+
+function operationalWorkAction(message: string): 'ACCEPT' | 'DEFER' | 'SNOOZE' | 'COMPLETE' | null {
+  if (/\bcomplete|done|finished\b/i.test(message)) return 'COMPLETE';
+  if (/\bsnooze|hide reminders?\b/i.test(message)) return 'SNOOZE';
+  if (/\bdefer|postpone|later\b/i.test(message)) return 'DEFER';
+  if (/\baccept|take this on|track this\b/i.test(message)) return 'ACCEPT';
+  return null;
+}
+
+async function operationalWorkUpdateResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const items = await listWorkItems({ propertyId });
+  const selected = exactEntityMatch(items, message, launchContext);
+  const action = operationalWorkAction(message);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/home-actions`;
+  if (!selected || !action) return { status: 'NEEDS_ENTITY', reasonCode: 'OPERATIONAL_WORK_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', id: 'operational-work-targets', title: 'Choose tracked work and an action', description: 'Use the exact title or work-item id and say accept, defer, snooze, or complete.', sections: [{ id: 'work', title: 'Tracked Operational Work', count: items.length, items: items.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: `${String(item.state).toLowerCase().replace(/_/g, ' ')} · ${String(item.safetyTier).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(item.state), href })) }], actions: [{ id: 'open-work', label: 'Manage Home Actions', href, style: 'SECONDARY' }] }], suggestions: [] };
+  const execution = selected.executions.find((candidate) => candidate.role === 'PRIMARY');
+  if (action === 'COMPLETE' && (selected.state !== 'ACCEPTED' || execution?.executionType !== 'MAINTENANCE_TASK')) return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_COMPLETION_REQUIRES_DOMAIN_WORKFLOW', blocks: [{ type: 'BOUNDARY', id: 'operational-work-completion-boundary', title: 'Complete this in its linked workflow', severity: 'INFO', body: 'Quick completion is available only for accepted maintenance-backed work. Project, guidance, booking, safety, and regulated work must record evidence and completion in the linked workflow.', suggestions: [] }, { type: 'SUMMARY', id: 'operational-work-manage', title: selected.title, body: `Current state: ${String(selected.state).toLowerCase().replace(/_/g, ' ')}. No change was made.`, tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'PRIMARY' }] }], suggestions: [] };
+  const targetState = action === 'ACCEPT' ? 'ACCEPTED' : action === 'DEFER' ? 'DEFERRED' : null;
+  if (targetState) {
+    try { assertUserWorkItemTransition(selected, targetState); } catch (error) { return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_TRANSITION_NOT_ALLOWED', blocks: [{ type: 'BOUNDARY', id: 'operational-work-governance', title: 'This change belongs to the linked workflow', severity: 'INFO', body: error instanceof Error ? error.message : 'The requested transition is not available.', suggestions: [] }], suggestions: [] }; }
+  }
+  const until = new Date(Date.now() + (/\bnext month\b/i.test(message) ? 30 : /\bweek\b/i.test(message) ? 7 : 14) * 86_400_000);
+  const contextVersion = createHash('sha256').update(`${selected.id}:${selected.state}:${selected.updatedAt.toISOString()}:${selected.snoozedUntil?.toISOString() ?? ''}`).digest('hex');
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'OPERATIONAL_WORK_CONFIRMATION_REQUIRED', contextVersion, parameters: { operationalWorkItemId: selected.id, operationalWorkAction: action, operationalWorkUntil: ['DEFER', 'SNOOZE'].includes(action) ? until.toISOString() : null, operationalWorkContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'operational-work-review', title: `Review ${action.toLowerCase()} action`, body: action === 'SNOOZE' ? `Reminders will be suppressed until ${humanDate(until)} without changing the work state or due date.` : action === 'DEFER' ? `The work will move to deferred until ${humanDate(until)}.` : action === 'COMPLETE' ? 'The linked canonical maintenance task and Operational Work outcome will be completed together.' : 'The proposed work will become accepted homeowner work.', tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `operational-work-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} ${selected.title}?`, description: 'Ask will recheck the current work state before applying this governed command.', fields: [{ label: 'Work', value: selected.title }, { label: 'Current state', value: String(selected.state).toLowerCase().replace(/_/g, ' ') }, { label: 'Action', value: action.toLowerCase() }], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} work`, consentText: 'I authorize this update to the shared Operational Work record.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
 }
 
 async function incidentClaimStatusResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -5402,6 +5625,9 @@ async function dispatchOperationAdapterResult(
     }
     case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
     case 'INCIDENT_CLAIM_STATUS': return incidentClaimStatusResult(input.userId, input.propertyId!, input.message);
+    case 'CLAIM_FILE': return claimFileResult(input.propertyId!, input.message);
+    case 'CLAIM_TRANSITION': return claimTransitionResult(input.propertyId!, input.message, input.launchContext);
+    case 'INCIDENT_CONTINUATION': return incidentContinuationResult(input.propertyId!);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
@@ -5414,6 +5640,11 @@ async function dispatchOperationAdapterResult(
         ? input.launchContext.actionId ?? input.launchContext.entityId
         : null,
     );
+    case 'OPERATIONAL_WORK_UPDATE': return operationalWorkUpdateResult(input.propertyId!, input.message, input.launchContext);
+    case 'INSPECTION_FINDINGS': return inspectionFindingsResult(input.propertyId!);
+    case 'INSPECTION_FINDING_UPDATE': return inspectionFindingUpdateResult(input.propertyId!, input.message, input.launchContext);
+    case 'DOCUMENT_PROMOTION_REVIEW': return documentPromotionReviewResult(input.propertyId!);
+    case 'DOCUMENT_PROMOTION_CONFIRM': return documentPromotionConfirmResult(input.propertyId!, input.message, input.launchContext);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(
       input.userId,
       input.propertyId!,
@@ -5730,6 +5961,17 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
         adapterEnabled: controls.adapterEnabled,
         contextProviderEnabled: controls.contextProviderEnabled,
       },
+      continuity: {
+        propertyId: input.propertyId ?? null,
+        sourceEntityType: input.launchContext?.entityType ?? null,
+        sourceEntityId: input.launchContext?.entityId ?? null,
+        sourceHomeActionId: input.launchContext?.actionId ?? null,
+        decisionThreadId: typeof result.parameters?.decisionThreadId === 'string' ? result.parameters.decisionThreadId : input.launchContext?.entityType === 'DECISION_THREAD' ? input.launchContext.entityId ?? null : null,
+        workItemId: typeof result.parameters?.operationalWorkItemId === 'string' ? result.parameters.operationalWorkItemId : null,
+        journeyId: input.launchContext?.journeyId ?? null,
+        contextVersion: result.contextVersion ?? null,
+        returnDestination: input.launchContext?.returnTo ?? null,
+      },
     });
     if (skill && skillHandoff) {
       askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
@@ -5832,6 +6074,10 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'REPLACEMENT_GUIDANCE':
     case 'INVENTORY_LOOKUP':
     case 'COVERAGE_GAPS': return `${base}/inventory`;
+    case 'INCIDENT_CLAIM_STATUS':
+    case 'CLAIM_FILE':
+    case 'CLAIM_TRANSITION':
+    case 'INCIDENT_CONTINUATION': return `${base}/claims`;
     case 'REFINANCE_ANALYSIS': return `${base}/tools/financing/profile`;
     case 'SAVINGS_OPPORTUNITIES': return `${base}/tools/home-savings`;
     case 'OWNERSHIP_COSTS': return `${base}/ownership-costs`;
@@ -5841,7 +6087,12 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;
     case 'RENOVATION_PERMIT_READINESS': return `${base}/projects`;
     case 'MAJOR_EVENT_ENTRY': return `${base}/tools`;
-    case 'HOME_ACTIONS': return `${base}/home-operations`;
+    case 'HOME_ACTIONS':
+    case 'OPERATIONAL_WORK_UPDATE': return `${base}/home-operations`;
+    case 'INSPECTION_FINDINGS':
+    case 'INSPECTION_FINDING_UPDATE': return `${base}/inspection`;
+    case 'DOCUMENT_PROMOTION_REVIEW':
+    case 'DOCUMENT_PROMOTION_CONFIRM': return `${base}/documents`;
     case 'HOUSEHOLD_INVITATION': return `${base}/household`;
     case 'MAINTENANCE_TASK_CREATE':
     case 'MAINTENANCE_TASK_COMPLETE': return `${base}/maintenance`;
@@ -7499,7 +7750,107 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   let artifactType: string;
   let artifactId: string;
   try {
-  if (execution.operationId === 'MAINTENANCE_TASK_COMPLETE') {
+  if (execution.operationId === 'CLAIM_FILE') {
+    const title = parameters.claimTitle;
+    const type = parameters.claimType;
+    const description = parameters.claimDescription;
+    const sourceType = parameters.claimSourceType;
+    if (typeof title !== 'string' || !title.trim() || typeof type !== 'string' || !CLAIM_TYPE_PATTERNS.some(([, candidate]) => candidate === type) && type !== 'OTHER') {
+      const error = new Error('The draft claim details are no longer valid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const claim = await ClaimsService.createClaim(execution.propertyId, userId, {
+      title: title.trim(), type: type as ClaimType,
+      description: typeof description === 'string' ? description : null,
+      sourceType: typeof sourceType === 'string' ? sourceType as 'INSURANCE' | 'HOME_WARRANTY' | 'MANUFACTURER_WARRANTY' | 'OUT_OF_POCKET' | 'UNKNOWN' : 'UNKNOWN',
+      generateChecklist: true,
+    });
+    artifactType = 'CLAIM'; artifactId = claim.id;
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['What should I gather for this claim?'] };
+  } else if (execution.operationId === 'CLAIM_TRANSITION') {
+    const claimId = parameters.claimId;
+    const nextStatus = parameters.claimToStatus;
+    if (typeof claimId !== 'string' || typeof nextStatus !== 'string') throw Object.assign(new Error('The claim transition is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const claim = await prisma.claim.findFirst({ where: { id: claimId, propertyId: execution.propertyId }, select: { id: true, title: true, status: true, updatedAt: true } });
+    if (!claim) throw Object.assign(new Error('The selected claim is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const currentVersion = createHash('sha256').update(`${claim.id}:${claim.status}:${claim.updatedAt.toISOString()}`).digest('hex');
+    if (parameters.claimContextVersion !== currentVersion && claim.status !== nextStatus) throw Object.assign(new Error('This claim changed while confirmation was open. Review its current status and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    const updated = claim.status === nextStatus ? await ClaimsService.getClaim(execution.propertyId, claim.id) : await ClaimsService.updateClaim(execution.propertyId, claim.id, userId, { status: nextStatus as ClaimStatus });
+    artifactType = 'CLAIM'; artifactId = claim.id;
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['Show my open claims'] };
+  } else if (execution.operationId === 'INSPECTION_FINDING_UPDATE') {
+    const findingId = parameters.inspectionFindingId;
+    const reportId = parameters.inspectionReportId;
+    const action = parameters.inspectionFindingAction;
+    if (typeof findingId !== 'string' || typeof reportId !== 'string' || !['ACCEPT', 'DISMISS', 'RESOLVE'].includes(String(action))) throw Object.assign(new Error('The inspection finding action is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, reportId, propertyId: execution.propertyId }, select: { id: true, homeSystem: true, status: true, workDisposition: true, updatedAt: true } });
+    if (!finding) throw Object.assign(new Error('The selected inspection finding is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const currentVersion = createHash('sha256').update(`${finding.id}:${finding.status}:${finding.workDisposition}:${finding.updatedAt.toISOString()}`).digest('hex');
+    const alreadyApplied = (action === 'ACCEPT' && finding.workDisposition === 'ACCEPTED') || (action === 'DISMISS' && finding.status === 'DISMISSED') || (action === 'RESOLVE' && finding.status === 'RESOLVED');
+    if (parameters.inspectionFindingContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This inspection finding changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    if (!alreadyApplied) {
+      if (action === 'ACCEPT') await acceptFindingAsWork(finding.id, reportId, execution.propertyId, userId);
+      else if (action === 'DISMISS') await dismissFinding(finding.id, reportId, execution.propertyId, 'Dismissed through Ask after homeowner confirmation.', userId);
+      else await resolveFinding(finding.id, execution.propertyId, { resolutionMethod: 'HOMEOWNER_CONFIRMED', resolutionNotes: 'Resolved through Ask after homeowner confirmation.' });
+    }
+    artifactType = 'INSPECTION_FINDING'; artifactId = finding.id;
+    const findingReasonCode = action === 'ACCEPT' ? 'INSPECTION_FINDING_ACCEPTED' : action === 'DISMISS' ? 'INSPECTION_FINDING_DISMISSED' : 'INSPECTION_FINDING_RESOLVED';
+    result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: ['Show remaining inspection findings'] };
+  } else if (execution.operationId === 'DOCUMENT_PROMOTION_CONFIRM') {
+    const kind = parameters.documentPromotionKind;
+    const candidateId = parameters.documentPromotionId;
+    const parentId = parameters.documentPromotionParentId;
+    const decision = parameters.documentPromotionDecision;
+    if (typeof candidateId !== 'string' || typeof parentId !== 'string' || !['CONFIRM', 'REJECT'].includes(String(decision))) throw Object.assign(new Error('The document-promotion decision is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    if (kind === 'MATERIAL_EXTRACTION_REVIEW') {
+      const review = await prisma.materialExtractionReview.findFirst({ where: { id: candidateId, materialSpecId: parentId, propertyId: execution.propertyId }, select: { id: true, status: true, candidateFields: true, updatedAt: true } });
+      if (!review) throw Object.assign(new Error('The selected material extraction review is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      const currentVersion = createHash('sha256').update(`${kind}:${review.id}:${review.updatedAt.toISOString()}`).digest('hex');
+      if (review.status === 'NEEDS_REVIEW' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This document candidate changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      if (review.status === 'NEEDS_REVIEW') await materialSpecService.reviewExtraction(execution.propertyId, parentId, review.id, userId, { status: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED', reviewedFields: decision === 'CONFIRM' ? review.candidateFields as Record<string, unknown> : undefined, reviewNotes: `${decision === 'CONFIRM' ? 'Confirmed' : 'Rejected'} through Ask after explicit homeowner review.` });
+      if (decision === 'CONFIRM') await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'MATERIAL_SPEC', promotedEntityId: parentId, userId });
+      artifactType = 'MATERIAL_EXTRACTION_REVIEW'; artifactId = review.id;
+    } else if (kind === 'INSURANCE_POLICY_FACT') {
+      const fact = await prisma.insurancePolicyFact.findFirst({ where: { id: candidateId, policyTerm: { propertyId: execution.propertyId, insurancePolicyId: parentId } }, include: { policyTerm: { include: { insurancePolicy: { select: { homeownerProfileId: true } } } } } });
+      if (!fact) throw Object.assign(new Error('The selected policy fact is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      const currentVersion = createHash('sha256').update(`${kind}:${fact.id}:${fact.updatedAt.toISOString()}`).digest('hex');
+      if (fact.confirmationStatus === 'PENDING' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This policy fact changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      if (fact.confirmationStatus === 'PENDING') await confirmPolicyFact({ policyId: parentId, factId: fact.id, homeownerProfileId: fact.policyTerm.insurancePolicy.homeownerProfileId, userId, confirmationStatus: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED' });
+      if (decision === 'CONFIRM') await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSURANCE_POLICY_FACT', promotedEntityId: fact.id, userId });
+      artifactType = 'INSURANCE_POLICY_FACT'; artifactId = fact.id;
+    } else if (kind === 'INSPECTION_REPORT' && decision === 'CONFIRM') {
+      const report = await prisma.inspectionReport.findFirst({ where: { id: candidateId, propertyId: execution.propertyId }, select: { id: true, status: true, updatedAt: true } });
+      if (!report) throw Object.assign(new Error('The selected inspection report is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      const currentVersion = createHash('sha256').update(`${kind}:${report.id}:${report.updatedAt.toISOString()}`).digest('hex');
+      if (report.status === 'REVIEW_PENDING' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This inspection report changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      if (report.status === 'REVIEW_PENDING') await applyWriteBacks(report.id, execution.propertyId, userId);
+      await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSPECTION_REPORT', promotedEntityId: report.id, userId });
+      artifactType = 'INSPECTION_REPORT'; artifactId = report.id;
+    } else throw Object.assign(new Error('This document-promotion action must be reviewed again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/documents`, style: 'PRIMARY' }] }], suggestions: ['Show remaining document reviews'] };
+  } else if (execution.operationId === 'OPERATIONAL_WORK_UPDATE') {
+    const workItemId = parameters.operationalWorkItemId;
+    const action = parameters.operationalWorkAction;
+    if (typeof workItemId !== 'string' || !['ACCEPT', 'DEFER', 'SNOOZE', 'COMPLETE'].includes(String(action))) throw Object.assign(new Error('The Operational Work command is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const item = await prisma.operationalWorkItem.findFirst({ where: { id: workItemId, propertyId: execution.propertyId }, include: { executions: true } });
+    if (!item) throw Object.assign(new Error('The selected Operational Work item is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const currentVersion = createHash('sha256').update(`${item.id}:${item.state}:${item.updatedAt.toISOString()}:${item.snoozedUntil?.toISOString() ?? ''}`).digest('hex');
+    const alreadyApplied = action === 'ACCEPT' ? item.state === 'ACCEPTED' : action === 'DEFER' ? item.state === 'DEFERRED' : action === 'SNOOZE' ? item.snoozedUntil?.toISOString() === parameters.operationalWorkUntil : ['VERIFIED', 'CLOSED'].includes(item.state);
+    if (parameters.operationalWorkContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This work item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    if (!alreadyApplied) {
+      if (action === 'ACCEPT' || action === 'DEFER') {
+        const target = action === 'ACCEPT' ? 'ACCEPTED' : 'DEFERRED'; assertUserWorkItemTransition(item, target);
+        await transitionWorkItem({ workItemId: item.id, to: target, actorType: 'USER', actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:${action.toLowerCase()}`, timestampValue: action === 'DEFER' && typeof parameters.operationalWorkUntil === 'string' ? new Date(parameters.operationalWorkUntil) : undefined });
+      } else if (action === 'SNOOZE') {
+        if (typeof parameters.operationalWorkUntil !== 'string') throw Object.assign(new Error('The snooze date is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+        await snoozeWorkItem({ workItemId: item.id, snoozedUntil: new Date(parameters.operationalWorkUntil), actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:snooze` });
+      } else await completeAcceptedOperationalWorkItem({ workItemId: item.id, propertyId: execution.propertyId, userId, safetyTier: item.safetyTier, decisionLineage: null, observedResult: 'CONFIRMED_HEALTHY', completedAt: new Date().toISOString() });
+    }
+    artifactType = 'OPERATIONAL_WORK_ITEM'; artifactId = item.id;
+    const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : 'OPERATIONAL_WORK_COMPLETED';
+    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
+  } else if (execution.operationId === 'MAINTENANCE_TASK_COMPLETE') {
     if (access.role === HouseholdRole.VIEWER) {
       const error = new Error('A contributor or owner is required to complete maintenance tasks.');
       (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';

@@ -8,11 +8,15 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
  * INCIDENT_CLAIM_STATUS was already fully defined, routed, and executed in
  * askOperationRegistry.ts/askOrchestrator.service.ts but had no owning
  * Skill (same ungoverned-operation gap as buyer-closing). This governs the
- * existing read-only claim status surface; claims.service.ts's filing and
- * transition operations are not yet Ask-reachable at all — see the FRD
- * Phase 6 status note for that open item.
+ * canonical status, draft filing, lifecycle transition, and safe
+ * post-incident continuation operations through one governed Skill.
  */
-export const INCIDENT_CLAIM_SKILL_OPERATIONS: AskOperationId[] = ['INCIDENT_CLAIM_STATUS'];
+export const INCIDENT_CLAIM_SKILL_OPERATIONS: AskOperationId[] = [
+  'INCIDENT_CLAIM_STATUS',
+  'CLAIM_FILE',
+  'CLAIM_TRANSITION',
+  'INCIDENT_CONTINUATION',
+];
 
 export const INCIDENT_CLAIM_SKILL = Object.freeze({
   id: 'incident-claim',
@@ -21,8 +25,8 @@ export const INCIDENT_CLAIM_SKILL = Object.freeze({
   displayName: 'Claims',
   description: 'Review the status of filed insurance and incident claims for this home.',
   homeownerJobs: ['STAY_AHEAD', 'DECIDE_WITH_CONFIDENCE'],
-  supportedGoals: ['review-claim-status'],
-  aliases: ['claim status', 'insurance claim', 'incident claim tracker', 'check my claim'],
+  supportedGoals: ['review-claim-status', 'file-claim', 'advance-claim', 'continue-after-incident'],
+  aliases: ['claim status', 'insurance claim', 'incident claim tracker', 'check my claim', 'file a claim', 'document an incident'],
   operations: INCIDENT_CLAIM_SKILL_OPERATIONS.map((operationId) => ({
     operationId,
     version: '1.0',
@@ -31,21 +35,26 @@ export const INCIDENT_CLAIM_SKILL = Object.freeze({
   })),
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
-  allowedAdapters: [{ id: 'incident-claim.status', version: '1.0' }],
+  allowedAdapters: [
+    { id: 'incident-claim.status', version: '1.0' },
+    { id: 'incident-claim.file', version: '1.0' },
+    { id: 'incident-claim.transition', version: '1.0' },
+    { id: 'incident-claim.continuation', version: '1.0' },
+  ],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: INCIDENT_CLAIM_SKILL_OPERATIONS }],
   riskPolicy: {
-    effects: ['READ'],
+    effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',
     riskDomains: ['COVERAGE', 'PRIVACY'],
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'WORKFLOW_PROGRESS', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
-    { type: 'OPERATION_CONTRACT', id: 'INCIDENT_CLAIM_STATUS', version: '1.0', required: true },
+    ...INCIDENT_CLAIM_SKILL_OPERATIONS.map((operationId) => ({ type: 'OPERATION_CONTRACT' as const, id: operationId, version: '1.0', required: true })),
   ],
   contextBudget: {
     maxFacts: 50,

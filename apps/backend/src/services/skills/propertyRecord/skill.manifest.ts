@@ -6,6 +6,7 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 export const PROPERTY_RECORD_SKILL_OPERATIONS: AskOperationId[] = [
   'PROPERTY_SUMMARY',
   'INVENTORY_LOOKUP',
+  'HOME_CHANGE_SUMMARY',
 ];
 
 export const PROPERTY_RECORD_SKILL = Object.freeze({
@@ -23,6 +24,7 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
   allowedAdapters: [
     { id: 'property.summary', version: '1.0' },
     { id: 'inventory.lookup', version: '1.0' },
+    { id: 'home-change.summary', version: '1.0' },
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [
@@ -37,7 +39,7 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'CAPABILITY_LIST'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'CAPABILITY_LIST', 'CHANGE_SUMMARY', 'EMPTY_STATE'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

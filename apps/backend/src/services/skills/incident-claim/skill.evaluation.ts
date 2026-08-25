@@ -12,9 +12,15 @@ export const INCIDENT_CLAIM_SKILL_EVALUATION = deepFreezeSkillPackage({
     { mode: 'PARAPHRASED', message: 'Track the status of my claim', expectedOperationId: 'INCIDENT_CLAIM_STATUS' },
     { mode: 'COLLOQUIAL', message: 'Is my claim active or pending?', expectedOperationId: 'INCIDENT_CLAIM_STATUS' },
     { mode: 'MISSPELLED', message: 'Whats the status of my insurence claim?', expectedOperationId: 'INCIDENT_CLAIM_STATUS' },
+    { mode: 'EXACT', message: 'File a water damage claim for the basement leak', expectedOperationId: 'CLAIM_FILE' },
+    { mode: 'EXACT', message: 'Submit my basement leak claim', expectedOperationId: 'CLAIM_TRANSITION' },
+    { mode: 'EXACT', message: 'The emergency is over; help me document the incident', expectedOperationId: 'INCIDENT_CONTINUATION' },
   ],
   operationCases: [
     { operationId: 'INCIDENT_CLAIM_STATUS', expectedAdapter: { id: 'incident-claim.status', version: '1.0' } },
+    { operationId: 'CLAIM_FILE', expectedAdapter: { id: 'incident-claim.file', version: '1.0' } },
+    { operationId: 'CLAIM_TRANSITION', expectedAdapter: { id: 'incident-claim.transition', version: '1.0' } },
+    { operationId: 'INCIDENT_CONTINUATION', expectedAdapter: { id: 'incident-claim.continuation', version: '1.0' } },
   ],
   ambiguityCases: [
     { message: 'Review my recorded incident and its coverage', candidateSkillIds: ['incident-claim', 'coverage'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
@@ -35,7 +41,7 @@ export const INCIDENT_CLAIM_SKILL_EVALUATION = deepFreezeSkillPackage({
     { message: 'Show me coverage gaps for my appliances', expectedBehavior: 'DO_NOT_SELECT_SKILL' },
   ],
   exclusionCases: [
-    { message: 'File a new claim on my behalf', expectedBehavior: 'DO_NOT_EXECUTE_SKILL' },
+    { message: 'Guarantee that my claim will be approved', expectedBehavior: 'DO_NOT_EXECUTE_SKILL' },
   ],
   resolutionAmbiguityCases: [
     { kind: 'ENTITY', message: 'Continue this request for the matching item', expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' },
@@ -45,13 +51,13 @@ export const INCIDENT_CLAIM_SKILL_EVALUATION = deepFreezeSkillPackage({
   degradedModeCases: [
     { dependencyType: 'ADAPTER', dependency: { id: 'incident-claim.status', version: '1.0' }, expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' },
   ],
-  expectedAdapters: [{ id: 'incident-claim.status', version: '1.0' }],
+  expectedAdapters: [{ id: 'incident-claim.status', version: '1.0' }, { id: 'incident-claim.file', version: '1.0' }, { id: 'incident-claim.transition', version: '1.0' }, { id: 'incident-claim.continuation', version: '1.0' }],
   prohibitedAdapters: ['coverage.review'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.insurer-portal'],
-  expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'SUMMARY'],
-  expectedCanonicalCalls: [{ id: 'incident-claim.status', version: '1.0' }],
+  expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED'],
+  expectedBlockTypes: ['BOUNDARY', 'EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'SUMMARY', 'WORKFLOW_PROGRESS'],
+  expectedCanonicalCalls: [{ id: 'incident-claim.status', version: '1.0' }, { id: 'incident-claim.file', version: '1.0' }, { id: 'incident-claim.transition', version: '1.0' }, { id: 'incident-claim.continuation', version: '1.0' }],
   prohibitedCanonicalCalls: ['coverage.review'],
   modelDisabledCase: { message: 'What is the status of my insurance claim?', expectedOperationId: 'INCIDENT_CLAIM_STATUS' },
   continuationCase: { message: 'Check that claim again', sourceOperationId: 'INCIDENT_CLAIM_STATUS', expectedOperationId: 'INCIDENT_CLAIM_STATUS' },

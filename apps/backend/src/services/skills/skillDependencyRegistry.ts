@@ -32,6 +32,8 @@ const NON_REGISTRY_CONTRACTS: readonly SkillDependencyContract[] = Object.freeze
   { type: 'CANONICAL_SERVICE_CAPABILITY', id: 'refinance-rate-monitor', version: '1.0', owner: 'Refinance Rate Monitor' },
   { type: 'CANONICAL_SERVICE_CAPABILITY', id: 'inventory-repair-replace-analysis', version: '1.0', owner: 'Inventory and ReplaceRepairService' },
   { type: 'CANONICAL_SERVICE_CAPABILITY', id: 'decision-platform-hvac-repair-replace', version: '1.0', owner: 'Decision Platform' },
+  { type: 'CANONICAL_SERVICE_CAPABILITY', id: 'inspection-hub', version: '1.0', owner: 'InspectionHubService' },
+  { type: 'CANONICAL_SERVICE_CAPABILITY', id: 'document-promotion-registry', version: '1.0', owner: 'Document Promotion Adapter Registry' },
 ] satisfies SkillDependencyContract[]).map((contract) => Object.freeze(contract)));
 
 export function skillDependencyContractKey(contract: Pick<SkillDependencyContract, 'type' | 'id' | 'version'>): string {

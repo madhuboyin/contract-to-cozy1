@@ -116,7 +116,10 @@ function parseStringSet(source, constName) {
     new RegExp(`const ${constName}\\s*=\\s*new Set\\(\\[([\\s\\S]*?)\\]\\);`),
   );
   if (!match) throw new Error(`Unable to parse set ${constName}`);
-  return new Set([...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]));
+  // Match only actual array entries. A global quoted-string regex treated
+  // apostrophes and quoted aliases inside comments as one giant string and
+  // swallowed most of the lifecycle ids between them.
+  return new Set([...match[1].matchAll(/^\s*'([^']+)'\s*,?/gm)].map((entry) => entry[1]));
 }
 
 function parseStringArray(source, constName) {
@@ -132,7 +135,7 @@ function parseCanonicalRecommendationModes(filePaths) {
   const rowPattern =
     /^\s*\['([^']+)'[^\n]*'(CATALOG_ONLY|CONTEXTUAL|WORKFLOW_ONLY)'\],?$/gm;
   const objectPattern =
-    /\{\s*id:\s*'([^']+)'[\s\S]*?\bmode:\s*'(CATALOG_ONLY|CONTEXTUAL|WORKFLOW_ONLY)'[\s\S]*?\}/g;
+    /\{\s*(?:(?:\/\/[^\n]*\n)\s*)*id:\s*'([^']+)'[\s\S]*?\bmode:\s*'(CATALOG_ONLY|CONTEXTUAL|WORKFLOW_ONLY)'[\s\S]*?\}/g;
   for (const filePath of filePaths) {
     const source = read(filePath);
     for (const match of [
@@ -153,7 +156,7 @@ function parseCanonicalRouteTemplates(filePaths) {
   const rowPattern =
     /^\s*\['([^']+)',\s*'[^']*',\s*'[^']*',\s*'([^']+)'/gm;
   const objectPattern =
-    /\{\s*id:\s*'([^']+)'[\s\S]*?\brouteTemplate:\s*'([^']+)'[\s\S]*?\}/g;
+    /\{\s*(?:(?:\/\/[^\n]*\n)\s*)*id:\s*'([^']+)'[\s\S]*?\brouteTemplate:\s*'([^']+)'[\s\S]*?\}/g;
   for (const filePath of filePaths) {
     const source = read(filePath);
     for (const match of [
@@ -164,6 +167,55 @@ function parseCanonicalRouteTemplates(filePaths) {
         throw new Error(`Duplicate canonical capability route: ${match[1]}`);
       }
       result.set(match[1], match[2]);
+    }
+  }
+  return result;
+}
+
+function parseBackendCapabilitySeeds(filePaths) {
+  const result = new Map();
+  for (const filePath of filePaths) {
+    const source = read(filePath);
+    const outcomeByFile = {
+      decideCompare: 'DECIDE_COMPARE', maintainPrevent: 'MAINTAIN_PREVENT',
+      planBudget: 'PLAN_BUDGET', protectMonitor: 'PROTECT_MONITOR',
+      saveOptimize: 'SAVE_OPTIMIZE', understandHome: 'UNDERSTAND_HOME',
+    };
+    const inferredOutcome = outcomeByFile[path.basename(filePath, '.ts')];
+    const rowPattern = /^\s*\['([^']+)',\s*'([^']+)',\s*(?:'[^']*'|"[^"]*"),\s*'([^']+)',\s*'([^']+)',\s*'(ACTIVE|BETA)',\s*'(LOW_CONSEQUENCE|MATERIAL_FINANCIAL|REGULATED_COVERAGE|SAFETY_EMERGENCY)',\s*'(CATALOG_ONLY|CONTEXTUAL|WORKFLOW_ONLY)'\],?$/gm;
+    for (const match of source.matchAll(rowPattern)) {
+      result.set(match[1], {
+        id: match[1], label: match[2], routeTemplate: match[3], rolloutKey: match[4],
+        releaseStage: match[5], safetyTier: match[6], mode: match[7],
+        outcomeCategory: match[1] === 'coverage-intelligence' ? 'DECIDE_COMPARE' : inferredOutcome,
+        completionKind: match[1] === 'buyer-closing' ? 'ACTION_COMPLETED' : null,
+      });
+    }
+    const rowPatternWithoutRelease = /^\s*\['([^']+)',\s*'([^']+)',\s*(?:'[^']*'|"[^"]*"),\s*'([^']+)',\s*'([^']+)',\s*'(LOW_CONSEQUENCE|MATERIAL_FINANCIAL|REGULATED_COVERAGE|SAFETY_EMERGENCY)',\s*'(CATALOG_ONLY|CONTEXTUAL|WORKFLOW_ONLY)'\],?$/gm;
+    for (const match of source.matchAll(rowPatternWithoutRelease)) {
+      result.set(match[1], {
+        id: match[1], label: match[2], routeTemplate: match[3], rolloutKey: match[4],
+        releaseStage: 'ACTIVE', safetyTier: match[5], mode: match[6],
+        outcomeCategory: match[1] === 'coverage-intelligence' ? 'DECIDE_COMPARE' : inferredOutcome,
+        completionKind: null,
+      });
+    }
+    const matches = [...source.matchAll(/\bid:\s*'([^']+)'/g)];
+    for (let index = 0; index < matches.length; index += 1) {
+      const match = matches[index];
+      const chunk = source.slice(match.index, matches[index + 1]?.index ?? source.length);
+      const value = (field) => chunk.match(new RegExp(`\\b${field}:\\s*'([^']+)'`))?.[1] ?? null;
+      const seed = {
+        id: match[1], label: value('label'), routeTemplate: value('routeTemplate'),
+        outcomeCategory: value('outcomeCategory'), rolloutKey: value('rolloutKey'),
+        releaseStage: value('releaseStage'), safetyTier: value('safetyTier'),
+        completionKind: value('completionKind'), mode: value('mode'),
+      };
+      // Contextual-definition objects also have ids. Only full capability
+      // seeds carry this complete metadata tuple.
+      if (!seed.label || !seed.routeTemplate || !seed.outcomeCategory || !seed.rolloutKey || !seed.releaseStage || !seed.safetyTier || !seed.completionKind || !seed.mode) continue;
+      if (result.has(seed.id)) throw new Error(`Duplicate backend capability seed: ${seed.id}`);
+      result.set(seed.id, seed);
     }
   }
   return result;
@@ -233,6 +285,9 @@ function buildInventory() {
   const canonicalRouteTemplates = parseCanonicalRouteTemplates(
     backendCapabilityDefinitionPaths,
   );
+  const backendCapabilitySeeds = parseBackendCapabilitySeeds(
+    backendCapabilityDefinitionPaths,
+  );
   const lifecycleCanonicalIds = parseStringSet(
     read(backendLifecycleContractPath),
     'DISCOVERABLE_TOOL_IDS',
@@ -241,19 +296,22 @@ function buildInventory() {
 
   const aiById = new Map(aiEntries.map((entry) => [entry.id, entry]));
   const homeById = new Map(homeEntries.map((entry) => [entry.id, entry]));
-  const ids = [...new Set([...aiById.keys(), ...homeById.keys()])].sort();
+  const ids = [...new Set([...aiById.keys(), ...homeById.keys(), ...backendCapabilitySeeds.keys()])].sort();
 
   const capabilities = ids.map((id) => {
     const homeEntry = homeById.get(id);
     const aiEntry = aiById.get(id);
-    const entry = homeEntry ?? aiEntry;
+    const backendEntry = backendCapabilitySeeds.get(id);
+    const entry = homeEntry ?? aiEntry ?? { label: backendEntry.label, href: backendEntry.routeTemplate, workflowOnly: backendEntry.mode === 'WORKFLOW_ONLY', source: 'backend' };
     const sources = [
       ...(homeEntry ? ['home'] : []),
       ...(aiEntry ? ['ai'] : []),
+      ...(!homeEntry && !aiEntry ? ['backend'] : []),
     ];
-    const outcomeCategory = homeEntry
+    const catalogOutcomeCategory = homeEntry
       ? homeOutcomeByTool[id] ?? homeOutcomeByGroup[homeEntry.group]
-      : aiOutcomeByGroup[aiEntry.group];
+      : aiEntry ? aiOutcomeByGroup[aiEntry.group] : backendEntry.outcomeCategory;
+    const outcomeCategory = backendEntry?.outcomeCategory ?? catalogOutcomeCategory;
     const route = canonicalRouteTemplates.get(id) ?? canonicalRoute(entry);
     const canonicalMode = canonicalRecommendationModes.get(id);
     const recommendationDisposition = canonicalMode === 'CONTEXTUAL'
@@ -268,17 +326,18 @@ function buildInventory() {
       routeVerified: pageRoutes.has(route),
       workflowOnly: entry.workflowOnly,
       outcomeCategory,
-      rolloutKey: rolloutKeys[id] ?? null,
-      releaseStage: betaIds.has(id) ? 'BETA' : 'ACTIVE',
-      safetyTier: coverageIds.has(id)
+      rolloutKey: rolloutKeys[id] ?? backendEntry?.rolloutKey ?? null,
+      releaseStage: backendEntry?.releaseStage ?? (betaIds.has(id) ? 'BETA' : 'ACTIVE'),
+      safetyTier: backendEntry?.safetyTier ?? (coverageIds.has(id)
         ? 'REGULATED_COVERAGE'
         : materialIds.has(id)
           ? 'MATERIAL_FINANCIAL'
           : id === 'emergency'
             ? 'SAFETY_EMERGENCY'
-            : 'LOW_CONSEQUENCE',
+            : 'LOW_CONSEQUENCE'),
       completionKind:
-        completionOverrides[id]
+        backendEntry?.completionKind
+        ?? completionOverrides[id]
         ?? completionByCategory[outcomeCategory]
         ?? null,
       lifecycleCanonicalized: lifecycleCanonicalIds.has(id),

@@ -502,6 +502,11 @@ export const AskExecutionResponseSchema = z.object({
     suggestedGoal: z.string().trim().min(1).max(160),
     reasonCodes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/)).min(1).max(8),
     contextReferenceIds: z.array(z.string().trim().min(1).max(128)).max(8),
+    continuity: z.object({
+      propertyId: z.string().nullable(), sourceEntityType: z.string().nullable(), sourceEntityId: z.string().nullable(),
+      sourceHomeActionId: z.string().nullable(), decisionThreadId: z.string().nullable(), workItemId: z.string().nullable(),
+      journeyId: z.string().nullable(), contextVersion: z.string().nullable(), returnDestination: z.string().nullable(),
+    }).default({ propertyId: null, sourceEntityType: null, sourceEntityId: null, sourceHomeActionId: null, decisionThreadId: null, workItemId: null, journeyId: null, contextVersion: null, returnDestination: null }),
   }).nullable().default(null),
   operation: z.object({ id: z.string(), version: z.string(), family: z.string() }).nullable(),
   contextVersion: z.string().nullable(),

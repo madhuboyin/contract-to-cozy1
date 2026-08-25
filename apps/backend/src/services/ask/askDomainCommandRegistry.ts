@@ -19,6 +19,11 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'BUYER_TASK_UPDATE',
   'BUYER_FINDING_DISPOSITION',
   'BUYER_LIFECYCLE_UPDATE',
+  'CLAIM_FILE',
+  'CLAIM_TRANSITION',
+  'INSPECTION_FINDING_UPDATE',
+  'DOCUMENT_PROMOTION_CONFIRM',
+  'OPERATIONAL_WORK_UPDATE',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -81,6 +86,11 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   BUYER_TASK_UPDATE: command('BUYER_TASK_UPDATE', 'BUYER_TASK_UPDATE', 'buyer.task.update', 'CONTRIBUTOR', 'HOME_BUYER_TASK', ['EDIT', 'STOP'], { title: 'Closing checklist item not updated', body: 'The task, due date, and assignment were not changed.', suggestion: 'What should I do next for this purchase?' }),
   BUYER_FINDING_DISPOSITION: command('BUYER_FINDING_DISPOSITION', 'BUYER_FINDING_DISPOSITION', 'buyer.finding.disposition', 'CONTRIBUTOR', 'INSPECTION_FINDING', ['EDIT'], { title: 'Finding not reclassified', body: 'The finding disposition, linked task, and journey were not changed.', suggestion: 'Which inspection findings still need a decision?' }),
   BUYER_LIFECYCLE_UPDATE: command('BUYER_LIFECYCLE_UPDATE', 'BUYER_LIFECYCLE_UPDATE', 'buyer.lifecycle.update', 'CONTRIBUTOR', 'HOME_BUYER_CHECKLIST', ['EDIT'], { title: 'Purchase lifecycle not changed', body: 'No cancellation or date change was recorded.', suggestion: 'What should I do next for this purchase?' }),
+  CLAIM_FILE: command('CLAIM_FILE', 'CLAIM_FILE', 'incident-claim.file', 'CONTRIBUTOR', 'CLAIM', ['EDIT', 'STOP'], { title: 'Claim not created', body: 'No claim, checklist, Operational Work Item, or timeline event was created.', suggestion: 'Show my recorded claims' }),
+  CLAIM_TRANSITION: command('CLAIM_TRANSITION', 'CLAIM_TRANSITION', 'incident-claim.transition', 'CONTRIBUTOR', 'CLAIM', ['EDIT', 'REOPEN'], { title: 'Claim status not changed', body: 'The claim, timeline, and linked Operational Work Item were not changed.', suggestion: 'Show my recorded claims' }),
+  INSPECTION_FINDING_UPDATE: command('INSPECTION_FINDING_UPDATE', 'INSPECTION_FINDING_UPDATE', 'inspection-findings.update', 'CONTRIBUTOR', 'INSPECTION_FINDING', ['EDIT', 'REOPEN'], { title: 'Inspection finding not changed', body: 'The finding and any linked Operational Work Item remain unchanged.', suggestion: 'Show my open inspection findings' }),
+  DOCUMENT_PROMOTION_CONFIRM: command('DOCUMENT_PROMOTION_CONFIRM', 'DOCUMENT_PROMOTION_CONFIRM', 'document-promotion.confirm', 'CONTRIBUTOR', 'DOCUMENT_PROMOTION', ['EDIT'], { title: 'Document candidate not promoted', body: 'No extracted candidate became canonical Home Record truth.', suggestion: 'Show pending document reviews' }),
+  OPERATIONAL_WORK_UPDATE: command('OPERATIONAL_WORK_UPDATE', 'OPERATIONAL_WORK_UPDATE', 'home-operations.update', 'CONTRIBUTOR', 'OPERATIONAL_WORK_ITEM', ['EDIT', 'REOPEN', 'STOP'], { title: 'Operational Work not changed', body: 'The work item lifecycle, schedule, and evidence remain unchanged.', suggestion: 'Show my home operations' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

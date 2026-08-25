@@ -26,6 +26,8 @@ import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { BUYER_CLOSING_SKILL } from './buyer-closing';
 import { INCIDENT_CLAIM_SKILL } from './incident-claim';
 import { HOME_OPERATIONS_SKILL } from './home-operations';
+import { INSPECTION_FINDINGS_SKILL } from './inspection-findings';
+import { DOCUMENT_PROMOTION_SKILL } from './document-promotion';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from './context/propertyIdentityContext.contract';
 import { REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
@@ -63,6 +65,8 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'buyer-closing': BUYER_CLOSING_SKILL,
   'incident-claim': INCIDENT_CLAIM_SKILL,
   'home-operations': HOME_OPERATIONS_SKILL,
+  'inspection-findings': INSPECTION_FINDINGS_SKILL,
+  'document-promotion': DOCUMENT_PROMOTION_SKILL,
 } satisfies Readonly<Record<string, SkillDefinition>>);
 
 export type SkillId = keyof typeof SKILL_DEFINITIONS;

@@ -18,21 +18,9 @@ import type { SkillId } from '../skills/skillRegistry';
  * entries being kept current by hand, a documented gap rather than a solved
  * one (see the Phase 0 registry report).
  *
- * guidanceJourneyTypeKeys is deliberately sparse: no formal capability <->
- * guidance-journey linkage exists in the codebase today (guidance journeys
- * are keyed by signalIntentFamilies, not capability id), so entries here
- * only carry a journeyTypeKey where one is independently verifiable. An
- * empty array documents a real, current gap rather than inventing a
- * mapping — see the Phase 0 registry report.
- *
- * outcomeAdapter is derived in the registry from the same Home Action
- * adapter ownership lookup completionOwner uses (homeActionAdapterOwnership.ts's
- * outcomeAdapterOwner), not hardcoded — it is null for every entry today
- * because it is null for every Home Action source kind: HI-OUT-005 outcome
- * observation exists in the codebase but is reachable only from Ask/Cozy
- * chat (askOrchestrator.service.ts's recordHomeownerReportedOutcome), never
- * from a Home Action's COMPLETE command. A real, verified gap, not a
- * placeholder — see the Phase 0 registry report.
+ * Priority capabilities declare independently registered Guidance template
+ * keys and their canonical completion/outcome owners. Other bridge entries
+ * may remain sparse when they do not claim Phase 6 end-to-end execution.
  */
 export interface CapabilitySkillGuidanceBridgeEntry {
   capabilityId: string;
@@ -65,6 +53,10 @@ export interface CapabilitySkillGuidanceBridgeValidationContext {
    */
   capabilityIdsRequiringBridge: () => readonly string[];
 }
+
+export const PHASE6_PRIORITY_CAPABILITY_IDS = Object.freeze([
+  'buyer-closing', 'claims', 'inspection-hub', 'emergency', 'material-specs', 'home-operations',
+] as const);
 
 export function validateCapabilitySkillGuidanceBridge(
   entries: readonly CapabilitySkillGuidanceBridgeEntry[],
@@ -110,6 +102,19 @@ export function validateCapabilitySkillGuidanceBridge(
     if (!seen.has(capabilityId)) {
       issues.push(`Capability "${capabilityId}" claims Home Action integration (non-empty recommendation.sourceKinds) but has no capabilitySkillGuidanceBridge entry.`);
     }
+  }
+
+  for (const capabilityId of PHASE6_PRIORITY_CAPABILITY_IDS) {
+    const entry = entries.find((candidate) => candidate.capabilityId === capabilityId);
+    if (!entry) {
+      issues.push(`Phase 6 priority capability "${capabilityId}" has no capability/Skill/Guidance bridge entry.`);
+      continue;
+    }
+    if (!entry.skillIds.length || !entry.operationIds.length) issues.push(`Phase 6 priority capability "${capabilityId}" is not governed by a Skill operation.`);
+    if (!entry.guidanceJourneyTypeKeys.length) issues.push(`Phase 6 priority capability "${capabilityId}" has no Guidance template mapping.`);
+    if (!entry.requiredContext.length) issues.push(`Phase 6 priority capability "${capabilityId}" has no required context mapping.`);
+    if (!entry.completionOwner.trim() || entry.completionOwner.startsWith('Not declared')) issues.push(`Phase 6 priority capability "${capabilityId}" has no completion owner.`);
+    if (!entry.outcomeAdapter?.trim()) issues.push(`Phase 6 priority capability "${capabilityId}" has no outcome adapter.`);
   }
 
   return issues;

@@ -21,19 +21,11 @@ import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../ask/askOperat
  * domain operations, so they are structurally exempt rather than carved
  * out by name.
  *
- * KNOWN_UNGOVERNED_OPERATIONS documents a real, current gap, not a
- * placeholder: GUIDANCE_JOURNEY_CREATE and HOME_CHANGE_SUMMARY are fully
- * implemented and orchestrator-routed but predate Skill governance and are
- * outside this phase's named scope (HI-SKL-003: Claims, buyer/closing,
- * inspection, incident/emergency, document review/promotion, Operational
- * Work). Governing them is open follow-up work — see the FRD Phase 6
- * status note. The second check below fails startup if either entry stops
- * being a real gap, so this list cannot rot into stale documentation.
+ * The exception list is intentionally empty: every property-scoped Ask
+ * operation is now owned by exactly one Skill. The second check below also
+ * prevents a future temporary exception from becoming stale documentation.
  */
-export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
-  'GUIDANCE_JOURNEY_CREATE',
-  'HOME_CHANGE_SUMMARY',
-];
+export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [];
 
 export interface SkillOperationGovernanceContext {
   skillCoversOperation: (operationId: AskOperationId) => boolean;

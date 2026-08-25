@@ -76,7 +76,17 @@ const DEFINITIONS = [
   adapter('buyer.finding.disposition', 'HomeBuyerTaskService', 'BUYER_FINDING_DISPOSITION', 'MUTATION_PREPARATION'),
   adapter('buyer.lifecycle.update', 'HomeBuyerTaskService', 'BUYER_LIFECYCLE_UPDATE', 'MUTATION_PREPARATION'),
   adapter('incident-claim.status', 'Incident and Claims Records', 'INCIDENT_CLAIM_STATUS'),
+  adapter('incident-claim.file', 'ClaimsService', 'CLAIM_FILE', 'MUTATION_PREPARATION'),
+  adapter('incident-claim.transition', 'ClaimsService', 'CLAIM_TRANSITION', 'MUTATION_PREPARATION'),
+  adapter('incident-claim.continuation', 'Incident and Claims Records', 'INCIDENT_CONTINUATION'),
   adapter('home-actions.feed', 'Home Action Feed', 'HOME_ACTIONS'),
+  adapter('home-operations.update', 'Operational Work application services', 'OPERATIONAL_WORK_UPDATE', 'MUTATION_PREPARATION'),
+  adapter('inspection-findings.review', 'InspectionHubService', 'INSPECTION_FINDINGS'),
+  adapter('inspection-findings.update', 'InspectionHubService', 'INSPECTION_FINDING_UPDATE', 'MUTATION_PREPARATION'),
+  adapter('document-promotion.review', 'Document Promotion Registry', 'DOCUMENT_PROMOTION_REVIEW'),
+  adapter('document-promotion.confirm', 'Canonical document promotion adapters', 'DOCUMENT_PROMOTION_CONFIRM', 'MUTATION_PREPARATION'),
+  adapter('guidance.journey.create', 'GuidanceJourneyService', 'GUIDANCE_JOURNEY_CREATE', 'MUTATION_PREPARATION'),
+  adapter('home-change.summary', 'PropertyChangeService', 'HOME_CHANGE_SUMMARY'),
 ] as const;
 
 export function skillAdapterKey(adapterReference: { id: string; version: string }): string {

@@ -2,7 +2,7 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 
 export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   ['budget', 'Budget Planner', 'Plan and track home spending.', '/dashboard/budget', 'BUDGET_PLANNER', 'BETA', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
-  ['buyer-closing', 'Buyer & Closing Plan', 'Track an active home purchase from contract through closing.', '/dashboard/properties/[id]/buyer-plan', 'BUYER_CLOSING_PLAN', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
+  ['buyer-closing', 'Buyer & Closing Plan', 'Track an active home purchase from contract through closing.', '/dashboard/properties/[id]/buyer-plan', 'BUYER_CLOSING_PLAN', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['capital-timeline', 'Home Capital Timeline', 'Plan major home system and capital events.', '/dashboard/properties/[id]/tools/capital-timeline', 'HOME_CAPITAL_TIMELINE', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['diy', 'DIY Project Center', 'Use reviewed guidance for eligible low-risk projects.', '/dashboard/properties/[id]/tools/diy', 'DIY', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['emergency', 'Emergency Help', 'Access rapid guidance for urgent home incidents.', '/dashboard/emergency', 'EMERGENCY_HELP', 'BETA', 'SAFETY_EMERGENCY', 'CATALOG_ONLY'],

@@ -13,10 +13,9 @@ import type { CapabilitySkillGuidanceBridgeEntry } from './capabilitySkillGuidan
  * coverage, launch destination, required context, and completion ownership
  * derived from existing canonical sources instead of duplicated by hand.
  *
- * guidanceJourneyTypeKeys stays empty for every entry: no real
- * capability <-> guidance-journey linkage exists anywhere in the codebase
- * today (see the Phase 0 registry report). Populating it is HI-SKL
- * work for a later phase.
+ * Priority Phase 6 capabilities declare their real guidance templates,
+ * completion owners, and outcome adapters below; other entries continue
+ * to derive ownership from the canonical Home Action registry.
  */
 const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   maintenance: ['MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE', 'HOME_DEADLINE_MONITOR'],
@@ -25,7 +24,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'ownership-costs': ['OWNERSHIP_COSTS'],
   'home-records': ['INVENTORY_LOOKUP'],
   'property-brief': ['PROPERTY_SUMMARY', 'MAJOR_EVENT_ENTRY'],
-  'home-operations': ['HOME_ACTIONS'],
+  'home-operations': ['HOME_ACTIONS', 'OPERATIONAL_WORK_UPDATE'],
   'replace-repair': ['REPLACEMENT_GUIDANCE'],
   'mortgage-refinance-radar': ['REFINANCE_ANALYSIS', 'REFINANCE_RATE_MONITOR'],
   'sell-hold-rent': ['SELL_HOLD_RENT_ANALYSIS'],
@@ -41,7 +40,10 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
     'BUYER_DISCLOSURE_FUNDS_READINESS', 'BUYER_CLOSING_DAY_READINESS', 'BUYER_CONTRACT_TIMELINE',
     'BUYER_NEGOTIATION_READINESS', 'BUYER_COST_READINESS', 'BUYER_FINDING_DISPOSITION', 'BUYER_LIFECYCLE_UPDATE',
   ],
-  claims: ['INCIDENT_CLAIM_STATUS'],
+  claims: ['INCIDENT_CLAIM_STATUS', 'CLAIM_FILE', 'CLAIM_TRANSITION'],
+  emergency: ['INCIDENT_CONTINUATION'],
+  'inspection-hub': ['INSPECTION_FINDINGS', 'INSPECTION_FINDING_UPDATE'],
+  'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
 /**
@@ -58,9 +60,19 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
 const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
   'break-even', 'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
   'home-event-radar', 'home-habit-coach', 'home-risk-replay', 'home-briefing',
-  'inspection-hub', 'material-specs', 'neighborhood-change-radar', 'permits',
+  'neighborhood-change-radar', 'permits',
   'plant-advisor', 'project-tracker', 'seller-prep', 'service-price-radar', 'status-board',
 ];
+
+const PHASE6_METADATA: Readonly<Record<string, Pick<CapabilitySkillGuidanceBridgeEntry,
+  'guidanceJourneyTypeKeys' | 'completionOwner' | 'outcomeAdapter'>>> = Object.freeze({
+  'home-operations': { guidanceJourneyTypeKeys: ['asset_lifecycle_resolution'], completionOwner: 'homeActionCompletion.service.ts / domain reconciliation adapters', outcomeAdapter: 'recordOperationalWorkOutcome' },
+  'buyer-closing': { guidanceJourneyTypeKeys: ['pre_purchase_inspection_journey'], completionOwner: 'HomeBuyerTaskService and buyer lifecycle services', outcomeAdapter: 'Operational Work and Decision Thread outcome adapters' },
+  claims: { guidanceJourneyTypeKeys: ['coverage_gap_resolution'], completionOwner: 'ClaimsService / claimWorkReconciliation.service.ts', outcomeAdapter: 'recordClaimOutcome' },
+  emergency: { guidanceJourneyTypeKeys: ['weather_risk_resolution'], completionOwner: 'Incident and Claims Records', outcomeAdapter: 'recordHomeEventOutcome / recordClaimOutcome' },
+  'inspection-hub': { guidanceJourneyTypeKeys: ['inspection_followup_resolution'], completionOwner: 'InspectionHubService / inspectionFinding.adapter.ts', outcomeAdapter: 'recordOperationalWorkOutcome' },
+  'material-specs': { guidanceJourneyTypeKeys: ['asset_lifecycle_resolution'], completionOwner: 'Document promotion adapters', outcomeAdapter: 'recordDocumentPromotionOutcome' },
+});
 
 function resolveSkillIdsForOperations(operationIds: readonly AskOperationId[]): SkillId[] {
   const skillIds = new Set<SkillId>();
@@ -81,24 +93,25 @@ function buildEntry(capabilityId: string, operationIds: readonly AskOperationId[
     ? ownership.find((entry) => entry.sourceKind === singleSourceKind) ?? null
     : null;
 
+  const phase6 = PHASE6_METADATA[capabilityId];
   return {
     capabilityId,
     skillIds: resolveSkillIdsForOperations(operationIds),
     operationIds,
-    guidanceJourneyTypeKeys: [],
+    guidanceJourneyTypeKeys: phase6?.guidanceJourneyTypeKeys ?? [],
     homeActionSourceKind: singleSourceKind,
     launchDestination: capability?.destination.routeTemplate ?? 'UNKNOWN — capability not found in canonicalCapabilityRegistry',
     requiredContext: capability?.destination.acceptedContext ?? [],
     executionOwner: operationIds.length > 0
       ? 'Ask operation execution (askOrchestrator.service.ts executeOperation)'
       : 'Home Action promotion only (homeActionSourcePromotion.service.ts) — not Ask-reachable',
-    completionOwner: ownershipEntry?.completionAdapterOwner ?? 'Not declared — no single Home Action source kind resolves for this capability today',
+    completionOwner: phase6?.completionOwner ?? ownershipEntry?.completionAdapterOwner ?? 'Not declared — no single Home Action source kind resolves for this capability today',
     // Derived from the same ownershipEntry lookup as completionOwner rather
     // than hardcoded, so this stops being null the moment any Home Action
     // source kind actually gets an outcome adapter (HI-OUT-005) — see
     // homeActionAdapterOwnership.ts's hasOutcomeAdapter field doc for why
     // every kind is null today.
-    outcomeAdapter: ownershipEntry?.outcomeAdapterOwner ?? null,
+    outcomeAdapter: phase6?.outcomeAdapter ?? ownershipEntry?.outcomeAdapterOwner ?? null,
   };
 }
 

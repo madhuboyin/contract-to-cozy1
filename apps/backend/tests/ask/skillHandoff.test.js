@@ -44,6 +44,10 @@ test('Ask returns a typed suggestion but never invokes the target Skill', () => 
     suggestedGoal: 'understand-maintenance-status',
     reasonCodes: ['HOME_RECORD_REVIEWED'],
     contextReferenceIds: [],
+    continuity: {
+      propertyId: null, sourceEntityType: null, sourceEntityId: null, sourceHomeActionId: null,
+      decisionThreadId: null, workItemId: null, journeyId: null, contextVersion: null, returnDestination: null,
+    },
   });
   assert.equal(Object.isFrozen(suggestion), true);
 
@@ -94,6 +98,7 @@ test('Ask response handoff contract is additive and bounded', () => {
     },
   });
   assert.equal(parsed.skillHandoff.suggestedNextSkillId, 'maintenance');
+  assert.equal(parsed.skillHandoff.continuity.propertyId, null);
   assert.equal(AskExecutionResponseSchema.safeParse({
     ...base,
     skillHandoff: {

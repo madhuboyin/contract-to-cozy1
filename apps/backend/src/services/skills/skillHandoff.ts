@@ -9,6 +9,19 @@ export interface SkillHandoffSuggestion {
   suggestedGoal: string;
   reasonCodes: readonly string[];
   contextReferenceIds: readonly string[];
+  continuity: SkillHandoffContinuity;
+}
+
+export interface SkillHandoffContinuity {
+  propertyId: string | null;
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
+  sourceHomeActionId: string | null;
+  decisionThreadId: string | null;
+  workItemId: string | null;
+  journeyId: string | null;
+  contextVersion: string | null;
+  returnDestination: string | null;
 }
 
 export interface SkillHandoffDefinition {
@@ -59,6 +72,31 @@ export const SKILL_HANDOFF_DEFINITIONS: readonly SkillHandoffDefinition[] = Obje
     eligibleStatuses: Object.freeze(['ANSWERED', 'READY_WITH_LIMITATIONS'] as AskExecutionStatus[]),
     reasonCodes: Object.freeze(['VERIFY_COVERAGE_AFTER_CLAIM'] as string[]),
     contextReferenceIds: Object.freeze([] as string[]),
+  }),
+  Object.freeze({
+    sourceOperationId: 'CLAIM_FILE', targetSkillId: 'home-operations', targetOperationId: 'HOME_ACTIONS',
+    suggestedGoal: 'review-home-actions-feed', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['CLAIM_WORK_CREATED'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
+  }),
+  Object.freeze({
+    sourceOperationId: 'CLAIM_TRANSITION', targetSkillId: 'coverage', targetOperationId: 'COVERAGE_GAPS',
+    suggestedGoal: 'review-coverage-gaps', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['VERIFY_COVERAGE_AFTER_CLAIM'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
+  }),
+  Object.freeze({
+    sourceOperationId: 'INSPECTION_FINDING_UPDATE', targetSkillId: 'home-operations', targetOperationId: 'HOME_ACTIONS',
+    suggestedGoal: 'review-home-actions-feed', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['INSPECTION_WORK_RECONCILED'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
+  }),
+  Object.freeze({
+    sourceOperationId: 'DOCUMENT_PROMOTION_CONFIRM', targetSkillId: 'property-record', targetOperationId: 'PROPERTY_SUMMARY',
+    suggestedGoal: 'summarize-property-record', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['DOCUMENT_FACT_PROMOTED'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
+  }),
+  Object.freeze({
+    sourceOperationId: 'BUYER_LIFECYCLE_UPDATE', targetSkillId: 'property-record', targetOperationId: 'PROPERTY_SUMMARY',
+    suggestedGoal: 'summarize-property-record', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['BUYER_LIFECYCLE_RECORDED'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
   }),
 ]);
 
@@ -112,6 +150,7 @@ export function resolveSkillHandoffSuggestion(input: {
   consumer?: SkillConsumer;
   controls?: SkillHealthControls;
   availableContextReferenceIds?: readonly string[];
+  continuity?: Partial<SkillHandoffContinuity>;
 }): SkillHandoffSuggestion | null {
   if (input.result.confirmation || input.result.clarification || (input.result.captureRequests?.length ?? 0) > 0) return null;
   const source = getSkillForOperation(input.sourceOperationId);
@@ -133,6 +172,17 @@ export function resolveSkillHandoffSuggestion(input: {
       suggestedGoal: handoff.suggestedGoal,
       reasonCodes: Object.freeze([...handoff.reasonCodes]),
       contextReferenceIds: Object.freeze([...handoff.contextReferenceIds]),
+      continuity: Object.freeze({
+        propertyId: input.continuity?.propertyId ?? null,
+        sourceEntityType: input.continuity?.sourceEntityType ?? null,
+        sourceEntityId: input.continuity?.sourceEntityId ?? null,
+        sourceHomeActionId: input.continuity?.sourceHomeActionId ?? null,
+        decisionThreadId: input.continuity?.decisionThreadId ?? null,
+        workItemId: input.continuity?.workItemId ?? null,
+        journeyId: input.continuity?.journeyId ?? null,
+        contextVersion: input.continuity?.contextVersion ?? input.result.contextVersion ?? null,
+        returnDestination: input.continuity?.returnDestination ?? null,
+      }),
     });
   }
   return null;

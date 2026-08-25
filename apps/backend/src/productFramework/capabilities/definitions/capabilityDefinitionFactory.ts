@@ -214,6 +214,22 @@ const OUTPUT_ENTITY_TYPES: Record<
 };
 
 const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
+  'buyer-closing': {
+    sourceKinds: ['PROJECT', 'GUIDANCE'],
+    triggerFamily: 'BUYER_JOURNEY_ACTIVE',
+    reason: 'An active purchase journey has closing work, deadlines, or findings that need attention.',
+    requiresExplicitTrigger: true,
+    acceptedContext: ['PROPERTY', 'JOURNEY', 'DOCUMENT', 'ISSUE', 'HOME_ACTION'],
+    readinessRequirements: [{ kind: 'SOURCE_CONTEXT', contextType: 'JOURNEY', reason: 'Select or activate the buyer journey for this purchase.' }],
+  },
+  claims: {
+    sourceKinds: ['INCIDENT', 'GUIDANCE'],
+    triggerFamily: 'INCIDENT_CLAIM_RELEVANT',
+    reason: 'A recorded incident or active claim makes governed claim follow-up relevant.',
+    requiresExplicitTrigger: true,
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'DOCUMENT', 'ISSUE', 'JOURNEY'],
+    readinessRequirements: [{ kind: 'SOURCE_CONTEXT', contextType: 'JOURNEY', reason: 'Select or activate the incident or claim follow-up journey.' }],
+  },
   'break-even': {
     sourceKinds: ['GUIDANCE', 'PROJECT'],
     triggerFamily: 'MATERIAL_DECISION_ACTIVE',
