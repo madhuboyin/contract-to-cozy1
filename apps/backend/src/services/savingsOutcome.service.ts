@@ -27,6 +27,7 @@ import type { Request } from 'express';
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
 import { signalService } from './signal.service';
+import { recordDecisionRecordOutcome } from './decisionPlatform/outcomeObservationService';
 
 export class SavingsOutcomeGovernanceError extends Error {
   code: string;
@@ -85,6 +86,53 @@ export interface RecordOutcomeInput {
 
 function actionStateForOutcome(stage: SavingsOutcomeStage): 'STARTED' | 'COMPLETED' {
   return TERMINAL_STAGES.includes(stage) ? 'COMPLETED' : 'STARTED';
+}
+
+async function recordSavingsDecisionOutcome(
+  tx: Prisma.TransactionClient,
+  input: {
+    actionId: string | undefined;
+    sourceEntityType: 'HiddenAssetMatchOutcome' | 'HomeSavingsOpportunityOutcome';
+    sourceEntityId: string;
+    stage: SavingsOutcomeStage;
+    recordedAt: Date;
+    userId: string;
+    verificationState: 'SELF_REPORTED' | 'EVIDENCE_ATTACHED' | 'VERIFIED' | 'REVOKED';
+    observedPayload: Prisma.InputJsonValue;
+  },
+) {
+  if (!input.actionId) return;
+  const action = await tx.savingsBenefitAction.findUnique({
+    where: { id: input.actionId },
+    select: { propertyId: true, influencingRecommendationSnapshotId: true },
+  });
+  if (!action?.influencingRecommendationSnapshotId) return;
+
+  const terminal = TERMINAL_STAGES.includes(input.stage);
+  await recordDecisionRecordOutcome({
+    idempotencyKey: `decision-record:${input.sourceEntityType}:${input.sourceEntityId}`,
+    propertyId: action.propertyId,
+    sourceEntityType: input.sourceEntityType,
+    sourceEntityId: input.sourceEntityId,
+    observedType: `SAVINGS_BENEFIT_${input.stage}`,
+    observedPayload: input.observedPayload,
+    occurredAt: input.recordedAt,
+    recordedByUserId: input.userId,
+    verificationStatus:
+      input.verificationState === 'VERIFIED'
+        ? 'VERIFIED'
+        : input.verificationState === 'EVIDENCE_ATTACHED'
+          ? 'CORROBORATED'
+          : 'REPORTED',
+    provenanceRefs: [
+      `SavingsBenefitAction:${input.actionId}`,
+      `${input.sourceEntityType}:${input.sourceEntityId}`,
+    ],
+    recommendationSnapshotId: action.influencingRecommendationSnapshotId,
+    relationshipTypes: terminal
+      ? ['ACTION_COMPLETED', 'RESULT_OBSERVED']
+      : ['ACTION_STARTED'],
+  }, tx);
 }
 
 async function reconcileCanonicalActionForOutcome(
@@ -231,6 +279,21 @@ export async function recordHiddenAssetMatchOutcome(
       });
       if (existing) {
         await reconcileCanonicalActionForOutcome(tx, input, { hiddenAssetMatchId: matchId });
+        await recordSavingsDecisionOutcome(tx, {
+          actionId: input.actionId,
+          sourceEntityType: 'HiddenAssetMatchOutcome',
+          sourceEntityId: existing.id,
+          stage: existing.stage,
+          recordedAt: existing.recordedAt,
+          userId,
+          verificationState: existing.verificationState,
+          observedPayload: {
+            matchId,
+            stage: existing.stage,
+            amountReceived: existing.amountReceived?.toString() ?? null,
+            currency: existing.currency,
+          },
+        });
         return existing;
       }
       if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
@@ -289,6 +352,21 @@ export async function recordHiddenAssetMatchOutcome(
       });
     }
       await reconcileCanonicalActionForOutcome(tx, input, { hiddenAssetMatchId: matchId });
+      await recordSavingsDecisionOutcome(tx, {
+        actionId: input.actionId,
+        sourceEntityType: 'HiddenAssetMatchOutcome',
+        sourceEntityId: created.id,
+        stage: created.stage,
+        recordedAt: created.recordedAt,
+        userId,
+        verificationState: created.verificationState,
+        observedPayload: {
+          matchId,
+          stage: created.stage,
+          amountReceived: created.amountReceived?.toString() ?? null,
+          currency: created.currency,
+        },
+      });
       return created;
     });
   } catch (error) {
@@ -305,7 +383,24 @@ export async function recordHiddenAssetMatchOutcome(
           },
         },
       });
-      if (raced) return raced;
+      if (raced) {
+        await prisma.$transaction((tx) => recordSavingsDecisionOutcome(tx, {
+          actionId: input.actionId,
+          sourceEntityType: 'HiddenAssetMatchOutcome',
+          sourceEntityId: raced.id,
+          stage: raced.stage,
+          recordedAt: raced.recordedAt,
+          userId,
+          verificationState: raced.verificationState,
+          observedPayload: {
+            matchId,
+            stage: raced.stage,
+            amountReceived: raced.amountReceived?.toString() ?? null,
+            currency: raced.currency,
+          },
+        }));
+        return raced;
+      }
     }
     throw error;
   }
@@ -398,6 +493,22 @@ export async function recordHomeSavingsOpportunityOutcome(
       });
       if (existing) {
         await reconcileCanonicalActionForOutcome(tx, input, { homeSavingsOpportunityId: opportunityId });
+        await recordSavingsDecisionOutcome(tx, {
+          actionId: input.actionId,
+          sourceEntityType: 'HomeSavingsOpportunityOutcome',
+          sourceEntityId: existing.id,
+          stage: existing.stage,
+          recordedAt: existing.recordedAt,
+          userId,
+          verificationState: existing.verificationState,
+          observedPayload: {
+            opportunityId,
+            stage: existing.stage,
+            observedMonthlyValue: existing.observedMonthlyValue?.toString() ?? null,
+            observedAnnualValue: existing.observedAnnualValue?.toString() ?? null,
+            currency: existing.currency,
+          },
+        });
         return existing;
       }
       if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
@@ -451,6 +562,22 @@ export async function recordHomeSavingsOpportunityOutcome(
         });
       }
       await reconcileCanonicalActionForOutcome(tx, input, { homeSavingsOpportunityId: opportunityId });
+      await recordSavingsDecisionOutcome(tx, {
+        actionId: input.actionId,
+        sourceEntityType: 'HomeSavingsOpportunityOutcome',
+        sourceEntityId: outcome.id,
+        stage: outcome.stage,
+        recordedAt: outcome.recordedAt,
+        userId,
+        verificationState: outcome.verificationState,
+        observedPayload: {
+          opportunityId,
+          stage: outcome.stage,
+          observedMonthlyValue: outcome.observedMonthlyValue?.toString() ?? null,
+          observedAnnualValue: outcome.observedAnnualValue?.toString() ?? null,
+          currency: outcome.currency,
+        },
+      });
       return outcome;
     });
   } catch (error) {
@@ -467,7 +594,25 @@ export async function recordHomeSavingsOpportunityOutcome(
           },
         },
       });
-      if (raced) return raced;
+      if (raced) {
+        await prisma.$transaction((tx) => recordSavingsDecisionOutcome(tx, {
+          actionId: input.actionId,
+          sourceEntityType: 'HomeSavingsOpportunityOutcome',
+          sourceEntityId: raced.id,
+          stage: raced.stage,
+          recordedAt: raced.recordedAt,
+          userId,
+          verificationState: raced.verificationState,
+          observedPayload: {
+            opportunityId,
+            stage: raced.stage,
+            observedMonthlyValue: raced.observedMonthlyValue?.toString() ?? null,
+            observedAnnualValue: raced.observedAnnualValue?.toString() ?? null,
+            currency: raced.currency,
+          },
+        }));
+        return raced;
+      }
     }
     throw error;
   }

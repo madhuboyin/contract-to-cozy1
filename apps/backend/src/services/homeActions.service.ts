@@ -1581,6 +1581,9 @@ export async function executeHomeActionCommand(
         sourceActionId: action.id,
         reason,
         revisitAt: nextTriggerAt?.toISOString() ?? null,
+        recommendationSnapshotId: action.decisionLineage?.status === 'LINKED'
+          ? action.decisionLineage.thread.currentRecommendationSnapshotId
+          : null,
       },
     );
     return {

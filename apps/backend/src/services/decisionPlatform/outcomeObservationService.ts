@@ -14,10 +14,13 @@ import { prisma } from '../../lib/prisma';
 import type {
   OutcomeObservation,
   OutcomeObservationSourceType,
+  OutcomeObservationVerificationStatus,
+  Prisma,
   RecommendationAttribution,
   RecommendationAttributionRelationshipType,
 } from '@prisma/client';
 import type { WorkItemDb } from '../../modules/homeOperations/infrastructure/workItemRepository';
+import { ACTIVE_LIFECYCLE_STATUSES } from './decisionThreadService';
 
 export class OutcomeObservationNotFoundError extends Error {
   constructor(id: string) {
@@ -70,6 +73,97 @@ export async function attachAttributions(
     })),
     skipDuplicates: true,
   });
+}
+
+export async function resolveCurrentDecisionSnapshotId(
+  input: {
+    propertyId: string;
+    decisionDefinitionId: string;
+    primaryEntityType: string;
+    primaryEntityId: string;
+  },
+  db: WorkItemDb = prisma,
+): Promise<string | null> {
+  const threads = await db.decisionThread.findMany({
+    where: {
+      propertyId: input.propertyId,
+      decisionDefinitionId: input.decisionDefinitionId,
+      primaryEntityType: input.primaryEntityType,
+      primaryEntityId: input.primaryEntityId,
+      lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] },
+    },
+    select: { currentRecommendationSnapshotId: true },
+    take: 2,
+  });
+  return threads.length === 1
+    ? threads[0].currentRecommendationSnapshotId
+    : null;
+}
+
+export interface RecordDecisionRecordOutcomeInput {
+  idempotencyKey: string;
+  propertyId: string;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  observedType: string;
+  observedPayload: Prisma.InputJsonValue;
+  occurredAt: Date;
+  recordedByUserId: string | null;
+  verificationStatus: OutcomeObservationVerificationStatus;
+  provenanceRefs: string[];
+  recommendationSnapshotId: string | null;
+  relationshipTypes: RecommendationAttributionRelationshipType[];
+}
+
+/**
+ * HI-OUT-005/006 normalization for structured, domain-owned decision writes.
+ * The caller supplies the snapshot locked when the decision/action began;
+ * this function never substitutes whichever snapshot happens to be current
+ * when a later completion arrives.
+ */
+export async function recordDecisionRecordOutcome(
+  input: RecordDecisionRecordOutcomeInput,
+  db: WorkItemDb = prisma,
+): Promise<OutcomeObservation> {
+  const existing = await db.outcomeObservation.findUnique({
+    where: { idempotencyKey: input.idempotencyKey },
+  });
+  if (existing) {
+    if (existing.propertyId !== input.propertyId || existing.sourceType !== 'DECISION_RECORD') {
+      throw new Error(`Outcome idempotency key ${input.idempotencyKey} is already in use.`);
+    }
+    await attachAttributions(
+      existing.id,
+      input.recommendationSnapshotId,
+      input.relationshipTypes,
+      db,
+    );
+    return existing;
+  }
+
+  const observation = await db.outcomeObservation.create({
+    data: {
+      idempotencyKey: input.idempotencyKey,
+      propertyId: input.propertyId,
+      sourceType: 'DECISION_RECORD',
+      sourceEntityType: input.sourceEntityType,
+      sourceEntityId: input.sourceEntityId,
+      observedType: input.observedType,
+      observedPayloadVersion: '1.0',
+      observedPayload: input.observedPayload,
+      occurredAt: input.occurredAt,
+      recordedByUserId: input.recordedByUserId,
+      verificationStatus: input.verificationStatus,
+      provenanceRefs: input.provenanceRefs,
+    },
+  });
+  await attachAttributions(
+    observation.id,
+    input.recommendationSnapshotId,
+    input.relationshipTypes,
+    db,
+  );
+  return observation;
 }
 
 // FRD §19.2's fourth allowed source: "an explicit homeowner report marked
@@ -517,7 +611,7 @@ export async function disputeOutcomeObservation(observationId: string, propertyI
 }
 
 // HI-OUT-005 (see the Phase 0/2 registry report) expanded
-// OutcomeObservationSourceType to 10 values. Every value now has a real
+// OutcomeObservationSourceType to 11 values. Every value now has a real
 // creation path except PROJECT_RECORD and BOOKING_RECORD, which are
 // deliberately unused: guidance/project/booking/inspection completions all
 // converge on OPERATIONAL_WORK_ITEM instead (see recordOperationalWorkOutcome's
@@ -526,7 +620,7 @@ export async function disputeOutcomeObservation(observationId: string, propertyI
 // (recordHomeownerReportedOutcome, recordCompletedMaintenanceOutcome,
 // recordOperationalWorkOutcome, recordClaimOutcome,
 // recordDocumentPromotionOutcome, recordCoverageDecisionOutcome,
-// recordHomeEventOutcome cover the rest, including INSPECTION_FINDING via
+// recordHomeEventOutcome, recordDecisionRecordOutcome cover the rest, including INSPECTION_FINDING via
 // recordOperationalWorkOutcome.) Every case is still listed explicitly, not
 // a default fallback, so adding a real creation path later trips this
 // switch's exhaustiveness check again rather than silently reusing a
@@ -543,5 +637,6 @@ export function sourceTypeLabel(sourceType: OutcomeObservationSourceType): strin
     case 'DOCUMENT_PROMOTION': return 'From an uploaded document';
     case 'COVERAGE_DECISION': return 'From a coverage decision';
     case 'HOME_EVENT': return 'From a recorded home event';
+    case 'DECISION_RECORD': return 'From a recorded decision';
   }
 }

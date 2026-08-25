@@ -101,6 +101,17 @@ test('validateHomeActionProducerOwnership fails fast when hasOutcomeAdapter is t
   assert.ok(issues.some((issue) => issue.includes('loadProjectActions') && issue.includes('no completion adapter to observe')));
 });
 
+test('validateHomeActionProducerOwnership requires outcomes for decision-required completion paths', () => {
+  const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
+    entry.producerId === 'loadOwnershipCostChangeActions'
+      ? { ...entry, hasOutcomeAdapter: false, outcomeAdapterOwner: null }
+      : entry);
+  const issues = validateHomeActionProducerOwnership(bad);
+  assert.ok(issues.some((issue) =>
+    issue.includes('loadOwnershipCostChangeActions')
+    && issue.includes('DECISION_REQUIRED completion adapter')));
+});
+
 test('validateHomeActionProducerOwnership rejects incomplete end-to-end outcome ownership', () => {
   const bad = HOME_ACTION_PRODUCER_OWNERSHIP.map((entry) =>
     entry.producerId === 'loadIncidentActions'

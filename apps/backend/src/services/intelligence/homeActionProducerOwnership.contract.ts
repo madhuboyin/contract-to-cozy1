@@ -195,7 +195,12 @@ export function validateHomeActionProducerKindConsistency(
     }
 
     const kindOutcomeDefault = kindHasOutcomeAdapter.get(producer.sourceKind);
-    if (kindOutcomeDefault !== undefined && producer.hasOutcomeAdapter && !kindOutcomeDefault) {
+    if (
+      kindOutcomeDefault !== undefined
+      && producer.hasOutcomeAdapter
+      && !kindOutcomeDefault
+      && !producer.isKindLevelCompletionException
+    ) {
       issues.push(`homeActionProducerOwnership entry "${producer.producerId}" hasOutcomeAdapter=true, but its source kind "${producer.sourceKind}" has no outcome adapter at the kind level — homeActionAdapterOwnership.ts needs a matching entry, or this is undeclared drift.`);
     }
   }
@@ -271,6 +276,13 @@ export function validateHomeActionProducerOwnership(
     }
     if (entry.hasOutcomeAdapter && !entry.hasCompletionAdapter) {
       issues.push(`homeActionProducerOwnership entry "${entry.producerId}" hasOutcomeAdapter but has no completion adapter to observe the outcome of.`);
+    }
+    if (
+      entry.hasCompletionAdapter
+      && entry.decisionLineagePolicy.kind === 'DECISION_REQUIRED'
+      && !entry.hasOutcomeAdapter
+    ) {
+      issues.push(`homeActionProducerOwnership entry "${entry.producerId}" has a DECISION_REQUIRED completion adapter but no outcome adapter for HI-OUT-005/006.`);
     }
     const seenEndToEndOwners = new Set<string>();
     for (const adapter of entry.endToEndOutcomeAdapters ?? []) {

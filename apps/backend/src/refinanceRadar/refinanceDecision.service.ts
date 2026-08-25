@@ -6,6 +6,10 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import {
+  recordDecisionRecordOutcome,
+  resolveCurrentDecisionSnapshotId,
+} from '../services/decisionPlatform/outcomeObservationService';
 import type { RecordRefinanceDecisionBody } from './validators/refinanceRadar.validators';
 
 const ALLOWED_TRANSITIONS: Record<RefinanceDecisionStatus, RefinanceDecisionStatus[]> = {
@@ -105,6 +109,7 @@ function toDecisionDto(row: any) {
     nextReviewAt: row.nextReviewAt?.toISOString() ?? null,
     decidedAt: row.decidedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
+    influencingRecommendationSnapshotId: row.influencingRecommendationSnapshotId ?? null,
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -192,6 +197,70 @@ async function loadDecision(tx: Prisma.TransactionClient, decisionId: string) {
   });
 }
 
+export function refinanceDecisionAttributionRelationships(
+  status: RefinanceDecisionStatus,
+  hasObservedCost: boolean,
+) {
+  const relationships = status === RefinanceDecisionStatus.KEEP_CURRENT_LOAN
+    || status === RefinanceDecisionStatus.OFFER_SELECTED
+    ? ['SELECTED_OPTION' as const]
+    : status === RefinanceDecisionStatus.PROCEEDING
+      || status === RefinanceDecisionStatus.APPLICATION_IN_PROGRESS
+      ? ['ACTION_STARTED' as const]
+      : status === RefinanceDecisionStatus.DEFERRED
+        ? ['TIMING_OBSERVED' as const]
+        : OUTCOME_STATUSES.has(status)
+          ? ['ACTION_COMPLETED' as const, 'RESULT_OBSERVED' as const]
+          : [];
+  if (hasObservedCost) relationships.push('COST_OBSERVED');
+  return relationships;
+}
+
+async function recordRefinanceTransitionOutcome(
+  tx: Prisma.TransactionClient,
+  input: {
+    propertyId: string;
+    userId: string;
+    decisionId: string;
+    historyId: string;
+    fromStatus: RefinanceDecisionStatus | null;
+    toStatus: RefinanceDecisionStatus;
+    occurredAt: Date;
+    recommendationSnapshotId: string | null;
+    selectedOfferId: string | null;
+    closingCostUsd: number | null;
+  },
+) {
+  const relationshipTypes = refinanceDecisionAttributionRelationships(
+    input.toStatus,
+    input.closingCostUsd != null,
+  );
+  if (relationshipTypes.length === 0) return;
+  await recordDecisionRecordOutcome({
+    idempotencyKey: `decision-record:RefinanceDecisionHistory:${input.historyId}`,
+    propertyId: input.propertyId,
+    sourceEntityType: 'RefinanceDecisionHistory',
+    sourceEntityId: input.historyId,
+    observedType: `REFINANCE_${input.toStatus}`,
+    observedPayload: {
+      decisionId: input.decisionId,
+      fromStatus: input.fromStatus,
+      toStatus: input.toStatus,
+      selectedOfferId: input.selectedOfferId,
+      closingCostUsd: input.closingCostUsd,
+    },
+    occurredAt: input.occurredAt,
+    recordedByUserId: input.userId,
+    verificationStatus: 'CORROBORATED',
+    provenanceRefs: [
+      `RefinanceDecision:${input.decisionId}`,
+      `RefinanceDecisionHistory:${input.historyId}`,
+    ],
+    recommendationSnapshotId: input.recommendationSnapshotId,
+    relationshipTypes,
+  }, tx);
+}
+
 export async function getCurrentRefinanceDecision(propertyId: string) {
   const row = await prisma.refinanceDecision.findFirst({
     where: { propertyId, currentKey: propertyId },
@@ -210,6 +279,12 @@ export async function recordRefinanceDecision(input: {
   const nextReviewAt = input.body.status === RefinanceDecisionStatus.DEFERRED
     ? validateNextReviewAt(input.body.nextReviewAt, now)
     : null;
+  const candidateRecommendationSnapshotId = await resolveCurrentDecisionSnapshotId({
+    propertyId: input.propertyId,
+    decisionDefinitionId: 'REFINANCE_OPPORTUNITY',
+    primaryEntityType: 'Property',
+    primaryEntityId: input.propertyId,
+  });
 
   return prisma.$transaction(async (tx) => {
     const repeated = await tx.refinanceDecisionHistory.findUnique({
@@ -220,6 +295,20 @@ export async function recordRefinanceDecision(input: {
       if (repeated.decision.propertyId !== input.propertyId) {
         throw new APIError('The mutation ID is already in use.', 409, 'REFINANCE_MUTATION_CONFLICT');
       }
+      const lockedSnapshotId = repeated.decision.influencingRecommendationSnapshotId
+        ?? candidateRecommendationSnapshotId;
+      await recordRefinanceTransitionOutcome(tx, {
+        propertyId: input.propertyId,
+        userId: input.userId,
+        decisionId: repeated.decisionId,
+        historyId: repeated.id,
+        fromStatus: repeated.fromStatus,
+        toStatus: repeated.toStatus,
+        occurredAt: repeated.occurredAt,
+        recommendationSnapshotId: lockedSnapshotId,
+        selectedOfferId: repeated.decision.selectedOfferId,
+        closingCostUsd: input.body.completedMortgage?.closingCostUsd ?? null,
+      });
       return { decision: toDecisionDto(await loadDecision(tx, repeated.decisionId)), idempotent: true };
     }
 
@@ -290,6 +379,7 @@ export async function recordRefinanceDecision(input: {
           nextReviewAt,
           completedAt: OUTCOME_STATUSES.has(toStatus) ? now : null,
           metadataJson: { contractVersion: 'refinance-decision-v1', ...completionMetadata },
+          influencingRecommendationSnapshotId: candidateRecommendationSnapshotId,
         },
         select: { id: true, version: true },
       });
@@ -314,6 +404,8 @@ export async function recordRefinanceDecision(input: {
           completedAt: OUTCOME_STATUSES.has(toStatus) ? now : null,
           version: { increment: 1 },
           metadataJson: { ...existingMetadata, ...completionMetadata },
+          influencingRecommendationSnapshotId:
+            current.influencingRecommendationSnapshotId ?? candidateRecommendationSnapshotId,
         },
       });
       if (result.count !== 1) {
@@ -391,6 +483,21 @@ export async function recordRefinanceDecision(input: {
           occurredAt: history.occurredAt.toISOString(),
         },
       },
+    });
+
+    const influencingRecommendationSnapshotId = current?.influencingRecommendationSnapshotId
+      ?? candidateRecommendationSnapshotId;
+    await recordRefinanceTransitionOutcome(tx, {
+      propertyId: input.propertyId,
+      userId: input.userId,
+      decisionId,
+      historyId: history.id,
+      fromStatus,
+      toStatus,
+      occurredAt: history.occurredAt,
+      recommendationSnapshotId: influencingRecommendationSnapshotId,
+      selectedOfferId: input.body.selectedOfferId ?? current?.selectedOfferId ?? null,
+      closingCostUsd: input.body.completedMortgage?.closingCostUsd ?? null,
     });
 
     return { decision: toDecisionDto(await loadDecision(tx, decisionId)), idempotent: false };

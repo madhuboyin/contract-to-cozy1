@@ -8464,6 +8464,9 @@ model RecommendationSnapshot {
   baselineForScenarios Scenario[]      @relation("ScenarioBaselineSnapshot")
   // Decision Platform Phase 10A (FRD §19)
   outcomeAttributions  RecommendationAttribution[]
+  influencedRefinanceDecisions    RefinanceDecision[]    @relation("RefinanceDecisionInfluencingSnapshot")
+  influencedSavingsBenefitActions SavingsBenefitAction[] @relation("SavingsBenefitActionInfluencingSnapshot")
+  influencedOwnershipCostDecisions OwnershipCostDecision[] @relation("OwnershipCostDecisionInfluencingSnapshot")
 
   // Decision Platform Phase 10B (FRD §19.4). All additive/nullable: existing
   // rows and every pre-Phase-10B caller are unaffected. `score` and
@@ -8515,6 +8518,7 @@ enum OutcomeObservationSourceType {
   DOCUMENT_PROMOTION
   COVERAGE_DECISION
   HOME_EVENT
+  DECISION_RECORD
 }
 
 enum OutcomeObservationVerificationStatus {
@@ -8547,6 +8551,7 @@ enum RecommendationAttributionReviewStatus {
 // deliberately no FK, since the source can be any domain-owned record.
 model OutcomeObservation {
   id                     String                                @id @default(uuid())
+  idempotencyKey         String?                               @unique
   propertyId             String
   sourceType             OutcomeObservationSourceType
   sourceEntityType       String
@@ -14607,6 +14612,7 @@ model SavingsBenefitAction {
   handoffRevokedAt       DateTime?
   handoffRevocationReason String?
   homeActionReference    String?
+  influencingRecommendationSnapshotId String?
   checklistJson          Json?
   startedAt              DateTime @default(now())
   submittedAt            DateTime?
@@ -14623,6 +14629,7 @@ model SavingsBenefitAction {
   hiddenAssetOutcomes    HiddenAssetMatchOutcome[]
   homeSavingsOutcomes    HomeSavingsOpportunityOutcome[]
   complaints             SavingsBenefitPartnerComplaint[]
+  influencingRecommendationSnapshot RecommendationSnapshot? @relation("SavingsBenefitActionInfluencingSnapshot", fields: [influencingRecommendationSnapshotId], references: [id], onDelete: SetNull)
 
   @@unique([propertyId, idempotencyKey])
   @@index([propertyId, state])
@@ -14630,6 +14637,7 @@ model SavingsBenefitAction {
   @@index([hiddenAssetMatchId])
   @@index([homeSavingsOpportunityId])
   @@index([partnerId, handoffStatus])
+  @@index([influencingRecommendationSnapshotId])
   @@map("savings_benefit_actions")
 }
 
@@ -18209,6 +18217,7 @@ model RefinanceDecision {
   completedAt              DateTime?
   version                  Int                      @default(1)
   metadataJson             Json?
+  influencingRecommendationSnapshotId String?
   createdAt                DateTime                 @default(now())
   updatedAt                DateTime                 @updatedAt
 
@@ -18217,6 +18226,7 @@ model RefinanceDecision {
   scenarioSnapshot       RefinanceScenarioSnapshot?                @relation(fields: [scenarioSnapshotId], references: [id], onDelete: SetNull)
   loanEstimateComparison RefinanceLoanEstimateComparisonSnapshot? @relation(fields: [loanEstimateComparisonId], references: [id], onDelete: SetNull)
   history                RefinanceDecisionHistory[]
+  influencingRecommendationSnapshot RecommendationSnapshot? @relation("RefinanceDecisionInfluencingSnapshot", fields: [influencingRecommendationSnapshotId], references: [id], onDelete: SetNull)
 
   @@index([propertyId, updatedAt(sort: Desc)])
   @@index([propertyId, status])
@@ -18224,6 +18234,7 @@ model RefinanceDecision {
   @@index([radarOpportunityId])
   @@index([scenarioSnapshotId])
   @@index([loanEstimateComparisonId])
+  @@index([influencingRecommendationSnapshotId])
   @@map("refinance_decisions")
 }
 
@@ -22961,18 +22972,21 @@ model OwnershipCostDecision {
   sourceActionId   String?
   recordedAt       DateTime                    @default(now())
   supersededById   String?
+  influencingRecommendationSnapshotId String?
 
   property     Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   snapshot     OwnershipCostSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
   scenario     OwnershipCostScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
   supersededBy OwnershipCostDecision?  @relation("OwnershipCostDecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes   OwnershipCostDecision[] @relation("OwnershipCostDecisionSupersession")
+  influencingRecommendationSnapshot RecommendationSnapshot? @relation("OwnershipCostDecisionInfluencingSnapshot", fields: [influencingRecommendationSnapshotId], references: [id], onDelete: SetNull)
 
   @@index([propertyId, recordedAt(sort: Desc)])
   @@index([snapshotId])
   @@index([scenarioId])
   @@index([recordedByUserId])
   @@index([supersededById])
+  @@index([influencingRecommendationSnapshotId])
   @@map("ownership_cost_decisions")
 }
 

@@ -24,6 +24,10 @@ import {
   getEligibleSavingsBenefitPartner,
   type SavingsBenefitPartnerRecord,
 } from './savingsBenefitsPartner.service';
+import {
+  recordDecisionRecordOutcome,
+  resolveCurrentDecisionSnapshotId,
+} from './decisionPlatform/outcomeObservationService';
 
 const hiddenAssets = new HiddenAssetService();
 const homeSavings = new HomeSavingsService();
@@ -276,6 +280,44 @@ function assertIdempotentActionMatches(
   }
 }
 
+async function recordSavingsBenefitActionObservation(
+  tx: Prisma.TransactionClient,
+  action: {
+    id: string;
+    propertyId: string;
+    actionType: SavingsBenefitActionType;
+    state: string;
+    startedAt: Date;
+    completedAt: Date | null;
+    influencingRecommendationSnapshotId: string | null;
+  },
+  userId: string,
+) {
+  if (!action.influencingRecommendationSnapshotId) return;
+  const completed = action.state === 'COMPLETED';
+  await recordDecisionRecordOutcome({
+    idempotencyKey: `decision-record:SavingsBenefitAction:${action.id}:${completed ? 'COMPLETED' : 'STARTED'}`,
+    propertyId: action.propertyId,
+    sourceEntityType: 'SavingsBenefitAction',
+    sourceEntityId: action.id,
+    observedType: completed
+      ? 'SAVINGS_BENEFIT_ACTION_COMPLETED'
+      : 'SAVINGS_BENEFIT_ACTION_STARTED',
+    observedPayload: {
+      actionType: action.actionType,
+      state: action.state,
+    },
+    occurredAt: action.completedAt ?? action.startedAt,
+    recordedByUserId: userId,
+    verificationStatus: 'CORROBORATED',
+    provenanceRefs: [`SavingsBenefitAction:${action.id}`],
+    recommendationSnapshotId: action.influencingRecommendationSnapshotId,
+    relationshipTypes: completed
+      ? ['SELECTED_OPTION', 'ACTION_COMPLETED']
+      : ['SELECTED_OPTION', 'ACTION_STARTED'],
+  }, tx);
+}
+
 export async function createCanonicalAction(
   propertyId: string,
   opportunityId: string,
@@ -291,6 +333,14 @@ export async function createCanonicalAction(
   if (detail.family !== input.family) {
     throw new Error('Opportunity family does not match the requested action.');
   }
+  const candidateRecommendationSnapshotId = detail.family === 'BENEFIT'
+    ? await resolveCurrentDecisionSnapshotId({
+        propertyId,
+        decisionDefinitionId: 'SAVINGS_BENEFIT_MATCH',
+        primaryEntityType: 'PropertyHiddenAssetMatch',
+        primaryEntityId: opportunityId,
+      })
+    : null;
   const existingAction = await prisma.savingsBenefitAction.findUnique({
     where: {
       propertyId_idempotencyKey: {
@@ -382,6 +432,7 @@ export async function createCanonicalAction(
       });
       if (racedAction) {
         assertIdempotentActionMatches(racedAction, opportunityId, input);
+        await recordSavingsBenefitActionObservation(tx, racedAction, userId);
         return racedAction;
       }
 
@@ -413,7 +464,7 @@ export async function createCanonicalAction(
         if (updated.count !== 1) throw new Error('Opportunity not found or access denied.');
       }
 
-      return tx.savingsBenefitAction.create({
+      const action = await tx.savingsBenefitAction.create({
         data: {
           propertyId,
           idempotencyKey: input.idempotencyKey,
@@ -440,12 +491,15 @@ export async function createCanonicalAction(
             input.family === 'BENEFIT'
               ? `savings-benefit-match:${opportunityId}`
               : `savings-benefit-recurring:${opportunityId}`,
+          influencingRecommendationSnapshotId: candidateRecommendationSnapshotId,
           checklistJson: checklist as unknown as Prisma.InputJsonValue,
           submittedAt: input.actionType === 'EXTERNALLY_SUBMITTED' ? now : null,
           completedAt: completedImmediately ? now : null,
           followUpAt: input.followUpAt ?? null,
         },
       });
+      await recordSavingsBenefitActionObservation(tx, action, userId);
+      return action;
     });
 
     // This refresh is deliberately after the atomic domain write. The signal
@@ -606,7 +660,11 @@ export async function updateCanonicalAction(
     if (updated.count !== 1) {
       throw new Error('Action changed concurrently. Refresh and try again.');
     }
-    return tx.savingsBenefitAction.findUniqueOrThrow({ where: { id: action.id } });
+    const persisted = await tx.savingsBenefitAction.findUniqueOrThrow({ where: { id: action.id } });
+    if (persisted.state === 'COMPLETED') {
+      await recordSavingsBenefitActionObservation(tx, persisted, userId);
+    }
+    return persisted;
   });
 }
 

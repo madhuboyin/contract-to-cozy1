@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { emitNorthStarLineageEvent } from '../analytics/northStarLineage';
+import { recordDecisionRecordOutcome } from '../decisionPlatform/outcomeObservationService';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import {
   OWNERSHIP_COST_CATEGORIES,
@@ -217,6 +218,8 @@ type DecisionDependencies = {
     decisionType: string;
     sourceActionId: string;
     payload: DecisionPayload | NotificationPreferencePayload;
+    influencingRecommendationSnapshotId: string | null;
+    recordOutcome: boolean;
   }) => Promise<StoredDecision>;
   now: () => Date;
 };
@@ -310,6 +313,7 @@ const defaultDependencies: DecisionDependencies = {
         status: previous ? 'REVISED' : 'RECORDED',
         payloadJson: input.payload as any,
         sourceActionId: input.sourceActionId,
+        influencingRecommendationSnapshotId: input.influencingRecommendationSnapshotId,
       },
     });
     if (previous) {
@@ -317,6 +321,30 @@ const defaultDependencies: DecisionDependencies = {
         where: { id: previous.id },
         data: { status: 'SUPERSEDED', supersededById: created.id },
       });
+    }
+    if (input.recordOutcome && input.payload.contractVersion === 'ownership-cost-decision-v1') {
+      await recordDecisionRecordOutcome({
+        idempotencyKey: `decision-record:OwnershipCostDecision:${created.id}:RESOLVED`,
+        propertyId: input.propertyId,
+        sourceEntityType: 'OwnershipCostDecision',
+        sourceEntityId: created.id,
+        observedType: 'OWNERSHIP_COST_ACTION_RESOLVED',
+        observedPayload: {
+          action: input.payload.action,
+          category: input.payload.category,
+          reason: input.payload.reason,
+          sourceActionId: input.sourceActionId,
+        },
+        occurredAt: created.recordedAt,
+        recordedByUserId: input.userId,
+        verificationStatus: 'CORROBORATED',
+        provenanceRefs: [
+          `OwnershipCostDecision:${created.id}`,
+          `OwnershipCostSnapshot:${input.snapshotId}`,
+        ],
+        recommendationSnapshotId: input.influencingRecommendationSnapshotId,
+        relationshipTypes: ['ACTION_COMPLETED'],
+      }, tx);
     }
     return created;
   }),
@@ -406,6 +434,7 @@ export class OwnershipCostDecisionService {
     explanation?: string | null;
     reason?: string | null;
     revisitAt?: string | null;
+    recommendationSnapshotId?: string | null;
   }) {
     await this.assertAccess(userId, propertyId);
     const change = input.sourceChangeId
@@ -469,6 +498,8 @@ export class OwnershipCostDecisionService {
       decisionType: 'CATEGORY_ACTION',
       sourceActionId,
       payload,
+      influencingRecommendationSnapshotId: input.recommendationSnapshotId ?? null,
+      recordOutcome: input.action === 'RESOLVE',
     });
 
     const resolved = ['DISMISS', 'NO_ACTION', 'RESOLVE'].includes(input.action);
@@ -533,6 +564,8 @@ export class OwnershipCostDecisionService {
       decisionType: 'NOTIFICATION_PREFERENCE',
       sourceActionId: 'ownership-cost-notifications',
       payload,
+      influencingRecommendationSnapshotId: null,
+      recordOutcome: false,
     });
     return {
       id: stored.id,
