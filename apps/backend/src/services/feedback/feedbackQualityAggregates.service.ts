@@ -145,11 +145,6 @@ export function aggregateCapabilityVersionQuality(input: {
     row.feedbackCount += 1;
     if (feedback.reasonCodes.includes('USEFUL')) row.usefulCount += 1;
     if (feedback.reasonCodes.includes('NOT_USEFUL')) row.notUsefulCount += 1;
-    if (feedback.rating === 'dismissed') {
-      row.dismissalCount += 1;
-      const reason = feedback.reasonCodes[0] ?? 'UNSPECIFIED';
-      row.dismissalReasonCounts[reason] = (row.dismissalReasonCounts[reason] ?? 0) + 1;
-    }
     if (feedback.reasonCodes.includes('WRONG_FACT')) row.correctionCount += 1;
     if (feedback.targetId && feedback.surface) {
       const targetKey = `${feedback.targetType ?? 'UNTYPED'}:${feedback.targetId}`;

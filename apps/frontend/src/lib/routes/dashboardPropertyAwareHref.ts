@@ -43,11 +43,6 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
     toPropertyHref: (propertyId, query) =>
       buildHref(`/dashboard/properties/${propertyId}/property-brief`, query),
   },
-  '/dashboard/fix': {
-    navTarget: 'fix',
-    toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/fix`, query),
-  },
   '/dashboard/save': {
     navTarget: 'save',
     toPropertyHref: (propertyId, query) =>
@@ -147,11 +142,8 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
   },
   '/dashboard/inspection-report': {
     navTarget: 'inspection-report',
-    toPropertyHref: (propertyId, query) => {
-      const nextQuery = new URLSearchParams(query);
-      nextQuery.set('report', 'inspection');
-      return buildHref(`/dashboard/properties/${propertyId}/reports`, nextQuery);
-    },
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/inspection-hub/upload`, query),
   },
   '/dashboard/property-tax': {
     navTarget: 'property-tax',

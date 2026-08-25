@@ -52,7 +52,6 @@ import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { Button } from '@/components/ui/button';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { anchorForHealthFactor, propertyEditHref } from '@/lib/property/editPageAnchors';
-import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { ConfidenceBadge as PremiumConfidenceBadge, MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import {
   appendGuidanceContinuityToHref,
@@ -721,13 +720,12 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const orchestrationQuery = useQuery({
-    queryKey: ['dashboard-orchestration-signals', effectiveSelectedPropertyId],
+  const homeActionsQuery = useQuery({
+    queryKey: ['home-actions', effectiveSelectedPropertyId],
     queryFn: async () => {
       if (!effectiveSelectedPropertyId) return null;
       try {
-        const summary = await api.getOrchestrationSummary(effectiveSelectedPropertyId);
-        return adaptOrchestrationSummary(summary);
+        return await api.getHomeActions(effectiveSelectedPropertyId);
       } catch {
         return null;
       }
@@ -1093,15 +1091,11 @@ export default function DashboardPage() {
       };
     }
 
-    // 4. Backend signal pressure: RISK_SPIKE or COST_PRESSURE from orchestration engine
-    // Loaded async (non-blocking) — only surfaces when local signals are all clear
-    const orchestrationMove = orchestrationQuery.data?.nextBestMove ?? null;
-    if (
-      orchestrationMove?.reasonCode === 'RISK_SPIKE' ||
-      orchestrationMove?.reasonCode === 'COST_PRESSURE' ||
-      orchestrationMove?.reasonCode === 'SCENARIO_CONTINUITY'
-    ) {
-      const rc = orchestrationMove.reasonCode as BackendSignalReasonCode;
+    // 4. The highest-ranked canonical Home Action is the sole backend owner
+    // for what deserves attention after the local hard-safety checks above.
+    const canonicalAction = homeActionsQuery.data?.actions?.[0] ?? null;
+    if (canonicalAction) {
+      const rc: BackendSignalReasonCode = canonicalAction.priority === 'NOW' ? 'RISK_SPIKE' : 'COST_PRESSURE';
       const impactLabel = rc === 'RISK_SPIKE' ? 'Risk signal active'
         : rc === 'COST_PRESSURE' ? 'Cost shift detected'
         : 'Scenario active';
@@ -1111,13 +1105,13 @@ export default function DashboardPage() {
       const etaLabel = 'ETA 3 min';
       return {
         badgeLabel: buildBackendSignalBadgeLabel(rc),
-        title: orchestrationMove.title,
-        subtitle: orchestrationMove.detail,
+        title: canonicalAction.presentation?.headline ?? canonicalAction.recommendedAction,
+        subtitle: canonicalAction.presentation?.summary ?? canonicalAction.whyItMatters,
         ctaLabel,
-        href: orchestrationMove.targetPath,
+        href: canonicalAction.primaryCta.href,
         impactLabel,
         etaLabel,
-        ...buildBackendSignalActionMeta(rc, orchestrationMove.detail),
+        ...buildBackendSignalActionMeta(rc, canonicalAction.whyItMatters),
       };
     }
 
@@ -1159,7 +1153,7 @@ export default function DashboardPage() {
         ctaLabel: topTaskName ? `Review ${topTaskName}` : 'Fix overdue tasks',
         href: primaryOverdueAction
           ? resolveUrgentActionHref(primaryOverdueAction, effectiveSelectedPropertyId)
-          : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix?focus=priority-actions'),
+          : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/resolution-center?focus=priority-actions'),
         impactLabel,
         etaLabel,
         ...buildMaintenanceActionMeta(overdueMaintenanceCount),
@@ -1216,7 +1210,7 @@ export default function DashboardPage() {
   const propertyBriefHref = `/dashboard/properties/${encodeURIComponent(effectiveSelectedPropertyId)}/property-brief`;
   const priorityActionsHref = buildPropertyAwareDashboardHref(
     effectiveSelectedPropertyId,
-    '/dashboard/fix?focus=priority-actions',
+    '/dashboard/resolution-center?focus=priority-actions',
   );
   const primaryActionHero = (
     <div className="space-y-6">

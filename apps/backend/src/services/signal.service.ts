@@ -1263,7 +1263,9 @@ export class SignalService {
       recentCompletions,
       activeSnoozes,
       dueDateCoverageCount,
-      completionEvidence,
+      completionEvidenceCount,
+      completionNotesCount,
+      completionPhotoCount,
       lastCompletion,
     ] = await Promise.all([
       prisma.propertyMaintenanceTask.count({
@@ -1291,10 +1293,13 @@ export class SignalService {
           nextDueDate: { lt: now },
         },
       }),
-      prisma.orchestrationActionCompletion.count({
+      prisma.outcomeObservation.count({
         where: {
           propertyId: params.propertyId,
-          completedAt: { gte: lookback },
+          sourceType: { in: ['OPERATIONAL_WORK_ITEM', 'COMPLETED_MAINTENANCE_RECORD'] },
+          observedType: 'ACTION_COMPLETED',
+          occurredAt: { gte: lookback },
+          verificationStatus: { in: ['CORROBORATED', 'VERIFIED'] },
         },
       }),
       prisma.orchestrationActionSnooze.count({
@@ -1311,27 +1316,40 @@ export class SignalService {
           status: { not: MaintenanceTaskStatus.CANCELLED },
         },
       }),
-      prisma.orchestrationActionCompletion.aggregate({
+      prisma.outcomeObservation.count({
         where: {
           propertyId: params.propertyId,
-          completedAt: { gte: lookback },
-        },
-        _sum: {
-          photoCount: true,
-        },
-        _count: {
-          _all: true,
-          notes: true,
+          sourceType: { in: ['OPERATIONAL_WORK_ITEM', 'COMPLETED_MAINTENANCE_RECORD'] },
+          observedType: 'ACTION_COMPLETED',
+          occurredAt: { gte: lookback },
+          verificationStatus: { in: ['CORROBORATED', 'VERIFIED'] },
         },
       }),
-      prisma.orchestrationActionCompletion.findFirst({
+      prisma.operationalWorkEvent.count({
+        where: {
+          workItem: { propertyId: params.propertyId },
+          eventType: 'OUTCOME_EVIDENCE_ADDED',
+          occurredAt: { gte: lookback },
+          payload: { path: ['notes'], not: Prisma.AnyNull },
+        },
+      }),
+      prisma.operationalWorkEvidence.count({
+        where: {
+          workItem: { propertyId: params.propertyId },
+          evidenceType: 'DOCUMENT',
+          observedAt: { gte: lookback },
+        },
+      }),
+      prisma.outcomeObservation.findFirst({
         where: {
           propertyId: params.propertyId,
-          undoneAt: null,
+          sourceType: { in: ['OPERATIONAL_WORK_ITEM', 'COMPLETED_MAINTENANCE_RECORD'] },
+          observedType: 'ACTION_COMPLETED',
+          verificationStatus: { in: ['CORROBORATED', 'VERIFIED'] },
         },
-        orderBy: [{ completedAt: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
         select: {
-          completedAt: true,
+          occurredAt: true,
         },
       }),
     ]);
@@ -1344,8 +1362,8 @@ export class SignalService {
       overdueTasks,
     });
 
-    const daysSinceLastCompletion = lastCompletion?.completedAt
-      ? daysSince(lastCompletion.completedAt, now)
+    const daysSinceLastCompletion = lastCompletion?.occurredAt
+      ? daysSince(lastCompletion.occurredAt, now)
       : null;
 
     const decayMultiplier =
@@ -1370,9 +1388,8 @@ export class SignalService {
     else if (daysSinceLastCompletion <= 90) validUntil.setDate(validUntil.getDate() + 10);
     else validUntil.setDate(validUntil.getDate() + 7);
 
-    const completionRecordCount = completionEvidence._count._all ?? 0;
-    const completionNotesCount = completionEvidence._count.notes ?? 0;
-    const completionPhotos = asFinite(completionEvidence._sum.photoCount) ?? 0;
+    const completionRecordCount = completionEvidenceCount;
+    const completionPhotos = completionPhotoCount;
 
     const proofQuality = completionRecordCount > 0
       ? clamp01((Math.min(1, completionNotesCount / completionRecordCount) + Math.min(1, completionPhotos / Math.max(1, completionRecordCount * 2))) / 2)

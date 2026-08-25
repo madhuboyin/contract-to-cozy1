@@ -132,7 +132,7 @@ export default function PropertiesPage() {
     if (navTarget === 'reports') return appendForwardedQuery(`/dashboard/properties/${propertyId}/reports`);
     if (navTarget === 'protect') return appendForwardedQuery(`/dashboard/properties/${propertyId}/protect`);
     if (navTarget === 'save') return appendForwardedQuery(`/dashboard/properties/${propertyId}/save`);
-    if (navTarget === 'fix') return appendForwardedQuery(`/dashboard/properties/${propertyId}/fix`);
+    if (navTarget === 'fix') return appendForwardedQuery(`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`);
     if (navTarget === 'vault') return appendForwardedQuery(`/dashboard/properties/${propertyId}/vault`);
 
     const resolvedFromNavTarget = resolvePropertyHrefFromNavTarget(propertyId, navTarget, searchParams);

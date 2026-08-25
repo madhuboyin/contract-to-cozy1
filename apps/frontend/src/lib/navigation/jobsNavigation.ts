@@ -30,7 +30,7 @@ export const PRIMARY_JOBS: NavJob[] = [
   {
     key: 'plan-projects',
     name: 'Plan & Projects',
-    href: '/dashboard/actions',
+    href: '/dashboard/resolution-center',
     icon: ClipboardList,
     description: 'Actions, decisions, projects, and major moments',
     engines: ['actions', 'projects', 'bookings', 'claims', 'guidance', 'resolution-center', 'moving-concierge'],

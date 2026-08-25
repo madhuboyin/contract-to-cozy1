@@ -205,7 +205,7 @@ function HazardCard({
         </Button>
         {item.propertyEffect.canonicalActionId ? (
           <Button asChild variant="outline">
-            <Link href="/dashboard/actions">
+            <Link href="/dashboard/resolution-center">
               Open Home Action
             </Link>
           </Button>

@@ -248,7 +248,7 @@ export default function HomeOperationsPage() {
           <Link href="/dashboard"><ArrowLeft className="mr-2 h-4 w-4" />Back to Home</Link>
         </Button>
         <Button asChild variant="outline" className="rounded-full">
-          <Link href={`/dashboard/properties/${propertyId}/fix`}><Wrench className="mr-2 h-4 w-4" />Open Resolution Center</Link>
+          <Link href={`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`}><Wrench className="mr-2 h-4 w-4" />Open Resolution Center</Link>
         </Button>
       </div>
 

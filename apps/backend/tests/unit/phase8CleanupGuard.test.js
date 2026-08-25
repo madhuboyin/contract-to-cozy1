@@ -116,9 +116,7 @@ test('financial, item, and snapshot ownership stays explicit', () => {
   assert.match(coverageAnalysis, /@@index\(\[inventoryItemId, computedAt\(sort: Desc\)\]\)/);
 
   const coverageService = read('../../src/services/coverageAnalysis.service.ts');
-  const resolutionCenter = read('../../src/services/resolutionCenter.service.ts');
   assert.doesNotMatch(coverageService, /parseItemIdFromInputsSnapshot/);
-  assert.doesNotMatch(resolutionCenter, /parseItemIdFromInputsSnapshot/);
   assert.match(coverageService, /where: \{ propertyId, inventoryItemId: itemId \}/);
   assert.match(coverageService, /where: \{ propertyId, inventoryItemId: null \}/);
 

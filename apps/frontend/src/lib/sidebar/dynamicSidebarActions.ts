@@ -119,6 +119,14 @@ function getPropertyPath(propertyId?: string): string {
   return propertyId ? `/dashboard/properties/${propertyId}` : '/dashboard';
 }
 
+function getResolutionCenterHref(propertyId?: string, filter?: string): string {
+  const query = new URLSearchParams();
+  if (propertyId) query.set('propertyId', propertyId);
+  if (filter) query.set('filter', filter);
+  const suffix = query.toString();
+  return suffix ? `/dashboard/resolution-center?${suffix}` : '/dashboard/resolution-center';
+}
+
 // ============================================================================
 // ACTION GENERATORS BY ROUTE FAMILY
 // ============================================================================
@@ -134,7 +142,7 @@ function getTodayActions(ctx: SidebarContext): SidebarAction[] {
       title: ctx.signals.urgentCount === 1 ? 'Review urgent issue' : 'Review urgent issues',
       description: `${ctx.signals.urgentCount} urgent issue${ctx.signals.urgentCount > 1 ? 's' : ''} detected`,
       icon: AlertTriangle,
-      href: `/dashboard/properties/${ctx.propertyId}/fix?filter=urgent&sort=priority`,
+      href: getResolutionCenterHref(ctx.propertyId, 'urgent'),
       priority: 'high',
       badge: 'Urgent',
       group: 'recommended-next',
@@ -415,7 +423,7 @@ function getFixActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Review urgent maintenance',
       description: `${ctx.signals.urgentCount} priority item${ctx.signals.urgentCount > 1 ? 's' : ''}`,
       icon: Wrench,
-      href: `/dashboard/properties/${ctx.propertyId}/fix`,
+      href: getResolutionCenterHref(ctx.propertyId),
       priority: 'high',
       badge: 'Urgent',
       group: 'recommended-next',

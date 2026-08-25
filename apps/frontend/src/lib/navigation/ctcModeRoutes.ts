@@ -65,8 +65,10 @@ export const CTC_MODES: CtcModeConfig[] = [
       '/incidents',
       '/inventory',
     ],
-    getHref: (propertyId) => 
-      propertyId ? `/dashboard/properties/${propertyId}/fix` : '/dashboard/fix',
+    getHref: (propertyId) =>
+      propertyId
+        ? `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`
+        : '/dashboard/resolution-center',
   },
 ];
 

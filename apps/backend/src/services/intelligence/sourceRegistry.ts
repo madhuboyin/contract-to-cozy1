@@ -25,7 +25,6 @@ export const AI_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Ob
   ai('ai:ask', 'apps/backend/src/services/gemini.service.ts', ['ask'], 'Return a typed unavailable response; never fabricate a record-grounded answer.'),
   ai('ai:document-intelligence', 'apps/backend/src/services/documentIntelligence.service.ts', ['document-intelligence'], 'Fail closed to manual review with no promotable fields.'),
   ai('ai:inspection-extraction', 'apps/backend/src/services/inspectionExtraction.service.ts', ['inspection-findings'], 'Retain the document for manual extraction.'),
-  ai('ai:inspection-analysis', 'apps/backend/src/services/inspectionAnalysis.service.ts', ['inspection-findings'], 'Show deterministic inspection records without generated analysis.'),
   ai('ai:tax-appeal', 'apps/backend/src/services/taxAppeal.service.ts', ['property-tax'], 'Require homeowner confirmation/manual entry.'),
   ai('ai:property-appreciation', 'apps/backend/src/services/propertyAppreciation.service.ts', ['property-value'], 'Use the labeled deterministic regional baseline only.'),
   ai('ai:trash-schedule', 'apps/backend/src/community/providers/trashSchedule.provider.ts', ['community'], 'Link to the official municipal source without an extracted schedule.'),

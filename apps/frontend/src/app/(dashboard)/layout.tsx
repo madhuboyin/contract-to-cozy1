@@ -74,10 +74,9 @@ function buildPropertyAwareHref(
   navTarget: string
 ): string {
   if (navTarget === 'fix') {
-    if (propertyId) {
-      return `/dashboard/properties/${encodeURIComponent(propertyId)}/fix`;
-    }
-    return '/dashboard/fix'; // Will redirect via JobHubRedirectPage to property-specific route
+    return propertyId
+      ? `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`
+      : '/dashboard/resolution-center';
   }
 
   if (propertyId) {

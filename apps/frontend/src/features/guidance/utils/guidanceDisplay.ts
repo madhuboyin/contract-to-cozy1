@@ -32,7 +32,7 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'replacement-purchase-finalization': '/dashboard/properties/:propertyId/guidance/step',
   'replacement-planning': '/dashboard/properties/:propertyId/guidance/step',
   'replacement-plan-followup': '/dashboard/properties/:propertyId/guidance/step',
-  'inspection-report': '/dashboard/inspection-report?propertyId=:propertyId',
+  'inspection-report': '/dashboard/properties/:propertyId/inspection-hub/upload',
   booking: '/dashboard/providers?propertyId=:propertyId',
   recalls: '/dashboard/properties/:propertyId/recalls',
   documents: '/dashboard/properties/:propertyId/inventory?filter=missing-coverage',

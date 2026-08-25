@@ -11,9 +11,8 @@ import {
   ArrowRight,
   ListChecks,
 } from 'lucide-react';
-import { OrchestratedActionDTO, MaintenanceTaskStats } from '@/types';
+import { MaintenanceTaskStats } from '@/types';
 import { api } from '@/lib/api/client';
-import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 
 interface HomePulseProps {
   stats: MaintenanceTaskStats | null;
@@ -45,20 +44,13 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
     setSuppressedSummary((prev) => ({ ...prev, loading: true }));
 
     api
-      .getOrchestrationSummary(selectedPropertyId)
-      .then((summary) => {
+      .getHomeActions(selectedPropertyId)
+      .then((feed) => {
         if (cancelled) return;
-        const adapted = adaptOrchestrationSummary(summary);
-        const suppressedActions = adapted.suppressedActions ?? [];
-        const suppressedCost = suppressedActions.reduce((sum, action) => {
-          const estimatedCost = Number(
-            action.exposure ?? (action as OrchestratedActionDTO & { estimatedCost?: number | null }).estimatedCost ?? 0
-          );
-          return sum + (Number.isFinite(estimatedCost) ? estimatedCost : 0);
-        }, 0);
+        const suppressedActions = feed.actions.filter((action) => action.fatigueSuppressed);
         setSuppressedSummary({
           count: suppressedActions.length,
-          cost: suppressedCost,
+          cost: 0,
           loading: false,
         });
       })

@@ -204,7 +204,7 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
   const fallbackPropertyId = propertyId || undefined;
   const actionPropertyId =
     action.propertyId && action.propertyId !== 'N/A' ? action.propertyId : fallbackPropertyId;
-  if (!actionPropertyId) return '/dashboard/actions';
+  if (!actionPropertyId) return '/dashboard/resolution-center';
 
   if (action.type === 'HEALTH_INSIGHT') {
     if (action.status === 'Missing Data' || action.status === 'Incomplete') {

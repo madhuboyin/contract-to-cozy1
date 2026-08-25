@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, X } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import { OrchestratedActionDTO } from '@/types';
 
 type PriorityAlertBannerProps = {
   propertyId?: string;
@@ -29,26 +28,10 @@ export default function PriorityAlertBanner({ propertyId }: PriorityAlertBannerP
     enabled: Boolean(propertyId),
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const summary = await api.getOrchestrationSummary(propertyId!);
-      const actions = Array.isArray(summary?.actions) ? summary.actions : [];
-      const highPriority = actions.filter((action: OrchestratedActionDTO) => {
-        const status = String(action.status || '').toUpperCase();
-        const level = String(action.riskLevel || '').toUpperCase();
-        const isPending =
-          !status ||
-          status === 'PENDING' ||
-          status === 'OPEN' ||
-          status === 'TODO' ||
-          status === 'IN_PROGRESS';
-        return isPending && (level === 'HIGH' || level === 'CRITICAL');
-      });
-      const totalExposure = highPriority.reduce((sum, action) => {
-        const cost = Number(action.exposure || 0);
-        return sum + (Number.isFinite(cost) ? cost : 0);
-      }, 0);
+      const feed = await api.getHomeActions(propertyId!);
+      const highPriority = feed.actions.filter((action) => action.priority === 'NOW' || action.priority === 'SOON');
       return {
         count: highPriority.length,
-        totalExposure,
       };
     },
   });
@@ -56,7 +39,6 @@ export default function PriorityAlertBanner({ propertyId }: PriorityAlertBannerP
   if (!propertyId || dismissed || bannerQuery.isLoading || bannerQuery.isError) return null;
 
   const count = bannerQuery.data?.count ?? 0;
-  const totalExposure = bannerQuery.data?.totalExposure ?? 0;
   if (count <= 0) return null;
 
   const dismiss = () => {
@@ -84,13 +66,7 @@ export default function PriorityAlertBanner({ propertyId }: PriorityAlertBannerP
               <h3 className="text-base font-semibold text-red-900">
                 You have {count} high-priority action{count === 1 ? '' : 's'} this week
               </h3>
-              <p className="text-sm text-red-700">
-                Estimated cost if ignored: {new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                  maximumFractionDigits: 0,
-                }).format(totalExposure)}
-              </p>
+              <p className="text-sm text-red-700">Ranked by the canonical Home Action feed.</p>
             </div>
           </div>
           <Link

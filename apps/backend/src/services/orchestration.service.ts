@@ -522,7 +522,7 @@ export function adaptOrchestratedActionToHomeAction(
       label: isCoverageAction
         ? 'Review coverage options'
         : action.cta?.label ?? (critical ? 'Review safety escalation' : 'Review action'),
-      href: coverageHref ?? serviceHref ?? `/dashboard/actions?propertyId=${encodeURIComponent(action.propertyId)}`,
+      href: coverageHref ?? serviceHref ?? `/dashboard/resolution-center?propertyId=${encodeURIComponent(action.propertyId)}`,
     },
     secondaryCtas: [],
     // No source kind adapted here (MAINTENANCE checklist items, orchestrated
@@ -611,42 +611,6 @@ function resolveProviderServiceCategory(action: OrchestratedAction): ServiceCate
   if (assetContext.includes('LOCK')) return ServiceCategory.LOCKSMITH;
 
   return ServiceCategory.HANDYMAN;
-}
-
-export interface CompletionCreateInput {
-  completedAt: string;
-  cost?: number | null;
-  didItMyself?: boolean;
-  serviceProviderName?: string | null;
-  serviceProviderRating?: number | null;
-  notes?: string | null;
-  photoIds?: string[];
-}
-
-export interface CompletionUpdateInput extends Partial<CompletionCreateInput> {}
-
-export interface CompletionResponse {
-  id: string;
-  actionKey: string;
-  completedAt: string;
-  cost: number | null;
-  didItMyself: boolean;
-  serviceProviderName: string | null;
-  serviceProviderRating: number | null;
-  notes: string | null;
-  photoCount: number;
-  photos: CompletionPhotoResponse[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CompletionPhotoResponse {
-  id: string;
-  thumbnailUrl: string;
-  originalUrl: string;
-  fileName: string;
-  fileSize: number;
-  order: number;
 }
 
 const ACTIVE_TASK_STATUSES = [
@@ -2591,7 +2555,7 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
   // Home Intelligence Functional Completeness FRD Phase 1, Slice 3 — batch
   // load once here (the one async caller) so adaptOrchestratedActionToHomeAction
   // can stay synchronous and pure. Latest READY analysis wins per item,
-  // matching resolutionCenter.service.ts's coverageAnalysesByItemId map.
+  // matching the former Resolution Center coverage-analysis lookup.
   const coverageGapInventoryItemIds = [...new Set(
     actions
       .filter((action) => action.relatedEntity?.type === 'INVENTORY_ITEM' && action.actionKey.startsWith('COVERAGE_GAP::'))

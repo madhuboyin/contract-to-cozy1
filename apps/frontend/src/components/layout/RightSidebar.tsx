@@ -6,7 +6,8 @@
  * 2. The desktop left nav is rendered once there as PersistentSidebarNav, not per page.
  * 3. Target dashboard pages share that layout: Today, My Home, Protect, Save, Fix/Resolution Center, Vault, Home Lab, and Community; Knowledge currently lives at /knowledge outside the dashboard route group.
  * 4. ResolutionCenterClient rendered its own right rail inline; that duplicate rail is replaced by this shared RightSidebar.
- * 5. Existing data sources reused here are React Query caches for property health, score snapshots, orchestration summary, active incidents, bookings, and property resolutions.
+ * 5. Attention data comes from the canonical Home Action feed; bookings remain
+ * a separate execution-calendar source.
  */
 
 import React, { useMemo } from 'react';
@@ -25,9 +26,7 @@ import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
-import type { Booking, OrchestratedActionDTO } from '@/types';
-import type { IncidentDTO } from '@/types/incidents.types';
-import { listIncidents } from '@/app/(dashboard)/dashboard/properties/[id]/incidents/incidentsApi';
+import type { Booking, RankedHomeActionDTO } from '@/types';
 import { getSidebarActions, getPageAwareSubtitle, type SidebarAction } from '@/lib/sidebar/dynamicSidebarActions';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 
@@ -37,7 +36,6 @@ type NextTask = {
 } | null;
 
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
-const HIGH_RISK_LEVELS = new Set(['CRITICAL', 'HIGH']);
 const COVERAGE_CATEGORY_KEYWORDS = ['COVERAGE', 'INSURANCE', 'WARRANTY', 'POLICY'];
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
@@ -76,35 +74,25 @@ function formatTaskDate(dateLike: string | null | undefined): string | null {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function isCoverageAction(action: OrchestratedActionDTO): boolean {
+function isCoverageAction(action: RankedHomeActionDTO): boolean {
   return (
-    action.coverage?.hasCoverage === false ||
-    normalizeUpperText(action.actionKey).startsWith('COVERAGE_GAP::') ||
-    hasKeyword(action.category, COVERAGE_CATEGORY_KEYWORDS) ||
-    hasKeyword(action.title, ['COVERAGE', 'WARRANTY', 'INSURANCE', 'POLICY', 'GAP']) ||
-    hasKeyword(action.description ?? null, ['COVERAGE', 'WARRANTY', 'INSURANCE', 'POLICY', 'GAP'])
+    action.source.kind === 'COVERAGE' ||
+    hasKeyword(action.presentation?.headline, COVERAGE_CATEGORY_KEYWORDS) ||
+    hasKeyword(action.whyItMatters, COVERAGE_CATEGORY_KEYWORDS)
   );
 }
 
-function isUrgentAction(action: OrchestratedActionDTO): boolean {
-  return HIGH_RISK_LEVELS.has(normalizeUpperText(action.riskLevel ?? null)) || action.overdue === true;
-}
-
-function isActiveIncident(item: IncidentDTO): boolean {
-  return item.status !== 'RESOLVED' && item.status !== 'SUPPRESSED' && item.status !== 'EXPIRED';
-}
-
-function isUrgentIncident(item: IncidentDTO): boolean {
-  return isActiveIncident(item) && (item.severity === 'CRITICAL' || item.severity === 'WARNING');
+function isUrgentAction(action: RankedHomeActionDTO): boolean {
+  return action.priority === 'NOW' || action.priority === 'SOON';
 }
 
 function isHighConfidence(item: any): boolean {
-  const level = normalizeUpperText(item?.confidence?.level ?? null);
+  const level = normalizeUpperText(item?.confidence?.label ?? item?.confidence?.level ?? null);
   if (level === 'HIGH') return true;
 
   const score =
     typeof item?.confidence?.score === 'number'
-      ? item.confidence.score
+      ? (item.confidence.score <= 1 ? item.confidence.score * 100 : item.confidence.score)
       : typeof item?.confidence === 'number'
         ? item.confidence * 100
         : null;
@@ -112,7 +100,7 @@ function isHighConfidence(item: any): boolean {
   return typeof score === 'number' && score >= 80;
 }
 
-function chooseNextTask(actions: OrchestratedActionDTO[], bookings: Booking[]): NextTask {
+function chooseNextTask(actions: RankedHomeActionDTO[], bookings: Booking[]): NextTask {
   const upcomingBookings = bookings
     .filter((booking) => booking.scheduledDate)
     .map((booking) => ({
@@ -122,11 +110,11 @@ function chooseNextTask(actions: OrchestratedActionDTO[], bookings: Booking[]): 
     }));
 
   const upcomingActions = actions
-    .filter((action) => action.nextDueDate)
+    .filter((action) => action.timing.dueAt)
     .map((action) => ({
-      name: action.title || 'Home task',
-      date: action.nextDueDate ?? null,
-      sortDate: Date.parse(String(action.nextDueDate)),
+      name: action.presentation?.headline || action.recommendedAction,
+      date: action.timing.dueAt,
+      sortDate: Date.parse(String(action.timing.dueAt)),
     }));
 
   const next = [...upcomingBookings, ...upcomingActions]
@@ -177,25 +165,11 @@ function useResolvedPropertyId() {
 function useSidebarData() {
   const { propertyId, isLoading: propertyIdLoading } = useResolvedPropertyId();
 
-  const orchestrationQuery = useQuery({
-    queryKey: ['orchestration-summary', propertyId],
-    queryFn: () => (propertyId ? api.getOrchestrationSummary(propertyId) : Promise.resolve(null as any)),
+  const homeActionsQuery = useQuery({
+    queryKey: ['home-actions', propertyId],
+    queryFn: () => (propertyId ? api.getHomeActions(propertyId) : Promise.resolve(null as any)),
     enabled: !!propertyId,
     staleTime: 3 * 60 * 1000,
-  });
-
-  const incidentsQuery = useQuery({
-    queryKey: ['active-incidents', propertyId],
-    queryFn: () => (propertyId ? listIncidents({ propertyId, limit: 10 }) : Promise.resolve({ items: [] } as any)),
-    enabled: !!propertyId,
-    staleTime: 3 * 60 * 1000,
-  });
-
-  const resolutionsQuery = useQuery({
-    queryKey: ['replace-repair-resolutions', propertyId],
-    queryFn: () => (propertyId ? api.getPropertyResolutions(propertyId) : Promise.resolve({ success: true, data: [] } as any)),
-    enabled: !!propertyId,
-    staleTime: 5 * 60 * 1000,
   });
 
   const bookingsQuery = useQuery({
@@ -221,27 +195,23 @@ function useSidebarData() {
   });
 
   return useMemo(() => {
-    const actions: OrchestratedActionDTO[] = (orchestrationQuery.data as any)?.actions || [];
-    const incidents: IncidentDTO[] = (incidentsQuery.data as any)?.items || [];
+    const actions: RankedHomeActionDTO[] = (homeActionsQuery.data as any)?.actions || [];
     const bookings: Booking[] =
       bookingsQuery.data && 'success' in bookingsQuery.data && bookingsQuery.data.success
         ? bookingsQuery.data.data?.bookings ?? []
         : [];
-    const activeActions = actions.filter((action) => action.status !== 'SUPPRESSED');
-    const activeIncidents = incidents.filter(isActiveIncident);
+    const activeActions = actions.filter((action) => action.state === 'OPEN' || action.state === 'IN_PROGRESS');
 
     return {
       propertyId,
       isLoading:
         propertyIdLoading ||
-        orchestrationQuery.isLoading ||
-        incidentsQuery.isLoading ||
-        resolutionsQuery.isLoading ||
+        homeActionsQuery.isLoading ||
         bookingsQuery.isLoading,
       snapshot: {
-        atRisk: activeActions.reduce((sum, item) => sum + (typeof item.exposure === 'number' ? item.exposure : 0), 0),
-        urgentCount: activeActions.filter(isUrgentAction).length + activeIncidents.filter(isUrgentIncident).length,
-        highConfidence: activeActions.filter(isHighConfidence).length + activeIncidents.filter(isHighConfidence).length,
+        atRisk: 0,
+        urgentCount: activeActions.filter(isUrgentAction).length,
+        highConfidence: activeActions.filter(isHighConfidence).length,
         gapCount: activeActions.filter(isCoverageAction).length,
         nextTask: chooseNextTask(activeActions, bookings),
         savingsOpportunities: (homeSavingsQuery.data?.categories ?? []).filter((c) => c.status === 'FOUND_SAVINGS').length,
@@ -250,11 +220,8 @@ function useSidebarData() {
   }, [
     propertyId,
     propertyIdLoading,
-    orchestrationQuery.data,
-    orchestrationQuery.isLoading,
-    incidentsQuery.data,
-    incidentsQuery.isLoading,
-    resolutionsQuery.isLoading,
+    homeActionsQuery.data,
+    homeActionsQuery.isLoading,
     bookingsQuery.data,
     bookingsQuery.isLoading,
     homeSavingsQuery.data,
@@ -400,9 +367,7 @@ function DynamicActionsBlock({
   const handleActionClick = (action: SidebarAction) => {
     if (action.onClickAction === 'refresh-signals') {
       if (propertyId) {
-        void queryClient.invalidateQueries({ queryKey: ['orchestration-summary', propertyId] });
-        void queryClient.invalidateQueries({ queryKey: ['active-incidents', propertyId] });
-        void queryClient.invalidateQueries({ queryKey: ['replace-repair-resolutions', propertyId] });
+        void queryClient.invalidateQueries({ queryKey: ['home-actions', propertyId] });
         void queryClient.invalidateQueries({ queryKey: ['resolution-bookings', propertyId] });
       }
       toast({ title: 'Scan started', description: 'Refreshing home signals now.' });

@@ -36,9 +36,9 @@ function inferredRoof(overrides = {}) {
   };
 }
 
-test('Resolution Center delegates to the canonical Home Action feed, whose orchestration uses the canonical detector', () => {
-  const resolutionCenterSource = fs.readFileSync(
-    path.resolve(__dirname, '../../src/services/resolutionCenter.service.ts'),
+test('the canonical Home Action feed uses orchestration with the canonical coverage detector', () => {
+  const homeActionsSource = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/homeActions.service.ts'),
     'utf8',
   );
   const orchestrationSource = fs.readFileSync(
@@ -46,10 +46,8 @@ test('Resolution Center delegates to the canonical Home Action feed, whose orche
     'utf8',
   );
 
-  assert.match(resolutionCenterSource, /getHomeActionFeed\(propertyId, userId\)/);
-  assert.doesNotMatch(resolutionCenterSource, /prisma\.checklistItem\.findMany/);
+  assert.match(homeActionsSource, /getOrchestrationSummary\(propertyId, userId\)/);
   assert.match(orchestrationSource, /detectCoverageGaps\(propertyId\)/);
-  assert.doesNotMatch(resolutionCenterSource, /function detectResolutionCoverageGaps/);
 });
 
 test('association-managed roofs cannot become homeowner coverage cases', () => {

@@ -186,7 +186,7 @@ export default function MaintenanceFocusPage() {
             </div>
           </Link>
 
-          <Link href={`/dashboard/fix?focus=priority-actions`} className="block">
+          <Link href={`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}&focus=priority-actions`} className="block">
             <div className="rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
               <div className="flex items-center gap-2.5">
                 <CalendarClock className="h-4 w-4 text-slate-500 shrink-0" />

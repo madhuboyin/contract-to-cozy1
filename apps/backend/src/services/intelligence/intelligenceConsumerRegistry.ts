@@ -53,17 +53,6 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
     },
   },
   {
-    consumerKey: 'orchestration', version: '1.0', resolutionMode: 'STATIC',
-    relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
-    outputOwner: 'getOrchestrationSummary — canonical orchestration source aggregation.',
-    timeoutMs: 30_000, retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, failureBehavior: 'MARK_STALE',
-    recompute: async ({ propertyId, signal }) => {
-      const userId = await homeownerForProperty(propertyId); throwIfAborted(signal);
-      const { getOrchestrationSummary } = await import('../orchestration.service'); throwIfAborted(signal);
-      await getOrchestrationSummary(propertyId, userId); throwIfAborted(signal);
-    },
-  },
-  {
     consumerKey: 'home-actions', version: '1.0', resolutionMode: 'STATIC',
     relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
     outputOwner: 'getHomeActionFeed — live canonical Home Action materialization/read validation.',
@@ -72,17 +61,6 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
       const userId = await homeownerForProperty(propertyId); throwIfAborted(signal);
       const { getHomeActionFeed } = await import('../homeActions.service'); throwIfAborted(signal);
       await getHomeActionFeed(propertyId, userId); throwIfAborted(signal);
-    },
-  },
-  {
-    consumerKey: 'resolution-center', version: '1.0', resolutionMode: 'STATIC',
-    relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
-    outputOwner: 'getResolutionCenter — canonical Fix/Home Operations projection validation.',
-    timeoutMs: 30_000, retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, failureBehavior: 'MARK_STALE',
-    recompute: async ({ propertyId, signal }) => {
-      const userId = await homeownerForProperty(propertyId); throwIfAborted(signal);
-      const { getResolutionCenter } = await import('../resolutionCenter.service'); throwIfAborted(signal);
-      await getResolutionCenter(propertyId, userId); throwIfAborted(signal);
     },
   },
   {

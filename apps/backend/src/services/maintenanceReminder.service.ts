@@ -84,7 +84,7 @@ export async function processMaintenanceReminders(options: {
 
     // Pre-close buyers don't yet possess the property, so "due in N days"
     // maintenance obligations don't apply — those only make sense once
-    // ownership transfers (see resolutionCenter.service.ts / homeBriefing.service.ts
+    // ownership transfers (see the canonical Home Action feed / homeBriefing.service.ts
     // for the same pre-close suppression on the other homeowner-only surfaces).
     if (operatingModeForOwnershipState(task.property.onboarding?.ownershipState) === 'BUYING') {
       skipped += 1;

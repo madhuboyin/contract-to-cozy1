@@ -100,8 +100,7 @@ test('Today, Action Center, and Personalization APIs reuse the Phase 7 envelope'
 test('Phase 7 lifecycle mutations enforce a contributor role floor', () => {
   for (const relative of [
     '../../src/routes/dailyHomePulse.routes.ts',
-    '../../src/routes/orchestration.routes.ts',
-    '../../src/routes/orchestrationCompletion.routes.ts',
+    '../../src/routes/homeActions.routes.ts',
   ]) {
     const source = read(relative);
     assert.ok(source.includes("requireHouseholdRole('CONTRIBUTOR')"), relative);

@@ -63,9 +63,7 @@ import movingConciergeRoutes from './routes/movingConcierge.routes';
 import { communityRoutes } from './community/community.routes';
 import sellerPrepRoutes from './sellerPrep/sellerPrep.routes';
 import feedbackRoutes from './feedback/feedback.routes';
-import inspectionReportRoutes from './routes/inspectionReport.routes';
 import localUpdatesRoutes from './localUpdates/localUpdates.routes';
-import orchestrationRoutes from './routes/orchestration.routes';
 import homeActionsRoutes from './routes/homeActions.routes';
 
 // Import middleware
@@ -585,9 +583,7 @@ app.use('/api/tax-appeal', taxAppealRoutes);
 app.use('/api/moving-concierge', movingConciergeRoutes);
 app.use('/api/seller-prep', sellerPrepRoutes);
 app.use('/api', feedbackRoutes);
-app.use('/api/inspection-reports', inspectionReportRoutes);
 app.use('/api/local-updates', localUpdatesRoutes);
-app.use('/api/orchestration', orchestrationRoutes);
 app.use('/api', homeActionsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api', seasonalChecklistRoutes);

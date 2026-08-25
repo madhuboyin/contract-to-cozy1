@@ -48,25 +48,3 @@ describe('validateFile (via uploadDocument)', () => {
     })).resolves.toBeDefined();
   });
 });
-
-describe('validateFile (via uploadCompletionPhoto)', () => {
-  it('rejects non-image files for photo upload', async () => {
-    const pdfFile = new File(['data'], 'doc.pdf', {
-      type: 'application/pdf',
-    });
-
-    await expect(api.uploadCompletionPhoto(
-      'prop-1', 'action-key', pdfFile, 0
-    )).rejects.toThrow('File type');
-  });
-
-  it('rejects files over 5MB for photo upload', async () => {
-    const bigImage = new File(['x'.repeat(6 * 1024 * 1024)], 'photo.jpg', {
-      type: 'image/jpeg',
-    });
-
-    await expect(api.uploadCompletionPhoto(
-      'prop-1', 'action-key', bigImage, 0
-    )).rejects.toThrow('File too large');
-  });
-});

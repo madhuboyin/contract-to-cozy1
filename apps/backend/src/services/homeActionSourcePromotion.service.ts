@@ -1724,7 +1724,7 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
 }
 
 // Home Intelligence Functional Completeness FRD Phase 1, Slice 1 — the
-// only Resolution Center action category (resolutionCenter.service.ts
+// only legacy Resolution Center action category (retired in Phase 8;
 // lines 972-1008) with no existing Home Action equivalent: no other
 // loader or the orchestration.service.ts candidate pipeline reads
 // Warranty/InsurancePolicy for renewal purposes. Mirrors that same
@@ -1848,7 +1848,7 @@ async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSour
 }
 
 // Home Intelligence Functional Completeness FRD Phase 1, Slice 2 — ports
-// resolutionCenter.service.ts's HEALTH_INSIGHT logic (lines ~882-955) onto
+// the retired Resolution Center HEALTH_INSIGHT projection onto
 // the canonical feed. Mirrors that file's two-branch handling: the
 // aggregate "Appliances" factor is recomputed independently from inventory
 // records (a stale score snapshot must not hide a concrete missing-field
@@ -2164,7 +2164,7 @@ async function loadCompoundRadarInsightActions(propertyId: string, db: HomeActio
 // Home Intelligence Functional Completeness FRD Phase 1, Slice 2 — the
 // other confirmed-zero-coverage row: no Home Action producer anywhere
 // reads ReplaceRepairAnalysis today. Mirrors
-// resolutionCenter.service.ts's mapReplaceRepairAnalysesToInsights (lines
+// the retired Resolution Center replace/repair projection (formerly
 // ~359-411) and its dedupe-by-item logic, but synthesizes generic
 // options/tradeoffs/assumptions (rather than carrying verdict/impactLevel
 // as bespoke fields) so the result satisfies HomeAction's MATERIAL_FINANCIAL

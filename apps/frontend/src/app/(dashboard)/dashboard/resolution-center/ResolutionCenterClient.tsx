@@ -33,7 +33,7 @@ import {
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
-import { Booking, OrchestratedActionDTO } from '@/types';
+import { Booking, RankedHomeActionDTO } from '@/types';
 import type { Property } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ import {
   WhyThisMattersCard,
   EstimatedSavingsBadge,
 } from '@/components/trust';
-import { CompletionModal } from '@/components/orchestration/CompletionModal';
+import { RichCompletionDialog, type RichCompletionValues } from '@/components/home/RichCompletionDialog';
 import { toast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
 import { ServiceSelectionSheet } from './ServiceSelectionSheet';
@@ -218,7 +218,7 @@ function normalizeConfidence(item: any): { level: 'high' | 'medium' | 'low'; sco
   const levelRaw = normalizeUpperText(item?.confidence?.level ?? null);
   const scoreRaw =
     typeof item?.confidence?.score === 'number'
-      ? item.confidence.score
+      ? (item.confidence.score <= 1 ? item.confidence.score * 100 : item.confidence.score)
       : typeof item?.confidence === 'number'
       ? item.confidence * 100
       : undefined;
@@ -478,8 +478,10 @@ function detectJourneyType(item: any, groupId?: string): JourneyType {
   return 'preventive';
 }
 
-function isOrchestrationAction(item: any): item is OrchestratedActionDTO {
-  return typeof item?.actionKey === 'string' && (item?.source === 'RISK' || item?.source === 'CHECKLIST');
+type ResolutionHomeAction = ReturnType<typeof toResolutionAction>;
+
+function isCanonicalHomeAction(item: any): item is ResolutionHomeAction {
+  return item?.__kind === 'home-action' && typeof item?.id === 'string';
 }
 
 function hasKeyword(value: string | null | undefined, keywords: string[]): boolean {
@@ -487,7 +489,7 @@ function hasKeyword(value: string | null | undefined, keywords: string[]): boole
   return keywords.some((keyword) => upper.includes(keyword));
 }
 
-function isCoverageAction(action: OrchestratedActionDTO): boolean {
+function isCoverageAction(action: any): boolean {
   return (
     action.coverage?.hasCoverage === false ||
     normalizeUpperText(action.actionKey).startsWith('COVERAGE_GAP::') ||
@@ -497,7 +499,7 @@ function isCoverageAction(action: OrchestratedActionDTO): boolean {
   );
 }
 
-function isCostSavingsAction(action: OrchestratedActionDTO): boolean {
+function isCostSavingsAction(action: any): boolean {
   return (
     hasKeyword(action.category, SAVINGS_CATEGORY_KEYWORDS) ||
     hasKeyword(action.actionKey, ['RISK_PREMIUM', 'DO_NOTHING', 'REFINANCE', 'HIDDEN_ASSET']) ||
@@ -516,7 +518,7 @@ function isReplaceRepairAction(action: any): boolean {
   );
 }
 
-function isProviderExecutionAction(action: OrchestratedActionDTO): boolean {
+function isProviderExecutionAction(action: any): boolean {
   return Boolean(
     action.serviceCategory ||
       hasKeyword(action.title, ['BOOK', 'PROVIDER', 'QUOTE', 'SCHEDULE']) ||
@@ -524,7 +526,7 @@ function isProviderExecutionAction(action: OrchestratedActionDTO): boolean {
   );
 }
 
-function isUrgentAction(action: OrchestratedActionDTO): boolean {
+function isUrgentAction(action: any): boolean {
   return (
     HIGH_RISK_LEVELS.has(normalizeUpperText(action.riskLevel ?? null)) ||
     action.overdue === true
@@ -539,14 +541,28 @@ function isUrgentIncident(item: IncidentDTO): boolean {
   return isActiveIncident(item) && (item.severity === 'CRITICAL' || item.severity === 'WARNING');
 }
 
-function isCompletedSuppressedAction(action: OrchestratedActionDTO): boolean {
-  const hasCompletedReason = action.suppression?.reasons?.some(
-    (reason) => reason.reason === 'USER_MARKED_COMPLETE'
-  );
-  const completedBySource =
-    action.suppression?.suppressionSource?.type === 'USER_EVENT' &&
-    action.suppression?.suppressionSource?.eventType === 'USER_MARKED_COMPLETE';
-  return Boolean(hasCompletedReason || completedBySource || action.status === 'COMPLETED');
+function toResolutionAction(action: RankedHomeActionDTO) {
+  const priorityRisk = action.priority === 'NOW' ? 'CRITICAL' : action.priority === 'SOON' ? 'HIGH' : action.priority === 'PLAN' ? 'MEDIUM' : 'LOW';
+  const dueAt = action.timing?.dueAt ?? null;
+  return {
+    ...action,
+    __kind: 'home-action' as const,
+    actionKey: action.id,
+    title: action.presentation?.headline ?? action.recommendedAction,
+    description: action.whyItMatters,
+    summary: action.whyItMatters,
+    category: action.source.kind,
+    systemType: action.presentation?.subject?.label ?? action.source.kind,
+    serviceCategory: action.source.kind,
+    riskLevel: priorityRisk,
+    severity: priorityRisk,
+    status: action.state,
+    nextDueDate: dueAt,
+    dueDate: dueAt,
+    overdue: Boolean(dueAt && Date.parse(dueAt) < Date.now()),
+    confidence: { ...action.confidence, level: action.confidence.label },
+    cta: action.primaryCta,
+  };
 }
 
 function toProviderExecutionBookingItem(booking: Booking) {
@@ -868,7 +884,7 @@ function TriageActionCard({
     if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenIncident(item);
     if (journey === 'urgent-issue') return onOpenService();
     if (journey === 'preventive') return onOpenService();
-    if (!isOrchestrationAction(item)) return;
+    if (!isCanonicalHomeAction(item)) return;
     onComplete();
   };
 
@@ -876,7 +892,7 @@ function TriageActionCard({
     if (journey === 'completed') return onSwitchToActive();
     if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenService();
     if (journey === 'provider-execution') return onViewProvider(item);
-    if (!isOrchestrationAction(item)) return;
+    if (!isCanonicalHomeAction(item)) return;
     onComplete();
   };
 
@@ -1142,7 +1158,7 @@ function EmptyQueueState({ isCompletedFilter }: { isCompletedFilter: boolean }) 
           <Link href="/dashboard/oracle">Run full scan</Link>
         </Button>
         <Button asChild variant="ghost" className="text-slate-600 hover:bg-white">
-          <Link href="/dashboard/actions">Open Task List</Link>
+          <Link href="/dashboard/resolution-center">Open Task List</Link>
         </Button>
       </div>
     </div>
@@ -1185,9 +1201,11 @@ export default function ResolutionCenterClient() {
   const { selectedPropertyId: contextSelectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
   const normalizedFilter = normalizeFilterParam(searchParams.get('filter'));
+  const requestedPropertyId = searchParams.get('propertyId');
   const shouldLoadCompletedIncidents = normalizedFilter === 'completed';
 
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
+  const [completionSubmitting, setCompletionSubmitting] = useState(false);
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<any>(null);
   const [celebratingItem, setCelebratingItem] = useState<any>(null);
@@ -1205,7 +1223,9 @@ export default function ResolutionCenterClient() {
   });
 
   const selectedPropertyId =
-    contextSelectedPropertyId &&
+    requestedPropertyId && properties.some((property) => property.id === requestedPropertyId)
+      ? requestedPropertyId
+      : contextSelectedPropertyId &&
     (propertiesLoading ||
       properties.length === 0 ||
       properties.some((property) => property.id === contextSelectedPropertyId))
@@ -1213,40 +1233,24 @@ export default function ResolutionCenterClient() {
       : properties[0]?.id;
 
   React.useEffect(() => {
-    if (!contextSelectedPropertyId && selectedPropertyId) {
+    if (selectedPropertyId && contextSelectedPropertyId !== selectedPropertyId) {
       setSelectedPropertyId(selectedPropertyId);
     }
   }, [contextSelectedPropertyId, selectedPropertyId, setSelectedPropertyId]);
 
   const {
-    data: orchestrationData,
-    isLoading: orchestrationLoading,
-    isError: orchestrationError,
-    error: orchestrationErrorObj,
-    refetch: refetchOrchestration,
-    dataUpdatedAt: orchestrationUpdatedAt,
+    data: homeActionData,
+    isLoading: homeActionsLoading,
+    isError: homeActionsError,
+    error: homeActionsErrorObj,
+    refetch: refetchHomeActions,
+    dataUpdatedAt: homeActionsUpdatedAt,
   } = useQuery({
-    queryKey: ['orchestration-summary', selectedPropertyId],
+    queryKey: ['home-actions', selectedPropertyId],
     queryFn: () =>
       selectedPropertyId
-        ? api.getOrchestrationSummary(selectedPropertyId)
+        ? api.getHomeActions(selectedPropertyId)
         : Promise.resolve(null as any),
-    enabled: !!selectedPropertyId,
-  });
-
-  const {
-    data: incidentsData,
-    isLoading: incidentsLoading,
-    isError: incidentsError,
-    error: incidentsErrorObj,
-    refetch: refetchIncidents,
-    dataUpdatedAt: incidentsUpdatedAt,
-  } = useQuery({
-    queryKey: ['active-incidents', selectedPropertyId],
-    queryFn: () =>
-      selectedPropertyId
-        ? listIncidents({ propertyId: selectedPropertyId, limit: 10 })
-        : Promise.resolve({ items: [] } as any),
     enabled: !!selectedPropertyId,
   });
 
@@ -1308,22 +1312,19 @@ export default function ResolutionCenterClient() {
 
   const isLoading =
     propertiesLoading ||
-    orchestrationLoading ||
-    incidentsLoading ||
+    homeActionsLoading ||
     resolutionsLoading ||
     bookingsLoading ||
     (shouldLoadCompletedIncidents && completedIncidentsLoading);
 
   const hasLoadError =
-    orchestrationError ||
-    incidentsError ||
+    homeActionsError ||
     resolutionsError ||
     bookingsError ||
     (shouldLoadCompletedIncidents && completedIncidentsError);
 
   const loadErrorMessage =
-    (orchestrationErrorObj as Error | undefined)?.message ||
-    (incidentsErrorObj as Error | undefined)?.message ||
+    (homeActionsErrorObj as Error | undefined)?.message ||
     (resolutionsErrorObj as Error | undefined)?.message ||
     (bookingsErrorObj as Error | undefined)?.message ||
     (completedIncidentsErrorObj as Error | undefined)?.message ||
@@ -1333,9 +1334,9 @@ export default function ResolutionCenterClient() {
   const triageGroups = useMemo((): TriageGroup[] => {
     if (!selectedPropertyId) return [];
 
-    const actions: OrchestratedActionDTO[] = (orchestrationData as any)?.actions || [];
-    const suppressedActions: OrchestratedActionDTO[] = (orchestrationData as any)?.suppressedActions || [];
-    const incidents: IncidentDTO[] = (incidentsData as any)?.items || [];
+    const actions: ResolutionHomeAction[] = (
+      ((homeActionData as any)?.actions || []) as RankedHomeActionDTO[]
+    ).map(toResolutionAction);
     const bookings: Booking[] =
       bookingsData && 'success' in bookingsData && bookingsData.success
         ? bookingsData.data?.bookings ?? []
@@ -1349,7 +1350,7 @@ export default function ResolutionCenterClient() {
       }
     });
 
-    const enrichWithReplaceRepair = (action: OrchestratedActionDTO) => {
+    const enrichWithReplaceRepair = (action: any) => {
       const inventoryItemId = resolveInventoryItemId(action);
       const byInventory = inventoryItemId ? analysisByInventoryId.get(inventoryItemId) : null;
       const byName = analyses.find((analysis) => {
@@ -1363,9 +1364,7 @@ export default function ResolutionCenterClient() {
       };
     };
 
-    const activeActions = actions
-      .filter((action) => action.status !== 'SUPPRESSED')
-      .map(enrichWithReplaceRepair);
+    const activeActions = actions.map(enrichWithReplaceRepair);
 
     const claimedActionKeys = new Set<string>();
     const takeActions = (predicate: (action: any) => boolean) => {
@@ -1381,10 +1380,7 @@ export default function ResolutionCenterClient() {
 
     const groups: TriageGroup[] = [];
 
-    const urgentItems = [
-      ...incidents.filter(isUrgentIncident).map((incident) => ({ ...incident, __kind: 'incident' })),
-      ...takeActions((action) => isUrgentAction(action)),
-    ];
+    const urgentItems = takeActions((action) => isUrgentAction(action));
 
     if (urgentItems.length > 0) {
       groups.push({
@@ -1457,9 +1453,6 @@ export default function ResolutionCenterClient() {
     }
 
     const completedItems = [
-      ...suppressedActions
-        .filter((action) => isCompletedSuppressedAction(action))
-        .map((action) => ({ ...action, resolutionJourney: 'completed' })),
       ...bookings
         .filter((booking) => COMPLETED_BOOKING_STATUSES.has(booking.status))
         .map(toCompletedBookingItem),
@@ -1482,8 +1475,7 @@ export default function ResolutionCenterClient() {
 
     return groups;
   }, [
-    orchestrationData,
-    incidentsData,
+    homeActionData,
     completedIncidentsData,
     bookingsData,
     resolutionsData,
@@ -1557,13 +1549,12 @@ export default function ResolutionCenterClient() {
   const latestDataRefreshTs = useMemo(
     () =>
       Math.max(
-        orchestrationUpdatedAt || 0,
-        incidentsUpdatedAt || 0,
+        homeActionsUpdatedAt || 0,
         resolutionsUpdatedAt || 0,
         bookingsUpdatedAt || 0,
         completedIncidentsUpdatedAt || 0
       ),
-    [orchestrationUpdatedAt, incidentsUpdatedAt, resolutionsUpdatedAt, bookingsUpdatedAt, completedIncidentsUpdatedAt]
+    [homeActionsUpdatedAt, resolutionsUpdatedAt, bookingsUpdatedAt, completedIncidentsUpdatedAt]
   );
 
   const latestUpdateLabel = useMemo(
@@ -1574,8 +1565,7 @@ export default function ResolutionCenterClient() {
   const homeHealthStatus = homeHealthScore >= 75 ? 'Good' : homeHealthScore >= 55 ? 'Watch' : 'At risk';
 
   const handleRunFullScan = () => {
-    void refetchOrchestration();
-    void refetchIncidents();
+    void refetchHomeActions();
     void refetchResolutions();
     void refetchBookings();
     if (shouldLoadCompletedIncidents) {
@@ -1585,7 +1575,7 @@ export default function ResolutionCenterClient() {
   };
 
   const handleOpenComplete = (item: any) => {
-    if (!isOrchestrationAction(item)) return;
+    if (!isCanonicalHomeAction(item) || !item.feedbackControls.includes('COMPLETE')) return;
     setActiveItem(item);
     setIsCompletionModalOpen(true);
   };
@@ -1726,15 +1716,27 @@ export default function ResolutionCenterClient() {
     router.push(`/dashboard/providers?${params.toString()}`);
   };
 
-  const handleCompletionSubmit = async (data: any) => {
-    if (!activeItem || !selectedPropertyId || !isOrchestrationAction(activeItem)) return;
+  const handleCompletionSubmit = async (data: RichCompletionValues) => {
+    if (!activeItem || !selectedPropertyId || !isCanonicalHomeAction(activeItem)) return;
 
+    setCompletionSubmitting(true);
     try {
-      await api.markOrchestrationActionCompleted(
+      const response = await api.executeHomeActionCommand(
         selectedPropertyId,
-        activeItem.actionKey || activeItem.id,
-        data,
+        activeItem.id,
+        {
+          command: 'COMPLETE',
+          completionCostCents: data.costCents,
+          completionObservedResult: data.observedResult,
+          completionDate: data.completedAt,
+          completionFulfillmentMode: data.fulfillmentMode,
+          completionProviderName: data.providerName,
+          completionNotes: data.notes,
+          completionFollowUpNeeded: data.followUpNeeded,
+          completionPhotoDocumentIds: data.photoDocumentIds,
+        },
       );
+      if (!response.success) throw new Error(response.message || 'Unable to complete this action.');
       track('task_completed', {
         priority: activeItem.riskLevel || 'MEDIUM',
         category: String(activeItem.category || activeItem.systemType || activeItem.serviceCategory || 'GENERAL'),
@@ -1742,12 +1744,14 @@ export default function ResolutionCenterClient() {
         journeyType: detectJourneyType(activeItem),
       });
       setIsCompletionModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['orchestration-summary', selectedPropertyId] });
-      queryClient.invalidateQueries({ queryKey: ['active-incidents', selectedPropertyId] });
+      queryClient.invalidateQueries({ queryKey: ['home-actions', selectedPropertyId] });
+      queryClient.invalidateQueries({ queryKey: ['home-operations-work-items', selectedPropertyId] });
       setCelebratingItem(activeItem);
       setActiveItem(null);
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setCompletionSubmitting(false);
     }
   };
 
@@ -1817,8 +1821,7 @@ export default function ResolutionCenterClient() {
                 variant="outline"
                 className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
                 onClick={() => {
-                  void refetchOrchestration();
-                  void refetchIncidents();
+                  void refetchHomeActions();
                   void refetchResolutions();
                   void refetchBookings();
                   if (shouldLoadCompletedIncidents) {
@@ -1858,23 +1861,14 @@ export default function ResolutionCenterClient() {
 
         {selectedPropertyId && activeItem && (
           <>
-            <CompletionModal
+            <RichCompletionDialog
               open={isCompletionModalOpen}
-              onClose={() => setIsCompletionModalOpen(false)}
+              onOpenChange={setIsCompletionModalOpen}
+              submitting={completionSubmitting}
+              costRequired={false}
+              description={`Record how “${activeItem.title}” was completed.`}
               onSubmit={handleCompletionSubmit}
-              actionTitle={activeItem.title}
               propertyId={selectedPropertyId}
-              actionKey={activeItem.actionKey || activeItem.id}
-              onPhotoUpload={async (file: File, idx: number) => {
-                const res = await api.uploadCompletionPhoto(
-                  selectedPropertyId,
-                  activeItem.actionKey || activeItem.id,
-                  file,
-                  idx,
-                );
-                if (res.success) return res.data.photo;
-                throw new Error(res.message || 'Photo upload failed');
-              }}
             />
             <ServiceSelectionSheet
               item={activeItem}

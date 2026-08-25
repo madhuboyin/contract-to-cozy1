@@ -203,7 +203,7 @@ export function PropertyIntelligenceJourneyLinks({
       key: 'ACTIONS',
       label: 'Home Actions',
       description: 'Take the canonical next step',
-      href: '/dashboard/actions',
+      href: '/dashboard/resolution-center',
     },
     {
       key: 'TIMELINE',

@@ -91,7 +91,7 @@ function home(): UnifiedHomeDTO {
     attention: {
       actions: [action()],
       totalCount: 1,
-      planHref: '/dashboard/actions',
+      planHref: '/dashboard/resolution-center',
       firstValueInsight: null,
     },
     decisions: [],
@@ -119,7 +119,7 @@ function home(): UnifiedHomeDTO {
       recordHref: '/dashboard/properties',
       systemsHref: '/dashboard/inventory',
       coverageHref: '/dashboard/protect',
-      workHref: '/dashboard/actions',
+      workHref: '/dashboard/resolution-center',
     },
     diagnostics: {
       candidateCount: 1,

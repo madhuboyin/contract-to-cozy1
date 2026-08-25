@@ -185,7 +185,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
 
     const navItems: CommandItem[] = [
       { id: 'nav-home', label: 'Home', href: '/dashboard', group: 'Navigation' },
-      { id: 'nav-plan-projects', label: 'Plan & Projects', href: '/dashboard/actions', group: 'Navigation' },
+      { id: 'nav-plan-projects', label: 'Plan & Projects', href: '/dashboard/resolution-center', group: 'Navigation' },
       { id: 'nav-home-record', label: 'Home Record', href: '/dashboard/properties', group: 'Navigation' },
       { id: 'nav-ask', label: 'Ask', href: '/dashboard/ask', group: 'Navigation' },
       { id: 'nav-settings', label: 'Profile & Settings', href: '/dashboard/profile', group: 'Navigation' },
@@ -194,7 +194,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     const recent: CommandItem[] = recentActions.map((action, index) => ({
       id: `recent-${action.id}-${index}`,
       label: action.label,
-      href: `/dashboard/actions${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
+      href: `/dashboard/resolution-center${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
       group: 'Recent Actions',
     }));
 

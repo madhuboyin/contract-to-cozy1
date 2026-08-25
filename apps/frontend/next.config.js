@@ -44,13 +44,9 @@ const nextConfig = {
       { source: '/dashboard/documents', destination: '/dashboard/vault?tab=documents', permanent: false },
       // Redirect /dashboard/warranties to vault except when action=new — the creation form must load directly
       { source: '/dashboard/warranties', missing: [{ type: 'query', key: 'action' }], destination: '/dashboard/vault?tab=coverage', permanent: false },
-      // Resolution Center
-      { source: '/dashboard/actions', destination: '/dashboard/resolution-center', permanent: false },
       // /dashboard/maintenance intentionally NOT redirected: it lists PropertyMaintenanceTask
       // records (seasonal "View in Maintenance" deep-links with ?taskId=) which the
       // resolution center does not surface.
-      { source: '/dashboard/fix', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
-      { source: '/dashboard/emergency', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
       // replace-repair is a standalone tool; keep it accessible from resolution-center cards
       // { source: '/dashboard/replace-repair', ... } intentionally removed — direct tool links are used
       // Save consolidation

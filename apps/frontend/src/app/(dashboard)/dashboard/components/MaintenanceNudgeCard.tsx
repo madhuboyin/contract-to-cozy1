@@ -21,7 +21,6 @@ interface MaintenanceNudgeCardProps {
 export function MaintenanceNudgeCard({
         property,
         consolidatedActionCount,
-        hasAssetDrivenActions,
     }: MaintenanceNudgeCardProps) {
 
     // Ensure healthScore data exists
@@ -32,8 +31,7 @@ export function MaintenanceNudgeCard({
     const healthScore = property.healthScore.totalScore || 0;
     const propertyName = property.name || 'Your Home';
 
-    // Derive the maintenance-specific count from health insights so it matches
-    // the resolution-center destination filtered to maintenance items.
+    // Derive the maintenance-specific count for the destination disclosure.
     const maintenanceCount =
         property.healthScore.insights?.filter((i) => MAINTENANCE_STATUSES.includes(i.status)).length ?? 0;
 
@@ -41,9 +39,7 @@ export function MaintenanceNudgeCard({
     const shouldShowNudge = healthScore < 70 && consolidatedActionCount > 0;
 
     // Build destination using maintenanceCount so expectedCount matches what the page shows
-    const destination = hasAssetDrivenActions
-        ? `/dashboard/properties/${property.id}/fix?filter=maintenance&priority=high&expectedCount=${maintenanceCount}`
-        : `/dashboard/properties/${property.id}/fix?filter=maintenance&expectedCount=${maintenanceCount}`;
+    const destination = `/dashboard/resolution-center?propertyId=${encodeURIComponent(property.id)}&filter=preventive&expectedCount=${maintenanceCount}`;
 
     if (!shouldShowNudge) {
         return null;

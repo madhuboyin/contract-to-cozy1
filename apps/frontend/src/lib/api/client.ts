@@ -58,14 +58,7 @@ import {
   CommunityEventsResponse,
   // LOCAL UPDATES
   LocalUpdate,
-  // NEW ORCHESTRATION TYPES 
-  OrchestratedActionDTO,
-  OrchestrationSummaryDTO,
-  SuppressionReason,
   ServiceCategory,
-  CompletionResponseDTO,
-  CompletionDataDTO,
-  CompletionPhotoDTO,
   VaultShareLinkResponse,
 
   HomeBuyerChecklist,
@@ -126,7 +119,6 @@ import {
   RadarTaskLink,
   RadarNotificationPreferences,
   UpdateRadarNotificationPreferencesInput,
-  ResolutionCenterPayload,
   EnvironmentReportDTO,
   FoundationType,
   BasementConfiguration,
@@ -1535,25 +1527,6 @@ class APIClient {
   async getPropertyResolutions(id: string): Promise<APIResponse<any[]>> {
     const res = await this.get<any[]>(`/api/properties/${id}/resolutions`);
     return { success: true, data: res.data };
-  }
-
-  /**
-   * Get aggregated Resolution Center data for a property.
-   */
-  async getPropertyResolutionCenter(id: string): Promise<APIResponse<ResolutionCenterPayload>> {
-    const res = await this.get<ResolutionCenterPayload>(`/api/properties/${id}/resolution-center`);
-    const normalizedActions = (res.data.urgentActions || []).map((action) => ({
-      ...action,
-      dueDate: action.dueDate ? new Date(action.dueDate) : null,
-    }));
-
-    return {
-      success: true,
-      data: {
-        ...res.data,
-        urgentActions: normalizedActions,
-      },
-    };
   }
 
   /**
@@ -3024,34 +2997,6 @@ class APIClient {
       method: 'DELETE',
     });
   }
-  async uploadLegacyInspectionReport(formData: FormData): Promise<APIResponse<any>> {
-    return this.formDataRequest<any>('/api/inspection-reports/upload', formData);
-  }
-
-  async getLegacyInspectionReport(reportId: string): Promise<APIResponse<any>> {
-    return this.request(`/api/inspection-reports/${reportId}`, {
-      method: 'GET',
-    });
-  }
-
-  /**
-   * Get all inspection reports for a property
-   */
-  async getPropertyInspectionReports(propertyId: string): Promise<APIResponse<any>> {
-    return this.request(`/api/inspection-reports/property/${propertyId}`, {
-      method: 'GET',
-    });
-  }
-
-  /**
-   * Get maintenance calendar from inspection report
-   */
-  async getInspectionMaintenanceCalendar(reportId: string): Promise<APIResponse<any>> {
-    return this.request(`/api/inspection-reports/${reportId}/maintenance-calendar`, {
-      method: 'GET',
-    });
-  }
-
   /**
    * Get user profile with homeowner profile information
    */
@@ -3096,28 +3041,12 @@ class APIClient {
   }
 
 // ==========================================================================
-// ORCHESTRATION ENDPOINTS (PHASE 6)
+// CANONICAL HOME ACTION ENDPOINTS
 // ==========================================================================
 
 /**
- * Fetch full orchestration summary for a property.
- * Returns backend decision model as-is (DTO).
- * UI transformation happens in orchestration.adapter.ts
+ * Fetch the canonical ranked Home Action feed for a property.
  */
-  async getOrchestrationSummary(
-    propertyId: string
-  ): Promise<OrchestrationSummaryDTO> {
-    const response = await this.request<OrchestrationSummaryDTO>(
-      `/api/orchestration/summary/${propertyId}`
-    );
-
-    if (response.success && response.data) {
-      return response.data;
-    }
-
-    throw new APIError('Failed to load orchestration summary', 'ORCHESTRATION_ERROR');
-  }
-
   async getHomeActions(propertyId: string): Promise<HomeActionFeedDTO> {
     const response = await this.request<HomeActionFeedDTO>(
       `/api/properties/${propertyId}/home-actions`,
@@ -3532,16 +3461,6 @@ class APIClient {
   }
 
   /**
-   * Lightweight orchestration count for dashboard badges.
-   * Non-breaking, optional convenience method.
-   */
-  async getOrchestrationActionCount(
-    propertyId: string
-  ): Promise<number> {
-    const summary = await this.getOrchestrationSummary(propertyId);
-    return summary.pendingActionCount;
-  }
-  /**
    * Creates a new checklist item directly (used by orchestration / action center).
    * This bypasses maintenance templates.
    */
@@ -3559,148 +3478,6 @@ class APIClient {
       method: 'POST',
       body: data,
     });
-  }
-
-  // ORCHESTRATION — Mark action as completed (CANONICAL)
-  async markOrchestrationActionCompleted(
-    propertyId: string,
-    actionKey: string,
-    completionData?: CompletionDataDTO
-  ): Promise<APIResponse<{ success: boolean; completion: CompletionResponseDTO | null }>> {
-    return this.request<{ success: boolean; completion: CompletionResponseDTO | null }>(
-      `/api/orchestration/${propertyId}/actions/mark-completed`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          propertyId,
-          actionKey,
-          completionData: completionData || undefined,
-        }),
-      }
-    );
-  }
-  async undoOrchestrationActionCompleted(
-    propertyId: string,
-    actionKey: string
-  ): Promise<APIResponse<{ success: boolean }>> {
-    // URL-encode the actionKey since it contains colons
-    const encodedActionKey = encodeURIComponent(actionKey);
-    
-    return this.request<{ success: boolean }>(
-      `/api/orchestration/${propertyId}/actions/${encodedActionKey}/undo`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ propertyId }),
-      }
-    );
-  }
-  /**
-   * Snooze an orchestration action
-   */
-  async snoozeOrchestrationAction(
-    propertyId: string,
-    actionKey: string,
-    snoozeUntil: string, // ISO date string
-    snoozeReason?: string
-  ): Promise<APIResponse<{ success: boolean }>> {
-    const encodedActionKey = encodeURIComponent(actionKey);
-    
-    return this.request<{ success: boolean }>(
-      `/api/orchestration/${propertyId}/actions/${encodedActionKey}/snooze`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          snoozeUntil,
-          snoozeReason,
-        }),
-      }
-    );
-  }
-
-  /**
-   * Un-snooze an orchestration action
-   */
-  async unsnoozeOrchestrationAction(
-    propertyId: string,
-    actionKey: string
-  ): Promise<APIResponse<{ success: boolean }>> {
-    const encodedActionKey = encodeURIComponent(actionKey);
-    
-    return this.request<{ success: boolean }>(
-      `/api/orchestration/${propertyId}/actions/${encodedActionKey}/unsnooze`,
-      {
-        method: 'POST',
-      }
-    );
-  }
-
-  async getOrchestrationDecisionTrace(propertyId: string, actionKey: string) {
-    const encoded = encodeURIComponent(actionKey);
-    return this.request<any>(`/api/orchestration/${propertyId}/actions/${encoded}/trace`, {
-      method: 'GET',
-    });
-  }
-  
-  async getCompletion(
-    propertyId: string,
-    completionId: string
-  ): Promise<APIResponse<CompletionResponseDTO>> {
-    return this.request<CompletionResponseDTO>(
-      `/api/orchestration/${propertyId}/completions/${completionId}`
-    );
-  }
-  
-  async updateCompletion(
-    propertyId: string,
-    completionId: string,
-    data: Partial<CompletionDataDTO>
-  ): Promise<APIResponse<CompletionResponseDTO>> {
-    return this.request<CompletionResponseDTO>(
-      `/api/orchestration/${propertyId}/completions/${completionId}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      }
-    );
-  }
-  
-  async uploadCompletionPhoto(
-    propertyId: string,
-    actionKey: string,
-    file: File,
-    orderIndex: number
-  ): Promise<APIResponse<{ photo: CompletionPhotoDTO }>> {
-    try {
-      this.validateFile(file, {
-        maxSizeMB: 5,
-        allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
-      });
-    } catch (e) { return Promise.reject(e); }
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('actionKey', actionKey);
-    formData.append('orderIndex', orderIndex.toString());
-  
-    return this.request<{ photo: CompletionPhotoDTO }>(
-      `/api/orchestration/${propertyId}/completions/photos`,
-      {
-        method: 'POST',
-        body: formData,
-        headers: {}, // Let browser set Content-Type for FormData
-      }
-    );
-  }
-  
-  async deleteCompletionPhoto(
-    propertyId: string,
-    photoId: string
-  ): Promise<APIResponse<{ success: boolean }>> {
-    return this.request<{ success: boolean }>(
-      `/api/orchestration/${propertyId}/completions/photos/${photoId}`,
-      {
-        method: 'DELETE',
-      }
-    );
   }
 
   // ==========================================================================

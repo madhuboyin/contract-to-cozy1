@@ -1,9 +1,9 @@
 /**
  * Phase 0 work item 3: code-owned inventory of every known calculation that
  * independently decides what deserves attention outside the canonical Home
- * Action rank. Phase 1 removes or converts these owners; until then this
- * registry makes additions/removals reviewable and report generation
- * deterministic instead of embedding a stale Markdown table in a script.
+ * Action rank. Phase 8 removed presentation-layer competitors from Home and
+ * Fix. The entries that remain are bounded domain or delivery policies and
+ * must not be used to re-rank the canonical Home Action feed.
  */
 export interface AttentionPriorityOwner {
   ownerKey: string;
@@ -13,18 +13,6 @@ export interface AttentionPriorityOwner {
 }
 
 export const ATTENTION_PRIORITY_OWNERS: readonly AttentionPriorityOwner[] = [
-  {
-    ownerKey: 'fix-backend-resolution-center',
-    sourceFiles: ['apps/backend/src/services/resolutionCenter.service.ts'],
-    surface: 'Fix backend',
-    calculation: 'Own critical/high/medium/low scale, status model, and case/action sorting.',
-  },
-  {
-    ownerKey: 'fix-frontend-resolution-center',
-    sourceFiles: ['apps/frontend/src/lib/dashboard/resolutionCenterViewModel.ts'],
-    surface: 'Fix frontend',
-    calculation: 'ACTION_PRIORITY_RANK and casePriorityForAction re-sort the backend projection in the browser.',
-  },
   {
     ownerKey: 'status-board-backend',
     sourceFiles: ['apps/backend/src/services/homeStatusBoard.service.ts'],
@@ -42,18 +30,6 @@ export const ATTENTION_PRIORITY_OWNERS: readonly AttentionPriorityOwner[] = [
     sourceFiles: ['apps/backend/src/services/guidanceEngine/guidancePriority.service.ts'],
     surface: 'Dashboard hero and Morning Pulse backend',
     calculation: 'GuidancePriorityService independently scores severity, urgency, financial impact, safety, confidence, and readiness.',
-  },
-  {
-    ownerKey: 'dashboard-hero-frontend',
-    sourceFiles: ['apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/DashboardHeroSection.tsx'],
-    surface: 'Dashboard hero frontend',
-    calculation: 'estimateHeroStrength and rankHeroCandidates re-rank already-scored guidance.',
-  },
-  {
-    ownerKey: 'morning-pulse-frontend',
-    sourceFiles: ['apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/MorningPulseSection.tsx'],
-    surface: 'Dashboard Morning Pulse frontend',
-    calculation: 'PULSE_DOMAIN_ORDER and deriveUrgency independently order guidance.',
   },
   {
     ownerKey: 'notification-fallback',

@@ -108,7 +108,6 @@ router.get('/address-details', authenticate, apiRateLimiter, propertyController.
  *         description: List of active resolutions
  */
 router.get('/:id/resolutions', authenticate, propertyController.getPropertyResolutions);
-router.get('/:id/resolution-center', authenticate, propertyController.getPropertyResolutionCenter);
 
 // Property Context transparency endpoints. Authorization is enforced inside
 // the provider so API and non-HTTP consumers share the same access boundary.

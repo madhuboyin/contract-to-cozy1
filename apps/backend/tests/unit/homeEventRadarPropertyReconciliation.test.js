@@ -259,10 +259,6 @@ test('fact routing is narrow and every required mutation path publishes reconcil
     ),
     'utf8',
   );
-  const completionService = fs.readFileSync(
-    path.join(root, 'src/services/orchestrationCompletion.service.ts'),
-    'utf8',
-  );
   const maintenanceService = fs.readFileSync(
     path.join(root, 'src/services/PropertyMaintenanceTask.service.ts'),
     'utf8',
@@ -284,7 +280,6 @@ test('fact routing is narrow and every required mutation path publishes reconcil
   );
   assert.match(factCapture, /radarReconciliationReasonForFactKey/);
   assert.match(radarInteractionService, /reasons: \['mitigation_changed'\]/);
-  assert.match(completionService, /reasons: \['mitigation_changed'\]/);
   assert.match(maintenanceService, /reasons: \['mitigation_changed'\]/);
   assert.match(propertyGeo, /reasons: \['geography_changed'\]/);
   assert.doesNotMatch(

@@ -4109,7 +4109,6 @@ model Property {
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport RiskAssessmentReport? @relation(name: "PropertyRiskReport")
 
-  legacyInspectionReports LegacyInspectionReport[]
   inspectionReports       InspectionReport[]
   inspectionFindings      InspectionFinding[]
 
@@ -6109,111 +6108,6 @@ model AgentInterview {
   @@map("agent_interviews")
 }
 
-// ============================================================================
-// INSPECTION REPORTS (HOME_BUYER FEATURE)
-// ============================================================================
-
-model LegacyInspectionReport {
-  id         String @id @default(uuid())
-  propertyId String
-  userId     String
-
-  // Report metadata
-  inspectionDate   DateTime?
-  inspectorName    String?
-  inspectorCompany String?
-  reportType       String?
-
-  // PDF storage
-  pdfUrl      String?
-  pdfFileName String
-
-  // AI Analysis Results
-  overallScore     Int    @default(0)
-  overallCondition String @default("FAIR")
-
-  totalIssuesFound   Int @default(0)
-  criticalIssues     Int @default(0)
-  highPriorityIssues Int @default(0)
-  mediumIssues       Int @default(0)
-  lowIssues          Int @default(0)
-  cosmeticIssues     Int @default(0)
-
-  // Cost estimates
-  totalRepairCost       Decimal @default(0) @db.Decimal(12, 2)
-  criticalRepairCost    Decimal @default(0) @db.Decimal(12, 2)
-  recommendedRepairCost Decimal @default(0) @db.Decimal(12, 2)
-
-  // Negotiation data
-  negotiationScript String?  @db.Text
-  suggestedCredit   Decimal? @db.Decimal(12, 2)
-  negotiationPoints Json?
-
-  // Comparison data
-  comparableHomes Json?
-  marketContext   String? @db.Text
-
-  // Status
-  analysisCompleted Boolean @default(false)
-  analysisError     String?
-
-  // Relations
-  property Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  issues   LegacyInspectionIssue[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([propertyId])
-  @@index([userId])
-  @@map("inspection_reports")
-}
-
-model LegacyInspectionIssue {
-  id       String @id @default(uuid())
-  reportId String
-
-  // Issue details
-  title       String
-  description String @db.Text
-  location    String
-  category    String
-
-  // Severity & Priority
-  severity   String
-  urgency    String
-  isCritical Boolean @default(false)
-
-  // Cost estimates
-  estimatedCost Decimal @db.Decimal(12, 2)
-  costRange     Json?
-
-  // Inspector notes
-  inspectorNotes          String? @db.Text
-  inspectorRecommendation String? @db.Text
-
-  // Repair info
-  repairRecommendations String[]
-  preventativeMeasures  String[]
-  estimatedRepairTime   String?
-
-  // Maintenance calendar
-  needsImmediateAction     Boolean   @default(false)
-  scheduledMaintenanceDate DateTime?
-  maintenanceFrequency     String?
-
-  // Relations
-  report LegacyInspectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([reportId])
-  @@index([severity])
-  @@index([category])
-  @@map("inspection_issues")
-}
-
 model LocalUpdate {
   id String @id @default(uuid())
 
@@ -6343,71 +6237,6 @@ model OrchestrationActionSnooze {
   @@index([propertyId, actionKey])
   @@index([snoozeUntil])
   @@map("orchestration_action_snoozes")
-}
-
-model OrchestrationActionCompletion {
-  id String @id @default(uuid())
-
-  // Scope
-  propertyId String
-  actionKey  String // Links to orchestration action
-  eventId    String @unique // Links to USER_MARKED_COMPLETE event
-
-  // Completion details
-  completedAt  DateTime
-  costAmount   Decimal? @db.Decimal(10, 2)
-  costCurrency String   @default("USD")
-  didItMyself  Boolean  @default(false)
-
-  serviceProviderName   String?
-  serviceProviderRating Int? // 1-5
-
-  notes      String? @db.Text
-  photoCount Int     @default(0)
-
-  // Metadata
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  createdBy String? // userId
-  undoneAt  DateTime? // If user undoes completion
-
-  // Relations
-  photos OrchestrationActionCompletionPhoto[]
-
-  @@index([propertyId, actionKey])
-  @@index([propertyId, completedAt])
-  @@index([serviceProviderName])
-  @@map("orchestration_action_completions")
-}
-
-model OrchestrationActionCompletionPhoto {
-  id String @id @default(uuid())
-
-  completionId String?
-  propertyId   String
-
-  // File metadata
-  fileName      String
-  fileSizeBytes Int
-  mimeType      String
-
-  // URLs (PLACEHOLDER - will store S3 URLs when image processing is implemented)
-  originalUrl  String
-  thumbnailUrl String
-
-  // Dimensions
-  width  Int?
-  height Int?
-
-  orderIndex Int      @default(0)
-  uploadedAt DateTime @default(now())
-
-  // Relations
-  completion OrchestrationActionCompletion? @relation(fields: [completionId], references: [id], onDelete: Cascade)
-
-  @@index([completionId])
-  @@index([propertyId])
-  @@map("orchestration_action_completion_photos")
 }
 
 model OrchestrationDecisionTrace {

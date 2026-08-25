@@ -1,16 +1,14 @@
-import JobHubRedirectPage from '@/components/navigation/JobHubRedirectPage';
+import { Suspense } from 'react';
+import ResolutionCenterClient from './ResolutionCenterClient';
 
 /**
- * Resolution Center Redirect Page
- * 
- * DEPRECATED: This route now redirects to the property-specific fix page.
- * The canonical route is /dashboard/properties/[id]/fix
- * 
- * This maintains backward compatibility for:
- * - Old bookmarks
- * - External links
- * - Legacy navigation
+ * Phase 8 canonical Home Action surface. Property selection is accepted by
+ * query string and synchronized by the client; there is no Fix redirect hop.
  */
-export default function ResolutionCenterRedirectPage() {
-  return <JobHubRedirectPage jobKey="fix" />;
+export default function ResolutionCenterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-[60vh] animate-pulse rounded-2xl bg-slate-100" />}>
+      <ResolutionCenterClient />
+    </Suspense>
+  );
 }

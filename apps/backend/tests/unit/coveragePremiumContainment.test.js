@@ -160,14 +160,12 @@ test('downstream coverage contracts do not interpret scenario verdicts as covera
   const financial = source('../../src/services/guidanceEngine/guidanceFinancialContext.service.ts');
   const signal = source('../../src/services/signal.service.ts');
   const backfill = source('../../src/services/sharedDataBackfill.service.ts');
-  const resolution = source('../../src/services/resolutionCenter.service.ts');
 
   assert.match(derived, /coverageReviewState/);
   assert.doesNotMatch(derived, /coverageOverallVerdict|insuranceVerdict|warrantyVerdict/);
   assert.doesNotMatch(financial, /coverageOverallVerdict|insuranceVerdict/);
   assert.doesNotMatch(signal, /gaps\.length > 0 \? 'SITUATIONAL' : 'NOT_WORTH_IT'/);
   assert.doesNotMatch(backfill, /gaps\.length > 0 \? 'SITUATIONAL' : 'NOT_WORTH_IT'/);
-  assert.doesNotMatch(resolution, /savedAnalysis\.warrantyVerdict|savedAnalysis\.overallVerdict/);
 });
 
 test('item protection UI keeps internal verdicts out of homeowner-facing directive copy', () => {

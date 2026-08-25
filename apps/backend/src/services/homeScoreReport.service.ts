@@ -1303,7 +1303,7 @@ export class HomeScoreReportService {
         value: signals.overdueTaskCount,
         component: 'RISK',
         provenance: 'SYSTEM_COMPUTED',
-        verifyHref: `/dashboard/actions?propertyId=${propertyId}`,
+        verifyHref: `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`,
       },
     ];
 
@@ -1490,7 +1490,7 @@ export class HomeScoreReportService {
         status: 'FAIL',
         severity: 'HIGH',
         detail: `${criticalTaskCount} critical overdue task${criticalTaskCount === 1 ? '' : 's'} are increasing uncertainty and risk.`,
-        actionHref: `/dashboard/actions?propertyId=${propertyId}`,
+        actionHref: `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`,
       });
     } else if (overdueTaskCount > 0) {
       checks.push({
@@ -1499,7 +1499,7 @@ export class HomeScoreReportService {
         status: 'WARN',
         severity: 'MEDIUM',
         detail: `${overdueTaskCount} overdue task${overdueTaskCount === 1 ? '' : 's'} detected.`,
-        actionHref: `/dashboard/actions?propertyId=${propertyId}`,
+        actionHref: `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`,
       });
     } else {
       checks.push({

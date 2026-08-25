@@ -9,17 +9,16 @@ import { FEEDBACK_REASON_CODES, type FeedbackReasonCode } from './feedbackContra
  * UP/DOWN, the generic app feedback widget, seller-prep feedback) wrote raw
  * `rating`/`comment`/`page` rows directly and left `targetType`, `targetId`,
  * `surface`, `reasonCodes`, and `contextVersion` — all already present on
- * the schema — permanently null. This does not remove `page`/`rating`:
- * existing readers (`getSuppressedHomeActionIds`'s cooldown query) still key
- * off `page`, so both are populated together rather than migrating reads in
- * the same pass.
+ * the schema — permanently null. `page` and `rating` remain compatibility/
+ * export fields; canonical identity and interpretation use targetType,
+ * targetId, surface, and reasonCodes.
  */
 export interface RecordTypedFeedbackInput {
   userId: string;
   propertyId: string | null;
-  /** Legacy per-target key existing readers (e.g. the suppression cooldown query) still query by. */
+  /** Compatibility/export location. Never use as canonical target identity. */
   page: string;
-  /** Legacy free-text sentiment field kept for existing readers/exports. */
+  /** Compatibility/export sentiment. Interpretation belongs to reasonCodes. */
   rating: string;
   comment?: string | null;
   targetType: FeedbackTargetType;
@@ -66,7 +65,12 @@ export async function recordTypedFeedback(
 ): Promise<{ id: string }> {
   const data = buildTypedFeedbackData(input);
   const existing = await db.feedback.findFirst({
-    where: { userId: input.userId, page: input.page },
+    where: {
+      userId: input.userId,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      surface: input.surface,
+    },
     orderBy: { createdAt: 'desc' },
   });
   const saved = existing

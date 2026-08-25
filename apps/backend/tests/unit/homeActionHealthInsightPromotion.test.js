@@ -84,7 +84,7 @@ test('no recorded appliances produces an "add major appliances" Home Action', as
 
 test('an old HVAC install year produces an unmatched, factor-page-linked Home Action', async () => {
   // 'HVAC'/'HVAC Age' is deliberately excluded from item-name matching
-  // (same exclusion list as resolutionCenter.service.ts's
+  // (same exclusion list as the retired Resolution Center projection's
   // extractHealthInsightAssetName) to avoid mismatching against a generic
   // named item, so this falls back to the factor detail page, not a
   // guidance-overview item deep link.

@@ -162,7 +162,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
       <Link
         href={
           maintenanceCount > 0
-            ? `/dashboard/properties/${property.id}/fix?filter=maintenance&priority=high`
+            ? `/dashboard/resolution-center?propertyId=${encodeURIComponent(property.id)}&filter=preventive`
             : weeklyChange !== "No change"
             ? buildPropertyAwareDashboardHref(property.id, '/dashboard/health-score?view=trends')
             : buildPropertyAwareDashboardHref(property.id, '/dashboard/health-score')

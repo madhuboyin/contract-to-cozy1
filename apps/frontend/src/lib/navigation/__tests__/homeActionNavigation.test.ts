@@ -16,7 +16,7 @@ function action(overrides: Partial<RankedHomeActionDTO> = {}): RankedHomeActionD
     evidence: [{ id: 'hvac', label: 'HVAC Furnace', source: 'Risk assessment', freshness: 'CURRENT', confidence: 0.9 }],
     assumptions: [],
     confidence: { score: 0.9, label: 'HIGH', missing: [] },
-    primaryCta: { label: 'Schedule Service', href: '/dashboard/properties/property-1/fix' },
+    primaryCta: { label: 'Schedule Service', href: '/dashboard/resolution-center?propertyId=property-1' },
     secondaryCtas: [],
     source: { kind: 'SYSTEM', entityId: 'risk-hvac', version: 'phase2-v1' },
     options: [],
@@ -70,7 +70,7 @@ function action(overrides: Partial<RankedHomeActionDTO> = {}): RankedHomeActionD
 }
 
 describe('resolveHomeActionPrimaryHref', () => {
-  it('replaces a legacy Fix destination with contextual HVAC provider search', () => {
+  it('replaces a canonical Resolution Center destination with contextual HVAC provider search', () => {
     expect(resolveHomeActionPrimaryHref(action(), 'property-1')).toBe(
       '/dashboard/providers?propertyId=property-1&category=HVAC&serviceLabel=HVAC+Furnace&intent=service-booking&from=home-action&actionKey=risk%3Aproperty-1%3Ahvac&workCategory=HVAC',
     );
@@ -121,7 +121,7 @@ describe('resolveHomeActionPrimaryHref', () => {
   });
 
   it('does not bypass safety escalation destinations', () => {
-    const safetyHref = '/dashboard/properties/property-1/fix?mode=emergency';
+    const safetyHref = '/dashboard/emergency?propertyId=property-1';
     expect(resolveHomeActionPrimaryHref(action({
       governance: {
         safetyTier: 'SAFETY_EMERGENCY',

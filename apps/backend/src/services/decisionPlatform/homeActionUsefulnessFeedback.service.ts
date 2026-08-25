@@ -71,11 +71,12 @@ export async function getSuppressedHomeActionIds(params: {
     where: {
       userId: params.userId,
       propertyId: params.propertyId,
-      page: { in: params.homeActionIds.map(homeActionFeedbackPage) },
-      rating: 'not-useful',
+      targetType: 'HOME_ACTION',
+      targetId: { in: [...params.homeActionIds] },
+      reasonCodes: { has: 'NOT_USEFUL' },
       createdAt: { gte: since },
     },
-    select: { page: true },
+    select: { targetId: true },
   });
-  return new Set(rows.map((row) => row.page.slice('home-action:'.length)));
+  return new Set(rows.flatMap((row) => row.targetId ? [row.targetId] : []));
 }

@@ -38,15 +38,15 @@ const REPORT_PATH = path.join(__dirname, '../../../docs/product/HOME_INTELLIGENC
 function independentPriorityCalculationsSection(): string {
   const rows = ATTENTION_PRIORITY_OWNERS.map((entry: AttentionPriorityOwner, index: number) =>
     `| ${index + 1} | ${entry.sourceFiles.map((file: string) => `\`${file}\``).join('<br>')} | ${entry.surface} | ${entry.calculation} |`);
-  return `## 2. Independent priority calculations (inventory only — Phase 1 converts these)
+  return `## 2. Bounded attention policies outside canonical Home Action ranking
 
-${ATTENTION_PRIORITY_OWNERS.length} systems outside \`homeActions.service.ts\` independently compute urgency/priority/rank for "what needs attention." The rows are generated from \`ATTENTION_PRIORITY_OWNERS\`, validated at startup, and retained until Phase 1 converts or retires each owner.
+${ATTENTION_PRIORITY_OWNERS.length} bounded domain or delivery policies remain outside \`homeActions.service.ts\`. Phase 8 removed the competing Home/Fix presentation ranks; these entries are retained to prevent a domain-specific or channel-delivery policy from being mistaken for permission to re-rank the canonical Home Action feed. The rows are generated from \`ATTENTION_PRIORITY_OWNERS\` and validated at startup.
 
 | # | File | Surface | What it computes independently |
 | --- | --- | --- | --- |
 ${rows.join('\n')}
 
-**Positive counter-example — the pattern Phase 1 should generalize, not replace:** \`apps/backend/src/services/decisionPlatform/priorityListPolicy.ts\`'s \`buildPriorityListView()\` is a genuinely pure, DB-free projection of \`homeActions.service.ts\`'s already-ranked feed — it never re-ranks. \`askOrchestrator.service.ts\` (Ask/Cozy) and \`homeActionProactiveDelivery.service.ts\` (external proactive notifications) already consume it correctly today.`;
+**Canonical presentation pattern:** \`apps/backend/src/services/decisionPlatform/priorityListPolicy.ts\`'s \`buildPriorityListView()\` is a genuinely pure, DB-free projection of \`homeActions.service.ts\`'s already-ranked feed — it never re-ranks. \`askOrchestrator.service.ts\` (Ask/Cozy) and \`homeActionProactiveDelivery.service.ts\` (external proactive notifications) consume it correctly.`;
 }
 
 const READ_BOUNDARY_SECTION = `## 4. Canonical read boundary decision (FRD Phase 0 work item 4)

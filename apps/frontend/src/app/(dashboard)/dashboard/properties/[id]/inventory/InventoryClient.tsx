@@ -513,7 +513,7 @@ export default function InventoryClient() {
               exposedValue={exposedValue}
               totalValue={portfolioStats.totalValue}
               onReviewGaps={() => setActiveSmartFilter('gaps')}
-              onViewActions={() => router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage`)}
+              onViewActions={() => router.push(`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}&filter=coverage`)}
               onAdd={onAdd}
             />
           </MobileSection>
@@ -593,7 +593,7 @@ export default function InventoryClient() {
                   )
                 }
                 onOpenActions={(count) =>
-                  router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage&expectedCount=${count}`)
+                  router.push(`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}&filter=coverage&expectedCount=${count}`)
                 }
               />
             ) : !hasFilteredItems ? (
@@ -678,7 +678,7 @@ export default function InventoryClient() {
             exposedValue={exposedValue}
             totalValue={portfolioStats.totalValue}
             onReviewGaps={() => setActiveSmartFilter('gaps')}
-            onViewActions={() => router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage`)}
+            onViewActions={() => router.push(`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}&filter=coverage`)}
             onAdd={onAdd}
           />
 
@@ -763,7 +763,7 @@ export default function InventoryClient() {
                 )
               }
               onOpenActions={(count) =>
-                router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage&expectedCount=${count}`)
+                router.push(`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}&filter=coverage&expectedCount=${count}`)
               }
             />
           ) : !hasFilteredItems ? (

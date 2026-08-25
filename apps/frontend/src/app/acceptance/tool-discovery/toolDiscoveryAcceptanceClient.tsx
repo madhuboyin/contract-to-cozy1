@@ -138,7 +138,7 @@ const home: UnifiedHomeDTO = {
   attention: {
     actions: [coverageAction],
     totalCount: 1,
-    planHref: '/dashboard/actions',
+    planHref: '/dashboard/resolution-center',
     firstValueInsight: null,
   },
   decisions: [],
@@ -212,7 +212,7 @@ const home: UnifiedHomeDTO = {
     recordHref: '/dashboard/properties',
     systemsHref: '/dashboard/inventory',
     coverageHref: '/dashboard/protect',
-    workHref: '/dashboard/actions',
+    workHref: '/dashboard/resolution-center',
   },
   diagnostics: {
     candidateCount: 1,

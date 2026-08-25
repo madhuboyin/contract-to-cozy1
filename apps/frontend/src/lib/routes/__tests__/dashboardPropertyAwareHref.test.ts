@@ -16,12 +16,7 @@ describe('buildPropertyAwareDashboardHref', () => {
 
   it('maps health-score dashboard route to canonical property route', () => {
     const href = buildPropertyAwareDashboardHref('property-123', '/dashboard/health-score');
-    expect(href).toBe('/dashboard/properties/property-123/health-score');
-  });
-
-  it('maps fix dashboard route to canonical property route', () => {
-    const href = buildPropertyAwareDashboardHref('property-123', '/dashboard/fix');
-    expect(href).toBe('/dashboard/properties/property-123/fix');
+    expect(href).toBe('/dashboard/properties/property-123/property-brief');
   });
 
   it('maps save dashboard route to canonical property route', () => {
