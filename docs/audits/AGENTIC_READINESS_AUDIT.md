@@ -5,6 +5,8 @@
 **Method:** Six research passes ran in parallel, each grounded in a pre-built knowledge graph of the repository (3,982 files, 42,104 nodes, 83,374 edges) and then verified line-by-line against source: frontend + Ask/chatbot + skill platform; backend core + domain services + rules engines; database schema + intelligence persistence + personalization; workers + cron + events + notifications; LLM usage + observability + external integrations; decision platform + shared context + the Radar ecosystem. Every finding below traces to a real file, model, or commit — documentation was deliberately not trusted at face value.
 **Related:** [`CONTRACTTOCOZY_INTELLIGENCE_READINESS_AUDIT.md`](./CONTRACTTOCOZY_INTELLIGENCE_READINESS_AUDIT.md) (2026-08-22/23) scores the *current, shipped* homeowner-facing intelligence experience (48/100, "Intelligence Readiness"). This audit asks a narrower, forward-looking question — how ready is the underlying architecture for an *agentic* layer — and scores accordingly (56/100, "Agentic Readiness"). The two overlap in evidence but answer different questions; neither supersedes the other.
 
+**Revisions (2026-08-25, after external review):** Three refinements accepted and folded into the sections below, each softening or sharpening a recommendation rather than overturning a finding — the underlying evidence is unchanged. (1) The event-bus gap ([§6](#6-gap-analysis), [§9](#9-recommended-foundation-before-agents)) is downgraded from an absolute prerequisite to a conditional one: prove the existing BullMQ/`DomainEvent` infrastructure can't meet real latency/reliability needs before building new event plumbing — nothing in the codebase's actual domains (weather alerts, refinance opportunities, maintenance) needs sub-minute reaction time. (2) The insight-unification recommendation ([§4](#4-component-classification-matrix), [§9](#9-recommended-foundation-before-agents)) is reframed from eventual schema consolidation to a **C2C Intelligence Envelope** — a common read-side contract (type · subject · source · confidence · severity · priority · evidence · freshness · expiry · status · provenance) that the five existing stores expose through, keeping their specialized persistence underneath. (3) The candidate-first-agents list ([§10](#10-candidate-first-agents)) is reordered: a **Home Intelligence Watcher / Attention Agent** — the unified priority-ranking engine already flagged Critical in [§6](#6-gap-analysis), wrapped in continuous background execution with an LLM added only for "why this, why now" narration — now leads, because it proves C2C's Job 1 ("tell me what needs my attention") rather than assisting a decision the homeowner already initiated. HVAC Repair/Replace Advisor becomes its first specialist consumer rather than the standalone first build. Stage 3 is retitled accordingly: **C2C Intelligence & Agentic Evolution Architecture**, not "Agent Architecture" — the missing piece this audit found is convergence and coordination, not agents per se.
+
 **At a glance**
 
 | | |
@@ -202,7 +204,7 @@ The 9,606-line `askOrchestrator.service.ts` and its ~35 supporting files (`askSe
 | `decisionPlatform` (DecisionThread) | Structured decision lifecycle, immutable lineage, commitment gating. | **ORCH** | Substrate for agent-driven, multi-step decision workflows. | Extend real composition beyond HVAC; wire dormant `homeIntelligenceGraph.ts`. | Critical |
 | `decisionFamilyAdapterRegistry` | Registers 7 decision families; only HVAC does real context composition. | **REFACTOR** | All 7 families composing, or explicitly documented as thin by design. | Bring 6 snapshot-wrapper families to real composition, or scope down. | Important |
 | `signal.service.ts` (Signal bus) | Cross-domain scored, versioned signal publication; 9 owned keys, 16+ callers. | **SHARED** | Reusable signal-bus pattern — the one genuine cross-domain success story. | Extend the key-ownership model past 9 hardcoded keys. | Important |
-| `GuidanceSignal` / `SignalProvenance` | Richest single intelligence record: confidence, severity, dedup, expiry, evidence. | **SHARED** | Best existing candidate schema to generalize into one Insight Store. | Schema unification across the 5 subsystems. | Critical |
+| `GuidanceSignal` / `SignalProvenance` | Richest single intelligence record: confidence, severity, dedup, expiry, evidence. | **SHARED** | Best reference shape for the C2C Intelligence Envelope's field set. | Expose through the shared envelope contract — not a physical merge with the other 4 stores. | Critical |
 | `IntelligenceObservation` / `IntelligenceSource*` | External-data ingestion pipeline with governance; 2 live providers. | **SHARED** | The path agents subscribe to for external-signal awareness. | Onboard more providers behind the existing governance shape. | Important |
 | `RecommendationSnapshot` / `OutcomeObservation` / `CalibrationRelease` | Immutable recommendation lineage, outcome attribution, governed calibration release. | **ORCH** | Foundation for confidence-calibrated agent recommendations. | Close the loop — outcomes are captured but not yet fed back into calibration (Phase 10B unbuilt). | Critical |
 | Home Event Radar pipeline | BullMQ ingest → match, 10s poll to notification. | **AGENT** | Execution substrate for a background environmental-signal watcher agent. | Extract a generic adapter contract shared with the other two radars. | Important |
@@ -264,11 +266,11 @@ A real, uneven foundation. Strongest where engineering discipline is oldest (bac
 | ✅ Available | Decision lineage + commitment gating (`decisionPlatform`) |
 | ✅ Available | Admin ops visibility (job health, capability grants, recompute triggers) |
 | ✅ Available | Skill manifest contract (`services/skills/`) — versioned, risk-classified |
-| 🔴 Critical | Unified insight/signal schema (currently 5 parallel, non-interoperable schemas) |
-| 🔴 Critical | Real event bus / pub-sub (currently poll-based, 10–30s latency even in the durable BullMQ radar path) |
+| 🔴 Critical | A **C2C Intelligence Envelope** — a common read-side contract (confidence/evidence/priority/status/expiry/provenance) the 5 parallel intelligence stores expose through. *Revised: not a physical schema merge — see the 2026-08-25 revision note above.* |
 | 🔴 Critical | LLM Gateway provider abstraction (single-provider today, no fallback, no caching, no safety filter) |
-| 🔴 Critical | Unified priority-ranking service (3 competing implementations, wrapped not merged) |
+| 🔴 Critical | Unified priority-ranking service (3 competing implementations, wrapped not merged) — this is also the deterministic core the proposed Attention Agent needs |
 | 🔴 Critical | Resolution of the two disagreeing HVAC decision engines — a live data-quality bug, not just a gap |
+| 🟡 Important | Real event bus / pub-sub — *revised to conditional*: only build this if the existing BullMQ/`DomainEvent` poll infrastructure (10–30s latency) is shown not to meet a real domain's latency or reliability need; nothing found in this audit currently requires it |
 | 🟡 Important | Generalized external-data-adapter interface (only permits/tax have one, of ~10 integrations) |
 | 🟡 Important | Skill kill-switch wiring (declared in every manifest, read by nothing at runtime) |
 | 🟡 Important | Radar pipeline convergence (3 independent implementations of the same conceptual pipeline) |
@@ -329,29 +331,39 @@ Evidence-based estimate of what the classification matrix implies at the scale o
 
 The minimum architectural foundation — not the full agent ecosystem design, which is explicitly out of scope for this audit.
 
-1. **Unify the insight/signal shape.** Even as a thin common interface over the 5 existing tables before any schema migration — confidence, evidence, status, priority, and expiry as first-class, generically queryable fields.
-2. **Upgrade the event backbone from poll to push** — or explicitly document poll latency (10–30s) as an accepted constraint — so agent-to-agent triggering doesn't depend on guesswork about timing.
-3. **Extend `aiRequestGovernance.service.ts` into a real multi-provider LLM Gateway** before any agent is allowed to call a model directly. This is the literal capability the audit brief asks about, and the seed already exists.
-4. **Resolve the two disagreeing HVAC verdicts and converge the 3 ranking engines.** An agent must not inherit contradictions that are already baked into its own inputs.
-5. **Wire the Skills registry's kill-switches for real**, and extend `releaseGate.service.ts`'s cohort/KPI gating — proven on tool rollout — to cover agent rollout the same way.
-6. **Give `propertyContext` a formal, versioned, agent-facing contract** rather than relying on internal service-to-service imports, so agents don't couple directly to backend internals.
-7. **Add trace-level observability** across the `DomainEvent → job → service` chain, so an orchestrator's decisions remain debuggable as agent count grows.
+1. **Define a C2C Intelligence Envelope** — a common read-side contract (type · subject · source · confidence · severity · priority · evidence · freshness · expiry · status · provenance) that `Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, and `RadarEvent` each expose through, via a thin adapter per store. *Deliberately not* a physical schema migration — the five underlying models differ enough in real ways (e.g. `GuidanceSignal`'s decimal severity scoring vs. `RadarEvent`'s correlation shape) that forcing one table would lose fidelity. Consolidate the schemas later only if the envelope proves insufficient.
+2. **Converge the 3 priority-ranking engines into one deterministic ranking service.** This is not optional infrastructure — it is the actual computational core the [Attention Agent](#10-candidate-first-agents) needs, and today it's wrapped, not unified, by `priorityListPolicy.ts`.
+3. **Treat the event backbone as conditional, not mandatory.** Test whether BullMQ + `DomainEvent`'s existing poll cadence (10–30s) meets every real domain's latency and reliability needs first. Only add push-based pub/sub where a specific need — most plausibly `SAFETY_EMERGENCY`-tier signals — demonstrably can't tolerate that latency.
+4. **Extend `aiRequestGovernance.service.ts` into a real multi-provider LLM Gateway** before any agent is allowed to call a model directly. This is the literal capability the audit brief asks about, and the seed already exists.
+5. **Resolve the two disagreeing HVAC verdicts.** An agent must not inherit contradictions that are already baked into its own inputs.
+6. **Wire the Skills registry's kill-switches for real**, and extend `releaseGate.service.ts`'s cohort/KPI gating — proven on tool rollout — to cover agent rollout the same way.
+7. **Give `propertyContext` a formal, versioned, agent-facing contract** rather than relying on internal service-to-service imports, so agents don't couple directly to backend internals.
+8. **Add trace-level observability** across the `DomainEvent → job → service` chain, so an orchestrator's decisions remain debuggable as agent count grows.
 
 ---
 
 ## 10. Candidate First Agents
 
-The 3–5 strongest candidates supported by what already exists — not an implementation plan, and not the full roster a mature ecosystem would eventually need.
+The 3–5 strongest candidates supported by what already exists — not an implementation plan, and not the full roster a mature ecosystem would eventually need. Ordered by strategic priority per the 2026-08-25 revision: the Attention Agent leads because it proves C2C's Job 1 — noticing something before the homeowner asks — rather than assisting a decision already in motion.
 
-### 1. HVAC Repair/Replace Advisor Agent
+### 1. Home Intelligence Watcher / Attention Agent
+*LLM: "why this, why now" narration only — the ranking itself stays deterministic*
+
+- **Business value:** Directly answers C2C's core promise — "tell me what needs my attention" — proactively, across every domain at once, instead of per-feature.
+- **Existing capabilities reused:** `homeActions.service.ts`'s ranker, `radarPriority.ts`, `guidancePriority.service.ts`, and `priorityListPolicy.ts`'s eligibility/suppression/consent/budget gate — the deterministic "what matters" computation already exists three times over.
+- **Missing pieces:** This is the one candidate whose prerequisite work is itself [§9](#9-recommended-foundation-before-agents)'s foundation — the 3 ranking engines must converge into one service, and it needs the C2C Intelligence Envelope to consume `Signal`/`GuidanceSignal`/`RadarEvent`/etc. uniformly, before the agent has anything coherent to watch.
+- **Why an agent, not a service:** The unified ranker is a service, full stop — deterministic, no LLM needed for the ranking itself. What makes this an *agent* is wrapping that service in continuous background execution (via the existing BullMQ/cron substrate) that watches for state changes across the whole property, decides materiality, and only then hands off to the notification policy layer — a standing background process making an ongoing judgment call, not a request/response calculation. The LLM's only job is explaining the "why" in the same disciplined, verified-facts-only pattern as `askResultSynthesis.service.ts`.
+- **How it composes with the specialist below:** When the Attention Agent surfaces an HVAC-related item, it hands off to the HVAC Repair/Replace Advisor Agent for the deeper, multi-step decision-support conversation — establishing the generalist-detects → specialist-advises hierarchy the rest of the agent roster should follow.
+
+### 2. HVAC Repair/Replace Advisor Agent
 *LLM: explanation & dialogue only*
 
-- **Business value:** The highest-stakes, highest-friction homeowner decision already modeled end-to-end in the codebase.
+- **Business value:** The highest-stakes, highest-friction homeowner decision already modeled end-to-end in the codebase; the natural first specialist the Attention Agent hands off to.
 - **Existing capabilities reused:** Full DecisionThread lifecycle, calibrated weighted scoring engine, RecommendationSnapshot lineage, outcome attribution.
 - **Missing pieces:** Resolve the two competing verdict engines first; wire the currently one-way outcome → calibration learning loop.
 - **Why an agent, not a service:** The reasoning already spans multi-step context gathering, option comparison, and calibrated confidence — an agent can drive the conversational "gather missing context, compare, explain" loop a user currently has to drive manually.
 
-### 2. External Signal Watcher Agent
+### 3. External Signal Watcher Agent
 *LLM: optional, explanation only*
 
 - **Business value:** Proactively surfaces refinance opportunities, price anomalies, and environmental/regulatory events without a user-initiated query.
@@ -359,7 +371,7 @@ The 3–5 strongest candidates supported by what already exists — not an imple
 - **Missing pieces:** Converge the 3 independent radar engines first, or scope the initial agent to Home Event Radar only.
 - **Why an agent, not a service:** Genuinely continuous and autonomous — reconciling heterogeneous external sources and judging materiality is closer to a background daemon with judgment than a fixed cron job.
 
-### 3. Ask Concierge Agent
+### 4. Ask Concierge Agent
 *LLM: fallback tier + clarification*
 
 - **Business value:** The product's actual chat surface, already carrying 65 operations, entity resolution, and trust/audience policy.
@@ -367,7 +379,7 @@ The 3–5 strongest candidates supported by what already exists — not an imple
 - **Missing pieces:** A real LLM-backed reasoning stage behind today's deterministic router (the `REMOTE_FALLBACK` stage name exists, unwired); Skills kill-switches need real wiring first.
 - **Why an agent, not a service:** This is the one place the product already anticipated an agent shape — routing stages, confidence bands, an eval corpus. Extending it is lower-risk than building a new agent from nothing.
 
-### 4. Document Intelligence Agent
+### 5. Document Intelligence Agent
 *LLM: core — vision + language*
 
 - **Business value:** Every document upload (insurance, inspection, inventory, permits, tax, negotiation) currently reimplements its own OCR/extraction call.
@@ -375,7 +387,7 @@ The 3–5 strongest candidates supported by what already exists — not an imple
 - **Missing pieces:** Consolidate the ~7 bespoke per-feature OCR/prompt implementations behind one shared extraction service before wrapping it in an agent.
 - **Why an agent, not a service:** Document intake genuinely benefits from multi-step reasoning — classify, extract, cross-check against existing property facts, flag conflicts, route for review — not a single-shot OCR call.
 
-### 5. Property Health Score Reconciler Agent *(lower priority)*
+### 6. Property Health Score Reconciler Agent *(lower priority)*
 *LLM: explanation layer only*
 
 - **Business value:** 4 independent risk/scoring paths can produce inconsistent signals about the same property.
@@ -412,24 +424,56 @@ Six parallel research passes against a 42,104-node knowledge graph of the actual
 
 ---
 
-## 12. Inputs Required for Stage 3 — C2C Agentic Evolution Architecture
+## 12. Inputs Required for Stage 3 — C2C Intelligence & Agentic Evolution Architecture
+
+*Retitled 2026-08-25, per external review: the missing piece this audit found is convergence and coordination, not agents per se — Stage 3 should be scoped and named as an intelligence-and-agentic exercise, not an "agent architecture" exercise, so the framing stays centered on homeowner intelligence rather than on agent proliferation for its own sake.*
 
 What the next exercise — designing *Current C2C → Intelligence Foundation → Initial Agents → Orchestrator → Mature Agent Ecosystem* — should take as given, rather than re-deriving.
+
+The shape the findings point toward, directly from this audit's own evidence:
+
+```mermaid
+graph TB
+  PC["Property Context<br/>modules/propertyContext"]
+  DP["Domain Intelligence Producers<br/>Signal / GuidanceSignal / IntelligenceObservation /<br/>RecommendationSnapshot / RadarEvent"]
+  ENV["C2C Intelligence Envelope<br/>common confidence / evidence / priority / status / expiry contract"]
+  SPEC["Specialist Agents<br/>e.g. HVAC Repair/Replace Advisor"]
+  ATT["Attention Agent<br/>unified ranking + continuous watch"]
+  POL["Priority + Interruption Policy<br/>priorityListPolicy.ts + suppression/snooze/consent/budget"]
+  OUT["Action / Recommendation / Ask"]
+
+  PC --> DP --> ENV --> SPEC
+  ENV --> ATT
+  SPEC -.hands back up.-> ATT
+  ATT --> POL --> OUT
+
+  SKILLS["Skills / Tools<br/>services/skills/ + deterministic C2C services"]
+  GATE["LLM Gateway<br/>aiRequestGovernance.service.ts, extended"]
+  LLM["LLM<br/>reasoning / narration only"]
+
+  ATT -.calls.-> SKILLS
+  SPEC -.calls.-> SKILLS
+  ATT -.only when narrating.-> GATE --> LLM
+  SPEC -.only when explaining/dialoguing.-> GATE
+```
 
 **Reusable substrate**
 `modules/propertyContext` as the shared-context API surface; BullMQ/cron/`CronJobLock` as the execution substrate; `aiRequestGovernance.service.ts` as the Gateway seed; `services/skills/` as the tool-manifest seed; the notification policy stack as the interruption gate.
 
 **Must unify first**
-The 5 intelligence subsystems into one insight shape; the 3 priority-ranking engines; the 3 Radar pipelines; the 2 disagreeing HVAC verdicts. Stage 3 should treat these as prerequisites, not as things agents can route around.
+The 5 intelligence subsystems behind one C2C Intelligence Envelope (a read-side contract, not a physical schema merge — see the 2026-08-25 revision note at the top of this document); the 3 priority-ranking engines (this is also literally the Attention Agent's computational core); the 3 Radar pipelines; the 2 disagreeing HVAC verdicts. Stage 3 should treat these as prerequisites, not as things agents can route around.
 
 **Genuinely new**
-A push-based event backbone; multi-provider abstraction in the LLM Gateway; safety/content filtering; an orchestrator-level agent coordination layer; distributed tracing across the async chain.
+Multi-provider abstraction in the LLM Gateway; safety/content filtering; an orchestrator-level agent coordination layer; distributed tracing across the async chain. A push-based event backbone moved from this list to conditional — see below.
+
+**Conditional, not assumed**
+A real event bus / pub-sub. Nothing in the domains this audit examined (weather alerts, refinance opportunities, maintenance, price benchmarks) needs sub-minute reaction time, and BullMQ + the `DomainEvent` poller already provide durable, governed 10–30s-latency delivery. Stage 3 should test the existing infrastructure against real requirements — including any `SAFETY_EMERGENCY`-tier exception — before specifying new event plumbing.
 
 **Proven governance patterns to extend**
 `releaseGate.service.ts`'s KPI-gated cohort rollout (proven on tool rollout) as the model for agent rollout; Tool Discovery's real, drill-tested kill-switches as the model for the Skills registry's currently-unwired ones; `workerJobRegistry.ts`'s startup parity enforcement as the model for agent-registration validation.
 
 **Strongest first-agent candidates**
-HVAC Repair/Replace Advisor and Ask Concierge (both extend existing, evidence-rich subsystems); External Signal Watcher as the background-autonomy proof point; Document Intelligence as the multi-step-reasoning proof point.
+The Home Intelligence Watcher / Attention Agent leads — it's the unified ranking engine already required by "must unify first" above, wrapped in continuous background execution, and it proves C2C's Job 1 (noticing something before being asked) rather than assisting an already-initiated decision. HVAC Repair/Replace Advisor is its first specialist hand-off target. Ask Concierge extends an existing, evidence-rich subsystem. Document Intelligence is the strongest multi-step-reasoning proof point.
 
 **Constraints to design within**
 No production-user migration constraint (confirmed) — but real working code exists at every layer and should not be discarded. Preserve the deterministic-first / LLM-for-phrasing-only discipline. Preserve the frontend's thin-client boundary.
