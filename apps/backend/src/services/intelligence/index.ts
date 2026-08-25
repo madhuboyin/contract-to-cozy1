@@ -20,6 +20,7 @@ import { COMPOUND_RULE_REGISTRY } from './compoundRuleRegistry';
 import { ATTENTION_PRIORITY_OWNERS, validateAttentionPriorityOwners } from './attentionPriorityOwnership.registry';
 import { validateDocumentPromotionAdapterRegistry } from './documentPromotionAdapterRegistry.contract';
 import { DOCUMENT_PROMOTION_ADAPTER_REGISTRY } from './documentPromotionAdapterRegistry';
+import { validateSkillOperationGovernanceCoverage } from './skillOperationGovernance.contract';
 export * from './extractionEnvelope.contract';
 
 export * from './intelligenceConsumerRegistry.contract';
@@ -36,6 +37,7 @@ export * from './compoundRuleRegistry';
 export * from './attentionPriorityOwnership.registry';
 export * from './documentPromotionAdapterRegistry.contract';
 export * from './documentPromotionAdapterRegistry';
+export * from './skillOperationGovernance.contract';
 
 /**
  * Home Intelligence Functional Completeness FRD Phase 0 work item 6 —
@@ -69,5 +71,8 @@ export function validateIntelligenceRegistries(): string[] {
     ),
     ...validateAttentionPriorityOwners(ATTENTION_PRIORITY_OWNERS),
     ...validateDocumentPromotionAdapterRegistry(DOCUMENT_PROMOTION_ADAPTER_REGISTRY),
+    ...validateSkillOperationGovernanceCoverage({
+      skillCoversOperation: (operationId: AskOperationId) => Boolean(getSkillForOperation(operationId)),
+    }),
   ];
 }

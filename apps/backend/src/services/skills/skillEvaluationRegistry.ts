@@ -13,6 +13,9 @@ import { RENOVATION_SKILL_EVALUATION } from './renovation';
 import { SAVINGS_SKILL_EVALUATION } from './savings';
 import { SELL_HOLD_RENT_SKILL_EVALUATION } from './sell-hold-rent';
 import { SELLER_PREPARATION_SKILL_EVALUATION } from './seller-preparation';
+import { BUYER_CLOSING_SKILL_EVALUATION } from './buyer-closing';
+import { INCIDENT_CLAIM_SKILL_EVALUATION } from './incident-claim';
+import { HOME_OPERATIONS_SKILL_EVALUATION } from './home-operations';
 
 export type SkillRoutingFixtureMode = 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL' | 'MISSPELLED';
 export type SkillContextFixtureState = 'KNOWN' | 'MISSING' | 'STALE' | 'CONFLICTING' | 'UNAUTHORIZED' | 'UNAVAILABLE';
@@ -123,6 +126,9 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
   [SAVINGS_SKILL_EVALUATION.id]: SAVINGS_SKILL_EVALUATION,
   [SELL_HOLD_RENT_SKILL_EVALUATION.id]: SELL_HOLD_RENT_SKILL_EVALUATION,
   [SELLER_PREPARATION_SKILL_EVALUATION.id]: SELLER_PREPARATION_SKILL_EVALUATION,
+  [BUYER_CLOSING_SKILL_EVALUATION.id]: BUYER_CLOSING_SKILL_EVALUATION,
+  [INCIDENT_CLAIM_SKILL_EVALUATION.id]: INCIDENT_CLAIM_SKILL_EVALUATION,
+  [HOME_OPERATIONS_SKILL_EVALUATION.id]: HOME_OPERATIONS_SKILL_EVALUATION,
   [maintenance.evaluationSuite]: evaluationPackage(maintenance, {
     routingCases: [
       { mode: 'EXACT', message: 'What maintenance is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },

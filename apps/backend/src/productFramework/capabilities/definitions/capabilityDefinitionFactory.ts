@@ -97,6 +97,8 @@ const DATA_SENSITIVITY_BY_CAPABILITY_ID: Record<
   string,
   ToolCapabilityDefinition['governance']['privacy']['dataSensitivity']
 > = {
+  'buyer-closing': 'SENSITIVE',
+  claims: 'SENSITIVE',
   'coverage-intelligence': 'SENSITIVE',
   'coverage-options': 'SENSITIVE',
   documents: 'SENSITIVE',
@@ -196,6 +198,7 @@ const OUTPUT_ENTITY_TYPES: Record<
   string,
   ToolCapabilityDefinition['lifecycle']['outputEntityTypes']
 > = {
+  claims: ['STRUCTURED_RECORD'],
   documents: ['PROPERTY_RECORD'],
   diy: ['PROJECT'],
   'hoa-compliance': ['DOCUMENT'],
@@ -442,7 +445,9 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
 
 const RELATED_CAPABILITIES: Record<string, string[]> = {
   'break-even': ['sell-hold-rent', 'ownership-costs', 'capital-timeline'],
+  'buyer-closing': ['property-brief', 'inspection-hub', 'home-timeline'],
   'capital-timeline': ['reserve-fund', 'home-timeline', 'seller-prep'],
+  claims: ['coverage-intelligence', 'home-timeline', 'property-brief'],
   // Moved from 'documents' → 'home-records': this related-capabilities set
   // (property-brief/home-timeline/material-specs) describes the canonical
   // records capability's natural relations — that's 'home-records' now

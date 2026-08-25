@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.29"
+version: "1.30"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.29 |
+| Version | 1.30 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1169,6 +1169,15 @@ Remaining, prioritized by the review's severity ranking: (a) wire `emitPropertyC
 
 **Phase 5 remediation status after items (a)-(e): (a) done, (b) done, (c) targeted vertical slice done (InsurancePolicy/Warranty; 4 direct-reader call sites and the relational-conflict resolution UI remain explicitly open), (d) done for INVENTORY/LOAN_ESTIMATE (PROPERTY_TAX/CLAIM deliberately deferred — no extraction pipeline exists to adapt), (e) done.** Phase 5 is closer to complete than the original "all 6 work items complete" claim, but is still not fully complete — the open items above (direct-reader conflict enforcement, relational conflict resolution UI, PROPERTY_TAX/CLAIM extraction pipelines) are real, scoped, and documented rather than silently dropped.
 
+**Final Phase 5 closure (2026-08-24; supersedes the open status immediately above): complete.** The remaining gaps were resolved against the normative requirements without pretending that every domain needs AI extraction:
+
+- **HI-DOC-004 is now literal, not advisory-only.** Coverage Property Facts carry structured competing evidence and affected entity ids in a real `CONFLICTED` state. Feature evaluation fails closed for aggregate use and blocks a selected conflicted Policy/Warranty while allowing an explicitly selected clean record. Direct material readers (`coverageAnalysis`, `riskPremiumOptimizer`, `doNothingSimulator`, coverage-correlated compound actions, Home Capital Timeline, and Ask's deadline/confirmation/update paths) use the same detector and do not silently choose a conflicted record. Insurance-policy fact review provides the existing choose-existing/choose-extracted resolution flow; Warranty provides an explicit keep-one flow that removes the competing records and emits a canonical change. Advisory conflict Home Actions remain discovery surfaces, not the enforcement mechanism.
+- **HI-DOC-003/005 now cover every named registry domain.** Inventory's persisted draft confirmation and Loan Estimate's homeowner save remain the appropriate review models. Loan Estimate now transports the actual server-built envelope with a property-bound HMAC attestation that save verifies before accepting document provenance. Property Tax uses its existing persisted `PropertyTaxDocumentIntake` review workflow: staged manual/OCR/AI fields are returned as a common envelope and confirmation atomically promotes parcel/assessment/bill evidence and emits `PropertyChange`. Claim intentionally keeps AI extraction deferred per the Claims PRD; the homeowner's categorized upload is the review step. Every claim/checklist document upload returns/stores a deterministic common envelope, atomically creates the canonical `ClaimDocument` links and timeline event, and emits `PropertyChange`. The registry consequently has nine implemented rows and no missing adapter.
+- **HI-CMP-003 no longer truncates compound evidence.** The canonical Home Action schema has no arbitrary evidence-count ceiling, and recurring-failure enrichment retains every contributing Home Event with its own identity, source, observation time, freshness, and confidence. UI presentation may collapse long lists but cannot alter the canonical reasoning basis.
+- **HI-DOC-001 contract consumption is end to end.** Home Records, Material Spec, Inspection Finding, Inventory, Loan Estimate, Property Tax, and Claim live paths now build and consume/return the common `ExtractionEnvelope`; client-created Loan Estimate provenance is no longer trusted.
+
+The historical review notes above are retained to explain why earlier "complete" claims were rejected and how the scope decisions evolved; this closure paragraph is the current Phase 5 status.
+
 ### Phase 6 — Skill and capability completion
 
 **Objective:** Cozy can carry every priority workflow from discovery to verified outcome.
@@ -1184,6 +1193,30 @@ Remaining, prioritized by the review's severity ranking: (a) wire `emitPropertyC
 5. Enforce startup parity validation.
 
 **Functional exit:** each priority capability can be discovered in context, explained by Cozy, launched or executed through a governed operation, and reconciled to completion/outcome.
+
+**Status: first vertical slice landed 2026-08-24 — closes the ungoverned-operation gap for 20 operations that already had real, tested execution logic but no Skill or capability governance.**
+
+Before this phase began, `getSkillForOperation()` returning `undefined` for an operation meant `executeOperationCore()` (`askOrchestrator.service.ts`) skipped Skill-level feature-flag, kill-switch, adapter-allowlist, result-block-allowlist, and risk-policy enforcement entirely, falling back to the raw operation definition with none of the Skill contract enforced. A repo-wide sweep (every `ASK_OPERATION_DEFINITIONS` entry cross-referenced against every `skill.manifest.ts`'s declared operations) found 20 fully-implemented, orchestrator-routed operations in that state: the 18 `BUYER_*` buyer/closing operations, `INCIDENT_CLAIM_STATUS`, and `HOME_ACTIONS`. The 18 buyer operations and `HOME_ACTIONS`/`INCIDENT_CLAIM_STATUS`'s capability also had no capability-registry or capability-discovery presence at all — real, shipped frontend features at `/dashboard/properties/[id]/buyer-plan` (9 dedicated center components) and `/dashboard/properties/[id]/claims` were entirely invisible to Cozy and capability discovery.
+
+Work items 1–2 (partial): three new Skills close this — `buyer-closing` (18 operations, `services/skills/buyer-closing/`), `incident-claim` (`INCIDENT_CLAIM_STATUS`, read-only), `home-operations` (`HOME_ACTIONS`). New `buyer-closing` and `claims` capabilities were registered in `canonicalCapabilityRegistry` (`planBudget.ts`/`protectMonitor.ts`, `CATALOG_ONLY` mode) and in `capabilitySkillGuidanceBridge.registry.ts`'s `OPERATIONS_BY_CAPABILITY`; the pre-existing `home-operations` capability already had a bridge entry — only its Skill was missing. 20 new adapter registrations were added to `services/skills/adapters/skillAdapterRegistry.ts`, reusing each operation's existing `adapterKey` and a canonical-owner service traced from that operation's real implementation in `askOrchestrator.service.ts` (e.g. `HomeBuyerTaskService`, `BuyerTitleEscrowService`, `BuyerWalkthroughService`, `BuyerClosingDisclosureService`). Real `SKILL_HANDOFF_DEFINITIONS` rows were added (buyer-closing → property-record, incident-claim → coverage, home-operations → maintenance) so HI-SKL-004 continuity is wired, not just documented, for these three.
+
+Work item 5 (startup parity validation): new `services/intelligence/skillOperationGovernance.contract.ts` validates at startup that every Ask operation with a non-null `propertyRoleFloor` is covered by exactly one Skill or is a named, documented exception in `KNOWN_UNGOVERNED_OPERATIONS` (currently `GUIDANCE_JOURNEY_CREATE` and `HOME_CHANGE_SUMMARY` — both fully implemented and orchestrator-routed but outside this phase's six named domains, a real open gap, not a placeholder). It also fails startup if a listed exception stops being a real gap, so the carve-out list cannot rot silently. This check would have caught the original 20-operation gap at boot; it is wired into `validateIntelligenceRegistries()`, so both the API and the worker process (`@worker-shared/services/intelligence`) fail closed on a regression. The five null-`propertyRoleFloor` operations (`CAPABILITY_DISCOVERY`, `EMERGENCY_BOUNDARY`, `GROUNDED_GUIDANCE`, `OUT_OF_SCOPE_BOUNDARY`, `UNSAFE_RESTRICTED_BOUNDARY`) are structurally exempt — they are orchestrator-native boundary/discovery responses, not Skill-executed domain operations, not a carve-out by name.
+
+No database schema, migration, or frontend change was required — every operation's execution logic, route, and UI already existed and is unchanged; this pass only closed the governance and discovery layer around them.
+
+Test coverage: the existing `tests/ask/skill*.test.js` suite was extended and re-verified green (55/55) after correcting several evaluation-package routing fixtures that were resolving through `REMOTE_FALLBACK` instead of the deterministic keyword patterns already in `askOperationRegistry.ts` (e.g. `BUYER_PLAN_STATUS` requires the literal phrase "buyer plan status", not "status of my buyer plan"). `tests/unit/capabilityCatalog.test.js`, `tests/unit/capabilityRegistryParity.test.js`, and `tests/unit/toolLifecycleAnalytics.test.js` are green after registering both new capabilities in `docs/product/capability-discovery/current-capability-inventory.json`/`.md` and adding both ids to `toolLifecycle.contract.ts`'s `DISCOVERABLE_TOOL_IDS`. The inventory's own generator script (`apps/frontend/scripts/product-framework/inventory-tool-capabilities.mjs`) was found already non-functional against the current tree before this phase touched it — running it with `--write` reproduced byte-identical output that omitted both new capabilities and separately reported "missing backend lifecycle canonicalization" for roughly 40 pre-existing, untouched capabilities — so both inventory files were updated by hand for this phase's 2 entries; repairing the generator itself is unrelated follow-up work, not caused by this phase. Three other test failures observed during verification (`tests/unit/toolCapabilityRelated.test.js`'s `cost-explainer`/`true-cost` legacy ids, `tests/unit/toolCapabilityRecommendation.test.js`'s CAP-405/CAP-604 `cost-growth`/`material-specs` cases, `tests/unit/capabilityGovernanceDefinition.test.js`'s `home-timeline` privacy classification) reference capabilities this phase never touched and were confirmed pre-existing in this shared working tree, not caused by this work.
+
+**Explicitly not done this pass (real, scoped gaps, not oversights):**
+
+- **Claims filing is still Ask-unreachable.** Only the pre-existing read-only `INCIDENT_CLAIM_STATUS` status query is now governed. `claims.service.ts` (1,925 lines — filing, transitions, checklist/document upload) has no Ask/Skill/operation surface; adding filing/transition operations for a regulated, financially consequential workflow is materially larger work than wrapping an existing read, and was not attempted blind in this slice.
+- **Inspection findings continuation has no dedicated surface.** `BUYER_INSPECTION_REVIEW` only covers the buyer-transaction-scoped read. The general Inspection Hub domain (`inspection-hub` capability, `inspectionWriteBack.service.ts`) remains Ask-unreachable.
+- **Document review/promotion remains Ask-unreachable**, the same gap Phase 5's remediation review already flagged for `PropertyChange` emission: `materialSpec.service.ts`'s `reviewExtraction`, `inspectionWriteBack.service.ts`'s `applyWriteBacks`, and `insurancePolicyRecord.service.ts`'s `confirmPolicyFact` have no Ask/Skill operation.
+- **Operational Work write commands don't exist.** `HOME_ACTIONS` (the ranked-feed read) is now governed, but no Ask operation exists for accept/complete/defer/snooze on an individual Home Action or `OperationalWorkItem`.
+- **Emergency/incident continuation is still a dead end.** `EMERGENCY_BOUNDARY` remains a pure orchestrator-native safety refusal with no follow-on handoff into `incident-claim` or the existing, bridge-unlinked `emergency` capability.
+- **Work item 3 is partial.** `buyer-closing` and `claims` are `CATALOG_ONLY` — no `CONTEXTUAL_DEFINITIONS`, readiness requirement, or Home-Action-source-kind wiring was added, so HI-SKL-005's "surfaced when eligibility and context indicate relevance" is not yet met for either.
+- **Work item 4 got 3 real handoff rows, not a continuity audit** across all six HI-SKL-003 domains.
+
+Remaining Phase 6 scope: Claims filing/transition operations, an inspection-findings Skill, a document-review/promotion Skill, Operational Work write-command operations, contextual/readiness wiring for `buyer-closing` and `claims`, and repair of the capability-inventory generator script (pre-existing, unrelated to this phase).
 
 ### Phase 7 — Unified feedback, source health, and reviewed learning
 

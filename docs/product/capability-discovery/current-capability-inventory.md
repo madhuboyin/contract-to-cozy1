@@ -16,13 +16,13 @@
 | AI catalog entries | 30 |
 | Home catalog entries | 35 |
 | Overlapping entries | 20 |
-| Distinct capabilities | 45 |
-| Canonical routes verified | 45 |
-| Canonical explicit-relationship coverage | 29 |
+| Distinct capabilities | 48 |
+| Canonical routes verified | 47 |
+| Canonical explicit-relationship coverage | 31 |
 | Canonical contextual capabilities | 23 |
-| Workflow-only | 1 |
-| Backend lifecycle canonicalized | 45 |
-| Canonical catalog-only capabilities | 21 |
+| Workflow-only | 2 |
+| Backend lifecycle canonicalized | 48 |
+| Canonical catalog-only capabilities | 24 |
 
 ## Capability Matrix
 
@@ -31,7 +31,9 @@
 | appreciation | Value Tracker | ai | `/dashboard/appreciation` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |
 | break-even | Break-Even | home, ai | `/dashboard/properties/[id]/tools/break-even` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | budget | Budget Planner | ai | `/dashboard/budget` | Verified | PLAN_BUDGET | BETA | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
+| buyer-closing | Buyer & Closing Plan |  | `/dashboard/properties/[id]/buyer-plan` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | ACTION_COMPLETED | Canonical | Yes | CATALOG_ONLY |
 | capital-timeline | Home Capital Timeline | home, ai | `/dashboard/properties/[id]/tools/capital-timeline` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| claims | Claims |  | `/dashboard/properties/[id]/claims` | Verified | PROTECT_MONITOR | ACTIVE | REGULATED_COVERAGE | OUTPUT_VIEWED | Canonical | Yes | CATALOG_ONLY |
 | coverage-intelligence | Coverage & Premium Review | ai | `/dashboard/properties/[id]/tools/coverage-intelligence` | Verified | DECIDE_COMPARE | BETA | REGULATED_COVERAGE | DECISION_RECORDED | Canonical; real-user launch gate remains fail-closed pending technical evidence, rollback drill, and human approvals | No | CATALOG_ONLY |
 | diy | DIY Project Center | home | `/dashboard/properties/[id]/tools/diy` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | No | CONTEXTUAL_CANONICAL |
 | do-nothing-simulator | Do-Nothing Simulator | ai | `/dashboard/do-nothing-simulator` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | No | CATALOG_ONLY |

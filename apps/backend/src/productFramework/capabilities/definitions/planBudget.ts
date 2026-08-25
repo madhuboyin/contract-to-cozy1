@@ -2,6 +2,7 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 
 export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   ['budget', 'Budget Planner', 'Plan and track home spending.', '/dashboard/budget', 'BUDGET_PLANNER', 'BETA', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
+  ['buyer-closing', 'Buyer & Closing Plan', 'Track an active home purchase from contract through closing.', '/dashboard/properties/[id]/buyer-plan', 'BUYER_CLOSING_PLAN', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['capital-timeline', 'Home Capital Timeline', 'Plan major home system and capital events.', '/dashboard/properties/[id]/tools/capital-timeline', 'HOME_CAPITAL_TIMELINE', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['diy', 'DIY Project Center', 'Use reviewed guidance for eligible low-risk projects.', '/dashboard/properties/[id]/tools/diy', 'DIY', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['emergency', 'Emergency Help', 'Access rapid guidance for urgent home incidents.', '/dashboard/emergency', 'EMERGENCY_HELP', 'BETA', 'SAFETY_EMERGENCY', 'CATALOG_ONLY'],
@@ -98,6 +99,36 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
       'A property Sale Case advanced through a verified readiness or handoff milestone without inferred spend, ROI, or value uplift.',
     completionSignal: 'sale_case_verified_milestone_completed',
     outputEntityTypes: ['SALE_CASE'] as const,
+  } : {}),
+  ...(id === 'buyer-closing' ? {
+    version: 1,
+    iconName: 'calendar' as const,
+    intentAliases: [
+      'buyer plan',
+      'home purchase plan',
+      'closing checklist',
+      'buyer closing readiness',
+      'home buying deadlines',
+      'under contract tasks',
+    ],
+    homeownerOutcome:
+      'Track an active home purchase from contract through closing with deadlines, document, financing, title/escrow, walkthrough, and closing-day readiness kept in one place.',
+    livingHomeRecordReads: [
+      'property-context',
+      'buyer-plan',
+      'buyer-task',
+      'inspection-finding',
+      'document',
+    ],
+    livingHomeRecordWrites: [
+      'buyer-task',
+      'buyer-finding-disposition',
+      'buyer-lifecycle-stage',
+    ],
+    expectedOutput:
+      'An up-to-date buyer plan with tracked deadlines, tasks, and readiness across financing, title/escrow, walkthrough, and closing day.',
+    completionSignal: 'buyer_plan_lifecycle_stage_updated',
+    outputEntityTypes: ['STRUCTURED_RECORD'] as const,
   } : {}),
   ...(id === 'permits' ? {
     version: 2,
@@ -284,6 +315,8 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   completionKind:
     id === 'diy'
       ? 'DECISION_RECORDED' as const
+      : id === 'buyer-closing'
+        ? 'ACTION_COMPLETED' as const
       : id === 'inspection-hub'
         ? 'ARTIFACT_CREATED' as const
         : id === 'seller-prep'

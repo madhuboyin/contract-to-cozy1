@@ -24,14 +24,24 @@ const TAXONOMY = Object.freeze({
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],
   'property-record': ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   household: ['HOUSEHOLD_INVITATION'],
+  'buyer-closing': [
+    'BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_DOCUMENT_READINESS', 'BUYER_INSPECTION_REVIEW',
+    'BUYER_TASK_COMPLETE', 'BUYER_TASK_CREATE', 'BUYER_TASK_UPDATE', 'BUYER_MOVE_STATUS',
+    'BUYER_FINANCING_READINESS', 'BUYER_TITLE_ESCROW_READINESS', 'BUYER_WALKTHROUGH_READINESS',
+    'BUYER_DISCLOSURE_FUNDS_READINESS', 'BUYER_CLOSING_DAY_READINESS', 'BUYER_CONTRACT_TIMELINE',
+    'BUYER_NEGOTIATION_READINESS', 'BUYER_COST_READINESS', 'BUYER_FINDING_DISPOSITION', 'BUYER_LIFECYCLE_UPDATE',
+  ],
+  'incident-claim': ['INCIDENT_CLAIM_STATUS'],
+  'home-operations': ['HOME_ACTIONS'],
 });
 
 const EXPANDED_SKILLS = Object.freeze([
   'capital-planning', 'coverage', 'household', 'ownership-cost', 'property-tax',
   'quote-comparison', 'renovation', 'savings', 'sell-hold-rent', 'seller-preparation',
+  'buyer-closing', 'incident-claim', 'home-operations',
 ]);
 
-test('all fourteen representative Skills own the intended canonical operations', () => {
+test('all seventeen representative Skills own the intended canonical operations', () => {
   assert.deepEqual(new Set(Object.keys(SKILL_DEFINITIONS)), new Set(Object.keys(TAXONOMY)));
   for (const [skillId, operations] of Object.entries(TAXONOMY)) {
     const skill = SKILL_DEFINITIONS[skillId];

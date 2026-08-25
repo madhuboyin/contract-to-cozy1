@@ -69,6 +69,8 @@ const DISCOVERABLE_TOOL_IDS = new Set([
   'hoa-compliance',
   'inspection-hub',
   'project-tracker',
+  'buyer-closing',
+  'claims',
 ]);
 
 const TOOL_ID_ALIASES: Record<string, string> = {

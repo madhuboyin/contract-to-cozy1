@@ -33,6 +33,33 @@ export const SKILL_HANDOFF_DEFINITIONS: readonly SkillHandoffDefinition[] = Obje
     reasonCodes: Object.freeze(['HOME_RECORD_REVIEWED'] as string[]),
     contextReferenceIds: Object.freeze([] as string[]),
   }),
+  Object.freeze({
+    sourceOperationId: 'BUYER_PLAN_STATUS',
+    targetSkillId: 'property-record',
+    targetOperationId: 'PROPERTY_SUMMARY',
+    suggestedGoal: 'summarize-property-record',
+    eligibleStatuses: Object.freeze(['ANSWERED', 'READY_WITH_LIMITATIONS'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['VERIFY_RECORDED_HOME_CONTEXT'] as string[]),
+    contextReferenceIds: Object.freeze([] as string[]),
+  }),
+  Object.freeze({
+    sourceOperationId: 'HOME_ACTIONS',
+    targetSkillId: 'maintenance',
+    targetOperationId: 'MAINTENANCE_STATUS',
+    suggestedGoal: 'understand-maintenance-status',
+    eligibleStatuses: Object.freeze(['ANSWERED', 'READY_WITH_LIMITATIONS'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['HOME_ACTION_REVIEWED'] as string[]),
+    contextReferenceIds: Object.freeze([] as string[]),
+  }),
+  Object.freeze({
+    sourceOperationId: 'INCIDENT_CLAIM_STATUS',
+    targetSkillId: 'coverage',
+    targetOperationId: 'COVERAGE_GAPS',
+    suggestedGoal: 'review-coverage-gaps',
+    eligibleStatuses: Object.freeze(['ANSWERED', 'READY_WITH_LIMITATIONS'] as AskExecutionStatus[]),
+    reasonCodes: Object.freeze(['VERIFY_COVERAGE_AFTER_CLAIM'] as string[]),
+    contextReferenceIds: Object.freeze([] as string[]),
+  }),
 ]);
 
 const REASON_CODE_PATTERN = /^[A-Z][A-Z0-9_]{2,79}$/;
