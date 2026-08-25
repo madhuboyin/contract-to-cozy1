@@ -104,7 +104,7 @@ const positives: Record<AskOperationId, readonly string[]> = {
   CLAIM_FILE: ['File a water damage claim for the basement leak', 'Start an insurance claim for storm damage', 'Create a warranty claim for my broken furnace'],
   CLAIM_TRANSITION: ['Submit my basement leak claim', 'Move the hail claim to under review', 'Close my appliance claim'],
   INCIDENT_CONTINUATION: ['The emergency is over; help me document the incident', 'Continue from this incident into a claim', 'Record what happened after the emergency'],
-  OPERATIONAL_WORK_UPDATE: ['Accept the roof repair work item', 'Defer the gutter work until next month', 'Snooze the furnace work for two weeks', 'Complete the filter replacement work'],
+  OPERATIONAL_WORK_UPDATE: ['Accept the roof repair work item', 'Defer the gutter work until next month', 'Snooze the furnace work for two weeks', 'Complete the filter replacement work; it is working as expected'],
   INSPECTION_FINDINGS: ['Show my open inspection findings', 'What did the home inspection find?', 'Review unresolved inspection issues for this home'],
   INSPECTION_FINDING_UPDATE: ['Accept the roof inspection finding as work', 'Dismiss the cosmetic paint finding', 'Resolve the electrical inspection finding'],
   DOCUMENT_PROMOTION_REVIEW: ['Show document facts waiting for review', 'What extracted home records need confirmation?', 'Review pending document promotions'],
