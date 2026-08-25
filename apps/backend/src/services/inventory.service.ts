@@ -1,7 +1,7 @@
 // apps/backend/src/services/inventory.service.ts
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-import { InventoryItemCategory } from '@prisma/client';
+import { InventoryItemCategory, type Prisma } from '@prisma/client';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import crypto from 'crypto';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
@@ -19,6 +19,7 @@ import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { buildInventoryCoveragePresentation } from './inventoryCoverageState.service';
 import JobQueueService from './JobQueue.service';
 import { markThreadStaleOnFactCorrection } from './decisionPlatform/decisionThreadService';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -87,6 +88,49 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 8000) {
 
 const TAG_PROPERTY_APPLIANCE = 'PROPERTY_APPLIANCE';
 const ROOM_REQUIRED_CATEGORIES = new Set(['APPLIANCE', 'FURNITURE', 'ELECTRONICS', 'OTHER']);
+const INVENTORY_ITEMS_FACT_KEY = 'inventory.items';
+
+type InventoryItemMutation = 'CREATED' | 'REVISED' | 'DELETED';
+
+async function emitInventoryItemPropertyChange(
+  tx: Prisma.TransactionClient,
+  input: {
+    propertyId: string;
+    itemId: string;
+    mutation: InventoryItemMutation;
+    sourceRevision: string;
+    changedAt: Date;
+  },
+) {
+  const changeType = input.mutation === 'CREATED'
+    ? 'SOURCE_RECORD_CREATED'
+    : input.mutation === 'DELETED'
+      ? 'SOURCE_LIFECYCLE_CHANGED'
+      : 'PROPERTY_FACT_CHANGED';
+
+  await emitPropertyChangeWithTransaction(tx, {
+    propertyId: input.propertyId,
+    // The consumer registry intentionally matches inventory-backed facts via
+    // PROPERTY_FACT; INVENTORY_ITEM remains the canonical affected reference.
+    sourceType: 'PROPERTY_FACT',
+    sourceEntityId: input.itemId,
+    sourceRevision: input.sourceRevision,
+    changeType,
+    changedFactKeys: [INVENTORY_ITEMS_FACT_KEY],
+    canonicalReferences: [{ entityType: 'INVENTORY_ITEM', entityId: input.itemId }],
+    occurredAt: input.changedAt,
+    detectedAt: input.changedAt,
+    confidence: 1,
+    sourceHealth: 'CURRENT',
+    signals: {
+      homeownerRelevant: true,
+      lifecycleAdvanced: input.mutation !== 'REVISED',
+      propertyEffectConfirmed: true,
+      urgentSafetyCondition: false,
+      canonicalActionPriority: null,
+    },
+  });
+}
 
 function mergeTags(
   existing: string[] | null | undefined,
@@ -357,55 +401,67 @@ export class InventoryService {
     // CREATE THE ITEM
     // ═══════════════════════════════════════════════════════════════════════════
   
-    const created = await prisma.inventoryItem.create({
-      data: {
+    const changedAt = new Date();
+    const sourceRevision = `created:${crypto.randomUUID()}`;
+    const created = await prisma.$transaction(async (tx) => {
+      const item = await tx.inventoryItem.create({
+        data: {
+          propertyId,
+          name: data.name,
+          category: data.category,
+          condition: data.condition || 'UNKNOWN',
+          isVerified: true,
+          verificationSource: 'USER_REPORTED',
+
+          roomId: data.roomId || null,
+          warrantyId: data.warrantyId || null,
+          insurancePolicyId: data.insurancePolicyId || null,
+          assetType: data.assetType || null,
+          efficiencyRating: data.efficiencyRating || null,
+
+          brand: data.brand || null,
+          model: data.model || null,
+          serialNo: data.serialNo || null,
+          notes: data.notes || null,
+
+          // Apply canonical sourceHash and tags for major appliances
+          sourceHash: sourceHash || null,
+          tags: mergeTags([], data.tags, enforcedTags),
+
+          purchaseCostCents: data.purchaseCostCents || null,
+          replacementCostCents: data.replacementCostCents || null,
+          currency: data.currency || 'USD',
+
+          installedOn: data.installedOn ? new Date(data.installedOn) : null,
+          purchasedOn: data.purchasedOn ? new Date(data.purchasedOn) : null,
+          lastServicedOn: data.lastServicedOn ? new Date(data.lastServicedOn) : null,
+
+          // Barcode/recall fields
+          manufacturer: data.manufacturer || null,
+          modelNumber: data.modelNumber || null,
+          serialNumber: data.serialNumber || null,
+          upc: data.upc || null,
+          sku: data.sku || null,
+
+          // Normalized (for matching)
+          manufacturerNorm,
+          modelNumberNorm,
+        },
+        include: {
+          room: true,
+          warranty: true,
+          insurancePolicy: true,
+          documents: { orderBy: { createdAt: 'desc' } },
+        },
+      });
+      await emitInventoryItemPropertyChange(tx, {
         propertyId,
-        name: data.name,
-        category: data.category,
-        condition: data.condition || 'UNKNOWN',
-        isVerified: true,
-        verificationSource: 'USER_REPORTED',
-  
-        roomId: data.roomId || null,
-        warrantyId: data.warrantyId || null,
-        insurancePolicyId: data.insurancePolicyId || null,
-        assetType: data.assetType || null,
-        efficiencyRating: data.efficiencyRating || null,
-  
-        brand: data.brand || null,
-        model: data.model || null,
-        serialNo: data.serialNo || null,
-        notes: data.notes || null,
-        
-        // Apply canonical sourceHash and tags for major appliances
-        sourceHash: sourceHash || null,
-        tags: mergeTags([], data.tags, enforcedTags),
-  
-        purchaseCostCents: data.purchaseCostCents || null,
-        replacementCostCents: data.replacementCostCents || null,
-        currency: data.currency || 'USD',
-  
-        installedOn: data.installedOn ? new Date(data.installedOn) : null,
-        purchasedOn: data.purchasedOn ? new Date(data.purchasedOn) : null,
-        lastServicedOn: data.lastServicedOn ? new Date(data.lastServicedOn) : null,
-  
-        // Barcode/recall fields
-        manufacturer: data.manufacturer || null,
-        modelNumber: data.modelNumber || null,
-        serialNumber: data.serialNumber || null,
-        upc: data.upc || null,
-        sku: data.sku || null,
-  
-        // Normalized (for matching)
-        manufacturerNorm,
-        modelNumberNorm,
-      },
-      include: {
-        room: true,
-        warranty: true,
-        insurancePolicy: true,
-        documents: { orderBy: { createdAt: 'desc' } },
-      },
+        itemId: item.id,
+        mutation: 'CREATED',
+        sourceRevision,
+        changedAt,
+      });
+      return item;
     });
   
     // Analytics: inventory item or system added
@@ -558,15 +614,27 @@ export class InventoryService {
     if ('manufacturer' in patch) updateData.manufacturerNorm = norm(patch.manufacturer);
     if ('modelNumber' in patch) updateData.modelNumberNorm = norm(patch.modelNumber);
   
-    const updated = await prisma.inventoryItem.update({
-      where: { id: itemId },
-      data: updateData,
-      include: {
-        room: true,
-        warranty: true,
-        insurancePolicy: true,
-        documents: { orderBy: { createdAt: 'desc' } },
-      },
+    const changedAt = new Date();
+    const sourceRevision = `revised:${crypto.randomUUID()}`;
+    const updated = await prisma.$transaction(async (tx) => {
+      const item = await tx.inventoryItem.update({
+        where: { id: itemId },
+        data: updateData,
+        include: {
+          room: true,
+          warranty: true,
+          insurancePolicy: true,
+          documents: { orderBy: { createdAt: 'desc' } },
+        },
+      });
+      await emitInventoryItemPropertyChange(tx, {
+        propertyId,
+        itemId,
+        mutation: 'REVISED',
+        sourceRevision,
+        changedAt,
+      });
+      return item;
     });
 
     // Recalculate lifespan if relevant fields changed on a verified item
@@ -640,13 +708,24 @@ export class InventoryService {
     });
     if (!existing) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
 
-    // Unlink docs (Document.inventoryItemId is SetNull)
-    await prisma.document.updateMany({
-      where: { inventoryItemId: itemId },
-      data: { inventoryItemId: null },
-    });
+    const changedAt = new Date();
+    const sourceRevision = `deleted:${crypto.randomUUID()}`;
+    await prisma.$transaction(async (tx) => {
+      // Unlink docs (Document.inventoryItemId is SetNull)
+      await tx.document.updateMany({
+        where: { inventoryItemId: itemId },
+        data: { inventoryItemId: null },
+      });
 
-    await prisma.inventoryItem.delete({ where: { id: itemId } });
+      await tx.inventoryItem.delete({ where: { id: itemId } });
+      await emitInventoryItemPropertyChange(tx, {
+        propertyId,
+        itemId,
+        mutation: 'DELETED',
+        sourceRevision,
+        changedAt,
+      });
+    });
     JobQueueService.enqueueHomeDigitalTwinRefresh(
       propertyId,
       'Inventory changed; the home projection is being refreshed.',

@@ -972,6 +972,8 @@ Explicitly **not** closed, left open by design:
 
 16 tests added/updated in `propertyChangeLedger.test.js` and ~13 in `intelligenceRecompute.test.js` (stale-reclaim at both run and target level, `onPermanentFailure` firing/not-firing/error-isolation, `triggerType` threading including `MANUAL_REFRESH`, refresh-state masking/supersession), plus 2 in `intelligenceRegistries.test.js` (fail-fast validation, per-consumer `failureBehavior` honesty) and 1 in `adminIntelligenceRecompute.test.js` (manual-refresh idempotency-key distinctness); all pass except the one pre-existing, unrelated `propertyChangeLedger.test.js` failure confirmed present before this slice too. tsc clean.
 
+**Inventory mutation trigger follow-up (2026-08-25): HI-REC-002 source-record coverage closed for the homeowner inventory lifecycle.** The ordinary `InventoryService` create, update, and delete paths previously wrote `InventoryItem` rows without emitting a `PropertyChange`; controller-level invalidation covered several individual analyses but could not create the durable generic recompute run/currentness signal. Each mutation now writes its canonical row change and a `PROPERTY_FACT` PropertyChange in the same Prisma transaction, carries `inventory.items` plus an `INVENTORY_ITEM` canonical reference, and uses a collision-resistant per-mutation source revision. Existing immediate analysis invalidation and post-commit Digital Twin/lifespan/forecast side effects remain intact.
+
 ### Phase 3A — Material decision lineage
 
 **Objective:** every material recommendation has durable Decision Thread and Recommendation Snapshot lineage before execution, compound routing, or skill handoff depends on it.
