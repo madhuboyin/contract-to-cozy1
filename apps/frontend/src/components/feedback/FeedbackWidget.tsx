@@ -20,19 +20,27 @@ import { api } from "@/lib/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
 
+const FEEDBACK_REASONS = [
+  ["ALREADY_HANDLED", "Already handled"], ["WRONG_FACT", "Wrong fact"],
+  ["WRONG_TIMING", "Wrong timing"], ["NOT_APPLICABLE", "Not applicable"],
+  ["DUPLICATE", "Duplicate"], ["UNCLEAR_EXPLANATION", "Unclear"],
+  ["UNSAFE_OR_INAPPROPRIATE", "Unsafe"],
+] as const;
+
 export function FeedbackWidget() {
   const { toast } = useToast();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false); // Default to false to show the trigger button
   const [selectedRating, setSelectedRating] = useState<"up" | "down" | null>(null);
   const [comment, setComment] = useState("");
+  const [reasonCodes, setReasonCodes] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const mutation = useMutation({
-    mutationFn: async (data: { rating: "up" | "down"; comment?: string }) => {
-      return api.submitFeedback(data.rating, data.comment, pathname || "unknown");
+    mutationFn: async (data: { rating: "up" | "down"; comment?: string; reasonCodes?: string[] }) => {
+      return api.submitFeedback(data.rating, data.comment, pathname || "unknown", data.reasonCodes);
     },
     onSuccess: () => {
       setSubmitted(true);
@@ -46,6 +54,7 @@ export function FeedbackWidget() {
         setSubmitted(false);
         setSelectedRating(null);
         setComment("");
+        setReasonCodes([]);
       }, 3000);
     },
     onError: () => {
@@ -59,7 +68,7 @@ export function FeedbackWidget() {
 
   const handleSubmit = () => {
     if (!selectedRating) return;
-    mutation.mutate({ rating: selectedRating, comment });
+    mutation.mutate({ rating: selectedRating, comment, reasonCodes });
   };
 
   // If feature flag is off, don't render
@@ -120,6 +129,17 @@ export function FeedbackWidget() {
                   rows={3}
                   className="text-sm resize-none focus-visible:ring-blue-500"
                 />
+                {selectedRating === "down" && (
+                  <div className="flex flex-wrap gap-1" aria-label="Why was this not useful?">
+                    {FEEDBACK_REASONS.map(([code, label]) => (
+                      <button key={code} type="button" aria-pressed={reasonCodes.includes(code)}
+                        className={`rounded-full border px-2 py-1 text-[11px] ${reasonCodes.includes(code) ? "border-blue-500 bg-blue-50 text-blue-800" : "border-gray-200 text-gray-600"}`}
+                        onClick={() => setReasonCodes((current) => current.includes(code) ? current.filter((item) => item !== code) : current.length < 3 ? [...current, code] : current)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button
                     type="button"

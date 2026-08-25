@@ -1,5 +1,6 @@
 // apps/backend/src/services/diyAiGuide.service.ts
 import { GoogleGenAI } from '@google/genai';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { LLM_MODEL_CONFIG } from '../config/ai-constants';
@@ -159,11 +160,12 @@ Respond with a JSON object matching this exact schema (no markdown, raw JSON onl
 
 If the project involves main electrical panels, gas lines, load-bearing structural elements, or anything requiring a licensed contractor in most US jurisdictions, set verdict to HIRE_REQUIRED and explain in safetyWarnings. Do not generate steps for those tasks.`;
 
-      const response = await this.getAi().models.generateContent({
-        model: LLM_MODEL_CONFIG.DEFAULT_MODEL,
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:diy-guide', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.getAi().models.generateContent({
+        model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 4096, temperature: 0.3 },
-      });
+        config: { maxOutputTokens: 4096, temperature: 0.3, responseMimeType: 'application/json' },
+      }) });
 
       const rawText = response.text ?? '';
       const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

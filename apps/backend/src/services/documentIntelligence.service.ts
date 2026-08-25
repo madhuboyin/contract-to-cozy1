@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
 
 export interface DocumentInsights {
@@ -158,9 +159,10 @@ export class DocumentIntelligenceService {
 
       const response = await documentIntelligenceCircuit.execute(async () =>
         withTimeout(
-          async () =>
-            this.ai.models.generateContent({
-              model: "gemini-2.0-flash",
+          async () => {
+            const model = resolveGovernedAIModel('FAST');
+            return executeGovernedAIRequest({ routeId: 'ai:document-intelligence', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+              model,
               contents: [{
                 role: "user",
                 parts: [
@@ -176,8 +178,10 @@ export class DocumentIntelligenceService {
               config: {
                 maxOutputTokens: 1000,
                 temperature: 0.1, // Low temperature for accuracy
+                responseMimeType: 'application/json',
               }
-            }),
+            }) });
+          },
           {
             timeoutMs: DOCUMENT_AI_TIMEOUT_MS,
             operation: 'document_analysis',
@@ -261,9 +265,10 @@ export class DocumentIntelligenceService {
     const base64Data = fileBuffer.toString('base64');
     const response = await documentIntelligenceCircuit.execute(async () =>
       withTimeout(
-        async () =>
-          this.ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+        async () => {
+          const model = resolveGovernedAIModel('FAST');
+          return executeGovernedAIRequest({ routeId: 'ai:document-intelligence', model, work: () => this.ai.models.generateContent({
+            model,
             contents: [{
               role: 'user',
               parts: [
@@ -279,7 +284,8 @@ export class DocumentIntelligenceService {
               maxOutputTokens: 4000,
               temperature: 0,
             },
-          }),
+          }) });
+        },
         {
           timeoutMs: DOCUMENT_AI_TIMEOUT_MS,
           operation: 'document_text_extraction',
@@ -304,9 +310,10 @@ export class DocumentIntelligenceService {
     const base64Data = fileBuffer.toString('base64');
     const response = await documentIntelligenceCircuit.execute(async () =>
       withTimeout(
-        async () =>
-          this.ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+        async () => {
+          const model = resolveGovernedAIModel('FAST');
+          return executeGovernedAIRequest({ routeId: 'ai:document-intelligence', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+            model,
             contents: [{
               role: 'user',
               parts: [
@@ -317,8 +324,10 @@ export class DocumentIntelligenceService {
             config: {
               maxOutputTokens: 500,
               temperature: 0.1,
+              responseMimeType: 'application/json',
             },
-          }),
+          }) });
+        },
         {
           timeoutMs: DOCUMENT_AI_TIMEOUT_MS,
           operation: 'material_photo_analysis',

@@ -5,6 +5,7 @@ import { getCityOpenDataSources } from './citySources.provider';
 import { GoogleGenerativeAI } from '@google/generative-ai'; // ✅ FIXED: Changed from require to import
 import { assertSafeUrl } from '../../utils/ssrfGuard';
 import { logger } from '../../lib/logger';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from '../../services/ai/aiRequestGovernance.service';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -52,7 +53,8 @@ export async function parseTrashScheduleWithAI(
     }
 
     // Use AI to extract schedule information
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const modelName = resolveGovernedAIModel('FAST');
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const prompt = `You are a helpful assistant that extracts trash and recycling schedule information from city websites.
 
@@ -80,7 +82,10 @@ Important:
 - If information is unclear, set frequency to "Check city website" and nextPickup to null
 - Return ONLY the JSON object, no additional text`;
 
-    const result = await model.generateContent(prompt);
+    const result = await executeGovernedAIRequest({
+      routeId: 'ai:trash-schedule', model: modelName, structuredOutputRequired: true, structuredOutputConfigured: true,
+      work: () => model.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } }),
+    });
     const responseText = result.response.text();
 
     // Parse AI response

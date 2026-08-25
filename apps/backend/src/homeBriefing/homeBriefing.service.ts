@@ -16,6 +16,7 @@ import { NotificationService } from '../services/notification.service';
 import { reconcileCanonicalPropertyChanges } from '../propertyChanges/canonicalChangeReconciliation.service';
 import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
 import { operatingModeForOwnershipState } from '../services/skills/context/propertyJourneyContext.contract';
+import { recordTypedFeedback } from '../services/feedback/typedFeedback.service';
 
 export const HOME_BRIEFING_BASELINE_VERSION = 'home-briefing-homeowner-v2';
 
@@ -929,6 +930,7 @@ export async function recordHomeBriefingItemOutcome(input: {
       propertyChangeId: true,
       canonicalActionId: true,
       canonicalEventId: true,
+      propertyChange: { select: { sourceRevision: true } },
     },
   });
   if (!item) throw new APIError('Briefing item not found.', 404, 'BRIEFING_ITEM_NOT_FOUND');
@@ -984,6 +986,26 @@ export async function recordHomeBriefingItemOutcome(input: {
         ...(input.outcome === 'NOT_USEFUL' ? { notUsefulAt: now } : {}),
       },
     });
+    if (input.outcome === 'ACTED' || input.outcome === 'DISMISSED' || input.outcome === 'NOT_USEFUL') {
+      await recordTypedFeedback({
+        userId: input.userId,
+        propertyId: input.propertyId,
+        page: `home-briefing-item:${item.id}`,
+        rating: input.outcome.toLowerCase().replace('_', '-'),
+        comment: input.note ?? null,
+        targetType: 'HOME_BRIEFING_ITEM',
+        targetId: item.id,
+        surface: 'HOME_BRIEFING',
+        reasonCodes: input.outcome === 'ACTED'
+          ? ['USEFUL']
+          : input.outcome === 'NOT_USEFUL'
+            ? ['NOT_USEFUL']
+            : [],
+        contextVersion: item.propertyChange.sourceRevision,
+        capabilityId: 'home-briefing',
+        capabilityVersion: HOME_BRIEFING_BASELINE_VERSION,
+      }, tx);
+    }
     return updated;
   });
 }

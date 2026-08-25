@@ -58,8 +58,9 @@ test('summarizeSourceHealth counts and lists only degraded sources', () => {
   ];
   const summary = summarizeSourceHealth(entries);
   assert.equal(summary.total, 4);
-  assert.equal(summary.healthyCount, 2);
+  assert.equal(summary.healthyCount, 1);
   assert.equal(summary.degradedCount, 2);
+  assert.equal(summary.unknownCount, 1);
   assert.deepEqual(new Set(summary.degradedSources.map((s) => s.sourceKey)), new Set(['b', 'c']));
 });
 

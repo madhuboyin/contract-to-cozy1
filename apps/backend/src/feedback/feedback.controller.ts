@@ -9,6 +9,7 @@ import { AuthRequest } from '../types/auth.types';
 import { logger } from '../lib/logger';
 import { getEmailNotificationQueue } from '../services/JobQueue.service';
 import { recordTypedFeedback } from '../services/feedback/typedFeedback.service';
+import { isFeedbackReasonCode } from '../services/feedback/feedbackContract';
 
 // Placeholder team alias for pilot feedback alerts — override via env in
 // any environment where a real monitored inbox exists.
@@ -17,11 +18,16 @@ const FEEDBACK_NOTIFICATION_EMAIL =
 
 const VALID_RATINGS = ['up', 'down'];
 
+function capabilityForPage(page: string): string {
+  const segment = page.split('?')[0].split('/').filter(Boolean).pop();
+  return segment ? `surface:${segment}` : 'surface:app';
+}
+
 export class FeedbackController {
   static async submit(req: AuthRequest, res: Response) {
     try {
       const userId = req.user!.userId;
-      const { rating, comment, page } = req.body;
+      const { rating, comment, page, reasonCodes } = req.body;
 
       if (!rating || !VALID_RATINGS.includes(rating)) {
         return res.status(400).json({
@@ -36,6 +42,9 @@ export class FeedbackController {
           message: 'page is required',
         });
       }
+      if (reasonCodes !== undefined && (!Array.isArray(reasonCodes) || reasonCodes.length > 3 || reasonCodes.some((code) => !isFeedbackReasonCode(code)))) {
+        return res.status(400).json({ success: false, message: 'reasonCodes must contain at most 3 registered feedback reasons' });
+      }
 
       const feedback = await recordTypedFeedback({
         userId,
@@ -46,7 +55,9 @@ export class FeedbackController {
         targetType: 'OTHER',
         targetId: page,
         surface: 'OTHER',
-        reasonCodes: [rating === 'up' ? 'USEFUL' : 'NOT_USEFUL'],
+        reasonCodes: [...new Set([rating === 'up' ? 'USEFUL' : 'NOT_USEFUL', ...(reasonCodes ?? [])])],
+        capabilityId: capabilityForPage(page),
+        capabilityVersion: 'dashboard-v1',
       });
 
       // Fire-and-forget: notify the pilot feedback alias by email. A failed

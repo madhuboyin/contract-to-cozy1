@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { IncidentSeverity, IncidentSourceType, IncidentStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -92,15 +93,29 @@ export class EmergencyTroubleshooterService {
     });
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({
+        routeId: 'ai:emergency-troubleshooter', model, structuredOutputRequired: true, structuredOutputConfigured: true,
+        work: () => this.ai.models.generateContent({
+        model,
         contents: conversationHistory,
         config: {
           systemInstruction: EMERGENCY_SYSTEM_PROMPT,
           maxOutputTokens: 500,
           temperature: 0.3,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'object',
+            properties: {
+              severity: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
+              classification: { type: 'string' }, message: { type: 'string' },
+              resolution: { type: 'string', enum: ['DIY', 'CALL_PRO', 'IMMEDIATE_DANGER'] },
+              steps: { type: 'array', items: { type: 'string' } }, confidence: { type: 'number' },
+            },
+            required: ['severity', 'classification', 'message', 'resolution', 'steps', 'confidence'],
+          },
         }
-      });
+      }), });
 
       const text = response.text;
       if (!text) {

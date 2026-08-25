@@ -1246,7 +1246,7 @@ No database schema change or migration is required for this closure. Validation 
 
 **Functional exit:** product operators can identify which intelligence is useful, incorrect, stale, degraded, or failing, while production rules remain unchanged until a reviewed release is approved.
 
-**Status: first vertical slice landed 2026-08-24 — work items 1, 2, and 4 done; 3 partial; 5–7 not started.**
+**Status: functionally complete 2026-08-25.**
 
 Before this phase began, `Feedback` already had every typed field HI-FBK-001 requires (`targetType`, `targetId`, `surface`, `reasonCodes`, `contextVersion`, `recommendationSnapshotId`, `outcomeObservationId` — added in an earlier phase), but all 4 writers that actually create `Feedback` rows (`homeActionUsefulnessFeedback.service.ts`'s Home Action usefulness rating, `askOrchestrator.service.ts`'s whole-execution UP/DOWN, the generic app-wide feedback widget, and seller-prep feedback) wrote only the legacy `rating`/`comment`/`page` fields — every typed field was permanently null.
 
@@ -1258,7 +1258,7 @@ Before this phase began, `Feedback` already had every typed field HI-FBK-001 req
 
 **Work item 4 (done):** `services/intelligence/sourceHealthProjection.service.ts` normalizes `RadarSourceHealth` (lowercase `healthy`/`degraded`/`failed`/`stale`/`disabled`/`unknown`) and `ServicePriceBenchmarkSourceHealth` (uppercase `UNKNOWN`/`HEALTHY`/`DEGRADED`/`UNHEALTHY`) into one `UnifiedSourceHealthStatus` vocabulary and one read, per HI-SRC-002 — neither domain table is replaced or has its own staleness logic (e.g. Radar's `freshnessSeconds`-based check in `radarAdminOperations.service.ts`) reproduced here; this only normalizes each domain's own recorded `status`. Exposed at `GET /api/admin/source-health` (WORKER_JOB_VIEW) with a `summarizeSourceHealth()` count/degraded-list rollup. HI-SRC-003 (source health changes triggering recomputation and reducing confidence) is not wired — this phase only builds the read projection. Test coverage: `tests/unit/sourceHealthProjection.test.js` (5 tests) and `tests/unit/adminSourceHealth.test.js` (3 tests, incl. a mocked-Prisma integration case).
 
-**Not started this pass:**
+**Historical first-slice gaps (closed by the completion update below):**
 
 - **Work item 5 (AI route standardization)** — no audit of existing Gemini call sites against centralized model configuration, structured output, rate limiting, cost accounting, and kill-switch controls was done.
 - **Work item 6 (evaluation harness expansion)** — no new golden scenarios were added for ranking, decisions, extraction, compound rules, or generated explanations.
@@ -1266,7 +1266,16 @@ Before this phase began, `Feedback` already had every typed field HI-FBK-001 req
 - **HI-SRC-001 (full source registry)** — the unified projection (work item 4) reads the two existing health tables but does not add the fuller per-source registry (owner, freshness SLA, credential requirements, retry policy, runbook) HI-SRC-001 separately describes.
 - **Frontend consumption of `fatigueSuppressed`** — the backend signal now reaches Home/Fix, but no UI change renders it there yet.
 
-Remaining Phase 7 scope: the three untouched work items above, HI-FBK-005's remaining metrics (dismissal/correction/completion/outcome/staleness/cross-surface/generated-content), HI-SRC-001's full registry, HI-SRC-003's recomputation wiring, and Home/Fix frontend treatment of the fatigue-suppression signal.
+**Completion update (2026-08-25):** the remaining Phase 7 scope is implemented.
+
+- Feedback now carries `capabilityId` and `capabilityVersion`; Home Briefing actions write the canonical typed Feedback record in the same transaction as item state. Home, Home Operations/Fix, and other unified-feed cards render the shared fatigue-suppression disclosure without weakening safety floors. The generic dashboard widget captures the registered negative reason vocabulary.
+- The admin quality report joins Feedback, Operational Work, Outcome Observation, consumer currentness, and deterministic evaluation results. It reports usefulness, dismissal/correction, completion conversion, corroborated/verified outcomes, stale or unavailable incidents, and cross-surface conflicts by capability/version. `/dashboard/admin/intelligence-quality` provides the capability table, failing-evaluation drill-down, and source blast radius.
+- `sourceRegistry.ts` declares the owner, consumers, SLA, configuration, retry, fallback, degradation copy, and runbook for platform external and AI sources. The unified projection also includes reviewed Property Intelligence sources. Radar, Service Price Benchmark, Property Intelligence run, and operator pause/resume transitions emit `SOURCE_HEALTH_CHANGED` Property Changes for affected properties, applying the common confidence policy and requesting recomputation through the existing Property Change pipeline.
+- Every direct Gemini call site executes through `aiRequestGovernance.service.ts`, which provides central model selection, provider-enforced structured-output gating where required, global/per-route kill switches and rate budgets, timeout, bounded retry, circuit breaking, token and operator-rate-based cost accounting, and route/model metrics. Fallback and homeowner degradation behavior remains owned by the source registry and capability.
+- `phase7EvaluationHarness.ts` exposes deterministic operator-facing results for ranking, sparse data, conflicting facts, decision contracts, extraction failure, cross-domain compound rules, generated-answer grounding, and safety. Independent Ask certification now covers all 65 governed operations; the eight previously absent claim, incident, Operational Work, inspection, and document-promotion operations have routing evidence and answer hard negatives.
+- HVAC remains the deliberately bounded first reviewed calibration family. Eligible `REPORTED` and `CORROBORATED` outcomes feed only an immutable proposal dataset; the content-based fingerprint detects row mutation, the release records verification-status composition, and activation still requires the existing Product, Domain, Privacy, and Trust approvals. No observation or engagement signal changes production weights directly.
+
+The Prisma change is additive. Per repository policy, no migration script was created; the schema owner must create and apply the migration.
 
 ### Phase 8 — Remove superseded paths
 

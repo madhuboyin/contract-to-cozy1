@@ -1,6 +1,7 @@
 // apps/backend/src/services/budgetForecaster.service.ts
 
 import { GoogleGenAI } from "@google/genai";
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { prisma } from '../lib/prisma';
 // [NEW IMPORT] Import AI and business logic constants
 import { 
@@ -205,17 +206,19 @@ export class BudgetForecasterService {
       // [REFACTORED] Use imported template function
       const prompt = BUDGET_RECOMMENDATION_PROMPT_TEMPLATE(property, totalAnnual, propertyAge);
 
-      const response = await this.ai.models.generateContent({
+      const model = resolveGovernedAIModel('ADVANCED');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:budget-forecaster', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
         // [REFACTORED] Use constant for model
-        model: LLM_MODEL_CONFIG.ADVANCED_MODEL,
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { 
           // [REFACTORED] Use constant for maxOutputTokens
           maxOutputTokens: LLM_MODEL_CONFIG.BUDGET_MAX_TOKENS, 
           // [REFACTORED] Use constant for temperature
-          temperature: LLM_MODEL_CONFIG.RECOMMENDATION_TEMPERATURE 
+          temperature: LLM_MODEL_CONFIG.RECOMMENDATION_TEMPERATURE,
+          responseMimeType: 'application/json',
         }
-      });
+      }) });
 
       const text = response.text;
       if (!text) {

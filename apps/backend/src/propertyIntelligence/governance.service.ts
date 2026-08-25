@@ -19,6 +19,10 @@ import {
 } from './launchGovernance';
 import { getIntelligenceSourceHealth } from './propertyIntelligence.service';
 import { evaluateSourceActivation } from './sourceGovernance';
+import {
+  affectedPropertyIntelligencePropertyIds,
+  emitSourceHealthChangesForProperties,
+} from '../services/intelligence/sourceHealthImpact.service';
 
 const FAMILY_SETTING_PREFIX = 'property-intelligence:family-gate';
 
@@ -477,7 +481,7 @@ export async function controlIntelligenceSource(input: {
     }
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const paused = input.action !== 'RESUME';
     const updated = await tx.intelligenceSource.update({
       where: { id: source.id },
@@ -524,4 +528,20 @@ export async function controlIntelligenceSource(input: {
           : null,
     };
   });
+  const latestRun = await prisma.intelligenceSourceRun.findFirst({
+    where: { sourceId: source.id },
+    orderBy: { startedAt: 'desc' },
+    select: { status: true, id: true },
+  });
+  const health = input.action !== 'RESUME' ? 'NOT_CONFIGURED'
+    : latestRun?.status === IntelligenceSourceRunStatus.SUCCEEDED ? 'CURRENT'
+      : latestRun?.status === IntelligenceSourceRunStatus.PARTIAL ? 'DEGRADED' : 'UNAVAILABLE';
+  await emitSourceHealthChangesForProperties({
+    propertyIds: await affectedPropertyIntelligencePropertyIds(source.id),
+    sourceType: 'PROPERTY_INTELLIGENCE_SOURCE',
+    sourceEntityId: source.key,
+    sourceRevision: `${input.action}:${latestRun?.id ?? new Date().toISOString()}`,
+    health,
+  });
+  return result;
 }

@@ -14,6 +14,7 @@ import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 import { minimizeAskQuestion, selectRelevantAskFacts } from './ask/askPromptMinimization';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 // Load environment variables
 dotenv.config();
 
@@ -136,9 +137,9 @@ class GeminiService {
       const response = await geminiChatCircuit.execute(async () =>
         withTimeout(
           async () =>
-            chat.sendMessage({
+            executeGovernedAIRequest({ routeId: 'ai:ask', model: this.model, work: () => chat.sendMessage({
               message: minimizedQuestion,
-            }),
+            }) }),
           {
             timeoutMs: GEMINI_CHAT_TIMEOUT_MS,
             operation: 'gemini_chat_send_message',
@@ -175,8 +176,10 @@ class GeminiService {
   public async synthesizeAskResult(resultOnlyPayload: string): Promise<unknown> {
     const response = await geminiChatCircuit.execute(async () =>
       withTimeout(
-        async () => this.getAI().models.generateContent({
-          model: this.model,
+        async () => {
+          const model = resolveGovernedAIModel('FAST');
+          return executeGovernedAIRequest({ routeId: 'ai:ask', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.getAI().models.generateContent({
+          model,
           contents: resultOnlyPayload,
           config: {
             systemInstruction: 'You format validated Contract to Cozy result data. Return JSON only. Never add facts, advice, numbers, dates, links, actions, or conclusions.',
@@ -190,7 +193,8 @@ class GeminiService {
             temperature: 0.1,
             maxOutputTokens: 220,
           },
-        }),
+        }) });
+        },
         { timeoutMs: GEMINI_CHAT_TIMEOUT_MS, operation: 'ask_result_synthesis' },
       ),
     );

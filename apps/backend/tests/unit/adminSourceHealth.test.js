@@ -47,6 +47,9 @@ const prismaMock = {
       ];
     },
   },
+  intelligenceSource: {
+    findMany: async () => [],
+  },
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
@@ -54,11 +57,14 @@ require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true
 
 const { getUnifiedSourceHealth } = require('../../src/services/intelligence/sourceHealthProjection.service.ts');
 
-test('getUnifiedSourceHealth combines both domain health stores into one sorted, normalized list', async () => {
+test('getUnifiedSourceHealth combines domain health stores and registered AI routes into one sorted, normalized list', async () => {
   const sources = await getUnifiedSourceHealth();
-  assert.equal(sources.length, 4);
-  // sorted by domain then sourceKey: HOME_EVENT_RADAR entries first
-  assert.deepEqual(sources.map((s) => s.sourceKey), ['never-polled-source', 'noaa-alerts', 'utility-outage-feed', 'hcp-index']);
+  assert.equal(sources.length, 23);
+  assert.ok(sources.some((source) => source.sourceKey === 'ai:ask'));
+  assert.deepEqual(
+    sources.filter((source) => source.domain === 'HOME_EVENT_RADAR').map((source) => source.sourceKey),
+    ['never-polled-source', 'noaa-alerts', 'utility-outage-feed'],
+  );
   const outage = sources.find((s) => s.sourceKey === 'utility-outage-feed');
   assert.equal(outage.status, 'UNHEALTHY');
   assert.equal(outage.consecutiveFailures, 5);

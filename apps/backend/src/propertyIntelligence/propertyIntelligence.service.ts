@@ -27,12 +27,33 @@ import {
   observationWithinReviewedCoverage,
   parseSourceFamilyLaunchPolicy,
 } from './launchGovernance';
+import {
+  affectedPropertyIntelligencePropertyIds,
+  emitSourceHealthChangesForProperties,
+} from '../services/intelligence/sourceHealthImpact.service';
 
 const normalizeKey = (value: string): string => value.trim().toUpperCase();
 const FAMILY_SETTING_PREFIX = 'property-intelligence:family-gate';
 
 function familySettingKey(environment: string, family: string) {
   return `${FAMILY_SETTING_PREFIX}:${environment}:${family}`;
+}
+
+function runStatusHealth(status: IntelligenceSourceRunStatus): 'CURRENT' | 'DEGRADED' | 'UNAVAILABLE' {
+  if (status === IntelligenceSourceRunStatus.SUCCEEDED) return 'CURRENT';
+  if (status === IntelligenceSourceRunStatus.PARTIAL) return 'DEGRADED';
+  return 'UNAVAILABLE';
+}
+
+async function emitIntelligenceSourceRunHealth(sourceId: string, sourceKey: string, runId: string, status: IntelligenceSourceRunStatus) {
+  const propertyIds = await affectedPropertyIntelligencePropertyIds(sourceId);
+  await emitSourceHealthChangesForProperties({
+    propertyIds,
+    sourceType: 'PROPERTY_INTELLIGENCE_SOURCE',
+    sourceEntityId: sourceKey,
+    sourceRevision: `${runId}:${status}`,
+    health: runStatusHealth(status),
+  });
 }
 
 async function authorizedSourceFamilies(environment: string) {
@@ -417,7 +438,7 @@ export async function ingestIntelligenceBatch(input: {
     ...familyAuthorization.reasonCodes,
   ];
   if (!activation.enabled || !familyAuthorization.authorized) {
-    await prisma.intelligenceSourceRun.create({
+    const rejectedRun = await prisma.intelligenceSourceRun.create({
       data: {
         sourceId: source.id,
         environment: input.environment,
@@ -430,6 +451,7 @@ export async function ingestIntelligenceBatch(input: {
         failureDetail: activationReasonCodes.join(','),
       },
     });
+    await emitIntelligenceSourceRunHealth(source.id, source.key, rejectedRun.id, IntelligenceSourceRunStatus.REJECTED);
     throw new APIError(
       'The source is not activated for ingestion.',
       409,
@@ -597,6 +619,8 @@ export async function ingestIntelligenceBatch(input: {
         matches,
       };
     });
+    const completedStatus = result.rejected > 0 ? IntelligenceSourceRunStatus.PARTIAL : IntelligenceSourceRunStatus.SUCCEEDED;
+    await emitIntelligenceSourceRunHealth(source.id, source.key, run.id, completedStatus);
     return { runId: run.id, ...result, checkedThrough: input.checkedThrough };
   } catch (error) {
     await prisma.$transaction([
@@ -617,6 +641,7 @@ export async function ingestIntelligenceBatch(input: {
         },
       }),
     ]);
+    await emitIntelligenceSourceRunHealth(source.id, source.key, run.id, IntelligenceSourceRunStatus.FAILED);
     throw error;
   }
 }

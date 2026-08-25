@@ -126,6 +126,15 @@ export const ADMIN_NAV: NavJob[] = [
     globalHref: true,
   },
   {
+    key: 'admin-intelligence-quality',
+    name: 'Intelligence Quality',
+    href: '/dashboard/admin/intelligence-quality',
+    icon: BarChart2,
+    description: 'Capability quality, deterministic evaluations, and source degradation',
+    engines: [],
+    globalHref: true,
+  },
+  {
     key: 'admin-worker-jobs',
     name: 'Worker Jobs',
     href: '/dashboard/worker-jobs',

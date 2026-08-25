@@ -9154,7 +9154,7 @@ export async function requestAskCorrection(userId: string, executionId: string, 
 }
 
 export async function submitAskExecutionFeedback(userId: string, executionId: string, input: SubmitAskFeedback): Promise<{ id: string; rating: 'UP' | 'DOWN' }> {
-  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { id: true, propertyId: true } });
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { id: true, propertyId: true, skillId: true, skillVersion: true } });
   if (!execution) {
     const error = new Error('Ask execution not found.');
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
@@ -9171,6 +9171,8 @@ export async function submitAskExecutionFeedback(userId: string, executionId: st
     targetId: execution.id,
     surface: 'COZY',
     reasonCodes: [...new Set<FeedbackReasonCode>([input.rating === 'UP' ? 'USEFUL' : 'NOT_USEFUL', ...(input.reasonCodes ?? [])])],
+    capabilityId: execution.skillId ?? 'ask',
+    capabilityVersion: execution.skillVersion ?? ASK_RESPONSE_SCHEMA_VERSION,
   });
   askFeedbackTotal.inc({ rating: input.rating.toLowerCase() });
   return { id: saved.id, rating: input.rating };
@@ -9188,7 +9190,7 @@ export async function submitHomeActionUsefulnessFeedback(
   homeActionId: string,
   input: SubmitHomeActionUsefulnessFeedback,
 ): Promise<{ id: string; rating: 'USEFUL' | 'NOT_USEFUL' }> {
-  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { id: true, propertyId: true } });
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { id: true, propertyId: true, skillId: true, skillVersion: true } });
   if (!execution) {
     const error = new Error('Ask execution not found.');
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
@@ -9197,6 +9199,8 @@ export async function submitHomeActionUsefulnessFeedback(
   return recordHomeActionUsefulnessFeedback({
     userId, propertyId: execution.propertyId, homeActionId, rating: input.rating, comment: input.comment ?? null,
     reasonCodes: input.reasonCodes,
+    capabilityId: execution.skillId ?? 'home-actions',
+    capabilityVersion: execution.skillVersion ?? 'canonical-feed-v1',
   });
 }
 

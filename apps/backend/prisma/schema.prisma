@@ -6067,6 +6067,11 @@ model Feedback {
   contextVersion           String?
   recommendationSnapshotId String?
   outcomeObservationId     String?
+  // Phase 7 HI-FBK-005: stable analytics dimensions. These are deliberately
+  // copied onto the feedback event because many targets (for example a
+  // generated Home Action) are projections rather than durable FK owners.
+  capabilityId             String?
+  capabilityVersion        String?
   createdAt                DateTime            @default(now())
   updatedAt                DateTime            @updatedAt
 
@@ -6078,6 +6083,7 @@ model Feedback {
   @@index([surface, createdAt])
   @@index([recommendationSnapshotId])
   @@index([outcomeObservationId])
+  @@index([capabilityId, capabilityVersion, createdAt])
 }
 
 // NEW MODEL: Stores data for the Agent Interview Guide

@@ -1,6 +1,7 @@
 // apps/backend/src/services/homeModificationAdvisor.service.ts
 
 import { GoogleGenAI } from "@google/genai";
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 import type { PropertyContextSnapshot } from '../modules/propertyContext';
@@ -240,11 +241,12 @@ Categories: ACCESSIBILITY, AGING_IN_PLACE, FAMILY, RESALE, ENERGY, SAFETY
 Use broad cost ranges rather than point estimates. Do not provide ROI, urgency rankings, or permit conclusions.
 Include diverse, independent options across categories.`;
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:home-modification', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 2000, temperature: 0.7 }
-      });
+        config: { maxOutputTokens: 2000, temperature: 0.7, responseMimeType: 'application/json' }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');

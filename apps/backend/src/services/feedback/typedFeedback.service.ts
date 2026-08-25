@@ -1,4 +1,4 @@
-import type { FeedbackSurface, FeedbackTargetType } from '@prisma/client';
+import type { FeedbackSurface, FeedbackTargetType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { FEEDBACK_REASON_CODES, type FeedbackReasonCode } from './feedbackContract';
 
@@ -29,6 +29,8 @@ export interface RecordTypedFeedbackInput {
   contextVersion?: string | null;
   recommendationSnapshotId?: string | null;
   outcomeObservationId?: string | null;
+  capabilityId?: string | null;
+  capabilityVersion?: string | null;
 }
 
 export function buildTypedFeedbackData(input: RecordTypedFeedbackInput) {
@@ -51,17 +53,24 @@ export function buildTypedFeedbackData(input: RecordTypedFeedbackInput) {
     contextVersion: input.contextVersion ?? null,
     recommendationSnapshotId: input.recommendationSnapshotId ?? null,
     outcomeObservationId: input.outcomeObservationId ?? null,
+    capabilityId: input.capabilityId ?? null,
+    capabilityVersion: input.capabilityVersion ?? null,
   };
 }
 
-export async function recordTypedFeedback(input: RecordTypedFeedbackInput): Promise<{ id: string }> {
+type FeedbackWriteClient = Pick<Prisma.TransactionClient, 'feedback'>;
+
+export async function recordTypedFeedback(
+  input: RecordTypedFeedbackInput,
+  db: FeedbackWriteClient = prisma,
+): Promise<{ id: string }> {
   const data = buildTypedFeedbackData(input);
-  const existing = await prisma.feedback.findFirst({
+  const existing = await db.feedback.findFirst({
     where: { userId: input.userId, page: input.page },
     orderBy: { createdAt: 'desc' },
   });
   const saved = existing
-    ? await prisma.feedback.update({ where: { id: existing.id }, data })
-    : await prisma.feedback.create({ data });
+    ? await db.feedback.update({ where: { id: existing.id }, data })
+    : await db.feedback.create({ data });
   return { id: saved.id };
 }

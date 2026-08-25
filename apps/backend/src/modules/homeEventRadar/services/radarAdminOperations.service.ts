@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma';
+import { affectedRadarPropertyIds, emitSourceHealthChangesForProperties } from '../../../services/intelligence/sourceHealthImpact.service';
 import { triggerJob } from '../../../services/adminWorkerJobs.service';
 import { redactRadarSourceConfig } from './radarSourceRegistry.service';
 
@@ -155,6 +156,16 @@ export class RadarAdminOperationsService {
         },
       }),
     ]);
+    const nextStatus = paused ? 'disabled' : 'unknown';
+    if ((existing.health?.status ?? 'unknown') !== nextStatus) {
+      await emitSourceHealthChangesForProperties({
+        propertyIds: await affectedRadarPropertyIds(existing.id),
+        sourceType: 'RADAR_SOURCE',
+        sourceEntityId: existing.key,
+        sourceRevision: `${nextStatus}:${new Date().toISOString()}`,
+        health: paused ? 'NOT_CONFIGURED' : 'STALE',
+      });
+    }
     return this.getSource(sourceKey);
   }
 

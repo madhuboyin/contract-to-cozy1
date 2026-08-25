@@ -6,6 +6,7 @@
 // Readiness Check) don't duplicate the Gemini plumbing.
 
 import { GoogleGenAI } from '@google/genai';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './aiRequestGovernance.service';
 
 export interface ImagePart {
   buffer: Buffer;
@@ -40,8 +41,11 @@ export async function analyzeImagesWithPrompt<T = unknown>(
     },
   }));
 
-  const response = await ai.models.generateContent({
-    model: opts.model ?? DEFAULT_MODEL,
+  const model = opts.model ?? resolveGovernedAIModel('FAST');
+  const response = await executeGovernedAIRequest({
+    routeId: 'ai:image-analysis', model, structuredOutputRequired: true, structuredOutputConfigured: true,
+    work: () => ai.models.generateContent({
+    model,
     contents: [
       {
         role: 'user',
@@ -51,8 +55,9 @@ export async function analyzeImagesWithPrompt<T = unknown>(
     config: {
       maxOutputTokens: opts.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       temperature: opts.temperature ?? DEFAULT_TEMPERATURE,
+      responseMimeType: 'application/json',
     },
-  });
+  }), });
 
   if (!response.text) {
     throw new Error('AI service returned an empty response');

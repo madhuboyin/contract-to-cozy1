@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 import { uploadPdfBuffer } from './storage/reportStorage';
 import { APIError } from '../middleware/error.middleware';
 import { inspectionExtractionToEnvelope } from './inspectionExtractionEnvelope.adapter';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 
 type HomeSystem =
   | 'ROOF' | 'EXTERIOR' | 'FOUNDATION' | 'BASEMENT_CRAWLSPACE' | 'STRUCTURAL'
@@ -72,11 +73,13 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 
 async function callGemini(pdfText: string): Promise<{ findings: ExtractedFinding[]; rawFindingCount: number }> {
   const ai = getGeminiClient();
-  const model = 'gemini-1.5-flash';
+  const model = resolveGovernedAIModel('FAST');
 
   const truncated = pdfText.length > 60_000 ? pdfText.slice(0, 60_000) + '\n[truncated]' : pdfText;
 
-  const response = await ai.models.generateContent({
+  const response = await executeGovernedAIRequest({
+    routeId: 'ai:inspection-extraction', model, structuredOutputRequired: true, structuredOutputConfigured: true,
+    work: () => ai.models.generateContent({
     model,
     contents: [
       {
@@ -85,7 +88,7 @@ async function callGemini(pdfText: string): Promise<{ findings: ExtractedFinding
       },
     ],
     config: { responseMimeType: 'application/json' },
-  });
+  }), });
 
   const raw = response.text ?? '';
   let parsed: { findings?: unknown[] };

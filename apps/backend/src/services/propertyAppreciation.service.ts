@@ -7,6 +7,7 @@ declare const google: {
 // --- END FIX ---
 
 import { GoogleGenAI } from "@google/genai";
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 
@@ -254,11 +255,12 @@ Consider:
 **FINAL OUTPUT INSTRUCTION: Output ONLY the raw estimated price as an integer. Output nothing else. No text, no markdown, no symbols, just the number.**
 `; 
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:property-appreciation', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 100, temperature: 0.3 }
-      });
+        config: { maxOutputTokens: 100, temperature: 0.3, responseMimeType: 'application/json', responseSchema: { type: 'number' } }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');
@@ -383,11 +385,12 @@ Focus on:
 3. Future outlook
 4. Actionable advice`;
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:property-appreciation', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 500, temperature: 0.7 }
-      });
+        config: { maxOutputTokens: 500, temperature: 0.7, responseMimeType: 'application/json' }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');

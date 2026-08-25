@@ -19,6 +19,7 @@ const governanceSource = readFileSync(resolve(__dirname, '../../src/services/dec
 const engineSource = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/hvacRepairReplaceEngine.service.ts'), 'utf8');
 const threadServiceSource = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionThreadService.ts'), 'utf8');
 const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
+const { datasetFingerprintFor } = require('../../src/services/decisionPlatform/calibrationReleaseService.ts');
 
 function slice(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -66,6 +67,16 @@ test('recordCalibrationGovernanceReview rejects a review unless the release has 
 
 test('the four required calibration governance roles are exactly Product, Domain, Privacy, and Trust per FRD §19.4', () => {
   assert.match(governanceSource, /CALIBRATION_RELEASE_REQUIRED_ROLES = \['PRODUCT', 'DOMAIN', 'PRIVACY', 'TRUST'\]/);
+});
+
+test('calibration dataset fingerprint is order independent but changes when reviewed row content changes', () => {
+  const base = {
+    propertyId: 'property-1', recommendationSnapshotId: 'snapshot-1', context: { condition: 'GOOD' },
+    observation: { id: 'observation-1', verificationStatus: 'CORROBORATED', actionState: 'COMPLETED', costCents: 100_000, occurredAt: '2026-01-01T00:00:00.000Z' },
+  };
+  const second = { ...base, propertyId: 'property-2', recommendationSnapshotId: 'snapshot-2', observation: { ...base.observation, id: 'observation-2' } };
+  assert.equal(datasetFingerprintFor([base, second], 'policy-v1'), datasetFingerprintFor([second, base], 'policy-v1'));
+  assert.notEqual(datasetFingerprintFor([base], 'policy-v1'), datasetFingerprintFor([{ ...base, observation: { ...base.observation, costCents: 200_000 } }], 'policy-v1'));
 });
 
 test('evaluateHvacRepairReplace defaults to DEFAULT_HVAC_ENGINE_WEIGHTS -- a caller that omits the second argument gets pre-Phase-10B behavior exactly', () => {

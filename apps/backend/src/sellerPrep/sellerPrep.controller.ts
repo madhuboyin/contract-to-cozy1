@@ -277,6 +277,8 @@ export class SellerPrepController {
         targetId: resolvedPage,
         surface: 'TOOL',
         reasonCodes: [rating === 'helpful' ? 'USEFUL' : 'NOT_USEFUL'],
+        capabilityId: 'seller-preparation',
+        capabilityVersion: 'seller-preparation-v1',
       });
   
       res.json({

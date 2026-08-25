@@ -19,7 +19,7 @@ router.use('/admin/source-health', authenticate, requireMfa, requireRole(UserRol
  * @swagger
  * /api/admin/source-health:
  *   get:
- *     summary: Unified read-only source-health projection across Home Event Radar and Service Price Benchmark sources — admin-only
+ *     summary: Unified read-only source-health projection across external, Property Intelligence, and AI sources — admin-only
  *     tags: [Admin Source Health]
  *     security:
  *       - bearerAuth: []

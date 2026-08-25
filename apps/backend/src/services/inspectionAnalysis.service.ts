@@ -1,6 +1,7 @@
 // apps/backend/src/services/inspectionAnalysis.service.ts
 
 import { GoogleGenAI } from "@google/genai";
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -261,17 +262,19 @@ Return ONLY valid JSON in this exact format:
 
 CRITICAL: Extract at least 95% of all issues. Match inspector severity. Cost estimates must be within 20% of market rates.`;
 
-    const response = await this.ai.models.generateContent({
-      model: "gemini-2.0-flash",
+    const model = resolveGovernedAIModel('FAST');
+    const response = await executeGovernedAIRequest({ routeId: 'ai:inspection-analysis', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+      model,
       contents: [{ 
         role: "user", 
         parts: [{ text: prompt }] 
       }],
       config: { 
         maxOutputTokens: 8000,
-        temperature: 0.2
+        temperature: 0.2,
+        responseMimeType: 'application/json',
       }
-    });
+    }) });
 
     if (!response.text) {
       throw new Error('AI returned empty response');

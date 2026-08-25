@@ -1,6 +1,7 @@
 // apps/backend/src/services/guidanceEngine/vendorSuggestionsAdvisor.service.ts
 
 import { GoogleGenAI } from '@google/genai';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from '../ai/aiRequestGovernance.service';
 import { logger } from '../../lib/logger';
 import { prisma } from '../../lib/prisma';
 import { LLM_MODEL_CONFIG, VENDOR_SUGGESTIONS_PROMPT_TEMPLATE } from '../../config/ai-constants';
@@ -90,11 +91,12 @@ class VendorSuggestionsAdvisorService {
     const prompt = VENDOR_SUGGESTIONS_PROMPT_TEMPLATE({ assetName, modelName, city, state, budgetMax });
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: LLM_MODEL_CONFIG.ADVANCED_MODEL,
+      const model = resolveGovernedAIModel('ADVANCED');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:vendor-suggestions', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 900, temperature: 0.35 },
-      });
+        config: { maxOutputTokens: 900, temperature: 0.35, responseMimeType: 'application/json' },
+      }) });
 
       const text = response.text;
       if (!text) throw new Error('Empty AI response');

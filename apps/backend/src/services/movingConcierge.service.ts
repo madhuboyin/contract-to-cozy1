@@ -1,6 +1,7 @@
 // apps/backend/src/services/movingConcierge.service.ts
 
 import { GoogleGenAI } from "@google/genai";
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 import { getPlanningContextDecisions, getPlanningContextEnvelope } from './planningContext/context';
@@ -318,11 +319,12 @@ Priorities: CRITICAL, HIGH, MEDIUM, LOW
 
 Include 5-8 tasks per period. Focus on practical, actionable items.`;
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:moving-concierge', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 2500, temperature: 0.6 }
-      });
+        config: { maxOutputTokens: 2500, temperature: 0.6, responseMimeType: 'application/json' }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');
@@ -902,11 +904,12 @@ Return ONLY a JSON array of specific, actionable recommendations:
 
 Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:moving-concierge', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 500, temperature: 0.7 }
-      });
+        config: { maxOutputTokens: 500, temperature: 0.7, responseMimeType: 'application/json' }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');

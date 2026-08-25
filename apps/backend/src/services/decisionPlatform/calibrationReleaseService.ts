@@ -81,15 +81,27 @@ async function buildHvacTrainingRows(): Promise<CalibrationTrainingRow[]> {
 // plain incrementing datasetVersion int doesn't, on its own, prove the
 // underlying observation set wasn't mutated between proposal and activation
 // -- this fingerprint does.
-function datasetFingerprintFor(rows: CalibrationTrainingRow[], policyVersion: string): string {
-  const ids = rows.map((row) => row.observation.id).sort();
-  return createHash('sha256').update(`${policyVersion}:${ids.join(',')}`).digest('hex');
+export function datasetFingerprintFor(rows: CalibrationTrainingRow[], policyVersion: string): string {
+  const canonicalRows = [...rows]
+    .sort((a, b) => a.observation.id.localeCompare(b.observation.id))
+    .map((row) => ({
+      propertyId: row.propertyId,
+      recommendationSnapshotId: row.recommendationSnapshotId,
+      context: row.context,
+      observation: row.observation,
+    }));
+  return createHash('sha256').update(JSON.stringify({ policyVersion, rows: canonicalRows })).digest('hex');
 }
 
 export async function proposeHvacCalibrationRelease(createdByUserId: string) {
   const rows = await buildHvacTrainingRows();
   const policy = DEFAULT_HVAC_CALIBRATION_POLICY;
   const outcome = evaluateHvacCalibrationCandidate(rows, DEFAULT_HVAC_ENGINE_WEIGHTS, policy);
+  const verificationStatusCounts = rows.reduce<Record<string, number>>((counts, row) => {
+    const status = row.observation.verificationStatus;
+    counts[status] = (counts[status] ?? 0) + 1;
+    return counts;
+  }, {});
 
   const priorMax = await prisma.calibrationRelease.aggregate({
     where: { estimateFamilyId: HVAC_ESTIMATE_FAMILY_ID },
@@ -113,7 +125,11 @@ export async function proposeHvacCalibrationRelease(createdByUserId: string) {
       trainingMetrics: outcome.trainingMetrics as unknown as Prisma.InputJsonValue,
       holdoutMetrics: outcome.holdoutMetrics as unknown as Prisma.InputJsonValue,
       segmentRegressionResults: outcome.segmentRegressionResults as unknown as Prisma.InputJsonValue,
-      exclusionSummary: outcome.exclusionSummary as unknown as Prisma.InputJsonValue,
+      exclusionSummary: {
+        ...outcome.exclusionSummary,
+        verificationStatusCounts,
+        reviewBoundary: 'Release activation requires Product, Domain, Privacy, and Trust approval; individual observations never activate weights directly.',
+      } as unknown as Prisma.InputJsonValue,
       // Every non-READY_FOR_REVIEW evaluator status (INSUFFICIENT_DATA,
       // BELOW_IMPROVEMENT_THRESHOLD, SEGMENT_REGRESSION) maps to the DB-level
       // PROPOSED lifecycle status; the *specific* reason is what
@@ -129,7 +145,7 @@ export async function proposeHvacCalibrationRelease(createdByUserId: string) {
     action: 'CALIBRATION_RELEASE_PROPOSED',
     entityType: 'CALIBRATION_RELEASE',
     entityId: release.id,
-    metadata: { estimateFamilyId: HVAC_ESTIMATE_FAMILY_ID, datasetVersion, status: outcome.status, observationCount: outcome.observationCount },
+    metadata: { estimateFamilyId: HVAC_ESTIMATE_FAMILY_ID, datasetVersion, status: outcome.status, observationCount: outcome.observationCount, verificationStatusCounts },
   });
 
   return release;

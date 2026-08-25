@@ -11,6 +11,7 @@ import {
   radarSourceRegistryService,
 } from './radarSourceRegistry.service';
 import type { WorkerTriggerType } from '../../../config/workerExecutionPolicy';
+import { affectedRadarPropertyIds, emitSourceHealthChangesForProperties } from '../../../services/intelligence/sourceHealthImpact.service';
 
 type RunDb = Pick<
   typeof prisma,
@@ -140,7 +141,7 @@ export class RadarSourceRunService {
   ) {
     const completion = radarSourceRunCompletionSchema.parse(input);
 
-    return this.db.$transaction(async (tx) => {
+    const completed = await this.db.$transaction(async (tx) => {
       const run = await tx.radarSourceRun.findUnique({
         where: { id: runId },
         include: { sourceDefinition: true },
@@ -148,7 +149,18 @@ export class RadarSourceRunService {
       if (!run) throw new Error(`Unknown Radar source run: ${runId}`);
 
       if (run.status !== 'started') {
-        if (run.status === completion.status) return run;
+        if (run.status === completion.status) {
+          const currentHealth = await tx.radarSourceHealth.findUnique({
+            where: { sourceDefinitionId: run.sourceDefinitionId },
+          });
+          const status = currentHealth?.status ?? 'unknown';
+          return {
+            updatedRun: run,
+            previousStatus: status,
+            nextStatus: status,
+            sourceKey: run.sourceDefinition.key,
+          };
+        }
         throw new RadarSourceRunConflictError(
           `Radar source run ${runId} is already ${run.status}; cannot complete as ${completion.status}`,
         );
@@ -200,8 +212,24 @@ export class RadarSourceRunService {
         }),
       ]);
 
-      return updatedRun;
+      return { updatedRun, previousStatus: currentHealth?.status ?? 'unknown', nextStatus: health.status, sourceKey: run.sourceDefinition.key };
     });
+    // Test/in-memory repositories do not own PropertyChange persistence. The
+    // production repository is the only one allowed to fan a global source
+    // transition out to affected property recomputations.
+    if (this.db === prisma && completed.previousStatus !== completed.nextStatus) {
+      const propertyIds = await affectedRadarPropertyIds(completed.updatedRun.sourceDefinitionId);
+      await emitSourceHealthChangesForProperties({
+        propertyIds,
+        sourceType: 'RADAR_SOURCE',
+        sourceEntityId: completed.sourceKey,
+        sourceRevision: `${completed.nextStatus}:${completion.finishedAt.toISOString()}`,
+        health: completed.nextStatus === 'healthy' ? 'CURRENT'
+          : completed.nextStatus === 'degraded' ? 'DEGRADED'
+            : completed.nextStatus === 'disabled' ? 'NOT_CONFIGURED' : 'UNAVAILABLE',
+      });
+    }
+    return completed.updatedRun;
   }
 
   healthTransition(

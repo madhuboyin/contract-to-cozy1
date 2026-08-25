@@ -1,6 +1,7 @@
 // apps/backend/src/services/energyAuditor.service.ts
 
 import { GoogleGenAI } from "@google/genai";
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 import type { PropertyContextSnapshot } from '../modules/propertyContext';
@@ -328,8 +329,9 @@ If you cannot extract the data, return null.`;
           }
         };
 
-        const response = await this.ai.models.generateContent({
-          model: "gemini-2.0-flash",
+        const model = resolveGovernedAIModel('FAST');
+        const response = await executeGovernedAIRequest({ routeId: 'ai:energy-auditor', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+          model,
           contents: [{ 
             role: "user", 
             parts: [
@@ -337,8 +339,8 @@ If you cannot extract the data, return null.`;
               fileData
             ] 
           }],
-          config: { maxOutputTokens: 200, temperature: 0.1 }
-        });
+          config: { maxOutputTokens: 200, temperature: 0.1, responseMimeType: 'application/json' }
+        }) });
 
         if (!response.text) {
           continue; // Skip this file if no response
@@ -524,11 +526,12 @@ Categories: HVAC, WATER_HEATING, LIGHTING, APPLIANCES, INSULATION, SOLAR, BEHAVI
 Priority: HIGH, MEDIUM, LOW
 Difficulty: EASY, MODERATE, PROFESSIONAL`;
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:energy-auditor', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 2000, temperature: 0.7 }
-      });
+        config: { maxOutputTokens: 2000, temperature: 0.7, responseMimeType: 'application/json' }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');

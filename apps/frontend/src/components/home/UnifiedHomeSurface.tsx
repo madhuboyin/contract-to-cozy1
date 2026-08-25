@@ -387,6 +387,11 @@ function formattedAlertExpiry(value: string | null): string | null {
   return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function FatigueSuppressedNotice({ suppressed }: { suppressed?: boolean }) {
+  if (!suppressed) return null;
+  return <p className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600" role="status">You previously said this wasn&apos;t useful. It remains visible for continuity and safety, but repeat prompting is reduced.</p>;
+}
+
 export function CriticalWeatherActionCard({
   action,
   propertyId,
@@ -426,6 +431,7 @@ export function CriticalWeatherActionCard({
   };
   return (
     <article className="rounded-2xl border-2 border-rose-300 bg-gradient-to-br from-rose-50 to-amber-50 p-4 shadow-sm" role="alert">
+      <FatigueSuppressedNotice suppressed={action.fatigueSuppressed} />
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-rose-100 p-2 text-rose-700"><CloudLightning className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
@@ -542,6 +548,7 @@ export function EnvironmentActionCard({
 
   return (
     <article className="rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/70 p-5 shadow-sm" role="status">
+      <FatigueSuppressedNotice suppressed={action.fatigueSuppressed} />
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700"><AlertTriangle className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
@@ -675,6 +682,7 @@ export function SeasonalChecklistActionCard({
   };
   return (
     <article className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-4 shadow-sm">
+      <FatigueSuppressedNotice suppressed={action.fatigueSuppressed} />
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={priorityTone(action.priority)}>{priorityLabel(action.priority)}</Badge>
         <span className="flex items-center gap-1 text-xs font-semibold text-emerald-800">
@@ -809,6 +817,7 @@ export function CoverageCorrectionGroupCard({
   };
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      {actions.some((candidate) => candidate.fatigueSuppressed) && <FatigueSuppressedNotice suppressed />}
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={priorityTone(first.priority)}>{first.priority}</Badge>
         <span className="text-xs text-slate-500">{actions.length} related items</span>
@@ -1096,6 +1105,7 @@ export function ActionCard({
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <FatigueSuppressedNotice suppressed={action.fatigueSuppressed} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

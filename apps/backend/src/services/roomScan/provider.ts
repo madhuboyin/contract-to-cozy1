@@ -1,6 +1,7 @@
 // apps/backend/src/services/roomScan/provider.ts
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from '../ai/aiRequestGovernance.service';
 import { APIError } from '../../middleware/error.middleware';
 
 export type RoomScanBox = {
@@ -115,7 +116,7 @@ function clampNormBox(b: any): RoomScanBox | null {
 
 // Keep your existing resolver if you want; this is safe default behavior.
 async function resolveModel(_apiKey: string): Promise<string> {
-  return process.env.ROOM_SCAN_GEMINI_MODEL || 'models/gemini-2.0-flash';
+  return process.env.ROOM_SCAN_GEMINI_MODEL || resolveGovernedAIModel('FAST');
 }
 
 export class GeminiRoomScanProvider implements RoomScanVisionProvider {
@@ -188,23 +189,15 @@ export class GeminiRoomScanProvider implements RoomScanVisionProvider {
       });
     }
 
-    const maxRetries = envInt('ROOM_SCAN_GEMINI_MAX_RETRIES', 1);
-
     let resp: any = null;
-    let lastErr: any = null;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        resp = await model.generateContent({
+    resp = await executeGovernedAIRequest({
+      routeId: 'ai:room-scan', model: modelName, structuredOutputRequired: true, structuredOutputConfigured: true,
+      maxAttempts: envInt('ROOM_SCAN_GEMINI_MAX_RETRIES', 1) + 1,
+      work: () => model.generateContent({
           contents: [{ role: 'user', parts }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1200 },
-        });
-        break;
-      } catch (e: any) {
-        lastErr = e;
-        if (attempt === maxRetries) throw e;
-      }
-    }
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1200, responseMimeType: 'application/json' },
+        }),
+    });
 
     const text = resp?.response?.text?.() ?? '';
     const usage = resp?.response?.usageMetadata || resp?.usageMetadata || null;

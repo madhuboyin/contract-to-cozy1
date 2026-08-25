@@ -1,6 +1,7 @@
 // apps/backend/src/services/climateRiskPredictor.service.ts
 
 import { GoogleGenAI } from "@google/genai";
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 import { getProtectionContextDecisions } from './protection/context';
@@ -194,11 +195,12 @@ Return ONLY valid JSON (no markdown, no code blocks):
 
 Only include categories with risk level MODERATE or higher.`;
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:climate-risk', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 1500, temperature: 0.3 }
-      });
+        config: { maxOutputTokens: 1500, temperature: 0.3, responseMimeType: 'application/json' }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');
@@ -344,11 +346,12 @@ Provide 5 actionable recommendations for the homeowner.
 Return as JSON array of strings (no markdown):
 ["Recommendation 1", "Recommendation 2", "Recommendation 3", "Recommendation 4", "Recommendation 5"]`;
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const model = resolveGovernedAIModel('FAST');
+      const response = await executeGovernedAIRequest({ routeId: 'ai:climate-risk', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+        model,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 500, temperature: 0.7 }
-      });
+        config: { maxOutputTokens: 500, temperature: 0.7, responseMimeType: 'application/json' }
+      }) });
 
       if (!response.text) {
         throw new Error('AI service returned an empty response');

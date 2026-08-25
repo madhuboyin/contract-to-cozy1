@@ -34,6 +34,8 @@ export async function recordHomeActionUsefulnessFeedback(params: {
   rating: UsefulnessRating;
   comment?: string | null;
   reasonCodes?: readonly FeedbackReasonCode[];
+  capabilityId?: string | null;
+  capabilityVersion?: string | null;
 }): Promise<{ id: string; rating: UsefulnessRating }> {
   const page = homeActionFeedbackPage(params.homeActionId);
   const saved = await recordTypedFeedback({
@@ -46,6 +48,8 @@ export async function recordHomeActionUsefulnessFeedback(params: {
     targetId: params.homeActionId,
     surface: 'COZY',
     reasonCodes: [...new Set<FeedbackReasonCode>([params.rating === 'USEFUL' ? 'USEFUL' : 'NOT_USEFUL', ...(params.reasonCodes ?? [])])],
+    capabilityId: params.capabilityId ?? 'home-actions',
+    capabilityVersion: params.capabilityVersion ?? 'canonical-feed-v1',
   });
   return { id: saved.id, rating: params.rating };
 }

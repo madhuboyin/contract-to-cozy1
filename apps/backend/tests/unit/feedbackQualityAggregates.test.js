@@ -7,6 +7,7 @@ require('ts-node/register');
 
 const {
   aggregateFeedbackQualityByTargetType,
+  aggregateCapabilityVersionQuality,
 } = require('../../src/services/feedback/feedbackQualityAggregates.service.ts');
 
 test('aggregateFeedbackQualityByTargetType groups by targetType and computes usefulRate from rated rows only', () => {
@@ -54,6 +55,35 @@ test('aggregateFeedbackQualityByTargetType sorts by total count descending, then
   ];
   const result = aggregateFeedbackQualityByTargetType(rows);
   assert.deepEqual(result.map((r) => r.targetType), ['HOME_ACTION', 'ASK_EXECUTION']);
+});
+
+test('aggregateCapabilityVersionQuality reports feedback, conversion, outcome, currentness, evaluation, and cross-surface quality by version', () => {
+  const rows = aggregateCapabilityVersionQuality({
+    feedback: [
+      { targetType: 'HOME_ACTION', targetId: 'action-1', surface: 'HOME', reasonCodes: ['USEFUL'], rating: 'up', capabilityId: 'home-actions', capabilityVersion: 'v2' },
+      { targetType: 'HOME_ACTION', targetId: 'action-1', surface: 'ASK', reasonCodes: ['NOT_USEFUL', 'WRONG_FACT'], rating: 'dismissed', capabilityId: 'home-actions', capabilityVersion: 'v2' },
+    ],
+    workItems: [{ state: 'VERIFIED', acceptanceState: 'ACCEPTED', disposition: null, sourceVersion: 'v2', sources: [{ sourceType: 'HOME_ACTION', sourceVersion: 'v2', active: true }] }],
+    outcomes: [
+      { sourceType: 'HOME_ACTION', observedPayloadVersion: 'v2', verificationStatus: 'CORROBORATED' },
+      { sourceType: 'HOME_ACTION', observedPayloadVersion: 'v2', verificationStatus: 'VERIFIED' },
+    ],
+    currentness: [{ consumerKey: 'home-actions', consumerVersion: 'v2', status: 'STALE' }],
+    evaluations: [{ scenarioId: 'rank-1', category: 'RANKING', capabilityId: 'home-actions', capabilityVersion: 'v2', passed: true, details: 'ok' }],
+  });
+  const feedback = rows.find((row) => row.capabilityId === 'home-actions' && row.version === 'v2');
+  assert.equal(feedback.feedbackCount, 2);
+  assert.equal(feedback.usefulRate, 0.5);
+  assert.equal(feedback.correctionRate, 0.5);
+  assert.equal(feedback.crossSurfaceInconsistencyCount, 1);
+  assert.equal(feedback.staleOutputIncidentCount, 1);
+  assert.equal(feedback.generatedEvaluationPassRate, 1);
+
+  const work = rows.find((row) => row.capabilityId === 'work:home_action');
+  assert.equal(work.completionConversionRate, 1);
+  const outcomes = rows.find((row) => row.capabilityId === 'outcome:home_action');
+  assert.equal(outcomes.corroboratedOutcomeCount, 1);
+  assert.equal(outcomes.verifiedOutcomeRate, 0.5);
 });
 
 test('admin feedback-quality route requires authenticate, MFA, ADMIN role, and ANALYTICS_VIEW', () => {

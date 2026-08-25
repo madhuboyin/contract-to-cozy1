@@ -431,6 +431,8 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   lineageId: string;
   relatedJourneyId?: string | null;
   state: 'OPEN' | 'IN_PROGRESS' | 'SNOOZED' | 'COMPLETED' | 'DEFERRED' | 'DISMISSED' | 'SUPERSEDED';
+  /** Same cross-surface usefulness cooldown computed by the canonical feed. */
+  fatigueSuppressed?: boolean;
   job: 'STAY_AHEAD' | 'DECIDE' | 'MAJOR_MOMENT';
   source: { kind: string; entityId: string; version: string | null };
   options: Array<{ id: string; label: string; summary: string; recommended: boolean }>;

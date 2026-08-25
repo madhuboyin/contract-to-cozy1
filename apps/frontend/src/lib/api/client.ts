@@ -230,6 +230,47 @@ function toNumber(value: unknown): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+export interface AdminCapabilityQuality {
+  capabilityId: string;
+  version: string;
+  feedbackCount: number;
+  usefulRate: number | null;
+  dismissalCount: number;
+  correctionRate: number | null;
+  completionConversionRate: number | null;
+  verifiedOutcomeRate: number | null;
+  staleOutputIncidentCount: number;
+  unavailableOutputIncidentCount: number;
+  crossSurfaceInconsistencyCount: number;
+  generatedEvaluationCount: number;
+  generatedEvaluationPassRate: number | null;
+}
+
+export interface AdminFeedbackQualityReport {
+  byCapabilityVersion: AdminCapabilityQuality[];
+  generatedContentEvaluations: Array<{ scenarioId: string; category: string; capabilityId: string; capabilityVersion: string; passed: boolean; details: string }>;
+  summary: { capabilityVersionCount: number; failingEvaluationCount: number; staleOrUnavailableIncidentCount: number; crossSurfaceInconsistencyCount: number };
+}
+
+export interface AdminSourceHealthEntry {
+  domain: string;
+  sourceKey: string;
+  name: string;
+  status: string;
+  message: string | null;
+  owner: string;
+  affectedCapabilityIds: string[];
+  freshnessSlaSeconds: number;
+  fallbackBehavior: string;
+  userVisibleDegradationMessage: string;
+  operationalRunbook: string;
+}
+
+export interface AdminSourceHealthReport {
+  sources: AdminSourceHealthEntry[];
+  summary: { total: number; healthyCount: number; degradedCount: number; unknownCount: number };
+}
+
 /**
  * API Client for ContractToCozy Backend
  * Uses a class structure for token refresh logic and state management.
@@ -2961,7 +3002,8 @@ class APIClient {
   async submitFeedback(
     rating: 'up' | 'down',
     comment: string | undefined,
-    page: string
+    page: string,
+    reasonCodes?: string[],
   ): Promise<APIResponse<any>> {
     return this.request('/api/feedback', {
       method: 'POST',
@@ -2969,6 +3011,7 @@ class APIClient {
         rating,
         comment,
         page,
+        reasonCodes,
       },
     });
   }
@@ -6647,6 +6690,20 @@ class APIClient {
     if (!res.data) throw new APIError('Closeout share link is unavailable', 404);
     return res.data;
   }
+
+  async adminGetFeedbackQuality(since?: string): Promise<AdminFeedbackQualityReport> {
+    const query = since ? `?since=${encodeURIComponent(since)}` : '';
+    const response = await this.get<AdminFeedbackQualityReport>(`/api/admin/feedback-quality${query}`);
+    if (!response.data) throw new APIError('Failed to load intelligence quality', 500);
+    return response.data;
+  }
+
+  async adminGetSourceHealth(): Promise<AdminSourceHealthReport> {
+    const response = await this.get<AdminSourceHealthReport>('/api/admin/source-health');
+    if (!response.data) throw new APIError('Failed to load source health', 500);
+    return response.data;
+  }
+
   // ── Neighbourhood Trust Network ──────────────────────────────────────────
 
   async getNeighbourhoodZipInfo(): Promise<APIResponse<import('@/types').NeighbourhoodZipInfo>> {

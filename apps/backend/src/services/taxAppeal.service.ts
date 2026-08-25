@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
+import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
 
 interface TaxBillData {
   parcelId?: string;
@@ -113,8 +114,11 @@ Return ONLY valid JSON (no markdown, no explanation):
 Extract only visible fields. Tax rate should be a percentage (for example, 1.2 for 1.2%).
 This extraction is unverified and must be confirmed by the homeowner before use.`;
 
-    const response = await this.ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+    const model = resolveGovernedAIModel('FAST');
+    const response = await executeGovernedAIRequest({
+      routeId: 'ai:tax-appeal', model, structuredOutputRequired: true, structuredOutputConfigured: true,
+      work: () => this.ai!.models.generateContent({
+      model,
       contents: [{
         role: 'user',
         parts: [
@@ -127,8 +131,8 @@ This extraction is unverified and must be confirmed by the homeowner before use.
           },
         ],
       }],
-      config: { maxOutputTokens: 500, temperature: 0.1 },
-    });
+      config: { maxOutputTokens: 500, temperature: 0.1, responseMimeType: 'application/json' },
+    }), });
 
     if (!response.text) {
       throw new Error('AI service returned an empty response');

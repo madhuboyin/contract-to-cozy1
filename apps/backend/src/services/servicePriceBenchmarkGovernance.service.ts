@@ -372,7 +372,8 @@ export async function recordServicePriceBenchmarkSourceHealth(
   details: Record<string, unknown>,
 ) {
   const now = new Date();
-  return prismaAny.servicePriceBenchmarkSourceHealth.upsert({
+  const previous = await prismaAny.servicePriceBenchmarkSourceHealth.findUnique({ where: { sourceId }, select: { status: true } });
+  const updated = await prismaAny.servicePriceBenchmarkSourceHealth.upsert({
     where: { sourceId },
     create: {
       sourceId,
@@ -391,6 +392,20 @@ export async function recordServicePriceBenchmarkSourceHealth(
       detailsJson: details,
     },
   });
+  if (previous?.status !== status) {
+    const [{ allPropertyIds, emitSourceHealthChangesForProperties }, source] = await Promise.all([
+      import('./intelligence/sourceHealthImpact.service'),
+      prismaAny.servicePriceBenchmarkSource.findUnique({ where: { id: sourceId }, select: { sourceKey: true } }),
+    ]);
+    await emitSourceHealthChangesForProperties({
+      propertyIds: await allPropertyIds(),
+      sourceType: 'SERVICE_PRICE_BENCHMARK_SOURCE',
+      sourceEntityId: source?.sourceKey ?? sourceId,
+      sourceRevision: `${status}:${now.toISOString()}`,
+      health: status === 'HEALTHY' ? 'CURRENT' : status === 'DEGRADED' ? 'DEGRADED' : 'UNAVAILABLE',
+    });
+  }
+  return updated;
 }
 
 async function assertReleaseActivatable(
