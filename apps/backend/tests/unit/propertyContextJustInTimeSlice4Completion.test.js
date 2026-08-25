@@ -61,7 +61,6 @@ test('aggregate notices use the explanation-only status renderer', () => {
   assert.doesNotMatch(notice, /captureFeatureContext|capturePropertyContext|<button|<input/);
   assert.match(notice, /correctionPaths/);
   for (const file of [
-    '../../../frontend/src/app/(dashboard)/dashboard/actions/ActionsClient.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/components/MorningHomePulseCard.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/GuidanceOverviewClient.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/HomeGazetteClient.tsx',

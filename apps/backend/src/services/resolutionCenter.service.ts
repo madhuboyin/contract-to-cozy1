@@ -641,37 +641,6 @@ function filterMaterialDecisionInsights(decisionInsights: DecisionInsightDTO[]):
   });
 }
 
-function sortCases(cases: ResolutionCaseDTO[]): ResolutionCaseDTO[] {
-  const priorityRank: Record<ResolutionCaseDTO['priority'], number> = {
-    critical: 0,
-    high: 1,
-    medium: 2,
-    low: 3,
-  };
-  const statusRank: Record<ResolutionCaseDTO['status'], number> = {
-    options_ready: 0,
-    detected: 1,
-    needs_analysis: 1,
-    in_progress: 2,
-    resolved: 3,
-  };
-
-  return [...cases].sort((a, b) => {
-    if (a.kind === 'incident' && b.kind !== 'incident') return -1;
-    if (b.kind === 'incident' && a.kind !== 'incident') return 1;
-
-    const statusDiff = statusRank[a.status] - statusRank[b.status];
-    if (statusDiff !== 0) return statusDiff;
-
-    const priorityDiff = priorityRank[a.priority] - priorityRank[b.priority];
-    if (priorityDiff !== 0) return priorityDiff;
-
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  });
-}
-
 function normalizeCoverageActionType(gap: CoverageGapResult): ResolutionActionDTO['type'] {
   return gap.gapType === 'NO_COVERAGE' ? 'COVERAGE_GAP' : 'COVERAGE_PARTIAL';
 }

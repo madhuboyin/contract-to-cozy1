@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.31"
+version: "1.32"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.31 |
+| Version | 1.32 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1218,6 +1218,18 @@ Test coverage: the existing `tests/ask/skill*.test.js` suite was extended and re
 
 Remaining Phase 6 scope: Claims filing/transition operations, an inspection-findings Skill, a document-review/promotion Skill, Operational Work write-command operations, contextual/readiness wiring for `buyer-closing` and `claims`, and repair of the capability-inventory generator script (pre-existing, unrelated to this phase).
 
+**Final Phase 6 closure (2026-08-24; supersedes the partial/open status immediately above): complete in code.** The remaining scope was implemented against the canonical domain owners rather than by introducing parallel records:
+
+- Claims now owns governed Ask operations for draft filing, legal lifecycle transitions, status review, and safe post-emergency continuation. Filing creates the canonical Claim, checklist, timeline, and reconciled Operational Work without claiming to submit to a provider; transitions recheck the current record and use `ClaimsService` lifecycle guards.
+- General confirmed inspection findings now have a dedicated read/write Skill. Ask can list findings and, after confirmation, accept one through `acceptFindingAsWork`, dismiss it through canonical reconciliation, or record a homeowner-confirmed resolution.
+- Document promotion now has a dedicated review/write Skill for the previously unreachable material-extraction, inspection-report, and insurance-policy-fact gates. Exact candidates and versions are rechecked before `MaterialSpecService.reviewExtraction`, `applyWriteBacks`, or `confirmPolicyFact`; confirmed promotions record an outcome.
+- Operational Work now has governed accept, defer, snooze, and maintenance-backed quick-complete commands. User-transition policy is checked both before confirmation and immediately before mutation; project, guidance, booking, regulated, safety, and other evidence-bearing completion paths fail closed to their canonical management workflow.
+- `buyer-closing` and `claims` are contextual capabilities with explicit triggers, accepted context, readiness requirements, and golden-fixture coverage. The six priority bridge entries now declare non-empty Skill/operation, guidance-template, context, completion-owner, and outcome-adapter metadata and fail startup validation when incomplete.
+- Skill handoffs carry property, source entity/Home Action, Decision Thread, work item, journey, context-version, and return-destination continuity. `GUIDANCE_JOURNEY_CREATE` and `HOME_CHANGE_SUMMARY` are owned by Skills, leaving no named property-scoped governance exceptions.
+- The capability-inventory generator now parses lifecycle ids without treating comment apostrophes as string entries, includes backend-only canonical capabilities, and uses canonical backend metadata. It regenerates and validates all 48 capabilities without hand edits.
+
+No database schema change or migration is required for this closure. Validation is based on startup contracts, registry/evaluation suites, canonical code-path review, TypeScript compilation, and generated-inventory parity; no service or database environment was started.
+
 ### Phase 7 — Unified feedback, source health, and reviewed learning
 
 **Objective:** make quality and trust operationally visible.
@@ -1269,6 +1281,22 @@ Remaining Phase 7 scope: the three untouched work items above, HI-FBK-005's rema
 5. Collapse obsolete redirects and route shims relevant to the new canonical surfaces.
 
 **Functional exit:** repository search shows one active owner for ranking, work lifecycle, material decision lineage, feedback interpretation, and document promotion.
+
+**Status: first pass 2026-08-24 — work item 1 (partial) and 5 (partial) done; 2/3/4 not attempted this pass.** Phase 8 is scoped as "Phases 1 through 7 → Phase 8 cleanup" (§16), and at the time of this pass Phase 6/7's own remaining-work items (Claims filing, inspection-findings, document-promotion, Operational Work write commands — see those phases' status notes) were being actively implemented in the same working tree, so this pass deliberately stayed out of every file touching claims/inspection/document-promotion/operational-work to avoid deleting something mid-build. The rest of Phase 8 (item 2 fully, item 3's reader side, item 4, and the remainder of items 1/5) should be revisited once those phases' own remaining work lands.
+
+Work item 1 (partial) confirmed the FRD's own Phase 1 closure note ("its former strength/attention rescoring was removed," "no longer applies a second browser-side priority sort") was true for the property dashboard hero but not fully true elsewhere — the cutover had disconnected callers, not deleted the superseded logic, in three places:
+
+- `apps/frontend/src/lib/dashboard/resolutionCases.ts` — `PRIORITY_RANK` and `sortResolutionCasesByPriority()` (a full independent re-sort by priority) had zero call sites anywhere in the repo.
+- `apps/frontend/src/lib/dashboard/resolutionCenterViewModel.ts` — `sortResolutionActionsByPriority()` had already been neutered to an identity no-op with a comment explaining why real re-ranking must not happen client-side, but the dead wrapper function itself, and its zero call sites, remained.
+- `apps/backend/src/services/resolutionCenter.service.ts` — `sortCases()` (priority/status/date re-ranking for Resolution Center cases) had zero call sites; its only caller was removed when `getResolutionCenter()` was rewritten to wrap `getHomeActionFeed()` directly, but the function itself was left behind. A sibling function in the same file, `sortActions`, had already been fully deleted in that same commit — proof the deletion was possible, just inconsistently applied.
+
+All three removed. Confirmed via `grep` across both `apps/frontend/src` and `apps/backend/src` (not just the removed functions' own files) that nothing else referenced them, and via full backend + frontend `tsc --noEmit` after removal.
+
+Work item 5 (partial): `apps/frontend/src/app/(dashboard)/dashboard/actions/` (`page.tsx` + a 668-line `ActionsClient.tsx`) was fully unreachable — `next.config.js` already permanently redirects `/dashboard/actions` → `/dashboard/resolution-center` — and its own presentation layer duplicated exactly the deprecated pattern item 1 targets: a local `orchestrationPriorityLabel()` function operating on `OrchestratedActionDTO`/`adaptOrchestrationSummary`, bypassing the canonical `getHomeActionFeed()`/`RankedHomeAction` pipeline entirely. Confirmed zero references anywhere (including tests) before deleting; one test (`propertyContextJustInTimeSlice4Completion.test.js`) that asserted this dead file's internal content was updated to drop that entry. The backend API methods it called (`getOrchestrationSummary`, `snoozeOrchestrationAction`, etc.) were confirmed still used elsewhere and were not touched. `OrchestrationActionCard`/`SnoozeModal`/`DecisionTraceModal`, the shared components it imported, are not used by Resolution Center's own client either — Resolution Center has its own current-generation equivalents — but they were left in place since this pass didn't verify no other page still uses them.
+
+**Explicitly not resolved — flagged, not fixed:** `/dashboard/emergency/page.tsx` (rendering `EmergencyTroubleshooter`, a real, unique component used nowhere else) is *also* permanently shadowed by a `next.config.js` redirect to `/dashboard/resolution-center?filter=urgent`, exactly like the `/dashboard/actions` case above — but unlike that case, Resolution Center has no equivalent emergency-troubleshooting content, so the redirect silently drops real, reachable-only-in-source functionality rather than replacing a superseded duplicate. This is a product regression risk, not confirmed dead code, and was deliberately left untouched rather than deleted or un-redirected without a product decision on which behavior is correct.
+
+Remaining Phase 8 scope: item 2 (legacy completion UI / dead orchestration presentation components — not investigated), item 3's reader side (old code that still interprets raw `Feedback.rating`/`page` strings instead of the Phase 7 typed fields — Phase 7 only converged writers), item 4 (legacy inspection truth — blocked on the in-flight inspection-findings work), the `/dashboard/emergency` product decision above, and a fuller sweep of items 1/5 once Phase 6/7's remaining work items land.
 
 ---
 

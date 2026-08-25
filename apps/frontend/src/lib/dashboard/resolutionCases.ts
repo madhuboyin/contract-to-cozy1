@@ -146,14 +146,3 @@ export function filterResolutionCases(
 
   return result;
 }
-
-const PRIORITY_RANK: Record<ResolutionCase['priority'], number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
-
-export function sortResolutionCasesByPriority(cases: ResolutionCase[]): ResolutionCase[] {
-  return [...cases].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
-}

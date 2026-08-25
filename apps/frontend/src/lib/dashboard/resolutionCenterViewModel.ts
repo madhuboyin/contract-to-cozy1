@@ -55,13 +55,6 @@ export function filterResolutionActions(
   return result;
 }
 
-export function sortResolutionActionsByPriority(actions: UrgentActionItem[]): UrgentActionItem[] {
-  // The backend already returns canonical Home Action rank order. Keep this
-  // compatibility helper stable for callers, but never calculate a second
-  // Fix-specific priority order in the browser.
-  return [...actions];
-}
-
 export function buildResolutionCenterViewModel(args: {
   actions: UrgentActionItem[];
   bookings: Booking[];
