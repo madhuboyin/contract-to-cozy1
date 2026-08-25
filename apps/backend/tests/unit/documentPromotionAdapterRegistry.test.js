@@ -19,11 +19,11 @@ test('the real document promotion adapter registry validates cleanly and covers 
   }
 });
 
-test('the real registry reflects verified adapter status: 5 implemented, 4 missing', () => {
+test('the real registry reflects verified adapter status: 7 implemented, 2 missing (Phase 5 remediation item d: INVENTORY + LOAN_ESTIMATE corrected + hardened)', () => {
   const implemented = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.filter((e) => e.adapterExists).map((e) => e.targetDomain).sort();
   const missing = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.filter((e) => !e.adapterExists).map((e) => e.targetDomain).sort();
-  assert.deepEqual(implemented, ['EXPENSE', 'INSPECTION_FINDING', 'INSURANCE_POLICY', 'MATERIAL_SPEC', 'WARRANTY']);
-  assert.deepEqual(missing, ['CLAIM', 'INVENTORY', 'LOAN_ESTIMATE', 'PROPERTY_TAX']);
+  assert.deepEqual(implemented, ['EXPENSE', 'INSPECTION_FINDING', 'INSURANCE_POLICY', 'INVENTORY', 'LOAN_ESTIMATE', 'MATERIAL_SPEC', 'WARRANTY']);
+  assert.deepEqual(missing, ['CLAIM', 'PROPERTY_TAX']);
 });
 
 test('WARRANTY, INSURANCE_POLICY, and EXPENSE declare conflict detection after Phase 5 work item 6', () => {
@@ -81,11 +81,22 @@ test('validateDocumentPromotionAdapterRegistry fails fast on empty notes', () =>
   assert.ok(issues.some((i) => i.includes('WARRANTY') && i.includes('no notes')));
 });
 
-test('a CLIENT_FORM_PREFILL_ONLY domain with no adapter is valid (INVENTORY, LOAN_ESTIMATE)', () => {
+// Phase 5 remediation item (d): the prior "no persisted review-gated
+// candidate" characterization was wrong — InventoryDraftItem already is one.
+test('INVENTORY is now a real, registered REVIEW_GATED_CANDIDATE adapter', () => {
   const inventory = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.find((e) => e.targetDomain === 'INVENTORY');
+  assert.equal(inventory.adapterExists, true);
+  assert.equal(inventory.reviewGate, 'REVIEW_GATED_CANDIDATE');
+  assert.equal(inventory.consumesExtractionEnvelope, true);
+});
+
+// Phase 5 remediation item (d): CLIENT_FORM_PREFILL_ONLY can legitimately
+// coexist with adapterExists:true — the homeowner's save action, not a
+// separate persisted candidate, is the review step, and that save is now
+// the registered promotion adapter.
+test('LOAN_ESTIMATE is now a real, registered adapter, still CLIENT_FORM_PREFILL_ONLY', () => {
   const loanEstimate = DOCUMENT_PROMOTION_ADAPTER_REGISTRY.find((e) => e.targetDomain === 'LOAN_ESTIMATE');
-  assert.equal(inventory.adapterExists, false);
-  assert.equal(inventory.reviewGate, 'CLIENT_FORM_PREFILL_ONLY');
-  assert.equal(loanEstimate.adapterExists, false);
+  assert.equal(loanEstimate.adapterExists, true);
   assert.equal(loanEstimate.reviewGate, 'CLIENT_FORM_PREFILL_ONLY');
+  assert.equal(loanEstimate.consumesExtractionEnvelope, true);
 });

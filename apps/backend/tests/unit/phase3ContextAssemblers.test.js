@@ -4,6 +4,9 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const calls = [];
+let warrantyRowsOverride = [];
+let pendingPolicyTermsOverride = [];
+let confirmedPolicyFactsOverride = [];
 const prismaMock = {
   inspectionReport: {
     findMany: async (args) => {
@@ -30,10 +33,16 @@ const prismaMock = {
     findMany: async (args) => { calls.push(['insurance', args]); return []; },
   },
   warranty: {
-    findMany: async (args) => { calls.push(['warranty', args]); return []; },
+    findMany: async (args) => { calls.push(['warranty', args]); return warrantyRowsOverride; },
   },
   claim: {
     findMany: async (args) => { calls.push(['claim', args]); return []; },
+  },
+  insurancePolicyTerm: {
+    findMany: async (args) => { calls.push(['insurancePolicyTerm', args]); return pendingPolicyTermsOverride; },
+  },
+  insurancePolicyFact: {
+    findMany: async (args) => { calls.push(['insurancePolicyFact', args]); return confirmedPolicyFactsOverride; },
   },
   riskAssessmentReport: {
     findUnique: async () => ({
@@ -105,6 +114,61 @@ test('COVERAGE treats queried empty policy, warranty, and claim sets as known', 
   assert.deepEqual(facts['coverage.insurancePolicies'].value, []);
   assert.deepEqual(facts['coverage.warranties'].value, []);
   assert.deepEqual(facts['coverage.activeClaims'].value, []);
+});
+
+// HI-DOC-004 remediation (Home Intelligence FRD §15 Phase 5 remediation item
+// 3): a newly-extracted, unconfirmed policy fact that disagrees with an
+// already-confirmed one for the same policy means coverage.insurancePolicies
+// cannot be trusted as a single value — CONFLICTED, not KNOWN. This is the
+// same detection coverageConflict.service.ts's shared function already
+// verifies for the advisory Home Action in
+// homeActionInsurancePolicyFactConflictPromotion.test.js — here it's
+// asserted against Property Context's own snapshot, since that's the
+// surface evaluateFeatureContext (and therefore feature-gated consumers
+// like CLAIMS: FILE_INSURANCE_CLAIM) actually reads.
+test('COVERAGE reports coverage.insurancePolicies as CONFLICTED when a pending policy fact disagrees with a confirmed one', async () => {
+  pendingPolicyTermsOverride = [{
+    id: 'term-pending-1',
+    insurancePolicyId: 'policy-1',
+    createdAt: new Date('2026-07-15T00:00:00.000Z'),
+    updatedAt: new Date('2026-07-15T00:00:00.000Z'),
+    insurancePolicy: { id: 'policy-1', carrierName: 'Acme Insurance' },
+    facts: [{
+      id: 'fact-pending-1', factKey: 'ANNUAL_PREMIUM', valueType: 'AMOUNT',
+      amountValue: 2400, textValue: null, booleanValue: null, jsonValue: null,
+      confidence: 0.8, confirmedAt: null,
+      createdAt: new Date('2026-07-15T00:00:00.000Z'), updatedAt: new Date('2026-07-15T00:00:00.000Z'),
+    }],
+  }];
+  confirmedPolicyFactsOverride = [{
+    id: 'fact-confirmed-1', factKey: 'ANNUAL_PREMIUM', valueType: 'AMOUNT',
+    amountValue: 1800, textValue: null, booleanValue: null, jsonValue: null,
+    confidence: 1, confirmedAt: new Date('2026-01-01T00:00:00.000Z'),
+    createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    policyTerm: { insurancePolicyId: 'policy-1', termStart: new Date('2026-01-01T00:00:00.000Z'), createdAt: new Date('2026-01-01T00:00:00.000Z') },
+  }];
+
+  const facts = byKey(await coverageAssembler.assemble('property-1', NOW));
+  assert.equal(facts['coverage.insurancePolicies'].state, 'CONFLICTED');
+  // coverage.warranties is a separate fact key — an insurance conflict must
+  // not bleed into it.
+  assert.equal(facts['coverage.warranties'].state, 'KNOWN');
+
+  pendingPolicyTermsOverride = [];
+  confirmedPolicyFactsOverride = [];
+});
+
+test('COVERAGE reports coverage.warranties as CONFLICTED when two active warranties in the same category disagree on provider', async () => {
+  warrantyRowsOverride = [
+    { id: 'warranty-1', category: 'HVAC', providerName: 'CoolAir Warranty Co.', expiryDate: new Date('2027-01-01T00:00:00.000Z'), updatedAt: new Date('2026-07-01T00:00:00.000Z') },
+    { id: 'warranty-2', category: 'HVAC', providerName: 'Other Provider Inc.', expiryDate: new Date('2027-01-01T00:00:00.000Z'), updatedAt: new Date('2026-07-01T00:00:00.000Z') },
+  ];
+
+  const facts = byKey(await coverageAssembler.assemble('property-1', NOW));
+  assert.equal(facts['coverage.warranties'].state, 'CONFLICTED');
+  assert.equal(facts['coverage.insurancePolicies'].state, 'KNOWN');
+
+  warrantyRowsOverride = [];
 });
 
 test('RISK marks the derived report stale after its validity window and keeps active incidents bounded', async () => {

@@ -22,6 +22,7 @@ import { analyticsEmitter } from './analytics';
 import { ProductAnalyticsEventType } from '@prisma/client';
 import { calculateHealthScore } from '../utils/propertyScore.util';
 import { hasGovernedPlanGuidance } from './riskPremiumOptimizer.service';
+import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from './coverageConflict.service';
 import { createHash } from 'node:crypto';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
@@ -2191,13 +2192,23 @@ function dedupeReplaceRepairAnalysesForPromotion<T extends {
 const RECURRING_FAILURE_LOOKBACK_MONTHS = 30;
 const RECURRING_FAILURE_MIN_EVENT_COUNT = 2;
 
-async function countRecentRepairEventsByInventoryItem(
+// HI-CMP-003 requires "every contributing entity, source, observation
+// time, freshness, and confidence" — an aggregate count alone (the prior
+// shape here) does not satisfy that; each contributing HomeEvent's own
+// identity and occurredAt now flow through so the Home Action below can
+// cite them individually, capped per item (EVIDENCE_PER_ITEM_CAP) so a
+// long repair history can't overflow HomeActionSchema's 50-entry evidence
+// array — the narrative sentence still reports the true total count.
+type RepairEventContributor = { id: string; type: string; occurredAt: Date };
+const RECURRING_FAILURE_EVIDENCE_CAP = 10;
+
+async function findRecentRepairEventsByInventoryItem(
   db: HomeActionSourceDb,
   inventoryItemIds: readonly string[],
   evaluatedAt: Date,
-): Promise<Map<string, number>> {
-  const counts = new Map<string, number>();
-  if (!db.homeEvent || inventoryItemIds.length === 0) return counts;
+): Promise<Map<string, RepairEventContributor[]>> {
+  const byItem = new Map<string, RepairEventContributor[]>();
+  if (!db.homeEvent || inventoryItemIds.length === 0) return byItem;
   const lookbackDate = new Date(evaluatedAt);
   lookbackDate.setMonth(lookbackDate.getMonth() - RECURRING_FAILURE_LOOKBACK_MONTHS);
   const events = await db.homeEvent.findMany({
@@ -2207,13 +2218,16 @@ async function countRecentRepairEventsByInventoryItem(
       type: { in: ['REPAIR', 'MAINTENANCE'] },
       occurredAt: { gte: lookbackDate },
     },
-    select: { inventoryItemId: true },
+    select: { id: true, inventoryItemId: true, type: true, occurredAt: true },
+    orderBy: { occurredAt: 'desc' },
   });
   for (const event of events) {
     if (!event.inventoryItemId) continue;
-    counts.set(event.inventoryItemId, (counts.get(event.inventoryItemId) ?? 0) + 1);
+    const list = byItem.get(event.inventoryItemId) ?? [];
+    list.push({ id: event.id, type: String(event.type), occurredAt: event.occurredAt });
+    byItem.set(event.inventoryItemId, list);
   }
-  return counts;
+  return byItem;
 }
 
 async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
@@ -2246,7 +2260,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   });
 
   const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses);
-  const recurringFailureCounts = await countRecentRepairEventsByInventoryItem(
+  const recurringFailureEventsByItem = await findRecentRepairEventsByInventoryItem(
     db,
     deduped.map((analysis) => analysis.inventoryItemId),
     now,
@@ -2276,7 +2290,8 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
     // HI-CMP-002 rule 6 enrichment: same obligation as every other
     // ReplaceRepairAnalysis promotion — id/lineageId/sourceEntityId/
     // decisionLineagePolicy are untouched by the recurring-failure signal.
-    const recentRepairCount = recurringFailureCounts.get(analysis.inventoryItemId) ?? 0;
+    const contributingRepairEvents = recurringFailureEventsByItem.get(analysis.inventoryItemId) ?? [];
+    const recentRepairCount = contributingRepairEvents.length;
     const hasRecurringFailure = recentRepairCount >= RECURRING_FAILURE_MIN_EVENT_COUNT;
     const recurringFailureSentence = hasRecurringFailure
       ? ` This item has ${recentRepairCount} logged repair or maintenance events in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months — a recurring failure pattern worth weighing against a one-time replacement.`
@@ -2305,15 +2320,21 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
           freshness: 'CURRENT',
           confidence: confidenceScore,
         },
-        ...(hasRecurringFailure ? [{
-          id: `${analysis.inventoryItemId}:recurring-repair-history`,
-          type: 'SYSTEM_DERIVATION' as const,
-          label: `${recentRepairCount} repair/maintenance events in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months`,
-          source: 'Home Timeline',
-          observedAt: now.toISOString(),
-          freshness: 'CURRENT' as const,
-          confidence: 0.85,
-        }] : []),
+        // HI-CMP-003: one evidence entry per contributing HomeEvent (its
+        // own id and observation time), not an aggregate summary — capped
+        // to the most recent RECURRING_FAILURE_EVIDENCE_CAP; the sentence
+        // above already states the true total count.
+        ...(hasRecurringFailure
+          ? contributingRepairEvents.slice(0, RECURRING_FAILURE_EVIDENCE_CAP).map((event) => ({
+              id: event.id,
+              type: 'HOME_EVENT' as const,
+              label: event.type === 'REPAIR' ? 'Repair logged' : 'Maintenance logged',
+              source: 'Home Timeline',
+              observedAt: event.occurredAt.toISOString(),
+              freshness: 'CURRENT' as const,
+              confidence: 0.85,
+            }))
+          : []),
       ],
       assumptions: [{
         key: 'verdict-computed-at',
@@ -2388,16 +2409,6 @@ type PolicyFactSnapshot = {
   updatedAt: Date;
 };
 
-function policyFactEffectiveValue(fact: PolicyFactSnapshot): string | null {
-  switch (fact.valueType) {
-    case 'AMOUNT': return fact.amountValue != null ? String(fact.amountValue) : null;
-    case 'TEXT': return fact.textValue;
-    case 'BOOLEAN': return fact.booleanValue != null ? String(fact.booleanValue) : null;
-    case 'JSON': return fact.jsonValue != null ? JSON.stringify(fact.jsonValue) : null;
-    default: return null;
-  }
-}
-
 function formatPolicyFactValue(fact: PolicyFactSnapshot): string {
   switch (fact.valueType) {
     case 'AMOUNT': return fact.amountValue != null ? formatHomeActionCurrency(Number(fact.amountValue)) : 'unknown';
@@ -2408,62 +2419,27 @@ function formatPolicyFactValue(fact: PolicyFactSnapshot): string {
 }
 
 async function loadInsurancePolicyFactConflictActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
-  if (!db.insurancePolicyTerm || !db.insurancePolicyFact) return [];
   const now = evaluatedAt ?? new Date();
-  const pendingTerms = await db.insurancePolicyTerm.findMany({
-    where: { propertyId, status: 'PENDING_CONFIRMATION' },
-    include: {
-      facts: { where: { confirmationStatus: 'PENDING' } },
-      insurancePolicy: { select: { id: true, carrierName: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-  });
-  if (pendingTerms.length === 0) return [];
+  // HI-DOC-004 remediation: detection now lives in coverageConflict.service.ts,
+  // the single source of truth also consumed by Property Context's Coverage
+  // assembler — this loader only formats the same detection result.
+  const conflictedTerms = await getConflictedInsurancePolicyTerms(propertyId, db);
 
-  const policyIds = [...new Set(pendingTerms.map((term) => term.insurancePolicyId))];
-  const confirmedFacts = await db.insurancePolicyFact.findMany({
-    where: {
-      confirmationStatus: 'CONFIRMED',
-      policyTerm: { insurancePolicyId: { in: policyIds }, status: { not: 'PENDING_CONFIRMATION' } },
-    },
-    include: { policyTerm: { select: { insurancePolicyId: true, termStart: true, createdAt: true } } },
-  });
-
-  const latestConfirmedByPolicyAndKey = new Map<string, PolicyFactSnapshot & { policyId: string; termTime: number }>();
-  for (const fact of confirmedFacts as any[]) {
-    const key = `${fact.policyTerm.insurancePolicyId}:${fact.factKey}`;
-    const termTime = (fact.policyTerm.termStart ?? fact.policyTerm.createdAt).getTime();
-    const existing = latestConfirmedByPolicyAndKey.get(key);
-    if (!existing || termTime > existing.termTime) {
-      latestConfirmedByPolicyAndKey.set(key, { ...fact, policyId: fact.policyTerm.insurancePolicyId, termTime });
-    }
-  }
-
-  return (pendingTerms as any[]).flatMap((term) => {
-    const conflicts = (term.facts as PolicyFactSnapshot[]).flatMap((pendingFact) => {
-      const confirmed = latestConfirmedByPolicyAndKey.get(`${term.insurancePolicyId}:${pendingFact.factKey}`);
-      if (!confirmed) return [];
-      if (policyFactEffectiveValue(pendingFact) === policyFactEffectiveValue(confirmed)) return [];
-      return [{ pending: pendingFact, confirmed }];
-    });
-    if (conflicts.length === 0) return [];
-
-    const carrierName = term.insurancePolicy.carrierName;
-    const conflictSummary = conflicts
+  return conflictedTerms.map((term) => {
+    const conflictSummary = term.conflicts
       .map(({ pending, confirmed }) =>
         `${POLICY_FACT_LABELS[pending.factKey] ?? pending.factKey}: newly extracted ${formatPolicyFactValue(pending)}, currently confirmed ${formatPolicyFactValue(confirmed)}`)
       .join('; ');
 
-    return [adaptHomeActionSource('SYSTEM', {
-      id: `insurance-fact-conflict:${term.id}`,
+    return adaptHomeActionSource('SYSTEM', {
+      id: `insurance-fact-conflict:${term.termId}`,
       propertyId,
-      lineageId: `insurance-fact-conflict:${term.id}`,
-      sourceEntityId: term.id,
-      sourceVersion: term.updatedAt.toISOString(),
+      lineageId: `insurance-fact-conflict:${term.termId}`,
+      sourceEntityId: term.termId,
+      sourceVersion: term.termUpdatedAt.toISOString(),
       state: 'OPEN',
       priority: 'SOON',
-      signal: `New ${carrierName} policy document conflicts with your confirmed policy details`,
+      signal: `New ${term.carrierName} policy document conflicts with your confirmed policy details`,
       whyItMatters: `A newly extracted policy document disagrees with what's already confirmed on file: ${conflictSummary}.`,
       recommendedAction: 'Review the newly extracted details and confirm which value is correct.',
       expectedOutcome: 'The policy record reflects one confirmed, correct value for each conflicting fact.',
@@ -2473,7 +2449,7 @@ async function loadInsurancePolicyFactConflictActions(propertyId: string, db: Ho
         windowEnd: null,
         rationale: 'Advisory — not tied to a specific deadline, but resolving it keeps coverage guidance accurate.',
       },
-      evidence: conflicts.flatMap(({ pending, confirmed }) => [
+      evidence: term.conflicts.flatMap(({ pending, confirmed }) => [
         {
           id: pending.id,
           type: 'DOCUMENT' as const,
@@ -2504,9 +2480,9 @@ async function loadInsurancePolicyFactConflictActions(propertyId: string, db: Ho
       secondaryCtas: [],
       feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
-      createdAt: term.createdAt.toISOString(),
+      createdAt: term.termCreatedAt.toISOString(),
       lastEvaluatedAt: now.toISOString(),
-    })];
+    });
   });
 }
 
@@ -2528,35 +2504,18 @@ async function loadInsurancePolicyFactConflictActions(propertyId: string, db: Ho
 // Property Context's fact-candidate machinery (which — like
 // InsurancePolicy's fact-level system — has no per-warranty-field
 // granularity to hook into).
-const WARRANTY_EXPIRY_CONFLICT_TOLERANCE_DAYS = 30;
-
 async function loadWarrantyConflictActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
-  if (!db.warranty) return [];
   const now = evaluatedAt ?? new Date();
-  const warranties = await db.warranty.findMany({
-    where: { propertyId, expiryDate: { gte: now } },
-    select: { id: true, category: true, providerName: true, expiryDate: true, updatedAt: true },
-  });
-
-  const byCategory = new Map<string, typeof warranties>();
-  for (const warranty of warranties) {
-    // OTHER is a catch-all category — two OTHER-category warranties aren't
-    // necessarily "the same coverage" the way two ROOFING warranties are,
-    // so grouping them would risk a false-positive conflict.
-    if (warranty.category === 'OTHER') continue;
-    const group = byCategory.get(warranty.category) ?? [];
-    group.push(warranty);
-    byCategory.set(warranty.category, group);
-  }
+  // HI-DOC-004 remediation: detection now lives in coverageConflict.service.ts,
+  // the single source of truth also consumed by Property Context's Coverage
+  // assembler — this loader only formats the same detection result.
+  const conflictedGroups = await getConflictedWarrantyGroups(propertyId, db, now);
 
   const actions: HomeAction[] = [];
-  for (const [category, group] of byCategory) {
-    if (group.length < 2) continue;
+  for (const { category, warranties: group } of conflictedGroups) {
     const providers = [...new Set(group.map((warranty) => warranty.providerName))];
     const expiryTimes = group.map((warranty) => warranty.expiryDate.getTime());
     const expirySpreadDays = (Math.max(...expiryTimes) - Math.min(...expiryTimes)) / (24 * 60 * 60 * 1000);
-    const conflicting = providers.length > 1 || expirySpreadDays > WARRANTY_EXPIRY_CONFLICT_TOLERANCE_DAYS;
-    if (!conflicting) continue;
 
     const sorted = [...group].sort((left, right) => left.id.localeCompare(right.id));
     const groupHash = createHash('sha256').update(sorted.map((warranty) => warranty.id).join('|')).digest('hex');
@@ -3481,7 +3440,19 @@ async function getReadyMortgageRefinanceOpportunitySummary(
   propertyId: string,
   db: HomeActionSourceDb,
   evaluatedAt: Date,
-): Promise<{ monthlySavings: number; breakEvenMonths: number; marketRate: number } | null> {
+): Promise<{
+  monthlySavings: number;
+  breakEvenMonths: number;
+  marketRate: number;
+  // HI-CMP-003: the real contributing entity identities and their own
+  // observation times — not a synthetic property-scoped id — so the
+  // caller can cite each one as its own evidence entry rather than one
+  // aggregate summary.
+  opportunityId: string;
+  opportunityObservedAt: string;
+  financingProfileId: string | null;
+  financingProfileObservedAt: string | null;
+} | null> {
   if (!db.propertyRefinanceRadarState || !db.propertyFinancingProfile) return null;
   const [state, profile] = await Promise.all([
     db.propertyRefinanceRadarState.findUnique({
@@ -3489,12 +3460,13 @@ async function getReadyMortgageRefinanceOpportunitySummary(
       select: {
         radarState: true,
         lastRateSnapshot: { select: { date: true, source: true } },
-        currentOpportunity: { select: { monthlySavings: true, breakEvenMonths: true, marketRate: true } },
+        currentOpportunity: { select: { id: true, monthlySavings: true, breakEvenMonths: true, marketRate: true, evaluationDate: true } },
       },
     }),
     db.propertyFinancingProfile.findUnique({
       where: { propertyId },
       select: {
+        id: true,
         mortgageStatus: true,
         currentMortgageBalanceCents: true,
         interestRateBps: true,
@@ -3528,6 +3500,10 @@ async function getReadyMortgageRefinanceOpportunitySummary(
     monthlySavings: Number(state.currentOpportunity.monthlySavings),
     breakEvenMonths: state.currentOpportunity.breakEvenMonths,
     marketRate: Number(state.currentOpportunity.marketRate),
+    opportunityId: state.currentOpportunity.id,
+    opportunityObservedAt: state.currentOpportunity.evaluationDate.toISOString(),
+    financingProfileId: profile?.id ?? null,
+    financingProfileObservedAt: profile?.mortgageBalanceAsOfDate?.toISOString() ?? null,
   };
 }
 
@@ -3676,15 +3652,29 @@ export async function loadOwnershipCostChangeActions(
           freshness: 'CURRENT',
           confidence,
         },
+        // HI-CMP-003: each contributing entity gets its own evidence entry,
+        // with its own id and its own observation time — not a synthetic
+        // property-scoped id borrowing the ownership-cost change's timestamp.
         ...(hasRefinanceLever && refinanceOpportunity ? [{
-          id: `${propertyId}:refinance-opportunity`,
+          id: refinanceOpportunity.opportunityId,
           type: 'SYSTEM_DERIVATION' as const,
           label: `Ready refinance opportunity — market rate ${refinanceOpportunity.marketRate.toFixed(3)}%`,
           source: 'Mortgage Refinance Radar',
-          observedAt: change.createdAt.toISOString(),
+          observedAt: refinanceOpportunity.opportunityObservedAt,
           freshness: 'CURRENT' as const,
           confidence: 0.7,
         }] : []),
+        ...(hasRefinanceLever && refinanceOpportunity && refinanceOpportunity.financingProfileId && refinanceOpportunity.financingProfileObservedAt
+          ? [{
+              id: refinanceOpportunity.financingProfileId,
+              type: 'SYSTEM_DERIVATION' as const,
+              label: 'Mortgage financing profile used for the refinance comparison',
+              source: 'Financing Profile',
+              observedAt: refinanceOpportunity.financingProfileObservedAt,
+              freshness: 'CURRENT' as const,
+              confidence: 0.7,
+            }]
+          : []),
       ],
       assumptions: [{
         key: 'observed_change_attribution',

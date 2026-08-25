@@ -45,14 +45,24 @@ function analysis(overrides = {}) {
   };
 }
 
+let repairEventIdCounter = 0;
 function repairEvent(overrides = {}) {
-  return { inventoryItemId: 'item-1', ...overrides };
+  repairEventIdCounter += 1;
+  return {
+    id: `home-event-${repairEventIdCounter}`,
+    inventoryItemId: 'item-1',
+    type: 'REPAIR',
+    occurredAt: new Date('2026-06-01T00:00:00.000Z'),
+    ...overrides,
+  };
 }
 
-test('two or more repair/maintenance events in the lookback window bumps priority to SOON and adds recurring-failure evidence', async () => {
+test('two or more repair/maintenance events in the lookback window bumps priority to SOON and adds one evidence entry per contributing event', async () => {
+  const eventA = repairEvent({ id: 'home-event-a', type: 'REPAIR', occurredAt: new Date('2026-06-01T00:00:00.000Z') });
+  const eventB = repairEvent({ id: 'home-event-b', type: 'MAINTENANCE', occurredAt: new Date('2026-03-01T00:00:00.000Z') });
   const db = stubSources({
     analyses: [analysis()],
-    repairEvents: [repairEvent(), repairEvent()],
+    repairEvents: [eventA, eventB],
   });
   const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
 
@@ -60,11 +70,34 @@ test('two or more repair/maintenance events in the lookback window bumps priorit
   const [action] = actions;
   assert.equal(action.priority, 'SOON');
   assert.ok(action.whyItMatters.includes('2 logged repair or maintenance events'));
-  assert.equal(action.evidence.length, 2, 'the base analysis evidence plus the recurring-failure evidence');
-  assert.ok(action.evidence.some((entry) => entry.label.includes('2 repair/maintenance events')));
+  // HI-CMP-003: one evidence entry per contributing HomeEvent (its own id
+  // and observedAt), not an aggregate summary — base analysis evidence
+  // plus one entry per event.
+  assert.equal(action.evidence.length, 3, 'the base analysis evidence plus one entry per contributing event');
+  const repairEvidence = action.evidence.find((entry) => entry.id === 'home-event-a');
+  assert.ok(repairEvidence, 'the REPAIR event\'s own id must appear as its own evidence entry');
+  assert.equal(repairEvidence.type, 'HOME_EVENT');
+  assert.equal(repairEvidence.label, 'Repair logged');
+  assert.equal(repairEvidence.observedAt, '2026-06-01T00:00:00.000Z');
+  const maintenanceEvidence = action.evidence.find((entry) => entry.id === 'home-event-b');
+  assert.ok(maintenanceEvidence, 'the MAINTENANCE event\'s own id must appear as its own evidence entry');
+  assert.equal(maintenanceEvidence.label, 'Maintenance logged');
+  assert.equal(maintenanceEvidence.observedAt, '2026-03-01T00:00:00.000Z');
   // Identity/decision-lineage fields must be untouched by enrichment.
   assert.equal(action.id, 'repair-replace:analysis-1');
   assert.equal(action.lineageId, 'repair-replace:item-1');
+});
+
+test('more contributing events than the evidence cap still report the true count in the narrative, with evidence capped', async () => {
+  const events = Array.from({ length: 15 }, (_, index) => repairEvent({
+    id: `home-event-${index}`,
+    occurredAt: new Date(2026, 0, index + 1),
+  }));
+  const db = stubSources({ analyses: [analysis()], repairEvents: events });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+
+  assert.ok(actions[0].whyItMatters.includes('15 logged repair or maintenance events'));
+  assert.equal(actions[0].evidence.length, 11, 'base analysis evidence plus the 10-event evidence cap');
 });
 
 test('exactly one repair event does not count as a recurring pattern', async () => {

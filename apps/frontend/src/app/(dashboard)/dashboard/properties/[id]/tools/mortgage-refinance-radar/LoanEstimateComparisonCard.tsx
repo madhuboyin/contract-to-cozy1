@@ -25,6 +25,7 @@ import {
   type RefinanceLoanEstimateComparison,
   type RefinanceLoanEstimateInput,
   type RefinanceLoanEstimateExtraction,
+  type RefinanceLoanEstimateExtractionProvenance,
   type SavedRefinanceLoanEstimateComparison,
 } from './mortgageRefinanceRadarApi';
 import {
@@ -59,7 +60,58 @@ type OfferDraft = {
     RefinanceLoanEstimateInput['rateLockStatus']
   >;
   rateLockExpirationDate: string;
+  extractionProvenance?: RefinanceLoanEstimateExtractionProvenance;
 };
+
+// Home Intelligence FRD §8.7 (HI-DOC-001/005), Phase 5 remediation item (d)
+// — mirrors refinanceLoanEstimateExtractionEnvelope.adapter.ts's own
+// CONFIDENCE_BY_TIER / extractor id+version exactly, so a saved offer's
+// provenance matches what the backend's ExtractionEnvelope would compute
+// for the same extraction.
+const LOAN_ESTIMATE_EXTRACTOR_ID = 'refinance-loan-estimate-parser';
+const LOAN_ESTIMATE_EXTRACTOR_VERSION = 'v1';
+const CONFIDENCE_BY_TIER: Record<'HIGH' | 'MEDIUM', number> = {
+  HIGH: 0.9,
+  MEDIUM: 0.6,
+};
+
+function resolveExtractionParseStatus(
+  extraction: RefinanceLoanEstimateExtraction,
+): RefinanceLoanEstimateExtractionProvenance['parseStatus'] {
+  if (
+    extraction.pageIntegrity?.status === 'UNVERIFIED' ||
+    extraction.requiredFieldsFound === 0
+  ) {
+    return 'FAILED';
+  }
+  if (
+    (extraction.pageIntegrity && extraction.pageIntegrity.status !== 'COMPLETE') ||
+    extraction.requiredFieldsFound < extraction.requiredFieldCount
+  ) {
+    return 'FALLBACK_UNSTRUCTURED';
+  }
+  return 'PARSED';
+}
+
+function buildExtractionProvenance(
+  extraction: RefinanceLoanEstimateExtraction,
+): RefinanceLoanEstimateExtractionProvenance {
+  const fieldConfidence: Record<string, number> = {};
+  const fieldEvidence: Record<string, string> = {};
+  for (const [fieldKey, field] of Object.entries(extraction.fields)) {
+    if (field.confidence === 'MISSING' || field.value == null) continue;
+    fieldConfidence[fieldKey] = CONFIDENCE_BY_TIER[field.confidence];
+    if (field.sourceLabel) fieldEvidence[fieldKey] = field.sourceLabel;
+  }
+  return {
+    extractorId: LOAN_ESTIMATE_EXTRACTOR_ID,
+    extractorVersion: LOAN_ESTIMATE_EXTRACTOR_VERSION,
+    parseStatus: resolveExtractionParseStatus(extraction),
+    extractedAt: new Date().toISOString(),
+    fieldConfidence,
+    fieldEvidence,
+  };
+}
 
 const METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   APR: 'Lowest APR',
@@ -137,6 +189,7 @@ function toDraft(offer: RefinanceLoanEstimateInput): OfferDraft {
     issuedDate: offer.issuedDate ?? '',
     rateLockStatus: offer.rateLockStatus ?? 'UNKNOWN',
     rateLockExpirationDate: offer.rateLockExpirationDate ?? '',
+    extractionProvenance: offer.extractionProvenance,
   };
 }
 
@@ -244,6 +297,9 @@ function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
     rateLockStatus: offer.rateLockStatus,
     ...(offer.rateLockStatus === 'LOCKED' && offer.rateLockExpirationDate
       ? { rateLockExpirationDate: offer.rateLockExpirationDate }
+      : {}),
+    ...(offer.extractionProvenance
+      ? { extractionProvenance: offer.extractionProvenance }
       : {}),
   };
 }
@@ -371,7 +427,7 @@ function OfferFields({
               type="number"
               min="0"
               step={field.includes('Pct') ? '0.001' : '1'}
-              value={offer[field as keyof OfferDraft]}
+              value={offer[field as keyof OfferDraft] as string}
               onChange={(event) =>
                 set(field as keyof OfferDraft, event.target.value)
               }
@@ -587,6 +643,7 @@ export function LoanEstimateComparisonCard({
         fields.issuedDate.value == null
           ? base.issuedDate
           : value(fields.issuedDate),
+      extractionProvenance: buildExtractionProvenance(extraction),
     };
     setOffers((current) =>
       targetIndex >= 0

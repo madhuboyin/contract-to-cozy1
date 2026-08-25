@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { getFactDefinitionsForScope } from '../catalog/factCatalog';
 import { PropertyContextActor, PropertyContextScope, PropertyFact } from '../domain/contracts';
 import { createPropertyFact, FactEvidenceMetadata } from '../domain/facts';
+import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from '../../../services/coverageConflict.service';
 
 export interface PropertyContextAssembler {
   readonly scope: PropertyContextScope;
@@ -497,7 +498,7 @@ export const inspectionAssembler: PropertyContextAssembler = {
 export const coverageAssembler: PropertyContextAssembler = {
   scope: 'COVERAGE',
   async assemble(propertyId, now) {
-    const [insurancePolicies, warranties, claims] = await Promise.all([
+    const [insurancePolicies, warranties, claims, conflictedPolicyTerms, conflictedWarrantyGroups] = await Promise.all([
       prisma.insurancePolicy.findMany({
         where: { propertyId },
         select: {
@@ -541,6 +542,18 @@ export const coverageAssembler: PropertyContextAssembler = {
         },
         orderBy: { lastActivityAt: 'desc' },
       }),
+      // HI-DOC-004 remediation: a newly-extracted policy fact disagreeing
+      // with a confirmed one, or two active warranties in the same category
+      // disagreeing with each other, means this collection cannot be
+      // trusted as a single value yet — CONFLICTED, not KNOWN. Detection is
+      // shared with the advisory conflict Home Actions (single source of
+      // truth); this is what makes the state real for every feature
+      // contract that requires these fact keys (e.g. CLAIMS:
+      // FILE_INSURANCE_CLAIM / FILE_WARRANTY_CLAIM), via
+      // evaluateFeatureContext's existing CONFLICT_REVIEW_REQUIRED /
+      // canExecute:false gating — no changes needed there.
+      getConflictedInsurancePolicyTerms(propertyId, prisma),
+      getConflictedWarrantyGroups(propertyId, prisma, now),
     ]);
     const serialize = (row: Record<string, unknown>) => Object.fromEntries(
       Object.entries(row).map(([key, value]) => [
@@ -550,9 +563,17 @@ export const coverageAssembler: PropertyContextAssembler = {
           : value,
       ]),
     );
+    const insurancePoliciesFact = createPropertyFact('coverage.insurancePolicies', insurancePolicies.map((row) => serialize(row)), undefined, now);
+    const warrantiesFact = createPropertyFact('coverage.warranties', warranties.map((row) => serialize(row)), undefined, now);
     return [
-      withPropertyId(createPropertyFact('coverage.insurancePolicies', insurancePolicies.map((row) => serialize(row)), undefined, now), propertyId),
-      withPropertyId(createPropertyFact('coverage.warranties', warranties.map((row) => serialize(row)), undefined, now), propertyId),
+      withPropertyId(
+        conflictedPolicyTerms.length > 0 ? { ...insurancePoliciesFact, state: 'CONFLICTED' } : insurancePoliciesFact,
+        propertyId,
+      ),
+      withPropertyId(
+        conflictedWarrantyGroups.length > 0 ? { ...warrantiesFact, state: 'CONFLICTED' } : warrantiesFact,
+        propertyId,
+      ),
       withPropertyId(createPropertyFact('coverage.activeClaims', claims.map((row) => serialize(row)), undefined, now), propertyId),
     ];
   },

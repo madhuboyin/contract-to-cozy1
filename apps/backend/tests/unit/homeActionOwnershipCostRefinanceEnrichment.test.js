@@ -33,11 +33,18 @@ function readyRefinanceStubs(overrides = {}) {
       findUnique: async () => ({
         radarState: 'OPEN',
         lastRateSnapshot: { date: new Date('2026-08-20T00:00:00.000Z'), source: 'FRED' },
-        currentOpportunity: { monthlySavings: 210, breakEvenMonths: 18, marketRate: 6.125 },
+        currentOpportunity: {
+          id: 'refinance-opportunity-1',
+          monthlySavings: 210,
+          breakEvenMonths: 18,
+          marketRate: 6.125,
+          evaluationDate: new Date('2026-08-21T00:00:00.000Z'),
+        },
       }),
     },
     propertyFinancingProfile: {
       findUnique: async () => ({
+        id: 'financing-profile-1',
         mortgageStatus: 'FIXED',
         currentMortgageBalanceCents: 35_000_000,
         interestRateBps: 725,
@@ -70,8 +77,17 @@ test('a mortgage cost change with a ready refinance opportunity is enriched: CTA
   assert.equal(action.primaryCta.href, '/dashboard/properties/property-1/tools/mortgage-refinance-radar');
   assert.equal(action.primaryCta.label, 'Compare refinance options');
   assert.ok(action.whyItMatters.includes('refinance comparison is currently ready'));
-  assert.equal(action.evidence.length, 2, 'the observed-change evidence plus the refinance-opportunity evidence');
-  assert.ok(action.evidence.some((entry) => entry.label.includes('6.125')));
+  // HI-CMP-003: base observed-change evidence, plus one entry per real
+  // contributing entity (the refinance opportunity and the financing
+  // profile) — not a synthetic aggregate.
+  assert.equal(action.evidence.length, 3, 'observed-change evidence plus one entry per contributing entity');
+  const opportunityEvidence = action.evidence.find((entry) => entry.id === 'refinance-opportunity-1');
+  assert.ok(opportunityEvidence, 'the refinance opportunity\'s own id must appear as its own evidence entry');
+  assert.ok(opportunityEvidence.label.includes('6.125'));
+  assert.equal(opportunityEvidence.observedAt, '2026-08-21T00:00:00.000Z');
+  const profileEvidence = action.evidence.find((entry) => entry.id === 'financing-profile-1');
+  assert.ok(profileEvidence, 'the financing profile\'s own id must appear as its own evidence entry');
+  assert.equal(profileEvidence.observedAt, '2026-08-15T00:00:00.000Z');
   // Identity/decision-lineage fields must be untouched by enrichment.
   assert.equal(action.id, 'ownership-cost-change:change-mortgage-1');
   assert.equal(action.lineageId, 'ownership-cost-change:property-1:MORTGAGE_INTEREST');

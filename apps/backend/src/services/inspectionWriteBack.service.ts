@@ -5,6 +5,7 @@ import { APIError } from '../middleware/error.middleware';
 import { inspectionFindingSourceAdapter } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 
 type FindingWithRelations = Prisma.InspectionFindingGetPayload<Record<string, never>>;
 
@@ -252,9 +253,48 @@ export async function applyWriteBacks(
     await prisma.inspectionWriteBack.createMany({ data: writeBacks });
   }
 
-  await prisma.inspectionReport.update({
-    where: { id: reportId },
-    data: { status: 'CONFIRMED', confirmedAt: new Date() },
+  // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-005) — the
+  // status flip below is what turns every finding above from a draft, no
+  // consumer reads yet, into homeowner-trusted (loadInspectionFindingActions
+  // and the rest of inspectionHub.service.ts all gate on report.status ===
+  // 'CONFIRMED'), so it's exactly the canonical write HI-DOC-005 requires a
+  // Property Change and recompute request for. Scoped to just this update
+  // (not the whole function) — the write-backs/permit flags/coverage-gap
+  // flags above and the work-item materialization below already have their
+  // own established non-atomic, per-finding failure-tolerance pattern
+  // (recordReconciliationFailure), which wrapping everything in one
+  // transaction would break.
+  await prisma.$transaction(async (tx) => {
+    await tx.inspectionReport.update({
+      where: { id: reportId },
+      data: { status: 'CONFIRMED', confirmedAt: new Date() },
+    });
+    await emitPropertyChangeWithTransaction(tx, {
+      propertyId,
+      sourceType: 'DOCUMENT',
+      sourceEntityId: reportId,
+      sourceRevision: 'CONFIRMED',
+      changeType: 'SOURCE_LIFECYCLE_CHANGED',
+      changedFactKeys: [...new Set(report.findings.map((finding) => `inspection.${finding.homeSystem.toLowerCase()}`))],
+      // canonicalReferences is capped at 100 by propertyChangeEmissionSchema
+      // — the report reference plus up to 99 findings comfortably covers
+      // any real inspection report.
+      canonicalReferences: [
+        { entityType: 'INSPECTION_REPORT', entityId: reportId },
+        ...report.findings.slice(0, 99).map((finding) => ({ entityType: 'INSPECTION_FINDING', entityId: finding.id })),
+      ],
+      occurredAt: new Date(),
+      detectedAt: new Date(),
+      confidence: 1,
+      sourceHealth: 'CURRENT',
+      signals: {
+        homeownerRelevant: true,
+        lifecycleAdvanced: true,
+        propertyEffectConfirmed: true,
+        urgentSafetyCondition: report.findings.some((finding) => finding.severity === 'SAFETY'),
+        canonicalActionPriority: null,
+      },
+    });
   });
 
   // Confirmation turns reviewed, actionable findings into candidate work —

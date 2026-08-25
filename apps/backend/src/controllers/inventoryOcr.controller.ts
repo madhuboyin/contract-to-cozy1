@@ -4,6 +4,7 @@ import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { extractLabelFieldsFromImage } from '../services/inventoryOcr.service';
+import { inventoryOcrToExtractionEnvelope } from '../services/inventoryOcrExtractionEnvelope.adapter';
 import { InventoryDraftService } from '../services/inventoryDraft.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -89,6 +90,16 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const debug = canReturnOcrDebug(req);
   const ocr = await extractLabelFieldsFromImage(file.buffer, { debug: debug as boolean });
 
+  // HI-DOC-001 (Home Intelligence FRD §8.7, Phase 5 remediation item d) —
+  // additive observability only: does not change which fields become the
+  // draft or how confirmation later proceeds, but surfaces the one signal
+  // OcrExtractResult can't on its own — a genuinely unreadable label
+  // (FALLBACK_UNSTRUCTURED) vs. a clean extraction.
+  const envelope = inventoryOcrToExtractionEnvelope(ocr);
+  if (envelope.warnings.length > 0) {
+    logger.warn({ propertyId, warnings: envelope.warnings }, '[inventoryOcr] Extraction envelope reported warnings');
+  }
+
   // 1) Create OCR session (no image stored)
   const session = await prisma.inventoryOcrSession.create({
     data: {
@@ -142,7 +153,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const draft = await draftSvc.createDraftFromOcr({
     propertyId,
     userId,
-    scanSessionId: session.id,
+    ocrSessionId: session.id,
     manufacturer,
     modelNumber,
     serialNumber,

@@ -61,6 +61,27 @@ for (const fixture of fixtures) {
   });
 }
 
+// HI-DOC-004 remediation (Home Intelligence FRD §15 Phase 5 remediation
+// item 3): coverageReview.service.ts passes hasUnresolvedConflict when
+// coverageConflict.service.ts finds a pending-vs-confirmed policy fact
+// disagreement — the review must refuse to answer coverage questions with
+// either value until a homeowner resolves it, regardless of what the term's
+// own facts otherwise look like.
+test('a term with an unresolved policy fact conflict short-circuits to CONFLICTED, even when its own facts look healthy', () => {
+  const fixture = fixtures.find((entry) => entry.name === 'positive scoped healthy');
+  const result = evaluateCoverageReview(hydrateTerm(fixture.term), evaluatedAt, { hasUnresolvedConflict: true });
+  assert.equal(result.overallState, 'CONFLICTED');
+  assert.equal(result.scopeStatus, 'UNSUPPORTED');
+  assert.deepEqual(result.questions.map((question) => question.questionKey), ['RESOLVE_POLICY_FACT_CONFLICT']);
+  assert.equal(result.healthySummary, null);
+});
+
+test('no conflict leaves the existing golden-fixture behavior untouched', () => {
+  const fixture = fixtures.find((entry) => entry.name === 'positive scoped healthy');
+  const result = evaluateCoverageReview(hydrateTerm(fixture.term), evaluatedAt, { hasUnresolvedConflict: false });
+  assert.notEqual(result.overallState, 'CONFLICTED');
+});
+
 test('unsupported policy prose cannot produce an evidence-based determination', () => {
   const fixture = fixtures.find((entry) => entry.name === 'unsupported raw policy language');
   const result = evaluateCoverageReview(hydrateTerm(fixture.term), evaluatedAt);

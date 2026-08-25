@@ -40,7 +40,7 @@ export type CoverageReviewDTO = {
   policyTermId: string | null;
   status: 'READY' | 'STALE';
   scopeStatus: 'SUPPORTED' | 'PARTIAL' | 'UNSUPPORTED';
-  overallState: 'HEALTHY_SCOPED' | 'QUESTIONS' | 'NEEDS_EVIDENCE' | 'UNSUPPORTED';
+  overallState: 'HEALTHY_SCOPED' | 'QUESTIONS' | 'NEEDS_EVIDENCE' | 'UNSUPPORTED' | 'CONFLICTED';
   reviewVersion: number;
   generatedAt: string;
   expiresAt: string | null;

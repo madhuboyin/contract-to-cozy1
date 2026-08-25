@@ -91,18 +91,22 @@ export default function CoverageReviewQuestionsPanel({ propertyId }: { propertyI
               Evidence-qualified review
             </p>
             <h2 className="mt-1 text-base font-semibold">
-              {review.overallState === 'HEALTHY_SCOPED'
-                ? 'No question within the reviewed fields'
-                : review.scopeStatus === 'UNSUPPORTED'
-                  ? 'More policy evidence is needed'
-                  : `${questions.length} question${questions.length === 1 ? '' : 's'} to review`}
+              {review.overallState === 'CONFLICTED'
+                ? 'A policy detail needs to be resolved'
+                : review.overallState === 'HEALTHY_SCOPED'
+                  ? 'No question within the reviewed fields'
+                  : review.scopeStatus === 'UNSUPPORTED'
+                    ? 'More policy evidence is needed'
+                    : `${questions.length} question${questions.length === 1 ? '' : 's'} to review`}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {review.scopeStatus === 'SUPPORTED'
-                ? 'Scope: the confirmed deductible, policy form, dwelling limit, and liability limit.'
-                : review.scopeStatus === 'PARTIAL'
-                  ? 'Scope: only the confirmed fields shown below; other policy language was not determined.'
-                  : 'The available record does not support a determination within this limited reviewed field set.'}
+              {review.overallState === 'CONFLICTED'
+                ? 'A newly uploaded policy document disagrees with what is already confirmed on file. Resolve which value is correct before relying on this review.'
+                : review.scopeStatus === 'SUPPORTED'
+                  ? 'Scope: the confirmed deductible, policy form, dwelling limit, and liability limit.'
+                  : review.scopeStatus === 'PARTIAL'
+                    ? 'Scope: only the confirmed fields shown below; other policy language was not determined.'
+                    : 'The available record does not support a determination within this limited reviewed field set.'}
             </p>
           </div>
           <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium">

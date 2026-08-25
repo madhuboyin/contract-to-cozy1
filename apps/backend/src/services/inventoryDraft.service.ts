@@ -3,12 +3,50 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { applianceOracleService } from './applianceOracle.service';
 import { logger } from '../lib/logger';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
+import type { Prisma } from '@prisma/client';
+
+// Home Intelligence FRD §8.7 (HI-DOC-005), Phase 5 remediation item (d) —
+// shared so confirmDraftToInventoryItem and bulkConfirm emit an identical
+// PropertyChange shape for the same lifecycle transition.
+async function emitInventoryDraftConfirmedChange(
+  tx: Prisma.TransactionClient,
+  params: { propertyId: string; draftId: string; itemId: string },
+) {
+  await emitPropertyChangeWithTransaction(tx, {
+    propertyId: params.propertyId,
+    sourceType: 'DOCUMENT',
+    sourceEntityId: params.draftId,
+    sourceRevision: 'CONFIRMED',
+    changeType: 'SOURCE_LIFECYCLE_CHANGED',
+    changedFactKeys: ['inventory.items'],
+    canonicalReferences: [{ entityType: 'INVENTORY_ITEM', entityId: params.itemId }],
+    occurredAt: new Date(),
+    detectedAt: new Date(),
+    confidence: 1,
+    sourceHealth: 'CURRENT',
+    signals: {
+      homeownerRelevant: true,
+      lifecycleAdvanced: true,
+      propertyEffectConfirmed: true,
+      urgentSafetyCondition: false,
+      canonicalActionPriority: null,
+    },
+  });
+}
 
 export class InventoryDraftService {
   async createDraftFromOcr(args: {
     propertyId: string;
     userId: string;
-    scanSessionId: string; // ✅ rename
+    // InventoryOcrSession.id (the single-label OCR scan), not
+    // InventoryRoomScanSession.id — these are two distinct FK'd models on
+    // InventoryDraftItem (sessionId vs. scanSessionId). This was previously
+    // written into scanSessionId, a real foreign key to
+    // InventoryRoomScanSession, which would reject an InventoryOcrSession id
+    // as a constraint violation. Found and fixed while hardening this path
+    // into the registered HI-DOC-003 promotion adapter.
+    ocrSessionId: string;
     manufacturer?: string | null;
     modelNumber?: string | null;
     serialNumber?: string | null;
@@ -20,7 +58,7 @@ export class InventoryDraftService {
       data: {
         propertyId: args.propertyId,
         userId: args.userId,
-        scanSessionId: args.scanSessionId, // ✅ use same field as room scan
+        sessionId: args.ocrSessionId,
         status: 'DRAFT',
 
         manufacturer: args.manufacturer || null,
@@ -70,41 +108,53 @@ export class InventoryDraftService {
 
     const hasTechSpecs = Object.keys(technicalSpecs).length > 0;
 
-    // Create inventory item from draft (with verification data from OCR)
-    const item = await prisma.inventoryItem.create({
-      data: {
-        propertyId,
-        name: d.name || d.modelNumber || d.manufacturer || 'New item',
-        category: d.category || 'OTHER',
-        condition: d.condition || 'UNKNOWN',
-        brand: d.brand || null,
-        model: d.model || null,
-        serialNo: d.serialNo || null,
+    // HI-DOC-003/005 promotion-adapter hardening: transactional (the item
+    // create and draft-status transition previously ran as two independent
+    // calls — a failure between them could leave a CONFIRMED-looking draft
+    // with no item, or an orphaned item with a still-DRAFT source), with
+    // durable OCR provenance (sourceOcrSessionId) and a PropertyChange
+    // emission so dependent recommendations recompute.
+    const item = await prisma.$transaction(async (tx) => {
+      const created = await tx.inventoryItem.create({
+        data: {
+          propertyId,
+          name: d.name || d.modelNumber || d.manufacturer || 'New item',
+          category: d.category || 'OTHER',
+          condition: d.condition || 'UNKNOWN',
+          brand: d.brand || null,
+          model: d.model || null,
+          serialNo: d.serialNo || null,
 
-        manufacturer: d.manufacturer || null,
-        modelNumber: d.modelNumber || null,
-        serialNumber: d.serialNumber || null,
-        upc: d.upc || null,
-        sku: d.sku || null,
+          manufacturer: d.manufacturer || null,
+          modelNumber: d.modelNumber || null,
+          serialNumber: d.serialNumber || null,
+          upc: d.upc || null,
+          sku: d.sku || null,
 
-        manufacturerNorm: d.manufacturer ? d.manufacturer.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
-        modelNumberNorm: d.modelNumber ? d.modelNumber.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
+          manufacturerNorm: d.manufacturer ? d.manufacturer.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
+          modelNumberNorm: d.modelNumber ? d.modelNumber.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
 
-        // Verification: OCR-confirmed items are auto-verified
-        isVerified: true,
-        verificationSource: 'OCR_LABEL',
-        ...(hasTechSpecs ? { technicalSpecs } : {}),
-      },
+          // Verification: OCR-confirmed items are auto-verified
+          isVerified: true,
+          verificationSource: 'OCR_LABEL',
+          sourceOcrSessionId: d.sessionId ?? null,
+          ...(hasTechSpecs ? { technicalSpecs } : {}),
+        },
+      });
+
+      await tx.inventoryDraftItem.update({
+        where: { id: draftId },
+        data: { status: 'CONFIRMED' },
+      });
+
+      await emitInventoryDraftConfirmedChange(tx, { propertyId, draftId, itemId: created.id });
+
+      return created;
     });
 
     // Fire-and-forget lifespan recalculation for OCR-verified item
     applianceOracleService.recalculateLifespan(item.id).catch((err) => {
       logger.error({ err }, '[OCR_CONFIRM] Lifespan recalculation failed (non-blocking)');
-    });
-
-    await prisma.inventoryDraftItem.update({
-      where: { id: draftId },
-      data: { status: 'CONFIRMED' },
     });
 
     return item;
@@ -153,6 +203,14 @@ export class InventoryDraftService {
       const created: string[] = [];
 
       for (const d of drafts) {
+        const technicalSpecs: Record<string, string | null> = {};
+        if (d.manufacturer) technicalSpecs.manufacturer = d.manufacturer;
+        if (d.modelNumber) technicalSpecs.modelNumber = d.modelNumber;
+        if (d.serialNumber) technicalSpecs.serialNumber = d.serialNumber;
+        if (d.upc) technicalSpecs.upc = d.upc;
+        if (d.sku) technicalSpecs.sku = d.sku;
+        const hasTechSpecs = Object.keys(technicalSpecs).length > 0;
+
         const item = await tx.inventoryItem.create({
           data: {
             propertyId,
@@ -174,6 +232,14 @@ export class InventoryDraftService {
 
             manufacturerNorm: d.manufacturer ? d.manufacturer.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
             modelNumberNorm: d.modelNumber ? d.modelNumber.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
+
+            // HI-DOC-003/005 promotion-adapter hardening: bring bulkConfirm
+            // to parity with confirmDraftToInventoryItem — same
+            // verification/provenance fields, same PropertyChange emission.
+            isVerified: true,
+            verificationSource: 'OCR_LABEL',
+            sourceOcrSessionId: d.sessionId ?? null,
+            ...(hasTechSpecs ? { technicalSpecs } : {}),
           },
           select: { id: true },
         });
@@ -184,6 +250,8 @@ export class InventoryDraftService {
           where: { id: d.id },
           data: { status: 'CONFIRMED' },
         });
+
+        await emitInventoryDraftConfirmedChange(tx, { propertyId, draftId: d.id, itemId: item.id });
       }
 
       return created;

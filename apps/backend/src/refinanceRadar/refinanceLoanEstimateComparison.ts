@@ -1,3 +1,19 @@
+// Home Intelligence FRD §8.7 (HI-DOC-001/005), Phase 5 remediation item (d)
+// — a durable link back to the extraction that produced this offer's
+// values, when it came from one (an offer typed by hand carries none). The
+// same field-confidence/evidence-location shape
+// refinanceLoanEstimateExtractionEnvelope.adapter.ts's ExtractionEnvelope
+// already computes; stored verbatim in offersJson (an existing JSON
+// column), so no schema migration is needed for this to be durable.
+export interface RefinanceLoanEstimateExtractionProvenance {
+  extractorId: string;
+  extractorVersion: string;
+  parseStatus: 'PARSED' | 'FALLBACK_UNSTRUCTURED' | 'FAILED';
+  extractedAt: string;
+  fieldConfidence: Record<string, number>;
+  fieldEvidence: Record<string, string>;
+}
+
 export interface RefinanceLoanEstimateInput {
   id: string;
   lenderName: string;
@@ -20,6 +36,7 @@ export interface RefinanceLoanEstimateInput {
   issuedDate?: string;
   rateLockStatus?: 'LOCKED' | 'NOT_LOCKED' | 'UNKNOWN';
   rateLockExpirationDate?: string;
+  extractionProvenance?: RefinanceLoanEstimateExtractionProvenance;
 }
 
 export type LoanEstimateMetric =

@@ -1220,6 +1220,11 @@ model InventoryItem {
   warrantyId        String?
   insurancePolicyId String?
 
+  // Durable provenance back to the OCR scan this item was confirmed from
+  // (HI-DOC-003/005 promotion-adapter hardening) — distinct from sourceHash,
+  // which is the unrelated bulk-CSV-import dedup key.
+  sourceOcrSessionId String?
+
   // Core fields
   name             String
   assetType        String?
@@ -1291,6 +1296,7 @@ model InventoryItem {
   linkedWarranties Warranty[]            @relation("WarrantyToInventoryItem")
   insurancePolicy  InsurancePolicy?      @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
   importBatch      InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
+  sourceOcrSession InventoryOcrSession?  @relation(fields: [sourceOcrSessionId], references: [id], onDelete: SetNull)
 
   documents                 Document[]
   homeEvents                HomeEvent[]
@@ -1323,6 +1329,7 @@ model InventoryItem {
   @@index([isVerified]) // NEW: Index added for performant nudge filtering
   @@index([propertyId, category])
   @@index([propertyId, roomId])
+  @@index([sourceOcrSessionId])
   @@map("inventory_items")
 }
 
@@ -1548,6 +1555,7 @@ model InventoryOcrSession {
 
   fields InventoryOcrField[]
   drafts InventoryDraftItem[]
+  confirmedItems InventoryItem[]
 
   @@index([propertyId])
   @@index([userId])

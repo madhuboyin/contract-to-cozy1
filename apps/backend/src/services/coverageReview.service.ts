@@ -7,6 +7,7 @@ import {
   evaluateCoverageReview,
   type ReviewTerm,
 } from './coverageReviewRules';
+import { getConflictedInsurancePolicyTerms } from './coverageConflict.service';
 
 const REVIEW_TTL_DAYS = 30;
 
@@ -63,8 +64,20 @@ export async function getOrCreateCoverageReview(
     },
   });
 
+  // HI-DOC-004: if this policy currently has an unresolved conflict between
+  // a newly extracted fact and an already-confirmed one, the review cannot
+  // trust either value — same detection as the advisory conflict Home
+  // Action and Property Context's coverage.insurancePolicies fact state
+  // (coverageConflict.service.ts is the single source of truth for all
+  // three).
+  const conflictedTerms = policyTerm ? await getConflictedInsurancePolicyTerms(propertyId, prisma) : [];
+  const hasUnresolvedConflict = policyTerm
+    ? conflictedTerms.some((term) => term.policyId === policyTerm.insurancePolicyId)
+    : false;
+
   const inputFingerprint = fingerprint({
     propertyUpdatedAt: property.updatedAt.toISOString(),
+    hasUnresolvedConflict,
     policyTerm: policyTerm
       ? {
           id: policyTerm.id,
@@ -138,7 +151,7 @@ export async function getOrCreateCoverageReview(
         })),
       }
     : null;
-  const evaluation = evaluateCoverageReview(rulesInput, evaluatedAt);
+  const evaluation = evaluateCoverageReview(rulesInput, evaluatedAt, { hasUnresolvedConflict });
   const expiresAt = new Date(evaluatedAt);
   expiresAt.setUTCDate(expiresAt.getUTCDate() + REVIEW_TTL_DAYS);
 

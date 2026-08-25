@@ -10,6 +10,7 @@ import { APIError } from '../middleware/error.middleware';
 import { logger } from '../lib/logger';
 import { presignGetObject } from './storage/presign';
 import { uploadDocumentBuffer } from './storage/reportStorage';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 
 type UploadedPhotoFile = {
   buffer: Buffer;
@@ -523,6 +524,27 @@ export class MaterialSpecService {
             notes: payload.reviewNotes,
           },
         });
+
+        // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-005)
+        // — the materialSpec.update above just changed canonical fields;
+        // only emit when something was actually applied (an empty
+        // reviewedFields CONFIRM changes nothing worth recomputing over).
+        if (Object.keys(appliedFields).length > 0) {
+          await emitPropertyChangeWithTransaction(tx, {
+            propertyId,
+            sourceType: 'DOCUMENT',
+            sourceEntityId: reviewId,
+            sourceRevision: 'CONFIRMED',
+            changeType: 'SOURCE_LIFECYCLE_CHANGED',
+            changedFactKeys: Object.keys(appliedFields).map((key) => `materialSpec.${key}`),
+            canonicalReferences: [{ entityType: 'MATERIAL_SPEC', entityId: specId }],
+            occurredAt: new Date(),
+            detectedAt: new Date(),
+            confidence: 1,
+            sourceHealth: 'CURRENT',
+            signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
+          });
+        }
       }
       return tx.materialExtractionReview.update({
         where: { id: reviewId },

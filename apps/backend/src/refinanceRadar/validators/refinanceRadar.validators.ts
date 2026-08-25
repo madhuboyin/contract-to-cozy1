@@ -173,6 +173,20 @@ const loanEstimateDateSchema = z
     { message: 'Enter a valid calendar date.' },
   );
 
+// HI-DOC-001/005 (Home Intelligence FRD §8.7, Phase 5 remediation item d)
+// — durable, optional provenance linking a saved offer back to the
+// extraction that produced it. Absent for a hand-typed offer.
+const loanEstimateExtractionProvenanceSchema = z
+  .object({
+    extractorId: z.string().trim().min(1).max(120),
+    extractorVersion: z.string().trim().min(1).max(40),
+    parseStatus: z.enum(['PARSED', 'FALLBACK_UNSTRUCTURED', 'FAILED']),
+    extractedAt: z.string().trim().min(1).max(60),
+    fieldConfidence: z.record(z.string(), z.number().min(0).max(1)).default({}),
+    fieldEvidence: z.record(z.string(), z.string().max(500)).default({}),
+  })
+  .strict();
+
 const loanEstimateOfferSchema = z
   .object({
     id: z.string().trim().min(1).max(80),
@@ -208,6 +222,7 @@ const loanEstimateOfferSchema = z
       .enum(['LOCKED', 'NOT_LOCKED', 'UNKNOWN'])
       .optional(),
     rateLockExpirationDate: loanEstimateDateSchema.optional(),
+    extractionProvenance: loanEstimateExtractionProvenanceSchema.optional(),
   })
   .superRefine((offer, ctx) => {
     if (

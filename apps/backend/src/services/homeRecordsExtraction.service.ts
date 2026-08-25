@@ -13,8 +13,9 @@ import { prisma } from '../lib/prisma';
 import { auditLog, logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { downloadObjectBuffer } from './storage/reportStorage';
-import { documentIntelligenceService, type DocumentInsights } from './documentIntelligence.service';
+import { documentIntelligenceService } from './documentIntelligence.service';
 import { documentInsightsToExtractionEnvelope } from './documentIntelligenceExtractionEnvelope.adapter';
+import type { ExtractionEnvelope } from './intelligence/extractionEnvelope.contract';
 import { homeRecordsService } from './homeRecords.service';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
@@ -82,67 +83,99 @@ type InsurancePolicyFieldKey =
   | (typeof INSURANCE_POLICY_REQUIRED_FIELD_KEYS)[number]
   | (typeof INSURANCE_POLICY_OPTIONAL_FIELD_KEYS)[number];
 
-function toIsoDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
+// Home Intelligence FRD §8.7 (HI-DOC-001), Phase 5 remediation item (e) —
+// candidate mapping now reads only from the ExtractionEnvelope, never raw
+// DocumentInsights directly, so the envelope is the actual return contract
+// this code consumes rather than a side artifact built for logging.
+// envelopeFieldValue/envelopeString/envelopeNumber/envelopeIsoDate exist
+// specifically to reproduce the prior direct-DocumentInsights-read behavior
+// byte-for-byte: envelope Date fields are stringified full ISO timestamps
+// (documentInsightsToExtractionEnvelope's fieldValue()), so envelopeIsoDate
+// slices to the same 10-character date the old toIsoDate(Date) produced,
+// and numeric fields stay numbers (never stringified) so String(...) at the
+// call site behaves identically to before.
+function envelopeFieldValue(envelope: ExtractionEnvelope, key: string) {
+  return envelope.fields.find((field) => field.fieldKey === key)?.value;
 }
 
-function warrantyCandidatesFromInsights(
-  insights: DocumentInsights,
+function envelopeString(envelope: ExtractionEnvelope, key: string): string | undefined {
+  const value = envelopeFieldValue(envelope, key);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function envelopeNumber(envelope: ExtractionEnvelope, key: string): number | undefined {
+  const value = envelopeFieldValue(envelope, key);
+  return typeof value === 'number' ? value : undefined;
+}
+
+function envelopeIsoDate(envelope: ExtractionEnvelope, key: string): string | null {
+  const value = envelopeFieldValue(envelope, key);
+  return typeof value === 'string' ? value.slice(0, 10) : null;
+}
+
+function warrantyCandidatesFromEnvelope(
+  envelope: ExtractionEnvelope,
 ): { fieldKey: WarrantyFieldKey; proposedValue: string }[] {
-  const { extractedData } = insights;
   const candidates: { fieldKey: WarrantyFieldKey; proposedValue: string }[] = [];
 
   // Field, not document classification, confidence would ideally differ per
   // value — today's extractor only returns one overall number, so every row
   // shares it. Deliberately not synthesized further apart than that.
-  const providerName = extractedData.manufacturer || extractedData.vendor;
+  const providerName = envelopeString(envelope, 'manufacturer') || envelopeString(envelope, 'vendor');
   if (providerName) candidates.push({ fieldKey: 'providerName', proposedValue: providerName });
 
-  if (extractedData.purchaseDate) {
-    candidates.push({ fieldKey: 'startDate', proposedValue: toIsoDate(extractedData.purchaseDate) });
-  }
-  if (extractedData.warrantyExpiration) {
-    candidates.push({ fieldKey: 'expiryDate', proposedValue: toIsoDate(extractedData.warrantyExpiration) });
-  }
-  if (extractedData.category) {
-    const normalized = extractedData.category.trim().toUpperCase().replace(/[^A-Z_]/g, '_') as WarrantyCategory;
+  const startDate = envelopeIsoDate(envelope, 'purchaseDate');
+  if (startDate) candidates.push({ fieldKey: 'startDate', proposedValue: startDate });
+
+  const expiryDate = envelopeIsoDate(envelope, 'warrantyExpiration');
+  if (expiryDate) candidates.push({ fieldKey: 'expiryDate', proposedValue: expiryDate });
+
+  const category = envelopeString(envelope, 'category');
+  if (category) {
+    const normalized = category.trim().toUpperCase().replace(/[^A-Z_]/g, '_') as WarrantyCategory;
     candidates.push({
       fieldKey: 'category',
       proposedValue: WARRANTY_CATEGORY_VALUES.has(normalized) ? normalized : 'OTHER',
     });
   }
+  const productName = envelopeString(envelope, 'productName');
+  const modelNumber = envelopeString(envelope, 'modelNumber');
+  const serialNumber = envelopeString(envelope, 'serialNumber');
   const detailParts = [
-    extractedData.productName ? `Product: ${extractedData.productName}` : null,
-    extractedData.modelNumber ? `Model: ${extractedData.modelNumber}` : null,
-    extractedData.serialNumber ? `Serial: ${extractedData.serialNumber}` : null,
+    productName ? `Product: ${productName}` : null,
+    modelNumber ? `Model: ${modelNumber}` : null,
+    serialNumber ? `Serial: ${serialNumber}` : null,
   ].filter((part): part is string => Boolean(part));
   if (detailParts.length > 0) {
     candidates.push({ fieldKey: 'coverageDetails', proposedValue: detailParts.join(' · ') });
   }
-  if (extractedData.amount != null) {
-    candidates.push({ fieldKey: 'cost', proposedValue: String(extractedData.amount) });
+  const amount = envelopeNumber(envelope, 'amount');
+  if (amount != null) {
+    candidates.push({ fieldKey: 'cost', proposedValue: String(amount) });
   }
 
   return candidates;
 }
 
-function receiptCandidatesFromInsights(
-  insights: DocumentInsights,
+function receiptCandidatesFromEnvelope(
+  envelope: ExtractionEnvelope,
 ): { fieldKey: ExpenseFieldKey; proposedValue: string }[] {
-  const { extractedData } = insights;
   const candidates: { fieldKey: ExpenseFieldKey; proposedValue: string }[] = [];
 
-  const description = extractedData.vendor || extractedData.productName;
+  const description = envelopeString(envelope, 'vendor') || envelopeString(envelope, 'productName');
   if (description) candidates.push({ fieldKey: 'description', proposedValue: description });
 
-  if (extractedData.amount != null) {
-    candidates.push({ fieldKey: 'amount', proposedValue: String(extractedData.amount) });
+  const amount = envelopeNumber(envelope, 'amount');
+  if (amount != null) {
+    candidates.push({ fieldKey: 'amount', proposedValue: String(amount) });
   }
-  if (extractedData.purchaseDate) {
-    candidates.push({ fieldKey: 'transactionDate', proposedValue: toIsoDate(extractedData.purchaseDate) });
+  const transactionDate = envelopeIsoDate(envelope, 'purchaseDate');
+  if (transactionDate) {
+    candidates.push({ fieldKey: 'transactionDate', proposedValue: transactionDate });
   }
-  if (extractedData.category) {
-    const normalized = extractedData.category.trim().toUpperCase().replace(/[^A-Z_]/g, '_') as ExpenseCategory;
+  const category = envelopeString(envelope, 'category');
+  if (category) {
+    const normalized = category.trim().toUpperCase().replace(/[^A-Z_]/g, '_') as ExpenseCategory;
     candidates.push({
       fieldKey: 'category',
       proposedValue: EXPENSE_CATEGORY_VALUES.has(normalized) ? normalized : 'OTHER',
@@ -152,35 +185,45 @@ function receiptCandidatesFromInsights(
   return candidates;
 }
 
-function insurancePolicyCandidatesFromInsights(
-  insights: DocumentInsights,
+function insurancePolicyCandidatesFromEnvelope(
+  envelope: ExtractionEnvelope,
 ): { fieldKey: InsurancePolicyFieldKey; proposedValue: string }[] {
-  const { extractedData } = insights;
   const candidates: { fieldKey: InsurancePolicyFieldKey; proposedValue: string }[] = [];
 
-  if (extractedData.carrierName) candidates.push({ fieldKey: 'carrierName', proposedValue: extractedData.carrierName });
-  if (extractedData.policyNumber) candidates.push({ fieldKey: 'policyNumber', proposedValue: extractedData.policyNumber });
-  if (extractedData.coverageType) candidates.push({ fieldKey: 'coverageType', proposedValue: extractedData.coverageType });
-  if (extractedData.premiumAmount != null) {
-    candidates.push({ fieldKey: 'premiumAmount', proposedValue: String(extractedData.premiumAmount) });
+  const carrierName = envelopeString(envelope, 'carrierName');
+  if (carrierName) candidates.push({ fieldKey: 'carrierName', proposedValue: carrierName });
+  const policyNumber = envelopeString(envelope, 'policyNumber');
+  if (policyNumber) candidates.push({ fieldKey: 'policyNumber', proposedValue: policyNumber });
+  const coverageType = envelopeString(envelope, 'coverageType');
+  if (coverageType) candidates.push({ fieldKey: 'coverageType', proposedValue: coverageType });
+
+  const premiumAmount = envelopeNumber(envelope, 'premiumAmount');
+  if (premiumAmount != null) {
+    candidates.push({ fieldKey: 'premiumAmount', proposedValue: String(premiumAmount) });
   }
-  if (extractedData.deductible != null) {
-    candidates.push({ fieldKey: 'deductibleAmount', proposedValue: String(extractedData.deductible) });
+  const deductible = envelopeNumber(envelope, 'deductible');
+  if (deductible != null) {
+    candidates.push({ fieldKey: 'deductibleAmount', proposedValue: String(deductible) });
   }
-  if (extractedData.dwellingLimit != null) {
-    candidates.push({ fieldKey: 'dwellingLimit', proposedValue: String(extractedData.dwellingLimit) });
+  const dwellingLimit = envelopeNumber(envelope, 'dwellingLimit');
+  if (dwellingLimit != null) {
+    candidates.push({ fieldKey: 'dwellingLimit', proposedValue: String(dwellingLimit) });
   }
-  if (extractedData.personalPropertyLimit != null) {
-    candidates.push({ fieldKey: 'personalPropertyLimit', proposedValue: String(extractedData.personalPropertyLimit) });
+  const personalPropertyLimit = envelopeNumber(envelope, 'personalPropertyLimit');
+  if (personalPropertyLimit != null) {
+    candidates.push({ fieldKey: 'personalPropertyLimit', proposedValue: String(personalPropertyLimit) });
   }
-  if (extractedData.liabilityLimit != null) {
-    candidates.push({ fieldKey: 'liabilityLimit', proposedValue: String(extractedData.liabilityLimit) });
+  const liabilityLimit = envelopeNumber(envelope, 'liabilityLimit');
+  if (liabilityLimit != null) {
+    candidates.push({ fieldKey: 'liabilityLimit', proposedValue: String(liabilityLimit) });
   }
-  if (extractedData.valuationBasis) {
-    candidates.push({ fieldKey: 'valuationBasis', proposedValue: extractedData.valuationBasis });
-  }
-  if (extractedData.startDate) candidates.push({ fieldKey: 'termStart', proposedValue: toIsoDate(extractedData.startDate) });
-  if (extractedData.expiryDate) candidates.push({ fieldKey: 'termEnd', proposedValue: toIsoDate(extractedData.expiryDate) });
+  const valuationBasis = envelopeString(envelope, 'valuationBasis');
+  if (valuationBasis) candidates.push({ fieldKey: 'valuationBasis', proposedValue: valuationBasis });
+
+  const termStart = envelopeIsoDate(envelope, 'startDate');
+  if (termStart) candidates.push({ fieldKey: 'termStart', proposedValue: termStart });
+  const termEnd = envelopeIsoDate(envelope, 'expiryDate');
+  if (termEnd) candidates.push({ fieldKey: 'termEnd', proposedValue: termEnd });
 
   return candidates;
 }
@@ -262,18 +305,18 @@ export class HomeRecordsExtractionService {
     }
 
     const citation = `AI extraction from "${version.originalFileName}"`;
-    const confidence = insights.confidence ?? 0;
+    const confidence = envelope.overallConfidence ?? 0;
     const fieldCandidates = targetDomain === 'WARRANTY'
-      ? warrantyCandidatesFromInsights(insights)
+      ? warrantyCandidatesFromEnvelope(envelope)
       : targetDomain === 'EXPENSE'
-        ? receiptCandidatesFromInsights(insights)
-        : insurancePolicyCandidatesFromInsights(insights);
+        ? receiptCandidatesFromEnvelope(envelope)
+        : insurancePolicyCandidatesFromEnvelope(envelope);
     const rows = [
       {
         propertyRecordVersionId: version.id,
         targetDomain,
         fieldKey: DOCUMENT_TYPE_FIELD_KEY,
-        proposedValue: insights.documentType,
+        proposedValue: envelope.candidateEntityType,
         sourceCitation: citation,
         confidence,
       },

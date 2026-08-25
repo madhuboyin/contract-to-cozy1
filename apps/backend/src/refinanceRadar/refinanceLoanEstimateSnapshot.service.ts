@@ -8,6 +8,7 @@ import {
   type RefinanceLoanEstimateComparison,
   type RefinanceLoanEstimateInput,
 } from './refinanceLoanEstimateComparison';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 
 export interface SavedRefinanceLoanEstimateComparison {
   id: string;
@@ -41,14 +42,53 @@ export async function saveRefinanceLoanEstimateComparison(input: {
   offers: RefinanceLoanEstimateInput[];
 }): Promise<SavedRefinanceLoanEstimateComparison> {
   const comparison = compareRefinanceLoanEstimates(input.offers);
-  const row = await prisma.refinanceLoanEstimateComparisonSnapshot.create({
-    data: {
+  const extractedOffers = input.offers.filter((offer) => offer.extractionProvenance);
+
+  // HI-DOC-003/005 (Home Intelligence FRD §8.7, Phase 5 remediation item d)
+  // — this is the registered LOAN_ESTIMATE promotion adapter: the
+  // homeowner's own save is the review step (no separate persisted
+  // candidate row precedes it), and this is the point a document-derived
+  // offer becomes a canonical record, so it emits a PropertyChange like
+  // every other promotion adapter.
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.refinanceLoanEstimateComparisonSnapshot.create({
+      data: {
+        propertyId: input.propertyId,
+        label: input.label?.trim() || null,
+        offersJson: input.offers as unknown as Prisma.InputJsonValue,
+        comparisonJson: comparison as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await emitPropertyChangeWithTransaction(tx, {
       propertyId: input.propertyId,
-      label: input.label?.trim() || null,
-      offersJson: input.offers as unknown as Prisma.InputJsonValue,
-      comparisonJson: comparison as unknown as Prisma.InputJsonValue,
-    },
+      sourceType: 'DOCUMENT',
+      sourceEntityId: created.id,
+      sourceRevision: created.updatedAt.toISOString(),
+      changeType: extractedOffers.length > 0 ? 'DOCUMENT_PROMOTED' : 'SOURCE_RECORD_CREATED',
+      changedFactKeys: ['financial.refinanceLoanEstimateComparison'],
+      canonicalReferences: [{ entityType: 'REFINANCE_LOAN_ESTIMATE_COMPARISON_SNAPSHOT', entityId: created.id }],
+      occurredAt: created.createdAt,
+      detectedAt: new Date(),
+      confidence: extractedOffers.length > 0
+        ? Math.min(...extractedOffers.map((offer) => {
+            const values = Object.values(offer.extractionProvenance!.fieldConfidence);
+            return values.length > 0 ? Math.min(...values) : 0.5;
+          }))
+        : 1,
+      sourceHealth: 'CURRENT',
+      signals: {
+        homeownerRelevant: true,
+        lifecycleAdvanced: true,
+        propertyEffectConfirmed: true,
+        urgentSafetyCondition: false,
+        canonicalActionPriority: null,
+      },
+    });
+
+    return created;
   });
+
   return mapSnapshot(row);
 }
 

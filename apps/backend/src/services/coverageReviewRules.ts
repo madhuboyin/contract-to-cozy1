@@ -6,7 +6,12 @@ export type CoverageReviewState =
   | 'HEALTHY_SCOPED'
   | 'QUESTIONS'
   | 'NEEDS_EVIDENCE'
-  | 'UNSUPPORTED';
+  | 'UNSUPPORTED'
+  // HI-DOC-004: a newly extracted policy fact disagrees with an already
+  // confirmed one on the same policy — this review cannot answer coverage
+  // questions with either value until a homeowner resolves which is
+  // correct. See coverageReview.service.ts's hasUnresolvedConflict.
+  | 'CONFLICTED';
 
 export type ReviewFact = {
   id: string;
@@ -103,8 +108,28 @@ function generalQuestion(params: {
 
 export function evaluateCoverageReview(
   term: ReviewTerm | null,
-  evaluatedAt = new Date()
+  evaluatedAt = new Date(),
+  options: { hasUnresolvedConflict?: boolean } = {}
 ): CoverageReviewEvaluation {
+  if (options.hasUnresolvedConflict) {
+    return {
+      scopeStatus: 'UNSUPPORTED',
+      overallState: 'CONFLICTED',
+      supportedFactKeys: [],
+      unsupportedFactKeys: [],
+      questions: [
+        generalQuestion({
+          questionKey: 'RESOLVE_POLICY_FACT_CONFLICT',
+          category: 'EVIDENCE',
+          priority: 'HIGH',
+          question: 'A newly uploaded policy document disagrees with your confirmed policy details. Which is correct?',
+          why: 'This coverage review cannot be trusted until the conflicting policy facts are resolved to one confirmed value.',
+          missingFactKeys: [...REVIEWED_FACT_KEYS],
+        }),
+      ],
+      healthySummary: null,
+    };
+  }
   if (!term) {
     return {
       scopeStatus: 'UNSUPPORTED',

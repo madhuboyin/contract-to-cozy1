@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 
 export type PolicyFactValue =
   | { valueType: 'AMOUNT'; amountValue: number; currency?: string }
@@ -369,6 +370,31 @@ export async function confirmPolicyFact(params: {
       where: { propertyId: fact.policyTerm.propertyId, status: 'READY' },
       data: { status: 'STALE' },
     });
+
+    // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-005) —
+    // confirming this fact just updated the canonical InsurancePolicy
+    // (and possibly InsurancePolicyTerm/coverageReview staleness above);
+    // a REJECTED fact leaves canonical values untouched, so only CONFIRMED
+    // emits a change worth recomputing dependents over.
+    if (params.confirmationStatus === 'CONFIRMED') {
+      await emitPropertyChangeWithTransaction(tx, {
+        propertyId: fact.policyTerm.propertyId,
+        sourceType: 'DOCUMENT',
+        sourceEntityId: fact.id,
+        sourceRevision: 'CONFIRMED',
+        changeType: 'SOURCE_LIFECYCLE_CHANGED',
+        changedFactKeys: [`coverage.insurancePolicy.${fact.factKey.toLowerCase()}`],
+        canonicalReferences: [
+          { entityType: 'INSURANCE_POLICY', entityId: params.policyId },
+          { entityType: 'INSURANCE_POLICY_TERM', entityId: fact.policyTermId },
+        ],
+        occurredAt: new Date(),
+        detectedAt: new Date(),
+        confidence: 1,
+        sourceHealth: 'CURRENT',
+        signals: { homeownerRelevant: true, lifecycleAdvanced: true, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
+      });
+    }
 
     await tx.auditLog.create({
       data: {

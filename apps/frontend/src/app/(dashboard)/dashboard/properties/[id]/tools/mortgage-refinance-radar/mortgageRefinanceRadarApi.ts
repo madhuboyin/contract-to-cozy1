@@ -345,6 +345,24 @@ export type RefinanceDecisionDTO = {
   }>;
 };
 
+// Home Intelligence FRD §8.7 (HI-DOC-001/005), Phase 5 remediation item (d)
+// — durable, optional link back to the extraction that produced this
+// offer's values, when it came from one. Mirrors the backend's
+// RefinanceLoanEstimateExtractionProvenance
+// (refinanceLoanEstimateComparison.ts) and ExtractionEnvelope shape
+// (refinanceLoanEstimateExtractionEnvelope.adapter.ts) — built client-side
+// from RefinanceLoanEstimateExtraction.fields, which already carries the
+// same per-field confidence/sourceLabel data, so no new backend response
+// field is needed to plumb this through.
+export type RefinanceLoanEstimateExtractionProvenance = {
+  extractorId: string;
+  extractorVersion: string;
+  parseStatus: 'PARSED' | 'FALLBACK_UNSTRUCTURED' | 'FAILED';
+  extractedAt: string;
+  fieldConfidence: Record<string, number>;
+  fieldEvidence: Record<string, string>;
+};
+
 export type RefinanceLoanEstimateInput = {
   id: string;
   lenderName: string;
@@ -367,6 +385,7 @@ export type RefinanceLoanEstimateInput = {
   issuedDate?: string;
   rateLockStatus?: 'LOCKED' | 'NOT_LOCKED' | 'UNKNOWN';
   rateLockExpirationDate?: string;
+  extractionProvenance?: RefinanceLoanEstimateExtractionProvenance;
 };
 
 export type LoanEstimateMetric =
