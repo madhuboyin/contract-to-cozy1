@@ -5,7 +5,7 @@
 **Grounding evidence:** [`docs/audits/AGENTIC_READINESS_AUDIT.md`](../audits/AGENTIC_READINESS_AUDIT.md) is the evidence base for architectural patterns and gaps at the time it was written. It is not an authoritative product-requirements source, and — critically for this revision — it is not exhaustive: a third external review found that this document had, twice, designed net-new proactive-attention infrastructure that duplicates or bypasses a real, already-shipped canonical pipeline the audit's evidence-density sampling didn't surface. See §1.1 for the requirements this revision is now grounded in, and the box below for what changed.
 **Scope:** This document is the requested Stage 3 exercise. It is a target architecture and phased evolution plan, not an implementation. No code changes accompany this document.
 
-> **What this revision corrects, and why it's the most consequential round yet.** C2C already has a live, shipped, cron-scheduled canonical pipeline that does most of what this document's first two drafts proposed building from scratch: `compoundRuleRegistry.ts`'s 8 registered rules promote qualifying intelligence into canonical Home Actions via `homeActionSourcePromotion.service.ts`; `getHomeActionFeed()` (`homeActions.service.ts`) is the sole homeowner-facing ranking authority, already consumed identically by Home, Fix, and Resolution Center per a 2026-08-25 convergence (`HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md`); `priorityListPolicy.ts` is a pure, non-ranking projection over that feed; `homeActionProactiveEligibilityPolicy.ts` and `homeActionProactiveDelivery.service.ts` already gate and send proactive notifications with real consent/budget/escalation logic; and `evaluateHomeActionProactiveDeliveryJob` **already runs on a schedule today**, registered in `workerJobRegistry.ts`. This is, concretely, an already-shipped answer to "tell me what needs my attention" for canonical Home Actions. Prior drafts of this document built a parallel `unifiedPriorityRanking.service.ts` and an "Attention Watcher Service" that either duplicated this pipeline or would have competed with it for ranking authority — both directly forbidden by `HI-ATT-001` and `ASK-INT-019` (§1.1). This revision retires both, narrows the Envelope to an upstream read/promotion-input role, and narrows this document's genuine net-new contribution to what the shipped pipeline does not yet do: closing intelligence-to-Home-Action coverage gaps, and adding multi-step decision support (the Specialist Agent) on top of an already-ranked, already-delivered item.
+> **What this revision corrects, and why it's the most consequential round yet.** C2C already has a fully-implemented canonical pipeline that does most of what this document's first two drafts proposed building from scratch: `compoundRuleRegistry.ts`'s 8 registered rules promote qualifying intelligence into canonical Home Actions via `homeActionSourcePromotion.service.ts`; `getHomeActionFeed()` (`homeActions.service.ts`) is the sole homeowner-facing ranking authority, already consumed identically by Home, Fix, and Resolution Center per a 2026-08-25 convergence (`HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md`); `priorityListPolicy.ts` is a pure, non-ranking projection over that feed; and `homeActionProactiveEligibilityPolicy.ts`/`homeActionProactiveDelivery.service.ts` implement real consent/budget/escalation-gated proactive notification logic, invoked by `evaluateHomeActionProactiveDeliveryJob`, which is registered in `workerJobRegistry.ts` and cron-schedule-capable. **Precisely, not overstated: this pipeline is implemented and schedule-capable, not necessarily active** — `isHomeActionProactiveDeliveryActive()` requires both `HOME_ACTION_PROACTIVE_DELIVERY_ENABLED=true` and a DB kill switch to be off, and the job's own source comment says it is "safe to register even while the feature stays disabled by default." Whether or not it is flipped on in any given environment, it is the canonical, complete, already-built answer to "tell me what needs my attention" for canonical Home Actions — this document does not need to build another one regardless of the flag's current value. Prior drafts of this document built a parallel `unifiedPriorityRanking.service.ts` and an "Attention Watcher Service" that either duplicated this pipeline or would have competed with it for ranking authority — both directly forbidden by `HI-ATT-001` and `ASK-INT-019` (§1.1). This revision retires both, narrows the Envelope to an upstream read/promotion-input role, and narrows this document's genuine net-new contribution to what the shipped pipeline does not yet do: closing intelligence-to-Home-Action coverage gaps, and adding multi-step decision support (the Specialist Agent) on top of an already-ranked, already-delivered item.
 
 ## 1.1 Requirements traceability
 
@@ -37,7 +37,7 @@
 8. [Agent vs Service vs Skill Decision Framework](#8-agent-vs-service-vs-skill-decision-framework)
 9. [Skills / Tool Architecture](#9-skills--tool-architecture)
 10. [Orchestrator Architecture](#10-orchestrator-architecture)
-11. [Attention Layer: The Promotion Coverage Service](#11-attention-layer-the-promotion-coverage-service)
+11. [Attention Layer: The Promotion Coverage Audit](#11-attention-layer-the-promotion-coverage-audit)
 12. [Specialist Agent Pattern](#12-specialist-agent-pattern)
 13. [Agent Interaction Patterns](#13-agent-interaction-patterns)
 14. [LLM Gateway & LLM Necessity Gate](#14-llm-gateway--llm-necessity-gate)
@@ -65,9 +65,9 @@
 
 **What C2C should become architecturally:** a system where the intelligence C2C already computes reaches the homeowner through exactly one canonical path — `compoundRuleRegistry.ts` promotion → `getHomeActionFeed()` ranking → `priorityListPolicy.ts` projection → eligibility/delivery — and where this document's job is to widen what feeds *into* that path and deepen what happens *after* a homeowner engages with what it surfaces, never to build a second path alongside it.
 
-**The central correction this revision makes:** the first two drafts of this document treated "build proactive attention" as greenfield work. It isn't. `evaluateHomeActionProactiveDeliveryJob` already runs on a schedule, already reads `getHomeActionFeed()`, already applies consent/budget/escalation gates, and already sends notifications — for every Home Action that a `compoundRuleRegistry.ts` rule has promoted. The genuine gap is narrower and less glamorous than "build an Attention Agent": **not every intelligence producer has a promotion rule yet**, and **once a homeowner engages with a promoted, ranked item, nothing today walks them through a multi-step decision** (compare options, explain tradeoffs, maintain a decision thread) the way `decisionPlatform` already can for HVAC specifically. Those two gaps — promotion coverage, and post-engagement decision depth — are what this document now scopes.
+**The central correction this revision makes:** the first two drafts of this document treated "build proactive attention" as greenfield work. It isn't. `evaluateHomeActionProactiveDeliveryJob` is implemented, registered, and schedule-capable — it reads `getHomeActionFeed()`, applies consent/budget/escalation gates, and sends notifications, for every Home Action that a `compoundRuleRegistry.ts` rule has promoted, whenever its env flag and DB kill switch permit it to run. The genuine gap is narrower and less glamorous than "build an Attention Agent": **not every intelligence producer has a promotion rule yet**, and **once a homeowner engages with a promoted, ranked item, nothing today walks them through a multi-step decision** (compare options, explain tradeoffs, maintain a decision thread) the way `decisionPlatform` already can for HVAC specifically. Those two gaps — promotion coverage, and post-engagement decision depth — are what this document now scopes.
 
-**What ships, in order:** an Intelligence Envelope, narrowed to a read/promotion-input abstraction over the 5 intelligence producers, with no ranking authority of its own (Phase 0) → a **Promotion Coverage Service** — not an agent, not a ranker, a scheduled Worker that evaluates Envelope items against `compoundRuleRegistry.ts` and flags (or, where a registered rule already exists, triggers) promotion, closing coverage gaps without inventing a second Home Action pipeline (Phase 1) → the HVAC Repair/Replace Specialist Agent, reusing the existing scoring engine and `DecisionThread` machinery, triggered when a homeowner engages with an already-ranked, already-delivered HVAC Home Action (Phase 2) → Ask Cozy wired to the same Envelope and canonical feed as its evidence source (Phase 3) → the extension pattern for additional specialists and additional promotion coverage (Phase 4).
+**What ships, in order:** an Intelligence Envelope, narrowed to a read/promotion-input abstraction over the 5 intelligence producers, with no ranking authority of its own (Phase 0) → a **Promotion Coverage Audit** — not an agent, not a ranker, not a runtime dispatcher; a scheduled Worker that structurally compares which intelligence producer/domain combinations `compoundRuleRegistry.ts` already covers against which it doesn't, and surfaces the gap for an engineer to close by hand-authoring a new rule, exactly as the existing 8 were authored (Phase 1) → the HVAC Repair/Replace Specialist Agent, reusing the existing scoring engine and `DecisionThread` machinery, triggered when a homeowner engages with an already-ranked, already-delivered HVAC Home Action (Phase 2) → Ask Cozy wired to the same Envelope and canonical feed as its evidence source (Phase 3) → the extension pattern for additional specialists and additional promotion coverage (Phase 4).
 
 **What this is not, still:** a plan to add a second LLM provider, an event bus, a vector database, or — now explicitly — a second ranking, eligibility, or delivery pipeline alongside the one C2C already ships. Every one of those is directly forbidden by an authoritative requirement (§1.1), not merely undesirable.
 
@@ -105,8 +105,8 @@
 | `services/skills/` (19 manifests) | Closest existing analog to an agent-tool manifest | The Skill/Tool layer agents call (§9) | Add an autonomy-level tag; no runtime rewrite |
 | `aiRequestGovernance.service.ts` | Routes all 25 Gemini invocation sites | LLM Gateway (§14) | Harden the interface; no second provider |
 | `askOrchestrator.service.ts` | Deterministic NLU router; `REMOTE_FALLBACK` unwired | Ask Cozy's entry point into the Envelope + canonical feed (§22) | Wire `REMOTE_FALLBACK`; add Specialist Agent as a routable target |
-| BullMQ + node-cron + `workerJobRegistry.ts` + `CronJobLock` | Most mature layer in the codebase; already runs `evaluateHomeActionProactiveDeliveryJob` on schedule | Execution substrate for the new Promotion Coverage Service job and Specialist Agent runs | Add one new job type to the existing registry |
-| pino/Loki + Prometheus + OpenTelemetry | Structured logging, worker/AI cost metrics | End-to-end observability for the Coverage Service and Specialist Agent (§20) | Extend metric namespaces |
+| BullMQ + node-cron + `workerJobRegistry.ts` + `CronJobLock` | Most mature layer in the codebase; already registers the schedule-capable `evaluateHomeActionProactiveDeliveryJob` | Execution substrate for the new Promotion Coverage Audit job and Specialist Agent runs | Add one new job type to the existing registry |
+| pino/Loki + Prometheus + OpenTelemetry | Structured logging, worker/AI cost metrics | End-to-end observability for the Coverage Audit and Specialist Agent (§20) | Extend metric namespaces |
 
 ---
 
@@ -122,21 +122,21 @@ graph TB
     PLP["priorityListPolicy.ts\npure projection, no ranking"]
     ELIG["homeActionProactiveEligibilityPolicy.ts"]
     DELIV["homeActionProactiveDelivery.service.ts"]
-    CRON["evaluateHomeActionProactiveDeliveryJob\nalready scheduled"]
+    CRON["evaluateHomeActionProactiveDeliveryJob\nregistered, schedule-capable"]
   end
 
   subgraph FOUNDATION["Intelligence Foundation — this document's actual scope"]
     CTX["Shared Home Context\nmodules/propertyContext + agent contract"]
     PROD["Intelligence Producers\nSignal / GuidanceSignal / IntelligenceObservation /\nRecommendationSnapshot / RadarEvent — UNCHANGED"]
     ENV["Intelligence Envelope\nread + promotion-input abstraction only — NEW"]
-    COVSVC["Promotion Coverage Service — NEW\n(Worker, not an Agent — see §8)"]
+    COVAUDIT["Promotion Coverage Audit — NEW\n(Worker, read-only, never dispatches — see §8/§11)"]
     SKILLS["Skills / Tool Layer — EXTENDED"]
     SPEC["HVAC Specialist Agent — NEW\n(the one genuine Agent in this document)"]
   end
 
-  PROD --> ENV --> COVSVC
-  COVSVC -->|"applicable rule exists"| RULES
-  COVSVC -.->|"no rule exists — flag coverage gap"| ADMIN["Admin coverage-gap dashboard"]
+  PROD --> ENV --> COVAUDIT
+  COVAUDIT -.->|"structural comparison only, no dispatch"| RULES
+  COVAUDIT -.->|"REVIEW_REQUIRED"| ADMIN["Admin coverage dashboard"]
   RULES --> PROMO --> HA --> FEED --> PLP --> ELIG --> DELIV --> CRON
   CTX --> SPEC
   DELIV -.homeowner engages with a delivered item.-> SPEC
@@ -147,7 +147,7 @@ graph TB
 |---|---|---|
 | Canonical Home Action pipeline | `compoundRuleRegistry.ts` → `getHomeActionFeed()` → `priorityListPolicy.ts` → eligibility → delivery → cron | **Nothing.** Documented here as the authority everything else in this document defers to. |
 | Intelligence Envelope | 5 disjoint schemas | A read + promotion-input contract with no ranking authority (§5) |
-| Promotion Coverage Service | None | New scheduled Worker; evaluates Envelope items against the existing rule registry; never ranks, never delivers (§11) |
+| Promotion Coverage Audit | None | New scheduled Worker; structurally compares producer/domain combinations against the registry — never dispatches a rule, never promotes anything itself (§11) |
 | Skills / Tool layer | `services/skills/` | Autonomy-level tag; HVAC engine wrapped as a callable tool |
 | HVAC Specialist Agent | `decisionPlatform`, `hvacRepairReplaceEngine.service.ts` | The genuine multi-step decision-support conversation (§12) |
 
@@ -159,10 +159,10 @@ graph TB
 
 Two corrections compound here. First (round 2): no generic cross-model write contract survives the schema — `Signal` has no status, `RecommendationSnapshot` is immutable, `RadarEvent` is global while dismissal is property-scoped. Second (round 3, this revision): **the Envelope has no ranking or delivery authority at all.** It is a read abstraction over the 5 native producers, used for exactly two purposes:
 
-1. Giving `compoundRuleRegistry.ts`-style promotion rules one uniform input contract to evaluate against, instead of each rule needing bespoke per-producer wiring.
+1. Giving the Promotion Coverage Audit (§11) one uniform surface to enumerate observed producer/domain combinations from, so it can structurally compare them against `compoundRuleRegistry.ts`'s declared coverage — a read-only comparison, never a runtime rule dispatch (§11.1 explains why the registry cannot be dispatched against at runtime).
 2. Giving Ask Cozy and Home Briefing a uniform way to surface non-actionable observations that have not been (and may never need to be) promoted into a Home Action.
 
-It has no write-back to producers beyond what §5.5 describes, no consumer-facing dismissal/snooze state (Home Actions already have a full lifecycle — `homeActionUsefulnessFeedback.service.ts`, `getSuppressedHomeActionIds`, and the HI-ATT-005 command policy — and this document does not build a second one), and no per-user overlay. What it needs instead is much smaller: a per-item **evaluation cursor**, tracking whether the Promotion Coverage Service has already evaluated a given native record's current revision against the rule registry.
+It has no write-back to producers beyond what §5.5 describes, no consumer-facing dismissal/snooze state (Home Actions already have a full lifecycle — `homeActionUsefulnessFeedback.service.ts`, `getSuppressedHomeActionIds`, and the HI-ATT-005 command policy — and this document does not build a second one), and no per-user overlay, and — per §5.7 — no per-item cursor either, since coverage is evaluated at the coarser producer/domain level, not per Envelope item.
 
 ### 5.2 Envelope identity — lineage, revision, and content change, kept separate
 
@@ -206,11 +206,10 @@ interface IntelligenceEnvelopeItem {
   freshness: { computedAt: string; ttl: string | null; staleAfter: string | null };
   nativeStatus: string | null;   // read-through only, per producer (§5.6)
 
-  // Promotion surface — OPTIONAL, and this is the only "action-adjacent" field the Envelope carries
-  promotionCandidate?: {
-    applicableRuleId?: string;      // set once the Coverage Service (§11) finds a matching compoundRuleRegistry entry
-    coverageStatus: "COVERED" | "GAP_FLAGGED" | "NOT_APPLICABLE";
-  };
+  // No promotion/coverage field on the item itself — per §11.2, coverage is determined at the
+  // coarser (producerModel, domain) level, not per item, and lives in CoverageAuditFinding (§25),
+  // not on IntelligenceEnvelopeItem. An earlier draft carried a per-item coverageStatus field here;
+  // it implied a per-item evaluation this document's mechanism doesn't actually perform.
 
   createdAt: string;
   updatedAt: string;
@@ -227,7 +226,7 @@ interface IntelligenceEnvelopeItem {
 | `severity` | Mandatory field, nullable value | Not every item is severity-typed |
 | `freshness` | Mandatory | Reuses `IntelligenceConsumerCurrentness` |
 | `nativeStatus` | Mandatory field, nullable value | Read-through only, `null` for producers with no status (`Signal`) |
-| `promotionCandidate` | Optional | Populated by the Coverage Service, never by the producer |
+| — | — | No promotion/coverage field exists on this type (§5.3's note) — coverage is tracked separately, at the `(producerModel, domain)` level, in `CoverageAuditFinding` (§25) |
 
 ### 5.5 Per-subsystem adapter mapping
 
@@ -245,21 +244,9 @@ interface IntelligenceEnvelopeItem {
 - It does not deliver, notify, or track per-homeowner dismissal/snooze. `homeActionProactiveEligibilityPolicy.ts`/`homeActionProactiveDelivery.service.ts`/the existing lifecycle-command policy (HI-ATT-005) do that, exclusively.
 - It does not write producer state beyond what an existing domain-owned command already permits (unchanged from round 2's finding — `Signal`/`RecommendationSnapshot` have no lifecycle to transition at all).
 
-### 5.7 Evaluation cursor (replaces round 2's `EnvelopeConsumerState`)
+### 5.7 No per-item cursor — the Envelope itself needs no additional persistence for coverage purposes
 
-The only new persistence the Envelope itself requires — narrower than round 2's overlay because there is no per-user consumer workflow to track anymore:
-
-```ts
-interface EnvelopeEvaluationCursor {
-  envelopeKey: EnvelopeKey;
-  lastEvaluatedRevisionToken: string;   // nativeRevisionToken at last Coverage Service pass
-  lastEvaluatedAt: string;
-  coverageStatus: "COVERED" | "GAP_FLAGGED" | "NOT_APPLICABLE";
-  applicableRuleId: string | null;
-}
-```
-
-One row per `envelopeKey`, no `userId`, no nullable-uniqueness problem (round 2's finding is moot here because there is no household/user dimension to this cursor at all — coverage evaluation is per-property-intelligence-item, not per-homeowner). No idempotency-key machinery is needed either: re-evaluating an already-covered item is a harmless no-op read, and triggering promotion for an already-promoted item is guarded by `compoundRuleRegistry.ts`'s own existing `deduplicationKey` semantics on the promotion side (unchanged, reused, not reinvented — Principle 12).
+An earlier draft of this section proposed a per-item `EnvelopeEvaluationCursor`, on the assumption that closing a coverage gap meant re-evaluating individual Envelope items against a live rule dispatcher. §11 replaces that mechanism with a structural audit comparing *producer/domain combinations* (not individual items) against the registry, recomputed fresh on every run rather than cached incrementally — so there is no per-item state for the Envelope to track at all. The one new persisted model this document introduces for coverage purposes, `CoverageAuditFinding`, is keyed by `(producerModel, domain)`, not by `envelopeKey`, and is defined in §11.2/§25, not here.
 
 ---
 
@@ -271,10 +258,16 @@ Unchanged from prior revisions: `modules/propertyContext` already does the hard 
 
 ### 6.2 The agent-facing contract
 
+An earlier draft's `SYSTEM_PURPOSE` principal (a bare `grantedByUserId`/`purpose`/`grantedAt` tuple) was an invented authorization primitive with no backing grant record — no grant ID, no property scope, no expiration, no revocation state, and nothing that could actually be checked or revoked. It also wasn't consistently threaded through: the Coverage Audit's own pseudocode called `queryEnvelope()` with no principal argument at all. The fix is to invent nothing: **[verified]** `evaluateHomeActionProactiveDeliveryJob` already solves this exact problem — for each property it reads `property.homeownerProfile.userId` and passes that real, resolved user ID into the property-scoped work it does. Every background job in this document reuses that identical pattern instead of a new grant type:
+
 ```ts
 type ExecutionPrincipal =
-  | { kind: "HOMEOWNER_SESSION"; userId: string }
-  | { kind: "SYSTEM_PURPOSE"; grantedByUserId: string; purpose: "PROMOTION_COVERAGE_EVALUATION"; grantedAt: string };
+  | { kind: "HOMEOWNER_SESSION"; userId: string }              // a live, user-initiated request (Ask Cozy)
+  | { kind: "BACKGROUND_JOB_RESOLVED_OWNER"; userId: string };  // a background job resolves the property's own
+                                                                  // homeownerProfile.userId (the same field
+                                                                  // evaluateHomeActionProactiveDeliveryJob already
+                                                                  // reads) and authorizes as that real user —
+                                                                  // not a new grant type, no invented authority
 
 interface AgentContextRequest {
   propertyId: string;
@@ -286,7 +279,7 @@ interface AgentContextRequest {
 }
 ```
 
-**[verified]** `getPropertyContext(propertyId, actor: PropertyContextActor, request, ...)` calls `dependencies.authorize(actor.userId, propertyId)` (→ `resolvePropertyAccess`) before reading a single fact, throwing `PropertyContextAccessDeniedError` on failure — this wrapper is passed straight through, never bypassed.
+**[verified]** `getPropertyContext(propertyId, actor: PropertyContextActor, request, ...)` calls `dependencies.authorize(actor.userId, propertyId)` (→ `resolvePropertyAccess`) before reading a single fact, throwing `PropertyContextAccessDeniedError` on failure — this wrapper is passed straight through, never bypassed. Every call site that constructs an `AgentContextRequest` — including the Coverage Audit's own property-scoped reads, where it needs them — supplies a `principal` explicitly; there is no code path that queries property-scoped data without one.
 
 ### 6.3 What agents must NOT do
 
@@ -370,12 +363,12 @@ graph TD
 | Kind | C2C examples |
 |---|---|
 | **Service** | `getHomeActionFeed()`, `hvacRepairReplaceEngine.service.ts`, `priorityListPolicy.ts`, any Envelope adapter |
-| **Worker / cron job** | `evaluateHomeActionProactiveDeliveryJob` (existing), the **Promotion Coverage Service** (new, §11) — both fixed evaluate-against-registry logic, no adaptive judgment |
+| **Worker / cron job** | `evaluateHomeActionProactiveDeliveryJob` (existing), the **Promotion Coverage Audit** (new, §11) — both fixed evaluate-against-registry logic, no adaptive judgment |
 | **Skill / Tool** | Any of the 19 existing `SkillDefinition`s |
 | **Rule / decision engine** | `compoundRuleRegistry.ts`'s 8 promotion rules |
 | **Agent** | The HVAC Specialist Agent (§12) — the only one this document ships |
 
-**Explicit non-agents this document is careful not to mislabel, having mislabeled the Promotion Coverage Service's predecessor twice already:** the Coverage Service evaluates a fixed rule registry — it does not decide *whether* to promote (the registry does), only whether a rule currently applies. That is Rule-adjacent Worker behavior, not Agent behavior, even though it runs continuously and touches every intelligence producer.
+**Explicit non-agents this document is careful not to mislabel, having mislabeled the Promotion Coverage Audit's predecessor twice already:** the Coverage Audit evaluates a fixed rule registry — it does not decide *whether* to promote (the registry does), only whether a rule currently applies. That is Rule-adjacent Worker behavior, not Agent behavior, even though it runs continuously and touches every intelligence producer.
 
 ---
 
@@ -404,37 +397,60 @@ Unchanged: `DecisionThread` lifecycle becomes the Specialist Agent's execution r
 
 ---
 
-## 11. Attention Layer: The Promotion Coverage Service
+## 11. Attention Layer: The Promotion Coverage Audit
 
-### 11.1 What this section is not, anymore
+### 11.1 What this section is not, anymore (twice over now)
 
-Rounds 1 and 2 designed an "Attention Watcher Service"/"Attention Agent" that ranked Envelope items and proposed them for interruption. That entire responsibility is retired in this revision — it already exists, unmodified, as `getHomeActionFeed()` → `priorityListPolicy.ts` → `homeActionProactiveEligibilityPolicy.ts` → `homeActionProactiveDelivery.service.ts` → `evaluateHomeActionProactiveDeliveryJob`. This document does not rebuild it, extend it, or sit in front of it.
+Rounds 1–2 designed an "Attention Watcher Service"/"Attention Agent" that ranked Envelope items and proposed them for interruption — retired in round 3, because `getHomeActionFeed()` → `priorityListPolicy.ts` → `homeActionProactiveEligibilityPolicy.ts` → `homeActionProactiveDelivery.service.ts` → `evaluateHomeActionProactiveDeliveryJob` already does that job. Round 3's own first pass at this section then designed a live runtime dispatcher — internally called "Promotion Coverage Service" at the time — that would call `findApplicableRule()` and `triggerPromotionIfNotAlreadyPromoted()` at runtime, per property, per Envelope item. **That design is what this section replaces with the read-only Coverage Audit below**, because the runtime-dispatch design doesn't survive contact with `compoundRuleRegistry.contract.ts`'s own header comment: the registry is explicitly declarative — "a rule's actual evaluation lives in a real, independently testable function, not a stored callback here... turning this registry into a runtime dispatcher over arbitrary stored callbacks is exactly the 'generic registry becomes a rules engine' risk the FRD's own risk table (§18) warns against." `applicability` and `deduplicationKey` are documentation strings for audit purposes, not executable predicates a service can evaluate against an Envelope item at runtime. And **[verified]** `getPromotedHomeActions()` (`homeActionSourcePromotion.service.ts:4962`) doesn't work the way a "trigger promotion" call would need it to, either — it's a *read-time projection*: `getHomeActionFeed()` calls it, and it in turn calls one hardcoded producer-loader function per registry entry (`loadIncidentActions`, `loadCompoundRadarInsightActions`, `loadInspectionCoverageActions`, ...) fresh on every read. There is no persisted "promotion event" to trigger and no generic dispatch surface to call it through — each rule's evaluation logic is bespoke, hand-written, and wired directly into the read path when the rule is authored. Closing a coverage gap is a code change (a new loader function + a new registry entry + a new call site in `getPromotedHomeActions()`), not something a generic service can do by "evaluating" an item at runtime.
 
-### 11.2 What remains: closing promotion-coverage gaps
+### 11.2 What this document actually contributes instead: a structural coverage audit, not a live dispatcher
 
-The one real gap the canonical pipeline has: it only ever sees intelligence that a `compoundRuleRegistry.ts` rule has already promoted into a Home Action. If a producer's output has no covering rule, it is invisible to `getHomeActionFeed()` — not wrong, just not yet connected. The Promotion Coverage Service's entire job:
+Given the above, the only honest, buildable version of this idea is a **read-only, structural comparison** between what the Envelope's adapters observe and what `compoundRuleRegistry.ts` already declares coverage for — a report for an engineer to act on, never a component that promotes anything itself. `observedCombinations` below is gathered by iterating properties the same way `evaluateHomeActionProactiveDeliveryJob` already does (a property scan resolving each property's own `homeownerProfile.userId`), constructing a `BACKGROUND_JOB_RESOLVED_OWNER` principal (§6.2) for each `AgentContextRequest`/Envelope read the audit performs, and aggregating the distinct `(producerModel, domain)` pairs observed — no read happens without a real, resolved principal.
 
 ```ts
-async function evaluatePromotionCoverage(propertyId: string): Promise<void> {
-  const items = await queryEnvelope({ propertyId, changedSince: /* per-item cursor, §5.7 */ });
-  for (const item of items) {
-    const rule = findApplicableRule(item, COMPOUND_RULE_REGISTRY);   // pure lookup against the existing registry
-    if (rule) {
-      await triggerPromotionIfNotAlreadyPromoted(item, rule);         // delegates to homeActionSourcePromotion.service.ts,
-                                                                        // which owns its own dedup via the rule's deduplicationKey
-      await writeCursor(item.envelopeKey, { coverageStatus: "COVERED", applicableRuleId: rule.ruleId });
-    } else {
-      await writeCursor(item.envelopeKey, { coverageStatus: "GAP_FLAGGED", applicableRuleId: null });
-    }
-  }
+type CoverageDetermination = "COVERED" | "INTENTIONALLY_NON_ACTIONABLE" | "REVIEW_REQUIRED";
+// NOT_APPLICABLE from earlier drafts is gone — every combination gets an explicit determination;
+// "no matching rule" alone is never sufficient to conclude a gap (see the INTENTIONALLY_NON_ACTIONABLE
+// case below), so the binary COVERED/GAP_FLAGGED split from the prior draft is retired.
+
+interface CoverageAuditFinding {
+  producerModel: string;              // e.g. "Signal", "GuidanceSignal" — the Envelope's own source.sourceModel
+  domain: EnvelopeDomain;
+  registryVersionDigest: string;      // hash of COMPOUND_RULE_REGISTRY's current contents — see 11.3 for why
+  determination: CoverageDetermination;
+  matchedRuleIds: string[];           // every compoundRuleRegistry entry whose inputContracts names this producerModel
+  firstObservedAt: string;
+  lastAuditedAt: string;
+}
+
+// A short, human-maintained allow-list — NOT inferred, NOT the audit's own judgment call — of
+// producer/domain combinations that are known-and-intended to stay informational-only (e.g. raw
+// ambient Signal readings with no actionable threshold). Anything not on this list and not matched
+// to a registry entry is REVIEW_REQUIRED, never silently dropped.
+const INTENTIONALLY_NON_ACTIONABLE: ReadonlySet<`${string}:${EnvelopeDomain}`> = new Set([/* ... */]);
+
+function auditCoverage(observedCombinations: { producerModel: string; domain: EnvelopeDomain }[]): CoverageAuditFinding[] {
+  const registryDigest = hashRegistry(COMPOUND_RULE_REGISTRY);   // recomputed fresh every run — see 11.3
+  return observedCombinations.map(({ producerModel, domain }) => {
+    const matchedRuleIds = COMPOUND_RULE_REGISTRY
+      .filter((rule) => rule.inputContracts.some((c) => c.startsWith(producerModel)))
+      .map((rule) => rule.ruleId);
+    const determination: CoverageDetermination =
+      matchedRuleIds.length > 0 ? "COVERED"
+      : INTENTIONALLY_NON_ACTIONABLE.has(`${producerModel}:${domain}`) ? "INTENTIONALLY_NON_ACTIONABLE"
+      : "REVIEW_REQUIRED";
+    return { producerModel, domain, registryVersionDigest: registryDigest, determination, matchedRuleIds, firstObservedAt: /* upsert-preserved */ '', lastAuditedAt: new Date().toISOString() };
+  });
 }
 ```
 
-This is a **Worker**, not an Agent, per §8: it evaluates a fixed registry, makes no adaptive judgment, and holds no cross-invocation goal beyond "keep the cursor current." It runs on a schedule — the same poll-based pattern the audit already found sufficient for every domain examined (weather, refinance, maintenance; nothing needs sub-minute reaction time) — via a new entry in `workerJobRegistry.ts`, exactly like `evaluateHomeActionProactiveDeliveryJob` already does. No `DomainEvent`/transactional-outbox machinery is needed for this, unlike round 2's design, because there is no real-time side effect to make safe — promotion triggering delegates entirely to `homeActionSourcePromotion.service.ts`'s own existing dedup, and a duplicate scheduled pass is a harmless no-op re-evaluation by construction (Principle 12).
+This is a **Worker**, not an Agent, per §8 — a fixed comparison against a registry, no runtime dispatch, no adaptive judgment. It runs periodically (or on-demand from the admin dashboard), via a new entry in `workerJobRegistry.ts`. Only `REVIEW_REQUIRED` findings surface on the coverage dashboard (§20) — `COVERED` and `INTENTIONALLY_NON_ACTIONABLE` are both closed, non-actionable states, correcting the prior draft's error of flagging every unmatched item regardless of whether "unmatched" actually meant "gap" or just "not meant to be a Home Action."
 
-### 11.3 `GAP_FLAGGED` items are a product decision, not an automatic promotion
+**Note what this section explicitly does not include, compared to the prior draft:** no `triggerPromotionIfNotAlreadyPromoted` call, no per-property live evaluation loop, no attempt to promote anything. Closing a `REVIEW_REQUIRED` finding always means an engineer writes a new producer-loader function and a new `compoundRuleRegistry.ts` entry, following the exact pattern the existing 8 rules already establish — this document documents that pattern (§9, §27) as the standard extension path, and treats the audit purely as the tool that tells an engineer where to look next.
 
-The Coverage Service never invents a promotion rule. A `GAP_FLAGGED` item surfaces on an admin dashboard (§20) for a human to decide whether it warrants a new `compoundRuleRegistry.ts` entry — consistent with Principle 4 (canonical services own promotion) and with the registry's own existing extension model (each entry already documents `applicability`, `materiality`, `safetyTier`; a human-authored rule, not an inferred one, is what the registry format itself demands).
+### 11.3 Re-running the audit picks up new rules automatically
+
+Because `auditCoverage` recomputes `matchedRuleIds` against the live `COMPOUND_RULE_REGISTRY` array on every run rather than diffing against a cached prior result, authoring a new rule for a previously-`REVIEW_REQUIRED` combination is picked up on the very next scheduled run with no separate invalidation step — there is no cursor to go stale, because there is nothing incremental being cached. `registryVersionDigest` is stored on each finding purely for audit-trail purposes (so a report can show "this combination has been `REVIEW_REQUIRED` since registry version X"), not as a staleness check that gates re-evaluation.
 
 ---
 
@@ -490,15 +506,34 @@ function selectNextTool(state: SpecialistRunState): SpecialistTool | "DONE" | "A
 
 A reviewer correctly flagged that scheduling a future re-evaluation is a reversible *internal* action — arguably Level 3 (Execute-reversible), not the Level 0–2 ceiling this document holds every agent to. Resolution: `SCHEDULE_FOLLOW_UP` is reclassified as a **Draft** action (Level 2) — the agent prepares the scheduled tick but a homeowner-visible confirmation ("we'll check back with you in a week — sound good?") is required before it's committed, via the same confirmation-recheck requirement the Ask Trust FRD's parent principle 5 already mandates for material actions (§1.1). This keeps the agent inside its declared ceiling rather than quietly exceeding it.
 
+### 12.5 Three records, one hierarchy — not two sources of truth
+
+A reviewer correctly flagged that calling `DecisionThread` "the Specialist Agent's execution record" in §12.1's diagram, while separately introducing `AgentRun`/`AgentState` for what reads as the same lifecycle, leaves it ambiguous which one is authoritative for what. They are not competing sources of truth — they answer three different questions, in a strict reference hierarchy:
+
+| Record | Answers | Owner | Lifecycle |
+|---|---|---|---|
+| `DecisionThread` (existing, `decisionPlatform`, unchanged) | "What is the homeowner's decision journey and recommendation history for this HVAC question?" | Canonical, business-facing | Persists across the homeowner's entire decision, independent of any single agent invocation |
+| `AgentRun` (new, §25) | "What happened the last time the Specialist Agent executed?" | Execution/audit | Append-only — one row per invocation, referencing `decisionThreadId`; never mutated after creation |
+| `AgentState` (new, §25) | "Where exactly in its `selectNextTool` loop was a *paused* run, so it can resume?" | Orchestration-only | Exists only for a run awaiting a `SCHEDULE_FOLLOW_UP` confirmation or a homeowner response — a run that completes in one pass never creates one |
+
+The Specialist Agent reads and writes `DecisionThread` for the business-facing recommendation itself (unchanged from every prior revision); it separately writes exactly one `AgentRun` row per invocation for observability/audit (§20); and it writes an `AgentState` row only in the one case where its loop genuinely needs to resume later. `DecisionThread` remains the only source of truth a homeowner-facing surface ever reads from — `AgentRun`/`AgentState` are internal to the agent runtime and never rendered as the decision itself.
+
 ---
 
 ## 13. Agent Interaction Patterns
 
-### Pattern A — Promotion coverage (Worker, not agent-mediated)
+### Pattern A — Promotion coverage, and the pipeline it does not trigger (Worker, not agent-mediated)
 ```
 Property/Event Change → Intelligence Producer → Intelligence Envelope
-  → Promotion Coverage Service (scheduled, §11) → compoundRuleRegistry.ts (if applicable)
-  → homeActionSourcePromotion.service.ts → Home Action → [unchanged canonical pipeline] → Homeowner
+  → Promotion Coverage Audit (scheduled, §11) compares observed producer/domain
+    combinations against compoundRuleRegistry.ts — a report, not a dispatch
+      ├─ COVERED / INTENTIONALLY_NON_ACTIONABLE → no action; the existing rule's own
+      │    hardcoded producer-loader function (already wired into getPromotedHomeActions())
+      │    keeps promoting this combination on every canonical feed read, exactly as it
+      │    always has — the Audit changes nothing about that path
+      └─ REVIEW_REQUIRED → surfaced on the admin dashboard; an engineer authors a new
+           compoundRuleRegistry.ts entry + producer-loader function, which then joins the
+           same unchanged canonical pipeline (getHomeActionFeed() → ... → homeowner)
 ```
 
 ### Pattern B — User-initiated engagement (the Specialist Agent's actual trigger)
@@ -518,7 +553,7 @@ User → Ask Cozy → query-envelope Skill (read-only) → rendered observation
 ```
 Trigger → deterministic service/worker → result
 ```
-Unchanged — this is the default for the large majority of C2C's existing services, and now explicitly includes the entire canonical Home Action pipeline and the Promotion Coverage Service itself.
+Unchanged — this is the default for the large majority of C2C's existing services, and now explicitly includes the entire canonical Home Action pipeline and the Promotion Coverage Audit itself.
 
 ### Pattern E — Multi-specialist decision (Phase 4+, only when a second specialist exists)
 ```
@@ -567,7 +602,7 @@ The LLM's structured-output schema constrains it to return `TypedClaim[]` — `c
 
 **This section is now almost entirely "reused, unchanged" rather than "designed."** `getHomeActionFeed()` is the sole ranking authority (Principle 3, HI-ATT-001); this document introduces no `unifiedPriorityRanking.service.ts`, no `importanceScore`, no second ranking factor set. `priorityListPolicy.ts` remains a pure, non-ranking projection (`buildPriorityListView`), confirmed unchanged. `homeActionProactiveEligibilityPolicy.ts` and `homeActionProactiveDelivery.service.ts` remain the sole owners of consent, channel policy, budgets, and delivery eligibility — this document does not expand `priorityListPolicy.ts` into a second eligibility owner, correcting round 2's error of assigning `computeDeliveryEligibility()` to it.
 
-The only ranking-adjacent decision left in this document is the Coverage Service's `findApplicableRule` lookup (§11.2) — a fixed registry match, not a scored ranking, and it never produces anything that reaches a homeowner directly; it only ever triggers the existing promotion path, after which `getHomeActionFeed()` ranks the resulting Home Action exactly as it ranks every other one.
+The only ranking-adjacent thing left in this document is the Coverage Audit's structural comparison (§11.2) — a read-only report, not a scored ranking, and not even a dispatch: it never triggers a promotion itself, and it never produces anything a homeowner sees directly. Whatever an engineer builds in response to a `REVIEW_REQUIRED` finding joins the canonical pipeline the same way every existing rule already does; `getHomeActionFeed()` ranks it exactly as it ranks every other Home Action.
 
 ---
 
@@ -575,9 +610,9 @@ The only ranking-adjacent decision left in this document is the Coverage Service
 
 | Requirement | Mechanism | Evidence |
 |---|---|---|
-| Promotion Coverage Service must periodically re-evaluate | Scheduled Worker job, same pattern as the existing `evaluateHomeActionProactiveDeliveryJob` | **[verified]** that job is already registered in `workerJobRegistry.ts` and runs on a schedule today |
+| Promotion Coverage Audit must periodically re-evaluate | Scheduled Worker job, same pattern as the existing `evaluateHomeActionProactiveDeliveryJob` | **[verified]** that job is already registered in `workerJobRegistry.ts` and is schedule-capable (its own execution is gated by an env flag + DB kill switch, disabled by default — §1's opening note) |
 | Promotion triggering must be safe to re-run | Delegates to `homeActionSourcePromotion.service.ts`'s own dedup, keyed by each rule's `deduplicationKey` | **[verified]** every `compoundRuleRegistry.ts` entry already declares one |
-| `DomainEventType` — does this document add a new enum value? | **No.** **[verified]** `DomainEventType` (`schema.prisma`) is a fixed enum of domain-specific values with no `ENVELOPE_CHANGE`; this document no longer needs one, since the Coverage Service is poll-based, not event-triggered | Round 2 proposed adding this trigger and using `DomainEvent` as a transactional outbox — both retired along with the real-time Attention design they served |
+| `DomainEventType` — does this document add a new enum value? | **No.** **[verified]** `DomainEventType` (`schema.prisma`) is a fixed enum of domain-specific values with no `ENVELOPE_CHANGE`; this document no longer needs one, since the Coverage Audit is poll-based, not event-triggered | Round 2 proposed adding this trigger and using `DomainEvent` as a transactional outbox — both retired along with the real-time Attention design they served |
 
 No Kafka, no Redis Streams, no new event infrastructure, no `DomainEvent` schema change. This document's event/trigger footprint is now smaller than round 2's, not larger — a direct consequence of discovering that the delivery side was never this document's job to build.
 
@@ -589,9 +624,9 @@ No Kafka, no Redis Streams, no new event infrastructure, no `DomainEvent` schema
 |---|---|
 | **C2C authoritative state** | Unchanged — existing 506 Prisma models |
 | **Intelligence state** | Unchanged native subsystems + the Envelope's read adapters |
-| **Promotion evaluation cursor** | New, narrow: `EnvelopeEvaluationCursor` (§5.7) — no per-user dimension |
+| **Coverage audit findings** | New, narrow: `CoverageAuditFinding` (§11.2/§25), keyed by `(producerModel, domain)` — no per-item, no per-user dimension |
 | **Home Action lifecycle state** (dismissal, snooze, completion) | Unchanged — already fully owned by the existing Home Action command policy (HI-ATT-005); this document does not duplicate it |
-| **Specialist Agent execution state** | New: `AgentRun`/`AgentState`, scoped to the one genuine agent (§25) |
+| **Specialist Agent execution state** | New: `AgentRun` (append-only, per invocation) / `AgentState` (only for a paused, resumable run) — see §12.5 for why these are two different records, not two sources of truth |
 | **Conversation context** | Unchanged — Ask's existing session state |
 | **Historical outcomes** | Unchanged — `OutcomeObservation` |
 
@@ -603,32 +638,40 @@ No vector database — unchanged reasoning from prior revisions.
 
 ### 18.1 Conflict detection, tightened to avoid false positives
 
-A reviewer correctly identified that round 2's rule — same `subject`+`domain`, no shared `semanticCorrelationKey`, therefore `CONFLICTED` — would falsely flag, say, an HVAC maintenance-due item and an HVAC warranty-expiration item as conflicting, when they address entirely different propositions and simply share a domain. Fixed: conflict requires a shared **claim identity**, not merely a shared domain.
+A reviewer correctly identified that round 2's rule — same `subject`+`domain`, no shared `semanticCorrelationKey`, therefore `CONFLICTED` — would falsely flag, say, an HVAC maintenance-due item and an HVAC warranty-expiration item as conflicting, when they address entirely different propositions and simply share a domain. A follow-up review then correctly noted that round 3's fix, a bare `claimKey` string like `"hvac-repair-replace-verdict"`, was itself under-scoped: the same string would collide across different properties and different HVAC units on the same property, and nothing explained how an Envelope adapter would actually produce one. Fixed with a composite, adapter-derived identity:
 
 ```ts
 interface QualifiedClaim {
-  claimKey: string;   // e.g. "hvac-repair-replace-verdict" — a specific proposition, not a domain
+  claimKey: {
+    propertyId: string;
+    entityRef: string | null;          // e.g. a specific HVAC unit's ID, when a property has more than one
+    propositionType: string;            // a closed, small vocabulary — e.g. "REPAIR_REPLACE_VERDICT" — not a free string
+    assessmentHorizonVersion: string;   // ties the claim to a specific assessment run/version, so an old and a
+                                          // current verdict for the same proposition aren't compared as if concurrent
+  };
   verdict: string;
 }
 ```
 
-Two items are `CONFLICTED` only when they share a `claimKey` (the same proposition — e.g. both are "the" HVAC repair/replace verdict for this property) and their verdicts are incompatible. Absence of a shared `claimKey` means **relationship unknown**, not conflicted — items with no correlation simply coexist as independent, unrelated intelligence. This is a narrower, more conservative rule than round 2's, and it is the one that actually matches the audit's original HVAC example (two engines computing *the same* repair/replace verdict and disagreeing) rather than over-generalizing from it.
+**Only the adapters for decision-grade, verdict-bearing Envelope types populate `claimKey` at all** — concretely, `RecommendationSnapshot`'s adapter (which already carries `recommendationDefinitionId`, `scenarioId`, and the decision family, giving it everything needed to construct a `propositionType`+`assessmentHorizonVersion` deterministically from data the native record already has) and, where a `GuidanceSignal` represents a comparable verdict rather than a raw observation, its adapter. Purely observational types (`Signal`, most `IntelligenceObservation` rows) never populate `claimKey` — they have no verdict to conflict over, and §18.1's "relationship unknown, not conflicted" default already covers them correctly.
+
+Two items are `CONFLICTED` only when their `claimKey`s match on every field (same property, same entity, same proposition, same assessment horizon) and their verdicts are incompatible. A mismatch on any field — including a different `entityRef` or a stale `assessmentHorizonVersion` — means **relationship unknown**, not conflicted. This is the version that actually matches the audit's original HVAC example (two engines computing *the same* verdict, for *the same unit*, at *the same assessment point*, and disagreeing) without over-generalizing to unrelated same-domain items or colliding across properties/units.
 
 ### 18.2 Abstention remains first-class
 
-Unchanged: **"C2C does not currently have enough reliable information to recommend this"** is a valid, structurally supported outcome — now additionally reached by the Specialist Agent's loop-budget-exhaustion path (§12.3) and the Coverage Service's `GAP_FLAGGED` state (§11.3), both new, explicit non-answers rather than forced ones.
+Unchanged: **"C2C does not currently have enough reliable information to recommend this"** is a valid, structurally supported outcome — now additionally reached by the Specialist Agent's loop-budget-exhaustion path (§12.3) and the Coverage Audit's `REVIEW_REQUIRED` determination (§11.2), both new, explicit non-answers rather than forced ones.
 
 ---
 
 ## 19. Governance & Safety
 
-Unchanged in substance from round 2 — kill switch/feature-flag convention, risk classification, capability allow-list, budgets (now including `maxLoopIterations`), evaluation-suite gate before `ENABLED`, `releaseGate.service.ts` available-but-not-required, audit log, `CalibrationRelease`-style versioning. Scoped now to exactly one `AgentDefinition` (the HVAC Specialist Agent) plus one Worker (the Coverage Service, governed as a Worker per §8 — feature-flagged, not `AgentDefinition`-registered).
+Unchanged in substance from round 2 — kill switch/feature-flag convention, risk classification, capability allow-list, budgets (now including `maxLoopIterations`), evaluation-suite gate before `ENABLED`, `releaseGate.service.ts` available-but-not-required, audit log, `CalibrationRelease`-style versioning. Scoped now to exactly one `AgentDefinition` (the HVAC Specialist Agent) plus one Worker (the Coverage Audit, governed as a Worker per §8 — feature-flagged, not `AgentDefinition`-registered).
 
 ---
 
 ## 20. Observability
 
-Unchanged trace shape from round 2 (correlation ID, agent/tick run ID, per-span tool/LLM/outcome logging), narrowed in scope to the Coverage Service's evaluation passes and the Specialist Agent's runs. New: the admin coverage-gap dashboard (§11.3), reusing `adminIntelligenceRecompute.service.ts`'s existing dashboard conventions.
+Unchanged trace shape from round 2 (correlation ID, agent/tick run ID, per-span tool/LLM/outcome logging), narrowed in scope to the Coverage Audit's evaluation passes and the Specialist Agent's runs. New: the admin coverage dashboard (§11.2), reusing `adminIntelligenceRecompute.service.ts`'s existing dashboard conventions.
 
 ---
 
@@ -678,7 +721,7 @@ graph TB
     CTX["Shared Home Context — EXISTING/EXTENDED"]
     PROD["Intelligence Producers — EXISTING, UNCHANGED"]
     ENV["Intelligence Envelope — NEW, read/promotion-input only"]
-    COV["Promotion Coverage Service — NEW (Worker)"]
+    COV["Promotion Coverage Audit — NEW (Worker)"]
   end
 
   subgraph AGENT["Agent Runtime — NEW, sized for one agent"]
@@ -717,21 +760,23 @@ graph TB
 ```mermaid
 sequenceDiagram
   participant Cron as workerJobRegistry (scheduled)
-  participant Cov as Promotion Coverage Service
+  participant Cov as Promotion Coverage Audit
+  participant Prop as Property scan (resolves homeownerProfile.userId, per property)
   participant Env as Intelligence Envelope
-  participant Rules as compoundRuleRegistry.ts
-  participant Promo as homeActionSourcePromotion.service.ts
-  participant Feed as getHomeActionFeed()
+  participant Rules as compoundRuleRegistry.ts (read-only, structural comparison)
+  participant Dash as Admin coverage dashboard
 
-  Cron->>Cov: run (per-property pass)
-  Cov->>Env: query items changed since cursor (§5.7)
-  Cov->>Rules: findApplicableRule(item)
-  alt rule exists
-    Cov->>Promo: triggerPromotionIfNotAlreadyPromoted(item, rule)
-    Promo->>Promo: dedup via rule's own deduplicationKey
-    Promo-->>Feed: Home Action now included in the canonical feed
-  else no rule
-    Cov->>Cov: write cursor coverageStatus=GAP_FLAGGED
+  Cron->>Cov: run
+  Cov->>Prop: resolve BACKGROUND_JOB_RESOLVED_OWNER principal per property
+  Cov->>Env: aggregate observed (producerModel, domain) combinations, authorized per property
+  Cov->>Rules: compare each combination's producerModel against every rule's inputContracts
+  alt matched to >=1 rule
+    Cov->>Cov: upsert CoverageAuditFinding determination=COVERED (no dispatch, no promotion attempt)
+  else on the INTENTIONALLY_NON_ACTIONABLE allow-list
+    Cov->>Cov: upsert CoverageAuditFinding determination=INTENTIONALLY_NON_ACTIONABLE
+  else no match, not allow-listed
+    Cov->>Cov: upsert CoverageAuditFinding determination=REVIEW_REQUIRED
+    Cov->>Dash: surface finding for an engineer to act on
   end
 ```
 
@@ -815,11 +860,11 @@ sequenceDiagram
 
 | New model | Purpose | Notes |
 |---|---|---|
-| `EnvelopeEvaluationCursor` (§5.7) | Per-item promotion-coverage evaluation state | No `userId`, no idempotency-key machinery needed (§5.7) |
-| `IntelligenceEnvelopeIndex` (conditional) | Thin materialized index, only if query-time fan-out proves insufficient | Unchanged concept from round 2, narrower now (no `importanceScore` field — nothing to cache there anymore) |
-| `AgentDefinition`, `AgentRun`, `AgentState` | Registry and execution state for the one genuine agent | Scoped to the HVAC Specialist Agent |
+| `CoverageAuditFinding` (§11.2) | Coverage determination per `(producerModel, domain)` combination — `COVERED` / `INTENTIONALLY_NON_ACTIONABLE` / `REVIEW_REQUIRED`, with `registryVersionDigest` and matched rule IDs | No `userId`, no per-item dimension, no idempotency-key machinery needed — upserted by natural key `(producerModel, domain)`, recomputed fresh each run |
+| `IntelligenceEnvelopeIndex` (conditional) | Thin materialized index, only if query-time fan-out proves insufficient | No ranking field of any kind — the Envelope carries none |
+| `AgentDefinition`, `AgentRun`, `AgentState` | Registry and execution records for the one genuine agent (§12.5) | Scoped to the HVAC Specialist Agent; `AgentState` rows exist only for a paused, resumable run |
 | `ToolInvocation`, `LLMInvocation` | Per-call logs | Unchanged from round 2 |
-| One new `compoundRuleRegistry.ts` entry per closed coverage gap | Whenever a `GAP_FLAGGED` item is promoted to a real rule (§11.3) | Not a schema change — the registry is a TypeScript array, per the existing pattern |
+| One new `compoundRuleRegistry.ts` entry + producer-loader function per closed coverage finding | Whenever an engineer decides a `REVIEW_REQUIRED` finding warrants a rule (§11.2) | Not a schema change — the registry is a TypeScript array; the new function follows the exact pattern the existing 8 entries already establish |
 
 **Explicitly not changed:** everything round 2 already listed, plus — this revision's addition — `homeActions.service.ts`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `compoundRuleRegistry.ts`'s existing 8 entries, and `DomainEventType`. None of this document's new work touches any of them.
 
@@ -837,15 +882,15 @@ sequenceDiagram
 | **Risks** | The temptation to add a ranking field "just in case" — mitigated by Principle 3 being a review checklist item |
 | **Exit criteria** | All 5 subsystems queryable through one Envelope contract with correct lineage/revision separation; zero ranking fields anywhere in the type |
 
-### Phase 1 — Promotion Coverage Service
+### Phase 1 — Promotion Coverage Audit
 
 | | |
 |---|---|
-| **Objective** | Close intelligence-to-Home-Action coverage gaps without a second promotion pipeline |
-| **New code** | `evaluatePromotionCoverage` job, `EnvelopeEvaluationCursor`, admin coverage-gap dashboard |
-| **Reused code** | `compoundRuleRegistry.ts`, `homeActionSourcePromotion.service.ts` (both untouched), `workerJobRegistry.ts` |
+| **Objective** | Surface intelligence-to-Home-Action coverage gaps for an engineer to close by hand — never dispatch or promote anything automatically |
+| **New code** | `auditCoverage` job (structural comparison, §11.2), `CoverageAuditFinding` table, admin coverage dashboard |
+| **Reused code** | `compoundRuleRegistry.ts` (read-only, untouched), `homeActionSourcePromotion.service.ts` (untouched — this phase never calls it), `workerJobRegistry.ts`, the `property.homeownerProfile.userId`-resolution pattern from `evaluateHomeActionProactiveDeliveryJob` |
 | **Dependencies** | Phase 0 |
-| **Exit criteria** | A previously-uncovered producer's output is either promoted through an existing rule or visibly `GAP_FLAGGED` on the admin dashboard — no silent gaps |
+| **Exit criteria** | Every producer/domain combination observed in the Envelope has an explicit `CoverageAuditFinding` determination; a previously-`REVIEW_REQUIRED` combination is confirmed to disappear from the dashboard once an engineer authors a covering rule, with no automated promotion involved at any point |
 
 ### Phase 2 — HVAC Specialist Agent
 
@@ -883,8 +928,8 @@ Pattern only, per §12/§11 — no build order committed. A second specialist is
 | `services/skills/` | EXTEND | `autonomyLevel` field; new `query-envelope` Skill |
 | `aiRequestGovernance.service.ts` | REFACTOR (interface hardening) | Typed-claims response mechanism (§14.2) |
 | `askOrchestrator.service.ts` | EXTEND | Wire `REMOTE_FALLBACK` |
-| `workerJobRegistry.ts` | EXTEND | One new job type (Coverage Service) |
-| Intelligence Envelope, `EnvelopeEvaluationCursor`, HVAC Specialist Agent, Agent runtime | NEW | The only genuinely new components |
+| `workerJobRegistry.ts` | EXTEND | One new job type (Coverage Audit) |
+| Intelligence Envelope, `CoverageAuditFinding`, HVAC Specialist Agent, Agent runtime | NEW | The only genuinely new components |
 | `unifiedPriorityRanking.service.ts`, "Attention Watcher Service" / "Attention Agent" (prior revisions) | **RETIRED FROM THIS DESIGN** — never built | Would have violated HI-ATT-001/ASK-INT-019 |
 | A second LLM provider, event bus, vector database, second ranking/eligibility/delivery pipeline | NOT BUILT | No evidence justifies any of them; the last is now explicitly forbidden by requirement, not merely undesirable |
 
@@ -895,7 +940,7 @@ Pattern only, per §12/§11 — no build order committed. A second specialist is
 | Risk | Mitigation |
 |---|---|
 | **Building a second ranking/delivery pipeline** — this document's own demonstrated, repeated failure mode across two prior drafts | Principle 3 + HI-ATT-001/ASK-INT-019 citations in §1.1; any future PR touching ranking or delivery is checked against this table first |
-| **Coverage Service becomes a hidden second promotion authority** if it ever gains inference logic instead of pure registry lookup | §11.3's binding constraint: it flags, a human authors the rule; it never invents one |
+| **Coverage Audit becomes a hidden second promotion authority** if it ever gains inference logic instead of pure structural comparison | §11.2's binding constraint: it flags, a human authors the rule; it never invents or dispatches one |
 | **Specialist loop livelock** (round 3 finding) | §12.3's bounded attempts, loop budget, and explicit abstention path |
 | **Agent silently exceeding its autonomy ceiling** via `SCHEDULE_FOLLOW_UP` | §12.4's reclassification to Draft (Level 2) with required confirmation |
 | **LLM evidence validation being referential instead of semantic** | §14.2's typed-claims mechanism — the model selects, it never asserts |
@@ -911,10 +956,10 @@ Pattern only, per §12/§11 — no build order committed. A second specialist is
 | Metric | Target |
 |---|---|
 | % of intelligence producers with `compoundRuleRegistry.ts` coverage | Rising from today's baseline (8 rules across several but not all producer types) |
-| `GAP_FLAGGED` items resolved (rule authored) vs. accumulating unaddressed | Resolved, trending toward zero backlog |
+| `REVIEW_REQUIRED` findings resolved (rule authored) vs. accumulating unaddressed | Resolved, trending toward zero backlog |
 | Specialist Agent loop-abstention rate | Low, but nonzero (proves the abstention path is real, not decorative) |
 | % Specialist Agent runs resolved without an LLM call | High |
-| Duplicate Home Actions created by Coverage Service triggering | Zero — proves `homeActionSourcePromotion.service.ts`'s existing dedup is being respected, not bypassed |
+| Duplicate Home Actions created by Coverage Audit triggering | Zero — proves `homeActionSourcePromotion.service.ts`'s existing dedup is being respected, not bypassed |
 
 ### Product intelligence
 
@@ -926,11 +971,11 @@ Unchanged from round 2's framing (recommendation acceptance/dismissal, homeowner
 
 ## 30. Final Recommendation
 
-**What should be built first:** Phase 0 (Envelope, read-only) and Phase 1 (Promotion Coverage Service). Both are additive to an already-shipped canonical pipeline and carry near-zero risk of duplicating it, provided Principle 3 is enforced in review.
+**What should be built first:** Phase 0 (Envelope, read-only) and Phase 1 (Promotion Coverage Audit). Both are additive to an already-shipped canonical pipeline and carry near-zero risk of duplicating it, provided Principle 3 is enforced in review.
 
 **What should NOT be built:** anything resembling a second `getHomeActionFeed()`, a second `priorityListPolicy.ts`, or a second delivery pipeline — not "not yet," but structurally excluded by this document going forward, since two independent drafts of this same document built exactly that before an external review caught it each time.
 
-**What should remain deterministic:** the entire canonical Home Action pipeline (unchanged), the Coverage Service's rule lookup, and the HVAC scoring engine.
+**What should remain deterministic:** the entire canonical Home Action pipeline (unchanged), the Coverage Audit's rule lookup, and the HVAC scoring engine.
 
 **What should become an agent:** exactly one — the HVAC Specialist Agent, triggered by homeowner engagement with an already-delivered item, not by a bespoke attention-routing mechanism this document no longer builds.
 
