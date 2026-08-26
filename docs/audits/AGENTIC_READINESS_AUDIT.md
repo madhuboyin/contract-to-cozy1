@@ -27,16 +27,17 @@
 
 1. [Current Architecture Map](#1-current-architecture-map)
 2. [Current Intelligence Map](#2-current-intelligence-map)
-3. [Existing Agentic Building Blocks](#3-existing-agentic-building-blocks)
+3. [Existing Agentic Building Blocks](#3-existing-agentic-building-blocks) (incl. [3.2 What this audit means by "agent"](#32-what-this-audit-means-by-agent))
 4. [Component Classification Matrix](#4-component-classification-matrix)
 5. [Agentic Readiness Score](#5-agentic-readiness-score)
 6. [Gap Analysis](#6-gap-analysis)
 7. [Architectural Risks](#7-architectural-risks)
 8. [Reuse Assessment](#8-reuse-assessment)
-9. [Recommended Foundation Before Agents](#9-recommended-foundation-before-agents)
+9. [Recommended Foundation Before Agents](#9-recommended-foundation-before-agents) (incl. [9.2 Autonomy levels and the consequential-action boundary](#92-autonomy-levels-and-the-consequential-action-boundary))
 10. [Candidate First Agents](#10-candidate-first-agents)
 11. [Final Conclusion](#11-final-conclusion)
-12. [Inputs Required for Stage 3 — C2C Agentic Evolution Architecture](#12-inputs-required-for-stage-3--c2c-agentic-evolution-architecture)
+12. [Inputs Required for Stage 3 — C2C Intelligence & Agentic Evolution Architecture](#12-inputs-required-for-stage-3--c2c-intelligence--agentic-evolution-architecture)
+13. [Evidence & Confidence Appendix](#13-evidence--confidence-appendix)
 
 ---
 
@@ -97,7 +98,7 @@ This is the single most mature layer in the codebase. Real BullMQ + Redis queues
 
 ### 1.5 AI / LLM surface
 
-Exactly one provider — Google Gemini via `@google/genai` — called from 18 registered routes, all enforced to request structured JSON output, all routed through `aiRequestGovernance.service.ts` (route allow-list, per-route rate limiting, circuit breaker, retry-with-backoff, Prometheus cost tracking). No OpenAI, no Anthropic, anywhere in the repo. One dead code path was found: `propertyAppreciation.service.ts` calls an undefined global `google.search(...)` — a leftover from what looks like an agentic dev sandbox — which throws and is silently swallowed by a try/catch, permanently degrading that feature to a static fallback. Full detail in Section 4.
+Exactly one provider — Google Gemini via `@google/genai` — called from 18 registered routes, all routed through `aiRequestGovernance.service.ts` (route allow-list, per-route rate limiting, circuit breaker, retry-with-backoff, Prometheus cost tracking). Most of those 18 request structured JSON output, but two are deliberately free-text: the Ask chat conversational reply (`gemini.service.ts`'s `sendMessage`) and document full-text transcription (`documentIntelligence.service.ts`'s `extractFullText`). Governance itself doesn't independently verify which mode a call is in — it trusts a caller-supplied `structuredOutputConfigured` flag rather than inspecting the actual request config, so this is a policy convention enforced by code review, not a runtime guarantee. No OpenAI, no Anthropic, anywhere in the repo. One dead code path was found: `propertyAppreciation.service.ts` calls an undefined global `google.search(...)` — a leftover from what looks like an agentic dev sandbox — which throws and is silently caught; the AI valuation call still runs afterward on the FHFA baseline and general market knowledge, so the concrete loss is the intended local-market search enrichment, not the feature as a whole. Full detail in Section 4.
 
 ---
 
@@ -191,6 +192,12 @@ Pieces already in the codebase that resemble what an agentic architecture needs 
 
 The 9,606-line `askOrchestrator.service.ts` and its ~35 supporting files (`askSemanticRouter.ts`, `askOperationRegistry.ts`, `askAnswerTrustPolicy.ts`…) form a mature, deterministic NLU pipeline: a hand-rolled local embedding (feature-hashed, not ML), lexical + trigram + synonym similarity blended into a calibrated confidence score, routed through a 5-stage cascade (`SAFETY → DETERMINISTIC → LOCAL_CLASSIFIER → CLARIFICATION → REMOTE_FALLBACK`). **The `REMOTE_FALLBACK` stage name exists but is not wired to any LLM call** — grep confirms zero connection to Gemini. The one real LLM touchpoint in the entire Ask subsystem is `askResultSynthesis.service.ts`, which rephrases already-computed, whitelisted JSON into prose under a strict system prompt and a post-hoc numeric-hallucination guard that throws if the model invents a number not present in its input. This is disciplined LLM use — for phrasing, not reasoning — and is the template worth preserving, not loosening, as agents are added.
 
+### 3.2 What this audit means by "agent"
+
+*Added after a third external review: earlier drafts of this audit sometimes used background/scheduled execution as a proxy for agenthood, which conflates two independent properties.*
+
+An "agent" here is defined by **adaptive goal pursuit under bounded, governed autonomy** — it selects among multiple tools or actions to pursue a goal against state that isn't fully known upfront, and its state transitions are logged, budgeted, and revocable — not by whether it runs on a schedule, runs continuously, or executes in the background. A cron job that recomputes the same deterministic formula every tick is a **service**, no matter how often it fires; `workerJobRegistry.ts`'s 66 entries are overwhelmingly this kind of service, and nothing about their scheduling makes them agentic. This matters for [Section 10](#10-candidate-first-agents): several candidates there are agentic only in a specific judgment or hand-off step, while the computation surrounding that step remains — and should remain — a deterministic service. See §9.2 for how much autonomy each candidate is actually being asked to hold.
+
 ---
 
 ## 4. Component Classification Matrix
@@ -218,11 +225,11 @@ The 9,606-line `askOrchestrator.service.ts` and its ~35 supporting files (`askSe
 | `priorityListPolicy.ts` + eligibility/suppression/snooze/kill-switch stack | Deterministic notify/suppress/consent/budget policy layer. | **ORCH** | Reusable "should the agent interrupt this user" gate. | None — reuse directly. | Critical |
 | Ask orchestrator + `askSemanticRouter` + `askOperationRegistry` | Deterministic hand-rolled NLU intent router; zero LLM in the routing path. | **TOOL** | Fast, cheap, safety-gated first pass in front of a real LLM fallback. | Wire the unwired `REMOTE_FALLBACK` stage to an actual model. | Important |
 | `askResultSynthesis.service.ts` | LLM rephrases verified structured facts into prose, with a hallucination guard. | **KEEP** | The template for every future "LLM writes prose from verified data" call. | None. | Critical (exemplar) |
-| Ask "Skills" registry (`services/skills/`) | 19 skills, versioned, risk-classified, context-budgeted, evaluation-linked. | **TOOL** | The strongest existing analog to a formal agent-tool manifest. | Wire declared kill-switches to real runtime env checks — currently unread. | Critical |
+| Ask "Skills" registry (`services/skills/`) | 19 skills, versioned, risk-classified, context-budgeted, evaluation-linked; each manifest's `featureFlag`/`killSwitch` pair is read at runtime by `askOperationalControls.ts`'s `skillEnabled()` and enforced in the orchestrator's hierarchical skill routing — confirmed live, not dormant. | **TOOL** | The strongest existing analog to a formal agent-tool manifest. | None for activation wiring. Remaining gap is tagging each skill/operation with an autonomy level (§9.2) before any of them gain execute-not-just-recommend capability. | Important |
 | Tool Discovery capability catalog | Recommends existing app features to users; has real, drill-tested kill-switches. | **SHARED** | Governance pattern to copy into the Skills registry above. | Port its env-driven kill-switch wiring. | Important |
-| `aiRequestGovernance.service.ts` | Route allow-list, rate limits, circuit breaker, retries, USD cost metrics — Gemini only. | **GATEWAY** | The literal seed of a centralized Intelligence / LLM Gateway. | Add provider abstraction, distributed rate-limit state, safety filtering, caching. | Critical |
-| `gemini.service.ts` | Single-provider client; 18 registered, structured-output call sites. | **REFACTOR** | Calls routed through the Gateway instead of the SDK directly. | Medium — mechanical once the Gateway exists. | Critical |
-| `propertyAppreciation.service.ts` — `google.search()` | Calls an undefined global; throws; silently caught; feature permanently degrades to a static fallback. | **REPLACE** | Wire a real search tool via the future Gateway, or delete the dead path. | Low effort — this is a live bug, not architecture debt. | Critical (bug) |
+| `aiRequestGovernance.service.ts` | Route allow-list, rate limits, circuit breaker, retries, USD cost metrics — Gemini only. | **GATEWAY** | The literal seed of a centralized Intelligence / LLM Gateway. | Harden the interface itself first — distributed rate-limit state, safety filtering, caching, and independent (not caller-asserted) verification of structured-vs-free-text mode. A second provider is a separate, conditional item — see §9 item 4. | Critical (interface) / Optional (second provider) |
+| `gemini.service.ts` | Single-provider client; 18 registered call sites (16 structured JSON, 2 free-text — Ask chat and document transcription). | **REFACTOR** | Calls routed through the Gateway instead of the SDK directly. | Medium — mechanical once the Gateway exists. | Critical |
+| `propertyAppreciation.service.ts` — `google.search()` | Calls an undefined global; throws; silently caught. The AI valuation call still runs afterward on the FHFA baseline and general market knowledge — the concrete loss is the intended local-market search enrichment, not the whole feature. | **REPLACE** | Wire a real search tool via the future Gateway, or delete the dead path. | Low effort — this is a live bug, not architecture debt. | Optional (bug; narrow blast radius) |
 | BullMQ + node-cron + `workerJobRegistry` + `CronJobLock` | Durable scheduling, registry/handler parity checks, distributed lease. | **SHARED** | Direct substrate for scheduling autonomous agent background ticks. | None structurally; add agent-specific job types. | Critical |
 | `DomainEvent` + poller | 30s CAS-claim poll table with real consumers, not just an audit log. | **SHARED** (seed) | Event-backbone candidate — needs a push mechanism for tight agent triggering. | Add a real event bus (Redis Streams / BullMQ events) alongside or instead of polling. | Important |
 | Admin ops surface (worker jobs, recompute, release gate) | Live job health, recompute triggers, capability cohort/KPI gating. | **SHARED** | Ready-shaped console for agent rollout and health monitoring. | Extend to surface agent-specific run health. | Important |
@@ -241,6 +248,8 @@ Each dimension scored 0–100 against what was actually found in code, not again
 ### Overall: 56 / 100
 
 A real, uneven foundation. Strongest where engineering discipline is oldest (background processing); weakest where five teams independently solved the same problem (intelligence reuse).
+
+**Read this as an editorial synthesis grounded in code evidence, not a statistically independent measurement.** Each dimension below was scored against the same rough anchors — 0 = absent, 25 = a dormant or prototype-only implementation, 50 = present but partial/inconsistent, 75 = solid with named gaps, 100 = production-grade and unified — applied by the auditor's judgment against the evidence cited, not against a scripted checklist. The ten dimensions also aren't independent: **Intelligence reuse**, **Insight persistence**, **Orchestration readiness**, and **Extensibility** all substantially measure the same underlying fact (five parallel intelligence subsystems, three ranking engines, three Radar pipelines), so an unweighted average of all ten likely double-counts that one root cause more than it should. Treat 56 as a defensible order-of-magnitude read, not a precise composite — and before using it to gate a go/no-go decision, Stage 3 should replace the unweighted average with explicit weights tied to whichever [autonomy level](#92-autonomy-levels-and-the-consequential-action-boundary) is actually being targeted (e.g. Event readiness and Orchestration readiness matter far more once execute-tier agents are in scope than they do for observe/recommend-tier ones).
 
 | Dimension | Score | Why |
 |---|---:|---|
@@ -267,20 +276,21 @@ A real, uneven foundation. Strongest where engineering discipline is oldest (bac
 | ✅ Available | AI governance seed (`aiRequestGovernance.service.ts`) |
 | ✅ Available | Decision lineage + commitment gating (`decisionPlatform`) |
 | ✅ Available | Admin ops visibility (job health, capability grants, recompute triggers) |
-| ✅ Available | Skill manifest contract (`services/skills/`) — versioned, risk-classified |
+| ✅ Available | Skill manifest contract (`services/skills/`) — versioned, risk-classified, with feature-flag/kill-switch pairs read and enforced at runtime |
 | 🔴 Critical | A **C2C Intelligence Envelope** — a common read-side contract (confidence/evidence/priority/status/expiry/provenance) the 5 parallel intelligence stores expose through. *Revised: not a physical schema merge — see the 2026-08-25 revision note above.* |
-| 🔴 Critical | LLM Gateway provider abstraction (single-provider today, no fallback, no caching, no safety filter) |
+| 🔴 Critical | LLM Gateway *interface* hardening — distributed rate-limit state, safety filtering, caching, independent structured-vs-free-text verification (today it trusts a caller-supplied flag) |
 | 🔴 Critical | Unified priority-ranking service (3 competing implementations, wrapped not merged) — this is also the deterministic core the proposed Attention Agent needs |
 | 🔴 Critical | Resolution of the two disagreeing HVAC decision engines — a live data-quality bug, not just a gap |
+| 🔴 Critical | An explicit autonomy-level model and consequential-action boundary (§9.2) — nothing in the code today distinguishes an agent that recommends from one permitted to execute |
 | 🟡 Important | Real event bus / pub-sub — *revised to conditional*: only build this if the existing BullMQ/`DomainEvent` poll infrastructure (10–30s latency) is shown not to meet a real domain's latency or reliability need; nothing found in this audit currently requires it |
 | 🟡 Important | Generalized external-data-adapter interface (only permits/tax have one, of ~10 integrations) |
-| 🟡 Important | Skill kill-switch wiring (declared in every manifest, read by nothing at runtime) |
-| 🟡 Important | Radar pipeline convergence (3 independent implementations of the same conceptual pipeline) |
+| 🟡 Important | Radar pipeline convergence (3 independent implementations of the same conceptual pipeline) — conditional on scale, since §10's External Signal Watcher candidate can scope to Home Event Radar alone first |
 | 🟡 Important | Distributed tracing / OpenTelemetry across the async chain |
 | 🟡 Important | Closing the calibration learning loop (outcomes are captured; calibration doesn't read them yet — Phase 10B unbuilt per code comment) |
 | ⚪ Optional | `homeIntelligenceGraph.ts` activation — currently zero call sites |
 | ⚪ Optional | Frontend `NEXT_PUBLIC_GEMINI_API_KEY` cleanup — unused, stale, never actually read by any browser code path |
-| ⚪ Optional | Fix or delete the broken `google.search()` call in `propertyAppreciation.service.ts` |
+| ⚪ Optional | Fix or delete the broken `google.search()` call in `propertyAppreciation.service.ts` — narrow blast radius, not a blocker |
+| ⚪ Optional | A second LLM provider — no measured reliability, cost, or capability gap in this audit currently requires one; add only once one is found |
 
 ---
 
@@ -317,15 +327,15 @@ A real, uneven foundation. Strongest where engineering discipline is oldest (bac
 
 ## 8. Reuse Assessment
 
-Evidence-based estimate of what the classification matrix implies at the scale of the whole codebase, not just the 30 sampled rows.
+An editorial reading of what the [30-row component classification matrix](#4-component-classification-matrix) — selected for evidence density, not random or exhaustive sampling — implies about the rest of the codebase. **These are qualitative bands, not a measured share of files, services, lines, or engineering effort;** there is no inventory or effort-estimation methodology behind them, and they should not be read as a budget input. Use them to gauge relative weight, not to size work.
 
-| Share | Category | What's in it |
-|---:|---|---|
-| **35%** | Remains unchanged | Frontend presentation layer, background scheduling substrate, permit/tax adapters, logging/audit, Ask trust/audience policy layer, notification policy stack. |
-| **30%** | Refactored | Radar-triad convergence, ranking-engine unification, context-wrapper dedup, controller/service boundary cleanup, external-adapter generalization. |
-| **15%** | Becomes shared intelligence infrastructure | The 5 intelligence schemas generalized into one insight store; `propertyContext` formalized as an agent-facing API; `aiRequestGovernance` extended into a full Gateway. |
-| **15%** | New development | Orchestrator-level agent coordination, LLM provider abstraction, safety/content filtering, agent-specific admin surfaces, plus event-infrastructure enhancements *only if* validation shows the existing BullMQ/DomainEvent poll cadence is insufficient. |
-| **5%** | Retired | The losing HVAC verdict engine (once reconciled), duplicate Radar code (once converged), dormant `homeIntelligenceGraph.ts` if left unwired, the broken `google.search()` path, the dead frontend `store/` and `adapters/` directories. |
+| Band | Category | What's in it |
+|---|---|---|
+| **Large** | Remains unchanged | Frontend presentation layer, background scheduling substrate, permit/tax adapters, logging/audit, Ask trust/audience policy layer, notification policy stack. |
+| **Moderate** | Refactored | Radar-triad convergence, ranking-engine unification, context-wrapper dedup, controller/service boundary cleanup, external-adapter generalization. |
+| **Small** | Becomes shared intelligence infrastructure | The 5 intelligence schemas exposed through one C2C Intelligence Envelope via a thin adapter per store — not merged into a single physical table (see §9 item 1); `propertyContext` formalized as an agent-facing API; `aiRequestGovernance` hardened into a full Gateway interface. |
+| **Small** | New development | Orchestrator-level agent coordination, an explicit autonomy-level/consequential-action model (§9.2), safety/content filtering, agent-specific admin surfaces, plus event-infrastructure enhancements *only if* validation shows the existing BullMQ/DomainEvent poll cadence is insufficient. |
+| **Minimal** | Retired | The losing HVAC verdict engine (once reconciled), duplicate Radar code (once converged), dormant `homeIntelligenceGraph.ts` if left unwired, the broken `google.search()` path, the dead frontend `store/` and `adapters/` directories. |
 
 ---
 
@@ -336,9 +346,9 @@ The minimum architectural foundation — not the full agent ecosystem design, wh
 1. **Define a C2C Intelligence Envelope** — a common read-side contract (type · subject · source · confidence · severity · priority · evidence · freshness · expiry · status · provenance) that `Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, and `RadarEvent` each expose through, via a thin adapter per store. *Deliberately not* a physical schema migration — the five underlying models differ enough in real ways (e.g. `GuidanceSignal`'s decimal severity scoring vs. `RadarEvent`'s correlation shape) that forcing one table would lose fidelity. Consolidate the schemas later only if the envelope proves insufficient.
 2. **Converge the 3 priority-ranking engines into one deterministic ranking service.** This is not optional infrastructure — it is the actual computational core the [Attention Agent](#10-candidate-first-agents) needs, and today it's wrapped, not unified, by `priorityListPolicy.ts`.
 3. **Treat the event backbone as conditional, not mandatory.** Test whether BullMQ + `DomainEvent`'s existing poll cadence (10–30s) meets every real domain's latency and reliability needs first. Only add push-based pub/sub where a specific need — most plausibly `SAFETY_EMERGENCY`-tier signals — demonstrably can't tolerate that latency.
-4. **Extend `aiRequestGovernance.service.ts` into a real multi-provider LLM Gateway** before any agent is allowed to call a model directly. This is the literal capability the audit brief asks about, and the seed already exists.
+4. **Harden `aiRequestGovernance.service.ts` into a real LLM Gateway interface** — distributed rate-limit state, safety/content filtering, caching, and independent (not caller-asserted) verification of structured-vs-free-text mode — before any agent is allowed to call a model directly. Treat **a second provider** as a separate, conditional item: this audit found no measured Gemini outage, cost ceiling, or capability gap showing single-provider operation blocks the narrow, narration-only LLM use the [candidate agents](#10-candidate-first-agents) propose. Add one only once a real reliability, cost, or capability requirement is measured.
 5. **Resolve the two disagreeing HVAC verdicts.** An agent must not inherit contradictions that are already baked into its own inputs.
-6. **Wire the Skills registry's kill-switches for real**, and extend `releaseGate.service.ts`'s cohort/KPI gating — proven on tool rollout — to cover agent rollout the same way.
+6. **Extend `releaseGate.service.ts`'s cohort/KPI gating** — already proven on tool rollout — to cover agent rollout the same way, and tag every skill/operation with an autonomy level (§9.2) before any of them gain execute-not-just-recommend capability. *(The Skills registry's kill-switches are already wired at runtime — see the §4 correction — so this item is scoping and rollout gating, not activation plumbing.)*
 7. **Give `propertyContext` a formal, versioned, agent-facing contract** rather than relying on internal service-to-service imports, so agents don't couple directly to backend internals.
 8. **Add trace-level observability** across the `DomainEvent → job → service` chain, so an orchestrator's decisions remain debuggable as agent count grows.
 
@@ -347,6 +357,24 @@ The minimum architectural foundation — not the full agent ecosystem design, wh
 *Added 2026-08-25, after a second round of external review.* Everything above assumes agents pull intelligence primarily from C2C's own accumulated understanding of the home — not from asking a model what it thinks. This was implicit in the deterministic-first observations throughout this audit ([§3.1](#3-existing-agentic-building-blocks), [§4](#4-component-classification-matrix)'s `askResultSynthesis.service.ts` exemplar, Q6 of [§11](#11-final-conclusion)); it should be stated as an explicit rule Stage 3 is required to follow, not left implicit.
 
 > **C2C agents must be context-first and deterministic-first. An LLM is an escalation capability, not the intelligence engine.** Agents must exhaust trusted C2C context, domain services, rules, tools, and existing intelligence before invoking an LLM. LLM-generated output must never become authoritative C2C state without validation and provenance.
+
+### 9.2 Autonomy levels and the consequential-action boundary
+
+*Added after a third external review: this audit's readiness model measured context, queues, persistence, and LLM infrastructure, but had no model at all for the risk that actually defines "agentic" — how much unsupervised action an agent is allowed to take. That gap is fixed here, not left to Stage 3 to discover on its own.*
+
+Score and scope every candidate agent against where it sits on this ladder, not just against the ten dimensions in [Section 5](#5-agentic-readiness-score):
+
+| Level | What the agent does | Reversibility | Example from §10 |
+|---|---|---|---|
+| 0 — Observe | Reads and monitors state; produces no output change a homeowner or another system sees. | N/A | A watcher's internal materiality check before it decides anything is worth surfacing. |
+| 1 — Recommend | Surfaces or ranks items for a human to act on; never acts itself. | N/A (no action taken) | The Attention Agent's ranking + hand-off; the External Signal Watcher's surfacing. |
+| 2 — Draft | Prepares a specific action, message, or document but does not send or commit it. | Fully — nothing has happened yet | An agent drafting a vendor message a homeowner must approve and send. |
+| 3 — Execute (reversible, internal) | Performs an action inside C2C's own system that a human can undo. | High — undo path exists | Snoozing a reminder, updating a checklist item, re-running a recompute. |
+| 4 — Execute (consequential or external) | Commits to something irreversible, external-facing, or materially costly. | Low or none | Submitting a claim, contacting a vendor on the homeowner's behalf, authorizing a purchase. |
+
+**Level 4 is explicitly out of scope today**, not by omission but by existing product decision: the Ask FRD lists "an autonomous agent with permission to make material decisions or external commitments" as a non-goal, and "automatic provider, lender, insurer, or third-party data transmission without separately authorized workflows" as a separate non-goal (`docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md`, §6.2). The Skill Platform FRD independently requires that confirmation and authorization stay intact rather than being absorbed into the platform (`docs/product/CONTRACTTOCOZY_SKILL_PLATFORM_FRD.md`, §1). Every candidate in [Section 10](#10-candidate-first-agents) targets Level 0–2 today; none proposes Level 3 or 4.
+
+What already exists covers Levels 0–2 reasonably well: the Skills registry's runtime-enforced kill-switches, Ask's confirmation/authorization layer, and `decisionPlatform`'s commitment gating. **None of it was built for Level 3, and nothing in the codebase addresses Level 4.** Before any agent is allowed past Level 2, it needs, at minimum: an idempotency key per action (so a retried job can't double-execute), a per-agent action budget/rate limit, a recorded reversal path, a human-escalation hook for ambiguous or out-of-policy cases, and audit-linked provenance connecting the action back to the specific context and decision that produced it. None of these exist today because nothing in the current codebase needs them yet — they're a genuine Stage 3 deliverable, not a hidden gap in what's already built.
 
 The default execution path, and the escalation ladder above it:
 
@@ -367,39 +395,44 @@ The 3–5 strongest candidates supported by what already exists — not an imple
 
 ### 1. Home Intelligence Watcher / Attention Agent
 *LLM: "why this, why now" narration only — the ranking itself stays deterministic*
+**Autonomy level targeted: 0–1 (Observe → Recommend).** It watches and judges materiality, then hands off — it never acts on the homeowner's behalf.
 
 - **Business value:** Directly answers C2C's core promise — "tell me what needs my attention" — proactively, across every domain at once, instead of per-feature.
 - **Existing capabilities reused:** `homeActions.service.ts`'s ranker, `radarPriority.ts`, `guidancePriority.service.ts`, and `priorityListPolicy.ts`'s eligibility/suppression/consent/budget gate — the deterministic "what matters" computation already exists three times over.
 - **Missing pieces:** This is the one candidate whose prerequisite work is itself [§9](#9-recommended-foundation-before-agents)'s foundation — the 3 ranking engines must converge into one service, and it needs the C2C Intelligence Envelope to consume `Signal`/`GuidanceSignal`/`RadarEvent`/etc. uniformly, before the agent has anything coherent to watch.
-- **Why an agent, not a service:** The unified ranker is a service, full stop — deterministic, no LLM needed for the ranking itself. What makes this an *agent* is wrapping that service in continuous background execution (via the existing BullMQ/cron substrate) that watches for state changes across the whole property, decides materiality, and only then hands off to the notification policy layer — a standing background process making an ongoing judgment call, not a request/response calculation. The LLM's only job is explaining the "why" in the same disciplined, verified-facts-only pattern as `askResultSynthesis.service.ts`.
+- **Why an agent, not a service** (per the [§3.2](#32-what-this-audit-means-by-agent) definition — goal pursuit under governed autonomy, not scheduling): The unified ranker is a service, full stop — deterministic, no LLM needed for the ranking itself, and running it on a schedule doesn't change that. What makes the *surrounding* layer an agent is the materiality judgment across heterogeneous, changing state — deciding *whether* and *when* something newly crosses a threshold worth surfacing, then choosing to hand off — not the background execution itself. The LLM's only job is explaining the "why" in the same disciplined, verified-facts-only pattern as `askResultSynthesis.service.ts`.
 - **How it composes with the specialist below:** When the Attention Agent surfaces an HVAC-related item, it hands off to the HVAC Repair/Replace Advisor Agent for the deeper, multi-step decision-support conversation — establishing the generalist-detects → specialist-advises hierarchy the rest of the agent roster should follow.
 
 ### 2. HVAC Repair/Replace Advisor Agent
 *LLM: explanation & dialogue only*
+**Autonomy level targeted: 1–2 (Recommend → Draft).** It compares options and can draft a recommendation for the homeowner; it does not commit to a repair, replacement, or vendor engagement itself.
 
 - **Business value:** The highest-stakes, highest-friction homeowner decision already modeled end-to-end in the codebase; the natural first specialist the Attention Agent hands off to.
 - **Existing capabilities reused:** Full DecisionThread lifecycle, calibrated weighted scoring engine, RecommendationSnapshot lineage, outcome attribution.
 - **Missing pieces:** Resolve the two competing verdict engines first; wire the currently one-way outcome → calibration learning loop.
-- **Why an agent, not a service:** The reasoning already spans multi-step context gathering, option comparison, and calibrated confidence — an agent can drive the conversational "gather missing context, compare, explain" loop a user currently has to drive manually.
+- **Why an agent, not a service:** The reasoning already spans multi-step context gathering, option comparison, and calibrated confidence — an agent can drive the conversational "gather missing context, compare, explain" loop a user currently has to drive manually. Multi-step tool selection under a goal, not the presence of a conversation, is what makes this agentic.
 
 ### 3. External Signal Watcher Agent
 *LLM: optional, explanation only*
+**Autonomy level targeted: 0–1 (Observe → Recommend).** It reconciles external sources and surfaces findings; it takes no external or committing action.
 
 - **Business value:** Proactively surfaces refinance opportunities, price anomalies, and environmental/regulatory events without a user-initiated query.
 - **Existing capabilities reused:** BullMQ ingest/match pipeline, Radar source-health governance, the full notification eligibility/suppression/consent/budget stack.
-- **Missing pieces:** Converge the 3 independent radar engines first, or scope the initial agent to Home Event Radar only.
-- **Why an agent, not a service:** Genuinely continuous and autonomous — reconciling heterogeneous external sources and judging materiality is closer to a background daemon with judgment than a fixed cron job.
+- **Missing pieces:** Full convergence of the 3 independent radar engines is conditional, not required to start — [§12](#12-inputs-required-for-stage-3--c2c-intelligence--agentic-evolution-architecture) allows scoping the initial agent to Home Event Radar alone and converging the other two later.
+- **Why an agent, not a service:** Reconciling heterogeneous external sources and judging materiality across sources it doesn't fully control is a goal-directed, bounded-planning task — not because it runs continuously, but because *what to check next and whether it matters* isn't a fixed formula the way a single ranking calculation is.
 
 ### 4. Ask Concierge Agent
 *LLM: fallback tier + clarification*
+**Autonomy level targeted: 1–2 (Recommend → Draft), bounded by Ask's existing confirmation layer for anything that would otherwise reach Level 3+.**
 
 - **Business value:** The product's actual chat surface, already carrying 65 operations, entity resolution, and trust/audience policy.
-- **Existing capabilities reused:** `askOperationRegistry`, the trust/audience policy layer, the Skills registry, the verified-summarization pattern from `askResultSynthesis`.
-- **Missing pieces:** A real LLM-backed reasoning stage behind today's deterministic router (the `REMOTE_FALLBACK` stage name exists, unwired); Skills kill-switches need real wiring first.
+- **Existing capabilities reused:** `askOperationRegistry`, the trust/audience policy layer, the Skills registry (kill-switches already wired at runtime — see the §4 correction), the verified-summarization pattern from `askResultSynthesis`.
+- **Missing pieces:** A real LLM-backed reasoning stage behind today's deterministic router (the `REMOTE_FALLBACK` stage name exists, unwired); each skill/operation this agent can reach should be tagged with an autonomy level (§9.2) before it's exposed.
 - **Why an agent, not a service:** This is the one place the product already anticipated an agent shape — routing stages, confidence bands, an eval corpus. Extending it is lower-risk than building a new agent from nothing.
 
 ### 5. Document Intelligence Agent
 *LLM: core — vision + language*
+**Autonomy level targeted: 1–2 (Recommend → Draft).** It classifies, extracts, and flags; a human reviews before any extracted fact becomes authoritative property data.
 
 - **Business value:** Every document upload (insurance, inspection, inventory, permits, tax, negotiation) currently reimplements its own OCR/extraction call.
 - **Existing capabilities reused:** The shared `ExtractionEnvelope` contract, `documentPromotionAdapterRegistry`'s self-audit of adapter coverage, the `ExtractedFactCandidate` review workflow.
@@ -408,6 +441,7 @@ The 3–5 strongest candidates supported by what already exists — not an imple
 
 ### 6. Property Health Score Reconciler Agent *(lower priority)*
 *LLM: explanation layer only*
+**Autonomy level targeted: 1 (Recommend).** It reconciles conflicting scores into one explained verdict; it doesn't act on that verdict.
 
 - **Business value:** 4 independent risk/scoring paths can produce inconsistent signals about the same property.
 - **Existing capabilities reused:** `PropertyScoreSnapshot`, the Signal bus (already consumed by `riskPremiumOptimizer`), `IntelligenceRecomputeRun` for staleness.
@@ -481,17 +515,20 @@ graph TB
 **Reusable substrate**
 `modules/propertyContext` as the shared-context API surface; BullMQ/cron/`CronJobLock` as the execution substrate; `aiRequestGovernance.service.ts` as the Gateway seed; `services/skills/` as the tool-manifest seed; the notification policy stack as the interruption gate.
 
-**Must unify first**
-The 5 intelligence subsystems behind one C2C Intelligence Envelope (a read-side contract, not a physical schema merge — see the 2026-08-25 revision note at the top of this document); the 3 priority-ranking engines (this is also literally the Attention Agent's computational core); the 3 Radar pipelines; the 2 disagreeing HVAC verdicts. Stage 3 should treat these as prerequisites, not as things agents can route around.
+**Must unify first — no candidate agent can route around these**
+The 5 intelligence subsystems behind one C2C Intelligence Envelope (a read-side contract, not a physical schema merge — see the 2026-08-25 revision note at the top of this document); the 3 priority-ranking engines into one service (this is also literally the Attention Agent's computational core); the 2 disagreeing HVAC verdicts.
+
+**Conditional on scale — can be scoped down to start**
+Full convergence of the 3 Radar pipelines. [§10](#10-candidate-first-agents)'s External Signal Watcher candidate explicitly allows starting scoped to Home Event Radar alone and converging `refinanceRadar`/`servicePriceRadar` later, once a second watcher domain actually needs them — this is important work, not a hard prerequisite for a first, narrower agent.
 
 **Genuinely new**
-Multi-provider abstraction in the LLM Gateway; safety/content filtering; an orchestrator-level agent coordination layer; distributed tracing across the async chain. A push-based event backbone moved from this list to conditional — see below.
+LLM Gateway interface hardening (distributed rate-limit state, caching, independent structured-vs-free-text verification) and safety/content filtering; an orchestrator-level agent coordination layer; an explicit autonomy-level and consequential-action model (§9.2); distributed tracing across the async chain. A second LLM provider and a push-based event backbone both moved from this list to conditional — see below.
 
 **Conditional, not assumed**
-A real event bus / pub-sub. Nothing in the domains this audit examined (weather alerts, refinance opportunities, maintenance, price benchmarks) needs sub-minute reaction time, and BullMQ + the `DomainEvent` poller already provide durable, governed 10–30s-latency delivery. Stage 3 should test the existing infrastructure against real requirements — including any `SAFETY_EMERGENCY`-tier exception — before specifying new event plumbing.
+A real event bus / pub-sub — nothing in the domains this audit examined (weather alerts, refinance opportunities, maintenance, price benchmarks) needs sub-minute reaction time, and BullMQ + the `DomainEvent` poller already provide durable, governed 10–30s-latency delivery; test the existing infrastructure against real requirements — including any `SAFETY_EMERGENCY`-tier exception — before specifying new event plumbing. A second LLM provider — no measured Gemini outage, cost ceiling, or capability gap in this audit shows single-provider operation blocks the narration-only use §10 proposes; add one only once a real requirement is measured.
 
 **Proven governance patterns to extend**
-`releaseGate.service.ts`'s KPI-gated cohort rollout (proven on tool rollout) as the model for agent rollout; Tool Discovery's real, drill-tested kill-switches as the model for the Skills registry's currently-unwired ones; `workerJobRegistry.ts`'s startup parity enforcement as the model for agent-registration validation.
+`releaseGate.service.ts`'s KPI-gated cohort rollout (proven on tool rollout) as the model for agent rollout; Tool Discovery's real, drill-tested kill-switches as the reference pattern for gating future execute-tier (Level 3+) capabilities the same way the Skills registry already gates recommend-tier ones at runtime; `workerJobRegistry.ts`'s startup parity enforcement as the model for agent-registration validation.
 
 **Strongest first-agent candidates**
 The Home Intelligence Watcher / Attention Agent leads — it's the unified ranking engine already required by "must unify first" above, wrapped in continuous background execution, and it proves C2C's Job 1 (noticing something before being asked) rather than assisting an already-initiated decision. HVAC Repair/Replace Advisor is its first specialist hand-off target. Ask Concierge extends an existing, evidence-rich subsystem. Document Intelligence is the strongest multi-step-reasoning proof point.
@@ -501,6 +538,26 @@ Every agent designed in Stage 3 is context-first and deterministic-first by defa
 
 **Constraints to design within**
 No production-user migration constraint (confirmed) — but real working code exists at every layer and should not be discarded. Preserve the frontend's thin-client boundary.
+
+---
+
+## 13. Evidence & Confidence Appendix
+
+*Added after a third external review, which found two claims in earlier drafts that didn't match the code (see the 2026-08-26 correction notes throughout this document). A compact sample of this audit's highest-stakes claims, their source, how each was checked, and how confident this audit is in it — not exhaustive, but enough to spot-check the rest of the document's method.*
+
+| Claim | Source | Method | Confidence |
+|---|---|---|---|
+| Skills registry kill-switches are read and enforced at runtime, not dormant | `askOperationalControls.ts:78-82` (`skillEnabled()`), wired into `askOrchestrator.service.ts`'s `resolveHierarchicalSkillRouting` call; covered by `tests/ask/skillPlatformFoundation.test.js` | Direct source read + grep for the call site + confirmed an existing test asserts the binding | High |
+| `propertyAppreciation.service.ts` calls an undefined `google.search()`, which throws and is caught, but the AI valuation call still runs afterward | `propertyAppreciation.service.ts:143-153` (search block), `:156-166` (valuation call passes through regardless) | Direct source read of the full function body, not just the failing call | High |
+| 16 of 18 Gemini call sites request structured JSON; 2 (Ask chat, document transcription) are deliberately free-text | `gemini.service.ts:137` (`sendMessage`, no schema), `documentIntelligence.service.ts:255` (`extractFullText`, no schema); other call sites confirmed via `structuredOutputRequired: true` at each site | Grep across all `executeGovernedAIRequest` call sites, spot-read each | High |
+| Governance trusts a caller-supplied `structuredOutputConfigured` flag rather than inspecting the actual request | `aiRequestGovernance.service.ts:122-131` — the check is `if (input.structuredOutputRequired && !input.structuredOutputConfigured)` against caller-passed booleans | Direct source read | High |
+| The two HVAC decision engines can and do disagree — acknowledged in the code itself | `decisionThreadService.ts:209-226` | Direct source read of the comment and surrounding logic | High |
+| `modules/propertyContext` has 27+ real call sites | grep across `apps/backend/src` for `getPropertyContext` imports/calls | Grep count, not a claimed exhaustive enumeration | Medium — an approximate count, not a verified unique-caller list |
+| Ask FRD treats "an autonomous agent with permission to make material decisions or external commitments" as an explicit non-goal | `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md`, §6.2 (line 305 area) | Direct doc read | High |
+| Skill Platform FRD requires confirmation and authorization to stay intact, not be absorbed into the platform | `docs/product/CONTRACTTOCOZY_SKILL_PLATFORM_FRD.md`, §1 (line 32 area) | Direct doc read | High |
+| `CronJobLock` exists specifically to stop the 2 k8s worker replicas from double-firing the same tick | `cronExecutionCoordinator.ts` + `CronJobLock` Prisma model usage | Direct source read | High |
+
+For any claim not in this table, treat this audit's confidence as the same "read the actual code, not the docs" method described in [§11, Q7](#11-final-conclusion) — but without the explicit spot-check this appendix provides, verify before treating it as load-bearing for an implementation decision.
 
 ---
 
