@@ -324,7 +324,7 @@ Evidence-based estimate of what the classification matrix implies at the scale o
 | **35%** | Remains unchanged | Frontend presentation layer, background scheduling substrate, permit/tax adapters, logging/audit, Ask trust/audience policy layer, notification policy stack. |
 | **30%** | Refactored | Radar-triad convergence, ranking-engine unification, context-wrapper dedup, controller/service boundary cleanup, external-adapter generalization. |
 | **15%** | Becomes shared intelligence infrastructure | The 5 intelligence schemas generalized into one insight store; `propertyContext` formalized as an agent-facing API; `aiRequestGovernance` extended into a full Gateway. |
-| **15%** | New development | A real event bus, orchestrator-level agent coordination, LLM provider abstraction, safety/content filtering, agent-specific admin surfaces. |
+| **15%** | New development | Orchestrator-level agent coordination, LLM provider abstraction, safety/content filtering, agent-specific admin surfaces, plus event-infrastructure enhancements *only if* validation shows the existing BullMQ/DomainEvent poll cadence is insufficient. |
 | **5%** | Retired | The losing HVAC verdict engine (once reconciled), duplicate Radar code (once converged), dormant `homeIntelligenceGraph.ts` if left unwired, the broken `google.search()` path, the dead frontend `store/` and `adapters/` directories. |
 
 ---
@@ -433,7 +433,7 @@ Incremental evolution is not just preferable here, it's what the evidence suppor
 `modules/propertyContext`, the decision-lineage and commitment-gating machinery in `decisionPlatform`, the BullMQ/cron/`CronJobLock` scheduling substrate, `aiRequestGovernance.service.ts`, the notification eligibility/suppression policy stack, the Skills manifest contract, and the disciplined logging/audit trail. These were built well, and an agentic layer should sit on top of them, not around them.
 
 **Q5 — What foundational capabilities must exist before agents?**
-The seven items in [Section 9](#9-recommended-foundation-before-agents) — most centrally, a unified insight shape, a real event backbone, and a genuine LLM Gateway. None of these are green-field: each has a real seed in the current code that needs extending, not inventing.
+The eight items in [Section 9](#9-recommended-foundation-before-agents) — most centrally, the C2C Intelligence Envelope, unified priority ranking, a genuine LLM Gateway, and validation that the existing event infrastructure (BullMQ + `DomainEvent`) actually meets agentic execution requirements before building anything new. None of these are green-field: each has a real seed in the current code that needs extending, not inventing.
 
 **Q6 — What should explicitly not be changed?**
 The deterministic-first discipline already visible in the Ask trust, audience, and synthesis layers — LLM calls used narrowly, for phrasing verified facts, with a hallucination guard that actually throws. That pattern should be the template every future agent follows, not a constraint an agentic redesign loosens. Also worth leaving alone: the frontend's thin-client design, and the background-job governance model, both of which are already agent-ready as they stand.
@@ -475,6 +475,8 @@ graph TB
   ATT -.only when narrating.-> GATE --> LLM
   SPEC -.only when explaining/dialoguing.-> GATE
 ```
+
+> **Not a fixed topology — open for Stage 3.** The diagram above traces one common path, not a mandated pipeline. Locking a single directional flow here would itself be premature target-architecture design, which this audit's own scope excludes. At minimum, Stage 3 needs to design for interaction *patterns*, not one route: **Attention → Specialist** (attention detects something needing deeper analysis), **Specialist → Envelope → Attention** (a specialist independently surfaces something significant, and attention needs to know), and **User/Ask → Specialist directly** (the homeowner initiates the decision themselves, bypassing attention entirely). All three are equally real given what already exists in Ask and Decision Platform today.
 
 **Reusable substrate**
 `modules/propertyContext` as the shared-context API surface; BullMQ/cron/`CronJobLock` as the execution substrate; `aiRequestGovernance.service.ts` as the Gateway seed; `services/skills/` as the tool-manifest seed; the notification policy stack as the interruption gate.
