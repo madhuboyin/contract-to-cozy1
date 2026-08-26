@@ -1417,14 +1417,18 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       // first message — a later follow-up isn't an entry-point event.
       const isFirstMessage = executions.length === 0;
       const response = await api.createAskExecution({
-        clientRequestId: newId(), sessionId, message, propertyId: selectedPropertyId ?? null,
+        clientRequestId: newId(), sessionId, message, propertyId: promptContext?.propertyId ?? selectedPropertyId ?? null,
         launchContext: {
           surface: (isFirstMessage && launchSurface) || (mode === 'page' ? 'ASK_PAGE' : 'GLOBAL_LAUNCHER'),
           capabilityId: promptContext?.capabilityId ?? (isFirstMessage && launchCapabilityId ? launchCapabilityId : undefined),
           entityType: promptContext?.entityType,
           entityId: promptContext?.entityId,
           actionId: promptContext?.actionId,
-          returnTo: safeBackTo || null,
+          decisionThreadId: promptContext?.decisionThreadId,
+          workItemId: promptContext?.workItemId,
+          journeyId: promptContext?.journeyId,
+          contextVersion: promptContext?.contextVersion,
+          returnTo: promptContext?.returnTo ?? (safeBackTo || null),
         },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
@@ -1682,7 +1686,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
                   {execution.skillHandoff && (() => {
                     const handoffPrompt = execution.skillHandoff.suggestedGoal.replace(/[-_]+/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
-                    return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" onClick={() => { setInput(handoffPrompt); window.localStorage.setItem(draftStorageKey(selectedPropertyId), handoffPrompt); textareaRef.current?.focus(); }} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
+                    const continuity = execution.skillHandoff.continuity;
+                    return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(handoffPrompt, undefined, { propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
                   })()}
                   {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
                   <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} />

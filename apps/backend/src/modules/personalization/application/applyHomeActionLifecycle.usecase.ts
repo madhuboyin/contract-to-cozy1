@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 import { DISMISSED_SUPPRESSION_DAYS } from '../domain/feedbackPolicy';
+import { recordTypedFeedback } from '../../../services/feedback/typedFeedback.service';
 
 export type PersonalizationHomeCommand =
   | 'COMPLETE'
@@ -99,6 +100,23 @@ export async function applyPersonalizationHomeActionLifecycle(params: {
       },
       update: {},
     });
+    await recordTypedFeedback({
+      userId: params.userId,
+      propertyId: params.propertyId,
+      page: 'personalization',
+      rating: feedback.type === 'COMPLETED' ? 'up' : 'down',
+      comment: params.reason,
+      targetType: 'OTHER',
+      targetId: params.recommendationId,
+      surface: 'HOME',
+      reasonCodes: [
+        feedback.type === 'COMPLETED' ? 'USEFUL' : 'NOT_USEFUL',
+        ...(feedback.reasonCode === 'ALREADY_DONE' ? ['ALREADY_HANDLED' as const]
+          : feedback.reasonCode === 'BAD_TIMING' ? ['WRONG_TIMING' as const]
+            : feedback.reasonCode === 'NOT_APPLICABLE' ? ['NOT_APPLICABLE' as const] : []),
+      ],
+      capabilityId: 'personalization',
+    }, db);
 
     const completed = params.command === 'COMPLETE' || params.command === 'ALREADY_DONE';
     const temporary = params.command === 'DEFER' || params.command === 'SNOOZE' || params.command === 'DISMISS';

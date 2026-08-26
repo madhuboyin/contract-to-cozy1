@@ -949,6 +949,7 @@ function CompleteWorkDialog({
   propertyId,
   submitting,
   costRequired,
+  safetyTier,
   onSubmit,
 }: {
   open: boolean;
@@ -956,6 +957,7 @@ function CompleteWorkDialog({
   propertyId: string;
   submitting: boolean;
   costRequired: boolean;
+  safetyTier?: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
   onSubmit: (completion: {
     completionCostCents: number | null;
     completionDate: string;
@@ -974,6 +976,7 @@ function CompleteWorkDialog({
       propertyId={propertyId}
       submitting={submitting}
       costRequired={costRequired}
+      safetyTier={safetyTier}
       description={costRequired
         ? 'Material work needs a recorded cost before it can be marked done.'
         : 'Record when and how the work was completed, with optional notes and photos.'}
@@ -1166,6 +1169,7 @@ export function ActionCard({
                       ? ` · observed ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(evidence.observedAt))}`
                       : ''}
                     {` · ${evidence.freshness.toLowerCase()}`}
+                    {evidence.confidence != null ? ` · ${Math.round(evidence.confidence * 100)}% confidence` : ' · confidence unavailable'}
                   </span>
                 </li>
               ))}
@@ -1177,6 +1181,18 @@ export function ActionCard({
               <p className="mt-1 text-sm text-amber-800">{action.confidence.missing.join(' · ')}</p>
             </div>
           )}
+          {(() => {
+            const conflicted = Array.from(new Set([
+              ...(action.confidence.conflicted ?? []),
+              ...(action.presentation?.factGroups.flatMap((group) => group.facts.filter((fact) => fact.kind === 'CONFLICTED').map((fact) => fact.label)) ?? []),
+            ]));
+            return conflicted.length > 0 ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 md:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-rose-800">Conflicting information</p>
+                <p className="mt-1 text-sm text-rose-800">{conflicted.join(' · ')}</p>
+              </div>
+            ) : null;
+          })()}
           <HomeActionDecisionDetail
             action={action}
             propertyId={propertyId}
@@ -1305,6 +1321,7 @@ export function ActionCard({
           propertyId={propertyId}
           submitting={pending === 'COMPLETE'}
           costRequired={action.governance.safetyTier === 'MATERIAL_FINANCIAL'}
+          safetyTier={action.governance.safetyTier}
           onSubmit={(completion) => {
             setCompleteDialogOpen(false);
             void execute('COMPLETE', completion);

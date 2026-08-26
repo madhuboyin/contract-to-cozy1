@@ -73,7 +73,6 @@ export async function getPersonalizationQuality(
     recommendationRows,
     feedbackRows,
     profileAnswerRows,
-    calibrationRows,
     incidentRows,
   ] = await Promise.all([
     prisma.household.count({ where: { consentedAt: { gte: since }, consentVersion: { not: null } } }),
@@ -84,31 +83,26 @@ export async function getPersonalizationQuality(
       where: { lastEvaluatedAt: { gte: since } },
       _count: { _all: true },
     }),
-    prisma.recommendationFeedback.groupBy({
-      by: ['type', 'explicit', 'reasonCode'],
-      where: { createdAt: { gte: since } },
-      _count: { _all: true },
+    prisma.feedback.findMany({
+      where: { createdAt: { gte: since }, page: 'personalization' },
+      select: { targetId: true, reasonCodes: true },
     }),
     prisma.profileAnswer.groupBy({
       by: ['action'],
       where: { createdAt: { gte: since } },
       _count: { _all: true },
     }),
-    prisma.personalizedRecommendation.findMany({
-      where: { feedbackEvents: { some: { createdAt: { gte: since } } } },
-      select: {
-        confidence: true,
-        feedbackEvents: {
-          where: { createdAt: { gte: since } },
-          select: { type: true },
-        },
-      },
-    }),
     prisma.recommendationIncident.findMany({
       where: { createdAt: { gte: since } },
       select: { status: true, type: true, severity: true, createdAt: true, resolvedAt: true },
     }),
   ]);
+  const feedbackTargetIds = feedbackRows.flatMap((row) => row.targetId ? [row.targetId] : []);
+  const calibrationRows = feedbackTargetIds.length === 0 ? [] : await prisma.personalizedRecommendation.findMany({
+    where: { id: { in: feedbackTargetIds } },
+    select: { id: true, confidence: true },
+  });
+  const reasonsByRecommendation = new Map(feedbackRows.flatMap((row) => row.targetId ? [[row.targetId, new Set(row.reasonCodes)] as const] : []));
 
   const definitionIds = [...new Set(recommendationRows.map((row) => row.definitionId))];
   const definitions = definitionIds.length === 0
@@ -138,17 +132,16 @@ export async function getPersonalizationQuality(
   let reversals = 0;
   let corrections = 0;
   for (const row of feedbackRows) {
-    const count = countOf(row);
-    feedbackTotal += count;
-    if (row.explicit) explicit += count;
-    if (row.type === 'ACCEPTED') accepted += count;
-    if (row.type === 'NOT_RELEVANT' || row.type === 'DISMISSED') negative += count;
-    if (row.type === 'COMPLAINT') { complaints += count; negative += count; }
-    if (row.type === 'RECOMMENDATION_OVERRIDDEN') overrides += count;
-    if (row.type === 'RECOMMENDATION_REVERSED') { reversals += count; negative += count; }
-    if (row.type === 'PROFILE_CORRECTED') corrections += count;
-    if (row.reasonCode) reasons.set(row.reasonCode, (reasons.get(row.reasonCode) ?? 0) + count);
+    feedbackTotal += 1;
+    explicit += 1;
+    if (row.reasonCodes.includes('USEFUL')) accepted += 1;
+    if (row.reasonCodes.includes('NOT_USEFUL')) negative += 1;
+    for (const reasonCode of row.reasonCodes) reasons.set(reasonCode, (reasons.get(reasonCode) ?? 0) + 1);
   }
+  complaints = incidentRows.filter((row) => row.type === 'COMPLAINT').length;
+  overrides = incidentRows.filter((row) => row.type === 'OVERRIDE').length;
+  reversals = incidentRows.filter((row) => row.type === 'REVERSAL').length;
+  corrections = incidentRows.filter((row) => row.type === 'CALIBRATION').length;
 
   const decisionEvents = accepted + negative;
   const propertiesWithDefaultGuidance = new Set(
@@ -166,10 +159,9 @@ export async function getPersonalizationQuality(
     calibration.set(band, { confidenceTotal: 0, knownConfidence: 0, samples: 0, positive: 0 });
   }
   for (const row of calibrationRows) {
-    const types = new Set(row.feedbackEvents.map((event) => event.type));
-    const isNegative = ['NOT_RELEVANT', 'DISMISSED', 'COMPLAINT', 'RECOMMENDATION_REVERSED']
-      .some((type) => types.has(type));
-    const isPositive = ['ACCEPTED', 'COMPLETED'].some((type) => types.has(type));
+    const reasons = reasonsByRecommendation.get(row.id) ?? new Set<string>();
+    const isNegative = reasons.has('NOT_USEFUL');
+    const isPositive = reasons.has('USEFUL');
     if (!isNegative && !isPositive) continue;
     const band = row.confidence == null ? 'UNKNOWN' : row.confidence < 0.55 ? 'LOW' : row.confidence < 0.8 ? 'MEDIUM' : 'HIGH';
     const accumulator = calibration.get(band)!;

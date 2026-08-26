@@ -292,7 +292,7 @@ export type ActivationHomeActionDTO = {
     };
     evidence: Array<{ id: string; label: string; source: string; observedAt?: string | null; freshness: string; confidence: number | null }>;
     assumptions: Array<{ key: string; label: string; value: string; editable: boolean }>;
-    confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; missing: string[] };
+    confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; missing: string[]; conflicted?: string[] };
     primaryCta: { kind?: string; label: string; href: string };
     secondaryCtas: Array<{ kind?: string; label: string; href: string }>;
 };

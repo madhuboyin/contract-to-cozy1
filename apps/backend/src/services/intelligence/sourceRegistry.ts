@@ -20,6 +20,7 @@ export interface IntelligenceSourceRegistryEntry {
 
 const ai = (sourceId: string, sourceFile: string, capabilityConsumers: readonly string[], fallbackBehavior: string): IntelligenceSourceRegistryEntry => ({
   sourceId, kind: 'AI', owner: 'AI Platform', capabilityConsumers, freshnessSlaSeconds: 0,
+  healthEntityType: 'AI_SOURCE', recomputeConsumerKeys: ['home-actions', 'capability-suggestions'],
   credentialConfigRequirements: ['GEMINI_API_KEY'], retryPolicy: { maxAttempts: 2, backoffMs: 250 }, fallbackBehavior,
   userVisibleDegradationMessage: 'Generated intelligence is temporarily unavailable. Record-based information remains available.',
   operationalRunbook: 'docs/operations/AI_REQUEST_GOVERNANCE_RUNBOOK.md', sourceFile,
@@ -61,7 +62,7 @@ export function validateIntelligenceSourceRegistry(entries: readonly Intelligenc
     ids.add(entry.sourceId);
     if (!entry.owner.trim()) issues.push(`${entry.sourceId}: missing owner`);
     if (!entry.capabilityConsumers.length) issues.push(`${entry.sourceId}: missing capability consumers`);
-    if (entry.kind === 'EXTERNAL' && (!entry.healthEntityType || !entry.recomputeConsumerKeys?.length)) {
+    if (!entry.healthEntityType || !entry.recomputeConsumerKeys?.length) {
       issues.push(`${entry.sourceId}: missing source-health recompute mapping`);
     }
     if (entry.freshnessSlaSeconds < 0) issues.push(`${entry.sourceId}: invalid freshness SLA`);

@@ -283,17 +283,16 @@ export async function saveOwnershipHorizonPreference(
         status: 'ACTIVE', supersedesId: previous?.id ?? null,
       },
     });
+    await emitDecisionPreferenceChange({
+      propertyId: null, definitionId: 'OWNERSHIP_HORIZON', subjectType: 'HOUSEHOLD', subjectId: household.id,
+      preferenceValueId: created.id, action: previous ? 'SAVED_REVISED' : 'SAVED_NEW',
+    }, tx);
     return { preferenceValueId: created.id, isNew: !previous };
   });
 
   // propertyId: null here -- OWNERSHIP_HORIZON is household-wide (see
   // decisionPlatformChangeEmitter.ts's guard), so this is a documented no-op
   // today, not silently skipped logic.
-  await emitDecisionPreferenceChange({
-    propertyId: null, definitionId: 'OWNERSHIP_HORIZON', subjectType: 'HOUSEHOLD', subjectId: household.id,
-    preferenceValueId: result.preferenceValueId, action: result.isNew ? 'SAVED_NEW' : 'SAVED_REVISED',
-  });
-
   return { preferenceValueId: result.preferenceValueId };
 }
 
@@ -322,12 +321,11 @@ export async function saveRepairReplaceApproachPreference(
         status: 'ACTIVE', supersedesId: previous?.id ?? null,
       },
     });
+    await emitDecisionPreferenceChange({
+      propertyId, definitionId: 'REPAIR_REPLACE_APPROACH', subjectType: 'USER', subjectId: userId,
+      preferenceValueId: created.id, action: previous ? 'SAVED_REVISED' : 'SAVED_NEW',
+    }, tx);
     return { preferenceValueId: created.id, isNew: !previous };
-  });
-
-  await emitDecisionPreferenceChange({
-    propertyId, definitionId: 'REPAIR_REPLACE_APPROACH', subjectType: 'USER', subjectId: userId,
-    preferenceValueId: result.preferenceValueId, action: result.isNew ? 'SAVED_NEW' : 'SAVED_REVISED',
   });
 
   return { preferenceValueId: result.preferenceValueId };
@@ -355,19 +353,16 @@ export async function revokeHvacPreference(preferenceValueId: string, userId: st
     const references = await tx.decisionThreadPreferenceReference.findMany({
       where: { preferenceValueId: value.id }, select: { decisionThreadId: true },
     });
+    await emitDecisionPreferenceChange({
+      propertyId: value.propertyId, definitionId: value.definitionId,
+      subjectType: value.subjectType, subjectId: value.subjectId,
+      preferenceValueId: value.id, action: 'REVOKED',
+    }, tx);
     return {
       affectedThreadIds: [...new Set(references.map((reference) => reference.decisionThreadId))],
       revoked: value,
     };
   });
-
-  if (result.revoked) {
-    await emitDecisionPreferenceChange({
-      propertyId: result.revoked.propertyId, definitionId: result.revoked.definitionId,
-      subjectType: result.revoked.subjectType, subjectId: result.revoked.subjectId,
-      preferenceValueId: result.revoked.id, action: 'REVOKED',
-    });
-  }
 
   return { affectedThreadIds: result.affectedThreadIds };
 }

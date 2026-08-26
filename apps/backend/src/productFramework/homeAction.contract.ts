@@ -217,6 +217,7 @@ export const HomeActionSchema = z.object({
     score: ConfidenceRatioSchema,
     label: z.enum(['LOW', 'MEDIUM', 'HIGH']),
     missing: z.array(z.string().trim().min(1).max(240)).max(30),
+    conflicted: z.array(z.string().trim().min(1).max(240)).max(30).optional(),
   }),
   recommendationResponse: RecommendationResponseContractSchema,
   governance: RecommendationGovernanceSchema,

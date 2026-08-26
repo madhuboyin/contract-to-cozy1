@@ -208,6 +208,12 @@ async function applyCanonicalLifecycle(
       explicit: input.type !== 'OPENED',
       reasonCode: input.reasonCode ?? null,
       reportedByUserId: input.userId,
+      surface: input.surface === 'HOME' ? 'HOME' : 'TOOL',
+      targetType: 'CAPABILITY_SUGGESTION',
+      targetId: input.suggestionId,
+      contextVersion: input.contextVersion,
+      capabilityId: input.capabilityId,
+      capabilityVersion: String(input.manifestVersion),
     });
     if (result.status === 'RECOMMENDATION_NOT_FOUND') {
       throw new Error('Personalization recommendation was not found.');

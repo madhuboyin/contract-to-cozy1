@@ -198,19 +198,17 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(threadId);
 
       const change = previousSnapshot ? compareRecommendationSnapshots(previousSnapshot, newSnapshot, []) : null;
+      await emitDecisionRecommendationChange({
+        propertyId: current.propertyId,
+        decisionThreadId: threadId,
+        snapshotId: newSnapshot.id,
+        generatedAt: newSnapshot.generatedAt,
+        isFirstSnapshot: false,
+        category: change?.category ?? null,
+      }, tx);
       return { thread: await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } }), change, recomputed: true };
     });
 
-    if (result.recomputed && result.thread.currentRecommendationSnapshotId) {
-      await emitDecisionRecommendationChange({
-        propertyId: result.thread.propertyId,
-        decisionThreadId: threadId,
-        snapshotId: result.thread.currentRecommendationSnapshotId,
-        generatedAt: new Date(),
-        isFirstSnapshot: false,
-        category: result.change?.category ?? null,
-      });
-    }
     // Phase 3 review finding 3: record durably regardless of whether this
     // resume produced a new snapshot -- a no-op (unchanged digest) resume
     // is still a real "this Home Action version was open against this
@@ -269,6 +267,15 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
           });
         }
 
+        await emitDecisionRecommendationChange({
+          propertyId: input.propertyId,
+          decisionThreadId: updatedThread.id,
+          snapshotId: snapshot.id,
+          generatedAt: snapshot.generatedAt,
+          isFirstSnapshot: true,
+          category: null,
+        }, tx);
+
         return { thread: updatedThread, snapshot };
       });
     } catch (error: any) {
@@ -284,14 +291,6 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       throw error;
     }
 
-    await emitDecisionRecommendationChange({
-      propertyId: input.propertyId,
-      decisionThreadId: result.thread.id,
-      snapshotId: result.snapshot.id,
-      generatedAt: result.snapshot.generatedAt,
-      isFirstSnapshot: true,
-      category: null,
-    });
     // Phase 3 review finding 3: also recorded on creation, not only resume
     // — the first snapshot already embeds origin in its own
     // signalReferences, but the durable link table is the one source

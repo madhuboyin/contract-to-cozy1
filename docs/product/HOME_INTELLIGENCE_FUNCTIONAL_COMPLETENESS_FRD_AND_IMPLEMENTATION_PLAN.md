@@ -1322,6 +1322,23 @@ Remaining Phase 8 scope: item 2 (legacy completion UI / dead orchestration prese
 
 Static verification completed with backend and frontend `tsc --noEmit`, Prisma validation and client generation, the generated Phase 0 registry parity artifact, targeted ownership/reconciliation tests, repository searches for the removed models/routes/readers, and `git diff --check`. The schema removals require a schema-owner migration; per repository policy, no migration script was created.
 
+### One-time functional-completeness audit remediation (2026-08-25)
+
+The bounded, comprehensive implementation audit requested on 2026-08-25 is closed by the following remediation. This is a one-time closure record, not an open-ended rolling findings list. The review prioritized seamless end-to-end behavior and direct code-path tracing over test-case pass counts.
+
+| Audited gap | Remediated behavior |
+| --- | --- |
+| Cozy Skill handoff dropped continuity after the backend produced it | The Ask request/response contracts and frontend now preserve property/source action, Decision Thread, Operational Work Item, journey, context version, and return destination. Selecting the handoff starts the next skill with that continuity instead of reducing it to prompt text. |
+| Personalization maintained a second active feedback interpretation path | Explicit homeowner personalization events now write the canonical typed `Feedback` row atomically with the append-only `RecommendationFeedback` lifecycle/suppression event. Home Action lifecycle commands use the same path, and personalization quality interpretation reads typed feedback; the legacy table remains only the domain lifecycle/suppression ledger. |
+| Work lifecycle recompute publication was best-effort | Candidate creation and every work transition now run in a Prisma transaction that also records the work event, `PropertyChange`, and recompute `DomainEvent`. Decision recommendation snapshots and property-scoped preference changes use the same transactional emission contract. |
+| Reopen and maintenance deletion could commit contradictory domain state | Reopen dispatch is transaction-aware and fails the entire transition if a linked maintenance/guidance/project/execution role cannot reconcile. Maintenance-task deletion closes its Operational Work Item and deletes the task in one transaction; neither side can commit alone. |
+| Completion capture used one universal form and mislabeled PDFs as photos | The shared completion dialog now adapts cost, fulfillment/provider, result, and evidence fields to safety tier and obligation type; required provider identity is enforced for provider work. Images upload as `PHOTO`; PDFs upload as `OTHER` document evidence. |
+| Decision detail omitted evidence confidence and conflicted context | Home Action confidence can carry explicit `conflicted` facts; the detail UI also derives conflicts from presentation fact groups, shows them separately from missing context, and labels every evidence item with numeric confidence or an honest unavailable state. |
+| Two compound integrations were incomplete | Inspection findings retain one canonical action but are enriched by an active sale case, milestone timing, and sale-readiness evidence. Inspection/coverage correlation now includes both reviewed warranties and confirmed, system-specific insurance policy facts without inferring loss cause or promising coverage. |
+| AI health was visible only in an in-memory/admin projection | Every AI registry entry now declares `AI_SOURCE` health ownership and exact affected consumer keys. Governed AI route health transitions emit property-scoped `PropertyChange` rows and recompute requests; failed publication remains pending and is retried by the next request instead of advancing the emission cursor. Home Actions and capability suggestions consume the health trigger. |
+
+Verification for this remediation used Graphify-assisted requirement/path tracing, backend and frontend `tsc --noEmit`, Prisma validation, registry validation through the existing startup/static contracts, `git diff --check`, and focused inspection of every changed write/read boundary. Per the repository execution policy, no services, database, seeded users, or browser test environment were started, and no claim is made that these paths were runtime-executed in an unavailable environment.
+
 ---
 
 ## 16. Delivery sequencing and parallel work

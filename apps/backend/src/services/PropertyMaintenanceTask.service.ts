@@ -1282,9 +1282,9 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       // it dangles as an orphaned ACCEPTED item forever. "Not relevant" is
       // an imprecise fit for "deleted" (no disposition value means exactly
       // that), but it is the closest of the four available.
-      try {
+      await prisma.$transaction(async (tx) => {
         const workKey = resolveMaintenanceTaskWorkKey(task, task.propertyId);
-        const existing = await findWorkItemByWorkKey(task.propertyId, workKey);
+        const existing = await findWorkItemByWorkKey(task.propertyId, workKey, tx);
         if (existing && existing.state !== 'CLOSED') {
           await transitionWorkItem({
             workItemId: existing.id,
@@ -1293,14 +1293,11 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
             actorType: 'USER',
             actorUserId: userId,
             idempotencyKey: `maintenance-task-deleted:${taskId}`,
-          });
+          }, tx);
         }
-      } catch (err) {
-        logger.warn({ err, taskId }, 'Home Operations work item close-on-delete failed; task deletion proceeds regardless');
-      }
-
-      await prisma.propertyMaintenanceTask.delete({
-        where: { id: taskId },
+        await tx.propertyMaintenanceTask.delete({
+          where: { id: taskId },
+        });
       });
     }
   

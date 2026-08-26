@@ -49,6 +49,17 @@ export * from './sourceRegistry';
  */
 export function validateIntelligenceRegistries(): string[] {
   const guidanceJourneyTypeKeys = new Set(listGuidanceTemplates().map((template) => template.journeyTypeKey));
+  const consumerByKey = new Map(INTELLIGENCE_CONSUMER_REGISTRY.map((entry) => [entry.consumerKey, entry]));
+  const sourceConsumerIssues = INTELLIGENCE_SOURCE_REGISTRY.flatMap((source) =>
+    (source.recomputeConsumerKeys ?? []).flatMap((consumerKey) => {
+      const consumer = consumerByKey.get(consumerKey);
+      if (!consumer) return [`${source.sourceId}: unknown recompute consumer ${consumerKey}`];
+      if (source.healthEntityType && !(consumer.relevantSourceHealthEntityTypes ?? []).includes(source.healthEntityType)) {
+        return [`${source.sourceId}: consumer ${consumerKey} does not subscribe to ${source.healthEntityType}`];
+      }
+      return [];
+    }),
+  );
 
   return [
     ...validateIntelligenceConsumerRegistry(INTELLIGENCE_CONSUMER_REGISTRY),
@@ -77,5 +88,6 @@ export function validateIntelligenceRegistries(): string[] {
       skillCoversOperation: (operationId: AskOperationId) => Boolean(getSkillForOperation(operationId)),
     }),
     ...validateIntelligenceSourceRegistry(INTELLIGENCE_SOURCE_REGISTRY),
+    ...sourceConsumerIssues,
   ];
 }

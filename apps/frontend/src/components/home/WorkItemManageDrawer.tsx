@@ -651,6 +651,8 @@ export function WorkItemManageDrawer({
           propertyId={propertyId}
           submitting={completePending}
           costRequired={detail?.safetyTier === 'MATERIAL_FINANCIAL'}
+          safetyTier={detail?.safetyTier}
+          obligationType={detail?.obligationType}
           onSubmit={handleComplete}
         />
       )}

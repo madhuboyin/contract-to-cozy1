@@ -6006,10 +6006,10 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
         sourceEntityType: input.launchContext?.entityType ?? null,
         sourceEntityId: input.launchContext?.entityId ?? null,
         sourceHomeActionId: input.launchContext?.actionId ?? null,
-        decisionThreadId: typeof result.parameters?.decisionThreadId === 'string' ? result.parameters.decisionThreadId : input.launchContext?.entityType === 'DECISION_THREAD' ? input.launchContext.entityId ?? null : null,
-        workItemId: typeof result.parameters?.operationalWorkItemId === 'string' ? result.parameters.operationalWorkItemId : null,
+        decisionThreadId: typeof result.parameters?.decisionThreadId === 'string' ? result.parameters.decisionThreadId : input.launchContext?.decisionThreadId ?? (input.launchContext?.entityType === 'DECISION_THREAD' ? input.launchContext.entityId ?? null : null),
+        workItemId: typeof result.parameters?.operationalWorkItemId === 'string' ? result.parameters.operationalWorkItemId : input.launchContext?.workItemId ?? null,
         journeyId: input.launchContext?.journeyId ?? null,
-        contextVersion: result.contextVersion ?? null,
+        contextVersion: result.contextVersion ?? input.launchContext?.contextVersion ?? null,
         returnDestination: input.launchContext?.returnTo ?? null,
       },
     });

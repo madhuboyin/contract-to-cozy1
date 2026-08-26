@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
-import { emitPropertyChange } from '../../../propertyChanges/propertyChange.service';
+import { emitPropertyChange, emitPropertyChangeWithTransaction } from '../../../propertyChanges/propertyChange.service';
+import type { Prisma } from '@prisma/client';
 import { resolveReminderPolicy } from '../domain/reminderPolicy';
 import type {
   OperationalWorkEvent,
@@ -29,10 +30,9 @@ export type WorkItemLifecycleEventCallback = (workItem: OperationalWorkItem, eve
  * already maps any sourceType containing WORK/ACTION to topic HOME_ACTION,
  * so no changes are needed there.
  *
- * Both exports here are best-effort: a failure must never fail the
- * caller's actual work-item mutation, matching the resilience norm already
- * documented in PropertyMaintenanceTask.service.ts for its own Home
- * Operations sync ("a sync failure must never block the actual mutation").
+ * Direct/due-soon emission remains independently transactional. Work-item
+ * commands use emitWorkItemLifecycleChangeWithTransaction below so the
+ * mutation, change ledger row, and recompute request commit together.
  */
 
 interface MaterialEventMapping {
@@ -112,6 +112,37 @@ export async function emitWorkItemLifecycleChange(
       '[workItemChangeEmitter] failed to emit lifecycle PropertyChange',
     );
   }
+}
+
+/**
+ * Durable variant used by work-item commands. The PropertyChange and its
+ * recompute DomainEvent are committed in the same transaction as the state
+ * transition and lifecycle event.
+ */
+export async function emitWorkItemLifecycleChangeWithTransaction(
+  tx: Prisma.TransactionClient,
+  workItem: WorkItemLifecycleChangeInput,
+  event: WorkItemLifecycleEventInput,
+): Promise<void> {
+  const mapping = MATERIAL_EVENTS[event.eventType];
+  if (!mapping) return;
+  await emitPropertyChangeWithTransaction(tx, {
+    propertyId: workItem.propertyId,
+    sourceType: 'OPERATIONAL_WORK_EVENT',
+    sourceEntityId: workItem.id,
+    sourceRevision: event.id,
+    changeType: mapping.changeType,
+    occurredAt: event.occurredAt,
+    sourceHealth: 'CURRENT',
+    signals: {
+      homeownerRelevant: true,
+      lifecycleAdvanced: mapping.lifecycleAdvanced,
+      propertyEffectConfirmed: mapping.propertyEffectConfirmed,
+      urgentSafetyCondition: workItem.safetyTier === 'SAFETY_EMERGENCY',
+      canonicalActionPriority: workItem.priority,
+    },
+    canonicalActionId: workItem.id,
+  });
 }
 
 // resolveReminderPolicy's widest horizonDays value today (see

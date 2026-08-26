@@ -62,10 +62,12 @@ function baseWarranty(overrides = {}) {
   };
 }
 
-function stubsWith({ findings = [], warranties = [] }) {
+function stubsWith({ findings = [], warranties = [], policies = [], saleCase = null }) {
   return baseStubs({
     inspectionFinding: { findMany: async () => findings },
     warranty: { findMany: async () => warranties },
+    insurancePolicy: { findMany: async () => policies },
+    ...(saleCase ? { propertySaleCase: { findUnique: async () => saleCase } } : {}),
   });
 }
 
@@ -105,6 +107,33 @@ test('a HOME_WARRANTY_PLAN warranty (no specific category) covers the convention
   const coverageActions = inspectionCoverageActionsOf(actions);
   assert.equal(coverageActions.length, 1);
   assert.ok(coverageActions[0].signal.includes('American Home Shield'));
+});
+
+test('a confirmed system-specific insurance fact contributes coverage evidence without promising coverage', async () => {
+  const db = stubsWith({
+    findings: [baseFinding()],
+    policies: [{
+      id: 'policy-1', carrierName: 'Reviewed Carrier', coverageType: 'Homeowner', expiryDate: new Date('2027-01-01T00:00:00.000Z'), updatedAt: NOW,
+      terms: [{ id: 'term-1', termEnd: new Date('2027-01-01T00:00:00.000Z'), updatedAt: NOW, facts: [{ id: 'fact-1', factKey: 'HVAC_COVERAGE_LIMIT', updatedAt: NOW }] }],
+    }],
+  });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+  const action = inspectionCoverageActionsOf(actions)[0];
+  assert.equal(action.evidence.some((entry) => entry.id === 'fact-1'), true);
+  assert.match(action.whyItMatters, /does not itself guarantee coverage/i);
+});
+
+test('an active sale case enriches the existing finding action instead of creating a duplicate finding obligation', async () => {
+  const db = stubsWith({
+    findings: [baseFinding({ severity: 'MINOR' })],
+    saleCase: { id: 'sale-1', status: 'PREPARING', targetListDate: new Date('2026-10-01T00:00:00.000Z'), targetCloseDate: null, updatedAt: NOW },
+  });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+  const findingActions = actions.filter((action) => action.id === 'inspection-finding:finding-1');
+  assert.equal(findingActions.length, 1);
+  assert.equal(findingActions[0].priority, 'SOON');
+  assert.equal(findingActions[0].timing.dueAt, '2026-10-01T00:00:00.000Z');
+  assert.equal(findingActions[0].evidence.some((entry) => entry.id === 'sale-1'), true);
 });
 
 test('a mismatched warranty category produces no compound action', async () => {

@@ -34,10 +34,34 @@ export interface AIRequestHealthSnapshot {
   message: string | null;
 }
 const routeHealth = new Map<string, AIRequestHealthSnapshot>();
+const emittedRouteHealth = new Map<string, AIRequestHealthSnapshot['status']>();
 
 export function getAIRequestHealthSnapshot(routeId: string): AIRequestHealthSnapshot | null {
   const snapshot = routeHealth.get(routeId);
   return snapshot ? { ...snapshot } : null;
+}
+
+async function publishRouteHealthIfChanged(routeId: string, snapshot: AIRequestHealthSnapshot): Promise<void> {
+  if (emittedRouteHealth.get(routeId) === snapshot.status) return;
+  try {
+    const [{ allPropertyIds, emitSourceHealthChangesForProperties }] = await Promise.all([
+      import('../intelligence/sourceHealthImpact.service'),
+    ]);
+    const propertyIds = await allPropertyIds();
+    await emitSourceHealthChangesForProperties({
+      propertyIds,
+      sourceType: 'AI_SOURCE',
+      sourceEntityId: routeId,
+      sourceRevision: `${snapshot.status}:${snapshot.lastAttemptAt.toISOString()}`,
+      health: snapshot.status === 'HEALTHY' ? 'CURRENT' : snapshot.status === 'DEGRADED' ? 'DEGRADED' : 'UNAVAILABLE',
+    });
+    emittedRouteHealth.set(routeId, snapshot.status);
+  } catch (err) {
+    // Keep the emitted-status cursor unchanged. The next request on this
+    // route retries the durable PropertyChange/recompute publication even
+    // when provider health itself did not change again.
+    logger.error({ err, routeId, status: snapshot.status }, '[AI-GOVERNANCE] source-health publication pending retry');
+  }
 }
 
 function positiveInt(value: string | undefined, fallback: number): number {
@@ -125,7 +149,9 @@ export async function executeGovernedAIRequest<T>(input: {
       const completionRate = Number(env.AI_COMPLETION_USD_PER_MILLION_TOKENS ?? 0);
       const estimatedCost = ((usage.prompt * promptRate) + (usage.completion * completionRate)) / 1_000_000;
       if (Number.isFinite(estimatedCost) && estimatedCost > 0) estimatedCostUsd.inc({ route: input.routeId, model: input.model }, estimatedCost);
-      routeHealth.set(input.routeId, { status: 'HEALTHY', lastAttemptAt: new Date(), lastSuccessAt: new Date(), consecutiveFailures: 0, message: null });
+      const healthySnapshot: AIRequestHealthSnapshot = { status: 'HEALTHY', lastAttemptAt: new Date(), lastSuccessAt: new Date(), consecutiveFailures: 0, message: null };
+      routeHealth.set(input.routeId, healthySnapshot);
+      await publishRouteHealthIfChanged(input.routeId, healthySnapshot);
       logger.info({ routeId: input.routeId, model: input.model, attempt, ...usage, estimatedCostUsd: estimatedCost }, '[AI-GOVERNANCE] request completed');
       return value;
     } catch (error) {
@@ -138,11 +164,13 @@ export async function executeGovernedAIRequest<T>(input: {
   logger.warn({ err: lastError, routeId: input.routeId, model: input.model }, '[AI-GOVERNANCE] request exhausted retry policy');
   const previous = routeHealth.get(input.routeId);
   const consecutiveFailures = (previous?.consecutiveFailures ?? 0) + 1;
-  routeHealth.set(input.routeId, {
+  const failedSnapshot: AIRequestHealthSnapshot = {
     status: consecutiveFailures >= positiveInt(env.AI_CIRCUIT_FAILURE_THRESHOLD, 3) ? 'UNHEALTHY' : 'DEGRADED',
     lastAttemptAt: new Date(), lastSuccessAt: previous?.lastSuccessAt ?? null, consecutiveFailures,
     message: lastError instanceof Error ? lastError.message.slice(0, 500) : 'AI provider request failed.',
-  });
+  };
+  routeHealth.set(input.routeId, failedSnapshot);
+  await publishRouteHealthIfChanged(input.routeId, failedSnapshot);
   throw lastError;
 }
 
@@ -150,4 +178,5 @@ export function resetAIRequestGovernanceForTests(): void {
   circuits.clear();
   rateWindows.clear();
   routeHealth.clear();
+  emittedRouteHealth.clear();
 }

@@ -1242,12 +1242,19 @@ function formatCentsRangeForCopy(low: number | null, high: number | null): strin
 
 async function loadInspectionFindingActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
   if (!db.inspectionFinding) return [];
-  const findings = await db.inspectionFinding.findMany({
-    where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' }, report: { status: 'CONFIRMED' } },
-    orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }],
-    take: 30,
-    include: { report: { select: { id: true, confirmedAt: true, reportType: true, inspectorName: true } } },
-  });
+  const [findings, saleCase] = await Promise.all([
+    db.inspectionFinding.findMany({
+      where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' }, report: { status: 'CONFIRMED' } },
+      orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }],
+      take: 30,
+      include: { report: { select: { id: true, confirmedAt: true, reportType: true, inspectorName: true } } },
+    }),
+    db.propertySaleCase?.findUnique({
+      where: { propertyId },
+      select: { id: true, status: true, targetListDate: true, targetCloseDate: true, updatedAt: true },
+    }) ?? Promise.resolve(null),
+  ]);
+  const activeSaleCase = saleCase && saleCase.status !== 'CLOSED' && saleCase.status !== 'CANCELLED' ? saleCase : null;
 
   return findings.map((finding) => {
     const isSafety = finding.severity === 'SAFETY';
@@ -1274,27 +1281,33 @@ async function loadInspectionFindingActions(propertyId: string, db: HomeActionSo
     const freshness: HomeAction['evidence'][number]['freshness'] =
       reportAgeMs == null ? 'UNKNOWN' : reportAgeMs > STALE_REPORT_AGE_MS ? 'STALE' : 'CURRENT';
 
-    const whyItMatters = costRangeText
+    let whyItMatters = costRangeText
       ? `${finding.inspectorDescription} Estimated cost range: ${costRangeText}.`
       : finding.inspectorDescription;
+    if (activeSaleCase) {
+      whyItMatters += ` This home is ${activeSaleCase.status === 'PREPARING' ? 'being prepared for sale' : activeSaleCase.status === 'LISTED' ? 'currently listed' : 'under contract'}, so resolving or documenting the finding can affect disclosure readiness, buyer confidence, and negotiations.`;
+    }
+    const saleDeadline = activeSaleCase
+      ? (activeSaleCase.status === 'PREPARING' ? activeSaleCase.targetListDate : activeSaleCase.targetCloseDate)
+      : null;
 
     return adaptHomeActionSource('INSPECTION_FINDING', {
       id: `inspection-finding:${finding.id}`,
       propertyId,
       lineageId: `inspection-finding:${finding.id}`,
       sourceEntityId: finding.id,
-      sourceVersion: finding.updatedAt.toISOString(),
+      sourceVersion: `${finding.updatedAt.toISOString()}:${activeSaleCase?.updatedAt.toISOString() ?? 'no-active-sale'}`,
       state: 'OPEN',
-      priority: isSafety ? 'NOW' : finding.severity === 'MAJOR' ? 'SOON' : finding.severity === 'MINOR' ? 'PLAN' : 'CONSIDER',
+      priority: isSafety ? 'NOW' : finding.severity === 'MAJOR' || activeSaleCase ? 'SOON' : finding.severity === 'MINOR' ? 'PLAN' : 'CONSIDER',
       signal: `${finding.homeSystem}: ${finding.inspectorRecommendation}`,
       whyItMatters,
       recommendedAction: 'Review the finding and accept it as tracked work, or dismiss it.',
       expectedOutcome: 'The finding is addressed and the inspection record reflects the verified outcome.',
       timing: {
-        dueAt: null,
+        dueAt: saleDeadline?.toISOString() ?? null,
         windowStart: finding.createdAt.toISOString(),
         windowEnd: null,
-        rationale: isSafety ? 'Safety findings warrant prompt review.' : 'This finding is open in a confirmed inspection report.',
+        rationale: isSafety ? 'Safety findings warrant prompt review.' : activeSaleCase ? 'Resolve or document this finding before the active sale milestone.' : 'This finding is open in a confirmed inspection report.',
       },
       evidence: [{
         id: finding.report.id,
@@ -1304,7 +1317,15 @@ async function loadInspectionFindingActions(propertyId: string, db: HomeActionSo
         observedAt: (finding.report.confirmedAt ?? finding.createdAt).toISOString(),
         freshness,
         confidence: 1,
-      }],
+      }, ...(activeSaleCase ? [{
+        id: activeSaleCase.id,
+        type: 'PROPERTY_FACT' as const,
+        label: `Active sale case: ${String(activeSaleCase.status).toLowerCase().replace(/_/g, ' ')}`,
+        source: 'Sale Readiness',
+        observedAt: activeSaleCase.updatedAt.toISOString(),
+        freshness: 'CURRENT' as const,
+        confidence: 1,
+      }] : [])],
       assumptions: [], options: [], tradeoffs: [],
       confidence: { score: 1, label: 'HIGH', missing: [] },
       governance,
@@ -1335,11 +1356,10 @@ async function loadInspectionFindingActions(propertyId: string, db: HomeActionSo
 // The match is deterministic, not textual: WarrantyCategory already names
 // the system a warranty covers (or, for HOME_WARRANTY_PLAN, the
 // conventional multi-system bundle a home-warranty service contract
-// covers — reviewed and fixed here, not inferred). InsurancePolicy
-// correlation is deliberately not included in this pass: its coverageType
-// field is free text, and matching a finding to a homeowner's policy would
-// require inferring damage cause from inspector prose, which is exactly
-// the kind of ungrounded correlation HI-CMP-003 prohibits.
+// covers — reviewed and fixed here, not inferred). InsurancePolicy matches
+// use only homeowner-confirmed fact keys whose system and coverage semantics
+// are explicit; they never infer damage cause from inspector prose or claim
+// that a fact-key match is itself a coverage determination.
 const WARRANTY_CATEGORY_HOME_SYSTEMS: Record<string, readonly string[]> = {
   APPLIANCE: ['APPLIANCES'],
   HVAC: ['HVAC'],
@@ -1354,7 +1374,7 @@ const WARRANTY_CATEGORY_HOME_SYSTEMS: Record<string, readonly string[]> = {
 async function loadInspectionCoverageActions(propertyId: string, db: HomeActionSourceDb, evaluatedAt?: Date): Promise<HomeAction[]> {
   if (!db.inspectionFinding || !db.warranty) return [];
   const now = evaluatedAt ?? new Date();
-  const [findings, warranties, conflictedWarrantyGroups] = await Promise.all([
+  const [findings, warranties, policies, conflictedWarrantyGroups] = await Promise.all([
     db.inspectionFinding.findMany({
       where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' }, report: { status: 'CONFIRMED' } },
       select: { id: true, reportId: true, homeSystem: true, severity: true, createdAt: true, updatedAt: true },
@@ -1363,24 +1383,54 @@ async function loadInspectionCoverageActions(propertyId: string, db: HomeActionS
       where: { propertyId, startDate: { lte: now }, expiryDate: { gte: now } },
       select: { id: true, category: true, providerName: true, expiryDate: true, updatedAt: true },
     }),
+    db.insurancePolicy?.findMany({
+      where: {
+        propertyId,
+        isVerified: true,
+        OR: [{ startDate: null }, { startDate: { lte: now } }],
+        AND: [{ OR: [{ expiryDate: null }, { expiryDate: { gte: now } }] }],
+      },
+      select: {
+        id: true, carrierName: true, coverageType: true, expiryDate: true, updatedAt: true,
+        terms: {
+          where: { verificationStatus: 'VERIFIED' },
+          select: {
+            id: true, termEnd: true, updatedAt: true,
+            facts: { where: { confirmationStatus: 'CONFIRMED' }, select: { id: true, factKey: true, updatedAt: true } },
+          },
+        },
+      },
+    }) ?? Promise.resolve([]),
     getConflictedWarrantyGroups(propertyId, db, now),
   ]);
   const conflictedWarrantyIds = new Set(
     conflictedWarrantyGroups.flatMap((group) => group.warranties.map((warranty) => warranty.id)),
   );
-  if (findings.length === 0 || warranties.length === 0) return [];
+  if (findings.length === 0 || (warranties.length === 0 && policies.length === 0)) return [];
 
   return findings.flatMap((finding) => {
     const matches = warranties.filter((warranty) => !conflictedWarrantyIds.has(warranty.id) &&
       (WARRANTY_CATEGORY_HOME_SYSTEMS[String(warranty.category)] ?? []).includes(finding.homeSystem));
-    if (matches.length === 0) return [];
+    const systemToken = finding.homeSystem.replace(/[^A-Z0-9]+/g, '_');
+    const policyMatches = policies.flatMap((policy) => policy.terms.flatMap((term) => term.facts
+      .filter((fact) => fact.factKey.toUpperCase().includes(systemToken) && /(COVER|LIMIT|EXCLUSION|DEDUCTIBLE)/i.test(fact.factKey))
+      .map((fact) => ({ policy, term, fact }))));
+    if (matches.length === 0 && policyMatches.length === 0) return [];
 
-    const soonestExpiry = [...matches].sort((left, right) => left.expiryDate.getTime() - right.expiryDate.getTime())[0].expiryDate;
-    const providerNames = [...new Set(matches.map((warranty) => warranty.providerName))];
+    const expiries = [
+      ...matches.map((warranty) => warranty.expiryDate),
+      ...policyMatches.flatMap(({ policy, term }) => [term.termEnd, policy.expiryDate].filter((value): value is Date => Boolean(value))),
+    ].sort((left, right) => left.getTime() - right.getTime());
+    const soonestExpiry = expiries[0] ?? null;
+    const providerNames = [...new Set([
+      ...matches.map((warranty) => warranty.providerName),
+      ...policyMatches.map(({ policy }) => policy.carrierName),
+    ])];
     const providerList = providerNames.join(' or ');
     const sourceVersion = createHash('sha256').update(JSON.stringify({
       findingUpdatedAt: finding.updatedAt.toISOString(),
       warranties: matches.map((warranty) => `${warranty.id}:${warranty.expiryDate.toISOString()}:${warranty.providerName}`).sort(),
+      policyFacts: policyMatches.map(({ policy, term, fact }) => `${policy.id}:${term.id}:${fact.id}:${fact.updatedAt.toISOString()}`).sort(),
     })).digest('hex');
 
     return [adaptHomeActionSource('SYSTEM', {
@@ -1391,15 +1441,15 @@ async function loadInspectionCoverageActions(propertyId: string, db: HomeActionS
       sourceVersion,
       state: 'OPEN',
       priority: finding.severity === 'SAFETY' ? 'NOW' : finding.severity === 'MAJOR' ? 'SOON' : 'PLAN',
-      signal: `${finding.homeSystem} finding may be covered by ${providerList}`,
-      whyItMatters: `An open inspection finding in ${finding.homeSystem} overlaps with an active warranty (${providerList}) that covers this system. Filing a claim before the warranty expires may cover repair costs that would otherwise come out of pocket.`,
-      recommendedAction: `Contact ${providerList} to check whether this finding is covered before paying for repairs independently.`,
-      expectedOutcome: 'Repair costs for this finding are covered by an active warranty instead of paid out of pocket.',
+      signal: `${finding.homeSystem} finding has applicable coverage evidence from ${providerList}`,
+      whyItMatters: `An open inspection finding in ${finding.homeSystem} overlaps with active, reviewed warranty or policy evidence from ${providerList}. Verify the terms before paying for repairs or filing a claim; the recorded evidence does not itself guarantee coverage for this loss.`,
+      recommendedAction: `Contact ${providerList} to verify whether this finding is covered before paying for repairs independently.`,
+      expectedOutcome: 'The homeowner gets a documented coverage determination before choosing how to fund the repair.',
       timing: {
-        dueAt: soonestExpiry.toISOString(),
+        dueAt: soonestExpiry?.toISOString() ?? null,
         windowStart: null,
-        windowEnd: soonestExpiry.toISOString(),
-        rationale: 'The matched warranty coverage expires on this date.',
+        windowEnd: soonestExpiry?.toISOString() ?? null,
+        rationale: soonestExpiry ? 'The earliest matched coverage evidence expires on this date.' : 'Verify coverage before authorizing repair work.',
       },
       evidence: [
         {
@@ -1420,9 +1470,18 @@ async function loadInspectionCoverageActions(propertyId: string, db: HomeActionS
           freshness: 'CURRENT' as const,
           confidence: 1,
         })),
+        ...policyMatches.map(({ policy, term, fact }) => ({
+          id: fact.id,
+          type: 'PROPERTY_FACT' as const,
+          label: `${fact.factKey.toLowerCase().replace(/_/g, ' ')} — ${policy.carrierName}`,
+          source: `Verified ${policy.coverageType ?? 'insurance'} policy term`,
+          observedAt: fact.updatedAt.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 1,
+        })),
       ],
       assumptions: [], options: [], tradeoffs: [],
-      confidence: { score: 0.75, label: confidenceLabel(0.75), missing: [] },
+      confidence: { score: 0.75, label: confidenceLabel(0.75), missing: ['Carrier or warranty administrator coverage determination'] },
       governance: lowConsequenceGovernance('inspection-coverage-v1'),
       primaryCta: {
         kind: 'REVIEW',

@@ -56,7 +56,7 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
   {
     consumerKey: 'home-actions', version: '1.0', resolutionMode: 'STATIC',
     relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
-    relevantSourceHealthEntityTypes: ['RADAR_SOURCE', 'PROPERTY_INTELLIGENCE_SOURCE'],
+    relevantSourceHealthEntityTypes: ['RADAR_SOURCE', 'PROPERTY_INTELLIGENCE_SOURCE', 'AI_SOURCE'],
     outputOwner: 'getHomeActionFeed — live canonical Home Action materialization/read validation.',
     timeoutMs: 30_000, retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, failureBehavior: 'MARK_STALE',
     recompute: async ({ propertyId, signal }) => {
@@ -240,7 +240,7 @@ export const INTELLIGENCE_CONSUMER_REGISTRY: readonly IntelligenceConsumerDefini
   {
     consumerKey: 'capability-suggestions', version: '1.0', resolutionMode: 'STATIC',
     relevantFactKeys: [], relevantSourceEntityTypes: BROAD_CANONICAL_SOURCES,
-    relevantSourceHealthEntityTypes: ['PROPERTY_INTELLIGENCE_SOURCE'],
+    relevantSourceHealthEntityTypes: ['PROPERTY_INTELLIGENCE_SOURCE', 'AI_SOURCE'],
     outputOwner: 'getCapabilitySuggestions — capability readiness/suggestion projection.',
     timeoutMs: 30_000, retryPolicy: { maxAttempts: 3, backoffMs: 60_000 }, failureBehavior: 'MARK_STALE',
     recompute: async ({ propertyId, signal }) => {

@@ -14,6 +14,10 @@ import { markRecommendationDismissed } from '../infrastructure/recommendationRep
 import { decideSuppressionForFeedback } from '../domain/feedbackPolicy';
 import { intakeRecommendationIncident } from '../../../services/recommendationIncident.service';
 import type { RecommendationIncidentType } from '../../../productFramework/recommendationIncident.contract';
+import type { FeedbackSurface, FeedbackTargetType } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
+import { recordTypedFeedback } from '../../../services/feedback/typedFeedback.service';
+import type { FeedbackReasonCode } from '../../../productFramework/feedback.contract';
 
 export type RecordFeedbackStatus = 'RECORDED' | 'DUPLICATE' | 'RECOMMENDATION_NOT_FOUND';
 
@@ -25,6 +29,12 @@ export interface RecordRecommendationFeedbackParams {
   reasonCode?: string | null;
   comment?: string | null;
   reportedByUserId?: string | null;
+  surface?: FeedbackSurface;
+  targetType?: FeedbackTargetType;
+  targetId?: string;
+  contextVersion?: string | null;
+  capabilityId?: string | null;
+  capabilityVersion?: string | null;
 }
 
 export interface RecordRecommendationFeedbackResult {
@@ -39,6 +49,21 @@ const INCIDENT_TYPE_BY_FEEDBACK: Partial<Record<string, RecommendationIncidentTy
   RECOMMENDATION_REVERSED: 'REVERSAL',
   PROFILE_CORRECTED: 'CALIBRATION',
 };
+
+function canonicalReasonCodes(type: string, reasonCode?: string | null): FeedbackReasonCode[] {
+  const reasons: FeedbackReasonCode[] = [];
+  if (['ACCEPTED', 'COMPLETED', 'SAVED', 'EXPANDED', 'VENDOR_CLICKED'].includes(type)) reasons.push('USEFUL');
+  if (['DISMISSED', 'NOT_RELEVANT', 'SNOOZED', 'COMPLAINT', 'RECOMMENDATION_OVERRIDDEN', 'RECOMMENDATION_REVERSED'].includes(type)) reasons.push('NOT_USEFUL');
+  const mapped: Partial<Record<string, FeedbackReasonCode>> = {
+    ALREADY_DONE: 'ALREADY_HANDLED',
+    NOT_APPLICABLE: 'NOT_APPLICABLE',
+    BAD_TIMING: 'WRONG_TIMING',
+    WRONG_PROFILE: 'WRONG_FACT',
+  };
+  const detail = reasonCode ? mapped[reasonCode] : undefined;
+  if (detail && !reasons.includes(detail)) reasons.push(detail);
+  return reasons;
+}
 
 export async function recordRecommendationFeedback(
   params: RecordRecommendationFeedbackParams,
@@ -55,13 +80,36 @@ export async function recordRecommendationFeedback(
     return { status: 'RECOMMENDATION_NOT_FOUND', suppressed: false };
   }
 
-  const feedback = await createFeedback({
-    recommendationId: params.recommendationId,
-    eventId: params.eventId,
-    type: params.type,
-    explicit: params.explicit,
-    reasonCode: params.reasonCode,
-    comment: params.comment,
+  const feedback = await prisma.$transaction(async (tx) => {
+    const saved = await createFeedback({
+      recommendationId: params.recommendationId,
+      eventId: params.eventId,
+      type: params.type,
+      explicit: params.explicit,
+      reasonCode: params.reasonCode,
+      comment: params.comment,
+    }, tx);
+    // RecommendationFeedback remains the append-only lifecycle/suppression
+    // ledger. Explicit homeowner interpretation is also written to the one
+    // typed Feedback contract in the same transaction, so quality and
+    // personalization can no longer disagree about whether it happened.
+    if (params.explicit && params.reportedByUserId) {
+      await recordTypedFeedback({
+        userId: params.reportedByUserId,
+        propertyId: context.propertyId,
+        page: 'personalization',
+        rating: canonicalReasonCodes(params.type, params.reasonCode).includes('USEFUL') ? 'up' : 'down',
+        comment: params.comment ?? null,
+        targetType: params.targetType ?? 'OTHER',
+        targetId: params.targetId ?? params.recommendationId,
+        surface: params.surface ?? 'HOME',
+        reasonCodes: canonicalReasonCodes(params.type, params.reasonCode),
+        contextVersion: params.contextVersion ?? null,
+        capabilityId: params.capabilityId ?? null,
+        capabilityVersion: params.capabilityVersion ?? null,
+      }, tx);
+    }
+    return saved;
   });
 
   const incidentType = INCIDENT_TYPE_BY_FEEDBACK[params.type];

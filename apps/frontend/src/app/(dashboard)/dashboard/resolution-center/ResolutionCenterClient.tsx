@@ -1866,6 +1866,8 @@ export default function ResolutionCenterClient() {
               onOpenChange={setIsCompletionModalOpen}
               submitting={completionSubmitting}
               costRequired={false}
+              safetyTier={activeItem.governance?.safetyTier ?? null}
+              obligationType={activeItem.workItem?.obligationType ?? null}
               description={`Record how “${activeItem.title}” was completed.`}
               onSubmit={handleCompletionSubmit}
               propertyId={selectedPropertyId}

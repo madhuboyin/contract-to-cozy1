@@ -358,6 +358,15 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
       });
     }
 
+    await emitDecisionRecommendationChange({
+      propertyId: input.propertyId,
+      decisionThreadId: updatedThread.id,
+      snapshotId: snapshot.id,
+      generatedAt: snapshot.generatedAt,
+      isFirstSnapshot: true,
+      category: null,
+    }, tx);
+
     return { thread: updatedThread, snapshot, preferencesUsed: preferences };
     });
   } catch (error: any) {
@@ -385,14 +394,6 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
     throw error;
   }
 
-  await emitDecisionRecommendationChange({
-    propertyId: input.propertyId,
-    decisionThreadId: result.thread.id,
-    snapshotId: result.snapshot.id,
-    generatedAt: result.snapshot.generatedAt,
-    isFirstSnapshot: true,
-    category: null,
-  });
   // Phase 3 review finding 3: durable alongside the first snapshot's own
   // embedded origin — see decisionThreadHomeActionLink.ts's doc comment.
   await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
@@ -613,21 +614,21 @@ export async function recomputeStaleThread(threadId: string, askExecutionId?: st
       ? compareRecommendationSnapshots(previousSnapshot, newSnapshot, current.contextIssueCodes)
       : null;
 
+    await emitDecisionRecommendationChange({
+      propertyId: current.propertyId,
+      decisionThreadId: threadId,
+      snapshotId: newSnapshot.id,
+      generatedAt: newSnapshot.generatedAt,
+      isFirstSnapshot: false,
+      category: change?.category ?? null,
+    }, tx);
+
     return {
       thread: await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } }),
       snapshot: newSnapshot,
       change,
       triggerReasonCodes: current.contextIssueCodes,
     };
-  });
-
-  await emitDecisionRecommendationChange({
-    propertyId: result.thread.propertyId,
-    decisionThreadId: threadId,
-    snapshotId: result.snapshot.id,
-    generatedAt: result.snapshot.generatedAt,
-    isFirstSnapshot: false,
-    category: result.change?.category ?? null,
   });
 
   return result;

@@ -484,7 +484,10 @@ export const CreateAskExecutionRequestSchema = z.object({
     entityType: z.string().trim().max(120).nullable().optional(),
     entityId: z.string().trim().max(160).nullable().optional(),
     actionId: z.string().trim().max(160).nullable().optional(),
+    decisionThreadId: z.string().trim().max(160).nullable().optional(),
+    workItemId: z.string().trim().max(160).nullable().optional(),
     journeyId: z.string().trim().max(160).nullable().optional(),
+    contextVersion: z.string().trim().max(160).nullable().optional(),
     returnTo: z.string().trim().max(1000).nullable().optional(),
   }).optional(),
 }).strict();

@@ -11,7 +11,7 @@ import {
   upsertWorkSource,
   type WorkItemDb,
 } from '../infrastructure/workItemRepository';
-import { emitWorkItemLifecycleChange, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
+import { emitWorkItemLifecycleChangeWithTransaction, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
 import { transitionWorkItem } from './transitionWorkItem.usecase';
 import { prisma } from '../../../lib/prisma';
 
@@ -38,6 +38,17 @@ import { prisma } from '../../../lib/prisma';
 export async function resolveAndUpsertWorkItem(
   proposal: ProposedWorkItem,
   db: WorkItemDb = prisma,
+  onLifecycleEvent?: WorkItemLifecycleEventCallback,
+) {
+  if (db === prisma) {
+    return prisma.$transaction((tx) => resolveAndUpsertWorkItemInTransaction(proposal, tx, onLifecycleEvent));
+  }
+  return resolveAndUpsertWorkItemInTransaction(proposal, db, onLifecycleEvent);
+}
+
+async function resolveAndUpsertWorkItemInTransaction(
+  proposal: ProposedWorkItem,
+  db: Exclude<WorkItemDb, typeof prisma>,
   onLifecycleEvent?: WorkItemLifecycleEventCallback,
 ) {
   const workKey = resolveWorkKey({
@@ -79,20 +90,14 @@ export async function resolveAndUpsertWorkItem(
       idempotencyKey: `created:${workKey}`,
       payload: { sourceType: proposal.source.sourceType, sourceEntityId: proposal.source.sourceEntityId },
     }, db);
-    // Item #20 (Slice 8: "digest limited to changed or due work") —
-    // best-effort, see workItemChangeEmitter.ts. Only the brand-new-item
+    // Item #20 (Slice 8: "digest limited to changed or due work"). Only the brand-new-item
     // branch emits; a source-driven due-field refresh (Item #19 Slice 2) on
     // an existing item is not a household-visible lifecycle event.
-    // HI-ATT-010: inside a caller-owned transaction (onLifecycleEvent
-    // supplied), defer this until after commit instead — emitting a
-    // lifecycle-change side effect from data that might still roll back
-    // would be visible and wrong.
+    // The PropertyChange and recompute request share this command's
+    // transaction; the callback is supplementary caller bookkeeping.
     if (event) {
-      if (onLifecycleEvent) {
-        await onLifecycleEvent(workItem, event);
-      } else {
-        await emitWorkItemLifecycleChange(workItem, event);
-      }
+      await emitWorkItemLifecycleChangeWithTransaction(db, workItem, event);
+      if (onLifecycleEvent) await onLifecycleEvent(workItem, event);
     }
   } else {
     if (workItem.state === 'CLOSED') sourceRemainsActive = false;

@@ -46,7 +46,23 @@ export interface AskExecutionResponse {
   status: AskExecutionStatus;
   property: { id: string; label: string } | null;
   skill?: { id: string; version: string; domain: string } | null;
-  skillHandoff?: { suggestedNextSkillId: string; suggestedGoal: string; reasonCodes: string[]; contextReferenceIds: string[] } | null;
+  skillHandoff?: {
+    suggestedNextSkillId: string;
+    suggestedGoal: string;
+    reasonCodes: string[];
+    contextReferenceIds: string[];
+    continuity: {
+      propertyId: string | null;
+      sourceEntityType: string | null;
+      sourceEntityId: string | null;
+      sourceHomeActionId: string | null;
+      decisionThreadId: string | null;
+      workItemId: string | null;
+      journeyId: string | null;
+      contextVersion: string | null;
+      returnDestination: string | null;
+    };
+  } | null;
   operation: { id: string; version: string; family: string } | null;
   contextVersion: string | null;
   blocks: AskPresentationBlock[];
@@ -149,7 +165,10 @@ export interface CreateAskExecutionPayload {
     entityType?: string | null;
     entityId?: string | null;
     actionId?: string | null;
+    decisionThreadId?: string | null;
+    workItemId?: string | null;
     journeyId?: string | null;
+    contextVersion?: string | null;
     returnTo?: string | null;
   };
 }
@@ -227,10 +246,16 @@ export interface AskCapabilityPrompt {
   question: string;
   subject?: AskConciergeSubject;
   context?: {
-    entityType: 'HOME_ACTION' | 'DECISION_THREAD' | 'INVENTORY_ITEM';
-    entityId: string;
+    propertyId?: string;
+    entityType?: string;
+    entityId?: string;
     actionId?: string;
     capabilityId?: string;
+    decisionThreadId?: string;
+    workItemId?: string;
+    journeyId?: string;
+    contextVersion?: string;
+    returnTo?: string;
   };
 }
 

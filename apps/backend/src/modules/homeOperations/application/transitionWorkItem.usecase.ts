@@ -1,7 +1,7 @@
 import type { OperationalWorkActorType, OperationalWorkEventType, OperationalWorkItemDisposition, OperationalWorkItemState } from '@prisma/client';
 import { applyTransition } from '../domain/transitions';
 import { findWorkItemById, recordWorkEvent, updateWorkItemState, type WorkItemDb } from '../infrastructure/workItemRepository';
-import { emitWorkItemLifecycleChange, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
+import { emitWorkItemLifecycleChangeWithTransaction, type WorkItemLifecycleEventCallback } from '../infrastructure/workItemChangeEmitter';
 import { prisma } from '../../../lib/prisma';
 import { assertDecisionLineageSatisfiedForAcceptance } from '../../../services/decisionPlatform/homeActionDecisionLineage';
 import { reopenLinkedDomainRecords } from '../infrastructure/domainReopenDispatch';
@@ -69,6 +69,17 @@ export async function transitionWorkItem(
   db: WorkItemDb = prisma,
   onLifecycleEvent?: WorkItemLifecycleEventCallback,
 ) {
+  if (db === prisma) {
+    return prisma.$transaction((tx) => transitionWorkItemInTransaction(input, tx, onLifecycleEvent));
+  }
+  return transitionWorkItemInTransaction(input, db, onLifecycleEvent);
+}
+
+async function transitionWorkItemInTransaction(
+  input: TransitionWorkItemInput,
+  db: Exclude<WorkItemDb, typeof prisma>,
+  onLifecycleEvent?: WorkItemLifecycleEventCallback,
+) {
   const workItem = await findWorkItemById(input.workItemId, db);
   if (!workItem) throw new Error(`OperationalWorkItem ${input.workItemId} not found.`);
 
@@ -115,10 +126,9 @@ export async function transitionWorkItem(
     // Home Intelligence Functional Completeness FRD Phase 4 review finding
     // 6 gap fix: both branches here mean "previously-verified work is open
     // again" -- the authoritative domain record must follow, not just this
-    // item's own source links. Best-effort, after the item's own state is
-    // already committed (see reopenLinkedDomainRecords's own docblock for
-    // why it must never block this transition).
-    await reopenLinkedDomainRecords(input.workItemId);
+    // item's own source links. All domain updates share the work-item
+    // transaction so contradictory completion states cannot commit.
+    await reopenLinkedDomainRecords(input.workItemId, db);
   }
 
   const event = await recordWorkEvent({
@@ -140,18 +150,13 @@ export async function transitionWorkItem(
     }, db);
   }
 
-  // Item #20 (Slice 8: "digest limited to changed or due work") — best-effort,
-  // see workItemChangeEmitter.ts. event is nullable in type only for a
+  // Item #20 (Slice 8: "digest limited to changed or due work"). event is nullable in type only for a
   // theoretical race on the idempotent-retry lookup; recordWorkEvent always
   // returns a row in practice for a freshly-issued idempotencyKey.
-  // HI-ATT-010: inside a caller-owned transaction (onLifecycleEvent
-  // supplied), defer this until after commit instead.
+  // The lifecycle change and recompute request share this transaction.
   if (event) {
-    if (onLifecycleEvent) {
-      await onLifecycleEvent(updated, event);
-    } else {
-      await emitWorkItemLifecycleChange(updated, event);
-    }
+    await emitWorkItemLifecycleChangeWithTransaction(db, updated, event);
+    if (onLifecycleEvent) await onLifecycleEvent(updated, event);
   }
 
   return updated;

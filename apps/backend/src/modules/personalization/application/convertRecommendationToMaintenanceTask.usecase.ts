@@ -54,6 +54,7 @@ export async function convertRecommendationToMaintenanceTask(params: {
     eventId: `personalization-task-accepted:${params.recommendationId}`,
     type: 'ACCEPTED',
     explicit: true,
+    reportedByUserId: params.userId,
   });
 
   return {

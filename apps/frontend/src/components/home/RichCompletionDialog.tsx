@@ -44,6 +44,8 @@ export function RichCompletionDialog({
   propertyId,
   submitting,
   costRequired,
+  obligationType,
+  safetyTier,
   description,
   onSubmit,
 }: {
@@ -52,6 +54,8 @@ export function RichCompletionDialog({
   propertyId: string;
   submitting: boolean;
   costRequired: boolean;
+  obligationType?: string | null;
+  safetyTier?: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY' | null;
   description?: string;
   onSubmit: (values: RichCompletionValues) => void;
 }) {
@@ -65,6 +69,10 @@ export function RichCompletionDialog({
   const [followUpNeeded, setFollowUpNeeded] = React.useState(false);
   const [photoDocumentIds, setPhotoDocumentIds] = React.useState<string[]>([]);
   const [uploading, setUploading] = React.useState(false);
+  const executionObligations = new Set(['MAINTENANCE_TASK', 'PROJECT_EXECUTION', 'SALE_PREP_TASK', 'SERVICE_EXECUTION']);
+  const showFulfillment = obligationType ? executionObligations.has(obligationType) : safetyTier === 'MATERIAL_FINANCIAL';
+  const showCost = costRequired || safetyTier === 'MATERIAL_FINANCIAL' || Boolean(obligationType && executionObligations.has(obligationType));
+  const showObservedResult = obligationType !== 'DECISION' && obligationType !== 'RECORD_REVIEW';
 
   const parsedCostCents = (() => {
     const dollars = Number(costInput);
@@ -89,7 +97,7 @@ export function RichCompletionDialog({
     try {
       const uploaded: string[] = [];
       for (const file of Array.from(files).slice(0, 5)) {
-        const res = await api.uploadDocument(file, { type: 'PHOTO', name: file.name, propertyId });
+        const res = await api.uploadDocument(file, { type: file.type.startsWith('image/') ? 'PHOTO' : 'OTHER', name: file.name, propertyId });
         if (res.success && res.data) uploaded.push(res.data.id);
         else throw new Error(res.message || `Unable to upload ${file.name}.`);
       }
@@ -101,7 +109,9 @@ export function RichCompletionDialog({
     }
   };
 
-  const canSubmit = !costRequired || parsedCostCents !== null;
+  const canSubmit = Boolean(completedAt)
+    && (!costRequired || parsedCostCents !== null)
+    && (!showFulfillment || fulfillmentMode !== 'PROVIDER' || providerName.trim().length > 0);
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) reset(); onOpenChange(next); }}>
@@ -111,12 +121,12 @@ export function RichCompletionDialog({
           <DialogDescription>{description ?? 'Record how this was completed.'}</DialogDescription>
         </DialogHeader>
         <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
-          <div className="grid grid-cols-2 gap-3">
+          <div className={showCost ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-1 gap-3'}>
             <div className="space-y-2">
               <Label htmlFor="completion-date">Completion date</Label>
               <Input id="completion-date" type="date" value={completedAt} max={todayIso()} onChange={(event) => setCompletedAt(event.target.value)} />
             </div>
-            <div className="space-y-2">
+            {showCost && <div className="space-y-2">
               <Label htmlFor="completion-cost">Cost ($){costRequired ? ' *' : ''}</Label>
               <Input
                 id="completion-cost"
@@ -128,10 +138,10 @@ export function RichCompletionDialog({
                 onChange={(event) => setCostInput(event.target.value)}
                 placeholder="0.00"
               />
-            </div>
+            </div>}
           </div>
 
-          <div className="space-y-2">
+          {showFulfillment && <div className="space-y-2">
             <Label>Who did this?</Label>
             <div className="flex gap-2">
               <Button type="button" size="sm" variant={fulfillmentMode === 'DIY' ? 'default' : 'outline'} onClick={() => setFulfillmentMode('DIY')}>
@@ -141,7 +151,7 @@ export function RichCompletionDialog({
                 A provider did it
               </Button>
             </div>
-          </div>
+          </div>}
           {fulfillmentMode === 'PROVIDER' && (
             <div className="space-y-2">
               <Label htmlFor="completion-provider">Provider name</Label>
@@ -149,7 +159,7 @@ export function RichCompletionDialog({
             </div>
           )}
 
-          <div className="space-y-2">
+          {showObservedResult && <div className="space-y-2">
             <Label>Result</Label>
             <div className="flex flex-wrap gap-2">
               {RESULT_OPTIONS.map((option) => (
@@ -164,7 +174,7 @@ export function RichCompletionDialog({
                 </Button>
               ))}
             </div>
-          </div>
+          </div>}
 
           <div className="space-y-2">
             <Label htmlFor="completion-notes">Notes</Label>

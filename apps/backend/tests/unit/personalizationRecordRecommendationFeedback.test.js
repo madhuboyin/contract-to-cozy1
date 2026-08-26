@@ -8,9 +8,24 @@ function createPrismaMock({ recommendation = { id: 'rec-1', propertyId: 'prop-1'
   const suppressions = [];
   const recommendationUpdates = [];
   const incidents = [];
+  const typedFeedbackRows = [];
   let recommendationRow = { ...recommendation, status: 'ACTIVE' };
 
   const prismaMock = {
+    $transaction: async (work) => work(prismaMock),
+    feedback: {
+      findFirst: async ({ where }) => typedFeedbackRows.find((row) => row.userId === where.userId && row.targetType === where.targetType && row.targetId === where.targetId && row.surface === where.surface) || null,
+      create: async ({ data }) => {
+        const row = { id: `typed-feedback-${typedFeedbackRows.length + 1}`, ...data };
+        typedFeedbackRows.push(row);
+        return row;
+      },
+      update: async ({ where, data }) => {
+        const index = typedFeedbackRows.findIndex((row) => row.id === where.id);
+        typedFeedbackRows[index] = { ...typedFeedbackRows[index], ...data };
+        return typedFeedbackRows[index];
+      },
+    },
     recommendationFeedback: {
       findUnique: async ({ where }) => feedbackRows.find((f) => f.eventId === where.eventId) || null,
       create: async ({ data }) => {

@@ -2,6 +2,9 @@
 //
 // Prisma-backed repository for RecommendationFeedback.
 import { prisma } from '../../../lib/prisma';
+import type { Prisma } from '@prisma/client';
+
+type FeedbackDb = typeof prisma | Prisma.TransactionClient;
 
 export interface CreateFeedbackParams {
   recommendationId: string;
@@ -20,8 +23,8 @@ export async function findFeedbackByEventId(eventId: string): Promise<{ id: stri
   });
 }
 
-export async function createFeedback(params: CreateFeedbackParams): Promise<{ id: string }> {
-  return prisma.recommendationFeedback.create({
+export async function createFeedback(params: CreateFeedbackParams, db: FeedbackDb = prisma): Promise<{ id: string }> {
+  return db.recommendationFeedback.create({
     data: {
       recommendationId: params.recommendationId,
       eventId: params.eventId,
