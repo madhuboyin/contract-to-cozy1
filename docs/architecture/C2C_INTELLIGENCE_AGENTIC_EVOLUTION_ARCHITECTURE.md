@@ -393,7 +393,9 @@ The orchestrator's footprint shrinks further this revision: it no longer routes 
 
 ### 10.2 Reuse of `decisionPlatform`
 
-Unchanged: `DecisionThread` lifecycle becomes the Specialist Agent's execution record; `decisionFamilyAdapterRegistry` gains an eighth family for agent-driven handoffs, once a second specialist exists (§26 Phase 4).
+Corrected twice over in this revision. First, terminology: per §12.5's hierarchy, `DecisionThread` remains the business-facing decision-lineage record the Specialist Agent reads/writes — it is not the agent's own execution/audit record, which is `AgentRun` (append-only, one per invocation) with `AgentState` only for a paused/resumable run.
+
+Second, a category error: **[verified]** `decisionFamilyAdapterRegistry.ts` maps a `DecisionDefinitionId` (`HVAC_REPAIR_REPLACE`, `REFINANCE_OPPORTUNITY`, `HOME_CAPITAL_TIMELINE_WINDOW`, ...) to the adapter that resolves *that decision's* `DecisionThread` lineage — it is keyed by decision *definitions* (a business question with a canonical answer shape), not by orchestration mechanisms. "Agent-driven handoff" is not a decision definition and has no lineage of its own to resolve; it does not belong in this registry at all. A future family — e.g. `APPLIANCE_REPAIR_REPLACE`, if HVAC generalizes per §12.6 — would earn its own registry entry the same way `HVAC_REPAIR_REPLACE` already has one, because it is itself a decision definition with a canonical verdict shape. Handoff routing (which specialist a homeowner's engagement reaches) is entirely an Agent/Orchestrator-contract concern (§7, §13), never a `decisionFamilyAdapterRegistry` entry.
 
 ---
 
@@ -432,15 +434,39 @@ const INTENTIONALLY_NON_ACTIONABLE: ReadonlySet<`${string}:${EnvelopeDomain}`> =
 function auditCoverage(observedCombinations: { producerModel: string; domain: EnvelopeDomain }[]): CoverageAuditFinding[] {
   const registryDigest = hashRegistry(COMPOUND_RULE_REGISTRY);   // recomputed fresh every run — see 11.3
   return observedCombinations.map(({ producerModel, domain }) => {
-    const matchedRuleIds = COMPOUND_RULE_REGISTRY
-      .filter((rule) => rule.inputContracts.some((c) => c.startsWith(producerModel)))
-      .map((rule) => rule.ruleId);
+    const matchedRuleIds = matchCoverageManifest(producerModel, domain);   // see below — never a string heuristic
     const determination: CoverageDetermination =
       matchedRuleIds.length > 0 ? "COVERED"
       : INTENTIONALLY_NON_ACTIONABLE.has(`${producerModel}:${domain}`) ? "INTENTIONALLY_NON_ACTIONABLE"
       : "REVIEW_REQUIRED";
     return { producerModel, domain, registryVersionDigest: registryDigest, determination, matchedRuleIds, firstObservedAt: /* upsert-preserved */ '', lastAuditedAt: new Date().toISOString() };
   });
+}
+```
+
+**Matching correction.** A prior draft matched `producerModel` against `compoundRuleRegistry.ts`'s `inputContracts` strings with `rule.inputContracts.some((c) => c.startsWith(producerModel))` — this is unreliable in both directions. `inputContracts` entries are free-form descriptive strings at a different abstraction layer than the Envelope's `producerModel` (e.g. `"PropertyRadarCompoundInsight (radarCompoundRules.ts rule, HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE)"`, `"ReplaceRepairAnalysis"`, `"InspectionFinding"` — none of which are, or reliably prefix-match, an Envelope `producerModel` like `Signal` or `RadarEvent`), so legitimate coverage would routinely surface as a false `REVIEW_REQUIRED`. It also ignores `domain` entirely — a single string match would mark *every* domain a producer emits as covered, even domains no matched rule actually addresses.
+
+Fixed with a separate, explicitly reviewed coverage manifest — hand-authored alongside each `compoundRuleRegistry.ts` entry, exactly as `deduplicationKey`/`applicability` already are, rather than inferred from the registry's existing free-form strings:
+
+```ts
+interface CoverageManifestEntry {
+  producerModel: string;    // an Envelope source.sourceModel value, e.g. "RadarEvent"
+  domain: EnvelopeDomain;   // e.g. "ROOF"
+  ruleIds: string[];        // compoundRuleRegistry.ts ruleIds this (producerModel, domain) pair is actually covered by
+}
+
+// One entry per rule the registry author confirms actually reads this producer for this domain —
+// reviewed and updated in the same PR that adds or changes a compoundRuleRegistry.ts entry, never
+// derived automatically from inputContracts' free-form text.
+const COVERAGE_MANIFEST: readonly CoverageManifestEntry[] = [
+  { producerModel: "RadarEvent", domain: "ROOF", ruleIds: ["RADAR_COMPOUND_INSIGHT_PROMOTION"] },
+  // ...
+];
+
+function matchCoverageManifest(producerModel: string, domain: EnvelopeDomain): string[] {
+  return COVERAGE_MANIFEST
+    .filter((entry) => entry.producerModel === producerModel && entry.domain === domain)
+    .flatMap((entry) => entry.ruleIds);
 }
 ```
 
@@ -517,6 +543,19 @@ A reviewer correctly flagged that calling `DecisionThread` "the Specialist Agent
 | `AgentState` (new, §25) | "Where exactly in its `selectNextTool` loop was a *paused* run, so it can resume?" | Orchestration-only | Exists only for a run awaiting a `SCHEDULE_FOLLOW_UP` confirmation or a homeowner response — a run that completes in one pass never creates one |
 
 The Specialist Agent reads and writes `DecisionThread` for the business-facing recommendation itself (unchanged from every prior revision); it separately writes exactly one `AgentRun` row per invocation for observability/audit (§20); and it writes an `AgentState` row only in the one case where its loop genuinely needs to resume later. `DecisionThread` remains the only source of truth a homeowner-facing surface ever reads from — `AgentRun`/`AgentState` are internal to the agent runtime and never rendered as the decision itself.
+
+### 12.6 Generalization: HVAC is the reference implementation of a Repair-or-Replace Specialist, not a permanent scope boundary
+
+Naming §12 around "the HVAC Specialist Agent" throughout, with Phase 4 (§26) only saying "add specialists independently," leaves the generalization path unspecified — an implementer could reasonably read this as license to build one bespoke specialist per appliance, or to treat the architecture as permanently HVAC-only. Neither is intended. This section makes the actual model explicit:
+
+| Question | Answer |
+|---|---|
+| What is HVAC, architecturally? | The **first certified reference implementation** of a reusable pattern: the **Repair-or-Replace Specialist** — any decision shaped as "repair this failing system, or replace it," backed by a deterministic scoring engine and a `decisionFamilyAdapterRegistry` entry (§10.2) for that specific decision definition. |
+| What generalizes across similar appliances (water heater, major kitchen appliances, similar-shaped repair/replace decisions)? | One **Repair-or-Replace Specialist family adapter** — the same `selectNextTool` loop shape (§12.2), the same loop-safety/abstention machinery (§12.3), the same autonomy ceiling (§12.4) — parameterized per appliance by a **profile**: which scoring engine to call in the `SCORE` step, which facts are material in `REQUEST_CONTEXT`, which documents are derivable in `REQUEST_DOCUMENT`, and which `decisionFamilyAdapterRegistry` entry backs its `DecisionThread`. Adding water-heater repair/replace support means adding a profile and a new decision-definition registry entry (e.g. `WATER_HEATER_REPAIR_REPLACE`) — not a new agent, not a new loop implementation. |
+| When does a new appliance/domain warrant a genuinely new specialist instead of a new profile on the existing family adapter? | Only when its decision shape is **materially different** from repair-or-replace — different tool set (not gather/score/explain), different safety tier (e.g. a decision with real Level 3+ consequences the family adapter's Level 0–2 ceiling doesn't cover), different evidence/evaluation requirements the shared loop can't express. A same-shaped decision with a different scoring engine is a profile; a differently-shaped decision is a new specialist. |
+| What about higher-risk families — electrical, plumbing, roofing, structural? | **Explicitly out of scope for this document, not silently included.** These carry safety and liability profiles the Repair-or-Replace family adapter's Level 0–2, narration-only ceiling was not evaluated against. Admission requires, at minimum: a documented safety-tier review, an explicit autonomy-ceiling re-justification (§7.1/§9.2 of the audit), and its own evaluation suite before any `AgentDefinition` is registered — the same bar `hvacRepairReplaceEngine.service.ts` itself already cleared for HVAC specifically, not an assumption that clearing it once clears it for every home system. |
+
+§26 Phase 4 is revised accordingly: it adds specialists via this family-adapter/new-specialist test, not by unstructured per-domain judgment call.
 
 ---
 
@@ -714,7 +753,7 @@ graph TB
     PLP["priorityListPolicy.ts"]
     ELIG["homeActionProactiveEligibilityPolicy.ts"]
     DELIV["homeActionProactiveDelivery.service.ts"]
-    CRON["evaluateHomeActionProactiveDeliveryJob (scheduled)"]
+    CRON["evaluateHomeActionProactiveDeliveryJob (registered, schedule-capable)"]
   end
 
   subgraph FOUNDATION["Intelligence Foundation — this document's actual scope"]
@@ -913,7 +952,7 @@ sequenceDiagram
 
 ### Phase 4 — Additional specialists and coverage rules
 
-Pattern only, per §12/§11 — no build order committed. A second specialist is what would first create genuine domain ambiguity and justify an orchestrator-mediated Pattern E; until then, each new specialist and each new coverage rule is added independently, following the patterns above.
+Pattern only, per §12/§11 — no build order committed. Extending the Repair-or-Replace family adapter with a new appliance profile (§12.6) is a routine addition, not a phase gate. Building a genuinely new specialist (a materially different decision shape, per §12.6's test) or admitting a higher-risk family (electrical, plumbing, roofing) requires the explicit review that section describes before any new `AgentDefinition` is registered. A second same-family specialist profile is what would first create genuine domain ambiguity and justify an orchestrator-mediated Pattern E; until then, each addition follows §12.6's test independently.
 
 ---
 
@@ -959,7 +998,8 @@ Pattern only, per §12/§11 — no build order committed. A second specialist is
 | `REVIEW_REQUIRED` findings resolved (rule authored) vs. accumulating unaddressed | Resolved, trending toward zero backlog |
 | Specialist Agent loop-abstention rate | Low, but nonzero (proves the abstention path is real, not decorative) |
 | % Specialist Agent runs resolved without an LLM call | High |
-| Duplicate Home Actions created by Coverage Audit triggering | Zero — proves `homeActionSourcePromotion.service.ts`'s existing dedup is being respected, not bypassed |
+| Coverage manifest precision (findings later found to be false positives — a `REVIEW_REQUIRED` that turns out to already be covered by a rule the manifest missed) | Low, trending toward zero as `COVERAGE_MANIFEST` entries are reviewed alongside registry changes (§11.2) |
+| Median time from a finding first becoming `REVIEW_REQUIRED` to an engineer resolving it (rule authored, or explicitly accepted as `INTENTIONALLY_NON_ACTIONABLE`) | Tracked; the Audit's entire value is realized only if findings are actually acted on, not just generated |
 
 ### Product intelligence
 
