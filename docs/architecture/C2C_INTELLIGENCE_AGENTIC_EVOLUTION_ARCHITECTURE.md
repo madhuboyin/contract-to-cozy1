@@ -395,7 +395,7 @@ The orchestrator's footprint shrinks further this revision: it no longer routes 
 
 Corrected twice over in this revision. First, terminology: per §12.5's hierarchy, `DecisionThread` remains the business-facing decision-lineage record the Specialist Agent reads/writes — it is not the agent's own execution/audit record, which is `AgentRun` (append-only, one per invocation) with `AgentState` only for a paused/resumable run.
 
-Second, a category error: **[verified]** `decisionFamilyAdapterRegistry.ts` maps a `DecisionDefinitionId` (`HVAC_REPAIR_REPLACE`, `REFINANCE_OPPORTUNITY`, `HOME_CAPITAL_TIMELINE_WINDOW`, ...) to the adapter that resolves *that decision's* `DecisionThread` lineage — it is keyed by decision *definitions* (a business question with a canonical answer shape), not by orchestration mechanisms. "Agent-driven handoff" is not a decision definition and has no lineage of its own to resolve; it does not belong in this registry at all. A future family — e.g. `APPLIANCE_REPAIR_REPLACE`, if HVAC generalizes per §12.6 — would earn its own registry entry the same way `HVAC_REPAIR_REPLACE` already has one, because it is itself a decision definition with a canonical verdict shape. Handoff routing (which specialist a homeowner's engagement reaches) is entirely an Agent/Orchestrator-contract concern (§7, §13), never a `decisionFamilyAdapterRegistry` entry.
+Second, a category error: **[verified]** `decisionFamilyAdapterRegistry.ts` maps a `DecisionDefinitionId` (`HVAC_REPAIR_REPLACE`, `REFINANCE_OPPORTUNITY`, `HOME_CAPITAL_TIMELINE_WINDOW`, ...) to the adapter that resolves *that decision's* `DecisionThread` lineage — it is keyed by decision *definitions* (a business question with a canonical answer shape), not by orchestration mechanisms. "Agent-driven handoff" is not a decision definition and has no lineage of its own to resolve; it does not belong in this registry at all. A future family — e.g. `APPLIANCE_REPAIR_REPLACE`, covering non-HVAC appliances per §12.6 (HVAC itself keeps its own `HVAC_REPAIR_REPLACE` definition, unchanged) — would earn its own registry entry the same way `HVAC_REPAIR_REPLACE` already has one, because it is itself a decision definition with a canonical verdict shape. Handoff routing (which specialist a homeowner's engagement reaches) is entirely an Agent/Orchestrator-contract concern (§7, §13), never a `decisionFamilyAdapterRegistry` entry.
 
 ---
 
@@ -475,20 +475,51 @@ function matchCoverageManifest(producerModel: string, domain: EnvelopeDomain): s
 
 **A manifest with a stale `ruleId` is worse than no manifest** — a typo'd or since-deleted `ruleId` would still make `matchedRuleIds.length > 0` true, silently reporting `COVERED` for a combination with no real coverage at all. `matchCoverageManifest` alone doesn't catch this; a separate validation does, run the same way `workerJobRegistry.ts`'s own startup parity check already works:
 
+A follow-up review found the first version of this validator incomplete: it caught duplicate manifest keys and stale `ruleId`s, but not a key declared in *both* `COVERAGE_MANIFEST` and `INTENTIONALLY_NON_ACTIONABLE` — since `auditCoverage` checks `matchedRuleIds.length > 0` first, `COVERED` silently wins that contradiction with no validation ever surfacing it. Extended to check every input this section's matching depends on, not just the two most obvious ones:
+
 ```ts
+const KNOWN_ENVELOPE_SOURCE_MODELS = new Set(["Signal", "GuidanceSignal", "IntelligenceObservation", "RecommendationSnapshot", "RadarEvent"]);
+// The Envelope's closed producerModel vocabulary (§5.5) — a manifest entry naming anything outside
+// this set is a typo or a model the Envelope doesn't actually wrap, either way a build-time error.
+
 function validateCoverageManifest(): string[] {
   const issues: string[] = [];
   const knownRuleIds = new Set(COMPOUND_RULE_REGISTRY.map((r) => r.ruleId));
-  const seenKeys = new Set<string>();
+  const seenManifestKeys = new Set<string>();
+  const manifestKeys = new Set<string>();
+
   for (const entry of COVERAGE_MANIFEST) {
     const key = `${entry.producerModel}:${entry.domain}`;
-    if (seenKeys.has(key)) issues.push(`COVERAGE_MANIFEST: duplicate entry for ${key} — merge into one entry's ruleIds instead of two entries`);
-    seenKeys.add(key);
+    if (seenManifestKeys.has(key)) issues.push(`COVERAGE_MANIFEST: duplicate entry for ${key} — merge into one entry's ruleIds instead of two entries`);
+    seenManifestKeys.add(key);
+    manifestKeys.add(key);
+
+    if (!KNOWN_ENVELOPE_SOURCE_MODELS.has(entry.producerModel)) issues.push(`COVERAGE_MANIFEST: ${key} names producerModel "${entry.producerModel}", which is not one of the Envelope's known source models`);
+    if (entry.ruleIds.length === 0) issues.push(`COVERAGE_MANIFEST: ${key} has an empty ruleIds array — remove the entry entirely if nothing covers it yet, don't leave a vacuous one`);
+    if (new Set(entry.ruleIds).size !== entry.ruleIds.length) issues.push(`COVERAGE_MANIFEST: ${key} lists the same ruleId more than once`);
     for (const ruleId of entry.ruleIds) {
       if (!knownRuleIds.has(ruleId)) issues.push(`COVERAGE_MANIFEST: ${key} references ruleId "${ruleId}", which does not exist in COMPOUND_RULE_REGISTRY`);
     }
   }
+
+  for (const nonActionableKey of INTENTIONALLY_NON_ACTIONABLE) {
+    if (manifestKeys.has(nonActionableKey)) issues.push(`Contradiction: ${nonActionableKey} appears in both COVERAGE_MANIFEST and INTENTIONALLY_NON_ACTIONABLE — a combination cannot be both "covered by a rule" and "intentionally never covered." Remove it from whichever list is wrong.`);
+  }
+
   return issues;   // non-empty -> fail startup/CI, exactly like validateDecisionFamilyAdapterRegistry's own pattern
+}
+
+// hashAuditInputs sorts every input canonically (by producerModel, then domain, then ruleId) before hashing,
+// so a semantically-identical manifest/registry in a different array or object-key order still produces the
+// same auditInputsDigest — an ordering-only change is not a "the audit inputs changed" event.
+function hashAuditInputs(registry: typeof COMPOUND_RULE_REGISTRY, manifest: typeof COVERAGE_MANIFEST, nonActionable: typeof INTENTIONALLY_NON_ACTIONABLE): string {
+  const canonical = {
+    registry: [...registry].sort((a, b) => a.ruleId.localeCompare(b.ruleId)),
+    manifest: [...manifest].sort((a, b) => `${a.producerModel}:${a.domain}`.localeCompare(`${b.producerModel}:${b.domain}`))
+      .map((e) => ({ ...e, ruleIds: [...e.ruleIds].sort() })),
+    nonActionable: [...nonActionable].sort(),
+  };
+  return hash(JSON.stringify(canonical));
 }
 ```
 
@@ -576,25 +607,62 @@ Naming §12 around "the HVAC Specialist Agent" throughout, with Phase 4 (§26) o
 
 **What is HVAC, architecturally?** The first certified reference implementation of a reusable pattern: the **Repair-or-Replace Specialist** — any decision shaped as "repair this failing system, or replace it," backed by a deterministic scoring engine.
 
-**What generalizes across similar appliances (water heater, major kitchen appliances, similar-shaped repair/replace decisions)? Two separate registries, not one.** A prior draft of this section conflated them by routing every new appliance through `decisionFamilyAdapterRegistry.ts` — which, per §10.2's correction, maps one `DecisionDefinitionId` to one lineage adapter — so that reading would have produced a new adapter per appliance despite claiming "one family adapter." Kept genuinely separate: the agent's code + its per-appliance configuration, versus business-decision identity.
+**Which decision definition does HVAC itself keep?** A prior draft's diagram put HVAC under a shared `APPLIANCE_REPAIR_REPLACE` definition — wrong, and unnecessary. HVAC's existing certified identity, `HVAC_REPAIR_REPLACE`, already has its own `DecisionThread` lineage, its own dedicated engine (`hvacRepairReplaceEngine.service.ts`), and a context contract and professional boundary (licensed HVAC technician) that are already HVAC-specific — migrating it into a generic appliance definition would be higher-impact for no benefit. **HVAC keeps `HVAC_REPAIR_REPLACE`, unchanged.** The generalization question below is about *other* appliances, not about moving HVAC anywhere.
+
+**What generalizes across similar appliances (water heater, major kitchen appliances, similar-shaped repair/replace decisions)? Two separate registries, not one — and one of them may already exist.** **[verified]** `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService` is already a real, general-purpose, non-HVAC repair/replace engine — it already classifies by inventory category/name (`inferDefaults()` already handles water heater, dishwasher, fridge, washer/dryer with their own lifespan/cost defaults) and already computes a verdict (`REPLACE_NOW`/`REPLACE_SOON`/`REPAIR_AND_MONITOR`/`REPAIR_ONLY`) against the `ReplaceRepairAnalysis` model. **This document does not build a second, competing appliance-classification catalog.** The generalization is:
 
 ```
 RepairReplaceSpecialist (the agent + its selectNextTool loop, §12.2-§12.4 — unchanged per appliance)
-└── RepairReplaceProfileRegistry (NEW, agent-internal — not decisionPlatform)
-    ├── HVAC profile         — scoring engine: hvacRepairReplaceEngine.service.ts; material facts; derivable documents
-    ├── WATER_HEATER profile
-    └── DISHWASHER profile
+└── RepairReplaceProfileRegistry (NEW, agent-internal — not decisionPlatform, not a classification catalog)
+    ├── HVAC profile              — decisionDefinitionId: HVAC_REPAIR_REPLACE
+    │                                scoringSkillId: wraps hvacRepairReplaceEngine.service.ts (unchanged)
+    └── GENERIC_APPLIANCE profile — decisionDefinitionId: APPLIANCE_REPAIR_REPLACE
+                                     scoringSkillId: wraps replaceRepairAnalysis.service.ts's ReplaceRepairService
+                                     (unchanged) — this single profile covers water heater, dishwasher, fridge,
+                                     washer/dryer, and anything else that service already classifies; the profile
+                                     registry does not re-implement its category/name matching
 
 decisionFamilyAdapterRegistry.ts (existing, decisionPlatform — unchanged mechanism)
-└── APPLIANCE_REPAIR_REPLACE (one DecisionDefinitionId, one DecisionThread-lineage adapter,
-     shared by every profile above whose canonical verdict/lifecycle/context contract is the same shape)
+├── HVAC_REPAIR_REPLACE       (existing, unchanged)
+└── APPLIANCE_REPAIR_REPLACE  (new entry, one DecisionThread-lineage adapter shared by every non-HVAC appliance
+                                ReplaceRepairService already scores)
 ```
 
-Adding water-heater repair/replace support means adding a `RepairReplaceProfileRegistry` entry — a new agent-internal profile, resolved by the property's inventory item type — not a new agent, not a new loop implementation, and **not** automatically a new `decisionFamilyAdapterRegistry` entry. A new decision-definition registry entry is warranted only per the test below, independent of how many profiles exist.
+Two profiles at launch, not one per appliance — `replaceRepairAnalysis.service.ts` is the single existing owner of non-HVAC appliance classification and numeric defaults, and the profile registry defers to it entirely rather than duplicating it. A future appliance needing genuinely different treatment than `ReplaceRepairService` already provides is a decision for whoever extends that service, not a reason to add a third profile here.
+
+**`RepairReplaceProfileRegistry`'s minimal executable contract** — an earlier draft named the registry without specifying what a profile actually is:
+
+```ts
+interface RepairReplaceProfile {
+  profileId: string;                          // stable, e.g. "HVAC", "GENERIC_APPLIANCE"
+  inventoryMatcher: (item: InventoryItem) => boolean;   // deterministic; see below for unmatched/ambiguous handling
+  decisionDefinitionId: DecisionDefinitionId;  // HVAC_REPAIR_REPLACE | APPLIANCE_REPAIR_REPLACE
+  scoringSkillId: string;                      // the Skill (§9) wrapping the profile's scoring engine
+  requiredFacts: PropertyContextScope[];       // what REQUEST_CONTEXT (§12.2) asks for
+  supportedDocuments: string[];                // what REQUEST_DOCUMENT (§12.2) can request
+  professionalBoundary: string;                // e.g. "licensed HVAC technician" vs. "general appliance repair" —
+                                                 // rendered in EXPLAIN's narration, never asserted beyond this string
+  evaluationSuiteId: string;                   // required before this profile is enabled, same bar as an AgentDefinition
+}
+
+const REPAIR_REPLACE_PROFILES: readonly RepairReplaceProfile[] = [
+  { profileId: "HVAC", inventoryMatcher: (item) => item.category === "HVAC", decisionDefinitionId: "HVAC_REPAIR_REPLACE", scoringSkillId: "hvac-repair-replace", requiredFacts: [/* ... */], supportedDocuments: ["hvac-nameplate-photo"], professionalBoundary: "licensed HVAC technician", evaluationSuiteId: "hvac-repair-replace-eval" },
+  { profileId: "GENERIC_APPLIANCE", inventoryMatcher: (item) => item.category === "APPLIANCE", decisionDefinitionId: "APPLIANCE_REPAIR_REPLACE", scoringSkillId: "replace-repair-analysis", requiredFacts: [/* ... */], supportedDocuments: [], professionalBoundary: "general appliance repair", evaluationSuiteId: "appliance-repair-replace-eval" },
+];
+
+function resolveProfile(item: InventoryItem): RepairReplaceProfile | "NO_MATCH" | "AMBIGUOUS" {
+  const matches = REPAIR_REPLACE_PROFILES.filter((p) => p.inventoryMatcher(item));
+  if (matches.length === 0) return "NO_MATCH";      // the Specialist Agent abstains (§18.2) — no profile means no scoring engine to call
+  if (matches.length > 1) return "AMBIGUOUS";        // fails validation at startup/CI, per the uniqueness rule below
+  return matches[0];
+}
+```
+
+**Uniqueness is enforced, not assumed:** every `inventoryMatcher` predicate across `REPAIR_REPLACE_PROFILES` must be mutually exclusive for any real `InventoryItem`, checked the same way `validateCoverageManifest` (§11.2) and `validateDecisionFamilyAdapterRegistry` already enforce their own uniqueness constraints — an ambiguous match (two profiles claiming the same item) fails startup/CI, it is never resolved silently at runtime by picking the first match.
 
 **When does a new appliance/domain warrant a genuinely new *decision definition* (`decisionFamilyAdapterRegistry` entry) — and, separately, when does it warrant a genuinely new *specialist* instead of a new profile?**
 
-- **New decision definition:** only when the canonical verdict shape, lifecycle, context contract, or professional/licensing boundary materially differs from `APPLIANCE_REPAIR_REPLACE` — never merely because the appliance type differs. Most appliances share one decision definition; the profile registry, not the decision-platform registry, is where appliance-specific variation lives.
+- **New decision definition:** only when the canonical verdict shape, lifecycle, context contract, or professional/licensing boundary materially differs from both `HVAC_REPAIR_REPLACE` and `APPLIANCE_REPAIR_REPLACE` — never merely because the appliance type differs. Most non-HVAC appliances stay under `APPLIANCE_REPAIR_REPLACE`, backed by `ReplaceRepairService`.
 - **New specialist:** only when the decision *shape itself* is materially different from repair-or-replace — a different tool set (not gather/score/explain), a different safety tier the family adapter's Level 0–2 ceiling doesn't cover, or evidence/evaluation requirements the shared loop can't express.
 
 **What about higher-risk families — electrical, plumbing, roofing, structural?** Explicitly out of scope for this document, not silently included. These carry safety and liability profiles the Repair-or-Replace family adapter's Level 0–2, narration-only ceiling was not evaluated against. Admission requires, at minimum: a documented safety-tier review, an explicit autonomy-ceiling re-justification (§7.1/§9.2 of the audit), and its own evaluation suite before any `AgentDefinition` is registered — the same bar `hvacRepairReplaceEngine.service.ts` itself already cleared for HVAC specifically, not an assumption that clearing it once clears it for every home system.
@@ -947,7 +1015,10 @@ sequenceDiagram
 | `IntelligenceEnvelopeIndex` (conditional) | Thin materialized index, only if query-time fan-out proves insufficient | No ranking field of any kind — the Envelope carries none |
 | `AgentDefinition`, `AgentRun`, `AgentState` | Registry and execution records for the one genuine agent (§12.5) | Scoped to the HVAC Specialist Agent; `AgentState` rows exist only for a paused, resumable run |
 | `ToolInvocation`, `LLMInvocation` | Per-call logs | Unchanged from round 2 |
-| One new `compoundRuleRegistry.ts` entry + producer-loader function per closed coverage finding | Whenever an engineer decides a `REVIEW_REQUIRED` finding warrants a rule (§11.2) | Not a schema change — the registry is a TypeScript array; the new function follows the exact pattern the existing 8 entries already establish |
+| One new `compoundRuleRegistry.ts` entry + producer-loader function + `COVERAGE_MANIFEST` entry per closed coverage finding | Whenever an engineer decides a `REVIEW_REQUIRED` finding warrants a rule (§11.2/§11.3) | Not a schema change — both the registry and the manifest are TypeScript arrays; the new function follows the exact pattern the existing 8 entries already establish |
+| `COVERAGE_MANIFEST`, `INTENTIONALLY_NON_ACTIONABLE` (§11.2) | Hand-authored coverage declarations, not a persisted table | TypeScript source, validated at startup/CI by `validateCoverageManifest` — not runtime-mutable |
+| `RepairReplaceProfileRegistry` (§12.6) | `HVAC` and `GENERIC_APPLIANCE` profiles, each naming a `decisionDefinitionId` + `scoringSkillId` | TypeScript source, not a persisted table; uniqueness validated at startup/CI via `resolveProfile` |
+| One new `decisionFamilyAdapterRegistry.ts` entry: `APPLIANCE_REPAIR_REPLACE` | Backs the `GENERIC_APPLIANCE` profile's `DecisionThread` lineage | Existing registry, existing mechanism (§10.2) — one new entry, `HVAC_REPAIR_REPLACE` untouched |
 
 **Explicitly not changed:** everything round 2 already listed, plus — this revision's addition — `homeActions.service.ts`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `compoundRuleRegistry.ts`'s existing 8 entries, and `DomainEventType`. None of this document's new work touches any of them.
 
@@ -970,18 +1041,18 @@ sequenceDiagram
 | | |
 |---|---|
 | **Objective** | Surface intelligence-to-Home-Action coverage gaps for an engineer to close by hand — never dispatch or promote anything automatically |
-| **New code** | `auditCoverage` job (structural comparison, §11.2), `CoverageAuditFinding` table, admin coverage dashboard |
-| **Reused code** | `compoundRuleRegistry.ts` (read-only, untouched), `homeActionSourcePromotion.service.ts` (untouched — this phase never calls it), `workerJobRegistry.ts`, the `property.homeownerProfile.userId`-resolution pattern from `evaluateHomeActionProactiveDeliveryJob` |
+| **New code** | `auditCoverage` job (structural comparison, §11.2), `CoverageAuditFinding` table, `COVERAGE_MANIFEST` + `INTENTIONALLY_NON_ACTIONABLE` (hand-authored), `validateCoverageManifest` (startup/CI parity check), `hashAuditInputs`, admin coverage dashboard |
+| **Reused code** | `compoundRuleRegistry.ts` (read-only, untouched), `homeActionSourcePromotion.service.ts` (untouched — this phase never calls it), `workerJobRegistry.ts`, the `property.homeownerProfile.userId`-resolution pattern from `evaluateHomeActionProactiveDeliveryJob`, `validateDecisionFamilyAdapterRegistry`'s startup-validation pattern (reused for `validateCoverageManifest`) |
 | **Dependencies** | Phase 0 |
-| **Exit criteria** | Every producer/domain combination observed in the Envelope has an explicit `CoverageAuditFinding` determination; a previously-`REVIEW_REQUIRED` combination is confirmed to disappear from the dashboard once an engineer authors a covering rule, with no automated promotion involved at any point |
+| **Exit criteria** | Every producer/domain combination observed in the Envelope has an explicit `CoverageAuditFinding` determination; `validateCoverageManifest` fails CI on a stale `ruleId`, a manifest/non-actionable contradiction, or an unknown `producerModel`; a previously-`REVIEW_REQUIRED` combination is confirmed to disappear from the dashboard **only** once both a covering rule *and* its `COVERAGE_MANIFEST` entry are authored (§11.3) — a rule alone is not sufficient, with no automated promotion involved at any point |
 
 ### Phase 2 — HVAC Specialist Agent
 
 | | |
 |---|---|
 | **Objective** | Ship the one genuine agent in this document |
-| **New code** | `AgentDefinition`/`AgentRun`/`AgentState`, the `selectNextTool` loop with its budget/abstention fixes (§12.3), the LLM Necessity Gate's typed-claims mechanism (§14.2) |
-| **Reused code** | `hvacRepairReplaceEngine.service.ts`, `DecisionThread`/`RecommendationSnapshot` |
+| **New code** | `AgentDefinition`/`AgentRun`/`AgentState`, the `selectNextTool` loop with its budget/abstention fixes (§12.3), `RepairReplaceProfileRegistry` with its `HVAC` and `GENERIC_APPLIANCE` profiles + `resolveProfile` uniqueness validation (§12.6), a new `APPLIANCE_REPAIR_REPLACE` `decisionFamilyAdapterRegistry.ts` entry for the `GENERIC_APPLIANCE` profile, the LLM Necessity Gate's typed-claims mechanism (§14.2) |
+| **Reused code** | `hvacRepairReplaceEngine.service.ts`, `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService` (as the `GENERIC_APPLIANCE` profile's scoring engine — no new classification logic), `DecisionThread`/`RecommendationSnapshot`, `HVAC_REPAIR_REPLACE`'s existing `decisionFamilyAdapterRegistry.ts` entry |
 | **Dependencies** | Phase 0's HVAC-verdict reconciliation (unchanged prerequisite from earlier revisions) |
 | **Tests** | Loop-budget/abstention tests (fact never resolves after `maxAttemptsPerTool`); the all-facts-known skip path; the homeowner-dispute re-entry path clearing `homeownerDisputedInput`; typed-claim rendering tests proving no LLM-generated number reaches a homeowner unverified |
 | **Exit criteria** | A homeowner engaging with a delivered HVAC Home Action receives a decision-support conversation grounded in the existing scoring engine, with a demonstrated abstention path when facts can't be resolved |
@@ -1007,12 +1078,13 @@ Pattern only, per §12/§11 — no build order committed. Extending the Repair-o
 | `compoundRuleRegistry.ts`, `homeActionSourcePromotion.service.ts`, `getHomeActionFeed()`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `evaluateHomeActionProactiveDeliveryJob` | **EXISTING** | Zero changes. This is the correction this revision makes concrete — every one of these was previously at risk of being duplicated or bypassed |
 | `Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, `RadarEvent` | WRAP AS TOOL (read adapter only) | No schema change, no write path added |
 | Two HVAC verdict engines | CONSOLIDATE | Unchanged prerequisite |
-| `decisionPlatform` | EXTEND | Backing for the Specialist Agent |
+| `decisionPlatform`, `decisionFamilyAdapterRegistry.ts` | EXTEND | Backing for the Specialist Agent; one new `APPLIANCE_REPAIR_REPLACE` entry (§12.6) alongside the unchanged `HVAC_REPAIR_REPLACE` |
+| `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService` | WRAP AS TOOL | Reused unmodified as the `GENERIC_APPLIANCE` profile's scoring engine (§12.6) — its existing category/name classification and numeric defaults are not duplicated |
 | `services/skills/` | EXTEND | `autonomyLevel` field; new `query-envelope` Skill |
 | `aiRequestGovernance.service.ts` | REFACTOR (interface hardening) | Typed-claims response mechanism (§14.2) |
 | `askOrchestrator.service.ts` | EXTEND | Wire `REMOTE_FALLBACK` |
 | `workerJobRegistry.ts` | EXTEND | One new job type (Coverage Audit) |
-| Intelligence Envelope, `CoverageAuditFinding`, HVAC Specialist Agent, Agent runtime | NEW | The only genuinely new components |
+| Intelligence Envelope, `CoverageAuditFinding`, `COVERAGE_MANIFEST`, `RepairReplaceProfileRegistry`, HVAC Specialist Agent, Agent runtime | NEW | The only genuinely new components |
 | `unifiedPriorityRanking.service.ts`, "Attention Watcher Service" / "Attention Agent" (prior revisions) | **RETIRED FROM THIS DESIGN** — never built | Would have violated HI-ATT-001/ASK-INT-019 |
 | A second LLM provider, event bus, vector database, second ranking/eligibility/delivery pipeline | NOT BUILT | No evidence justifies any of them; the last is now explicitly forbidden by requirement, not merely undesirable |
 
