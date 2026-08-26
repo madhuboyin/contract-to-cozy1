@@ -62,10 +62,28 @@ test('a retried event with the same idempotency key is a no-op, not an error', a
 
   const retried = await recordWorkEvent({ ...input, payload: { note: 'retry after timeout, not a new event' } });
 
-  assert.equal(createCalls, 2, 'the repository should still attempt the insert (that is what surfaces the constraint)');
+  assert.equal(createCalls, 1, 'a known retry must be detected before attempting another insert');
   assert.equal(workEvents.size, 1, 'no duplicate row should exist');
   assert.equal(retried.id, first.id, 'the retry must resolve to the original event, not throw');
   assert.equal(retried.payload.note, 'first attempt', 'the original event is untouched by the retried payload');
+});
+
+test('a retried event is a no-op inside a transaction client', async () => {
+  workEvents.clear();
+  createCalls = 0;
+
+  const input = {
+    workItemId: 'work-transactional',
+    eventType: 'SOURCE_RECONCILED',
+    actorType: 'SYSTEM',
+    idempotencyKey: 'source-reconciled:MAINTENANCE:task-1:v1',
+  };
+
+  const first = await recordWorkEvent(input, prismaMock);
+  const retried = await recordWorkEvent(input, prismaMock);
+
+  assert.equal(createCalls, 1, 'the transaction client must not receive a duplicate insert');
+  assert.equal(retried.id, first.id);
 });
 
 test('a genuinely different idempotency key on the same work item creates a second event', async () => {

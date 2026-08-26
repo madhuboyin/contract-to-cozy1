@@ -41,7 +41,16 @@ export async function resolveAndUpsertWorkItem(
   onLifecycleEvent?: WorkItemLifecycleEventCallback,
 ) {
   if (db === prisma) {
-    return prisma.$transaction((tx) => resolveAndUpsertWorkItemInTransaction(proposal, tx, onLifecycleEvent));
+    // A concurrent resolver can pass the initial identity/event lookup and
+    // then lose at one of the database uniqueness boundaries. A P2002 aborts
+    // the interactive transaction, so retry the complete unit once; the
+    // winner's committed rows make the retry an idempotent reconciliation.
+    try {
+      return await prisma.$transaction((tx) => resolveAndUpsertWorkItemInTransaction(proposal, tx, onLifecycleEvent));
+    } catch (error: any) {
+      if (error?.code !== 'P2002') throw error;
+      return prisma.$transaction((tx) => resolveAndUpsertWorkItemInTransaction(proposal, tx, onLifecycleEvent));
+    }
   }
   return resolveAndUpsertWorkItemInTransaction(proposal, db, onLifecycleEvent);
 }

@@ -229,6 +229,22 @@ export function findWorkSource(input: Pick<UpsertSourceInput, 'workItemId' | 'so
  * a no-op, not an error — callers should not have to special-case retries.
  */
 export async function recordWorkEvent(input: RecordEventInput, db: WorkItemDb = prisma) {
+  const uniqueWhere = {
+    workItemId_idempotencyKey: {
+      workItemId: input.workItemId,
+      idempotencyKey: input.idempotencyKey,
+    },
+  };
+
+  // Check before inserting as well as catching P2002 below. The catch-and-
+  // refetch path is safe on the global client, but Postgres aborts an
+  // interactive transaction after a unique violation. Most work resolution
+  // runs transactionally, so a normal retry must be recognized before it can
+  // poison that transaction and take down a read-side reconciliation such as
+  // Unified Home.
+  const existing = await db.operationalWorkEvent.findUnique({ where: uniqueWhere });
+  if (existing) return existing;
+
   try {
     return await db.operationalWorkEvent.create({
       data: {
@@ -246,7 +262,7 @@ export async function recordWorkEvent(input: RecordEventInput, db: WorkItemDb = 
     // the default global client, never inside a real transaction.
     if (err?.code === 'P2002' && db === prisma) {
       return db.operationalWorkEvent.findUnique({
-        where: { workItemId_idempotencyKey: { workItemId: input.workItemId, idempotencyKey: input.idempotencyKey } },
+        where: uniqueWhere,
       });
     }
     throw err;
