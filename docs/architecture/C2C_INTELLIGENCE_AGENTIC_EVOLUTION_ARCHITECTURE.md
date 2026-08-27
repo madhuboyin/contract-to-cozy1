@@ -104,7 +104,7 @@
 | Two disagreeing HVAC verdict engines | Acknowledged divergence, `SOURCE_CARD_VERDICT_DIVERGENCE` | One authoritative verdict | Reconcile in Phase 0 — a data-quality fix |
 | `services/skills/` (19 manifests) | Closest existing analog to an agent-tool manifest | The Skill/Tool layer agents call (§9) | Add an autonomy-level tag; no runtime rewrite |
 | `aiRequestGovernance.service.ts` | Routes all 25 Gemini invocation sites | LLM Gateway (§14) | Harden the interface; no second provider |
-| `askOrchestrator.service.ts` | Deterministic NLU router; `REMOTE_FALLBACK` unwired | Ask Cozy's entry point into the Envelope + canonical feed (§22) | Wire `REMOTE_FALLBACK`; add Specialist Agent as a routable target |
+| `askOrchestrator.service.ts` | Deterministic NLU router; `REMOTE_FALLBACK` already resolves to a real, implemented `GROUNDED_GUIDANCE` operation (`groundedGuidanceResult`), enabled by default (`ASK_REMOTE_GENERATION_ENABLED` defaults `true`) — not unwired, corrected by a comprehensive review that found earlier drafts' "unwired" claim stale | Ask Cozy's entry point into the Envelope + canonical feed (§22) | Verify `GROUNDED_GUIDANCE`'s existing evidence sourcing satisfies this document's Envelope-grounding needs; add the Specialist Agent as a routable target — no "wiring" from scratch |
 | BullMQ + node-cron + `workerJobRegistry.ts` + `CronJobLock` | Most mature layer in the codebase; already registers the schedule-capable `evaluateHomeActionProactiveDeliveryJob` | Execution substrate for the new Promotion Coverage Audit job and Specialist Agent runs | Add one new job type to the existing registry |
 | pino/Loki + Prometheus + OpenTelemetry | Structured logging, worker/AI cost metrics | End-to-end observability for the Coverage Audit and Specialist Agent (§20) | Extend metric namespaces |
 
@@ -938,7 +938,9 @@ interface QualifiedClaim {
 
 **Only the adapters for decision-grade, verdict-bearing Envelope types populate `claimKey` at all** — concretely, `RecommendationSnapshot`'s adapter (which already carries `recommendationDefinitionId`, `scenarioId`, and the decision family, giving it everything needed to construct a `propositionType`+`assessmentHorizonVersion` deterministically from data the native record already has) and, where a `GuidanceSignal` represents a comparable verdict rather than a raw observation, its adapter. Purely observational types (`Signal`, most `IntelligenceObservation` rows) never populate `claimKey` — they have no verdict to conflict over, and §18.1's "relationship unknown, not conflicted" default already covers them correctly.
 
-Two items are `CONFLICTED` only when their `claimKey`s match on every field (same property, same entity, same proposition, same assessment horizon) and their verdicts are incompatible. A mismatch on any field — including a different `entityRef` or a stale `assessmentHorizonVersion` — means **relationship unknown**, not conflicted. This is the version that actually matches the audit's original HVAC example (two engines computing *the same* verdict, for *the same unit*, at *the same assessment point*, and disagreeing) without over-generalizing to unrelated same-domain items or colliding across properties/units.
+Two items are `CONFLICTED` only when their `claimKey`s match on every field (same property, same entity, same proposition, same assessment horizon) and their verdicts are incompatible. A mismatch on any field — including a different `entityRef` or a stale `assessmentHorizonVersion` — means **relationship unknown**, not conflicted.
+
+**A correction from a comprehensive review: this mechanism does not actually cover the audit's own original HVAC example.** That example is two engines computing *the same* verdict, for *the same unit*, at *the same assessment point*, and disagreeing — concretely, `hvacRepairReplaceEngine.service.ts`'s `evaluateHvacRepairReplace()` versus `ReplaceRepairService`'s independent HVAC scoring, the exact pair `decisionThreadService.ts`'s `sourceCardVerdictDivergenceLimitationCodes` already cross-checks today. **[verified]** `ReplaceRepairAnalysis` — the record that divergence check reads — is not one of the Envelope's five wrapped native models (§5.5: `Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, `RadarEvent`), so no Envelope adapter ever produces a `claimKey` for it, and this generic mechanism structurally cannot see that divergence, regardless of how `claimKey` is scoped. What actually resolves the audit's HVAC example is Phase 0's verdict-engine consolidation (§26): once `ReplaceRepairService`'s HVAC branch derives from `evaluateHvacRepairReplace()` instead of scoring independently, the divergence this section's example describes can no longer occur at all, by elimination rather than detection. This claimKey mechanism's real, narrower job is catching a *future* same-property, same-entity, same-proposition, same-horizon disagreement between two genuinely independent, Envelope-wrapped verdict-bearing producers — a case this document does not currently have an instance of, HVAC no longer being one after Phase 0 — without over-generalizing to unrelated same-domain items or colliding across properties/units.
 
 ### 18.2 Abstention remains first-class
 
@@ -966,7 +968,7 @@ Unchanged: `OutcomeObservation` → `CalibrationRelease`, governed, versioned. S
 
 ## 22. Ask Cozy Integration
 
-Unchanged shape from round 2, corrected for what Ask now actually ranks against:
+Unchanged shape from round 2, corrected for what Ask now actually ranks against — and, per a comprehensive review, for what "wire `REMOTE_FALLBACK`" actually means. **[verified]** `REMOTE_FALLBACK` is not unimplemented: `askRoutingCascade.ts` already resolves an unclassified message to a real `GROUNDED_GUIDANCE` operation, `askOrchestrator.service.ts`'s `groundedGuidanceResult` already handles it with a real model call, and `ASK_REMOTE_GENERATION_ENABLED` defaults `true` — unlike the proactive-delivery pipeline, this path is not merely schedule-capable, it is live by default today. Phase 3's actual job is narrower than "wire" it: confirm `GROUNDED_GUIDANCE`'s existing evidence sourcing satisfies this document's Envelope-grounding expectations, and add the Specialist Agent and `query-envelope` as additional routable targets alongside it.
 
 ```
 Ask Cozy → existing deterministic routing (unchanged) →
@@ -1159,15 +1161,21 @@ sequenceDiagram
 
 ## 26. Implementation Phases
 
-### Phase 0 — Intelligence Envelope (read/promotion-input only)
+### Phase 0 — Intelligence Envelope (read/promotion-input only) and the HVAC verdict-engine consolidation
+
+A comprehensive review found that "reconcile the two HVAC verdict engines in Phase 0" was asserted in three places (§3's mapping table, §27's matrix, and Phase 2's own Dependencies row below) but never actually specified anywhere, and Phase 0's own table — the phase everything else cites it against — didn't list it in New code, Reused code, or Exit criteria at all. An implementer following this table alone would have no way to know the reconciliation was in scope, let alone when it's done. Specified here, concretely, for the first time:
+
+**What "one authoritative verdict" means.** `hvacRepairReplaceEngine.service.ts`'s `evaluateHvacRepairReplace()` becomes the sole HVAC verdict computation. `ReplaceRepairService`'s HVAC branch (`replaceRepairAnalysis.service.ts`'s `inferDefaults()`, the "Lifespan Engine" that backs `loadRepairReplaceDecisionActions`'s HVAC row) stops computing an independent verdict for HVAC items: it composes the same `HvacDecisionContext` the `hvacDecisionFamilyAdapter` path already builds and calls `evaluateHvacRepairReplace()` instead, then projects that 3-state result (`REPAIR`/`MONITOR`/`REPLACE`) into `ReplaceRepairAnalysis`'s 4-state `ReplaceRepairVerdict` with a fixed, deliberately conservative table: `REPAIR` → `REPAIR_ONLY`, `MONITOR` → `REPAIR_AND_MONITOR`, `REPLACE` → `REPLACE_SOON` — **never `REPLACE_NOW`**, because neither `HvacDecisionContext` nor `HvacRepairReplaceResult` carries any current-failure/safety signal `InventoryItemCondition`'s enum (`NEW`/`GOOD`/`FAIR`/`POOR`/`UNKNOWN`) could ground an "urgent now" claim in — asserting `REPLACE_NOW` from a score the engine itself doesn't attach timing to would repeat exactly the kind of unearned claim §14.2's typed-claims discipline exists to prevent elsewhere in this document. Non-HVAC categories are entirely unaffected — `ReplaceRepairService`'s existing classification and scoring for `APPLIANCE` and every other category is untouched.
+
+**What this retires.** Once both paths derive from the same computation, `decisionThreadService.ts`'s `sourceCardVerdictDivergenceLimitationCodes` cross-check (and its `SOURCE_CARD_VERDICT_DIVERGENCE` limitation code) becomes structurally unreachable — two readings of the same function can't disagree — and is deleted in this phase, not left behind as dead code.
 
 | | |
 |---|---|
-| **Objective** | Build the read abstraction; explicitly do NOT build a ranker |
-| **New code** | 5 read adapters, `EnvelopeKey`/`LineageKey` types, `query-envelope` Skill |
-| **Reused code** | All 5 native stores; `compoundRuleRegistry.ts` (untouched) |
-| **Risks** | The temptation to add a ranking field "just in case" — mitigated by Principle 3 being a review checklist item |
-| **Exit criteria** | All 5 subsystems queryable through one Envelope contract with correct lineage/revision separation; zero ranking fields anywhere in the type |
+| **Objective** | Build the read abstraction (explicitly do NOT build a ranker); consolidate the two independent HVAC verdict computations into one |
+| **New code** | 5 read adapters, `EnvelopeKey`/`LineageKey` types, `query-envelope` Skill, the HVAC-verdict projection function described above |
+| **Reused/modified code** | All 5 native stores; `compoundRuleRegistry.ts` (untouched); `hvacRepairReplaceEngine.service.ts` (reused, unmodified — becomes the sole HVAC verdict authority); `replaceRepairAnalysis.service.ts`'s HVAC branch (modified to delegate instead of independently scoring); `sourceCardVerdictDivergenceLimitationCodes` (deleted) |
+| **Risks** | The temptation to add a ranking field "just in case" — mitigated by Principle 3 being a review checklist item; silently keeping a second HVAC formula alive somewhere — mitigated by the exit criterion below |
+| **Exit criteria** | All 5 subsystems queryable through one Envelope contract with correct lineage/revision separation; zero ranking fields anywhere in the type; identical HVAC facts produce the same verdict (through the projection table above) whether read via the Home Action/`ReplaceRepairAnalysis` path or the `DecisionThread` path; `SOURCE_CARD_VERDICT_DIVERGENCE` can no longer occur because there is only one computation left to disagree with itself |
 
 ### Phase 1 — Promotion Coverage Audit
 
@@ -1194,11 +1202,13 @@ A prior draft shipped the `GENERIC_APPLIANCE` profile, a new `APPLIANCE_REPAIR_R
 
 ### Phase 3 — Ask Cozy integration
 
+`REMOTE_FALLBACK` is already wired to a live, enabled-by-default `GROUNDED_GUIDANCE` operation (§22) — this phase does not build that path, it adds two new routable targets alongside it and confirms the existing one meets this document's grounding bar.
+
 | | |
 |---|---|
-| **Objective** | Wire `REMOTE_FALLBACK`; add the Specialist Agent and `query-envelope` as routable Ask targets |
+| **Objective** | Confirm `GROUNDED_GUIDANCE`'s existing evidence sourcing is Envelope-grounding-compatible; add the Specialist Agent and `query-envelope` as routable Ask targets |
 | **Dependencies** | Phases 0–2 |
-| **Exit criteria** | Ask ranks only `getHomeActionFeed()` output (verified by a test that fails if any new ranking path is introduced); non-actionable questions resolve via `query-envelope` without touching promotion |
+| **Exit criteria** | Ask ranks only `getHomeActionFeed()` output (verified by a test that fails if any new ranking path is introduced); non-actionable questions resolve via `query-envelope` without touching promotion; `GROUNDED_GUIDANCE` responses that touch Envelope-observable domains cite Envelope evidence rather than unsourced model text |
 
 ### Phase 4 — `GENERIC_APPLIANCE`, additional specialists, and coverage rules
 
@@ -1231,7 +1241,7 @@ Building a genuinely new specialist (a materially different decision shape, per 
 | `snapshotDecisionFamilyAdapter.ts`'s `createSnapshotDecisionFamilyAdapter`/`hashSourceState` | WRAP AS TOOL | Reused unmodified as the factory backing `applianceDecisionFamilyAdapter` (§12.7) — the same factory the five existing snapshot families already use |
 | `services/skills/` | EXTEND | `autonomyLevel` field; new `query-envelope` Skill |
 | `aiRequestGovernance.service.ts` | REFACTOR (interface hardening) | Typed-claims response mechanism (§14.2) |
-| `askOrchestrator.service.ts` | EXTEND | Wire `REMOTE_FALLBACK` |
+| `askOrchestrator.service.ts` | EXTEND | Add Specialist Agent + `query-envelope` as routable targets alongside the already-live `GROUNDED_GUIDANCE`/`REMOTE_FALLBACK` path (§22) — not "wire" it, it's already wired and enabled by default |
 | `workerJobRegistry.ts` | EXTEND | One new job type (Coverage Audit) |
 | Intelligence Envelope, `CoverageAuditFinding`, `COVERAGE_MANIFEST`, `RepairReplaceProfileRegistry`, HVAC Specialist Agent, Agent runtime | NEW | The only genuinely new components |
 | `unifiedPriorityRanking.service.ts`, "Attention Watcher Service" / "Attention Agent" (prior revisions) | **RETIRED FROM THIS DESIGN** — never built | Would have violated HI-ATT-001/ASK-INT-019 |
