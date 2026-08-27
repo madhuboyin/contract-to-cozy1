@@ -708,29 +708,98 @@ An earlier draft treated adding one `decisionFamilyAdapterRegistry.ts` entry as 
 | `DecisionDefinitionId` | A string-literal union type (`decisionDefinitionRegistry.ts`) — currently 7 values, none of them appliance-shaped | Add `'APPLIANCE_REPAIR_REPLACE'` to the union |
 | `DECISION_DEFINITIONS` entry | A `DecisionDefinition` record: `decisionDefinitionId`, `version`, `primaryDomain`, `title`, `contextContractId`, `allowedPreferenceDefinitionIds`, `professionalBoundaryCode`, `evalSuite` | A new entry — `allowedPreferenceDefinitionIds: []` is defensible (no preference definition exists for this domain yet, matching the existing pattern for the 5 snapshot-style families) |
 | `DecisionContextContract` entry (`DECISION_CONTEXT_CONTRACTS`) | The typed context shape a thread of this family reads | A new contract — likely thin, since `ReplaceRepairService` already assembles what it needs from the inventory item directly |
-| A concrete `DecisionFamilyAdapter` | Implements the real contract (`decisionFamilyAdapter.ts`): thread selection, create/resume behavior, `DecisionFamilyThreadLineage`, `DecisionFamilyAmbiguousThreadError` handling | A new `applianceDecisionFamilyAdapter.ts`, following the existing snapshot-family adapters' shape (`domainSnapshotAdapters.ts`) rather than `hvacDecisionFamilyAdapter`'s heavier composition — `ReplaceRepairAnalysis` is already the authoritative evaluation, so this adapter wraps it, it does not recompute it |
+| A concrete `DecisionFamilyAdapter` | Implements the real contract (`decisionFamilyAdapter.ts`): thread selection, create/resume behavior, `DecisionFamilyThreadLineage`, `DecisionFamilyAmbiguousThreadError` handling | **[verified, corrected]** `createSnapshotDecisionFamilyAdapter` (`snapshotDecisionFamilyAdapter.ts`) — not a hand-rolled adapter and not `hvacDecisionFamilyAdapter`'s shape (see correction below) |
 | `decisionFamilyAdapterRegistry.ts` entry | Maps the ID to the adapter | The one artifact the earlier draft already named |
+| Category-aware ingress in `homeActionDecisionLineage.ts` and its producer | Routes a repair-replace Home Action/work item to the *correct* decision definition by inventory-item category | **New in this round** — see "Ingress" below; omitted from the earlier draft entirely |
 
-**The bridge from `ReplaceRepairAnalysis` to `RecommendationSnapshot`.** `ReplaceRepairService` already persists an authoritative `ReplaceRepairAnalysis` row with its own `verdict`/`confidence`/`impactLevel` — it does not itself produce a `RecommendationSnapshot`, decision-platform lineage, staleness handling, supersession, or limitation codes. Without an explicit bridge, two independent recommendation records for the same appliance (a `ReplaceRepairAnalysis` row and a `RecommendationSnapshot`) could diverge with no declared authority between them — precisely the `SOURCE_CARD_VERDICT_DIVERGENCE` failure mode `decisionFamilyAdapter.ts`'s own code comments already document happening for HVAC today. The bridge, made explicit rather than assumed:
+**Correcting which existing adapter this actually resembles.** An earlier draft of this section claimed `applianceDecisionFamilyAdapter` follows "the same shape `hvacDecisionFamilyAdapter` already establishes... wrap an authoritative external evaluation, don't recompute it." **[verified]** That is backwards: `hvacDecisionFamilyAdapter` (`decisionThreadService.ts`) does the opposite — `createHvacDecisionThread` calls `composeHvacDecisionContext` then `evaluateHvacRepairReplace(context, weights)`, *recomputing* a verdict fresh from Property Context facts and calibration weights every time. There is no persisted "authoritative HVAC evaluation" it wraps. The real precedent for wrapping an already-persisted authoritative record is the five existing snapshot-style families in `domainSnapshotAdapters.ts` (refinance opportunity, home-capital-timeline window, ownership-cost change, savings-benefit match, coverage question) — each is a thin `loadXSourceState(propertyId, primaryEntityId): Promise<SnapshotSourceState | null>` function passed to the shared `createSnapshotDecisionFamilyAdapter` factory (`snapshotDecisionFamilyAdapter.ts`), whose own header comment states the distinction explicitly: domains here "already have a persisted, authoritative evaluation... this factory turns into a DecisionThread/RecommendationSnapshot by snapshotting its current state, not by re-deriving a recommendation" — exactly `ReplaceRepairAnalysis`'s shape, not HVAC's.
 
+**The bridge from `ReplaceRepairAnalysis` to `RecommendationSnapshot`**, corrected to reuse that factory rather than invent a new adapter shape. `ReplaceRepairService` already persists an authoritative `ReplaceRepairAnalysis` row with its own `verdict`/`confidence`/`impactLevel` — it does not itself produce a `RecommendationSnapshot`, decision-platform lineage, staleness handling, supersession, or limitation codes. Without an explicit bridge, two independent recommendation records for the same appliance (a `ReplaceRepairAnalysis` row and a `RecommendationSnapshot`) could diverge with no declared authority between them — precisely the `SOURCE_CARD_VERDICT_DIVERGENCE` failure mode `decisionThreadService.ts`'s own code comments already document happening for HVAC today, between its `ReplaceRepairAnalysis` "Lifespan Engine" row and `evaluateHvacRepairReplace`'s independent verdict. The bridge, made explicit rather than assumed, following `domainSnapshotAdapters.ts`'s exact existing pattern:
+
+```ts
+// applianceDecisionFamilyAdapter.ts — same file shape as domainSnapshotAdapters.ts's
+// six existing configs, not a new kind of component.
+
+async function loadApplianceRepairReplaceSourceState(
+  propertyId: string,
+  primaryEntityId: string, // an InventoryItem id — same identity HVAC's adapter uses
+): Promise<SnapshotSourceState | null> {
+  const analysis = await prisma.replaceRepairAnalysis.findFirst({
+    where: {
+      propertyId,
+      inventoryItemId: primaryEntityId,
+      status: 'READY',
+      // Eligibility is the GENERIC_APPLIANCE profile's own eligibleCategories (§12.6) —
+      // defined once there, read here, never duplicated: an item HVAC already owns
+      // must never also resolve non-null under APPLIANCE_REPAIR_REPLACE.
+      inventoryItem: { category: { in: GENERIC_APPLIANCE_PROFILE.eligibleCategories } },
+    },
+    orderBy: { computedAt: 'desc' },
+    select: {
+      id: true, verdict: true, confidence: true, impactLevel: true, summary: true,
+      ageYears: true, remainingYears: true, estimatedNextRepairCostCents: true,
+      estimatedReplacementCostCents: true, breakEvenMonths: true, updatedAt: true,
+    },
+  });
+  if (!analysis) return null;
+
+  // Explicit table, not an inferred 1:1 — the two vocabularies are not identical,
+  // and a silent assumption here would be exactly the kind of unreviewed mapping
+  // this document elsewhere insists on avoiding (§14.2's typed-claims discipline).
+  const verdictCode = analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON' ? 'REPLACE' : 'REPAIR';
+
+  return {
+    title: 'Repair or replace this appliance',
+    goalCode: 'APPLIANCE_REPAIR_REPLACE_DECISION',
+    verdictCode,
+    reasonCodes: [`SOURCE_VERDICT_${analysis.verdict}`, `CONFIDENCE_${analysis.confidence}`, `IMPACT_${analysis.impactLevel ?? 'UNKNOWN'}`],
+    confidenceBreakdown: {
+      label: analysis.confidence, impactLevel: analysis.impactLevel,
+      remainingYears: analysis.remainingYears, breakEvenMonths: analysis.breakEvenMonths,
+    },
+    // Only the fields a changed recommendation would actually change — same field-scoped
+    // rationale as §11.2's hashAuditInputs fix, not a full-object hash.
+    inputDigest: hashSourceState({
+      id: analysis.id, verdict: analysis.verdict, confidence: analysis.confidence, impactLevel: analysis.impactLevel,
+      ageYears: analysis.ageYears, remainingYears: analysis.remainingYears,
+      estimatedNextRepairCostCents: analysis.estimatedNextRepairCostCents,
+      estimatedReplacementCostCents: analysis.estimatedReplacementCostCents,
+      breakEvenMonths: analysis.breakEvenMonths, updatedAt: analysis.updatedAt.toISOString(),
+    }),
+    // ReplaceRepairAnalysis.id is preserved as durable snapshot provenance via canonicalFactReferences,
+    // the same way homeCapitalTimelineWindowDecisionFamilyAdapter (domainSnapshotAdapters.ts) points
+    // canonicalFactReferences at the inventory item it derives from.
+    canonicalFactReferences: [
+      { entityType: 'REPLACE_REPAIR_ANALYSIS', entityId: analysis.id },
+      { entityType: 'INVENTORY_ITEM', entityId: primaryEntityId, fieldPath: 'condition' },
+    ],
+  };
+}
+
+export const applianceDecisionFamilyAdapter = createSnapshotDecisionFamilyAdapter({
+  decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+  primaryEntityType: 'InventoryItem',
+  recommendationDefinitionVersion: '1.0',
+  engineVersion: 'replace-repair-analysis-v1',
+  contextContractVersion: '1.0',
+  loadSourceState: loadApplianceRepairReplaceSourceState,
+});
 ```
-ReplaceRepairService
-  → persists the authoritative ReplaceRepairAnalysis (unchanged — this document does not touch this service)
-  → applianceDecisionFamilyAdapter (NEW) reads the current ReplaceRepairAnalysis for the inventory item
-      → maps verdict: REPLACE_NOW/REPLACE_SOON -> RecommendationSnapshot.verdictCode "REPLACE";
-                       REPAIR_AND_MONITOR/REPAIR_ONLY -> verdictCode "REPAIR"
-                       (an explicit table, not an inferred one — the two vocabularies are not identical
-                       and a silent 1:1 assumption would be exactly the kind of unreviewed mapping this
-                       document elsewhere insists on avoiding, e.g. §14.2's typed-claims discipline)
-      → maps confidence: ReplaceRepairConfidence -> RecommendationSnapshot.confidenceBreakdown
-      → creates or supersedes the APPLIANCE_REPAIR_REPLACE RecommendationSnapshot for this DecisionThread
-      → sets signalReferences to include { replaceRepairAnalysisId: analysis.id } — ReplaceRepairAnalysis.id
-        is preserved as durable snapshot provenance, the same way HomeActionOriginRef already preserves
-        "which Home Action opened this thread" in signalReferences today
-  → updates the APPLIANCE_REPAIR_REPLACE DecisionThread's lifecycle/context status accordingly
-```
 
-This is the same shape `hvacDecisionFamilyAdapter` already establishes for HVAC (wrap an authoritative external evaluation, don't recompute it) — `applianceDecisionFamilyAdapter` is a new instance of an existing pattern, not a new kind of component. Its own evaluation suite (named in the `GENERIC_APPLIANCE` profile's `evaluationSuiteId`) is required before this family is enabled, per §19's governance bar.
+`createSnapshotDecisionFamilyAdapter` already gives this for free, with no new logic to write: `isEligiblePrimaryEntity` (`loadSourceState(...) !== null`), staleness via `inputDigest` comparison on resume (a changed digest supersedes with a new snapshot and a `RecommendationChangeDiff`; an unchanged digest is a no-op read), and thread create/resume/ambiguity handling identical to the other five snapshot families. Its own evaluation suite (named in the `GENERIC_APPLIANCE` profile's `evaluationSuiteId`) is still required before this family is enabled, per §19's governance bar.
+
+**Ingress: a Home Action still needs to reach `APPLIANCE_REPAIR_REPLACE`, not just have somewhere to land.** **[verified]** Adding the family above is necessary but not sufficient — `homeActionDecisionLineage.ts` currently routes *every* repair-replace Home Action and work item to `HVAC_REPAIR_REPLACE` unconditionally, regardless of the underlying item's category:
+
+- `PREFIX_TO_DECISION_DEFINITION` (`homeActionDecisionLineage.ts:60`) maps the single `repair-replace:` prefix to `HVAC_REPAIR_REPLACE` — the only prefix `loadRepairReplaceDecisionActions` (`homeActionSourcePromotion.service.ts`) ever attaches, for every category `ReplaceRepairAnalysis` covers, not just HVAC.
+- `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch (`homeActionDecisionLineage.ts:246`) hard-codes `decisionDefinitionId: 'HVAC_REPAIR_REPLACE'` when resolving a work item's source `ReplaceRepairAnalysis`, again independent of category.
+
+A non-HVAC appliance would therefore still resolve to `HVAC_REPAIR_REPLACE`, hit `hvacDecisionFamilyAdapter.isEligiblePrimaryEntity`'s `category: 'HVAC'` gate, and get `NOT_APPLICABLE` back — the new family above would simply never be reached. The fix, kept minimal and consistent with how this file already gives every other decision family its own dedicated `lineageId` prefix (`REFINANCE_OPPORTUNITY_ID_PREFIX`, `HOME_CAPITAL_TIMELINE_WINDOW_ID_PREFIX`, etc. — one prefix per family is the existing convention, not a new one introduced here):
+
+1. **`loadRepairReplaceDecisionActions`** (`homeActionSourcePromotion.service.ts`) selects `inventoryItem.category` alongside the fields it already selects, and picks the `lineageId` prefix per analysis: `repair-replace:` (unchanged) when `category === 'HVAC'`, a new `appliance-repair-replace:` prefix otherwise. `id` (`repair-replace:${analysis.id}`, used for evidence/href construction only) is untouched.
+2. **`PREFIX_TO_DECISION_DEFINITION`** gains one entry: `{ prefix: APPLIANCE_REPAIR_REPLACE_ID_PREFIX, decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE' }`. `resolveDecisionFamilyRef` itself needs no logic change — it already dispatches on whichever prefix a `lineageId` actually starts with; the fix is that the producer above now attaches the correct one instead of always the HVAC prefix.
+3. **`resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch** additionally selects `inventoryItem: { select: { category: true } }` on its `ReplaceRepairAnalysis` lookup and picks `decisionDefinitionId` the same way: `category === 'HVAC' ? 'HVAC_REPAIR_REPLACE' : 'APPLIANCE_REPAIR_REPLACE'`.
+
+This is a small, local change to one producer function and one lineage resolver — it does not touch `getHomeActionFeed()`, ranking, eligibility, or delivery, so it does not reopen the "duplicated ranking authority" concern earlier rounds closed. `homeActionSourcePromotion.service.ts` is accordingly no longer "zero changes" in §27's matrix (below) for this one function; every other producer in that file is still untouched.
 
 ---
 
@@ -1081,9 +1150,10 @@ sequenceDiagram
 | One new `compoundRuleRegistry.ts` entry + producer-loader function + `COVERAGE_MANIFEST` entry per closed coverage finding | Whenever an engineer decides a `REVIEW_REQUIRED` finding warrants a rule (§11.2/§11.3) | Not a schema change — both the registry and the manifest are TypeScript arrays; the new function follows the exact pattern the existing 8 entries already establish |
 | `COVERAGE_MANIFEST`, `INTENTIONALLY_NON_ACTIONABLE` (§11.2) | Hand-authored coverage declarations, not a persisted table | TypeScript source, validated at startup/CI by `validateCoverageManifest` — not runtime-mutable |
 | `RepairReplaceProfileRegistry` (§12.6) | `HVAC` profile at Phase 2; `GENERIC_APPLIANCE` profile added at Phase 4 — each naming a `decisionDefinitionId` + `scoringSkillId` + `eligibleCategories` | TypeScript source, not a persisted table; category-overlap uniqueness validated at startup/CI via `validateRepairReplaceProfiles` |
-| `APPLIANCE_REPAIR_REPLACE`'s full decision-platform family (§12.7, Phase 4) — `DecisionDefinitionId` union entry, `DECISION_DEFINITIONS` entry, `DecisionContextContract`, `applianceDecisionFamilyAdapter.ts`, `decisionFamilyAdapterRegistry.ts` entry | Backs the `GENERIC_APPLIANCE` profile's `DecisionThread` lineage — a registry entry alone was insufficient (§12.7) | Existing registry mechanisms (§10.2), five artifacts together, not one — `HVAC_REPAIR_REPLACE` untouched |
+| `APPLIANCE_REPAIR_REPLACE`'s full decision-platform family (§12.7, Phase 4) — `DecisionDefinitionId` union entry, `DECISION_DEFINITIONS` entry, `DecisionContextContract`, `applianceDecisionFamilyAdapter.ts`, `decisionFamilyAdapterRegistry.ts` entry | Backs the `GENERIC_APPLIANCE` profile's `DecisionThread` lineage — a registry entry alone was insufficient (§12.7) | Existing registry mechanisms (§10.2), five artifacts together, not one — `HVAC_REPAIR_REPLACE` untouched; the adapter is a `createSnapshotDecisionFamilyAdapter` config (`domainSnapshotAdapters.ts`'s shape), not a bespoke implementation |
+| Category-aware ingress: `PREFIX_TO_DECISION_DEFINITION` entry + `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch (`homeActionDecisionLineage.ts`); `loadRepairReplaceDecisionActions`'s prefix selection (`homeActionSourcePromotion.service.ts`) (§12.7, Phase 4) | Without this, every repair-replace Home Action/work item still routes to `HVAC_REPAIR_REPLACE` regardless of category, and the new family above is unreachable | Not a schema change; a small, local edit to one existing producer function and one lineage resolver — no ranking/eligibility/delivery path is touched |
 
-**Explicitly not changed:** everything round 2 already listed, plus — this revision's addition — `homeActions.service.ts`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `compoundRuleRegistry.ts`'s existing 8 entries, and `DomainEventType`. None of this document's new work touches any of them.
+**Explicitly not changed:** everything round 2 already listed, plus — this revision's addition — `homeActions.service.ts`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `compoundRuleRegistry.ts`'s existing 8 entries, and `DomainEventType`. `homeActionSourcePromotion.service.ts` is unchanged **except** for `loadRepairReplaceDecisionActions`'s category-aware prefix selection above — every other producer in that file is untouched.
 
 ---
 
@@ -1137,11 +1207,12 @@ The first concrete instance of §12.6's extension pattern, not pattern-only pros
 | | |
 |---|---|
 | **Objective** | Stand up `APPLIANCE_REPAIR_REPLACE` as a real Decision Platform family (§12.7) and add the `GENERIC_APPLIANCE` profile to `RepairReplaceProfileRegistry` |
-| **New code** | `APPLIANCE_REPAIR_REPLACE` added to `DecisionDefinitionId` + its `DECISION_DEFINITIONS` entry + its `DecisionContextContract`; `applianceDecisionFamilyAdapter.ts` (§12.7's bridge — verdict/confidence mapping, `ReplaceRepairAnalysis.id` provenance, supersession); the `decisionFamilyAdapterRegistry.ts` entry; the `GENERIC_APPLIANCE` `RepairReplaceProfile` entry |
-| **Reused code** | `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService`, unmodified, as the profile's scoring engine — no new classification logic |
+| **New code** | `APPLIANCE_REPAIR_REPLACE` added to `DecisionDefinitionId` + its `DECISION_DEFINITIONS` entry + its `DecisionContextContract`; `applianceDecisionFamilyAdapter.ts` (§12.7's bridge — a `createSnapshotDecisionFamilyAdapter` config, verdict/confidence mapping, `ReplaceRepairAnalysis.id` provenance, supersession); the `decisionFamilyAdapterRegistry.ts` entry; the `GENERIC_APPLIANCE` `RepairReplaceProfile` entry; category-aware ingress — a new `APPLIANCE_REPAIR_REPLACE_ID_PREFIX` entry in `PREFIX_TO_DECISION_DEFINITION` and a category branch in `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` case (both `homeActionDecisionLineage.ts`) |
+| **Reused code** | `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService`, unmodified, as the profile's scoring engine — no new classification logic; `createSnapshotDecisionFamilyAdapter`/`hashSourceState` (`snapshotDecisionFamilyAdapter.ts`), unmodified |
+| **Modified** | `loadRepairReplaceDecisionActions` (`homeActionSourcePromotion.service.ts`) — selects `inventoryItem.category` and picks the `repair-replace:` vs. `appliance-repair-replace:` `lineageId` prefix accordingly; no other producer in that file changes |
 | **Dependencies** | Phase 2 (the agent runtime and `RepairReplaceProfileRegistry` shape already exist) |
-| **Tests** | A `GENERIC_APPLIANCE` `DecisionThread` create/resume test; the verdict-mapping table (§12.7) exercised for all 4 `ReplaceRepairVerdict` values; `ReplaceRepairAnalysis.id` provenance round-trips into `signalReferences`; an abstention case parallel to HVAC's |
-| **Exit criteria** | A homeowner engaging with a delivered non-HVAC appliance Home Action (e.g. a water heater) receives the same decision-support conversation shape HVAC already gets, backed by `ReplaceRepairService` and a real `APPLIANCE_REPAIR_REPLACE` `DecisionThread` — not just a registry entry with nothing behind it |
+| **Tests** | A `GENERIC_APPLIANCE` `DecisionThread` create/resume test; the verdict-mapping table (§12.7) exercised for all 4 `ReplaceRepairVerdict` values; `ReplaceRepairAnalysis.id` provenance round-trips into `signalReferences`; an abstention case parallel to HVAC's; **HVAC/non-HVAC routing tests** — a HVAC-category item's Home Action and work item both still resolve to `HVAC_REPAIR_REPLACE` unchanged, a non-HVAC item's resolve to `APPLIANCE_REPAIR_REPLACE`, and neither adapter reports the other category's item as eligible |
+| **Exit criteria** | A homeowner engaging with a delivered non-HVAC appliance Home Action (e.g. a water heater) receives the same decision-support conversation shape HVAC already gets, backed by `ReplaceRepairService` and a real `APPLIANCE_REPAIR_REPLACE` `DecisionThread` reached through category-aware ingress — not just a registry entry with nothing behind it and no way to get there |
 
 Building a genuinely new specialist (a materially different decision shape, per §12.6's test) or admitting a higher-risk family (electrical, plumbing, roofing) requires the explicit review §12.6 describes before any new `AgentDefinition` is registered, independent of this phase's `GENERIC_APPLIANCE` work — no build order beyond that is committed for further profiles, rules, or specialists. Pattern E's precondition is narrower than "a second thing exists": it activates only when one homeowner decision genuinely spans **multiple decision shapes or multiple distinct specialists** producing independently-reasoned recommendations that must be reconciled — e.g., a structural issue that is simultaneously a repair-or-replace question and an insurance-coverage question, not two appliances each cleanly handled by their own profile.
 
@@ -1151,11 +1222,13 @@ Building a genuinely new specialist (a materially different decision shape, per 
 
 | Component | Classification | Notes |
 |---|---|---|
-| `compoundRuleRegistry.ts`, `homeActionSourcePromotion.service.ts`, `getHomeActionFeed()`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `evaluateHomeActionProactiveDeliveryJob` | **EXISTING** | Zero changes. This is the correction this revision makes concrete — every one of these was previously at risk of being duplicated or bypassed |
+| `compoundRuleRegistry.ts`, `getHomeActionFeed()`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `evaluateHomeActionProactiveDeliveryJob` | **EXISTING** | Zero changes. This is the correction this revision makes concrete — every one of these was previously at risk of being duplicated or bypassed |
+| `homeActionSourcePromotion.service.ts` | EXTEND (one function, Phase 4) | `loadRepairReplaceDecisionActions` becomes category-aware in its `lineageId` prefix choice (§12.7's ingress fix) — no other producer in this file changes, and no ranking/eligibility/delivery path is touched |
 | `Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, `RadarEvent` | WRAP AS TOOL (read adapter only) | No schema change, no write path added |
 | Two HVAC verdict engines | CONSOLIDATE | Unchanged prerequisite |
-| `decisionPlatform`, `decisionDefinitionRegistry.ts`, `decisionFamilyAdapterRegistry.ts`, `DECISION_CONTEXT_CONTRACTS` | EXTEND | Backing for the Specialist Agent; a new `APPLIANCE_REPAIR_REPLACE` family (§12.7, Phase 4) — definition, context contract, adapter, registry entry together — alongside the unchanged `HVAC_REPAIR_REPLACE` |
+| `decisionPlatform`, `decisionDefinitionRegistry.ts`, `decisionFamilyAdapterRegistry.ts`, `DECISION_CONTEXT_CONTRACTS`, `homeActionDecisionLineage.ts` | EXTEND | Backing for the Specialist Agent; a new `APPLIANCE_REPAIR_REPLACE` family (§12.7, Phase 4) — definition, context contract, adapter, registry entry together — alongside the unchanged `HVAC_REPAIR_REPLACE`; `homeActionDecisionLineage.ts` gains one `PREFIX_TO_DECISION_DEFINITION` entry and a category branch in `resolveWorkItemDecisionFamilyRefs` (§12.7's ingress fix) |
 | `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService` | WRAP AS TOOL | Reused unmodified as the `GENERIC_APPLIANCE` profile's scoring engine (§12.6) — its existing category/name classification and numeric defaults are not duplicated |
+| `snapshotDecisionFamilyAdapter.ts`'s `createSnapshotDecisionFamilyAdapter`/`hashSourceState` | WRAP AS TOOL | Reused unmodified as the factory backing `applianceDecisionFamilyAdapter` (§12.7) — the same factory the five existing snapshot families already use |
 | `services/skills/` | EXTEND | `autonomyLevel` field; new `query-envelope` Skill |
 | `aiRequestGovernance.service.ts` | REFACTOR (interface hardening) | Typed-claims response mechanism (§14.2) |
 | `askOrchestrator.service.ts` | EXTEND | Wire `REMOTE_FALLBACK` |
