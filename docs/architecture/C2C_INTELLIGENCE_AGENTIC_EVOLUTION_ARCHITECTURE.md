@@ -1,7 +1,7 @@
 # C2C Intelligence & Agentic Evolution Architecture (Stage 3)
 
 **Date:** 2026-08-26
-**Status:** Draft target architecture — third revision, not yet build-approved.
+**Status:** Draft target architecture — third revision with full-review corrections incorporated; implementation approval still requires the phase-specific exit evidence in §26.
 **Grounding evidence:** [`docs/audits/AGENTIC_READINESS_AUDIT.md`](../audits/AGENTIC_READINESS_AUDIT.md) is the evidence base for architectural patterns and gaps at the time it was written. It is not an authoritative product-requirements source, and — critically for this revision — it is not exhaustive: a third external review found that this document had, twice, designed net-new proactive-attention infrastructure that duplicates or bypasses a real, already-shipped canonical pipeline the audit's evidence-density sampling didn't surface. See §1.1 for the requirements this revision is now grounded in, and the box below for what changed.
 **Scope:** This document is the requested Stage 3 exercise. It is a target architecture and phased evolution plan, not an implementation. No code changes accompany this document.
 
@@ -67,7 +67,7 @@
 
 **The central correction this revision makes:** the first two drafts of this document treated "build proactive attention" as greenfield work. It isn't. `evaluateHomeActionProactiveDeliveryJob` is implemented, registered, and schedule-capable — it reads `getHomeActionFeed()`, applies consent/budget/escalation gates, and sends notifications, for every Home Action that a `compoundRuleRegistry.ts` rule has promoted, whenever its env flag and DB kill switch permit it to run. The genuine gap is narrower and less glamorous than "build an Attention Agent": **not every intelligence producer has a promotion rule yet**, and **once a homeowner engages with a promoted, ranked item, nothing today walks them through a multi-step decision** (compare options, explain tradeoffs, maintain a decision thread) the way `decisionPlatform` already can for HVAC specifically. Those two gaps — promotion coverage, and post-engagement decision depth — are what this document now scopes.
 
-**What ships, in order:** an Intelligence Envelope, narrowed to a read/promotion-input abstraction over the 5 intelligence producers, with no ranking authority of its own (Phase 0) → a **Promotion Coverage Audit** — not an agent, not a ranker, not a runtime dispatcher; a scheduled Worker that structurally compares which intelligence producer/domain combinations `compoundRuleRegistry.ts` already covers against which it doesn't, and surfaces the gap for an engineer to close by hand-authoring a new rule, exactly as the existing 8 were authored (Phase 1) → the HVAC Repair/Replace Specialist Agent, reusing the existing scoring engine and `DecisionThread` machinery, triggered when a homeowner engages with an already-ranked, already-delivered HVAC Home Action (Phase 2) → Ask Cozy wired to the same Envelope and canonical feed as its evidence source (Phase 3) → the extension pattern for additional specialists and additional promotion coverage (Phase 4).
+**What ships, in order:** an Intelligence Envelope with proposition-level presentation admission plus consolidation onto one canonical HVAC base-verdict engine (Phase 0) → a **Promotion Coverage Audit** — not an agent, ranker, or runtime dispatcher; a scheduled Worker that reports uncovered producer/domain combinations for an engineer to close by hand (Phase 1) → the least-privilege HVAC Repair/Replace Specialist Agent, including its confirmed resumable follow-up lifecycle (Phase 2) → Ask Cozy wired to the same Envelope and canonical feed under the admission policy (Phase 3) → the generic-appliance profile/family and additional reviewed coverage (Phase 4).
 
 **What this is not, still:** a plan to add a second LLM provider, an event bus, a vector database, or — now explicitly — a second ranking, eligibility, or delivery pipeline alongside the one C2C already ships. Every one of those is directly forbidden by an authoritative requirement (§1.1), not merely undesirable.
 
@@ -102,10 +102,10 @@
 | `Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, `RadarEvent` | 5 disjoint intelligence schemas | Read-only through the Intelligence Envelope (§5); their existing promotion paths into `compoundRuleRegistry.ts` inputs (where they have one) are unchanged | 5 read adapters; no schema change, no new write path |
 | `decisionPlatform` (DecisionThread, RecommendationSnapshot, `decisionFamilyAdapterRegistry`) | Real lifecycle machinery, 1 of 7 families (HVAC) does real composition | Backing for the HVAC Specialist Agent's decision-support conversation (§12) | Extend, don't replace |
 | Two disagreeing HVAC verdict engines | Acknowledged divergence, `SOURCE_CARD_VERDICT_DIVERGENCE` | One authoritative verdict | Reconcile in Phase 0 — a data-quality fix |
-| `services/skills/` (19 manifests) | Closest existing analog to an agent-tool manifest | The Skill/Tool layer agents call (§9) | Add an autonomy-level tag; no runtime rewrite |
+| `services/skills/` (19 manifests) | Closest existing analog to an agent-tool manifest | Least-privilege Skill layer agents call (§9) | Add autonomy-level metadata and validate each Agent's positive Skill/tool allow-list against the registries |
 | `aiRequestGovernance.service.ts` | Routes all 25 Gemini invocation sites | LLM Gateway (§14) | Harden the interface; no second provider |
 | `askOrchestrator.service.ts` | Deterministic NLU router; `REMOTE_FALLBACK` unwired | Ask Cozy's entry point into the Envelope + canonical feed (§22) | Wire `REMOTE_FALLBACK`; add Specialist Agent as a routable target |
-| BullMQ + node-cron + `workerJobRegistry.ts` + `CronJobLock` | Most mature layer in the codebase; already registers the schedule-capable `evaluateHomeActionProactiveDeliveryJob` | Execution substrate for the new Promotion Coverage Audit job and Specialist Agent runs | Add one new job type to the existing registry |
+| BullMQ + node-cron + `workerJobRegistry.ts` + `CronJobLock` | Most mature layer in the codebase; already registers the schedule-capable `evaluateHomeActionProactiveDeliveryJob` | Execution substrate for the Promotion Coverage Audit and confirmed Specialist follow-ups | Add two governed job types to the existing registry, in Phases 1 and 2 respectively |
 | pino/Loki + Prometheus + OpenTelemetry | Structured logging, worker/AI cost metrics | End-to-end observability for the Coverage Audit and Specialist Agent (§20) | Extend metric namespaces |
 
 ---
@@ -248,6 +248,44 @@ interface IntelligenceEnvelopeItem {
 
 An earlier draft of this section proposed a per-item `EnvelopeEvaluationCursor`, on the assumption that closing a coverage gap meant re-evaluating individual Envelope items against a live rule dispatcher. §11 replaces that mechanism with a structural audit comparing *producer/domain combinations* (not individual items) against the registry, recomputed fresh on every run rather than cached incrementally — so there is no per-item state for the Envelope to track at all. The one new persisted model this document introduces for coverage purposes, `CoverageAuditFinding`, is keyed by `(producerModel, domain)`, not by `envelopeKey`, and is defined in §11.2/§25, not here.
 
+### 5.8 `query-envelope` presentation admission — "non-actionable only" is an enforced policy, not a caller promise
+
+The Envelope intentionally carries no ranking or promotion status (§5.3), so neither the presence nor absence of a `CoverageAuditFinding` can establish that an individual item is safe to present through Ask's non-actionable path. In particular, `COVERED` is only a producer/domain-level statement, while `REVIEW_REQUIRED` may identify intelligence that is actionable but has not yet received a reviewed promotion rule. Neither determination admits an item to `query-envelope`.
+
+Admission uses a separate, typed, hand-reviewed presentation registry at the proposition level:
+
+```ts
+// Generated from the five registered adapter manifests, each of which declares a literal
+// producerModel, supported domains, and supported propositionTypes. These are closed unions;
+// callers cannot introduce an arbitrary producer/proposition string at runtime.
+type EnvelopeSourceModel = (typeof ENVELOPE_ADAPTER_MANIFESTS)[number]["producerModel"];
+type EnvelopePropositionType = (typeof ENVELOPE_ADAPTER_MANIFESTS)[number]["propositionTypes"][number];
+const ENVELOPE_DOMAINS = Object.values(EnvelopeDomain) as readonly EnvelopeDomain[];
+
+interface EnvelopeQueryPresentationRule {
+  producerModel: EnvelopeSourceModel;     // the closed §11.2 vocabulary
+  domain: EnvelopeDomain;
+  propositionType: EnvelopePropositionType; // adapter-owned closed value, never inferred by an LLM
+  disposition: "INFORMATIONAL_ONLY" | "CANONICAL_HOME_ACTION_ONLY";
+  rendererId: string;                     // deterministic renderer; no raw payload passthrough
+}
+
+type EnvelopeQueryAdmission =
+  | { status: "ADMITTED_INFORMATIONAL"; rendererId: string }
+  | { status: "EXCLUDED_CANONICAL_ACTION"; homeActionId: string }
+  | { status: "DENIED_UNREVIEWED" };
+```
+
+`evaluateEnvelopeQueryAdmission(item, principal)` applies, in order:
+
+1. The unchanged property/household authorization check from §6.
+2. Currentness and native lifecycle applicability.
+3. Correlation against the current canonical Home Action feed by stable source/lineage identity; a matching Home Action returns `EXCLUDED_CANONICAL_ACTION`, so Ask uses that canonical action instead of duplicating it as an observation.
+4. An exact `(producerModel, domain, propositionType)` registry match. Only `INFORMATIONAL_ONLY` is admitted. Missing rules, `CANONICAL_HOME_ACTION_ONLY`, and every `REVIEW_REQUIRED` gap fail closed as `DENIED_UNREVIEWED`.
+5. Deterministic rendering through `rendererId`; raw producer payloads are never sent directly to the homeowner or to an LLM.
+
+`validateEnvelopeQueryPresentationRegistry()` rejects duplicate keys, unknown source models/domains/proposition types, and missing renderers at startup/CI. This registry is deliberately separate from `COVERAGE_MANIFEST`: the manifest asks whether a producer/domain has any promotion coverage; this policy asks whether one specific proposition is approved for informational presentation. One cannot safely stand in for the other.
+
 ---
 
 ## 6. Shared Context Architecture
@@ -308,6 +346,7 @@ interface AgentDefinition {
 
   requiredContext: PropertyContextScope[];
   allowedSkills: string[];
+  allowedTools: string[];                 // runtime/platform tools that are not Skill manifests
   prohibitedSkills?: string[];
 
   executionMode: "SYNC" | "ASYNC_LONG_RUNNING";
@@ -355,7 +394,7 @@ graph TD
   Q3 -->|No| SVC
   Q2 -->|Yes| Q4{"State persists across invocations,\nshaping future tool selection?"}
   Q4 -->|No| SKILL["SKILL"]
-  Q4 -->|Yes| Q5{"Goal fully known and static?"}
+  Q4 -->|Yes| Q5{"Tool path and relevant subject state\nfully known and static upfront?"}
   Q5 -->|Yes| RULE["RULE / DECISION ENGINE"]
   Q5 -->|No| AGENT["AGENT (§7 contract required)"]
 ```
@@ -374,7 +413,26 @@ graph TD
 
 ## 9. Skills / Tool Architecture
 
-Unchanged in substance from round 2: `services/skills/` is extended with an `autonomyLevel` field; existing manifests (HVAC repair/replace, coverage, maintenance, document-promotion, refinance, ownership-cost, property-record, household/seller-preparation/buyer-closing) are reused directly by the Specialist Agent. **Agent → Skill/Tool → Domain Service, never Agent → Prisma.** The one Skill this document adds is `query-envelope` (read-only, for Ask's non-actionable-observation use case, §22) — there is no `query-canonical-feed` Skill, because Ask calls `getHomeActionFeed()` the same way every other canonical surface already does, not through a Skill indirection.
+`services/skills/` is extended with an `autonomyLevel` field, but the existence of a Skill in the platform catalog does **not** make it callable by every Agent. **Agent → admitted Skill/Tool → Domain Service, never Agent → Prisma.** Each concrete `AgentDefinition` carries a least-privilege allow-list, validated against the Skill and tool registries at startup/CI.
+
+The Phase 2 HVAC Specialist's executable boundary is deliberately small:
+
+```ts
+const HVAC_SPECIALIST_CAPABILITIES = {
+  allowedSkills: ["repair-replace"],
+  allowedTools: [
+    "property-context.read",          // REQUEST_CONTEXT; actor-authorized through §6
+    "property-record.request-document", // REQUEST_DOCUMENT; creates only the bounded homeowner request
+    "llm.typed-claim-explain",        // EXPLAIN; §14.2's verified typed-claim path
+    "agent-follow-up.draft",          // SCHEDULE_FOLLOW_UP; draft only until §12.4 confirmation
+  ],
+  prohibitedSkills: [
+    "coverage", "refinance", "ownership-cost", "seller-preparation", "buyer-closing",
+  ],
+} as const;
+```
+
+The prohibited list is defense-in-depth; the binding control is positive admission through `allowedSkills`/`allowedTools`. A future profile may change scoring configuration without gaining more tools. A genuinely new decision shape must justify its own capability set under §12.6's new-specialist test. The one Skill this document adds is `query-envelope` (read-only, governed by §5.8's presentation policy) for Ask — there is no `query-canonical-feed` Skill, because Ask calls `getHomeActionFeed()` through its existing canonical service path.
 
 ---
 
@@ -393,7 +451,7 @@ The orchestrator's footprint shrinks further this revision: it no longer routes 
 
 ### 10.2 Reuse of `decisionPlatform`
 
-Corrected twice over in this revision. First, terminology: per §12.5's hierarchy, `DecisionThread` remains the business-facing decision-lineage record the Specialist Agent reads/writes — it is not the agent's own execution/audit record, which is `AgentRun` (append-only, one per invocation) with `AgentState` only for a paused/resumable run.
+Corrected twice over in this revision. First, terminology: per §12.5's hierarchy, `DecisionThread` remains the business-facing decision-lineage record the Specialist Agent reads/writes — it is not the agent's execution/audit record. That responsibility is split between an immutable `AgentRun` header, append-only `AgentRunEvent` transitions, and a versioned `AgentState` checkpoint only while a run is paused/resumable.
 
 Second, a category error: **[verified]** `decisionFamilyAdapterRegistry.ts` maps a `DecisionDefinitionId` (`HVAC_REPAIR_REPLACE`, `REFINANCE_OPPORTUNITY`, `HOME_CAPITAL_TIMELINE_WINDOW`, ...) to the adapter that resolves *that decision's* `DecisionThread` lineage — it is keyed by decision *definitions* (a business question with a canonical answer shape), not by orchestration mechanisms. "Agent-driven handoff" is not a decision definition and has no lineage of its own to resolve; it does not belong in this registry at all. A future family — e.g. `APPLIANCE_REPAIR_REPLACE`, covering non-HVAC appliances per §12.6 (HVAC itself keeps its own `HVAC_REPAIR_REPLACE` definition, unchanged) — would earn its own registry entry the same way `HVAC_REPAIR_REPLACE` already has one, because it is itself a decision definition with a canonical verdict shape. Handoff routing (which specialist a homeowner's engagement reaches) is entirely an Agent/Orchestrator-contract concern (§7, §13), never a `decisionFamilyAdapterRegistry` entry.
 
@@ -425,7 +483,10 @@ interface CoverageAuditFinding {
   matchedRuleIds: string[];           // ruleIds from COVERAGE_MANIFEST for this (producerModel, domain) pair —
                                         // never derived from inputContracts (11.2's matching correction)
   firstObservedAt: string;
+  lastObservedAt: string;
   lastAuditedAt: string;
+  lastAuditRunId: string;
+  currentlyObserved: boolean;         // dashboard eligibility; false when absent from the latest complete audit
 }
 
 // A short, human-maintained allow-list — NOT inferred, NOT the audit's own judgment call — of
@@ -434,7 +495,10 @@ interface CoverageAuditFinding {
 // to a registry entry is REVIEW_REQUIRED, never silently dropped.
 const INTENTIONALLY_NON_ACTIONABLE: ReadonlySet<`${string}:${EnvelopeDomain}`> = new Set([/* ... */]);
 
-function auditCoverage(observedCombinations: { producerModel: string; domain: EnvelopeDomain }[]): CoverageAuditFinding[] {
+function auditCoverage(
+  auditRunId: string,
+  observedCombinations: { producerModel: string; domain: EnvelopeDomain }[],
+): CoverageAuditFinding[] {
   const auditInputsDigest = hashAuditInputs(COMPOUND_RULE_REGISTRY, COVERAGE_MANIFEST, INTENTIONALLY_NON_ACTIONABLE);
   return observedCombinations.map(({ producerModel, domain }) => {
     const matchedRuleIds = matchCoverageManifest(producerModel, domain);   // see below — never a string heuristic
@@ -442,10 +506,26 @@ function auditCoverage(observedCombinations: { producerModel: string; domain: En
       matchedRuleIds.length > 0 ? "COVERED"
       : INTENTIONALLY_NON_ACTIONABLE.has(`${producerModel}:${domain}`) ? "INTENTIONALLY_NON_ACTIONABLE"
       : "REVIEW_REQUIRED";
-    return { producerModel, domain, auditInputsDigest, determination, matchedRuleIds, firstObservedAt: /* upsert-preserved */ '', lastAuditedAt: new Date().toISOString() };
+    const observedAt = new Date().toISOString();
+    return {
+      producerModel, domain, auditInputsDigest, determination, matchedRuleIds,
+      firstObservedAt: /* upsert-preserved */ '', lastObservedAt: observedAt,
+      lastAuditedAt: observedAt, lastAuditRunId: auditRunId, currentlyObserved: true,
+    };
   });
 }
 ```
+
+The Worker persists a `CoverageAuditRun(status=SCANNING)` and uses its ID as `auditRunId`. It upserts the observed rows above, and only after every property scan and upsert succeeds performs this reconciliation in the same transaction that marks the run `COMPLETED`:
+
+```ts
+await tx.coverageAuditFinding.updateMany({
+  where: { lastAuditRunId: { not: auditRunId }, currentlyObserved: true },
+  data: { currentlyObserved: false, lastAuditedAt: completedAt },
+});
+```
+
+A failed or partial scan never deactivates prior findings. The admin dashboard shows only `currentlyObserved=true AND determination=REVIEW_REQUIRED` by default, while retaining inactive rows for audit history. If a combination later reappears, its natural-key upsert sets `currentlyObserved=true`, preserves the original `firstObservedAt`, and advances `lastObservedAt`.
 
 **Matching correction.** A prior draft matched `producerModel` against `compoundRuleRegistry.ts`'s `inputContracts` strings with `rule.inputContracts.some((c) => c.startsWith(producerModel))` — this is unreliable in both directions. `inputContracts` entries are free-form descriptive strings at a different abstraction layer than the Envelope's `producerModel` (e.g. `"PropertyRadarCompoundInsight (radarCompoundRules.ts rule, HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE)"`, `"ReplaceRepairAnalysis"`, `"InspectionFinding"` — none of which are, or reliably prefix-match, an Envelope `producerModel` like `Signal` or `RadarEvent`), so legitimate coverage would routinely surface as a false `REVIEW_REQUIRED`. It also ignores `domain` entirely — a single string match would mark *every* domain a producer emits as covered, even domains no matched rule actually addresses.
 
@@ -503,6 +583,9 @@ function validateCoverageManifest(): string[] {
   }
 
   for (const nonActionableKey of INTENTIONALLY_NON_ACTIONABLE) {
+    const [producerModel, domain] = nonActionableKey.split(":");
+    if (!KNOWN_ENVELOPE_SOURCE_MODELS.has(producerModel)) issues.push(`INTENTIONALLY_NON_ACTIONABLE: ${nonActionableKey} names an unknown producerModel`);
+    if (!ENVELOPE_DOMAINS.includes(domain as EnvelopeDomain)) issues.push(`INTENTIONALLY_NON_ACTIONABLE: ${nonActionableKey} names an unknown domain`);
     if (manifestKeys.has(nonActionableKey)) issues.push(`Contradiction: ${nonActionableKey} appears in both COVERAGE_MANIFEST and INTENTIONALLY_NON_ACTIONABLE — a combination cannot be both "covered by a rule" and "intentionally never covered." Remove it from whichever list is wrong.`);
   }
 
@@ -536,7 +619,7 @@ function hashAuditInputs(registry: typeof COMPOUND_RULE_REGISTRY, manifest: type
 
 This runs at the same startup/CI point as the existing registry-parity checks (`workerJobRegistry.ts`, `decisionFamilyAdapterRegistry.ts`'s `validateDecisionFamilyAdapterRegistry`) — a manifest referencing a deleted or misspelled `ruleId` fails the build, it does not silently report false coverage in production.
 
-This is a **Worker**, not an Agent, per §8 — a fixed comparison against a registry, no runtime dispatch, no adaptive judgment. It runs periodically (or on-demand from the admin dashboard), via a new entry in `workerJobRegistry.ts`. Only `REVIEW_REQUIRED` findings surface on the coverage dashboard (§20) — `COVERED` and `INTENTIONALLY_NON_ACTIONABLE` are both closed, non-actionable states, correcting the prior draft's error of flagging every unmatched item regardless of whether "unmatched" actually meant "gap" or just "not meant to be a Home Action."
+This is a **Worker**, not an Agent, per §8 — a fixed comparison against a registry, no runtime dispatch, no adaptive judgment. It runs periodically (or on-demand from the admin dashboard), via a new entry in `workerJobRegistry.ts`. Only currently-observed `REVIEW_REQUIRED` findings surface on the default coverage dashboard (§20); inactive findings remain queryable as history. `COVERED` and `INTENTIONALLY_NON_ACTIONABLE` are both closed, non-actionable states, correcting the prior draft's error of flagging every unmatched item regardless of whether "unmatched" actually meant "gap" or just "not meant to be a Home Action."
 
 **Note what this section explicitly does not include, compared to the prior draft:** no `triggerPromotionIfNotAlreadyPromoted` call, no per-property live evaluation loop, no attempt to promote anything. Closing a `REVIEW_REQUIRED` finding always means an engineer writes a new producer-loader function, a new `compoundRuleRegistry.ts` entry, **and a new `COVERAGE_MANIFEST` entry** — following the exact pattern the existing 8 rules already establish — this document documents that pattern (§9, §27) as the standard extension path, and treats the audit purely as the tool that tells an engineer where to look next.
 
@@ -578,6 +661,9 @@ interface SpecialistRunState {
   maxAttemptsPerTool: number;              // e.g. 2 — a fact that's still missing after 2 requests is "attempted but unresolved," not silently retried forever
   loopIterations: number;
   maxLoopIterations: number;               // from AgentDefinition.budgets.maxLoopIterations
+  missingFacts: MissingFact[];
+  latestScore: RepairReplaceScore | null;
+  narrated: boolean;
   homeownerDisputedInput: boolean;         // cleared explicitly by the SCORE transition once re-run
   homeownerNeedsTime: boolean;             // cleared explicitly when the scheduled follow-up tick actually fires
 }
@@ -600,6 +686,38 @@ function selectNextTool(state: SpecialistRunState): SpecialistTool | "DONE" | "A
 
 A reviewer correctly flagged that scheduling a future re-evaluation is a reversible *internal* action — arguably Level 3 (Execute-reversible), not the Level 0–2 ceiling this document holds every agent to. Resolution: `SCHEDULE_FOLLOW_UP` is reclassified as a **Draft** action (Level 2) — the agent prepares the scheduled tick but a homeowner-visible confirmation ("we'll check back with you in a week — sound good?") is required before it's committed, via the same confirmation-recheck requirement the Ask Trust FRD's parent principle 5 already mandates for material actions (§1.1). This keeps the agent inside its declared ceiling rather than quietly exceeding it.
 
+The confirmation is an executable domain command, not conversational state inferred from a later message:
+
+```ts
+interface AgentFollowUpDraft {
+  id: string;
+  agentRunId: string;
+  decisionThreadId: string;
+  propertyId: string;
+  requestedByUserId: string;
+  dueAt: string;
+  reasonCode: "HOMEOWNER_NEEDS_TIME";
+  status: "DRAFT" | "CONFIRMED" | "SCHEDULED" | "FIRED" | "CANCELLED" | "EXPIRED";
+  confirmationExpiresAt: string;
+  idempotencyKey: string;             // unique: decisionThreadId + dueAt + reasonCode
+  version: number;                    // optimistic concurrency for confirm/cancel/fire transitions
+  createdAt: string;
+  confirmedAt?: string;
+  firedAt?: string;
+}
+
+interface ConfirmAgentFollowUpCommand {
+  draftId: string;
+  expectedVersion: number;
+  idempotencyKey: string;
+  confirmedBy: { kind: "HOMEOWNER_SESSION"; userId: string };
+}
+```
+
+`SCHEDULE_FOLLOW_UP` creates or returns the idempotent `DRAFT`; it does not enqueue anything. The homeowner-visible confirmation command rechecks property access, household authorization, decision-thread applicability, current draft version, expiry, and the agent/feature kill switches before atomically transitioning `DRAFT → CONFIRMED → SCHEDULED` and enqueueing the existing worker substrate's new `agent-specialist-follow-up` job with the draft ID as its deduplication key. Duplicate confirmations return the existing scheduled record.
+
+When the job fires, its handler obtains the same lock/dedup guarantee as other registered worker jobs, reloads the draft and Decision Thread, and resolves the property's current owner principal using §6.2's trusted worker pattern. The resolved owner must still equal the user who confirmed the draft and remain an authorized participant in the Decision Thread; an ownership/authorization change is a no-op, never authority transferred to the new owner. The handler also reapplies applicability, kill-switch, current-context, and cancellation checks. Only then does it atomically transition `SCHEDULED → FIRED`, clear `homeownerNeedsTime` in the versioned `AgentState`, and resume the loop. A stale, unauthorized, cancelled, expired, or already-fired job is recorded as a no-op. `CANCELLED` and `EXPIRED` are terminal. No notification bypass is created: any homeowner-facing delivery still uses the canonical notification policy stack.
+
 ### 12.5 Three records, one hierarchy — not two sources of truth
 
 A reviewer correctly flagged that calling `DecisionThread` "the Specialist Agent's execution record" in §12.1's diagram, while separately introducing `AgentRun`/`AgentState` for what reads as the same lifecycle, leaves it ambiguous which one is authoritative for what. They are not competing sources of truth — they answer three different questions, in a strict reference hierarchy:
@@ -607,10 +725,11 @@ A reviewer correctly flagged that calling `DecisionThread` "the Specialist Agent
 | Record | Answers | Owner | Lifecycle |
 |---|---|---|---|
 | `DecisionThread` (existing, `decisionPlatform`, unchanged) | "What is the homeowner's decision journey and recommendation history for this HVAC question?" | Canonical, business-facing | Persists across the homeowner's entire decision, independent of any single agent invocation |
-| `AgentRun` (new, §25) | "What happened the last time the Specialist Agent executed?" | Execution/audit | Append-only — one row per invocation, referencing `decisionThreadId`; never mutated after creation |
-| `AgentState` (new, §25) | "Where exactly in its `selectNextTool` loop was a *paused* run, so it can resume?" | Orchestration-only | Exists only for a run awaiting a `SCHEDULE_FOLLOW_UP` confirmation or a homeowner response — a run that completes in one pass never creates one |
+| `AgentRun` (new, §25) | "Which governed invocation owns this execution history?" | Execution/audit identity | Immutable header inserted before the first tool call, one row per invocation, referencing `decisionThreadId`; completion is represented by an appended `AgentRunEvent`, not by mutating this row |
+| `AgentRunEvent` (new, §25) | "Which state transitions, pause/resume, and terminal outcome occurred?" | Append-only execution ledger | One append-only row per transition; a terminal event is required for completed/abstained/failed runs, while a paused run ends its current tick with `PAUSED` |
+| `AgentState` (new, §25) | "Where exactly in its `selectNextTool` loop was a *paused* run, so it can resume?" | Orchestration-only checkpoint | Versioned mutable checkpoint for a paused run; created/updated transactionally with the corresponding `PAUSED`/`RESUMED` event and deleted after a terminal event |
 
-The Specialist Agent reads and writes `DecisionThread` for the business-facing recommendation itself (unchanged from every prior revision); it separately writes exactly one `AgentRun` row per invocation for observability/audit (§20); and it writes an `AgentState` row only in the one case where its loop genuinely needs to resume later. `DecisionThread` remains the only source of truth a homeowner-facing surface ever reads from — `AgentRun`/`AgentState` are internal to the agent runtime and never rendered as the decision itself.
+The Specialist Agent reads and writes `DecisionThread` for the business-facing recommendation itself (unchanged from every prior revision); it inserts exactly one immutable `AgentRun` header before execution, appends `AgentRunEvent` rows for observable lifecycle transitions, and maintains `AgentState` only while the loop is genuinely paused. `ToolInvocation` and `LLMInvocation` reference both `agentRunId` and the causative `AgentRunEvent`. A resumed tick performs an optimistic-version claim on `AgentState`, so two confirmations/jobs cannot run the same transition concurrently. `DecisionThread` remains the only source of truth a homeowner-facing surface ever reads from — execution records are internal and never rendered as the decision itself.
 
 ### 12.6 Generalization: HVAC is the reference implementation of a Repair-or-Replace Specialist, not a permanent scope boundary
 
@@ -629,7 +748,7 @@ RepairReplaceSpecialist (the agent + its selectNextTool loop, §12.2-§12.4 — 
     │                                scoringSkillId: wraps hvacRepairReplaceEngine.service.ts (unchanged)
     └── GENERIC_APPLIANCE profile — decisionDefinitionId: APPLIANCE_REPAIR_REPLACE
                                      scoringSkillId: wraps replaceRepairAnalysis.service.ts's ReplaceRepairService
-                                     (unchanged) — this profile covers `APPLIANCE`-category items such as dishwasher,
+                                     (`APPLIANCE` branch unchanged by Phase 4) — this profile covers items such as dishwasher,
                                      fridge, and washer/dryer; the profile registry does not re-implement the service's
                                      name-level defaults within that admitted category
 
@@ -771,16 +890,16 @@ async function loadApplianceRepairReplaceSourceState(
   });
   if (!analysis) return null;
 
-  // Explicit table, not an inferred 1:1 — the two vocabularies are not identical,
-  // and a silent assumption here would be exactly the kind of unreviewed mapping
-  // this document elsewhere insists on avoiding (§14.2's typed-claims discipline).
-  const verdictCode = analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON' ? 'REPLACE' : 'REPAIR';
+  // Preserve the source engine's four material states as the canonical verdict.
+  // Collapsing NOW/SOON or ONLY/MONITOR would cause compareRecommendationSnapshots()
+  // to misclassify a material urgency/lifecycle transition as CONFIDENCE_ONLY.
+  const verdictCode: ReplaceRepairVerdict = analysis.verdict;
 
   return {
     title: 'Repair or replace this appliance',
     goalCode: 'APPLIANCE_REPAIR_REPLACE_DECISION',
     verdictCode,
-    reasonCodes: [`SOURCE_VERDICT_${analysis.verdict}`, `CONFIDENCE_${analysis.confidence}`, `IMPACT_${analysis.impactLevel ?? 'UNKNOWN'}`],
+    reasonCodes: [`CONFIDENCE_${analysis.confidence}`, `IMPACT_${analysis.impactLevel ?? 'UNKNOWN'}`],
     confidenceBreakdown: {
       label: analysis.confidence, impactLevel: analysis.impactLevel,
       remainingYears: analysis.remainingYears, breakEvenMonths: analysis.breakEvenMonths,
@@ -814,6 +933,8 @@ export const applianceDecisionFamilyAdapter = createSnapshotDecisionFamilyAdapte
 });
 ```
 
+`APPLIANCE_REPAIR_REPLACE` therefore declares the same four verdict codes as `ReplaceRepairVerdict`: `REPLACE_NOW`, `REPLACE_SOON`, `REPAIR_AND_MONITOR`, and `REPAIR_ONLY`. Its evaluation suite verifies that `REPLACE_SOON ↔ REPLACE_NOW` and `REPAIR_ONLY ↔ REPAIR_AND_MONITOR` produce `RecommendationChangeCategory.MATERIAL`, because timing and monitoring obligations are part of the homeowner-facing decision, not confidence-only metadata.
+
 `createSnapshotDecisionFamilyAdapter` already gives this for free, with no new logic to write: `isEligiblePrimaryEntity` (`loadSourceState(...) !== null`), staleness via `inputDigest` comparison on resume (a changed digest supersedes with a new snapshot and a `RecommendationChangeDiff`; an unchanged digest is a no-op read), and thread create/resume/ambiguity handling identical to the other six snapshot families. Its own evaluation suite (named in the `GENERIC_APPLIANCE` profile's `evaluationSuiteId`) is still required before this family is enabled, per §19's governance bar.
 
 **Ingress: a Home Action still needs to reach `APPLIANCE_REPAIR_REPLACE`, not just have somewhere to land.** **[verified]** Adding the family above is necessary but not sufficient — `homeActionDecisionLineage.ts` currently routes *every* repair-replace Home Action and work item to `HVAC_REPAIR_REPLACE` unconditionally, regardless of the underlying item's category:
@@ -821,15 +942,18 @@ export const applianceDecisionFamilyAdapter = createSnapshotDecisionFamilyAdapte
 - `PREFIX_TO_DECISION_DEFINITION` (`homeActionDecisionLineage.ts:60`) maps the single `repair-replace:` prefix to `HVAC_REPAIR_REPLACE` — the only prefix `loadRepairReplaceDecisionActions` (`homeActionSourcePromotion.service.ts`) ever attaches, for every category `ReplaceRepairAnalysis` covers, not just HVAC.
 - `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch (`homeActionDecisionLineage.ts:246`) hard-codes `decisionDefinitionId: 'HVAC_REPAIR_REPLACE'` when resolving a work item's source `ReplaceRepairAnalysis`, again independent of category.
 
-A non-HVAC appliance would therefore still resolve to `HVAC_REPAIR_REPLACE`, hit `hvacDecisionFamilyAdapter.isEligiblePrimaryEntity`'s `category: 'HVAC'` gate, and get `NOT_APPLICABLE` back — the new family above would simply never be reached. The fix uses §12.6's neutral closed category-to-family resolver, not a binary `HVAC`/`otherwise` branch. This is consistent with how the lineage file already gives every admitted decision family its own dedicated `lineageId` prefix (`REFINANCE_OPPORTUNITY_ID_PREFIX`, `HOME_CAPITAL_TIMELINE_WINDOW_ID_PREFIX`, etc.):
+A non-HVAC appliance would therefore still resolve to `HVAC_REPAIR_REPLACE`, hit `hvacDecisionFamilyAdapter.isEligiblePrimaryEntity`'s `category: 'HVAC'` gate, and get `NOT_APPLICABLE` back — the new family above would simply never be reached. The fix uses §12.6's neutral closed category-to-family resolver, not a binary `HVAC`/`otherwise` branch, while preserving the canonical identity rule: **inventory category is mutable, so it must select a decision family but must never select a new lineage ID for the same physical item.**
 
-1. **`loadRepairReplaceDecisionActions`** (`homeActionSourcePromotion.service.ts`) selects `inventoryItem.category` alongside the fields it already selects and calls `resolveRepairReplaceDecisionFamily(category)`. `HVAC_REPAIR_REPLACE` receives the existing `repair-replace:` lineage prefix; `APPLIANCE_REPAIR_REPLACE` receives a new `appliance-repair-replace:` prefix. `NO_MATCH` receives a stable, deliberately unregistered `repair-replace-unadmitted:` lineage prefix: the Home Action can remain visible as deterministic source guidance, but any Specialist/commitment path resolves fail-closed as unsupported rather than being mislabeled as HVAC or appliance. `id` (`repair-replace:${analysis.id}`, used for evidence/href construction only) is untouched.
-2. **`PREFIX_TO_DECISION_DEFINITION`** gains one entry: `{ prefix: APPLIANCE_REPAIR_REPLACE_ID_PREFIX, decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE' }`. `resolveDecisionFamilyRef` itself needs no logic change — it already dispatches on whichever prefix a `lineageId` actually starts with; the fix is that the producer above now attaches the correct one instead of always the HVAC prefix.
-3. **`resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch** additionally selects `inventoryItem: { select: { category: true } }` on its `ReplaceRepairAnalysis` lookup and calls the same resolver. It adds a decision-family ref only for `HVAC_REPAIR_REPLACE` or `APPLIANCE_REPAIR_REPLACE`. On `NO_MATCH`, it throws the existing `DecisionLineageRequiredForAcceptanceError` with a message that identifies the inventory category as unadmitted rather than returning no ref: the current acceptance guard iterates returned refs, so silently omitting the ref would incorrectly let the work item bypass lineage enforcement. No new error class or API error code is introduced.
+1. **`loadRepairReplaceDecisionActions` remains unchanged.** Every repair/replace Home Action keeps the stable `lineageId: repair-replace:${inventoryItemId}` it already emits. The analysis-row `id` (`repair-replace:${analysis.id}`) also remains unchanged. No `appliance-repair-replace:` or `repair-replace-unadmitted:` lineage prefixes are introduced.
+2. **`homeActionDecisionLineage.ts` separates identity from routing.** The static `PREFIX_TO_DECISION_DEFINITION` entry for `repair-replace:` is replaced by an async, property-scoped `resolveHomeActionDecisionFamilyRef(propertyId, action, db)` branch. For a `repair-replace:` lineage it loads that `InventoryItem`'s current category, calls `resolveRepairReplaceDecisionFamily(category)`, and returns one of `MATCHED` (family + stable `primaryEntityId`), `UNADMITTED` (known item/category with no admitted family), or `MISSING_PRIMARY_ENTITY`. Other fixed-prefix families continue through the existing synchronous table. The Home Action lineage policy converts both non-match states into its existing fail-closed `UNAVAILABLE` result, with no invented decision family.
+3. **Every asynchronous Home Action lineage caller** — the feed's decision-lineage enrichment and the command/commitment guard — awaits the same resolver. This is a narrow extension to `homeActions.service.ts`; it does not alter ranking, eligibility, or delivery. A caller must not cache a family independently of inventory revision/context because an authorized category correction can legitimately change which family handles the next decision while the underlying Home Action lineage remains stable.
+4. **`resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch** additionally selects `inventoryItem: { select: { category: true } }` on its `ReplaceRepairAnalysis` lookup and calls the same neutral category resolver. It adds a ref only for `HVAC_REPAIR_REPLACE` or `APPLIANCE_REPAIR_REPLACE`. On `NO_MATCH`, it throws the existing `DecisionLineageRequiredForAcceptanceError` with an unadmitted-category message rather than returning no ref, because the acceptance guard iterates returned refs and omission would bypass lineage enforcement.
+
+If an inventory category correction moves an item between admitted families after a Decision Thread already exists, the resolver does not mutate or silently reuse that old family's thread. It marks the prior thread's context stale through the existing inventory `PropertyChange`, opens/resumes the thread belonging to the newly eligible family using the same stable `InventoryItem` primary entity, and preserves the former thread/snapshots as historical lineage. The Home Action's stable lineage remains unchanged throughout.
 
 The routing invariant is therefore explicit: **only categories present in `REPAIR_REPLACE_DECISION_FAMILY_BY_CATEGORY` can enter a Specialist decision family.** `PLUMBING`, `ELECTRICAL`, `ROOF_EXTERIOR`, and every other absent category never fall through to `APPLIANCE_REPAIR_REPLACE` merely because they are not HVAC.
 
-This is a small, local change to one producer function and one lineage resolver — it does not touch `getHomeActionFeed()`, ranking, eligibility, or delivery, so it does not reopen the "duplicated ranking authority" concern earlier rounds closed. `homeActionSourcePromotion.service.ts` is accordingly no longer "zero changes" in §27's matrix (below) for this one function; every other producer in that file is still untouched.
+This is a bounded change to the lineage resolver and the existing asynchronous enrichment/guard call sites in `homeActions.service.ts`; it does not change `getHomeActionFeed()`'s ranking calculation, eligibility, promotion, or delivery. `homeActionSourcePromotion.service.ts` remains unchanged, and stable action identity is preserved rather than encoded with mutable classification.
 
 ---
 
@@ -858,8 +982,10 @@ Homeowner engages with a delivered Home Action (via Ask Cozy or in-app)
 
 ### Pattern C — Ask Cozy, non-actionable observation
 ```
-User → Ask Cozy → query-envelope Skill (read-only) → rendered observation
-  (never enters the Home Action ranking — Principle 3/4)
+User → Ask Cozy → query-envelope Skill (read-only) → §5.8 presentation admission
+  ├─ ADMITTED_INFORMATIONAL → deterministic renderer → observation
+  ├─ EXCLUDED_CANONICAL_ACTION → Ask uses the matching canonical Home Action
+  └─ DENIED_UNREVIEWED → safe refusal/clarification; no raw producer payload
 ```
 
 ### Pattern D — Direct deterministic execution
@@ -895,6 +1021,7 @@ enum LLMPurpose {
   ASK_COZY_REMOTE_FALLBACK_SYNTHESIS,
 }
 ```
+
 (`NARRATE_MULTI_ITEM_ATTENTION_SUMMARY` is retired along with the Attention layer it served — no component in this document narrates across multiple Envelope items anymore.)
 
 **A reviewer correctly identified a remaining gap: checking that an LLM-supplied `evidenceRef` was among the refs passed into the prompt proves the reference is *real*, not that the generated *text* is actually supported by it — a model can attach a legitimate reference to a false claim, and a `COMPARISON` claim can't be reconstructed from a single reference alone.** Fixed by moving from "validate generated text against a reference" to "the LLM never generates the claim's substance at all":
@@ -937,9 +1064,9 @@ No Kafka, no Redis Streams, no new event infrastructure, no `DomainEvent` schema
 |---|---|
 | **C2C authoritative state** | Unchanged — existing 506 Prisma models |
 | **Intelligence state** | Unchanged native subsystems + the Envelope's read adapters |
-| **Coverage audit findings** | New, narrow: `CoverageAuditFinding` (§11.2/§25), keyed by `(producerModel, domain)` — no per-item, no per-user dimension |
+| **Coverage audit findings** | New, narrow: `CoverageAuditFinding` (§11.2/§25), keyed by `(producerModel, domain)`, with complete-run current/inactive reconciliation — no per-item, no per-user dimension |
 | **Home Action lifecycle state** (dismissal, snooze, completion) | Unchanged — already fully owned by the existing Home Action command policy (HI-ATT-005); this document does not duplicate it |
-| **Specialist Agent execution state** | New: `AgentRun` (append-only, per invocation) / `AgentState` (only for a paused, resumable run) — see §12.5 for why these are two different records, not two sources of truth |
+| **Specialist Agent execution state** | New: immutable `AgentRun` header + append-only `AgentRunEvent` ledger + versioned `AgentState` only while paused; `AgentFollowUpDraft` owns the confirmed scheduled-action lifecycle (§12.4/§12.5) |
 | **Conversation context** | Unchanged — Ask's existing session state |
 | **Historical outcomes** | Unchanged — `OutcomeObservation` |
 
@@ -959,16 +1086,21 @@ interface QualifiedClaim {
     propertyId: string;
     entityRef: string | null;          // e.g. a specific HVAC unit's ID, when a property has more than one
     propositionType: string;            // a closed, small vocabulary — e.g. "REPAIR_REPLACE_VERDICT" — not a free string
-    assessmentHorizonVersion: string;   // ties the claim to a specific assessment run/version, so an old and a
-                                          // current verdict for the same proposition aren't compared as if concurrent
+    assessmentHorizon: {
+      basis: "PROPERTY_CONTEXT_VERSION" | "SHARED_SOURCE_CORRELATION";
+      value: string;                    // a value both producers actually received, never either producer's own row/run id
+      evaluationWindow: string;         // governed time bucket/contract version, identical across compared producers
+    };
   };
   verdict: string;
 }
 ```
 
-**Only the adapters for decision-grade, verdict-bearing Envelope types populate `claimKey` at all** — concretely, `RecommendationSnapshot`'s adapter (which already carries `recommendationDefinitionId`, `scenarioId`, and the decision family, giving it everything needed to construct a `propositionType`+`assessmentHorizonVersion` deterministically from data the native record already has) and, where a `GuidanceSignal` represents a comparable verdict rather than a raw observation, its adapter. Purely observational types (`Signal`, most `IntelligenceObservation` rows) never populate `claimKey` — they have no verdict to conflict over, and §18.1's "relationship unknown, not conflicted" default already covers them correctly.
+**Only adapters for decision-grade, verdict-bearing Envelope types populate `claimKey` at all.** `propertyId`, `entityRef`, and `propositionType` are necessary but not sufficient: independent producers must also prove they evaluated the same horizon through a value shared before either result was created. Valid bases are the exact `PropertyContextSnapshot.versionHash` both engines consumed, or an orchestration-issued source-correlation ID stamped into both outputs when they are intentionally evaluated together. A producer's own snapshot ID, scenario ID, definition version, row ID, source run ID, or generated-at timestamp is never a valid shared horizon — those values differ by construction and would hide real conflicts.
 
-Two items are `CONFLICTED` only when their `claimKey`s match on every field (same property, same entity, same proposition, same assessment horizon) and their verdicts are incompatible. A mismatch on any field — including a different `entityRef` or a stale `assessmentHorizonVersion` — means **relationship unknown**, not conflicted. This is the version that actually matches the audit's original HVAC example (two engines computing *the same* verdict, for *the same unit*, at *the same assessment point*, and disagreeing) without over-generalizing to unrelated same-domain items or colliding across properties/units.
+`RecommendationSnapshot` and a comparable verdict-bearing `GuidanceSignal` populate this key only when their durable provenance carries the same shared horizon value and evaluation-window contract. If either side lacks it, the relationship is `UNKNOWN`, never inferred from timestamp proximity. Phase 0's HVAC reconciliation either stamps the shared horizon on both evaluations during the transitional comparison or removes the second verdict authority entirely; the conflict layer does not pretend independently-derived native versions are comparable. Purely observational types (`Signal`, most `IntelligenceObservation` rows) never populate `claimKey` because they have no verdict to reconcile.
+
+Two items are `CONFLICTED` only when their `claimKey`s match on every field (same property, entity, proposition, shared horizon basis/value, and evaluation window) and their verdicts are incompatible. A mismatch or missing shared horizon means **relationship unknown**, not conflicted. Contract tests construct two different producer records stamped with the same shared horizon and prove disagreement is detected, then prove records with different horizons are not compared.
 
 ### 18.2 Abstention remains first-class
 
@@ -978,13 +1110,13 @@ Unchanged: **"C2C does not currently have enough reliable information to recomme
 
 ## 19. Governance & Safety
 
-Unchanged in substance from round 2 — kill switch/feature-flag convention, risk classification, capability allow-list, budgets (now including `maxLoopIterations`), evaluation-suite gate before `ENABLED`, `releaseGate.service.ts` available-but-not-required, audit log, `CalibrationRelease`-style versioning. Scoped now to exactly one `AgentDefinition` (the HVAC Specialist Agent) plus one Worker (the Coverage Audit, governed as a Worker per §8 — feature-flagged, not `AgentDefinition`-registered).
+The round-2 controls remain: kill switches/feature flags, risk classification, budgets (including `maxLoopIterations`), evaluation-suite gate before `ENABLED`, audit logging, and `CalibrationRelease`-style versioning. This revision makes capability admission concrete through §9's positive Skill/tool allow-list and treats the confirmed follow-up worker as part of the HVAC Agent's governed capability, not as independent authority. Every confirm/resume path reapplies authorization, applicability, current context, and kill-switch state. Scope remains one `AgentDefinition` plus two deterministic Workers: the Coverage Audit and the follow-up tick handler.
 
 ---
 
 ## 20. Observability
 
-Unchanged trace shape from round 2 (correlation ID, agent/tick run ID, per-span tool/LLM/outcome logging), narrowed in scope to the Coverage Audit's evaluation passes and the Specialist Agent's runs. New: the admin coverage dashboard (§11.2), reusing `adminIntelligenceRecompute.service.ts`'s existing dashboard conventions.
+The trace shape retains correlation ID, agent/tick run ID, and per-span tool/LLM/outcome logging. `AgentRunEvent` is the durable lifecycle ledger; every `ToolInvocation`/`LLMInvocation` references its causative event. Follow-up draft/confirm/cancel/fire/no-op transitions carry the same correlation and decision-thread IDs. Coverage Audit telemetry distinguishes complete, partial, and failed scans plus active/inactive finding counts, preventing a partial scan from looking like successful disappearance. The admin coverage dashboard (§11.2) reuses `adminIntelligenceRecompute.service.ts`'s conventions and defaults to currently-observed gaps.
 
 ---
 
@@ -1000,11 +1132,11 @@ Unchanged shape from round 2, corrected for what Ask now actually ranks against:
 
 ```
 Ask Cozy → existing deterministic routing (unchanged) →
-  {Skill call | HVAC Specialist Agent | query-envelope Skill (non-actionable observations only)} →
+  {Skill call | HVAC Specialist Agent | query-envelope Skill (§5.8-admitted informational observations only)} →
   optional LLM synthesis (typed claims, §14.2) → Answer
 ```
 
-Per ASK-INT-019 (§1.1): **Ask ranks only the canonical `getHomeActionFeed()` output, using the same versioned, explainable `priorityListPolicy.ts` categories every other surface uses.** It never ranks raw Envelope items. The 8 example homeowner questions from prior revisions still apply, with "Show me the evidence" now also covering non-actionable Envelope observations surfaced via `query-envelope`.
+Per ASK-INT-019 (§1.1): **Ask ranks only the canonical `getHomeActionFeed()` output, using the same versioned, explainable `priorityListPolicy.ts` categories every other surface uses.** It never ranks raw Envelope items. `query-envelope` returns only §5.8's explicitly admitted informational propositions, excludes any item correlated to a current canonical Home Action, and denies unreviewed propositions. The 8 example homeowner questions from prior revisions still apply, with "Show me the evidence" covering only those admitted observations.
 
 ---
 
@@ -1089,8 +1221,9 @@ sequenceDiagram
     Cov->>Cov: upsert CoverageAuditFinding determination=INTENTIONALLY_NON_ACTIONABLE
   else no match, not allow-listed
     Cov->>Cov: upsert CoverageAuditFinding determination=REVIEW_REQUIRED
-    Cov->>Dash: surface finding for an engineer to act on
   end
+  Cov->>Cov: after complete successful scan, set currentlyObserved=false where lastAuditRunId differs
+  Cov->>Dash: surface currentlyObserved REVIEW_REQUIRED findings; retain inactive history
 ```
 
 ### 24.2 Canonical delivery (existing, unmodified — shown for completeness)
@@ -1160,11 +1293,51 @@ sequenceDiagram
   participant U as Homeowner
   participant Ask as Ask Orchestrator
   participant Env as query-envelope Skill
+  participant Policy as Envelope presentation policy (§5.8)
+  participant Feed as Canonical Home Action feed
 
   U->>Ask: "What do you know about my roof?"
   Ask->>Env: query(propertyId, domain=ROOF, principal)
-  Env-->>Ask: observations (not promoted, not ranked)
-  Ask-->>U: rendered facts + evidence
+  Env->>Policy: authorize + classify proposition + correlate lineage
+  Policy->>Feed: find current canonical action with same source/lineage
+  alt exact INFORMATIONAL_ONLY rule and no canonical action
+    Policy-->>Env: ADMITTED_INFORMATIONAL(rendererId)
+    Env-->>Ask: deterministically rendered facts + evidence
+    Ask-->>U: informational observation
+  else matching canonical Home Action
+    Policy-->>Ask: EXCLUDED_CANONICAL_ACTION(homeActionId)
+    Ask-->>U: canonical Home Action response
+  else unreviewed/actionable-only
+    Policy-->>Ask: DENIED_UNREVIEWED
+    Ask-->>U: safe bounded response; no raw payload
+  end
+```
+
+### 24.6 Confirmed Specialist follow-up
+
+```mermaid
+sequenceDiagram
+  participant HO as Homeowner
+  participant Spec as Specialist Agent
+  participant Cmd as Follow-up confirmation command
+  participant Job as agent-specialist-follow-up worker
+  participant Auth as Property authorization/applicability
+  participant State as AgentState + AgentRunEvent
+
+  Spec->>State: append FOLLOW_UP_DRAFTED; persist idempotent DRAFT
+  Spec-->>HO: "We'll check back in a week — sound good?"
+  HO->>Cmd: confirm(draftId, expectedVersion, idempotencyKey)
+  Cmd->>Auth: recheck user/property/thread/kill switches/expiry
+  Auth-->>Cmd: authorized and applicable
+  Cmd->>State: atomically CONFIRMED → SCHEDULED + append event
+  Cmd->>Job: enqueue(draftId, dedupKey=draftId)
+  Job->>Auth: on due date, reload and recheck current authority/applicability
+  alt current, authorized, not cancelled, first fire
+    Job->>State: claim AgentState version; SCHEDULED → FIRED; clear homeownerNeedsTime; append RESUMED
+    Job->>Spec: resume selectNextTool loop
+  else stale/cancelled/expired/duplicate
+    Job->>State: append governed no-op outcome
+  end
 ```
 
 ---
@@ -1173,41 +1346,66 @@ sequenceDiagram
 
 | New model | Purpose | Notes |
 |---|---|---|
-| `CoverageAuditFinding` (§11.2) | Coverage determination per `(producerModel, domain)` combination — `COVERED` / `INTENTIONALLY_NON_ACTIONABLE` / `REVIEW_REQUIRED`, with `auditInputsDigest` and matched rule IDs | No `userId`, no per-item dimension, no idempotency-key machinery needed — upserted by natural key `(producerModel, domain)`, recomputed fresh each run against `COMPOUND_RULE_REGISTRY` + `COVERAGE_MANIFEST` together |
+| `CoverageAuditRun` | Durable complete/partial/failed scan identity and counts | Reconciliation occurs only in the transaction that marks a run `COMPLETED`; failed/abandoned runs cannot deactivate findings |
+| `CoverageAuditFinding` (§11.2) | Coverage determination per `(producerModel, domain)` combination — `COVERED` / `INTENTIONALLY_NON_ACTIONABLE` / `REVIEW_REQUIRED`, with `auditInputsDigest`, matched rule IDs, `lastAuditRunId`, `lastObservedAt`, and `currentlyObserved` | No `userId` or per-item dimension; natural-key upsert plus successful-run reconciliation deactivates combinations absent from the latest complete scan without erasing history |
 | `IntelligenceEnvelopeIndex` (conditional) | Thin materialized index, only if query-time fan-out proves insufficient | No ranking field of any kind — the Envelope carries none |
-| `AgentDefinition`, `AgentRun`, `AgentState` | Registry and execution records for the one genuine agent (§12.5) | Scoped to the HVAC Specialist Agent; `AgentState` rows exist only for a paused, resumable run |
-| `ToolInvocation`, `LLMInvocation` | Per-call logs | Unchanged from round 2 |
+| `AgentDefinition`, `AgentRun`, `AgentRunEvent`, `AgentState` | Registry, immutable run identity, append-only execution transitions, and paused checkpoint (§12.5) | Scoped initially to the HVAC Specialist; `AgentState` is versioned and exists only while resumable; terminal state lives in `AgentRunEvent` |
+| `AgentFollowUpDraft` | Confirmable, cancellable, idempotent follow-up lifecycle (§12.4/§24.6) | Unique `idempotencyKey`, optimistic `version`, explicit DRAFT/CONFIRMED/SCHEDULED/FIRED/CANCELLED/EXPIRED states; worker job deduplicates by draft ID |
+| `ToolInvocation`, `LLMInvocation` | Per-call logs | Reference `agentRunId` and causative `agentRunEventId` |
 | One new `compoundRuleRegistry.ts` entry + producer-loader function + `COVERAGE_MANIFEST` entry per closed coverage finding | Whenever an engineer decides a `REVIEW_REQUIRED` finding warrants a rule (§11.2/§11.3) | Not a schema change — both the registry and the manifest are TypeScript arrays; the new function follows the exact pattern the existing 8 entries already establish |
 | `COVERAGE_MANIFEST`, `INTENTIONALLY_NON_ACTIONABLE` (§11.2) | Hand-authored coverage declarations, not a persisted table | TypeScript source, validated at startup/CI by `validateCoverageManifest` — not runtime-mutable |
+| `EnvelopeQueryPresentationRegistry` (§5.8) | Proposition-level admission for Ask's informational Envelope path | TypeScript source, validated at startup/CI; deliberately separate from coarse promotion coverage |
 | `RepairReplaceProfileRegistry` (§12.6) | `HVAC` profile at Phase 2; `GENERIC_APPLIANCE` profile added at Phase 4 — each naming a `decisionDefinitionId` + `scoringSkillId` + `eligibleCategories` | TypeScript source, not a persisted table; category-overlap uniqueness validated at startup/CI via `validateRepairReplaceProfiles` |
 | `APPLIANCE_REPAIR_REPLACE`'s full decision-platform family (§12.7, Phase 4) — `DecisionDefinitionId` union entry, `DECISION_DEFINITIONS` entry, `DecisionContextContract`, `applianceDecisionFamilyAdapter.ts`, `decisionFamilyAdapterRegistry.ts` entry | Backs the `GENERIC_APPLIANCE` profile's `DecisionThread` lineage — a registry entry alone was insufficient (§12.7) | Existing registry mechanisms (§10.2), five artifacts together, not one — `HVAC_REPAIR_REPLACE` untouched; the adapter is a `createSnapshotDecisionFamilyAdapter` config (`domainSnapshotAdapters.ts`'s shape), not a bespoke implementation |
-| Closed repair/replace eligibility + category-aware ingress: `repairReplaceDecisionEligibility.ts`; `PREFIX_TO_DECISION_DEFINITION` entry + `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch (`homeActionDecisionLineage.ts`); `loadRepairReplaceDecisionActions`'s prefix selection (`homeActionSourcePromotion.service.ts`) (§12.6/§12.7, Phase 4) | Without this, every repair-replace Home Action/work item still routes to `HVAC_REPAIR_REPLACE` regardless of category, while a binary non-HVAC fallback would incorrectly admit higher-risk categories | Not a schema change; one neutral closed mapping consumed by the profile registry, adapter, producer, and lineage resolver — no ranking/eligibility/delivery path is touched |
+| Closed repair/replace eligibility + category-aware routing: `repairReplaceDecisionEligibility.ts`; async repair/replace branch in `homeActionDecisionLineage.ts`; awaited enrichment/guard call sites in `homeActions.service.ts`; `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` branch (§12.6/§12.7, Phase 4) | Routes by current category without putting mutable classification into canonical identity | Not a schema change; every repair/replace action retains `repair-replace:${inventoryItemId}` while the neutral resolver selects or rejects the family at access/commit time |
 
-**Explicitly not changed:** everything round 2 already listed, plus — this revision's addition — `homeActions.service.ts`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `compoundRuleRegistry.ts`'s existing 8 entries, and `DomainEventType`. `homeActionSourcePromotion.service.ts` is unchanged **except** for `loadRepairReplaceDecisionActions`'s category-aware prefix selection above — every other producer in that file is untouched.
+**Explicitly not changed:** ranking logic inside `getHomeActionFeed()`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `compoundRuleRegistry.ts`'s existing 8 entries, `homeActionSourcePromotion.service.ts`, and `DomainEventType`. `homeActions.service.ts` changes only where its existing asynchronous enrichment/command paths await the category-aware lineage resolver; candidate generation, scoring, ranking, suppression, eligibility, and delivery remain untouched.
 
 ---
 
 ## 26. Implementation Phases
 
-### Phase 0 — Intelligence Envelope (read/promotion-input only)
+### Phase 0 — Intelligence Envelope and HVAC verdict convergence
 
 | | |
 |---|---|
-| **Objective** | Build the read abstraction; explicitly do NOT build a ranker |
-| **New code** | 5 read adapters, `EnvelopeKey`/`LineageKey` types, `query-envelope` Skill |
-| **Reused code** | All 5 native stores; `compoundRuleRegistry.ts` (untouched) |
-| **Risks** | The temptation to add a ranking field "just in case" — mitigated by Principle 3 being a review checklist item |
-| **Exit criteria** | All 5 subsystems queryable through one Envelope contract with correct lineage/revision separation; zero ranking fields anywhere in the type |
+| **Objective** | Build the read abstraction and eliminate the known two-engine HVAC verdict divergence; explicitly do NOT build a ranker |
+| **New code** | 5 read adapters, `EnvelopeKey`/`LineageKey` types, `query-envelope` Skill, `EnvelopeQueryPresentationRegistry` + validator (§5.8), and the shared HVAC evaluation adapter described below |
+| **Reused/modified code** | All 5 native stores; `compoundRuleRegistry.ts` untouched. `hvacRepairReplaceEngine.service.ts` becomes the sole HVAC base-verdict authority (`REPAIR`/`MONITOR`/`REPLACE`). `ReplaceRepairService`'s HVAC branch delegates to it using a versioned default-preference context, then applies the explicit schema-projection table below; Decision Threads use the same engine with authorized preferences. Both persist engine/context versions and shared horizon provenance. Non-HVAC formulas remain unchanged. |
+| **Tests** | Same HVAC facts + same preference/weight context produce semantically equivalent source-card and DecisionThread verdicts through the projection table; the urgency modifier never changes REPAIR/MONITOR into REPLACE or vice versa; a preference-driven difference is labeled changed decision context; §5.8 deny/redirect tests; shared-horizon conflict fixtures detect same-horizon disagreement and ignore different horizons |
+| **Risks** | Accidentally retaining a second HVAC verdict formula, or adding a ranking field "just in case" — mitigated by module-import/contract tests and Principle 3's review check |
+| **Exit criteria** | All 5 subsystems are queryable through one Envelope contract with correct lineage/revision separation and zero ranking fields; `hvacRepairReplaceEngine.service.ts` is the only HVAC verdict computation; the existing `SOURCE_CARD_VERDICT_DIVERGENCE` limitation is removed only after parity tests pass; only §5.8-admitted informational propositions can leave `query-envelope` |
+
+The HVAC source record and Decision Platform currently require different verdict vocabularies, so consolidation does not pretend they are a 1:1 enum. The only allowed projection is:
+
+```ts
+function projectHvacVerdictToReplaceRepairAnalysis(
+  verdict: HvacRepairReplaceVerdict,
+  urgency: "CURRENT_SAFETY_OR_FAILURE" | "PLANNING_HORIZON",
+): ReplaceRepairVerdict {
+  if (verdict === "REPAIR") return "REPAIR_ONLY";
+  if (verdict === "MONITOR") return "REPAIR_AND_MONITOR";
+  return urgency === "CURRENT_SAFETY_OR_FAILURE" ? "REPLACE_NOW" : "REPLACE_SOON";
+}
+
+function normalizeAnalysisVerdictForHvacComparison(verdict: ReplaceRepairVerdict): HvacRepairReplaceVerdict {
+  if (verdict === "REPAIR_ONLY") return "REPAIR";
+  if (verdict === "REPAIR_AND_MONITOR") return "MONITOR";
+  return "REPLACE";
+}
+```
+
+The urgency input is a typed, deterministic modifier derived from explicit current failure/safety evidence and may only choose `NOW` versus `SOON` after the canonical engine has returned `REPLACE`; it cannot change the base decision. This preserves HVAC's existing certified three-state Decision Platform contract while eliminating the independent second repair/replace formula.
 
 ### Phase 1 — Promotion Coverage Audit
 
 | | |
 |---|---|
 | **Objective** | Surface intelligence-to-Home-Action coverage gaps for an engineer to close by hand — never dispatch or promote anything automatically |
-| **New code** | `auditCoverage` job (structural comparison, §11.2), `CoverageAuditFinding` table, `COVERAGE_MANIFEST` + `INTENTIONALLY_NON_ACTIONABLE` (hand-authored), `validateCoverageManifest` (startup/CI parity check), `hashAuditInputs`, admin coverage dashboard |
+| **New code** | `auditCoverage` job, `CoverageAuditRun`, `CoverageAuditFinding` with complete-run observation reconciliation, hand-authored manifest/non-actionable registries and validator, `hashAuditInputs`, admin coverage dashboard |
 | **Reused code** | `compoundRuleRegistry.ts` (read-only, untouched), `homeActionSourcePromotion.service.ts` (untouched — this phase never calls it), `workerJobRegistry.ts`, the `property.homeownerProfile.userId`-resolution pattern from `evaluateHomeActionProactiveDeliveryJob`, `validateDecisionFamilyAdapterRegistry`'s startup-validation pattern (reused for `validateCoverageManifest`) |
 | **Dependencies** | Phase 0 |
-| **Exit criteria** | Every producer/domain combination observed in the Envelope has an explicit `CoverageAuditFinding` determination; `validateCoverageManifest` fails CI on a stale `ruleId`, a manifest/non-actionable contradiction, or an unknown `producerModel`; a previously-`REVIEW_REQUIRED` combination is confirmed to disappear from the dashboard **only** once both a covering rule *and* its `COVERAGE_MANIFEST` entry are authored (§11.3) — a rule alone is not sufficient, with no automated promotion involved at any point |
+| **Exit criteria** | Every currently observed producer/domain combination has an explicit determination; validation fails on stale rule IDs, contradictions, or unknown producer/domain keys; a resolved gap closes only when both rule and manifest exist; a no-longer-observed combination becomes inactive only after a successful complete audit and remains in history; a failed/partial audit cannot deactivate findings |
 
 ### Phase 2 — HVAC Specialist Agent (HVAC-only — `GENERIC_APPLIANCE` moved to Phase 4)
 
@@ -1216,11 +1414,11 @@ A prior draft shipped the `GENERIC_APPLIANCE` profile, a new `APPLIANCE_REPAIR_R
 | | |
 |---|---|
 | **Objective** | Ship the one genuine agent in this document |
-| **New code** | `AgentDefinition`/`AgentRun`/`AgentState`, the `selectNextTool` loop with its budget/abstention fixes (§12.3), `repairReplaceDecisionEligibility.ts` with the closed `HVAC → HVAC_REPAIR_REPLACE` mapping, `RepairReplaceProfileRegistry` with its `HVAC` profile only + `validateRepairReplaceProfiles` (§12.6 — the registry shape ships now; Phase 4 extends the neutral map with `APPLIANCE` and adds the `GENERIC_APPLIANCE` entry), the LLM Necessity Gate's typed-claims mechanism (§14.2) |
+| **New code** | `AgentDefinition`/`AgentRun`/`AgentRunEvent`/`AgentState`; the concrete least-privilege HVAC capability set (§9); `AgentFollowUpDraft`, confirmation/cancellation commands, and `agent-specialist-follow-up` worker (§12.4/§24.6); the bounded loop (§12.3); `repairReplaceDecisionEligibility.ts` with `HVAC → HVAC_REPAIR_REPLACE`; HVAC-only `RepairReplaceProfileRegistry`; typed-claims mechanism (§14.2) |
 | **Reused code** | `hvacRepairReplaceEngine.service.ts`, `DecisionThread`/`RecommendationSnapshot`, `HVAC_REPAIR_REPLACE`'s existing `decisionFamilyAdapterRegistry.ts` entry |
 | **Dependencies** | Phase 0's HVAC-verdict reconciliation (unchanged prerequisite from earlier revisions) |
-| **Tests** | Loop-budget/abstention tests (fact never resolves after `maxAttemptsPerTool`); the all-facts-known skip path; the homeowner-dispute re-entry path clearing `homeownerDisputedInput`; typed-claim rendering tests proving no LLM-generated number reaches a homeowner unverified |
-| **Exit criteria** | A homeowner engaging with a delivered HVAC Home Action receives a decision-support conversation grounded in the existing scoring engine, with a demonstrated abstention path when facts can't be resolved |
+| **Tests** | Loop budget/abstention, all-facts-known skip, dispute re-entry, typed-claim rendering, concrete allow-list rejection of every unrelated Skill, immutable run header + append-only transition ledger, optimistic resume collision, duplicate confirmation/job delivery, cancellation/expiry, and authorization/applicability/kill-switch rechecks at confirmation and fire time |
+| **Exit criteria** | A homeowner engaging with a delivered HVAC Home Action receives grounded decision support with demonstrated abstention; unrelated domain Skills are uncallable; a follow-up cannot be scheduled without typed confirmation and cannot fire twice or resume under stale authority |
 
 ### Phase 3 — Ask Cozy integration
 
@@ -1228,21 +1426,21 @@ A prior draft shipped the `GENERIC_APPLIANCE` profile, a new `APPLIANCE_REPAIR_R
 |---|---|
 | **Objective** | Wire `REMOTE_FALLBACK`; add the Specialist Agent and `query-envelope` as routable Ask targets |
 | **Dependencies** | Phases 0–2 |
-| **Exit criteria** | Ask ranks only `getHomeActionFeed()` output (verified by a test that fails if any new ranking path is introduced); non-actionable questions resolve via `query-envelope` without touching promotion |
+| **Exit criteria** | Ask ranks only `getHomeActionFeed()` output; `query-envelope` admits only exact `INFORMATIONAL_ONLY` proposition rules, redirects canonical-lineage matches to the Home Action path, and denies unreviewed/actionable-only items without exposing raw payloads |
 
-### Phase 4 — `GENERIC_APPLIANCE`, additional specialists, and coverage rules
+### Phase 4 — `GENERIC_APPLIANCE` and additional coverage rules
 
 The first concrete instance of §12.6's extension pattern, not pattern-only prose. Extending the Repair-or-Replace family adapter with a new appliance profile is a routine addition once its own decision-platform family exists — a profile is a deterministic configuration selected by the property's inventory item type, not a second agent producing an independent recommendation, so **adding profiles never by itself creates the domain ambiguity Pattern E exists for.**
 
 | | |
 |---|---|
 | **Objective** | Stand up `APPLIANCE_REPAIR_REPLACE` as a real Decision Platform family (§12.7) and add the `GENERIC_APPLIANCE` profile to `RepairReplaceProfileRegistry` |
-| **New code** | `APPLIANCE_REPAIR_REPLACE` added to `DecisionDefinitionId` + its `DECISION_DEFINITIONS` entry + its `DecisionContextContract`; `applianceDecisionFamilyAdapter.ts` (§12.7's bridge — a `createSnapshotDecisionFamilyAdapter` config, verdict/confidence mapping, `ReplaceRepairAnalysis.id` provenance, supersession); the `decisionFamilyAdapterRegistry.ts` entry; the `GENERIC_APPLIANCE` `RepairReplaceProfile` entry; category-aware ingress — a new `APPLIANCE_REPAIR_REPLACE_ID_PREFIX` entry in `PREFIX_TO_DECISION_DEFINITION` and shared-resolver handling in `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` case (both `homeActionDecisionLineage.ts`) |
-| **Reused code** | `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService`, unmodified, as the profile's scoring engine — no new classification logic; `createSnapshotDecisionFamilyAdapter`/`hashSourceState` (`snapshotDecisionFamilyAdapter.ts`), unmodified |
-| **Modified** | `repairReplaceDecisionEligibility.ts` gains the closed `APPLIANCE → APPLIANCE_REPAIR_REPLACE` mapping; `loadRepairReplaceDecisionActions` (`homeActionSourcePromotion.service.ts`) selects `inventoryItem.category`, resolves the admitted family through `resolveRepairReplaceDecisionFamily`, and picks `repair-replace:`, `appliance-repair-replace:`, or the unregistered fail-closed `repair-replace-unadmitted:` lineage prefix; no other producer in that file changes |
+| **New code** | `APPLIANCE_REPAIR_REPLACE` definition/context/adapter/registry artifacts; four-state verdict-preserving `applianceDecisionFamilyAdapter.ts`; `GENERIC_APPLIANCE` profile; async repair/replace branch in `homeActionDecisionLineage.ts`; shared-resolver handling in `resolveWorkItemDecisionFamilyRefs`'s `GUIDANCE` case |
+| **Reused code** | `ReplaceRepairService`'s existing `APPLIANCE` behavior, unchanged by Phase 4, as the profile's scoring engine — no new classification logic; `createSnapshotDecisionFamilyAdapter`/`hashSourceState`, unmodified |
+| **Modified** | `repairReplaceDecisionEligibility.ts` gains `APPLIANCE → APPLIANCE_REPAIR_REPLACE`; existing asynchronous lineage-enrichment/commitment call sites in `homeActions.service.ts` await the resolver. `loadRepairReplaceDecisionActions` stays unchanged and every item retains `repair-replace:${inventoryItemId}`. |
 | **Dependencies** | Phase 2 (the agent runtime and `RepairReplaceProfileRegistry` shape already exist) |
-| **Tests** | A `GENERIC_APPLIANCE` `DecisionThread` create/resume test; the verdict-mapping table (§12.7) exercised for all 4 `ReplaceRepairVerdict` values; `ReplaceRepairAnalysis.id` provenance round-trips into `canonicalFactReferences`; an abstention case parallel to HVAC's; **closed routing tests** — an `HVAC` item's Home Action/work item resolves to `HVAC_REPAIR_REPLACE`, an `APPLIANCE` item's resolves to `APPLIANCE_REPAIR_REPLACE`, and representative `PLUMBING`, `ELECTRICAL`, and `ROOF_EXTERIOR` Home Actions resolve through the unregistered fail-closed prefix while their work-item acceptance attempts throw the existing `DecisionLineageRequiredForAcceptanceError` with an unadmitted-category message; neither adapter reports the other or an unadmitted category as eligible |
-| **Exit criteria** | A homeowner engaging with a delivered `APPLIANCE`-category Home Action (e.g. a dishwasher, refrigerator, washer, or dryer) receives the same decision-support conversation shape HVAC already gets, backed by `ReplaceRepairService` and a real `APPLIANCE_REPAIR_REPLACE` `DecisionThread` reached through category-aware ingress; a water heater or other `PLUMBING` item remains explicitly unadmitted and fail-closed pending its separate safety/evaluation review |
+| **Tests** | Generic-appliance thread create/resume; all four verdicts round-trip unchanged; NOW/SOON and ONLY/MONITOR transitions are material; analysis provenance round-trips; abstention; closed routing for HVAC/APPLIANCE/unadmitted categories; work-item rejection for unadmitted categories; changing one item's category changes family routing without changing its `lineageId`, and never silently reuses the former family's active thread |
+| **Exit criteria** | A homeowner engaging with an `APPLIANCE` Home Action receives the certified conversation backed by `ReplaceRepairService` and a real appliance Decision Thread; all four verdict states and material changes survive snapshotting; HVAC/APPLIANCE/unadmitted routing is closed and category-aware; category correction never changes the Home Action lineage; plumbing remains explicitly unadmitted and fail-closed |
 
 Building a genuinely new specialist (a materially different decision shape, per §12.6's test) or admitting a higher-risk family (electrical, plumbing, roofing) requires the explicit review §12.6 describes before any new `AgentDefinition` is registered, independent of this phase's `GENERIC_APPLIANCE` work — no build order beyond that is committed for further profiles, rules, or specialists. Pattern E's precondition is narrower than "a second thing exists": it activates only when one homeowner decision genuinely spans **multiple decision shapes or multiple distinct specialists** producing independently-reasoned recommendations that must be reconciled — e.g., a structural issue that is simultaneously a repair-or-replace question and an insurance-coverage question, not two appliances each cleanly handled by their own profile.
 
@@ -1252,18 +1450,18 @@ Building a genuinely new specialist (a materially different decision shape, per 
 
 | Component | Classification | Notes |
 |---|---|---|
-| `compoundRuleRegistry.ts`, `getHomeActionFeed()`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `evaluateHomeActionProactiveDeliveryJob` | **EXISTING** | Zero changes. This is the correction this revision makes concrete — every one of these was previously at risk of being duplicated or bypassed |
-| `homeActionSourcePromotion.service.ts` | EXTEND (one function, Phase 4) | `loadRepairReplaceDecisionActions` uses the closed repair/replace eligibility resolver for its `lineageId` prefix choice (§12.7's ingress fix), including an explicit unadmitted path — no other producer in this file changes, and no ranking/eligibility/delivery path is touched |
+| `compoundRuleRegistry.ts`, ranking logic in `getHomeActionFeed()`, `priorityListPolicy.ts`, `homeActionProactiveEligibilityPolicy.ts`, `homeActionProactiveDelivery.service.ts`, `evaluateHomeActionProactiveDeliveryJob` | **EXISTING** | Ranking/eligibility/delivery behavior remains unchanged; existing async Home Action lineage enrichment is extended separately below |
+| `homeActionSourcePromotion.service.ts` | EXISTING | Repair/replace keeps its stable `repair-replace:${inventoryItemId}` lineage; no category-selected prefix is added |
 | `Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, `RadarEvent` | WRAP AS TOOL (read adapter only) | No schema change, no write path added |
-| Two HVAC verdict engines | CONSOLIDATE | Unchanged prerequisite |
-| `decisionPlatform`, `decisionDefinitionRegistry.ts`, `decisionFamilyAdapterRegistry.ts`, `DECISION_CONTEXT_CONTRACTS`, `repairReplaceDecisionEligibility.ts`, `homeActionDecisionLineage.ts` | EXTEND | Backing for the Specialist Agent; a new `APPLIANCE_REPAIR_REPLACE` family (§12.7, Phase 4) — definition, context contract, adapter, registry entry together — alongside the unchanged `HVAC_REPAIR_REPLACE`; the neutral eligibility map prevents agent-layer dependency cycles and drives `homeActionDecisionLineage.ts`'s admitted-family routing |
-| `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService` | WRAP AS TOOL | Reused unmodified as the `GENERIC_APPLIANCE` profile's scoring engine (§12.6) — its existing category/name classification and numeric defaults are not duplicated |
+| Two HVAC verdict engines | CONSOLIDATE (Phase 0) | `hvacRepairReplaceEngine.service.ts` becomes the sole HVAC verdict computation; the HVAC analysis/source-card path delegates to it with explicit context/version provenance |
+| `decisionPlatform`, `decisionDefinitionRegistry.ts`, `decisionFamilyAdapterRegistry.ts`, `DECISION_CONTEXT_CONTRACTS`, `repairReplaceDecisionEligibility.ts`, `homeActionDecisionLineage.ts`, existing lineage call sites in `homeActions.service.ts` | EXTEND | New appliance family plus category-aware, stable-identity routing; mutable inventory category never becomes part of `lineageId` |
+| `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService` | REFACTOR in Phase 0; WRAP AS TOOL in Phase 4 | Its HVAC verdict branch delegates to the canonical HVAC engine; its existing `APPLIANCE` classification/defaults/formula remain the generic-appliance profile's single owner and are not duplicated |
 | `snapshotDecisionFamilyAdapter.ts`'s `createSnapshotDecisionFamilyAdapter`/`hashSourceState` | WRAP AS TOOL | Reused unmodified as the factory backing `applianceDecisionFamilyAdapter` (§12.7) — the same factory the six existing snapshot families already use |
-| `services/skills/` | EXTEND | `autonomyLevel` field; new `query-envelope` Skill |
+| `services/skills/` | EXTEND | `autonomyLevel`; concrete per-Agent Skill/tool allow-lists; `query-envelope` with §5.8 admission policy |
 | `aiRequestGovernance.service.ts` | REFACTOR (interface hardening) | Typed-claims response mechanism (§14.2) |
 | `askOrchestrator.service.ts` | EXTEND | Wire `REMOTE_FALLBACK` |
-| `workerJobRegistry.ts` | EXTEND | One new job type (Coverage Audit) |
-| Intelligence Envelope, `CoverageAuditFinding`, `COVERAGE_MANIFEST`, `RepairReplaceProfileRegistry`, HVAC Specialist Agent, Agent runtime | NEW | The only genuinely new components |
+| `workerJobRegistry.ts` | EXTEND | Coverage Audit and confirmed Specialist follow-up job types |
+| Intelligence Envelope, `EnvelopeQueryPresentationRegistry`, `CoverageAuditRun`/`CoverageAuditFinding`, `COVERAGE_MANIFEST`, `RepairReplaceProfileRegistry`, HVAC Specialist Agent, Agent runtime, `AgentFollowUpDraft` | NEW | Narrow components with explicit contracts above; none owns ranking or delivery |
 | `unifiedPriorityRanking.service.ts`, "Attention Watcher Service" / "Attention Agent" (prior revisions) | **RETIRED FROM THIS DESIGN** — never built | Would have violated HI-ATT-001/ASK-INT-019 |
 | A second LLM provider, event bus, vector database, second ranking/eligibility/delivery pipeline | NOT BUILT | No evidence justifies any of them; the last is now explicitly forbidden by requirement, not merely undesirable |
 
@@ -1275,10 +1473,15 @@ Building a genuinely new specialist (a materially different decision shape, per 
 |---|---|
 | **Building a second ranking/delivery pipeline** — this document's own demonstrated, repeated failure mode across two prior drafts | Principle 3 + HI-ATT-001/ASK-INT-019 citations in §1.1; any future PR touching ranking or delivery is checked against this table first |
 | **Coverage Audit becomes a hidden second promotion authority** if it ever gains inference logic instead of pure structural comparison | §11.2's binding constraint: it flags, a human authors the rule; it never invents or dispatches one |
+| **Stale coverage findings remain indefinitely actionable** after a producer/domain combination disappears | Complete-run `lastAuditRunId` reconciliation and `currentlyObserved`; partial runs never deactivate prior findings |
 | **Specialist loop livelock** (round 3 finding) | §12.3's bounded attempts, loop budget, and explicit abstention path |
-| **Agent silently exceeding its autonomy ceiling** via `SCHEDULE_FOLLOW_UP` | §12.4's reclassification to Draft (Level 2) with required confirmation |
+| **Agent silently exceeding its autonomy ceiling or scheduling twice** via `SCHEDULE_FOLLOW_UP` | §12.4's typed Draft/confirmation lifecycle, unique idempotency key, versioned state, deduplicated worker, cancellation, and authorization/applicability rechecks |
+| **Specialist gains unrelated domain capabilities** through the global Skill catalog | §9's positive `allowedSkills`/`allowedTools` admission and explicit HVAC deny tests |
+| **Ask duplicates a canonical action or exposes unreviewed actionable intelligence through the Envelope** | §5.8's proposition-level admission, canonical-lineage exclusion, and deny-by-default deterministic rendering |
+| **Mutable inventory classification splits canonical history** | Stable `repair-replace:${inventoryItemId}` identity; category affects only the async family-resolution result |
+| **Appliance urgency changes are demoted to confidence-only** | Four source verdicts remain canonical; transition tests require NOW/SOON and ONLY/MONITOR changes to be material |
 | **LLM evidence validation being referential instead of semantic** | §14.2's typed-claims mechanism — the model selects, it never asserts |
-| **False conflict detection demoting unrelated items** | §18.1's `claimKey`-based tightening |
+| **False conflict detection or undetected cross-engine disagreement** | §18.1 requires a shared pre-result horizon value; native row/run IDs are invalid horizons; missing correlation yields UNKNOWN |
 | **Repeating this document's own pattern of designing net-new infrastructure without checking for an existing canonical answer first** | This revision's very existence is the mitigation on record; future sections proposing "new" components should search for a canonical existing owner before assuming one doesn't exist |
 
 ---
@@ -1290,9 +1493,12 @@ Building a genuinely new specialist (a materially different decision shape, per 
 | Metric | Target |
 |---|---|
 | % of observed `(producerModel, domain)` combinations with at least one manifest-matched rule — **not** a claim that every proposition within a covered pair is addressed (§11.2) | Rising from today's baseline (8 rules across several but not all producer/domain combinations) |
-| `REVIEW_REQUIRED` findings resolved (rule authored) vs. accumulating unaddressed | Resolved, trending toward zero backlog |
+| Currently-observed `REVIEW_REQUIRED` findings resolved (rule + manifest authored) vs. accumulating unaddressed | Resolved, trending toward zero backlog; inactive findings reported separately, never counted as live gaps |
 | Specialist Agent loop-abstention rate | Low, but nonzero (proves the abstention path is real, not decorative) |
 | % Specialist Agent runs resolved without an LLM call | High |
+| Duplicate Specialist follow-up executions / unauthorized or stale resumes | Zero; safe no-op attempts tracked separately |
+| `query-envelope` denied-unreviewed and canonical-action-redirect rate | Tracked by proposition type; zero raw-payload bypasses |
+| Repair/replace lineage changes caused solely by inventory-category correction | Zero |
 | Coverage manifest precision (findings later found to be false positives — a `REVIEW_REQUIRED` that turns out to already be covered by a rule the manifest missed) | Low, trending toward zero as `COVERAGE_MANIFEST` entries are reviewed alongside registry changes (§11.2) |
 | Median time from a finding first becoming `REVIEW_REQUIRED` to an engineer resolving it (rule authored, or explicitly accepted as `INTENTIONALLY_NON_ACTIONABLE`) | Tracked; the Audit's entire value is realized only if findings are actually acted on, not just generated |
 
@@ -1306,7 +1512,7 @@ Unchanged from round 2's framing (recommendation acceptance/dismissal, homeowner
 
 ## 30. Final Recommendation
 
-**What should be built first:** Phase 0 (Envelope, read-only) and Phase 1 (Promotion Coverage Audit). Both are additive to an already-shipped canonical pipeline and carry near-zero risk of duplicating it, provided Principle 3 is enforced in review.
+**What should be built first:** Phase 0 has two explicitly-tested workstreams: the additive Envelope/presentation-admission foundation and the targeted HVAC verdict-authority consolidation. Phase 1 may proceed once the Envelope contract is stable; Phase 2 may not proceed until the HVAC parity exit criterion is met. The Envelope and Coverage Audit remain additive and low-risk to ranking/delivery; the HVAC consolidation is a correctness refactor and receives the stronger parity/change-classification test bar in §26.
 
 **What should NOT be built:** anything resembling a second `getHomeActionFeed()`, a second `priorityListPolicy.ts`, or a second delivery pipeline — not "not yet," but structurally excluded by this document going forward, since two independent drafts of this same document built exactly that before an external review caught it each time.
 
@@ -1316,7 +1522,7 @@ Unchanged from round 2's framing (recommendation acceptance/dismissal, homeowner
 
 **What role the orchestrator plays:** sequencing the Specialist Agent's own loop only — no cross-domain routing responsibility remains, because there is no longer a component in this document that would need to route across domains before Phase 4.
 
-**How Ask Cozy fits:** as a caller of the exact same `getHomeActionFeed()` every other canonical surface calls, plus a read-only path into the Envelope for non-actionable observations — never a second ranking consumer.
+**How Ask Cozy fits:** as a caller of the same canonical feed every other surface calls, plus a read-only Envelope path limited by §5.8's proposition-level informational admission and canonical-action redirect — never a second ranking consumer and never a raw-payload escape hatch.
 
 **How much LLM dependency C2C should tolerate:** less than round 2 proposed — the Necessity Gate's surviving purposes are down to three, and the typed-claims mechanism removes even the possibility of the LLM asserting an unverified fact, not just the likelihood.
 
@@ -1337,7 +1543,7 @@ Unchanged from round 2's framing (recommendation acceptance/dismissal, homeowner
 | **4. Invoke specialist intelligence where needed** | If the maintenance item is HVAC and the homeowner engages with it (via Ask or in-app), the Specialist Agent runs (Pattern B) — this is the one part of the scenario this document's own work actually adds |
 | **5. Identify the single most important next action** | `getHomeActionFeed()`'s existing ranking — unchanged |
 | **6. Explain why it matters** | `priorityListPolicy.ts`'s existing category/reason-code rendering for the simple case; the Specialist Agent's typed-claim explanation only on engagement |
-| **7. Show evidence** | Existing Home Action evidence fields; Envelope `evidence` for non-actionable items via Ask |
+| **7. Show evidence** | Existing Home Action evidence fields; Envelope evidence only for §5.8-admitted informational propositions via Ask |
 | **8. Communicate at the appropriate time** | `homeActionProactiveEligibilityPolicy.ts`/`homeActionProactiveDelivery.service.ts` — already shipped, unchanged |
 | **9. Do most of this without an LLM** | Steps 1–3, 5, 7, 8 involve zero LLM calls today, already, independent of this document. Only step 6, on engagement, may invoke the Gateway — and only for typed-claim selection, never fact assertion |
 | **10. Later learn whether the recommendation was useful** | `OutcomeObservation`/`CalibrationRelease` — already shipped for HVAC, unchanged |
@@ -1346,4 +1552,4 @@ Unchanged from round 2's framing (recommendation acceptance/dismissal, homeowner
 
 ---
 
-*Contract to Cozy — Stage 3: C2C Intelligence & Agentic Evolution Architecture. Third revision — narrowed after discovering that most of the second revision's "new" attention infrastructure duplicated an already-shipped canonical pipeline. Draft — not yet build-approved.*
+*Contract to Cozy — Stage 3: C2C Intelligence & Agentic Evolution Architecture. Third revision with full-review corrections — canonical routing identity, verdict fidelity, resumable-agent execution, Envelope presentation admission, audit reconciliation, and shared conflict horizons are now specified. Draft implementation plan; approval remains phase-exit-evidence based.*
