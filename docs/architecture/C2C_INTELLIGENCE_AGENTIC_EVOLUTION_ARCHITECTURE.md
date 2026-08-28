@@ -25,17 +25,17 @@
 
 ## 1.2 Implementation-readiness decision log
 
-This revision is not build-approved until the material decisions below are confirmed by the accountable product/architecture owner. Repository evidence can narrow these choices, but it cannot make the product decisions on the owner's behalf. An implementation PR must cite the resulting decision IDs rather than silently selecting an interpretation.
+This log records the material product/architecture decisions that constrain implementation. All five decisions are now approved; the decision-log gate is closed, although every phase remains subject to its documented contracts, tests, and exit criteria. An implementation PR must cite the applicable decision IDs rather than silently changing their interpretation.
 
 | ID | Decision required | Evidence-constrained recommendation | Status |
 |---|---|---|---|
 | `ARD-001` | Envelope producer boundary | The Envelope is the registered read abstraction for property-scoped derived-intelligence artifacts. The initial registry contains the five named producer families—`Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, and Radar—plus `PersonalizedRecommendation`; Radar is exposed only through property-scoped `PropertyRadarMatch` / `PropertyRadarCompoundInsight` projections, with global `RadarEvent` retained as evidence. Ordinary domain facts and workflow records remain outside the Envelope. Envelope promotion coverage and comprehensive Home Action producer completeness are separate audits. | **APPROVED — 2026-08-27** |
 | `ARD-002` | `EnvelopeDomain` taxonomy | Extract the existing closed `GuidanceIssueDomain` vocabulary into a shared, versioned `IntelligenceIssueDomain` contract and alias both `GuidanceIssueDomain` and `EnvelopeDomain` to it. A domain classifies issue/decision intent; specific assets such as roof, HVAC, or appliance belong in typed `entityRef` metadata. Every adapter mapping is explicit, and unknown values fail certification rather than silently becoming `OTHER`. | **APPROVED — 2026-08-27** |
 | `ARD-003` | Authoritative HVAC verdict | For HVAC, `hvacRepairReplaceEngine.service.ts` is the sole computation authority and the current, non-stale Decision Platform `RecommendationSnapshot` is the sole published verdict. `ReplaceRepairAnalysis` may trigger evaluation and supply typed evidence/approved context inputs, but its HVAC verdict is non-authoritative and is never displayed or used as a scoring input. For non-HVAC appliances, `ReplaceRepairAnalysis` remains authoritative and its Decision Platform snapshot is a provenance-preserving projection, not an independent recomputation. | **APPROVED — 2026-08-27** |
-| `ARD-004` | Coverage universe | Evaluate declared adapter capabilities as well as combinations observed in fixture/property data; otherwise an empty or narrow beta database can pass vacuously. | **OWNER CONFIRMATION REQUIRED** |
-| `ARD-005` | Agent-definition source of truth | Prefer a code-owned immutable registry with startup parity validation, while persisting runs/state only; use a database-owned definition only if runtime administration is an explicit requirement. | **OWNER CONFIRMATION REQUIRED BEFORE PHASE 2** |
+| `ARD-004` | Coverage universe | Use the union of exact capability tuples statically declared by registered Envelope adapters and capabilities observed through authorized property reads. Declared-but-unobserved capabilities remain visible; observed-but-undeclared capabilities are declaration-drift defects that fail certification. Coverage is still reported at the current `(producerModel, primaryDomain)` granularity, and only a complete audit may retire a finding. | **APPROVED — 2026-08-27** |
+| `ARD-005` | Agent-definition source of truth | Use a versioned, immutable, code-owned `AgentDefinition` registry with startup/CI parity validation. The registry retains every version referenced by a nonterminal run, paused state, or delayed job and declares one active version for new runs. Persist only append-only runs, CAS-versioned paused state, and bounded tool/LLM invocation audit records; a future operational-state overlay may be added only if runtime administration becomes an explicit requirement. | **APPROVED — 2026-08-27** |
 
-The following gaps are resolved and binding in the sections below: `ARD-001` establishes a registered Envelope boundary distinct from the complete Home Action producer inventory; `ARD-002` establishes the shared issue-domain taxonomy and keeps asset identity orthogonal to it; `ARD-003` establishes the HVAC computation/published-verdict authority split and preserves `ReplaceRepairAnalysis` authority only for non-HVAC appliances; Envelope evidence reuses the canonical Home Action evidence shape; conflict identity uses one `QualifiedClaim` contract rather than both `semanticCorrelationKey` and `claimKey`; the coverage worker does not reuse notification-consent filtering; and coverage findings have active/retired reconciliation.
+The following gaps are resolved and binding in the sections below: `ARD-001` establishes a registered Envelope boundary distinct from the complete Home Action producer inventory; `ARD-002` establishes the shared issue-domain taxonomy and keeps asset identity orthogonal to it; `ARD-003` establishes the HVAC computation/published-verdict authority split and preserves `ReplaceRepairAnalysis` authority only for non-HVAC appliances; `ARD-004` prevents vacuous coverage by combining exact declarations with authorized observations and treating observed-only capabilities as drift; `ARD-005` makes code the sole definition owner while pinning persisted execution records to immutable versions. Envelope evidence reuses the canonical Home Action evidence shape, conflict identity uses one `QualifiedClaim` contract, the coverage worker does not reuse notification-consent filtering, and coverage findings retain active/retired reconciliation.
 
 ---
 
@@ -320,7 +320,27 @@ Each adapter declares exactly one primary-domain mapping for every native subtyp
 | `PersonalizedRecommendation` | `RECOMMENDATION` | `PersonalizedRecommendation.status` (read-through) | A reviewed definition-code/category mapping supplies the primary domain; preserve versions, confidence, expiry, and explanations while omitting native `score`/`priorityBand` |
 | `PropertyRadarMatch` / `PropertyRadarCompoundInsight` | `RADAR_INSIGHT` | Property-scoped match/insight lifecycle status, **never** the global `RadarEvent.status` | A closed match/compound-rule mapping supplies the primary issue domain; affected assets stay in `entityRef`; global `RadarEvent` is evidence only |
 
-Every adapter must also publish a static descriptor containing its `producerModel`, supported `EnvelopeType`s, supported primary `EnvelopeDomain`s, complete native subtype/key mapping, `domainTaxonomyVersion`, lineage derivation version, revision-token algorithm, and freshness policy. The mapping table—not an asset-name heuristic—assigns the primary issue domain. An unmapped native subtype is returned in adapter diagnostics and fails the coverage certification fixture; it is never silently emitted as `OTHER` or dropped.
+Every adapter publishes exact capabilities rather than independent `supportedTypes` and `supportedDomains` arrays whose Cartesian product could claim combinations the adapter cannot emit:
+
+```ts
+interface EnvelopeAdapterCapability {
+  type: EnvelopeType;
+  domain: EnvelopeDomain;
+  nativeSubtype: string;       // closed native key/type handled by this mapping
+  propositionType?: string;    // optional future coverage refinement; not part of today's finding key
+}
+
+interface EnvelopeAdapterDescriptor {
+  producerModel: EnvelopeProducerModel;
+  capabilities: readonly EnvelopeAdapterCapability[];
+  domainTaxonomyVersion: typeof INTELLIGENCE_ISSUE_DOMAIN_TAXONOMY_VERSION;
+  lineageDerivationVersion: string;
+  revisionTokenAlgorithm: string;
+  freshnessPolicy: string;
+}
+```
+
+The descriptor's capability tuples are the static input to `ARD-004`; the audit projects them to distinct `(producerModel, primaryDomain)` pairs for today's coarse coverage finding. The mapping—not an asset-name heuristic—assigns the primary issue domain. An unmapped native subtype is returned in adapter diagnostics and fails coverage certification; it is never silently emitted as `OTHER` or dropped.
 
 #### 5.5.1 Admission rubric and exclusion boundary
 
@@ -436,14 +456,16 @@ interface AgentContextRequest {
 ```ts
 interface AgentDefinition {
   agentId: string;
+  version: string;                     // immutable semantic version
+  definitionSchemaVersion: string;
   name: string;
   responsibility: string;
   supportedDomains: EnvelopeDomain[];
   acceptedTriggers: AgentTrigger[];     // USER_INITIATED | HOME_ACTION_ENGAGEMENT | SPECIALIST_HANDOFF
 
   requiredContext: PropertyContextScope[];
-  allowedSkills: string[];
-  prohibitedSkills?: string[];
+  allowedSkills: VersionedSkillReference[];
+  prohibitedSkills?: VersionedSkillReference[];
 
   executionMode: "SYNC" | "ASYNC_LONG_RUNNING";
   stateRequirements: { persistsAcrossInvocations: boolean; stateShape?: string };
@@ -471,6 +493,25 @@ interface AgentDefinition {
 ```
 
 `maxLoopIterations` and `onLoopBudgetExhausted` are new in this revision (§12.3 explains why). `acceptedTriggers` dropped `ENVELOPE_CHANGE`/`SPECIALIST_DISCOVERY` — the only agent in this document (§12) is triggered by homeowner engagement with an already-delivered canonical item, not by an Envelope event.
+
+#### 7.2.1 Code-owned version registry (`ARD-005`)
+
+```ts
+interface VersionedAgentRegistryEntry {
+  activeVersion: string;  // selected deterministically for new runs
+  versions: Readonly<Record<string, AgentDefinition>>;
+}
+
+const AGENT_DEFINITION_REGISTRY: Readonly<Record<string, VersionedAgentRegistryEntry>> = Object.freeze({
+  // agentId -> { activeVersion, versions }
+});
+```
+
+`(agentId, version)` is immutable: any change to triggers, tools, context, output, budgets, safety, retry behavior, or evaluation requirements creates a new version. New runs use `activeVersion`; a run, delayed job, or paused `AgentState` remains pinned to the version that created it. A version may not be removed while any nonterminal run, paused state, or delayed job references it. `AgentRun` stores the version, a canonical definition digest, and the deployment revision so the exact reviewed definition remains reconstructable from source/build artifacts without persisting a second mutable definition copy.
+
+Static startup/CI validation follows the existing decision/Skill registry pattern and fails on: key/ID/version mismatch; duplicate versions; missing or incompatible Skills, adapters, context providers, trigger handlers, output schemas, or evaluation suites; budgets above platform maxima; an autonomy or safety declaration weaker than an allowed tool; or an `activeVersion` absent from `versions`. CI also compares canonical definition digests with the checked-in release baseline and rejects a changed digest under an existing `(agentId, version)`; a behavior change must add a version instead. A deployment/readiness retention check additionally fails if code no longer contains a version referenced by a nonterminal run, paused state, or delayed job.
+
+No `AgentDefinition` database model is created. If runtime pause/activation is later explicitly required, it is a separate `AgentOperationalState` overlay keyed by `(agentId, version)`; it may disable selection but can never edit definition content. This overlay is not part of the current implementation.
 
 ### 7.3 What's reused vs. new
 
@@ -544,11 +585,23 @@ Rounds 1–2 designed an "Attention Watcher Service"/"Attention Agent" that rank
 
 This audit's universe is the closed `ENVELOPE_ADAPTERS` registry approved by `ARD-001`: the five named producer families (`Signal`, `GuidanceSignal`, `IntelligenceObservation`, `RecommendationSnapshot`, and Radar) plus `PersonalizedRecommendation`. The Radar family contributes only property-scoped `PropertyRadarMatch` / `PropertyRadarCompoundInsight` projections; global `RadarEvent` is evidence, not a registered Envelope item. The audit does **not** claim to inventory every Home Action source. Comprehensive producer completeness—including direct producers backed by inspections, warranties, permits, incidents, inventory, documents, and other ordinary domain records—continues to be enforced by `HOME_ACTION_PRODUCER_OWNERSHIP` and its validation. The two audits may share reporting conventions, but neither substitutes for the other.
 
-Given the above, the only honest, buildable version of this idea is a **read-only, structural comparison** between what the Envelope's adapters declare/observe and what `compoundRuleRegistry.ts` already declares coverage for — a report for an engineer to act on, never a component that promotes anything itself. Subject to `ARD-004`, the audit compares two inputs: static producer/domain capabilities declared by the adapter descriptors (§5.5), and combinations actually observed in authorized fixture/property reads. Keeping them separate prevents an empty or narrow beta database from passing coverage merely because it happened not to contain a supported combination.
+Given the above, the only honest, buildable version of this idea is a **read-only, structural comparison** between what the Envelope's adapters declare/observe and what `compoundRuleRegistry.ts` already declares coverage for—a report for an engineer to act on, never a component that promotes anything itself. Per approved `ARD-004`, the universe is the union of exact capability tuples declared by adapter descriptors (§5.5) and tuples actually observed in authorized fixture/property reads. Those exact tuples are then projected to distinct `(producerModel, primaryDomain)` pairs for the current coverage finding. Keeping declarations and observations separate prevents an empty or narrow database from passing vacuously, while avoiding a false Cartesian product of independently declared types and domains.
 
 Observed combinations are gathered with a coverage-specific paginated property query. The job reuses only `evaluateHomeActionProactiveDeliveryJob`'s proven pattern of resolving each property's real `homeownerProfile.userId`; it **does not** reuse that job's notification-consent filter, because consent to external delivery has no bearing on whether an internal producer/domain combination exists. For each property, it constructs a `BACKGROUND_JOB_RESOLVED_OWNER` principal (§6.2), performs an authorized Envelope read, and aggregates distinct pairs. Properties with no resolvable homeowner are counted as `OWNER_UNRESOLVED` diagnostics and skipped rather than read under fabricated authority.
 
 ```ts
+interface ObservedEnvelopeCapability extends EnvelopeAdapterCapability {
+  producerModel: EnvelopeProducerModel;
+}
+
+interface AdapterDeclarationDrift {
+  producerModel: EnvelopeProducerModel;
+  capability: EnvelopeAdapterCapability;
+  firstObservedAt: string;
+  lastObservedAt: string;
+  sampleEnvelopeKeys: EnvelopeKey[]; // bounded diagnostics only
+}
+
 type CoverageDetermination = "COVERED" | "INTENTIONALLY_NON_ACTIONABLE" | "REVIEW_REQUIRED";
 // NOT_APPLICABLE from earlier drafts is gone — every combination gets an explicit determination;
 // "no matching rule" alone is never sufficient to conclude a gap (see the INTENTIONALLY_NON_ACTIONABLE
@@ -558,7 +611,7 @@ interface CoverageAuditFinding {
   producerModel: EnvelopeProducerModel;
   domain: EnvelopeDomain;
   auditInputsDigest: string;          // hash of rule IDs + manifest + non-actionable declarations +
-                                        // adapter primary-domain declarations + taxonomy version; see §11.3
+                                        // exact adapter capability tuples + taxonomy version; see §11.3
   determination: CoverageDetermination;
   matchedRuleIds: string[];           // ruleIds from COVERAGE_MANIFEST for this (producerModel, domain) pair —
                                         // never derived from inputContracts (11.2's matching correction)
@@ -575,6 +628,19 @@ interface CoverageAuditFinding {
 // ambient Signal readings with no actionable threshold). Anything not on this list and not matched
 // to a registry entry is REVIEW_REQUIRED, never silently dropped.
 const INTENTIONALLY_NON_ACTIONABLE: ReadonlySet<`${EnvelopeProducerModel}:${EnvelopeDomain}`> = new Set([/* ... */]);
+
+const declaredCapabilities = ENVELOPE_ADAPTERS.flatMap((adapter) =>
+  adapter.capabilities.map((capability) => ({ producerModel: adapter.producerModel, ...capability })),
+);
+const declarationDrift: AdapterDeclarationDrift[] = differenceByExactCapability(
+  observedCapabilities,
+  declaredCapabilities,
+);
+// Any entry is a certification failure. It is still projected into observedCombinations below
+// so the coverage dashboard cannot hide a real emitted producer/domain pair while the descriptor is fixed.
+
+const declaredCombinations = projectDistinctProducerDomainPairs(declaredCapabilities);
+const observedCombinations = projectDistinctProducerDomainPairs(observedCapabilities);
 
 function auditCoverage(
   declaredCombinations: { producerModel: EnvelopeProducerModel; domain: EnvelopeDomain }[],
@@ -607,6 +673,8 @@ function auditCoverage(
 ```
 
 After each successful full audit, the worker reconciles—not merely upserts—the result set. A previously persisted natural key absent from both current adapter declarations and current observations becomes `active=false` with `retiredAt` set; historical timestamps and determinations remain available for audit. A partial run never retires findings. The dashboard defaults to active `REVIEW_REQUIRED` findings and provides a separate retired-history view.
+
+`DECLARED_ONLY` pairs remain active and receive the same `COVERED` / `INTENTIONALLY_NON_ACTIONABLE` / `REVIEW_REQUIRED` determination as observed pairs; absence from current data is never treated as absence from the supported product contract. `OBSERVED_ONLY` at the coarse pair level stays visible, while any observed exact capability absent from the descriptor produces `AdapterDeclarationDrift` and fails adapter certification independently of whether that coarse pair happens to have a matching rule.
 
 The worker processes properties in stable ID order with a persisted run cursor and configurable batch size. Each adapter has an individual timeout; one adapter/property failure increments diagnostics without preventing other adapters from running. A run is `COMPLETE` only after the final page succeeds, `PARTIAL` when any page or adapter fails, and only a `COMPLETE` run may retire missing findings. The implementation publishes examined/skipped/failed counts through the existing `WorkerRunResult` and worker metrics conventions.
 
@@ -674,7 +742,7 @@ function validateCoverageManifest(): string[] {
 
 // hashAuditInputs's canonicalization is narrower than "fully canonical" — an earlier draft's comment
 // overstated it. What this normalizes: top-level array order (rule IDs, manifest entries,
-// non-actionable keys, declared adapter combinations) and manifest ruleIds order. What it does NOT normalize: object-key order within
+// non-actionable keys, exact declared adapter capabilities) and manifest ruleIds order. What it does NOT normalize: object-key order within
 // each CompoundRuleDefinition/CoverageManifestEntry, or any nested array inside a registry entry beyond
 // ruleIds (e.g. inputContracts, evidenceRequirements) — a formatter- or refactor-driven key/field reorder
 // inside those objects could still change JSON.stringify's output and therefore the digest, even though
@@ -698,7 +766,13 @@ function hashAuditInputs(
     manifest: [...manifest].sort((a, b) => `${a.producerModel}:${a.domain}`.localeCompare(`${b.producerModel}:${b.domain}`))
       .map((e) => ({ producerModel: e.producerModel, domain: e.domain, ruleIds: [...e.ruleIds].sort() })),
     nonActionable: [...nonActionable].sort(),
-    declaredCombinations: adapters.flatMap((adapter) => adapter.supportedDomains.map((domain) => `${adapter.producerModel}:${domain}`)).sort(),
+    declaredCapabilities: adapters.flatMap((adapter) => adapter.capabilities.map((capability) => ({
+      producerModel: adapter.producerModel,
+      type: capability.type,
+      domain: capability.domain,
+      nativeSubtype: capability.nativeSubtype,
+      propositionType: capability.propositionType ?? null,
+    }))).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
     taxonomyVersion,
   };
   return hash(JSON.stringify(canonical));
@@ -715,7 +789,7 @@ This is a **Worker**, not an Agent, per §8 — a fixed comparison against a reg
 
 ### 11.3 A new rule is recognized only once its manifest entry is added — not from the registry alone
 
-Because coverage matching reads `COVERAGE_MANIFEST`, not `COMPOUND_RULE_REGISTRY` directly (11.2's matching correction), **authoring a new `compoundRuleRegistry.ts` rule alone does not close a `REVIEW_REQUIRED` finding** — the manifest entry naming that rule's `ruleId` for the relevant `(producerModel, domain)` pair must be added in the same change. `validateCoverageManifest` (above) is what makes forgetting this loud rather than silent: a rule with no manifest entry doesn't cause a validation failure by itself (a rule can legitimately serve a combination the audit hasn't observed yet), but a manifest entry naming a rule that doesn't exist does. `auditInputsDigest` covers the rule IDs, coverage manifest, non-actionable declarations, adapter primary-domain declarations, and `ARD-002` taxonomy version so changes to either matching or the declared coverage universe are reflected in the finding's audit trail.
+Because coverage matching reads `COVERAGE_MANIFEST`, not `COMPOUND_RULE_REGISTRY` directly (11.2's matching correction), **authoring a new `compoundRuleRegistry.ts` rule alone does not close a `REVIEW_REQUIRED` finding** — the manifest entry naming that rule's `ruleId` for the relevant `(producerModel, domain)` pair must be added in the same change. `validateCoverageManifest` (above) is what makes forgetting this loud rather than silent: a rule with no manifest entry doesn't cause a validation failure by itself (a rule can legitimately serve a combination the audit hasn't observed yet), but a manifest entry naming a rule that doesn't exist does. `auditInputsDigest` covers the rule IDs, coverage manifest, non-actionable declarations, exact adapter capability tuples, and `ARD-002` taxonomy version so changes to either matching or the declared coverage universe are reflected in the finding's audit trail.
 
 ---
 
@@ -990,13 +1064,15 @@ This is a small, local change to one producer function and one lineage resolver 
 
 ### 12.8 Phase 2 execution, persistence, and idempotency contract
 
-Phase 2 does not begin until `ARD-005` selects the `AgentDefinition` source of truth. Whichever source is selected, definitions are immutable by `(agentId, version)`, startup validation proves every allowed Skill and evaluation suite exists, and an enabled version cannot be edited in place.
+Per approved `ARD-005`, `AGENT_DEFINITION_REGISTRY` is the sole definition source of truth. Definitions are immutable by `(agentId, version)`; new runs select the code-declared active version, while continuations, delayed jobs, and paused states use their pinned originating version. Startup validation proves every referenced Skill, adapter, context provider, trigger handler, output schema, and evaluation suite exists and is compatible and validates budget/autonomy bounds. CI additionally compares canonical digests with the checked-in release baseline and rejects content changes without a version bump. Deployment readiness proves every version referenced by nonterminal execution state remains registered.
 
 The runtime records have non-overlapping ownership:
 
-- `AgentRun` is created once with a terminal outcome after an invocation completes or pauses. It is append-only and contains the definition version, trigger identity, principal user ID, property ID, `decisionThreadId`, originating Home Action/Ask execution references, budget usage, terminal outcome, and correlation ID.
+- `AgentRun` is created once with a terminal outcome after an invocation completes or pauses. It is append-only and contains `agentId`, definition version and digest, deployment revision, trigger identity, principal user ID, property ID, `decisionThreadId`, originating Home Action/Ask execution references, budget usage, terminal outcome, and correlation ID.
 - `AgentState` exists only while a run is paused. It is keyed by `runId`, carries a monotonic version for compare-and-swap resume, an expiry, the serialized state shape/version, and the next expected homeowner/system event. Successful resume consumes the prior version exactly once; duplicate or concurrent resumes return the already-recorded result.
 - `ToolInvocation` and `LLMInvocation` are append-only children of the run correlation ID. They store bounded metadata, hashes and references—not unrestricted property context, raw documents, secrets, or an unredacted prompt transcript. Retention and purge use the existing Ask minimization/retention conventions and must be fixed in the Phase 2 schema specification before migration work.
+
+No definition payload is copied into the database. Version + digest + deployment revision provide audit reconstruction through retained source/build artifacts without creating a second mutable owner. Removing a registry version is allowed only after no nonterminal run, paused state, or delayed job references it. A future `AgentOperationalState` pause/activation overlay requires its own approved requirement and cannot modify definition content.
 
 Every trigger has an idempotency key derived from the immutable trigger identity plus agent-definition version: Home Action engagement uses `(userId, propertyId, homeAction.lineageId, agentVersion, engagementNonce)`, and Ask handoff additionally records `askExecutionId`. A repeated request returns the existing run/thread result; it does not start a second loop.
 
@@ -1337,10 +1413,11 @@ sequenceDiagram
 
 | New model | Purpose | Notes |
 |---|---|---|
-| `CoverageAuditFinding` (§11.2) | Coverage determination per `(producerModel, domain)` combination — `COVERED` / `INTENTIONALLY_NON_ACTIONABLE` / `REVIEW_REQUIRED`, with evidence basis, `auditInputsDigest`, matched rule IDs, observation timestamps, and active/retired lifecycle | No `userId` and no per-item dimension. Reconciled by natural key `(producerModel, domain)` after a complete run; partial runs may update observations but may not retire missing keys |
+| `CoverageAuditFinding` (§11.2) | Coverage determination per `(producerModel, domain)` combination — `COVERED` / `INTENTIONALLY_NON_ACTIONABLE` / `REVIEW_REQUIRED`, with evidence basis, `auditInputsDigest`, matched rule IDs, observation timestamps, and active/retired lifecycle | No `userId` and no per-item dimension. Declared-only pairs remain visible; exact observed-only capabilities also create certification-failing declaration-drift diagnostics. Reconciled only after a complete run |
 | `IntelligenceEnvelopeIndex` (conditional) | Thin materialized index, only if query-time fan-out proves insufficient | No ranking field of any kind — the Envelope carries none |
-| `AgentDefinition`, `AgentRun`, `AgentState` | Registry and execution records for the one genuine agent (§12.5) | Scoped to the HVAC Specialist Agent; `AgentState` rows exist only for a paused, resumable run |
-| `ToolInvocation`, `LLMInvocation` | Per-call logs | Unchanged from round 2 |
+| `AGENT_DEFINITION_REGISTRY` (code, not a model) | Immutable multi-version definitions and active-version selection (§7.2.1/§12.8) | Startup/CI parity validated; retains versions referenced by nonterminal state; no `AgentDefinition` table or mutable definition copy |
+| `AgentRun`, `AgentState` | Execution records for the one genuine agent (§12.5/§12.8) | `AgentRun` is append-only and pins definition version/digest/deployment revision; `AgentState` exists only for a paused, resumable run and uses CAS versioning + expiry |
+| `ToolInvocation`, `LLMInvocation` | Bounded append-only per-call audit records | Store metadata, hashes, and references rather than unrestricted context, raw documents, secrets, or unredacted prompt transcripts |
 | One new `compoundRuleRegistry.ts` entry + producer-loader function + `COVERAGE_MANIFEST` entry per closed coverage finding | Whenever an engineer decides a `REVIEW_REQUIRED` finding warrants a rule (§11.2/§11.3) | Not a schema change — both the registry and the manifest are TypeScript arrays; the new function follows the exact pattern the existing 8 entries already establish |
 | `COVERAGE_MANIFEST`, `INTENTIONALLY_NON_ACTIONABLE` (§11.2) | Hand-authored coverage declarations, not a persisted table | TypeScript source, validated at startup/CI by `validateCoverageManifest` — not runtime-mutable |
 | `RepairReplaceProfileRegistry` (§12.6) | `HVAC` profile at Phase 2; `GENERIC_APPLIANCE` profile added at Phase 4 — each naming a `decisionDefinitionId` + `scoringSkillId` + `eligibleCategories` | TypeScript source, not a persisted table; category-overlap uniqueness validated at startup/CI via `validateRepairReplaceProfiles` |
@@ -1369,10 +1446,10 @@ sequenceDiagram
 | | |
 |---|---|
 | **Objective** | Surface intelligence-to-Home-Action coverage gaps for an engineer to close by hand — never dispatch or promote anything automatically |
-| **New code** | `auditCoverage` job (structural comparison, §11.2), `CoverageAuditFinding` table, `COVERAGE_MANIFEST` + `INTENTIONALLY_NON_ACTIONABLE` (hand-authored), `validateCoverageManifest` (startup/CI parity check), `hashAuditInputs`, admin coverage dashboard |
+| **New code** | Exact adapter capability descriptors; `auditCoverage` job (declared ∪ authorized-observed projection, §11.2); declaration-drift diagnostics/certification failure; `CoverageAuditFinding`; `COVERAGE_MANIFEST` + `INTENTIONALLY_NON_ACTIONABLE`; validation/digest logic; admin dashboard |
 | **Reused code** | `compoundRuleRegistry.ts` (read-only, untouched), `homeActionSourcePromotion.service.ts` (untouched — this phase never calls it), `workerJobRegistry.ts`, the `property.homeownerProfile.userId`-resolution pattern from `evaluateHomeActionProactiveDeliveryJob`, `validateDecisionFamilyAdapterRegistry`'s startup-validation pattern (reused for `validateCoverageManifest`) |
 | **Dependencies** | Phase 0 |
-| **Exit criteria** | Every combination in the `ARD-004`-approved declared/observed universe has an explicit determination, including declared-but-unobserved combinations; a zero-row fixture database cannot pass vacuously; `validateCoverageManifest` fails CI on a stale `ruleId`, a manifest/non-actionable contradiction, or an unknown `producerModel`; complete-run reconciliation retires removed keys while partial runs retire none; a previously-`REVIEW_REQUIRED` combination disappears from the active dashboard **only** once both a covering rule and its `COVERAGE_MANIFEST` entry are authored (§11.3) — with no automated promotion involved |
+| **Exit criteria** | Every pair projected from the `ARD-004` exact declared ∪ authorized-observed capability universe has an explicit determination; declared-only pairs remain visible; an observed exact capability missing from its descriptor fails certification even if its coarse pair is covered; a zero-row database cannot pass vacuously; manifest validation rejects stale/contradictory/unknown entries; complete runs alone retire removed keys; a `REVIEW_REQUIRED` finding closes only after both rule and manifest are authored (§11.3)—with no automated promotion |
 
 ### Phase 2 — HVAC Specialist Agent (HVAC-only — `GENERIC_APPLIANCE` moved to Phase 4)
 
@@ -1381,11 +1458,11 @@ A prior draft shipped the `GENERIC_APPLIANCE` profile, a new `APPLIANCE_REPAIR_R
 | | |
 |---|---|
 | **Objective** | Ship the one genuine agent in this document |
-| **New code** | The `ARD-005`-approved definition registry/model; `AgentRun`/`AgentState`/invocation records and CAS/idempotency rules (§12.8); typed engagement/resume/follow-up operations and homeowner state projection (§12.9); the `selectNextTool` loop with its budget/abstention fixes (§12.3); `RepairReplaceProfileRegistry` with its `HVAC` profile only + validation (§12.6); the LLM Necessity Gate's typed-claims mechanism (§14.2) |
+| **New code** | The `ARD-005` immutable multi-version code registry, active-version selection, static parity validator, definition digest, and referenced-version retention check; `AgentRun`/`AgentState`/invocation records and CAS/idempotency rules (§12.8); typed engagement/resume/follow-up operations (§12.9); bounded `selectNextTool` loop; HVAC `RepairReplaceProfile`; typed-claims mechanism |
 | **Reused code** | `hvacRepairReplaceEngine.service.ts`, `DecisionThread`/`RecommendationSnapshot`, `HVAC_REPAIR_REPLACE`'s existing `decisionFamilyAdapterRegistry.ts` entry |
 | **Dependencies** | Phase 0's approved HVAC authority correction (§12.5.1) |
-| **Tests** | Loop-budget/abstention tests; all-facts-known skip path; homeowner-dispute re-entry; duplicate and concurrent start/resume idempotency; authorization recheck on every operation; expired/ambiguous-state failure; confirmed/cancelled/retried follow-up; retention/redaction; typed-claim rendering proving no LLM-generated number reaches a homeowner unverified |
-| **Exit criteria** | A homeowner engaging with a delivered HVAC Home Action receives a decision-support conversation grounded in the single authoritative engine; duplicate/concurrent engagement cannot create competing runs or threads; all paused states have an explicit resume/cancel/expiry path; abstention works when facts cannot be resolved; the quantitative Phase 2 evaluation contract in §29 passes |
+| **Tests** | Registry ID/version/digest immutability; missing Skill/adapter/context/handler/schema/eval-suite parity; budget/autonomy bounds; active-version validity; old-version continuation after active-version change; deployment rejection when paused/nonterminal state references a removed version; loop/abstention, authorization, idempotency, follow-up CAS/expiry, retention/redaction, and typed-claim rendering |
+| **Exit criteria** | The HVAC Agent runs from the code-owned active definition; persisted runs pin version/digest/deployment revision; paused runs resume under their originating version after a newer version activates; no `AgentDefinition` database model exists; parity and retention validation fail closed; the decision-support and quantitative evaluation contracts pass |
 
 ### Phase 3 — Ask Cozy integration
 
@@ -1427,11 +1504,12 @@ Building a genuinely new specialist (a materially different decision shape, per 
 | `decisionPlatform`, `decisionDefinitionRegistry.ts`, `decisionFamilyAdapterRegistry.ts`, `DECISION_CONTEXT_CONTRACTS`, `homeActionDecisionLineage.ts` | EXTEND | Backing for the Specialist Agent; a new `APPLIANCE_REPAIR_REPLACE` family (§12.7, Phase 4) — definition, context contract, adapter, registry entry together — alongside the unchanged `HVAC_REPAIR_REPLACE`; `homeActionDecisionLineage.ts` gains one `PREFIX_TO_DECISION_DEFINITION` entry and a category branch in `resolveWorkItemDecisionFamilyRefs` (§12.7's ingress fix) |
 | `replaceRepairAnalysis.service.ts`'s `ReplaceRepairService` | WRAP AS TOOL | Reused unmodified as the `GENERIC_APPLIANCE` profile's scoring engine (§12.6) — its existing category/name classification and numeric defaults are not duplicated |
 | `snapshotDecisionFamilyAdapter.ts`'s `createSnapshotDecisionFamilyAdapter`/`hashSourceState` | WRAP AS TOOL | Reused unmodified as the factory backing `applianceDecisionFamilyAdapter` (§12.7) — the same factory the five existing snapshot families already use |
+| `AGENT_DEFINITION_REGISTRY` + parity/retention validation | NEW CODE-OWNED REGISTRY | Immutable multi-version definitions, code-declared active version, exact version pinning for runs/state/jobs; no database definition owner (§7.2.1/§12.8) |
 | `services/skills/` | EXTEND | `autonomyLevel` field; new `query-envelope` Skill |
 | `aiRequestGovernance.service.ts` | REFACTOR (interface hardening) | Typed-claims response mechanism (§14.2) |
 | `askOrchestrator.service.ts` | EXTEND | Wire `REMOTE_FALLBACK` |
 | `workerJobRegistry.ts` | EXTEND | One new job type (Coverage Audit) |
-| Intelligence Envelope, `CoverageAuditFinding`, `COVERAGE_MANIFEST`, `RepairReplaceProfileRegistry`, HVAC Specialist Agent, Agent runtime | NEW | The only genuinely new components |
+| Intelligence Envelope, exact adapter capability descriptors, `CoverageAuditFinding`, declaration-drift diagnostics, `COVERAGE_MANIFEST`, `RepairReplaceProfileRegistry`, HVAC Specialist Agent, Agent runtime | NEW | The genuinely new runtime/components; definitions themselves remain code-owned rather than persisted |
 | `unifiedPriorityRanking.service.ts`, "Attention Watcher Service" / "Attention Agent" (prior revisions) | **RETIRED FROM THIS DESIGN** — never built | Would have violated HI-ATT-001/ASK-INT-019 |
 | A second LLM provider, event bus, vector database, second ranking/eligibility/delivery pipeline | NOT BUILT | No evidence justifies any of them; the last is now explicitly forbidden by requirement, not merely undesirable |
 
@@ -1443,8 +1521,10 @@ Building a genuinely new specialist (a materially different decision shape, per 
 |---|---|
 | **Building a second ranking/delivery pipeline** — this document's own demonstrated, repeated failure mode across two prior drafts | Principle 3 + HI-ATT-001/ASK-INT-019 citations in §1.1; any future PR touching ranking or delivery is checked against this table first |
 | **Coverage Audit becomes a hidden second promotion authority** if it ever gains inference logic instead of pure structural comparison | §11.2's binding constraint: it flags, a human authors the rule; it never invents or dispatches one |
+| **Coverage passes vacuously or overstates adapter support** because data is empty or independent type/domain arrays imply a false Cartesian product | `ARD-004`: union exact declared tuples with authorized observations; retain declared-only pairs; fail certification on observed-only exact capabilities |
 | **Specialist loop livelock** (round 3 finding) | §12.3's bounded attempts, loop budget, and explicit abstention path |
 | **Agent silently exceeding its autonomy ceiling** via `SCHEDULE_FOLLOW_UP` | §12.4's reclassification to Draft (Level 2) with required confirmation |
+| **Agent behavior changes in place or a deployment strands paused work** | `ARD-005`: immutable `(agentId, version)`, digest/version parity, pinned execution records, and readiness failure if referenced versions are removed |
 | **LLM evidence validation being referential instead of semantic** | §14.2's typed-claims mechanism — the model selects, it never asserts |
 | **False conflict detection demoting unrelated items** | §18.1's `claimKey`-based tightening |
 | **Issue taxonomy drifts into an asset taxonomy** (`ROOF`, `HVAC`, appliance names added as domains) | `ARD-002`: one shared issue-domain vocabulary; typed `entityRef` metadata owns the affected asset; exhaustive adapter mapping and taxonomy-version tests fail drift |
@@ -1463,7 +1543,9 @@ Qualitative words in this section (`high`, `low`, `rising`, `trending`) describe
 |---|---|
 | Registered native subtype/key mappings certified against the shared `IntelligenceIssueDomain` taxonomy version, with no implicit `OTHER` fallback | 100% before Phase 0 exit |
 | Homeowner-facing HVAC verdicts sourced from a current Decision Platform snapshot; generic HVAC `ReplaceRepairAnalysis.verdict` presentation occurrences | 100%; zero occurrences |
-| % of the `ARD-004`-approved declared/observed universe with at least one manifest-matched rule — **not** a claim that every proposition within a covered pair is addressed (§11.2) | Numeric baseline and target recorded before Phase 1 scheduling |
+| Exact observed adapter capabilities absent from static declarations | Zero; any occurrence fails certification |
+| Nonterminal runs/paused states/delayed jobs whose pinned `AgentDefinition` version is absent from the code registry | Zero; deployment/readiness failure |
+| % of pairs projected from the `ARD-004` exact declared ∪ authorized-observed capability universe with at least one manifest-matched rule — **not** a claim that every proposition within a covered pair is addressed (§11.2) | Numeric baseline and target recorded before Phase 1 scheduling |
 | `REVIEW_REQUIRED` findings resolved (rule authored) vs. accumulating unaddressed | Resolved, trending toward zero backlog |
 | Specialist Agent loop-abstention rate | Numeric acceptable band, including a nonzero certified abstention fixture, recorded before `EVAL_APPROVED` |
 | % Specialist Agent runs resolved without an LLM call | Numeric minimum recorded before `EVAL_APPROVED` |
