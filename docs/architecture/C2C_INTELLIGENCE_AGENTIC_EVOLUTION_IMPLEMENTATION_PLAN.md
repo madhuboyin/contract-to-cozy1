@@ -62,6 +62,7 @@ These inputs do not block Phase 0. They must not be silently invented during imp
 | `IPD-005` | Phase 2 evaluation approval | Versioned HVAC agent evaluation contract, including acceptable abstention band and minimum deterministic/no-LLM completion rate | Keep the definition below `EVAL_APPROVED` |
 | `IPD-006` | Phase 4 activation | Versioned generic-appliance evaluation contract and reviewed verdict mapping from `ReplaceRepairAnalysis` to Decision Platform verdict codes | Build contracts only; do not enable the profile |
 | `IPD-007` | Phase 2 schema specification | Define “append-only `AgentRun`” precisely: immutable terminal insert plus a separate idempotency reservation, or a run row that may transition once from `RUNNING` to a terminal/paused outcome and is immutable afterward | Do not finalize run constraints or concurrency logic |
+| `IPD-008` | Phase 0 adapter registry | Approve the explicit native-subtype-to-`IntelligenceIssueDomain` mapping matrix, including primary domains for ambiguous Signal and Radar subtypes and the initial closed asset-kind registry | Do not encode heuristic/fallback mappings; shared domain/evidence contracts and the independent HVAC authority correction may proceed |
 
 The source architecture header still describes the document as not build-approved even though its decision log says all five architecture decisions are approved. Normalize that metadata when this plan is accepted; do not reinterpret the approved decision rows.
 
@@ -512,4 +513,4 @@ The architecture is implemented when all of the following are true:
 
 Start with PR 1 (shared contracts) and PR 4's investigation in parallel at the engineering-workstream level, but merge shared contracts first. Then deliver the Envelope registry/query path before persistence-heavy coverage or agent work. This order exposes mapping and authority errors early, keeps Phase 1's universe mechanically derived from certified adapters, and prevents Phase 2 from building against unstable context/evidence contracts.
 
-Do not start Phase 1 scheduling until `IPD-001` and `IPD-002` are resolved. Do not start Phase 2 schema migration work until `IPD-003` and `IPD-007` are resolved, and do not enable follow-up or generic appliance profiles without `IPD-004`/`IPD-006` respectively.
+Do not complete the Phase 0 adapter registry until `IPD-008` is resolved. Do not start Phase 1 scheduling until `IPD-001` and `IPD-002` are resolved. Do not start Phase 2 schema migration work until `IPD-003` and `IPD-007` are resolved, and do not enable follow-up or generic appliance profiles without `IPD-004`/`IPD-006` respectively.

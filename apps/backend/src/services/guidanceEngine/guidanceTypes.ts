@@ -1,26 +1,13 @@
 import { APIError } from '../../middleware/error.middleware';
 import { prisma } from '../../lib/prisma';
 import type { RecommendationGovernance } from '../../productFramework/recommendationGovernance.contract';
+import {
+  GUIDANCE_ISSUE_DOMAINS,
+  type GuidanceIssueDomain,
+} from '../../productFramework/intelligence/intelligenceIssueDomain.contract';
 
-export const GUIDANCE_ISSUE_DOMAINS = [
-  'SAFETY',
-  'MAINTENANCE',
-  'INSURANCE',
-  'FINANCIAL',
-  'COMPLIANCE',
-  'MARKET_VALUE',
-  'ASSET_LIFECYCLE',
-  'CLAIMS',
-  'PRICING',
-  'NEGOTIATION',
-  'BOOKING',
-  'DOCUMENTATION',
-  'NEIGHBORHOOD',
-  'ONBOARDING',
-  'WEATHER',
-  'ENERGY',
-  'OTHER',
-] as const;
+export { GUIDANCE_ISSUE_DOMAINS };
+export type { GuidanceIssueDomain };
 
 export const GUIDANCE_DECISION_STAGES = [
   'AWARENESS',
@@ -50,7 +37,6 @@ export const GUIDANCE_STEP_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKI
 export const GUIDANCE_SEVERITY = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'UNKNOWN'] as const;
 export const GUIDANCE_STEP_SKIP_POLICY = ['ALLOWED', 'DISCOURAGED', 'DISALLOWED'] as const;
 
-export type GuidanceIssueDomain = (typeof GUIDANCE_ISSUE_DOMAINS)[number];
 export type GuidanceDecisionStage = (typeof GUIDANCE_DECISION_STAGES)[number];
 export type GuidanceExecutionReadiness = (typeof GUIDANCE_EXECUTION_READINESS)[number];
 export type GuidanceSignalStatus = (typeof GUIDANCE_SIGNAL_STATUS)[number];

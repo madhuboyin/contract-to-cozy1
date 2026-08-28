@@ -4,6 +4,11 @@ import {
   type RecommendationSafetyTier,
 } from './recommendationGovernance.contract';
 import { RecommendationResponseContractSchema } from './recommendationResponse.contract';
+import {
+  ConfidenceRatioSchema,
+  EvidenceRefSchema,
+  normalizeConfidenceRatio,
+} from './intelligence/evidenceRef.contract';
 
 export const HOME_ACTION_SOURCE_KINDS = [
   'GUIDANCE',
@@ -69,34 +74,13 @@ export const HOME_ACTION_CTA_KINDS = [
  * adapters, so one legacy producer cannot make the entire Home feed fail.
  */
 export function normalizeHomeActionConfidenceScore(value: unknown): number | null {
-  if (value == null) return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const ratio = numeric > 1 ? numeric / 100 : numeric;
-  return Math.max(0, Math.min(1, ratio));
+  return normalizeConfidenceRatio(value);
 }
-
-const ConfidenceRatioSchema = z.preprocess(
-  (value) => typeof value === 'number' && Number.isFinite(value)
-    ? normalizeHomeActionConfidenceScore(value)
-    : value,
-  z.number().min(0).max(1).nullable(),
-);
 
 const ActionLinkSchema = z.object({
   kind: z.enum(HOME_ACTION_CTA_KINDS),
   label: z.string().trim().min(1).max(120),
   href: z.string().trim().min(1).max(1000),
-});
-
-const EvidenceReferenceSchema = z.object({
-  id: z.string().trim().min(1).max(120),
-  type: z.enum(['PROPERTY_FACT', 'DOCUMENT', 'HOME_EVENT', 'USER_INPUT', 'EXTERNAL_SOURCE', 'SYSTEM_DERIVATION']),
-  label: z.string().trim().min(1).max(240),
-  source: z.string().trim().min(1).max(300),
-  observedAt: z.string().datetime().nullable(),
-  freshness: z.enum(['CURRENT', 'STALE', 'UNKNOWN']),
-  confidence: ConfidenceRatioSchema,
 });
 
 const AssumptionSchema = z.object({
@@ -209,7 +193,7 @@ export const HomeActionSchema = z.object({
   }),
   // Canonical compound actions retain every contributor; clients may collapse
   // presentation but cannot truncate the stored reasoning basis.
-  evidence: z.array(EvidenceReferenceSchema).min(1),
+  evidence: z.array(EvidenceRefSchema).min(1),
   assumptions: z.array(AssumptionSchema).max(30),
   options: z.array(DecisionOptionSchema).max(20),
   tradeoffs: z.array(TradeoffSchema).max(50),

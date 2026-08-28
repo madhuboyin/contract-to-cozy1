@@ -11,6 +11,7 @@ export * from './propertyIntelligenceOwnership.contract';
 export * from './recommendationIncident.contract';
 export * from './notificationPolicy.contract';
 export * from './groundedAsk.contract';
+export * from './intelligence';
 export * from './recommendationLaunchGate';
 export * from './buyerAcquisition.contract';
 export * from './newHomeSetup.contract';

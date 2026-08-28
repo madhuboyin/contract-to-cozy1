@@ -192,19 +192,13 @@ test('thread creation and continuation do not acknowledge a snapshot before its 
   assert.match(acknowledgement, /lastChangeAcknowledgedSnapshotId:\s*snapshotId/);
 });
 
-// Phase 3 review finding 5: a disagreement between evaluateHvacRepairReplace
-// and the originating ReplaceRepairAnalysis verdict must be disclosed
-// (SOURCE_CARD_VERDICT_DIVERGENCE), not silently ignored -- on both the
-// initial create and every later recompute, since a recompute can newly
-// introduce or newly resolve a disagreement.
-test('sourceCardVerdictDivergenceLimitationCodes is called from both createHvacDecisionThread and recomputeStaleThread, and its result feeds into limitationCodes', () => {
-  const calls = [...source.matchAll(/sourceCardVerdictDivergenceLimitationCodes\(/g)];
-  assert.ok(calls.length >= 2, `expected at least 2 sourceCardVerdictDivergenceLimitationCodes calls, found ${calls.length}`);
-  const limitationCodesAssignments = [...source.matchAll(/const limitationCodes = Array\.from\(new Set\(\[([^\]]*)\]\)\)/g)];
-  assert.ok(limitationCodesAssignments.length >= 2, 'expected limitationCodes to be assembled at least twice');
-  for (const match of limitationCodesAssignments) {
-    assert.match(match[1], /divergenceLimitationCodes/, `limitationCodes assembly does not include divergenceLimitationCodes: ${match[0]}`);
-  }
+// C2C Agentic Evolution ARD-003: ReplaceRepairAnalysis may support the HVAC
+// workflow, but its verdict is not an authority and must not affect the HVAC
+// engine output or limitation codes.
+test('HVAC Decision Platform does not compare its verdict to ReplaceRepairAnalysis verdict', () => {
+  assert.doesNotMatch(source, /sourceCardVerdictDivergenceLimitationCodes/);
+  assert.doesNotMatch(source, /SOURCE_CARD_VERDICT_DIVERGENCE/);
+  assert.doesNotMatch(source, /sourceAnalysis\.verdict/);
 });
 
 test('toDecisionFamilyLineage threads limitationCodes through every call site inside hvacDecisionFamilyAdapter, not just some', () => {

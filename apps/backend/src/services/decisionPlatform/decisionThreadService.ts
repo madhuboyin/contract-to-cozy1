@@ -24,7 +24,6 @@ import {
   composeHvacDecisionContext,
   evaluateHvacRepairReplace,
   HvacDecisionContext,
-  type HvacRepairReplaceVerdict,
 } from './hvacRepairReplaceEngine.service';
 // Decision Platform Phase 10B (FRD §19.4). Resolves whatever weight set is
 // currently activated for this estimate family -- DEFAULT_HVAC_ENGINE_WEIGHTS
@@ -93,9 +92,8 @@ export async function selectHvacDecisionThread(propertyId: string, inventoryItem
       lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] },
     },
     orderBy: { createdAt: 'asc' },
-    // Phase 3 review finding 5: selectThread (read-only) needs the current
-    // snapshot's limitationCodes to surface a disclosed divergence — see
-    // sourceCardVerdictDivergenceLimitationCodes's doc comment.
+    // Read-only selection carries the authoritative snapshot's own
+    // limitation codes through to homeowner presentation.
     include: { currentRecommendationSnapshot: { select: { limitationCodes: true } } },
   });
   return classifyThreadSelection(candidates);
@@ -206,41 +204,6 @@ async function skillLineageForExecution(
     : null;
 }
 
-// Home Intelligence Functional Completeness FRD Phase 3 review finding 5:
-// "HVAC still snapshots a different recommendation from the one shown on
-// Home." loadRepairReplaceDecisionActions (homeActionSourcePromotion
-// .service.ts) surfaces ReplaceRepairAnalysis's verdict (REPLACE_NOW /
-// REPLACE_SOON / REPAIR_AND_MONITOR / REPAIR_ONLY, a "lifespan engine"
-// scored from remaining years / failure probability / repair history), but
-// this file's own evaluateHvacRepairReplace (REPLACE / REPAIR / MONITOR)
-// is a genuinely different, independently-calibrated preference-aware
-// engine with its own inputs (condition/installedOn, repair spend,
-// registered quotes) — the two can and do disagree. Unifying them into one
-// engine is a real redesign this fix does not attempt (it would touch a
-// certified, golden-eval-suite-governed calibration this file's evaluation
-// pipeline depends on); instead this makes a disagreement honest rather
-// than silent — homeActionOrigin.sourceEntityId is the originating
-// ReplaceRepairAnalysis id (loadRepairReplaceDecisionActions's own
-// construction), so this is a read-only, best-effort cross-check with
-// nothing to fetch (and no limitation code) when there is no origin or the
-// two engines happen to agree.
-const REPLACE_LEANING_SOURCE_VERDICTS = new Set(['REPLACE_NOW', 'REPLACE_SOON']);
-
-async function sourceCardVerdictDivergenceLimitationCodes(
-  homeActionOrigin: HomeActionOriginRef | undefined,
-  engineVerdict: HvacRepairReplaceVerdict,
-): Promise<string[]> {
-  if (!homeActionOrigin) return [];
-  const sourceAnalysis = await prisma.replaceRepairAnalysis.findUnique({
-    where: { id: homeActionOrigin.sourceEntityId },
-    select: { verdict: true },
-  });
-  if (!sourceAnalysis) return [];
-  const sourceLeansReplace = REPLACE_LEANING_SOURCE_VERDICTS.has(sourceAnalysis.verdict);
-  const engineLeansReplace = engineVerdict === 'REPLACE';
-  return sourceLeansReplace !== engineLeansReplace ? ['SOURCE_CARD_VERDICT_DIVERGENCE'] : [];
-}
-
 export async function createHvacDecisionThread(input: CreateThreadInput) {
   const preferences = await getActiveHvacPreferences(input.propertyId, input.userId);
   const composed = await composeHvacDecisionContext(input.propertyId, input.inventoryItemId, {
@@ -252,8 +215,7 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
 
   const { weights, calibrationReleaseId } = await getActiveHvacEngineWeights();
   const evaluation = evaluateHvacRepairReplace(context, weights);
-  const divergenceLimitationCodes = await sourceCardVerdictDivergenceLimitationCodes(input.homeActionOrigin, evaluation.verdict);
-  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes, ...divergenceLimitationCodes]));
+  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   const identityKey = activeDecisionThreadIdentityKey(input.propertyId, 'HVAC_REPAIR_REPLACE', 'InventoryItem', input.inventoryItemId);
@@ -529,8 +491,7 @@ export async function recomputeStaleThread(threadId: string, askExecutionId?: st
   const { context, compositionLimitationCodes } = composed;
   const { weights, calibrationReleaseId } = await getActiveHvacEngineWeights();
   const evaluation = evaluateHvacRepairReplace(context, weights);
-  const divergenceLimitationCodes = await sourceCardVerdictDivergenceLimitationCodes(homeActionOrigin, evaluation.verdict);
-  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes, ...divergenceLimitationCodes]));
+  const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
   const result = await prisma.$transaction(async (tx) => {

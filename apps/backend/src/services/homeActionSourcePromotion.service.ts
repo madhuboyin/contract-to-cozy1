@@ -24,6 +24,7 @@ import { calculateHealthScore } from '../utils/propertyScore.util';
 import { hasGovernedPlanGuidance } from './riskPremiumOptimizer.service';
 import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from './coverageConflict.service';
 import { createHash } from 'node:crypto';
+import { ACTIVE_LIFECYCLE_STATUSES } from './decisionPlatform/decisionThreadService';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -40,7 +41,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense' | 'decisionThread'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -2266,6 +2267,73 @@ function dedupeReplaceRepairAnalysesForPromotion<T extends {
 const RECURRING_FAILURE_LOOKBACK_MONTHS = 30;
 const RECURRING_FAILURE_MIN_EVENT_COUNT = 2;
 
+type CurrentHvacPublishedVerdict = {
+  snapshotId: string;
+  verdict: 'REPAIR' | 'REPLACE' | 'MONITOR';
+  generatedAt: Date;
+  confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
+};
+
+function parseHvacSnapshotConfidence(value: unknown): 'LOW' | 'MEDIUM' | 'HIGH' {
+  if (value && typeof value === 'object') {
+    const label = (value as { label?: unknown }).label;
+    if (label === 'LOW' || label === 'MEDIUM' || label === 'HIGH') return label;
+  }
+  return 'LOW';
+}
+
+async function loadCurrentHvacPublishedVerdicts(
+  db: HomeActionSourceDb,
+  propertyId: string,
+  inventoryItemIds: readonly string[],
+): Promise<Map<string, CurrentHvacPublishedVerdict>> {
+  const result = new Map<string, CurrentHvacPublishedVerdict>();
+  if (!db.decisionThread || inventoryItemIds.length === 0) return result;
+
+  const threads = await db.decisionThread.findMany({
+    where: {
+      propertyId,
+      decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+      primaryEntityType: 'InventoryItem',
+      primaryEntityId: { in: [...inventoryItemIds] },
+      lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      primaryEntityId: true,
+      contextStatus: true,
+      currentRecommendationSnapshot: {
+        select: { id: true, verdictCode: true, generatedAt: true, confidenceBreakdown: true },
+      },
+    },
+  });
+
+  const byItem = new Map<string, typeof threads>();
+  for (const thread of threads) {
+    if (!thread.primaryEntityId) continue;
+    const candidates = byItem.get(thread.primaryEntityId) ?? [];
+    candidates.push(thread);
+    byItem.set(thread.primaryEntityId, candidates);
+  }
+
+  for (const [inventoryItemId, candidates] of byItem) {
+    // Material decision lineage is fail-closed: recency must never choose
+    // between multiple active threads for the same item.
+    if (candidates.length !== 1) continue;
+    const [thread] = candidates;
+    const snapshot = thread.currentRecommendationSnapshot;
+    if (thread.contextStatus !== 'CURRENT' || !snapshot) continue;
+    if (snapshot.verdictCode !== 'REPAIR' && snapshot.verdictCode !== 'REPLACE' && snapshot.verdictCode !== 'MONITOR') continue;
+    result.set(inventoryItemId, {
+      snapshotId: snapshot.id,
+      verdict: snapshot.verdictCode,
+      generatedAt: snapshot.generatedAt,
+      confidenceLabel: parseHvacSnapshotConfidence(snapshot.confidenceBreakdown),
+    });
+  }
+  return result;
+}
+
 // HI-CMP-003 requires "every contributing entity, source, observation
 // time, freshness, and confidence" — an aggregate count alone (the prior
 // shape here) does not satisfy that; each contributing HomeEvent's own
@@ -2309,7 +2377,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   const [analyses, journeys] = await Promise.all([
     db.replaceRepairAnalysis.findMany({
       where: { propertyId, status: 'READY' },
-      include: { inventoryItem: { select: { id: true, name: true } } },
+      include: { inventoryItem: { select: { id: true, name: true, category: true } } },
       orderBy: { computedAt: 'desc' },
       take: 10,
     }),
@@ -2332,11 +2400,17 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   });
 
   const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses);
-  const recurringFailureEventsByItem = await findRecentRepairEventsByInventoryItem(
-    db,
-    deduped.map((analysis) => analysis.inventoryItemId),
-    now,
-  );
+  const inventoryItemIds = deduped.map((analysis) => analysis.inventoryItemId);
+  const [recurringFailureEventsByItem, currentHvacPublishedVerdicts] = await Promise.all([
+    findRecentRepairEventsByInventoryItem(db, inventoryItemIds, now),
+    loadCurrentHvacPublishedVerdicts(
+      db,
+      propertyId,
+      deduped
+        .filter((analysis) => analysis.inventoryItem?.category === 'HVAC')
+        .map((analysis) => analysis.inventoryItemId),
+    ),
+  ]);
 
   return deduped.map((analysis) => {
     const itemName = analysis.inventoryItem?.name || 'Inventory Item';
@@ -2357,8 +2431,18 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
       href = `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`;
     }
 
-    const favorsReplace = analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON';
-    const confidenceScore = analysis.confidence === 'HIGH' ? 0.9 : analysis.confidence === 'MEDIUM' ? 0.65 : 0.4;
+    const isHvac = analysis.inventoryItem?.category === 'HVAC';
+    const publishedHvacVerdict = isHvac ? currentHvacPublishedVerdicts.get(analysis.inventoryItemId) : undefined;
+    const favorsReplace = isHvac
+      ? publishedHvacVerdict?.verdict === 'REPLACE'
+      : analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON';
+    const favorsRepair = isHvac
+      ? publishedHvacVerdict?.verdict === 'REPAIR'
+      : !favorsReplace;
+    const confidenceLabel = isHvac
+      ? publishedHvacVerdict?.confidenceLabel ?? 'LOW'
+      : analysis.confidence;
+    const confidenceScore = confidenceLabel === 'HIGH' ? 0.9 : confidenceLabel === 'MEDIUM' ? 0.65 : 0.4;
     // HI-CMP-002 rule 6 enrichment: same obligation as every other
     // ReplaceRepairAnalysis promotion — id/lineageId/sourceEntityId/
     // decisionLineagePolicy are untouched by the recurring-failure signal.
@@ -2368,26 +2452,47 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
     const recurringFailureSentence = hasRecurringFailure
       ? ` This item has ${recentRepairCount} logged repair or maintenance events in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months — a recurring failure pattern worth weighing against a one-time replacement.`
       : '';
+    const hvacWhyItMatters = publishedHvacVerdict
+      ? `The current HVAC Decision Platform recommendation favors ${publishedHvacVerdict.verdict === 'REPLACE' ? 'replacement' : publishedHvacVerdict.verdict === 'REPAIR' ? 'repair' : 'continued monitoring'}.${recurringFailureSentence}`
+      : `This HVAC system is ready for a repair-or-replace review, but no current Decision Platform recommendation is available yet.${recurringFailureSentence}`;
+    const hvacRecommendedAction = publishedHvacVerdict
+      ? publishedHvacVerdict.verdict === 'REPLACE'
+        ? 'Review the current recommendation to replace this HVAC system.'
+        : publishedHvacVerdict.verdict === 'REPAIR'
+          ? 'Review the current recommendation to repair this HVAC system.'
+          : 'Review the current recommendation to monitor this HVAC system.'
+      : 'Review the available facts and start or resume the tracked HVAC decision.';
 
     return adaptHomeActionSource('GUIDANCE', {
       id: `repair-replace:${analysis.id}`,
       propertyId,
       lineageId: `repair-replace:${analysis.inventoryItemId}`,
       sourceEntityId: analysis.id,
-      sourceVersion: analysis.computedAt.toISOString(),
+      sourceVersion: publishedHvacVerdict ? `snapshot:${publishedHvacVerdict.snapshotId}` : analysis.computedAt.toISOString(),
       state: 'OPEN',
-      priority: analysis.verdict === 'REPLACE_NOW' || hasRecurringFailure ? 'SOON' : 'PLAN',
+      priority: (isHvac ? publishedHvacVerdict?.verdict === 'REPLACE' : analysis.verdict === 'REPLACE_NOW') || hasRecurringFailure ? 'SOON' : 'PLAN',
       signal: `Repair vs Replace: ${itemName}`,
-      whyItMatters: `${analysis.summary || `Our AI has a recommendation for ${itemName}.`}${recurringFailureSentence}`,
-      recommendedAction: favorsReplace ? 'Consider replacing this item.' : 'Consider repairing this item.',
+      whyItMatters: isHvac ? hvacWhyItMatters : `${analysis.summary || `Our AI has a recommendation for ${itemName}.`}${recurringFailureSentence}`,
+      recommendedAction: isHvac ? hvacRecommendedAction : favorsReplace ? 'Consider replacing this item.' : 'Consider repairing this item.',
       expectedOutcome: 'A documented repair-or-replace decision for this item.',
       timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
       evidence: [
+        ...(publishedHvacVerdict
+          ? [{
+              id: publishedHvacVerdict.snapshotId,
+              type: 'SYSTEM_DERIVATION' as const,
+              label: `Current HVAC decision recommendation: ${publishedHvacVerdict.verdict}`,
+              source: 'Decision Platform',
+              observedAt: publishedHvacVerdict.generatedAt.toISOString(),
+              freshness: 'CURRENT' as const,
+              confidence: confidenceScore,
+            }]
+          : []),
         {
           id: analysis.id,
           type: 'SYSTEM_DERIVATION',
-          label: `Repair vs Replace: ${itemName}`,
-          source: 'Lifespan Engine',
+          label: isHvac ? `Supporting HVAC lifecycle analysis: ${itemName}` : `Repair vs Replace: ${itemName}`,
+          source: isHvac ? 'Lifespan Engine (supporting evidence only)' : 'Lifespan Engine',
           observedAt: analysis.computedAt.toISOString(),
           freshness: 'CURRENT',
           confidence: confidenceScore,
@@ -2407,21 +2512,29 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
           : []),
       ],
       assumptions: [{
-        key: 'verdict-computed-at',
-        label: 'Verdict reflects the most recent computation',
-        value: `Computed ${analysis.computedAt.toISOString()}`,
+        key: isHvac ? 'published-decision-state' : 'verdict-computed-at',
+        label: isHvac ? 'Published HVAC recommendation state' : 'Verdict reflects the most recent computation',
+        value: publishedHvacVerdict
+          ? `Decision Platform snapshot generated ${publishedHvacVerdict.generatedAt.toISOString()}`
+          : isHvac
+            ? 'No current Decision Platform snapshot is available'
+            : `Computed ${analysis.computedAt.toISOString()}`,
         source: 'SYSTEM_DEFAULT',
         editable: true,
       }],
       options: [
-        { id: 'repair', label: 'Repair', summary: `Continue repairing ${itemName} as issues arise.`, recommended: !favorsReplace },
+        { id: 'repair', label: 'Repair', summary: `Continue repairing ${itemName} as issues arise.`, recommended: favorsRepair },
         { id: 'replace', label: 'Replace', summary: `Replace ${itemName} rather than continuing to repair it.`, recommended: favorsReplace },
       ],
       tradeoffs: [
         { optionId: 'repair', dimension: 'COST', summary: 'Lower upfront cost, but risk of recurring failures.' },
         { optionId: 'replace', dimension: 'COST', summary: 'Higher upfront cost, but resets the item\'s expected lifespan.' },
       ],
-      confidence: { score: confidenceScore, label: analysis.confidence, missing: [] },
+      confidence: {
+        score: confidenceScore,
+        label: confidenceLabel,
+        missing: isHvac && !publishedHvacVerdict ? ['Current HVAC Decision Platform recommendation'] : [],
+      },
       governance: materialFinancialGovernance('resolution-center-parity-v1'),
       propertyContextFeature: {
         featureKey: 'REPAIR_REPLACE',

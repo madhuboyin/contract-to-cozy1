@@ -27,14 +27,8 @@ export interface DecisionFamilyThreadLineage {
   // from the immutable supersession chain until the homeowner explicitly
   // acknowledges the rendered Home notice.
   recommendationChange: RecommendationChangeDiff | null;
-  // Home Intelligence Functional Completeness FRD Phase 3 review finding 5:
-  // the current snapshot's own limitationCodes, surfaced so a homeowner can
-  // actually see a disclosed limitation (e.g. SOURCE_CARD_VERDICT_DIVERGENCE
-  // — the HVAC engine's own evaluation disagreeing with the originating
-  // ReplaceRepairAnalysis verdict the Home Action card showed) rather than
-  // it sitting unread in the snapshot row. Always [] for every non-HVAC
-  // domain today — none has a second, independent evaluation to diverge
-  // from.
+  // The current snapshot's own limitationCodes, surfaced so a homeowner can
+  // see the authoritative engine's disclosed data/evidence limitations.
   limitationCodes: string[];
 }
 
