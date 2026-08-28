@@ -2,29 +2,13 @@ import { MaintenanceTaskStatus, Prisma, Signal } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from './coverageGap.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
+import {
+  SHARED_SIGNAL_KEYS,
+  type SharedSignalKey,
+} from '../productFramework/intelligence/sharedSignalKey.contract';
 
-export type SharedSignalKey =
-  | 'MAINT_ADHERENCE'
-  | 'COVERAGE_GAP'
-  | 'SAVINGS_REALIZATION'
-  | 'RISK_SPIKE'
-  | 'COST_ANOMALY'
-  | 'RISK_ACCUMULATION'
-  | 'SYSTEM_DEGRADATION'
-  | 'COST_PRESSURE_PATTERN'
-  | 'FINANCIAL_DISCIPLINE';
-
-export const SHARED_SIGNAL_KEYS: SharedSignalKey[] = [
-  'MAINT_ADHERENCE',
-  'COVERAGE_GAP',
-  'SAVINGS_REALIZATION',
-  'RISK_SPIKE',
-  'COST_ANOMALY',
-  'RISK_ACCUMULATION',
-  'SYSTEM_DEGRADATION',
-  'COST_PRESSURE_PATTERN',
-  'FINANCIAL_DISCIPLINE',
-];
+export { SHARED_SIGNAL_KEYS } from '../productFramework/intelligence/sharedSignalKey.contract';
+export type { SharedSignalKey } from '../productFramework/intelligence/sharedSignalKey.contract';
 
 const SIGNAL_OWNER_BY_KEY: Record<SharedSignalKey, string> = {
   MAINT_ADHERENCE: 'MaintenanceOrchestrationService',
@@ -1701,7 +1685,7 @@ export class SignalService {
       skippedSignals.push('SAVINGS_REALIZATION');
     }
 
-    const latest = await this.getLatestSignalsByKey(propertyId, SHARED_SIGNAL_KEYS, { freshOnly: true });
+    const latest = await this.getLatestSignalsByKey(propertyId, [...SHARED_SIGNAL_KEYS], { freshOnly: true });
     const interactions = computeSignalInteractionInsights({ signals: latest });
 
     const summary = {

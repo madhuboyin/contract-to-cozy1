@@ -204,6 +204,7 @@ import { validateDecisionFamilyAdapterRegistry } from './services/decisionPlatfo
 import { validateDecisionThreadTransitionContract } from './services/decisionPlatform/decisionThreadTransitions';
 import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
 import { validateIntelligenceRegistries } from './services/intelligence';
+import { validateEnvelopeRegistry } from './services/intelligenceEnvelope';
 dotenv.config();
 
 const askRegistryIssues = [
@@ -239,7 +240,10 @@ if (decisionPlatformRegistryIssues.length) {
 
 // Home Intelligence Functional Completeness FRD Phase 0 — same fail-fast
 // registry validation pattern as the Ask and Decision Platform registries above.
-const intelligenceRegistryIssues = [...validateIntelligenceRegistries()];
+const intelligenceRegistryIssues = [
+  ...validateIntelligenceRegistries(),
+  ...validateEnvelopeRegistry(),
+];
 if (intelligenceRegistryIssues.length) {
   throw new Error(`FATAL: Home Intelligence registry validation failed: ${intelligenceRegistryIssues.join('; ')}`);
 }

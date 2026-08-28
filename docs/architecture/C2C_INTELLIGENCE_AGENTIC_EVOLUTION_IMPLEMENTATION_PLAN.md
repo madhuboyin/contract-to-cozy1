@@ -1,7 +1,7 @@
 # C2C Intelligence & Agentic Evolution — Implementation Plan
 
 **Date:** 2026-08-27  
-**Status:** Draft implementation plan — architecture decisions `ARD-001` through `ARD-005` approved; owner inputs in §3 remain open  
+**Status:** Approved implementation plan — implementation in progress; unresolved owner inputs in §3 remain phase-gated
 **Source architecture:** [`C2C_INTELLIGENCE_AGENTIC_EVOLUTION_ARCHITECTURE.md`](./C2C_INTELLIGENCE_AGENTIC_EVOLUTION_ARCHITECTURE.md)  
 **Authoritative requirements:** `HI-ATT-001`, `HI-ATT-004`, `ASK-INT-019`, the Ask Trust Architecture Addendum, and the Skill Platform FRD cited by the source architecture
 
@@ -62,9 +62,14 @@ These inputs do not block Phase 0. They must not be silently invented during imp
 | `IPD-005` | Phase 2 evaluation approval | Versioned HVAC agent evaluation contract, including acceptable abstention band and minimum deterministic/no-LLM completion rate | Keep the definition below `EVAL_APPROVED` |
 | `IPD-006` | Phase 4 activation | Versioned generic-appliance evaluation contract and reviewed verdict mapping from `ReplaceRepairAnalysis` to Decision Platform verdict codes | Build contracts only; do not enable the profile |
 | `IPD-007` | Phase 2 schema specification | Define “append-only `AgentRun`” precisely: immutable terminal insert plus a separate idempotency reservation, or a run row that may transition once from `RUNNING` to a terminal/paused outcome and is immutable afterward | Do not finalize run constraints or concurrency logic |
-| `IPD-008` | Phase 0 adapter registry | Approve the explicit native-subtype-to-`IntelligenceIssueDomain` mapping matrix, including primary domains for ambiguous Signal and Radar subtypes and the initial closed asset-kind registry | Do not encode heuristic/fallback mappings; shared domain/evidence contracts and the independent HVAC authority correction may proceed |
 
-The source architecture header still describes the document as not build-approved even though its decision log says all five architecture decisions are approved. Normalize that metadata when this plan is accepted; do not reinterpret the approved decision rows.
+Resolved input:
+
+| ID | Resolution |
+|---|---|
+| `IPD-008` | **APPROVED — 2026-08-28.** Use immutable versioned code registries and explicit mappings. Closed native vocabularies map exhaustively; open observation/Radar vocabularies require explicit admission and return `UNMAPPED_NATIVE_VALUE` otherwise. Use the reviewed Signal matrix, seed asset kinds from `RISK_ASSET_CONFIG.systemType`, keep asset kind optional when not reliably known, and begin property components with `ROOF`, `FOUNDATION`, `EXTERIOR`, `INTERIOR`, and `SITE`. |
+
+The source architecture metadata is normalized to approved implementation status. Remaining owner inputs continue to gate only the work packages named above.
 
 ## 4. Delivery strategy and dependency graph
 
