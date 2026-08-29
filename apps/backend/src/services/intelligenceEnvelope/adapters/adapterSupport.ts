@@ -149,7 +149,15 @@ export function buildMappedItem(input: {
     createdAt: iso(input.createdAt),
     updatedAt: iso(input.updatedAt),
   });
-  return { item };
+  return {
+    item,
+    capability: {
+      type: mapping.type,
+      domain: mapping.domain,
+      nativeSubtype: mapping.nativeSubtype,
+      ...(mapping.propositionType ? { propositionType: mapping.propositionType } : {}),
+    },
+  };
 }
 
 export function currentnessFromExpiry(expiry: DateValue | null | undefined, now: Date): EnvelopeCurrentness {

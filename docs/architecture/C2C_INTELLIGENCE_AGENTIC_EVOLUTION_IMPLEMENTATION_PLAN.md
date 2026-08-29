@@ -232,6 +232,8 @@ Create shared product-framework contracts before adapters so Guidance, Home Acti
 
 ## 6. Phase 1 — Envelope Promotion Coverage Audit
 
+**Implementation status (2026-08-28): In progress.** Delivery increment 5 and the non-scheduling portion of increment 6 are complete. The hand-authored `COVERAGE_MANIFEST`, explicit non-actionable registry, startup validation, semantic digest, declared/authorized-observed union projection, evidence-basis classification, and exact declaration-drift certification are implemented. `CoverageAuditFinding` now persists the coarse natural key and observation lifecycle; the audit reads properties in stable ID pages, resolves the real homeowner principal, uses the authorized internal Envelope coverage view, reports unresolved owners and adapter failures, and permits retirement only after a complete global run. The audit has no imports from promotion, ranking, eligibility, or delivery owners. No migration script was created. Worker registry/scheduling and admin reporting remain: §3 says to implement registry parity without a cron while §6.2 task 8 says not to register until `IPD-001` supplies the schedule, so implementation follows the stricter task-level gate and leaves registration untouched pending owner clarification. Execution cursors are bounded within one invocation; adding cross-invocation cursor persistence would require an architecture amendment because the approved coverage persistence contract permits only `CoverageAuditFinding`. Phase 1 operational evaluation remains `NOT_MEASURED` under `IPD-002`.
+
 ### 6.1 Persistence contract
 
 Add `CoverageAuditFinding` to `apps/backend/prisma/schema.prisma`. The natural key is `(producerModel, domain)`; do not add an item/envelope dimension.

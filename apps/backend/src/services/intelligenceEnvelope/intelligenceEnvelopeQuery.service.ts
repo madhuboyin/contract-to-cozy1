@@ -5,7 +5,7 @@ import {
   entityRefKey,
   type EvidenceRef,
 } from '../../productFramework/intelligence';
-import type { EnvelopeAdapterResult } from './envelopeAdapter.contract';
+import type { EnvelopeAdapterCapability, EnvelopeAdapterResult } from './envelopeAdapter.contract';
 import {
   ENVELOPE_PRODUCER_MODELS,
   IntelligenceEnvelopePageSchema,
@@ -63,6 +63,17 @@ export interface IntelligenceEnvelopeQueryDependencies {
   perAdapterTimeoutMs: number;
   totalTimeoutMs: number;
 }
+
+export type EnvelopeObservedCapability = EnvelopeAdapterCapability & Readonly<{
+  producerModel: EnvelopeProducerModel;
+  observedAt: string;
+  envelopeKey: IntelligenceEnvelopeItem['envelopeKey'];
+}>;
+
+export type IntelligenceEnvelopeCoveragePage = Readonly<{
+  page: IntelligenceEnvelopePage;
+  observedCapabilities: readonly EnvelopeObservedCapability[];
+}>;
 
 function sourceEvidence(input: {
   producerModel: EnvelopeProducerModel;
@@ -332,10 +343,10 @@ async function readWithTimeout(
   });
 }
 
-export async function queryIntelligenceEnvelope(
+async function executeIntelligenceEnvelopeQuery(
   rawQuery: IntelligenceEnvelopeQuery,
   dependencyOverrides: Partial<IntelligenceEnvelopeQueryDependencies> = {},
-): Promise<IntelligenceEnvelopePage> {
+): Promise<IntelligenceEnvelopeCoveragePage> {
   const query = IntelligenceEnvelopeQuerySchema.parse(rawQuery);
   const dependencies: IntelligenceEnvelopeQueryDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
   const cursor = query.cursor ? decodeEnvelopeCursor(query.cursor, query) : null;
@@ -376,6 +387,7 @@ export async function queryIntelligenceEnvelope(
 
   const outcomes = await Promise.all(reads);
   const items: IntelligenceEnvelopeItem[] = [];
+  const observedCapabilities: EnvelopeObservedCapability[] = [];
   const diagnostics: EnvelopeDiagnostic[] = [];
   for (const outcome of outcomes) {
     if (outcome.failed && outcome.timeout) {
@@ -387,7 +399,15 @@ export async function queryIntelligenceEnvelope(
       continue;
     }
     for (const result of outcome.results) {
-      if (result.item) items.push(result.item);
+      if (result.item) {
+        items.push(result.item);
+        observedCapabilities.push({
+          producerModel: outcome.producerModel,
+          ...result.capability,
+          observedAt: result.item.updatedAt,
+          envelopeKey: result.item.envelopeKey,
+        });
+      }
       else diagnostics.push(result.diagnostic);
     }
   }
@@ -409,11 +429,27 @@ export async function queryIntelligenceEnvelope(
     diagnostics: aggregateDiagnostics(diagnostics),
   })).digest('hex');
 
-  return IntelligenceEnvelopePageSchema.parse({
+  const page = IntelligenceEnvelopePageSchema.parse({
     items: pageItems,
     nextCursor,
     diagnostics: aggregateDiagnostics(diagnostics),
     contextVersion,
     generatedAt,
   });
+  return { page, observedCapabilities };
+}
+
+export async function queryIntelligenceEnvelope(
+  rawQuery: IntelligenceEnvelopeQuery,
+  dependencyOverrides: Partial<IntelligenceEnvelopeQueryDependencies> = {},
+): Promise<IntelligenceEnvelopePage> {
+  return (await executeIntelligenceEnvelopeQuery(rawQuery, dependencyOverrides)).page;
+}
+
+/** Internal coverage view; preserves exact adapter tuples without widening the public Envelope page. */
+export function queryIntelligenceEnvelopeForCoverage(
+  rawQuery: IntelligenceEnvelopeQuery,
+  dependencyOverrides: Partial<IntelligenceEnvelopeQueryDependencies> = {},
+): Promise<IntelligenceEnvelopeCoveragePage> {
+  return executeIntelligenceEnvelopeQuery(rawQuery, dependencyOverrides);
 }

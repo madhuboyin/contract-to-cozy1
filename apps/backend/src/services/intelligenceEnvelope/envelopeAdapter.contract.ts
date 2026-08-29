@@ -30,8 +30,8 @@ export type EnvelopeAdapterDescriptor = Readonly<{
 }>;
 
 export type EnvelopeAdapterResult =
-  | { item: IntelligenceEnvelopeItem; diagnostic?: never }
-  | { item?: never; diagnostic: EnvelopeDiagnostic };
+  | { item: IntelligenceEnvelopeItem; capability: EnvelopeAdapterCapability; diagnostic?: never }
+  | { item?: never; capability?: never; diagnostic: EnvelopeDiagnostic };
 
 export type EnvelopeAdapterInputBase = {
   propertyId: string;

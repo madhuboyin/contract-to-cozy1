@@ -22,6 +22,7 @@ import { validateDocumentPromotionAdapterRegistry } from './documentPromotionAda
 import { DOCUMENT_PROMOTION_ADAPTER_REGISTRY } from './documentPromotionAdapterRegistry';
 import { validateSkillOperationGovernanceCoverage } from './skillOperationGovernance.contract';
 import { INTELLIGENCE_SOURCE_REGISTRY, validateIntelligenceSourceRegistry } from './sourceRegistry';
+import { validateEnvelopeCoverageManifest } from './envelopeCoverageValidation';
 export * from './extractionEnvelope.contract';
 
 export * from './intelligenceConsumerRegistry.contract';
@@ -40,6 +41,12 @@ export * from './documentPromotionAdapterRegistry.contract';
 export * from './documentPromotionAdapterRegistry';
 export * from './skillOperationGovernance.contract';
 export * from './sourceRegistry';
+export * from './envelopeCoverageManifest';
+export * from './envelopeCoverageDigest';
+export * from './envelopeCoverageValidation';
+export * from './envelopeCoverageAudit.service';
+export * from './envelopeCoverageFinding.repository';
+export * from './envelopeCoverageAuditExecution.service';
 
 /**
  * Home Intelligence Functional Completeness FRD Phase 0 work item 6 —
@@ -88,6 +95,7 @@ export function validateIntelligenceRegistries(): string[] {
       skillCoversOperation: (operationId: AskOperationId) => Boolean(getSkillForOperation(operationId)),
     }),
     ...validateIntelligenceSourceRegistry(INTELLIGENCE_SOURCE_REGISTRY),
+    ...validateEnvelopeCoverageManifest(),
     ...sourceConsumerIssues,
   ];
 }

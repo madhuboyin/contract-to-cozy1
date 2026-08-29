@@ -15539,6 +15539,18 @@ enum IntelligenceObservationLifecycleStatus {
   UNKNOWN
 }
 
+enum CoverageAuditDetermination {
+  COVERED
+  INTENTIONALLY_NON_ACTIONABLE
+  REVIEW_REQUIRED
+}
+
+enum CoverageAuditEvidenceBasis {
+  DECLARED_ONLY
+  OBSERVED_ONLY
+  DECLARED_AND_OBSERVED
+}
+
 enum IntelligencePropertyMatchMethod {
   EXACT_POINT_DISTANCE
   POLYGON_OVERLAP
@@ -15576,6 +15588,28 @@ enum PropertyLocalObservationDisposition {
   FOLLOWING
   DISMISSED
   NOT_RELEVANT
+}
+
+model CoverageAuditFinding {
+  id                String                     @id @default(uuid())
+  producerModel     String
+  domain            GuidanceIssueDomain
+  determination     CoverageAuditDetermination
+  evidenceBasis     CoverageAuditEvidenceBasis
+  auditInputsDigest String
+  matchedRuleIds    String[]                   @default([])
+  firstObservedAt   DateTime?
+  lastObservedAt    DateTime?
+  active            Boolean                    @default(true)
+  lastAuditedAt     DateTime
+  retiredAt         DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@unique([producerModel, domain])
+  @@index([active, determination, lastAuditedAt(sort: Desc)])
+  @@index([producerModel, active])
+  @@map("coverage_audit_findings")
 }
 
 model IntelligenceSource {

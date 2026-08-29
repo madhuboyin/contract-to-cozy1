@@ -120,3 +120,29 @@ test('empty healthy producers return an empty page without failure diagnostics',
   assert.deepEqual(page.diagnostics, []);
   assert.equal(page.nextCursor, null);
 });
+
+test('coverage query preserves exact internal adapter capabilities without widening the public page', async () => {
+  const result = signalResult('signal-observed', NOW);
+  const queryReaders = readers({ Signal: { producerModel: 'Signal', read: async () => [result] } });
+  const query = {
+    propertyId: 'property-1',
+    principal: { kind: 'BACKGROUND_JOB_RESOLVED_OWNER', userId: 'user-1' },
+    sourceModels: ['Signal'],
+  };
+  const coverage = await envelope.queryIntelligenceEnvelopeForCoverage(
+    query,
+    dependencies({ readers: queryReaders }),
+  );
+  const publicPage = await envelope.queryIntelligenceEnvelope(query, dependencies({ readers: queryReaders }));
+
+  assert.deepEqual(coverage.page, publicPage);
+  assert.deepEqual(coverage.observedCapabilities, [{
+    producerModel: 'Signal',
+    type: 'SIGNAL',
+    domain: 'SAFETY',
+    nativeSubtype: 'RISK_SPIKE',
+    observedAt: NOW,
+    envelopeKey: coverage.page.items[0].envelopeKey,
+  }]);
+  assert.equal('observedCapabilities' in publicPage, false);
+});
