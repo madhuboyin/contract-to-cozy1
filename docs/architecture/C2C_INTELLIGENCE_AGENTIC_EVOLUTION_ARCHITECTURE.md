@@ -43,6 +43,20 @@ The approved Signal primary domains are `MAINT_ADHERENCE→MAINTENANCE`, `COVERA
 
 The initial asset-kind registry is seeded from the twelve existing `RISK_ASSET_CONFIG.systemType` values. Asset kind remains optional when a producer cannot identify it reliably. The initial property-component registry is `ROOF`, `FOUNDATION`, `EXTERIOR`, `INTERIOR`, and `SITE`; additional values require a reviewed registry change and fixtures.
 
+### 1.2.2 `IPD-001` coverage-audit scheduling and invocation resolution
+
+Approved on 2026-08-28: Register the Envelope Promotion Coverage Audit as a weekly global internal-write worker scheduled at 04:30 UTC every Sunday. Support an admin-only manual trigger through the existing worker-jobs infrastructure. Scheduled and manual executions must use the same handler, execution policy, renewable per-job lease, and run-record contract. Overlapping executions are skipped. Only complete global runs may retire findings. Keep scheduled execution disabled until `IPD-002` operational acceptance.
+
+The manual trigger exists for immediate post-deployment verification and operational investigation; it is not a promotion or mutation control. Both invocation paths run the same global audit. Property-scoped execution is not supported because a scoped run cannot establish global completeness or retire findings safely.
+
+`IPD-001` fixes invocation behavior. Its shared run-record requirement is implemented through the durable `CoverageAuditRun` contract approved by `IPD-009` below.
+
+### 1.2.3 `IPD-009` coverage-audit run persistence resolution
+
+Approved on 2026-08-28: Add a minimal durable `CoverageAuditRun` model as the authoritative record of scheduled and manual Envelope Promotion Coverage Audit attempts. A run is inserted as `RUNNING` after lease acquisition and transitions exactly once through a CAS-protected update to `COMPLETE`, `PARTIAL`, or `FAILED`. Finding reconciliation and terminal run recording occur in one transaction; only `COMPLETE` may retire findings. Store bounded run metadata, digest/version identity, aggregate counts, diagnostics, and reconciliation totals—never raw Envelope items or homeowner data. Do not implement cross-invocation cursor resumption initially; interrupted runs fail and restart globally. Any future resumable implementation requires bounded per-run observation staging, not cursor-only continuation.
+
+`CoverageAuditFinding` remains the current-state projection by `(producerModel, domain)`; `CoverageAuditRun` is execution/audit history and does not duplicate finding rows. Redis cron history remains generic worker telemetry rather than the domain-authoritative audit record. A unique invocation idempotency key prevents duplicate run creation for the same scheduled tick or manual job. Fatal errors before reconciliation terminalize the run as `FAILED`; operational incompleteness that reaches reconciliation terminalizes it as `PARTIAL`, updates current findings without retirement, and preserves the prior complete-run state.
+
 The following gaps are resolved and binding in the sections below: `ARD-001` establishes a registered Envelope boundary distinct from the complete Home Action producer inventory; `ARD-002` establishes the shared issue-domain taxonomy and keeps asset identity orthogonal to it; `ARD-003` establishes the HVAC computation/published-verdict authority split and preserves `ReplaceRepairAnalysis` authority only for non-HVAC appliances; `ARD-004` prevents vacuous coverage by combining exact declarations with authorized observations and treating observed-only capabilities as drift; `ARD-005` makes code the sole definition owner while pinning persisted execution records to immutable versions. Envelope evidence reuses the canonical Home Action evidence shape, conflict identity uses one `QualifiedClaim` contract, the coverage worker does not reuse notification-consent filtering, and coverage findings retain active/retired reconciliation.
 
 ---
@@ -1185,7 +1199,7 @@ The only ranking-adjacent thing left in this document is the Coverage Audit's st
 | Requirement | Mechanism | Evidence |
 |---|---|---|
 | Envelope Promotion Coverage Audit must periodically re-evaluate | Scheduled Worker job, same pattern as the existing `evaluateHomeActionProactiveDeliveryJob` | **[verified]** that job is already registered in `workerJobRegistry.ts` and is schedule-capable (its own execution is gated by an env flag + DB kill switch, disabled by default — §1's opening note) |
-| Promotion triggering must be safe to re-run | Delegates to `homeActionSourcePromotion.service.ts`'s own dedup, keyed by each rule's `deduplicationKey` | **[verified]** every `compoundRuleRegistry.ts` entry already declares one |
+| Coverage-audit execution must be safe to retry | `IPD-009`: interrupted attempts terminalize as `FAILED`; a retry starts a fresh global run under a new idempotent invocation identity. Finding reconciliation is idempotent, and only a transactionally terminalized `COMPLETE` run may retire findings | No cursor-only continuation and no promotion call |
 | `DomainEventType` — does this document add a new enum value? | **No.** **[verified]** `DomainEventType` (`schema.prisma`) is a fixed enum of domain-specific values with no `ENVELOPE_CHANGE`; this document no longer needs one, since the Coverage Audit is poll-based, not event-triggered | Round 2 proposed adding this trigger and using `DomainEvent` as a transactional outbox — both retired along with the real-time Attention design they served |
 
 No Kafka, no Redis Streams, no new event infrastructure, no `DomainEvent` schema change. This document's event/trigger footprint is now smaller than round 2's, not larger — a direct consequence of discovering that the delivery side was never this document's job to build.
@@ -1199,6 +1213,7 @@ No Kafka, no Redis Streams, no new event infrastructure, no `DomainEvent` schema
 | **C2C authoritative state** | Unchanged — existing 506 Prisma models |
 | **Intelligence state** | Unchanged native subsystems + the Envelope's read adapters |
 | **Coverage audit findings** | New, narrow: `CoverageAuditFinding` (§11.2/§25), keyed by `(producerModel, domain)` — no per-item, no per-user dimension |
+| **Coverage audit execution history** | New, narrow: `CoverageAuditRun` (`IPD-009`/§25), one scheduled/manual attempt with bounded metadata and one CAS-protected terminal transition — no raw Envelope items, homeowner data, or continuation cursor |
 | **Home Action lifecycle state** (dismissal, snooze, completion) | Unchanged — already fully owned by the existing Home Action command policy (HI-ATT-005); this document does not duplicate it |
 | **Specialist Agent execution state** | New: `AgentRun` (append-only, per invocation) / `AgentState` (only for a paused, resumable run) — see §12.5 for why these are two different records, not two sources of truth |
 | **Conversation context** | Unchanged — Ask's existing session state |
@@ -1322,22 +1337,31 @@ graph TB
 sequenceDiagram
   participant Cron as workerJobRegistry (scheduled)
   participant Cov as Envelope Promotion Coverage Audit
+  participant Run as CoverageAuditRun
   participant Prop as Property scan (resolves homeownerProfile.userId, per property)
   participant Env as Intelligence Envelope
   participant Manifest as COVERAGE_MANIFEST (hand-authored, validated at startup — §11.2)
   participant Dash as Admin coverage dashboard
 
   Cron->>Cov: run
+  Cov->>Run: insert RUNNING after shared lease acquisition (idempotencyKey)
   Cov->>Prop: resolve BACKGROUND_JOB_RESOLVED_OWNER principal per property
   Cov->>Env: aggregate observed (producerModel, domain) combinations, authorized per property
   Cov->>Manifest: matchCoverageManifest(producerModel, domain) — never against compoundRuleRegistry.ts's inputContracts strings
   alt matched to >=1 validated ruleId
-    Cov->>Cov: upsert CoverageAuditFinding determination=COVERED (no dispatch, no promotion attempt)
+    Cov->>Cov: project CoverageAuditFinding determination=COVERED (no dispatch, no promotion attempt)
   else on the INTENTIONALLY_NON_ACTIONABLE allow-list
-    Cov->>Cov: upsert CoverageAuditFinding determination=INTENTIONALLY_NON_ACTIONABLE
+    Cov->>Cov: project CoverageAuditFinding determination=INTENTIONALLY_NON_ACTIONABLE
   else no match, not allow-listed
-    Cov->>Cov: upsert CoverageAuditFinding determination=REVIEW_REQUIRED
+    Cov->>Cov: project CoverageAuditFinding determination=REVIEW_REQUIRED
     Cov->>Dash: surface finding for an engineer to act on
+  end
+  alt every page/adapter succeeded
+    Cov->>Run: transaction: reconcile findings + retire absent keys + CAS RUNNING→COMPLETE
+  else operationally incomplete
+    Cov->>Run: transaction: reconcile without retirement + CAS RUNNING→PARTIAL
+  else fatal interruption before reconciliation
+    Cov->>Run: CAS RUNNING→FAILED; later invocation restarts globally
   end
 ```
 
@@ -1422,6 +1446,7 @@ sequenceDiagram
 | New model | Purpose | Notes |
 |---|---|---|
 | `CoverageAuditFinding` (§11.2) | Coverage determination per `(producerModel, domain)` combination — `COVERED` / `INTENTIONALLY_NON_ACTIONABLE` / `REVIEW_REQUIRED`, with evidence basis, `auditInputsDigest`, matched rule IDs, observation timestamps, and active/retired lifecycle | No `userId` and no per-item dimension. Declared-only pairs remain visible; exact observed-only capabilities also create certification-failing declaration-drift diagnostics. Reconciled only after a complete run |
+| `CoverageAuditRun` (`IPD-009`) | Authoritative scheduled/manual audit-attempt history and the source for last-complete-run/admin diagnostics | Inserted as `RUNNING` after lease acquisition; one CAS-protected terminal transition to `COMPLETE`, `PARTIAL`, or `FAILED`. Stores bounded digest/version identity, aggregate counts, diagnostics, and reconciliation totals—no raw Envelope items, homeowner data, or continuation cursor. Reconciliation and terminalization share one transaction; only `COMPLETE` retires findings |
 | `IntelligenceEnvelopeIndex` (conditional) | Thin materialized index, only if query-time fan-out proves insufficient | No ranking field of any kind — the Envelope carries none |
 | `AGENT_DEFINITION_REGISTRY` (code, not a model) | Immutable multi-version definitions and active-version selection (§7.2.1/§12.8) | Startup/CI parity validated; retains versions referenced by nonterminal state; no `AgentDefinition` table or mutable definition copy |
 | `AgentRun`, `AgentState` | Execution records for the one genuine agent (§12.5/§12.8) | `AgentRun` is append-only and pins definition version/digest/deployment revision; `AgentState` exists only for a paused, resumable run and uses CAS versioning + expiry |
@@ -1454,10 +1479,10 @@ sequenceDiagram
 | | |
 |---|---|
 | **Objective** | Surface intelligence-to-Home-Action coverage gaps for an engineer to close by hand — never dispatch or promote anything automatically |
-| **New code** | Exact adapter capability descriptors; `auditCoverage` job (declared ∪ authorized-observed projection, §11.2); declaration-drift diagnostics/certification failure; `CoverageAuditFinding`; `COVERAGE_MANIFEST` + `INTENTIONALLY_NON_ACTIONABLE`; validation/digest logic; admin dashboard |
+| **New code** | Exact adapter capability descriptors; `auditCoverage` job (declared ∪ authorized-observed projection, §11.2); declaration-drift diagnostics/certification failure; `CoverageAuditFinding`; `CoverageAuditRun` (`IPD-009`); `COVERAGE_MANIFEST` + `INTENTIONALLY_NON_ACTIONABLE`; validation/digest logic; admin dashboard |
 | **Reused code** | `compoundRuleRegistry.ts` (read-only, untouched), `homeActionSourcePromotion.service.ts` (untouched — this phase never calls it), `workerJobRegistry.ts`, the `property.homeownerProfile.userId`-resolution pattern from `evaluateHomeActionProactiveDeliveryJob`, `validateDecisionFamilyAdapterRegistry`'s startup-validation pattern (reused for `validateCoverageManifest`) |
-| **Dependencies** | Phase 0 |
-| **Exit criteria** | Every pair projected from the `ARD-004` exact declared ∪ authorized-observed capability universe has an explicit determination; declared-only pairs remain visible; an observed exact capability missing from its descriptor fails certification even if its coarse pair is covered; a zero-row database cannot pass vacuously; manifest validation rejects stale/contradictory/unknown entries; complete runs alone retire removed keys; a `REVIEW_REQUIRED` finding closes only after both rule and manifest are authored (§11.3)—with no automated promotion |
+| **Dependencies** | Phase 0; `IPD-001` is approved, while scheduled activation remains gated by `IPD-002` |
+| **Exit criteria** | Every pair projected from the `ARD-004` exact declared ∪ authorized-observed capability universe has an explicit determination; declared-only pairs remain visible; an observed exact capability missing from its descriptor fails certification even if its coarse pair is covered; a zero-row database cannot pass vacuously; manifest validation rejects stale/contradictory/unknown entries; run creation is idempotent and terminalization is CAS-protected; reconciliation and terminal run recording are atomic; complete runs alone retire removed keys; interrupted runs fail and restart globally without cursor-only continuation; a `REVIEW_REQUIRED` finding closes only after both rule and manifest are authored (§11.3)—with no automated promotion |
 
 ### Phase 2 — HVAC Specialist Agent (HVAC-only — `GENERIC_APPLIANCE` moved to Phase 4)
 

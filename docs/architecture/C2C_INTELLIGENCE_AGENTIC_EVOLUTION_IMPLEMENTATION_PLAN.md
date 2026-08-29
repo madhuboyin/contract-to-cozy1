@@ -55,7 +55,6 @@ These inputs do not block Phase 0. They must not be silently invented during imp
 
 | ID | Required by | Owner input | Default treatment until resolved |
 |---|---|---|---|
-| `IPD-001` | Phase 1 scheduling | Coverage-audit cadence and whether manual triggering is also required | Implement the job and registry parity, but do not assign a production cron expression |
 | `IPD-002` | Phase 1 operational acceptance | Versioned evaluation contract: fixture corpus, baseline, numeric coverage target, sample minimum, measurement window, and failure action | Report `NOT_MEASURED`; do not claim the phase operationally accepted |
 | `IPD-003` | Phase 2 schema specification | Retention periods and purge behavior for `AgentRun`, expired `AgentState`, `ToolInvocation`, and `LLMInvocation` | Implement bounded payloads and purge seams; do not choose retention durations |
 | `IPD-004` | Phase 2 scope | Include confirmed delayed follow-up in the first HVAC Specialist release, or remove `SCHEDULE_FOLLOW_UP` from its enabled tool set | Do not simulate follow-up in memory |
@@ -67,7 +66,11 @@ Resolved input:
 
 | ID | Resolution |
 |---|---|
+| `IPD-001` | **APPROVED — 2026-08-28.** Register the Envelope Promotion Coverage Audit as a weekly global internal-write worker scheduled at 04:30 UTC every Sunday. Support an admin-only manual trigger through the existing worker-jobs infrastructure. Scheduled and manual executions use the same handler, execution policy, renewable per-job lease, and run-record contract; overlapping executions are skipped, and only complete global runs may retire findings. Keep scheduled execution disabled until `IPD-002` operational acceptance. |
 | `IPD-008` | **APPROVED — 2026-08-28.** Use immutable versioned code registries and explicit mappings. Closed native vocabularies map exhaustively; open observation/Radar vocabularies require explicit admission and return `UNMAPPED_NATIVE_VALUE` otherwise. Use the reviewed Signal matrix, seed asset kinds from `RISK_ASSET_CONFIG.systemType`, keep asset kind optional when not reliably known, and begin property components with `ROOF`, `FOUNDATION`, `EXTERIOR`, `INTERIOR`, and `SITE`. |
+| `IPD-009` | **APPROVED — 2026-08-28.** Add a minimal durable `CoverageAuditRun` as the authoritative scheduled/manual audit-attempt record. Insert it as `RUNNING` after lease acquisition and permit exactly one CAS-protected transition to `COMPLETE`, `PARTIAL`, or `FAILED`. Reconcile findings and terminalize the run in one transaction; only `COMPLETE` may retire findings. Persist bounded metadata, digest/version identity, aggregate counts, diagnostics, and reconciliation totals—never raw Envelope items or homeowner data. Interrupted runs fail and restart globally; resumability would require future bounded per-run observation staging, not cursor-only continuation. |
+
+`IPD-001`'s shared run-record requirement is satisfied by the `CoverageAuditRun` contract in `IPD-009`. Redis cron history remains generic worker telemetry and is not the domain-authoritative audit history.
 
 The source architecture metadata is normalized to approved implementation status. Remaining owner inputs continue to gate only the work packages named above.
 
@@ -232,11 +235,11 @@ Create shared product-framework contracts before adapters so Guidance, Home Acti
 
 ## 6. Phase 1 — Envelope Promotion Coverage Audit
 
-**Implementation status (2026-08-28): In progress.** Delivery increment 5 and the non-scheduling portion of increment 6 are complete. The hand-authored `COVERAGE_MANIFEST`, explicit non-actionable registry, startup validation, semantic digest, declared/authorized-observed union projection, evidence-basis classification, and exact declaration-drift certification are implemented. `CoverageAuditFinding` now persists the coarse natural key and observation lifecycle; the audit reads properties in stable ID pages, resolves the real homeowner principal, uses the authorized internal Envelope coverage view, reports unresolved owners and adapter failures, and permits retirement only after a complete global run. The audit has no imports from promotion, ranking, eligibility, or delivery owners. No migration script was created. Worker registry/scheduling and admin reporting remain: §3 says to implement registry parity without a cron while §6.2 task 8 says not to register until `IPD-001` supplies the schedule, so implementation follows the stricter task-level gate and leaves registration untouched pending owner clarification. Execution cursors are bounded within one invocation; adding cross-invocation cursor persistence would require an architecture amendment because the approved coverage persistence contract permits only `CoverageAuditFinding`. Phase 1 operational evaluation remains `NOT_MEASURED` under `IPD-002`.
+**Implementation status (2026-08-28): In progress.** Delivery increment 5 and the non-scheduling portion of increment 6 are complete. The hand-authored `COVERAGE_MANIFEST`, explicit non-actionable registry, startup validation, semantic digest, declared/authorized-observed union projection, evidence-basis classification, and exact declaration-drift certification are implemented. `CoverageAuditFinding` now persists the coarse natural key and observation lifecycle; the audit reads properties in stable ID pages, resolves the real homeowner principal, uses the authorized internal Envelope coverage view, reports unresolved owners and adapter failures, and permits retirement only after a complete global run. The audit has no imports from promotion, ranking, eligibility, or delivery owners. No migration script was created. `IPD-001` authorizes a weekly Sunday 04:30 UTC global worker plus an admin-only manual trigger; `IPD-009` now authorizes their shared durable `CoverageAuditRun` contract. Implementing that worker/admin/run path remains, and scheduled execution stays disabled until `IPD-002` operational acceptance. Runs remain bounded to one invocation: interruption produces `FAILED` and a later invocation restarts globally; cursor-only resumption is prohibited.
 
 ### 6.1 Persistence contract
 
-Add `CoverageAuditFinding` to `apps/backend/prisma/schema.prisma`. The natural key is `(producerModel, domain)`; do not add an item/envelope dimension.
+`CoverageAuditFinding` remains the current-state projection in `apps/backend/prisma/schema.prisma`. Its natural key is `(producerModel, domain)`; do not add an item/envelope dimension.
 
 Minimum fields:
 
@@ -246,6 +249,10 @@ Minimum fields:
 - created/updated timestamps.
 
 Store rule IDs using the repository's established JSON/list convention after checking existing Prisma patterns. Declaration-drift details may be bounded run diagnostics rather than a second durable model unless the admin reporting requirement demonstrates a need for historical per-capability records.
+
+Add the minimal `CoverageAuditRun` approved by `IPD-009`. Required identity/lifecycle fields are `id`, unique `idempotencyKey`, `trigger` (`SCHEDULED` or `MANUAL`), `status` (`RUNNING`, `COMPLETE`, `PARTIAL`, or `FAILED`), `workerJobKey`, `correlationId`, `startedAt`, and `finishedAt`. Required reproducibility fields are `auditInputsDigest`, taxonomy version, deployment revision, and optional evaluation-contract version/status. Persist aggregate execution and reconciliation counts already returned by the audit service, including properties/pages, owner/property/adapter failures, observed capabilities, findings/review-required/declaration-drift/certification totals, and created/updated/retired totals. Diagnostics and failure summaries are bounded structured metadata; raw Envelope items, homeowner data, principals, and unrestricted errors are prohibited.
+
+Insert the run as `RUNNING` only after the shared lease is acquired. Terminalize it exactly once with a CAS predicate on `status = RUNNING`. Finding reconciliation and terminalization share one database transaction; a `COMPLETE` run may retire absent findings, a `PARTIAL` run may update but never retire them, and a fatal pre-reconciliation error records `FAILED`. Do not store a continuation cursor or resume a run across invocations. A later retry creates or resolves through its own idempotent invocation identity and restarts the global audit. Future resumability requires a separate approved bounded observation-staging design.
 
 Per project rules, update the Prisma schema and generated client, but do not create migration scripts; the user owns migration creation/execution.
 
@@ -257,6 +264,7 @@ Per project rules, update the Prisma schema and generated client, but do not cre
 - `apps/backend/src/services/intelligence/envelopeCoverageAudit.service.ts`
 - `apps/backend/src/services/intelligence/envelopeCoverageDigest.ts`
 - `apps/backend/src/services/intelligence/envelopeCoverageValidation.ts`
+- `apps/backend/src/services/intelligence/envelopeCoverageRun.repository.ts`
 - `apps/workers/src/jobs/evaluateEnvelopePromotionCoverage.job.ts`
 
 **Existing files to change**
@@ -274,8 +282,8 @@ Per project rules, update the Prisma schema and generated client, but do not cre
 4. Validate manifest rule IDs, producer/domain values, contradictory non-actionable declarations, duplicate entries, and current taxonomy version at startup/CI.
 5. Hash only semantically relevant sorted inputs: rule IDs, manifest, non-actionable declarations, exact adapter capabilities, and taxonomy version.
 6. Read properties in stable pages, resolve each real homeowner principal, and record `OWNER_UNRESOLVED` rather than fabricating authority. Do not apply notification-consent filtering.
-7. Mark a run `COMPLETE` only after every page/adapter succeeds. A complete run reconciles and retires missing natural keys; a partial run may update observations but cannot retire findings.
-8. Register the job and handler only after `IPD-001` supplies the schedule. The job performs internal writes, never homeowner delivery.
+7. Create `CoverageAuditRun` after lease acquisition, mark it `COMPLETE` only after every page/adapter succeeds, and CAS-terminalize it exactly once. Reconcile findings and terminalize the run in one transaction: a complete run may retire missing natural keys, while a partial run may update observations but cannot retire findings. Fatal interruption records `FAILED`; retries restart globally rather than resume from a cursor.
+8. Register the global internal-write job and handler with the `IPD-001` schedule (`04:30 UTC` every Sunday) and admin-only manual triggering. Both invocation paths use the same handler, execution policy, renewable per-job lease, and run-record contract; skip overlaps, never permit property-scoped retirement, and keep scheduled execution disabled until `IPD-002` operational acceptance. The job never performs homeowner delivery.
 
 ### 6.3 Admin reporting
 
@@ -291,7 +299,7 @@ Per project rules, update the Prisma schema and generated client, but do not cre
 - `apps/frontend/src/hooks/useAdminEnvelopeCoverage.ts`
 - `apps/frontend/src/app/(dashboard)/dashboard/envelope-coverage/page.tsx`
 
-The dashboard is admin-only and read-only. It shows active `REVIEW_REQUIRED` findings by default, declared-only support, observed declaration drift, matched rule IDs, digest/version, diagnostics, last complete run, and retired history. It does not provide “promote,” “create rule,” or runtime mutation controls.
+The dashboard is admin-only and read-only. It shows active `REVIEW_REQUIRED` findings by default, declared-only support, observed declaration drift, matched rule IDs, digest/version, bounded diagnostics, the durable last complete run, recent partial/failed runs, and retired history. Run history comes from `CoverageAuditRun`, not the five-entry generic Redis cron history. It does not provide “promote,” “create rule,” or runtime mutation controls.
 
 ### 6.4 Phase 1 acceptance
 
@@ -300,6 +308,8 @@ The dashboard is admin-only and read-only. It shows active `REVIEW_REQUIRED` fin
 - Every projected pair has exactly one explicit determination.
 - A rule without a matching manifest entry does not close a finding.
 - A complete run retires removed keys; a partial run retires none.
+- Run creation is idempotent, terminal transition is CAS-protected, and reconciliation plus terminalization is atomic.
+- An interrupted run is `FAILED` and a retry restarts globally; no cursor-only continuation exists.
 - The audit does not call `homeActionSourcePromotion.service.ts`, ranking, eligibility, or delivery.
 - `IPD-002` evaluation metrics are checked in before operational acceptance.
 
@@ -479,7 +489,7 @@ Keep reviews bounded and preserve a green dependency chain:
 | 3 | Authorized Envelope query service, cursor, diagnostics, and `query-envelope` Skill | PR 2 |
 | 4 | HVAC Home Action authority/presentation correction | PR 1; may proceed parallel to PRs 2–3 |
 | 5 | Coverage manifest, validation, audit/digest pure logic | PR 2 |
-| 6 | `CoverageAuditFinding`, worker execution, reconciliation, and metrics | PRs 3, 5; `IPD-001` |
+| 6 | `CoverageAuditFinding`, `CoverageAuditRun`, worker execution, atomic reconciliation/terminalization, and metrics | PRs 3, 5; `IPD-001` and `IPD-009` resolved; scheduled activation gated by `IPD-002` |
 | 7 | Admin coverage API and dashboard | PR 6 |
 | 8 | Agent contracts, immutable registry/digest baseline, HVAC profile, startup/readiness validation | PRs 3–4 |
 | 9 | Agent persistence, repositories, and retention seams | PR 8; `IPD-003`, `IPD-007` |
@@ -526,4 +536,4 @@ The architecture is implemented when all of the following are true:
 
 Start with PR 1 (shared contracts) and PR 4's investigation in parallel at the engineering-workstream level, but merge shared contracts first. Then deliver the Envelope registry/query path before persistence-heavy coverage or agent work. This order exposes mapping and authority errors early, keeps Phase 1's universe mechanically derived from certified adapters, and prevents Phase 2 from building against unstable context/evidence contracts.
 
-Do not complete the Phase 0 adapter registry until `IPD-008` is resolved. Do not start Phase 1 scheduling until `IPD-001` and `IPD-002` are resolved. Do not start Phase 2 schema migration work until `IPD-003` and `IPD-007` are resolved, and do not enable follow-up or generic appliance profiles without `IPD-004`/`IPD-006` respectively.
+`IPD-001`, `IPD-008`, and `IPD-009` are resolved. Implement the Phase 1 weekly/manual worker and durable run contract, but keep scheduled execution disabled until `IPD-002` operational acceptance. Do not start Phase 2 schema migration work until `IPD-003` and `IPD-007` are resolved, and do not enable follow-up or generic appliance profiles without `IPD-004`/`IPD-006` respectively.
