@@ -35,7 +35,11 @@ test('every Ask operation has a complete governed definition', () => {
 
 test('every material Ask command has governed confirmation, authorization, cancellation, and correction metadata', () => {
   assert.deepEqual(validateAskDomainCommandRegistry(), []);
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 20);
+  // Tripwire: bump only when a genuinely material Ask command is added and the
+  // per-command loop below (cancellation/correction/role-floor/adapter parity)
+  // still passes for it. The compiler already ties the registry to
+  // ASK_DOMAIN_COMMAND_IDS one-to-one; this catches an unreviewed addition.
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 25);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);
