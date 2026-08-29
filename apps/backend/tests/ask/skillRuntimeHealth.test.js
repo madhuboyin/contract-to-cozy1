@@ -48,6 +48,7 @@ test('adapter failure degrades or removes only operations that depend on that ad
   const allDisabled = readAskOperationalControls({
     ASK_ADAPTER_PROPERTY_SUMMARY_KILL_SWITCH: 'true',
     ASK_ADAPTER_INVENTORY_LOOKUP_KILL_SWITCH: 'true',
+    ASK_ADAPTER_HOME_CHANGE_SUMMARY_KILL_SWITCH: 'true',
   });
   assert.equal(deriveSkillHealth('property-record', 'ASK', allDisabled).status, 'UNAVAILABLE');
   assert.equal(listDiscoverableSkills('ASK', allDisabled).some((skill) => skill.id === 'property-record'), false);

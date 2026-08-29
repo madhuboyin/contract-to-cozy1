@@ -99,6 +99,7 @@ export const BUYER_CLOSING_SKILL = Object.freeze({
   })),
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: BUYER_CLOSING_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',

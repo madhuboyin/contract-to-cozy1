@@ -46,6 +46,7 @@ export const PROPERTY_TAX_SKILL = Object.freeze({
       ]
     }
   ],
+  "autonomyLevel": 1,
   "riskPolicy": {
     "effects": [
       "READ"

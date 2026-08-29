@@ -30,6 +30,7 @@ export type AskOperationId =
   | 'OWNERSHIP_COSTS'
   | 'INVENTORY_LOOKUP'
   | 'PROPERTY_SUMMARY'
+  | 'INTELLIGENCE_ENVELOPE_QUERY'
   | 'HOME_ACTIONS'
   | 'OPERATIONAL_WORK_UPDATE'
   | 'INSPECTION_FINDINGS'
@@ -175,6 +176,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   OWNERSHIP_COSTS: definition('OWNERSHIP_COSTS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'ownership.costs', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   INVENTORY_LOOKUP: definition('INVENTORY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inventory.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
   PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
+  INTELLIGENCE_ENVELOPE_QUERY: definition('INTELLIGENCE_ENVELOPE_QUERY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'intelligence-envelope.query', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   // Phase 9B (FRD §17/§21.2) adds PRIORITY_LIST as an additive, versioned
   // explainable annotation of this same operation's existing feed read --
   // deliberately not a new operation, so Ask never presents two ranked

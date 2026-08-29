@@ -28,9 +28,10 @@ import { INCIDENT_CLAIM_SKILL } from './incident-claim';
 import { HOME_OPERATIONS_SKILL } from './home-operations';
 import { INSPECTION_FINDINGS_SKILL } from './inspection-findings';
 import { DOCUMENT_PROMOTION_SKILL } from './document-promotion';
+import { QUERY_ENVELOPE_SKILL } from './query-envelope';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from './context/propertyIdentityContext.contract';
-import { REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
+import { getSkillAdapter, REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
 import { selectSkillDependencyVersion } from './skillDependencyVersion';
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
@@ -67,6 +68,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'home-operations': HOME_OPERATIONS_SKILL,
   'inspection-findings': INSPECTION_FINDINGS_SKILL,
   'document-promotion': DOCUMENT_PROMOTION_SKILL,
+  'query-envelope': QUERY_ENVELOPE_SKILL,
 } satisfies Readonly<Record<string, SkillDefinition>>);
 
 export type SkillId = keyof typeof SKILL_DEFINITIONS;
@@ -114,6 +116,7 @@ export function resolveEffectiveSkillOperationPolicy(
     authorizationFloor: stricterRole(skill.authorizationFloor, operation.propertyRoleFloor),
     adapterKey: operation.adapterKey,
     allowedResultBlocks: operation.allowedBlockTypes.filter((block) => skill.allowedResultBlocks.includes(block)),
+    autonomyLevel: skill.autonomyLevel,
     riskPolicy: skill.riskPolicy,
   };
 }
@@ -145,6 +148,7 @@ export function validateSkillDefinitions(
     }
     if (!skill.homeownerJobs.length || !skill.supportedGoals.length || !skill.aliases.length) issues.push(`${key}: missing semantic routing metadata`);
     if (!skill.operations.length) issues.push(`${key}: no registered operations`);
+    if (![0, 1, 2].includes(skill.autonomyLevel)) issues.push(`${key}: autonomy level exceeds the platform maximum`);
     if (!skill.allowedResultBlocks.length) issues.push(`${key}: no allowed result blocks`);
     if (!skill.consumerPolicy.length) issues.push(`${key}: no consumer policy`);
 
@@ -210,9 +214,21 @@ export function validateSkillDefinitions(
       if (adapterRefs.has(adapterRef)) issues.push(`${key}: duplicate allowed adapter ${adapterRef}`);
       adapterRefs.add(adapterRef);
       if (!registeredAdapters.has(`${adapter.id}@${adapter.version}`)) issues.push(`${key}: unknown adapter ${adapter.id}@${adapter.version}`);
+      const adapterDefinition = getSkillAdapter(adapter.id, adapter.version);
+      if (adapterDefinition?.effect === 'MUTATION_PREPARATION' && skill.autonomyLevel < 2) {
+        issues.push(`${key}: mutation-preparation adapter ${adapter.id} requires autonomy level 2`);
+      }
       if (!skill.operations.some((operation) => ASK_OPERATION_DEFINITIONS[operation.operationId]?.adapterKey === adapter.id)) {
         issues.push(`${key}: adapter ${adapter.id} is not used by a declared operation`);
       }
+    }
+    if (skill.riskPolicy.effects.some((effect) => effect === 'WRITE' || effect === 'EXTERNAL_TRANSMISSION') && skill.autonomyLevel < 2) {
+      issues.push(`${key}: write or external-transmission effects require autonomy level 2`);
+    }
+    if (skill.riskPolicy.effects.every((effect) => effect === 'READ')
+      && skill.riskPolicy.materiality !== 'LOW'
+      && skill.autonomyLevel < 1) {
+      issues.push(`${key}: material read-only behavior requires autonomy level 1`);
     }
     for (const [budgetName, maximum] of Object.entries(PLATFORM_CONTEXT_BUDGET_MAXIMUMS)) {
       const value = skill.contextBudget[budgetName as keyof typeof skill.contextBudget];

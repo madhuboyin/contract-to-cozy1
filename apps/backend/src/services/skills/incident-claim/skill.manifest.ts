@@ -43,6 +43,7 @@ export const INCIDENT_CLAIM_SKILL = Object.freeze({
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: INCIDENT_CLAIM_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',

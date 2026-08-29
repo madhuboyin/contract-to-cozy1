@@ -79,6 +79,7 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'INSPECTION_FINDING_UPDATE', message: 'Turn the electrical inspection defect into tracked work', category: 'PARAPHRASE' },
   { operationId: 'DOCUMENT_PROMOTION_REVIEW', message: 'Which facts extracted from my uploaded files are waiting on me?', category: 'PARAPHRASE' },
   { operationId: 'DOCUMENT_PROMOTION_CONFIRM', message: 'Promote the reviewed extracted furnace serial number into the home record', category: 'PARAPHRASE' },
+  { operationId: 'INTELLIGENCE_ENVELOPE_QUERY', message: 'List normalized observations emitted by registered intelligence producers for this address', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -156,6 +157,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   OWNERSHIP_COSTS: 'The monthly cost of owning this home is led by insurance and property-tax expense categories.',
   INVENTORY_LOOKUP: 'The home inventory records the dryer model, installation year, and service history.',
   PROPERTY_SUMMARY: 'The home record is missing three governed details and has one stale field.',
+  INTELLIGENCE_ENVELOPE_QUERY: 'The registered Envelope producers returned a bounded normalized view of this property intelligence.',
   HOME_ACTIONS: 'The Home Actions priority list puts the overdue safety inspection first.',
   OPERATIONAL_WORK_UPDATE: 'The selected home-work item can be accepted, deferred, snoozed, or completed through its governed workflow.',
   INSPECTION_FINDINGS: 'The confirmed inspection report has one unresolved major roof finding.',

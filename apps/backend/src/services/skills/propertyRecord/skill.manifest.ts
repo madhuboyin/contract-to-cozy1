@@ -32,6 +32,7 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
     { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS },
     { consumer: 'HOME_ACTIONS', operations: ['PROPERTY_SUMMARY'] },
   ],
+  autonomyLevel: 0,
   riskPolicy: {
     effects: ['READ'],
     materiality: 'LOW',

@@ -46,6 +46,7 @@ export const COVERAGE_SKILL = Object.freeze({
       ]
     }
   ],
+  "autonomyLevel": 1,
   "riskPolicy": {
     "effects": [
       "READ"

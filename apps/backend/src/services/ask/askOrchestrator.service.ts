@@ -94,6 +94,7 @@ import { SellHoldRentService } from '../sellHoldRent.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
 import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
+import { queryIntelligenceEnvelope } from '../intelligenceEnvelope';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
 import { buildBuyerPlanHomeActionsResult } from './askBuyerPlanPresentation';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
@@ -5638,6 +5639,92 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   };
 }
 
+async function intelligenceEnvelopeQueryResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const page = await queryIntelligenceEnvelope({
+    propertyId,
+    principal: { kind: 'HOMEOWNER_SESSION', userId },
+    limit: 20,
+  });
+  if (!page.items.length && !page.diagnostics.length) {
+    return {
+      status: 'ANSWERED',
+      contextVersion: page.contextVersion,
+      blocks: [{
+        type: 'EMPTY_STATE',
+        id: 'intelligence-envelope-empty',
+        title: 'No registered intelligence yet',
+        body: 'The registered Envelope producers have not created intelligence for this property yet.',
+        actions: [],
+      }],
+      suggestions: ['Summarize my home record'],
+    };
+  }
+
+  const grouped = new Map<string, typeof page.items>();
+  for (const item of page.items) {
+    const existing = grouped.get(item.domain) ?? [];
+    existing.push(item);
+    grouped.set(item.domain, existing);
+  }
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'intelligence-envelope-summary',
+    title: 'Registered home intelligence',
+    body: `${page.items.length} normalized intelligence item${page.items.length === 1 ? '' : 's'} from ${new Set(page.items.map((item) => item.source.sourceModel)).size} registered producer${new Set(page.items.map((item) => item.source.sourceModel)).size === 1 ? '' : 's'}.`,
+    tone: page.diagnostics.length ? 'CAUTION' : 'DEFAULT',
+    actions: [],
+  }];
+  if (page.items.length) {
+    blocks.push({
+      type: 'GROUPED_LIST',
+      id: 'intelligence-envelope-items',
+      title: 'Derived intelligence by domain',
+      description: 'This is a normalized read of registered Envelope producers, not every Home Action or ordinary domain record.',
+      sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, items]) => ({
+        id: `envelope-${domain.toLowerCase()}`,
+        title: domain.replace(/_/g, ' ').toLowerCase(),
+        count: items.length,
+        items: items.map((item) => ({
+          id: item.envelopeKey,
+          title: `${item.type.replace(/_/g, ' ').toLowerCase()} · ${item.source.producer}`,
+          description: item.qualifiedClaim?.verdict ?? `${item.source.sourceModel} · ${item.freshness.currentness.toLowerCase()}`,
+          meta: [item.severity ?? 'UNSPECIFIED', item.createdAt.slice(0, 10)],
+          status: item.freshness.currentness,
+          href: null,
+        })),
+      })),
+      actions: [],
+    });
+    const evidence = page.items.flatMap((item) => item.evidence).slice(0, 20);
+    if (evidence.length) {
+      blocks.push({
+        type: 'EVIDENCE',
+        id: 'intelligence-envelope-evidence',
+        title: 'Producer evidence',
+        items: evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })),
+      });
+    }
+  }
+  if (page.diagnostics.length) {
+    blocks.push({
+      type: 'BOUNDARY',
+      id: 'intelligence-envelope-partial',
+      title: 'Some registered intelligence was unavailable',
+      body: page.diagnostics.map((diagnostic) => `${diagnostic.producerModel}: ${diagnostic.code}`).join('; '),
+      severity: 'INFO',
+      suggestions: ['Try the query again'],
+    });
+  }
+  return {
+    status: page.diagnostics.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: page.diagnostics.length ? 'INTELLIGENCE_ENVELOPE_PARTIAL' : undefined,
+    contextVersion: page.contextVersion,
+    blocks,
+    suggestions: page.nextCursor ? ['Ask about a specific intelligence domain'] : [],
+    parameters: page.nextCursor ? { nextCursor: page.nextCursor } : undefined,
+  };
+}
+
 async function dispatchOperationAdapterResult(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
@@ -5672,6 +5759,7 @@ async function dispatchOperationAdapterResult(
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
     case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
+    case 'INTELLIGENCE_ENVELOPE_QUERY': return intelligenceEnvelopeQueryResult(input.userId, input.propertyId!);
     case 'HOME_ACTIONS': return homeActionsResult(
       input.userId,
       input.propertyId!,

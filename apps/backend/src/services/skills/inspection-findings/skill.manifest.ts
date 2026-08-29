@@ -21,6 +21,7 @@ export const INSPECTION_FINDINGS_SKILL = Object.freeze({
   allowedAdapters: [{ id: 'inspection-findings.review', version: '1.0' }, { id: 'inspection-findings.update', version: '1.0' }],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: INSPECTION_FINDINGS_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: { effects: ['READ', 'WRITE'], materiality: 'MATERIAL', riskDomains: ['HOME_SAFETY'], reversibility: 'PARTIALLY_REVERSIBLE' },
   authorizationFloor: 'VIEWER',
   allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'WORKFLOW_PROGRESS', 'BOUNDARY'],

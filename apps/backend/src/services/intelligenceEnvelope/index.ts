@@ -4,4 +4,5 @@ export * from './envelopeMappingRegistry';
 export * from './envelopeAdapterRegistry';
 export * from './envelopeRegistryValidation';
 export * from './qualifiedClaimCompatibilityRegistry';
+export * from './intelligenceEnvelopeQuery.service';
 export * from './adapters';

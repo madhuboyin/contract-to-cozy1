@@ -26,7 +26,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['004-expected', '004', 'MAINTENANCE_TASK_UPDATE', .1899, true], ['004-competitor', '004', 'BUYER_TASK_UPDATE', .2814, false],
   ['005-expected', '005', 'COVERAGE_GAPS', .7519, true], ['005-competitor', '005', 'INVENTORY_LOOKUP', .4333, false],
   ['006-expected', '006', 'INCIDENT_CLAIM_STATUS', .1065, true], ['006-competitor', '006', 'HVAC_DECISION_CONTINUE', .1622, false],
-  ['007-expected', '007', 'SAVINGS_OPPORTUNITIES', .6503, true], ['007-competitor', '007', 'OWNERSHIP_COSTS', .4253, false],
+  ['007-expected', '007', 'SAVINGS_OPPORTUNITIES', .6503, true], ['007-competitor', '007', 'OWNERSHIP_COSTS', .4618, false],
   ['008-expected', '008', 'OWNERSHIP_COSTS', .6832, true], ['008-competitor', '008', 'BUYER_COST_READINESS', .4801, false],
   ['009-expected', '009', 'INVENTORY_LOOKUP', .7246, true], ['009-competitor', '009', 'BUYER_CONTRACT_TIMELINE', .4796, false],
   ['010-expected', '010', 'PROPERTY_SUMMARY', .6215, true], ['010-competitor', '010', 'MAINTENANCE_TASK_COMPLETE', .445, false],
@@ -34,7 +34,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['012-expected', '012', 'CAPABILITY_DISCOVERY', .7095, true], ['012-competitor', '012', 'HOUSEHOLD_INVITATION', .5232, false],
   ['013-expected', '013', 'REPLACEMENT_GUIDANCE', .718, true], ['013-competitor', '013', 'HVAC_DECISION_START', .6671, false],
   ['014-expected', '014', 'REFINANCE_ANALYSIS', .6936, true], ['014-competitor', '014', 'HOME_ACTIONS', .4651, false],
-  ['015-expected', '015', 'REFINANCE_RATE_MONITOR', .5804, true], ['015-competitor', '015', 'HOME_DEADLINE_MONITOR', .3509, false],
+  ['015-expected', '015', 'REFINANCE_RATE_MONITOR', .6678, true], ['015-competitor', '015', 'HOME_DEADLINE_MONITOR', .3509, false],
   ['016-expected', '016', 'SELL_HOLD_RENT_ANALYSIS', .5358, true], ['016-competitor', '016', 'INSPECTION_FINDINGS', .4609, false],
   ['017-expected', '017', 'HOUSEHOLD_INVITATION', .6546, true], ['017-competitor', '017', 'QUOTE_COMPARISON_CREATE', .0979, false],
   ['018-expected', '018', 'GUIDANCE_JOURNEY_CREATE', .8766, true], ['018-competitor', '018', 'INCIDENT_CONTINUATION', .1424, false],
@@ -85,6 +85,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['063-expected', '063', 'INSPECTION_FINDING_UPDATE', .2948, true], ['063-competitor', '063', 'DOCUMENT_PROMOTION_CONFIRM', .1982, false],
   ['064-expected', '064', 'DOCUMENT_PROMOTION_REVIEW', .2725, true], ['064-competitor', '064', 'BUYER_CONTRACT_TIMELINE', .2461, false],
   ['065-expected', '065', 'DOCUMENT_PROMOTION_CONFIRM', .6684, true], ['065-competitor', '065', 'HOME_CHANGE_SUMMARY', .6381, false],
+  ['066-expected', '066', 'INTELLIGENCE_ENVELOPE_QUERY', .2777, true], ['066-competitor', '066', 'PROPERTY_SUMMARY', .142, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

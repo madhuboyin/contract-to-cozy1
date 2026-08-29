@@ -46,6 +46,7 @@ export const SELLER_PREPARATION_SKILL = Object.freeze({
       ]
     }
   ],
+  "autonomyLevel": 1,
   "riskPolicy": {
     "effects": [
       "READ"

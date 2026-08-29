@@ -18,6 +18,7 @@ import { INCIDENT_CLAIM_SKILL_EVALUATION } from './incident-claim';
 import { HOME_OPERATIONS_SKILL_EVALUATION } from './home-operations';
 import { INSPECTION_FINDINGS_SKILL_EVALUATION } from './inspection-findings';
 import { DOCUMENT_PROMOTION_SKILL_EVALUATION } from './document-promotion';
+import { QUERY_ENVELOPE_SKILL_EVALUATION } from './query-envelope';
 
 export type SkillRoutingFixtureMode = 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL' | 'MISSPELLED';
 export type SkillContextFixtureState = 'KNOWN' | 'MISSING' | 'STALE' | 'CONFLICTING' | 'UNAUTHORIZED' | 'UNAVAILABLE';
@@ -118,6 +119,7 @@ const refinance = SKILL_DEFINITIONS.refinance;
 const propertyRecord = SKILL_DEFINITIONS['property-record'];
 
 export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationPackage>> = Object.freeze({
+  [QUERY_ENVELOPE_SKILL_EVALUATION.id]: QUERY_ENVELOPE_SKILL_EVALUATION,
   [INSPECTION_FINDINGS_SKILL_EVALUATION.id]: INSPECTION_FINDINGS_SKILL_EVALUATION,
   [DOCUMENT_PROMOTION_SKILL_EVALUATION.id]: DOCUMENT_PROMOTION_SKILL_EVALUATION,
   [CAPITAL_PLANNING_SKILL_EVALUATION.id]: CAPITAL_PLANNING_SKILL_EVALUATION,

@@ -26,6 +26,7 @@ export const REFINANCE_SKILL = Object.freeze({
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: REFINANCE_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',

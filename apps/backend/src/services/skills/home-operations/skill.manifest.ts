@@ -41,6 +41,7 @@ export const HOME_OPERATIONS_SKILL = Object.freeze({
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: HOME_OPERATIONS_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',

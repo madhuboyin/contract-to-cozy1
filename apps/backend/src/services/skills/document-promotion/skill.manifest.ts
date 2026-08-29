@@ -13,6 +13,7 @@ export const DOCUMENT_PROMOTION_SKILL = Object.freeze({
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER], optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   allowedAdapters: [{ id: 'document-promotion.review', version: '1.0' }, { id: 'document-promotion.confirm', version: '1.0' }], allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: DOCUMENT_PROMOTION_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: { effects: ['READ', 'WRITE'], materiality: 'MATERIAL', riskDomains: ['PRIVACY', 'COVERAGE'], reversibility: 'PARTIALLY_REVERSIBLE' },
   authorizationFloor: 'VIEWER', allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'WORKFLOW_PROGRESS', 'BOUNDARY'],
   dependencies: [

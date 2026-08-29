@@ -31,6 +31,9 @@ test('the static Skill registry validates and groups the existing Maintenance op
   );
   assert.equal(getSkillForOperation('MAINTENANCE_STATUS').id, 'maintenance');
   assert.equal(getSkillForOperation('REFINANCE_ANALYSIS').id, 'refinance');
+  assert.equal(getSkillForOperation('INTELLIGENCE_ENVELOPE_QUERY').id, 'query-envelope');
+  assert.equal(SKILL_DEFINITIONS['query-envelope'].autonomyLevel, 0);
+  assert.ok(Object.values(SKILL_DEFINITIONS).every((skill) => [0, 1, 2].includes(skill.autonomyLevel)));
 });
 
 test('effective policy is the restrictive intersection of Skill, consumer, and operation policy', () => {
@@ -66,6 +69,15 @@ test('Skill validation rejects incompatible and over-broad manifests', () => {
   assert.ok(issues.some((issue) => issue.includes('undeclared result block')));
   assert.ok(issues.some((issue) => issue.includes('invalid context budget maxSerializedBytes')));
   assert.ok(issues.some((issue) => issue.includes('references undeclared operation REFINANCE_ANALYSIS')));
+});
+
+test('Skill validation rejects autonomy below declared risk and adapter effects', () => {
+  const invalid = {
+    maintenance: { ...SKILL_DEFINITIONS.maintenance, autonomyLevel: 0 },
+  };
+  const issues = validateSkillDefinitions(invalid);
+  assert.ok(issues.some((issue) => issue.includes('mutation-preparation adapter')));
+  assert.ok(issues.some((issue) => issue.includes('write or external-transmission effects require autonomy level 2')));
 });
 
 test('Skill feature and kill-switch controls are independent of operation controls', () => {

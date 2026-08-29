@@ -57,6 +57,7 @@ export const QUOTE_COMPARISON_SKILL = Object.freeze({
       ]
     }
   ],
+  "autonomyLevel": 2,
   "riskPolicy": {
     "effects": [
       "READ",

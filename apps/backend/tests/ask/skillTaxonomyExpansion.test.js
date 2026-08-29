@@ -22,7 +22,7 @@ const TAXONOMY = Object.freeze({
   'sell-hold-rent': ['SELL_HOLD_RENT_ANALYSIS'],
   renovation: ['RENOVATION_PERMIT_READINESS'],
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],
-  'property-record': ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  'property-record': ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP', 'HOME_CHANGE_SUMMARY'],
   household: ['HOUSEHOLD_INVITATION'],
   'buyer-closing': [
     'BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_DOCUMENT_READINESS', 'BUYER_INSPECTION_REVIEW',
@@ -31,8 +31,11 @@ const TAXONOMY = Object.freeze({
     'BUYER_DISCLOSURE_FUNDS_READINESS', 'BUYER_CLOSING_DAY_READINESS', 'BUYER_CONTRACT_TIMELINE',
     'BUYER_NEGOTIATION_READINESS', 'BUYER_COST_READINESS', 'BUYER_FINDING_DISPOSITION', 'BUYER_LIFECYCLE_UPDATE',
   ],
-  'incident-claim': ['INCIDENT_CLAIM_STATUS'],
-  'home-operations': ['HOME_ACTIONS'],
+  'incident-claim': ['INCIDENT_CLAIM_STATUS', 'CLAIM_FILE', 'CLAIM_TRANSITION', 'INCIDENT_CONTINUATION'],
+  'home-operations': ['HOME_ACTIONS', 'OPERATIONAL_WORK_UPDATE', 'GUIDANCE_JOURNEY_CREATE'],
+  'inspection-findings': ['INSPECTION_FINDINGS', 'INSPECTION_FINDING_UPDATE'],
+  'document-promotion': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
+  'query-envelope': ['INTELLIGENCE_ENVELOPE_QUERY'],
 });
 
 const EXPANDED_SKILLS = Object.freeze([
@@ -41,7 +44,7 @@ const EXPANDED_SKILLS = Object.freeze([
   'buyer-closing', 'incident-claim', 'home-operations',
 ]);
 
-test('all seventeen representative Skills own the intended canonical operations', () => {
+test('all twenty representative Skills own the intended canonical operations', () => {
   assert.deepEqual(new Set(Object.keys(SKILL_DEFINITIONS)), new Set(Object.keys(TAXONOMY)));
   for (const [skillId, operations] of Object.entries(TAXONOMY)) {
     const skill = SKILL_DEFINITIONS[skillId];

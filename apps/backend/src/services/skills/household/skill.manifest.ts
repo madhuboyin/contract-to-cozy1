@@ -46,6 +46,7 @@ export const HOUSEHOLD_SKILL = Object.freeze({
       ]
     }
   ],
+  "autonomyLevel": 2,
   "riskPolicy": {
     "effects": [
       "WRITE"

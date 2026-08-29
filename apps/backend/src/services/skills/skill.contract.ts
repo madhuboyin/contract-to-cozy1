@@ -25,6 +25,7 @@ export type SkillRiskDomain =
   | 'PRIVACY'
   | 'EXTERNAL_COMMUNICATION';
 export type SkillReversibility = 'REVERSIBLE' | 'PARTIALLY_REVERSIBLE' | 'IRREVERSIBLE';
+export type SkillAutonomyLevel = 0 | 1 | 2;
 
 export interface VersionedSkillReference {
   id: string;
@@ -90,6 +91,7 @@ export interface SkillDefinition {
   allowedAdapters: VersionedSkillReference[];
   allowedExternalConnectors: VersionedSkillReference[];
   consumerPolicy: SkillConsumerPolicy[];
+  autonomyLevel: SkillAutonomyLevel;
   riskPolicy: SkillRiskPolicy;
   authorizationFloor: AskPropertyRoleFloor;
   allowedResultBlocks: AskPresentationBlock['type'][];
@@ -112,5 +114,6 @@ export interface EffectiveSkillOperationPolicy {
   authorizationFloor: AskPropertyRoleFloor;
   adapterKey: string;
   allowedResultBlocks: AskPresentationBlock['type'][];
+  autonomyLevel: SkillAutonomyLevel;
   riskPolicy: SkillRiskPolicy;
 }

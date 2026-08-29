@@ -45,6 +45,7 @@ const DEFINITIONS = [
   adapter('refinance.analysis', 'Refinance Radar', 'REFINANCE_ANALYSIS'),
   adapter('refinance.monitor', 'Refinance Rate Monitor', 'REFINANCE_RATE_MONITOR', 'MUTATION_PREPARATION'),
   adapter('property.summary', 'Property Record Overview', 'PROPERTY_SUMMARY'),
+  adapter('intelligence-envelope.query', 'IntelligenceEnvelopeQueryService', 'INTELLIGENCE_ENVELOPE_QUERY'),
   adapter('inventory.lookup', 'InventoryService', 'INVENTORY_LOOKUP'),
   adapter('coverage.review', 'Coverage Intelligence', 'COVERAGE_GAPS'),
   adapter('savings.opportunities', 'Savings and Benefits Intelligence', 'SAVINGS_OPPORTUNITIES'),

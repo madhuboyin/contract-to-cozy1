@@ -21,7 +21,7 @@ function catalogSkill(consumer, skillId, controls = {}) {
 }
 
 test('the full representative taxonomy is registered and validates without semantic conflicts', () => {
-  assert.equal(Object.keys(SKILL_DEFINITIONS).length, 17);
+  assert.equal(Object.keys(SKILL_DEFINITIONS).length, 20);
   assert.deepEqual(validateSkillDefinitions(), []);
   assert.equal(getSkillForOperation('PROPERTY_SUMMARY').id, 'property-record');
   assert.equal(getSkillForOperation('INVENTORY_LOOKUP').id, 'property-record');
@@ -46,8 +46,8 @@ test('consumer-specific discovery returns only explicitly permitted operations',
   const homeActions = catalogSkill('HOME_ACTIONS', 'property-record');
   const proactive = catalogSkill('PROACTIVE', 'property-record');
 
-  assert.deepEqual(ask.operations.map(({ id }) => id), ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY']);
-  assert.deepEqual(concierge.operations.map(({ id }) => id), ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY']);
+  assert.deepEqual(ask.operations.map(({ id }) => id), ['HOME_CHANGE_SUMMARY', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY']);
+  assert.deepEqual(concierge.operations.map(({ id }) => id), ['HOME_CHANGE_SUMMARY', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY']);
   assert.deepEqual(homeActions.operations.map(({ id }) => id), ['PROPERTY_SUMMARY']);
   assert.equal(proactive, undefined);
   assert.equal(resolveEffectiveSkillOperationPolicy('property-record', 'INVENTORY_LOOKUP', 'HOME_ACTIONS'), null);
@@ -75,7 +75,7 @@ test('catalog projection applies Skill and operation controls independently', ()
   const inventoryDisabled = readAskOperationalControls({ ASK_OPERATION_INVENTORY_LOOKUP_ENABLED: 'false' });
   assert.deepEqual(
     catalogSkill('ASK', 'property-record', inventoryDisabled).operations.map(({ id }) => id),
-    ['PROPERTY_SUMMARY'],
+    ['HOME_CHANGE_SUMMARY', 'PROPERTY_SUMMARY'],
   );
 
   const homeActionsSummaryDisabled = readAskOperationalControls({ ASK_OPERATION_PROPERTY_SUMMARY_ENABLED: 'false' });

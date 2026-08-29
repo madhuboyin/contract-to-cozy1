@@ -165,9 +165,11 @@ Create shared product-framework contracts before adapters so Guidance, Home Acti
 
 ### 5.3 Work package P0C — authorized query service and `query-envelope` Skill
 
+**Implementation status (2026-08-28): Complete.** The implemented service is `intelligenceEnvelopeQuery.service.ts`. It authorizes through the canonical property-access resolver before invoking any producer reader; applies the closed producer/filter contract, stable ordering, query-bound cursor, bounded reads, total/per-producer latency budgets, and isolated diagnostics; and exposes a bounded Ask presentation. The `query-envelope` Skill, read-only adapter, dependency contract, evaluation package, and operation are registered. Every Skill manifest now declares autonomy explicitly (`0` observe, `1` material read/recommendation, `2` confirmation-gated mutation preparation), and startup validation rejects autonomy below declared materiality/effects or above the platform ceiling. This does not broaden the Envelope to ordinary domain records or create another Home Action ranking path.
+
 **Proposed new files**
 
-- `apps/backend/src/services/intelligenceEnvelope/intelligenceEnvelope.service.ts`
+- `apps/backend/src/services/intelligenceEnvelope/intelligenceEnvelopeQuery.service.ts`
 - `apps/backend/src/services/skills/query-envelope/skill.manifest.ts`
 - `apps/backend/src/services/skills/query-envelope/index.ts`
 - a query adapter in `apps/backend/src/services/skills/adapters/`

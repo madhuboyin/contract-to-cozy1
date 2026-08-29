@@ -50,6 +50,7 @@ export const REPAIR_REPLACE_SKILL = Object.freeze({
   allowedAdapters: REPAIR_REPLACE_ADAPTERS,
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: REPAIR_REPLACE_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',

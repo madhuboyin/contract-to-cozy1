@@ -46,6 +46,7 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
       ]
     }
   ],
+  "autonomyLevel": 1,
   "riskPolicy": {
     "effects": [
       "READ"

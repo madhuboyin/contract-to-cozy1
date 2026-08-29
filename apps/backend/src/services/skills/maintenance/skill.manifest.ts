@@ -59,6 +59,7 @@ export const MAINTENANCE_SKILL = Object.freeze({
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: MAINTENANCE_SKILL_OPERATIONS }],
+  autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',
