@@ -57,6 +57,14 @@ export type AskOperationId =
   | 'GROUNDED_GUIDANCE'
   | 'HVAC_DECISION_START'
   | 'HVAC_DECISION_CONTINUE'
+  // C2C Intelligence & Agentic Evolution Phase 3 / PR 12b (architecture §8 task
+  // 2, §22). Routes an Ask "help me decide / why / walk me through" question
+  // that references an already-delivered HVAC repair-or-replace Home Action to
+  // the Phase 2 Specialist Agent runtime (invokeAgentRuntime), sharing the
+  // AgentRun idempotency ledger and canonical DecisionThread with the in-app
+  // HomeActionDecisionDetail panel. Generic forward-looking "should I repair or
+  // replace my furnace?" with no delivered action stays on HVAC_DECISION_START.
+  | 'HVAC_SPECIALIST_ENGAGE'
   | 'HVAC_DECISION_SCENARIO'
   | 'HVAC_DECISION_ABANDON'
   | 'HVAC_PREFERENCE_SAVE'
@@ -219,6 +227,12 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // time a recompute actually happens.
   HVAC_DECISION_START: definition('HVAC_DECISION_START', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.start', ['SUMMARY', 'DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE', 'EVIDENCE', 'LIMITATION', 'ASSUMPTIONS', 'GROUPED_LIST', 'BOUNDARY']),
   HVAC_DECISION_CONTINUE: definition('HVAC_DECISION_CONTINUE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'decision-platform.hvac.continue', ['DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE', 'EVIDENCE', 'LIMITATION', 'EMPTY_STATE']),
+  // Phase 3 / PR 12b: adapts to the bounded HVAC Specialist Agent runtime.
+  // MATERIAL_DECISION/CONTRIBUTOR mirrors HVAC_DECISION_START because
+  // START_OR_RESUME can create or advance the canonical DecisionThread; the
+  // adapter surfaces only the bounded run-status projection + decisionThreadId
+  // (§7.4), never raw AgentRun / AgentState rows.
+  HVAC_SPECIALIST_ENGAGE: definition('HVAC_SPECIALIST_ENGAGE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.specialist-engage', ['SUMMARY', 'GROUPED_LIST', 'ASSUMPTIONS', 'LIMITATION', 'EMPTY_STATE', 'BOUNDARY']),
   HVAC_DECISION_SCENARIO: definition('HVAC_DECISION_SCENARIO', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.scenario', ['SUMMARY', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'LIMITATION', 'BOUNDARY']),
   HVAC_DECISION_ABANDON: definition('HVAC_DECISION_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.abandon', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   // Ask Intelligence FRD Phase 8B — confirmed ownership-horizon
@@ -399,6 +413,24 @@ const hvacPreferenceSaveVerbPattern = /\b(?:save|remember|keep track of|note tha
 const hvacPreferenceSaveSubjectPattern = /\b(?:sell|selling|plan(?:s|ning)?\s+to\s+sell)\b.{0,40}\b(?:month|year)s?\b|\bminimi[sz]e (?:the )?(?:upfront|long[- ]term) cost\b|\bmaximi[sz]e reliability\b/i;
 const hvacPreferenceForgetPattern = /\b(?:forget|stop using|remove|revoke)\b.{0,60}\b(?:ownership horizon|sell(?:ing)? (?:plan|timeline)|repair[- ]replace approach|repair or replace preference|hvac (?:preference|plan))\b/i;
 const hvacDecisionStartPattern = new RegExp(`\\b(?:repair or replace|should i replace|should i repair|fix or replace|worth repairing|worth replacing)\\b.{0,60}\\b${hvacKeyword}\\b|\\b${hvacKeyword}\\b.{0,60}\\b(?:repair or replace|repair vs\\.? replace|fix or replace|worth repairing|worth replacing)\\b`, 'i');
+// Phase 3 / PR 12b: an Ask engagement with an already-delivered HVAC
+// repair-or-replace Home Action -- "help me decide / walk me through" it, or a
+// "why is this the recommendation" question, or an explicit reference to a
+// flagged/surfaced HVAC action. Checked before hvacDecisionContinuePattern and
+// hvacDecisionStartPattern. Deliberately narrower than hvacDecisionStartPattern:
+// a bare forward-looking "should I repair or replace my furnace?" has no
+// engagement verb / surfaced-action reference and still falls through to
+// HVAC_DECISION_START.
+const hvacSpecialistEngagePattern = new RegExp(
+  `\\b(?:help me decide|walk me through|talk me through|coach me through|guide me through)\\b`
+    + `.{0,80}(?:\\b${hvacKeyword}\\b|\\brepair[- ]or[- ]replace\\b|\\brepair or replace\\b)`
+    + `.{0,80}\\b(?:action|recommendation|item|decision|flagged|surfaced|home actions?)\\b`
+  + `|\\b(?:flagged|recommended|surfaced|raised)\\b.{0,80}\\b${hvacKeyword}\\b`
+  + `|\\b${hvacKeyword}\\b.{0,60}\\b(?:action|recommendation|item)\\b.{0,40}\\byou (?:flagged|surfaced|raised|recommended)\\b`
+  + `|\\bwhy (?:is|should|would|does)\\b.{0,60}\\b(?:replac\\w+|repair\\w+)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\b(?:recommend\\w+|better|the option|the verdict)\\b`
+  + `|\\bwhy (?:is|should|would|does)\\b.{0,40}\\b${hvacKeyword}\\b.{0,60}\\brecommend\\w+\\b`,
+  'i',
+);
 // Ask Intelligence FRD Phase 10A (§19.2's homeowner-report source, §25
 // "Phase 10A"). Past-tense completion/start language, distinct from
 // hvacDecisionStartPattern's forward-looking "should I replace" phrasing
@@ -501,6 +533,13 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // sentence matches quoteComparisonReviewPattern's "quote ... compare" shape
   // too). All four require an HVAC-family keyword, so non-HVAC phrasing is
   // unaffected and still falls through to the generic patterns unchanged.
+  // Phase 3 / PR 12b: engagement with an already-delivered HVAC Home Action is
+  // checked ahead of the continue/start patterns so "walk me through the HVAC
+  // decision from my home actions" reaches the Specialist runtime rather than
+  // the direct decisionThreadService path.
+  if (hvacSpecialistEngagePattern.test(message)) {
+    return resolved('HVAC_SPECIALIST_ENGAGE', 0.95);
+  }
   if (hvacDecisionContinuePattern.test(message)) {
     return resolved('HVAC_DECISION_CONTINUE', 0.97);
   }

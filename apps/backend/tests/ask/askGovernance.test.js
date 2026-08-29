@@ -25,7 +25,7 @@ const {
 
 test('every Ask operation has a complete governed definition', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 57);
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 67);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);

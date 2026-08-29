@@ -1269,6 +1269,8 @@ Ask Cozy → existing deterministic routing (unchanged) →
 
 Per ASK-INT-019 (§1.1): **Ask ranks only the canonical `getHomeActionFeed()` output, using the same versioned, explainable `priorityListPolicy.ts` categories every other surface uses.** It never ranks raw Envelope items. The 8 example homeowner questions from prior revisions still apply, with "Show me the evidence" now also covering non-actionable Envelope observations surfaced via `query-envelope`.
 
+The "HVAC Specialist Agent" arm of the routing is the `HVAC_SPECIALIST_ENGAGE` Ask operation (PR 12b). It activates only when the message resolves to an already-delivered HVAC repair-or-replace Home Action — Ask reads `getHomeActionFeed()` to resolve exactly that one action (no re-ranking, no new record), constructs a `HOME_ACTION_ENGAGEMENT`-shaped origin, and calls the same `invokeAgentRuntime` operations the in-app `HomeActionDecisionDetail` panel uses. Both surfaces therefore share one `AgentRun` idempotency ledger and one canonical `DecisionThread`. A generic forward-looking "should I repair or replace my furnace?" with no delivered action continues to use `HVAC_DECISION_START` and its own `DecisionThread` machinery unchanged.
+
 ---
 
 ## 23. Target Architecture Diagram
@@ -1499,11 +1501,13 @@ A prior draft shipped the `GENERIC_APPLIANCE` profile, a new `APPLIANCE_REPAIR_R
 
 ### Phase 3 — Ask Cozy integration
 
+**Implementation status (2026-08-29): complete.** PR 12 (`75ee0b1b`) wired `query-envelope` and locked the ranking boundary. PR 12b added the `HVAC_SPECIALIST_ENGAGE` Ask operation: it resolves one already-delivered HVAC repair-or-replace Home Action from `getHomeActionFeed()` and drives the Phase 2 Specialist runtime via `invokeAgentRuntime`, sharing the `AgentRun` ledger and canonical `decisionThreadId` with the in-app panel. It reuses the agent's existing `HOME_ACTION_ENGAGEMENT` trigger (no `AgentDefinition` version bump), never ranks or promotes, and leaves the generic `HVAC_DECISION_START` flow unchanged for bare forward-looking questions.
+
 | | |
 |---|---|
 | **Objective** | Wire `REMOTE_FALLBACK`; add the Specialist Agent and `query-envelope` as routable Ask targets |
 | **Dependencies** | Phases 0–2 |
-| **Exit criteria** | Ask ranks only `getHomeActionFeed()` output (verified by a test that fails if any new ranking path is introduced); non-actionable questions resolve via `query-envelope` without touching promotion |
+| **Exit criteria** | Ask ranks only `getHomeActionFeed()` output (verified by a test that fails if any new ranking path is introduced — `askEnvelopeAndRankingBoundary.test.js`, `askSpecialistEngageRouting.test.js`); non-actionable questions resolve via `query-envelope` without touching promotion; HVAC "help me decide" on a delivered action continues the canonical Decision Thread through the shared Specialist runtime |
 
 ### Phase 4 — `GENERIC_APPLIANCE`, additional specialists, and coverage rules
 

@@ -1217,8 +1217,14 @@ code-complete but governance-unrecorded, not as a gate the later phases waited o
 - desktop/mobile accessibility evidence retained.
 
 **Implementation status:** built and live as six Ask operations (`HVAC_DECISION_START`/
-`CONTINUE`/`SCENARIO`/`ABANDON`, `HVAC_PREFERENCE_SAVE`/`FORGET`). Thread selection is scoped to
-property+item and never resolved by recency (ambiguous results are surfaced, not guessed);
+`CONTINUE`/`SCENARIO`/`ABANDON`, `HVAC_PREFERENCE_SAVE`/`FORGET`). A seventh operation,
+`HVAC_SPECIALIST_ENGAGE` (C2C Intelligence & Agentic Evolution Phase 3 / PR 12b), routes an Ask
+"help me decide / why / walk me through" question that references an already-delivered HVAC
+repair-or-replace Home Action to the bounded Phase 2 HVAC Specialist Agent runtime
+(`invokeAgentRuntime`), sharing the `AgentRun` idempotency ledger and the same canonical
+`DecisionThread` as the in-app `HomeActionDecisionDetail` panel; a bare forward-looking "should I
+repair or replace my furnace?" with no delivered action still uses `HVAC_DECISION_START`. Thread
+selection is scoped to property+item and never resolved by recency (ambiguous results are surfaced, not guessed);
 concurrency is optimistic-locked with version conflicts throwing rather than overwriting;
 correction/invalidation appends a new superseding snapshot rather than editing in place;
 multi-session continuation needs no session/device identifier at all, since a thread is a durable

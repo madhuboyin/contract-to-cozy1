@@ -80,6 +80,9 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'DOCUMENT_PROMOTION_REVIEW', message: 'Which facts extracted from my uploaded files are waiting on me?', category: 'PARAPHRASE' },
   { operationId: 'DOCUMENT_PROMOTION_CONFIRM', message: 'Promote the reviewed extracted furnace serial number into the home record', category: 'PARAPHRASE' },
   { operationId: 'INTELLIGENCE_ENVELOPE_QUERY', message: 'List normalized observations emitted by registered intelligence producers for this address', category: 'PARAPHRASE' },
+  // Phase 3 / PR 12b — appended at the end so existing fixture indices (and the
+  // 001-066 calibration rows keyed off them) do not shift.
+  { operationId: 'HVAC_SPECIALIST_ENGAGE', message: 'Talk me through the flagged heat pump repair-or-replace recommendation from my home actions', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -184,6 +187,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   GROUNDED_GUIDANCE: 'Basement dampness commonly involves drainage, grading, condensation, or plumbing and should be inspected at the source.',
   HVAC_DECISION_START: 'A new HVAC repair-or-replace decision is ready to start with heater condition, quote, and cost inputs.',
   HVAC_DECISION_CONTINUE: 'The active heating-system decision is waiting for one remaining quote.',
+  HVAC_SPECIALIST_ENGAGE: 'The flagged HVAC repair-or-replace home action is handed to the HVAC Specialist, which reports its current repair-versus-replacement verdict on the same decision thread.',
   HVAC_DECISION_SCENARIO: 'The additional furnace bid changes the repair-versus-replacement comparison.',
   HVAC_DECISION_ABANDON: 'The active heating decision can be stopped after confirmation.',
   HVAC_PREFERENCE_SAVE: 'Your HVAC decision preference for lower upfront cost is ready to be saved after confirmation.',

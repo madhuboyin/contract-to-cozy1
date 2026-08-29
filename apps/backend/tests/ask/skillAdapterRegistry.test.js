@@ -18,7 +18,7 @@ const { SKILL_DEFINITIONS, validateSkillDefinitions } = require('../../src/servi
 test('every represented Skill operation resolves to one registered immutable adapter', () => {
   assert.deepEqual(validateSkillAdapterDefinitions(), []);
   assert.deepEqual(validateSkillDefinitions(), []);
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 61);
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 62);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);

@@ -7,6 +7,9 @@ export const REPAIR_REPLACE_SKILL_OPERATIONS: AskOperationId[] = [
   'REPLACEMENT_GUIDANCE',
   'HVAC_DECISION_START',
   'HVAC_DECISION_CONTINUE',
+  // Phase 3 / PR 12b — Ask engagement with a delivered HVAC Home Action,
+  // adapted onto the Phase 2 Specialist Agent runtime.
+  'HVAC_SPECIALIST_ENGAGE',
   'HVAC_DECISION_SCENARIO',
   'HVAC_DECISION_ABANDON',
   'HVAC_PREFERENCE_SAVE',
@@ -20,6 +23,7 @@ const REPAIR_REPLACE_ADAPTERS = [
   'inventory.replacement',
   'decision-platform.hvac.start',
   'decision-platform.hvac.continue',
+  'decision-platform.hvac.specialist-engage',
   'decision-platform.hvac.scenario',
   'decision-platform.hvac.abandon',
   'decision-platform.hvac.preference.save',

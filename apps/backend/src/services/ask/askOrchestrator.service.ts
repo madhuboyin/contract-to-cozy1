@@ -96,6 +96,17 @@ import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { queryIntelligenceEnvelope } from '../intelligenceEnvelope';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
+// C2C Intelligence & Agentic Evolution Phase 3 / PR 12b (architecture §8 task 2,
+// §22): Ask engagement with a delivered HVAC repair-or-replace Home Action is
+// adapted onto the same Phase 2 Specialist Agent runtime the in-app panel uses.
+import {
+  invokeAgentRuntime,
+  AgentRuntimeAuthorizationError,
+  AgentRuntimeCasConflictError,
+  AgentRuntimeDisabledError,
+  AgentRuntimeStateError,
+} from '../agents/agentRuntime.service';
+import type { AgentRunStatusProjection, HvacSpecialistHomeActionOrigin } from '../agents/agentRuntime.contract';
 import { buildBuyerPlanHomeActionsResult } from './askBuyerPlanPresentation';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
 import { getOrCreateQuoteComparisonWorkspace, getQuoteComparisonWorkspace, getWorkspaceComparability } from '../quoteComparison.service';
@@ -5725,6 +5736,276 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
   };
 }
 
+// C2C Intelligence & Agentic Evolution Phase 3 / PR 12b. Routes an Ask "help me
+// decide / why / walk me through" question that references an already-delivered
+// HVAC repair-or-replace Home Action to the bounded Phase 2 Specialist Agent
+// runtime, sharing the AgentRun idempotency ledger and canonical DecisionThread
+// with the in-app HomeActionDecisionDetail panel (§7.4). This adapter never
+// ranks, never promotes, and never creates a Home Action or coverage record --
+// it resolves exactly one already-ranked action from getHomeActionFeed() and
+// hands it to invokeAgentRuntime. It surfaces only the bounded run-status
+// projection + decisionThreadId, never raw AgentRun / AgentState rows.
+const REQUESTING_AGENT_ID = 'ask.orchestrator.hvac-specialist-engage';
+const RESTART_INTENT = /\b(?:start|restart|re[- ]?run|begin|kick off|redo)\b/i;
+const RESUME_INTENT = /\b(?:resume|continue|pick up|carry on|keep going)\b/i;
+
+function specialistUnavailableRedirect(propertyId: string, reason: string): AskOperationResult {
+  return {
+    status: 'NOT_APPLICABLE',
+    reasonCode: 'HVAC_SPECIALIST_NO_DELIVERED_ACTION',
+    blocks: [{
+      type: 'EMPTY_STATE',
+      id: 'hvac-specialist-no-action',
+      title: 'No flagged HVAC repair-or-replace action to work from',
+      body: `${reason} Ask can start a durable repair-or-replace decision instead, or you can open Home Actions to engage a flagged one.`,
+      actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/home-actions`, style: 'PRIMARY' }],
+    }],
+    suggestions: ['Should I repair or replace my furnace?', 'What needs my attention?'],
+  };
+}
+
+function specialistProjectionBlocks(
+  headline: string,
+  projection: AgentRunStatusProjection,
+): AskPresentationBlock[] {
+  const blocks: AskPresentationBlock[] = [];
+  const verdictLabel = projection.verdict
+    ? { REPAIR: 'Repair', REPLACE: 'Replace', MONITOR: 'Monitor' }[projection.verdict]
+    : null;
+
+  if (projection.phase === 'RECOMMENDATION_READY' && verdictLabel) {
+    blocks.push({
+      type: 'SUMMARY', id: 'hvac-specialist-recommendation', tone: 'DEFAULT',
+      title: `Repair or replace: ${headline}`,
+      body: `The HVAC Specialist's current recommendation is to ${verdictLabel.toLowerCase()}${projection.confidenceLabel ? ` (${projection.confidenceLabel.toLowerCase()} confidence)` : ''}. This continues the same decision thread as the in-app panel; no purchase or provider is selected.`,
+      actions: [],
+    });
+    if (projection.explanation.length) {
+      blocks.push({
+        type: 'ASSUMPTIONS', id: 'hvac-specialist-explanation',
+        title: 'Why the Specialist reached this',
+        items: projection.explanation.map((claim) => claim.text).slice(0, 20),
+      });
+    }
+  } else if (projection.phase === 'NEEDS_CONTEXT' || projection.phase === 'NEEDS_DOCUMENT') {
+    blocks.push({
+      type: 'SUMMARY', id: 'hvac-specialist-needs-input', tone: 'CAUTION',
+      title: `The HVAC Specialist needs more information for ${headline}`,
+      body: 'Add the items below to the home record — the Specialist picks them up automatically and updates the recommendation. Ask does not submit them back through the runtime itself.',
+      actions: [],
+    });
+    if (projection.outstanding.length) {
+      blocks.push({
+        type: 'GROUPED_LIST', id: 'hvac-specialist-outstanding',
+        title: 'Still needed', description: 'Correct these on the home record.',
+        sections: [{
+          id: 'outstanding', title: 'Outstanding items', count: projection.outstanding.length,
+          items: projection.outstanding.map((item) => ({
+            id: item.key, title: item.label, description: item.kind === 'DOCUMENT' ? 'Document' : 'Fact',
+            meta: [], status: null, href: item.correctionPath ?? null,
+          })),
+        }],
+        actions: [],
+      });
+    }
+  } else if (projection.phase === 'ABSTAINED') {
+    blocks.push({
+      type: 'LIMITATION', id: 'hvac-specialist-abstained', severity: 'CAUTION',
+      title: `The HVAC Specialist did not reach a recommendation for ${headline}`,
+      body: `The bounded review stopped without a verdict${projection.abstentionReason ? ` (${projection.abstentionReason.replace(/_/g, ' ').toLowerCase()})` : ''}. The canonical decision thread is unchanged; open the in-app panel to continue.`,
+    });
+  } else {
+    blocks.push({
+      type: 'SUMMARY', id: 'hvac-specialist-working', tone: 'DEFAULT',
+      title: `The HVAC Specialist is reviewing ${headline}`,
+      body: 'The bounded review is still in progress. Check back shortly or open the in-app decision panel.',
+      actions: [],
+    });
+  }
+  return blocks;
+}
+
+async function hvacSpecialistEngageResult(
+  userId: string,
+  propertyId: string,
+  message: string,
+  executionId: string,
+  launchContext?: CreateAskExecutionRequest['launchContext'],
+): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+
+  let feed: Awaited<ReturnType<typeof getHomeActionFeed>>;
+  try {
+    feed = await getHomeActionFeed(propertyId, userId);
+  } catch {
+    return {
+      status: 'UNAVAILABLE', reasonCode: 'HOME_ACTION_FEED_UNAVAILABLE',
+      blocks: [{
+        type: 'SUMMARY', id: 'hvac-specialist-feed-unavailable', tone: 'CAUTION',
+        title: 'Home Actions are temporarily unavailable',
+        body: 'Ask could not load the governed action feed needed to engage the HVAC Specialist. It will not substitute a raw recommendation.',
+        actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/home-actions`, style: 'PRIMARY' }],
+      }],
+      suggestions: ['Should I repair or replace my furnace?'],
+    };
+  }
+
+  const hvacActions = feed.actions.filter((action) =>
+    action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+    && Boolean(action.decisionLineage.primaryEntityId));
+
+  const focusedActionId = launchContext?.entityType === 'HOME_ACTION'
+    ? launchContext.actionId ?? launchContext.entityId ?? null
+    : null;
+
+  let action = focusedActionId
+    ? hvacActions.find((candidate) => candidate.id === focusedActionId) ?? null
+    : null;
+  if (!action) {
+    if (focusedActionId) {
+      return specialistUnavailableRedirect(propertyId, 'The referenced Home Action is not a currently delivered HVAC repair-or-replace action.');
+    }
+    if (hvacActions.length === 1) {
+      action = hvacActions[0];
+    } else if (hvacActions.length > 1) {
+      const lower = message.toLowerCase();
+      action = hvacActions.find((candidate) => {
+        const name = candidate.presentation?.headline?.toLowerCase() ?? '';
+        return name && lower.includes(name);
+      }) ?? null;
+      if (!action) {
+        return {
+          status: 'NEEDS_ENTITY', reasonCode: 'HVAC_SPECIALIST_ACTION_AMBIGUOUS',
+          blocks: [{
+            type: 'GROUPED_LIST', id: 'hvac-specialist-action-candidates',
+            title: 'Which HVAC decision do you mean?',
+            description: 'More than one HVAC repair-or-replace action is on your Home feed. Name the system in your next message.',
+            sections: [{
+              id: 'candidates', title: 'Flagged HVAC actions', count: hvacActions.length,
+              items: hvacActions.map((candidate) => ({
+                id: candidate.id, title: candidate.presentation?.headline ?? candidate.recommendedAction,
+                description: candidate.signal, meta: [], status: null, href: null,
+              })),
+            }],
+            actions: [],
+          }],
+          suggestions: [],
+        };
+      }
+    } else {
+      return specialistUnavailableRedirect(propertyId, 'No HVAC repair-or-replace action is on your Home feed right now.');
+    }
+  }
+
+  const inventoryItemId = action.decisionLineage?.primaryEntityId;
+  if (!inventoryItemId) {
+    return specialistUnavailableRedirect(propertyId, 'The flagged HVAC action has no resolvable system record yet.');
+  }
+  const headline = action.presentation?.headline ?? action.recommendedAction;
+  const origin: HvacSpecialistHomeActionOrigin = {
+    homeActionId: action.id,
+    lineageId: action.lineageId,
+    sourceEntityId: action.source.entityId,
+    sourceVersion: action.source.version,
+    contextVersion: launchContext?.contextVersion ?? null,
+    // Stable for retries of one Ask turn; a new homeowner engagement (new
+    // execution) gets a new nonce. Matches the contract's stated semantics.
+    engagementNonce: createHash('sha256').update(`ask-engage:${executionId}:${action.id}`).digest('hex').slice(0, 32),
+  };
+
+  const runOperation = async (): Promise<AskOperationResult> => {
+    const status = await invokeAgentRuntime({
+      operation: 'GET_STATUS',
+      principalUserId: userId,
+      propertyId,
+      inventoryItemId,
+      requestingAgentId: REQUESTING_AGENT_ID,
+      homeActionOrigin: origin,
+      askExecutionId: executionId,
+    });
+
+    const wantsRestart = RESTART_INTENT.test(message);
+    const wantsResume = RESUME_INTENT.test(message);
+    const noRunYet = status.status.runId === null;
+    const paused = status.status.paused;
+
+    let projection = status.status;
+    let mutated = false;
+
+    if (noRunYet || wantsRestart || (paused && wantsResume)) {
+      const advanced = await invokeAgentRuntime({
+        operation: 'START_OR_RESUME',
+        principalUserId: userId,
+        propertyId,
+        inventoryItemId,
+        requestingAgentId: REQUESTING_AGENT_ID,
+        homeActionOrigin: origin,
+        askExecutionId: executionId,
+        ...(paused && status.status.casVersion !== null ? { expectedCasVersion: status.status.casVersion } : {}),
+      });
+      projection = advanced.status;
+      mutated = advanced.mutated;
+    }
+
+    const blocks = specialistProjectionBlocks(headline, projection);
+    const answered = projection.phase === 'RECOMMENDATION_READY';
+    return {
+      status: answered ? 'ANSWERED' : 'READY_WITH_LIMITATIONS',
+      reasonCode: answered
+        ? (mutated ? 'HVAC_SPECIALIST_RECOMMENDATION_READY' : 'HVAC_SPECIALIST_RECOMMENDATION_EXISTING')
+        : `HVAC_SPECIALIST_${projection.phase}`,
+      contextVersion: origin.contextVersion,
+      parameters: projection.decisionThreadId ? { decisionThreadId: projection.decisionThreadId } : undefined,
+      blocks,
+      suggestions: projection.phase === 'RECOMMENDATION_READY'
+        ? ['What changed about this decision?', 'Compare a new quote for this decision']
+        : ['Open my Home Actions'],
+    };
+  };
+
+  try {
+    return await runOperation();
+  } catch (error) {
+    if (error instanceof AgentRuntimeAuthorizationError) {
+      return specialistUnavailableRedirect(propertyId, 'The HVAC Specialist could not authorize this property.');
+    }
+    if (error instanceof AgentRuntimeDisabledError) {
+      return {
+        status: 'READY_WITH_LIMITATIONS', reasonCode: 'HVAC_SPECIALIST_DISABLED',
+        blocks: [{
+          type: 'LIMITATION', id: 'hvac-specialist-disabled', severity: 'INFO',
+          title: 'The HVAC Specialist is not available right now',
+          body: 'The bounded HVAC Specialist is currently turned off. The canonical repair-or-replace decision is still available from Home Actions or by starting a decision here.',
+        }],
+        suggestions: ['Should I repair or replace my furnace?'],
+      };
+    }
+    if (error instanceof AgentRuntimeCasConflictError) {
+      return {
+        status: 'READY_WITH_LIMITATIONS', reasonCode: 'HVAC_SPECIALIST_STATE_CONFLICT',
+        blocks: [{
+          type: 'LIMITATION', id: 'hvac-specialist-conflict', severity: 'CAUTION',
+          title: 'This HVAC decision was updated elsewhere',
+          body: 'The Specialist run changed while Ask was reading it. Open the in-app decision panel to see the current state.',
+        }],
+        suggestions: ['Open my Home Actions'],
+      };
+    }
+    if (error instanceof AgentRuntimeStateError) {
+      return {
+        status: 'READY_WITH_LIMITATIONS', reasonCode: 'HVAC_SPECIALIST_STATE_INVALID',
+        blocks: [{
+          type: 'LIMITATION', id: 'hvac-specialist-state', severity: 'CAUTION',
+          title: 'The HVAC Specialist could not continue from here',
+          body: error.message,
+        }],
+        suggestions: ['Open my Home Actions', 'Should I repair or replace my furnace?'],
+      };
+    }
+    throw error;
+  }
+}
+
 async function dispatchOperationAdapterResult(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
@@ -5794,6 +6075,7 @@ async function dispatchOperationAdapterResult(
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input, trace);
     case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message, input.executionId);
+    case 'HVAC_SPECIALIST_ENGAGE': return hvacSpecialistEngageResult(input.userId, input.propertyId!, input.message, input.executionId, input.launchContext);
     case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(
       input.userId,
       input.propertyId!,

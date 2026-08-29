@@ -86,6 +86,8 @@ const ROWS: readonly ObservationTuple[] = [
   ['064-expected', '064', 'DOCUMENT_PROMOTION_REVIEW', .2725, true], ['064-competitor', '064', 'BUYER_CONTRACT_TIMELINE', .2461, false],
   ['065-expected', '065', 'DOCUMENT_PROMOTION_CONFIRM', .6684, true], ['065-competitor', '065', 'HOME_CHANGE_SUMMARY', .6381, false],
   ['066-expected', '066', 'INTELLIGENCE_ENVELOPE_QUERY', .2777, true], ['066-competitor', '066', 'PROPERTY_SUMMARY', .142, false],
+  // Phase 3 / PR 12b — fixture ask-routing-independent-v2-067 (HVAC_SPECIALIST_ENGAGE).
+  ['067-expected', '067', 'HVAC_SPECIALIST_ENGAGE', .7802, true], ['067-competitor', '067', 'HVAC_DECISION_OUTCOME_REPORT', .504, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

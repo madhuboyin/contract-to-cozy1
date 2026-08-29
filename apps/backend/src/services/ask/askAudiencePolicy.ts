@@ -109,6 +109,9 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('REPLACEMENT_GUIDANCE', ALL_MODES),
   definePolicy('HVAC_DECISION_START', KNOWN_MODES),
   definePolicy('HVAC_DECISION_CONTINUE', KNOWN_MODES),
+  // Phase 3 / PR 12b — same material-decision framing as HVAC_DECISION_START:
+  // needs a known buying/owning/selling stage for correct framing.
+  definePolicy('HVAC_SPECIALIST_ENGAGE', KNOWN_MODES),
   definePolicy('HVAC_DECISION_SCENARIO', KNOWN_MODES),
   definePolicy('HVAC_DECISION_ABANDON', KNOWN_MODES),
   definePolicy('HVAC_PREFERENCE_SAVE', OWNER_LIFECYCLE_MODES),

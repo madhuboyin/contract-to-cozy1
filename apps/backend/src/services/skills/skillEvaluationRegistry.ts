@@ -165,6 +165,9 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'PARAPHRASED', message: 'Should I repair or replace my refrigerator?', expectedOperationId: 'REPLACEMENT_GUIDANCE' },
       { mode: 'COLLOQUIAL', message: 'Should I fix or replace my refrigerator?', expectedOperationId: 'REPLACEMENT_GUIDANCE' },
       { mode: 'MISSPELLED', message: 'Should I repair or replce my aging appliance?', expectedOperationId: 'REPLACEMENT_GUIDANCE' },
+      // Phase 3 / PR 12b — engagement with a delivered HVAC Home Action routes
+      // to the Specialist runtime, not the generic HVAC_DECISION_START flow.
+      { mode: 'EXACT', message: 'Help me decide on the flagged furnace repair-or-replace action', expectedOperationId: 'HVAC_SPECIALIST_ENGAGE' },
     ],
     ambiguityCases: [{ message: 'Help with my repair or replace decision', candidateOperationIds: ['REPLACEMENT_GUIDANCE', 'HVAC_DECISION_START'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [

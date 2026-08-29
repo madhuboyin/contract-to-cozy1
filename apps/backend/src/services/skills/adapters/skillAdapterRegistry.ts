@@ -35,6 +35,9 @@ const DEFINITIONS = [
   adapter('inventory.replacement', 'Inventory and ReplaceRepairService', 'REPLACEMENT_GUIDANCE'),
   adapter('decision-platform.hvac.start', 'Decision Platform', 'HVAC_DECISION_START', 'MUTATION_PREPARATION'),
   adapter('decision-platform.hvac.continue', 'Decision Platform', 'HVAC_DECISION_CONTINUE'),
+  // Phase 3 / PR 12b — bounded HVAC Specialist Agent runtime (invokeAgentRuntime).
+  // START_OR_RESUME can create/advance the canonical DecisionThread.
+  adapter('decision-platform.hvac.specialist-engage', 'HVAC Repair-or-Replace Specialist Agent', 'HVAC_SPECIALIST_ENGAGE', 'MUTATION_PREPARATION'),
   adapter('decision-platform.hvac.scenario', 'Decision Platform', 'HVAC_DECISION_SCENARIO', 'MUTATION_PREPARATION'),
   adapter('decision-platform.hvac.abandon', 'Decision Platform', 'HVAC_DECISION_ABANDON', 'MUTATION_PREPARATION'),
   adapter('decision-platform.hvac.preference.save', 'Decision Platform Preferences', 'HVAC_PREFERENCE_SAVE', 'MUTATION_PREPARATION'),
