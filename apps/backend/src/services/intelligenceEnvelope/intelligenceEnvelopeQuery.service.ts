@@ -4,6 +4,9 @@ import { resolvePropertyAccess } from '../propertyAccess.service';
 import {
   entityRefKey,
   type EvidenceRef,
+  type EnvelopeEntityRef,
+  type InventoryItemCategory,
+  type PropertyComponentKind,
 } from '../../productFramework/intelligence';
 import type { EnvelopeAdapterCapability, EnvelopeAdapterResult } from './envelopeAdapter.contract';
 import {
@@ -300,15 +303,36 @@ function isAfterCursor(item: IntelligenceEnvelopeItem, cursor: { createdAt: stri
   return itemTime < cursorTime || (itemTime === cursorTime && item.envelopeKey > cursor.envelopeKey);
 }
 
+const COMPONENT_INVENTORY_CATEGORIES: Readonly<Record<PropertyComponentKind, readonly InventoryItemCategory[]>> = Object.freeze({
+  ROOF: ['ROOF_EXTERIOR'],
+  FOUNDATION: ['STRUCTURAL'],
+  EXTERIOR: ['EXTERIOR', 'ROOF_EXTERIOR'],
+  INTERIOR: ['INTERIOR'],
+  SITE: ['SITE'],
+});
+
+function matchesEntityScope(item: IntelligenceEnvelopeItem, requested: EnvelopeEntityRef): boolean {
+  const actual = item.subject.entityRef;
+  if (!actual) return false;
+  if (entityRefKey(actual) === entityRefKey(requested)) return true;
+
+  // A PROPERTY component ref is an aggregate query scope, not a claim that an
+  // inventory row is itself the property. It may match typed inventory refs
+  // registered beneath that physical component, while remaining property-
+  // bound and category-closed. This makes §24.5's `{PROPERTY, ROOF}` query
+  // useful without weakening ordinary exact entity-ref matching.
+  if (requested.entityType !== 'PROPERTY' || !requested.componentKind) return false;
+  if (requested.entityId !== item.subject.propertyId || actual.entityType !== 'INVENTORY_ITEM') return false;
+  return COMPONENT_INVENTORY_CATEGORIES[requested.componentKind].includes(actual.assetCategory);
+}
+
 function matchesQuery(item: IntelligenceEnvelopeItem, query: ReturnType<typeof IntelligenceEnvelopeQuerySchema.parse>): boolean {
   if (query.types?.length && !query.types.includes(item.type)) return false;
   if (query.domains?.length && !query.domains.includes(item.domain)) return false;
   if (query.sourceModels?.length && !query.sourceModels.includes(item.source.sourceModel)) return false;
   if (query.currentness?.length && !query.currentness.includes(item.freshness.currentness)) return false;
   if (query.entityRefs?.length) {
-    if (!item.subject.entityRef) return false;
-    const requested = new Set(query.entityRefs.map(entityRefKey));
-    if (!requested.has(entityRefKey(item.subject.entityRef))) return false;
+    if (!query.entityRefs.some((requested) => matchesEntityScope(item, requested))) return false;
   }
   if (query.createdAfter && Date.parse(item.createdAt) <= Date.parse(query.createdAfter)) return false;
   if (query.createdBefore && Date.parse(item.createdAt) >= Date.parse(query.createdBefore)) return false;

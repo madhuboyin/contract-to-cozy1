@@ -385,6 +385,10 @@ export function isPropertyCompletenessRequest(message: string): boolean {
   return PROPERTY_COMPLETENESS_PATTERNS.some((pattern) => pattern.test(message));
 }
 const homeActionsPattern = /\b(?:what should i do next|what should i do before closing|what needs (?:my |our )?(?:attention|attension)|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
+// Phase 3 §24.5: a natural observation question about a registered property
+// component reads normalized derived intelligence. Detail/history/inventory
+// verbs remain owned by INVENTORY_LOOKUP below.
+const scopedEnvelopeObservationPattern = /\b(?:what do you know about|what intelligence (?:do you have|is available) (?:about|for)|show (?:derived|registered) intelligence (?:about|for))\b.{0,45}\b(?:my |the )?(?:roof|roofing|foundation|exterior|interior|site|lot|grounds)\b/i;
 // Ask Intelligence FRD Phase 9A ("What changed?", §16). Deliberately excludes
 // any message mentioning "decision" (checked at the call site) -- a phrase
 // like "what changed about this decision" is a Decision Thread continuity
@@ -428,7 +432,8 @@ const hvacSpecialistEngagePattern = new RegExp(
   + `|\\b(?:flagged|recommended|surfaced|raised)\\b.{0,80}\\b${hvacKeyword}\\b`
   + `|\\b${hvacKeyword}\\b.{0,60}\\b(?:action|recommendation|item)\\b.{0,40}\\byou (?:flagged|surfaced|raised|recommended)\\b`
   + `|\\bwhy (?:is|should|would|does)\\b.{0,60}\\b(?:replac\\w+|repair\\w+)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\b(?:recommend\\w+|better|the option|the verdict)\\b`
-  + `|\\bwhy (?:is|should|would|does)\\b.{0,40}\\b${hvacKeyword}\\b.{0,60}\\brecommend\\w+\\b`,
+  + `|\\bwhy (?:is|should|would|does)\\b.{0,40}\\b${hvacKeyword}\\b.{0,60}\\brecommend\\w+\\b`
+  + `|\\bwhy (?:are|did|do|would) you\\b.{0,40}\\b(?:recommend\\w+|suggest\\w+)\\b.{0,40}\\b(?:repair\\w+|replac\\w+)\\b`,
   'i',
 );
 // Ask Intelligence FRD Phase 10A (§19.2's homeowner-report source, §25
@@ -619,6 +624,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (ownershipCostsPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('OWNERSHIP_COSTS', 0.97);
+  }
+  if (scopedEnvelopeObservationPattern.test(message)) {
+    return resolved('INTELLIGENCE_ENVELOPE_QUERY', 0.96);
   }
   if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_LOOKUP', 0.96);

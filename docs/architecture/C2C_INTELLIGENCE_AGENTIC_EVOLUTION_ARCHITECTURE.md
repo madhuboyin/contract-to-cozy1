@@ -1503,6 +1503,8 @@ A prior draft shipped the `GENERIC_APPLIANCE` profile, a new `APPLIANCE_REPAIR_R
 
 **Implementation status (2026-08-29): complete.** PR 12 (`75ee0b1b`) wired `query-envelope` and locked the ranking boundary. PR 12b added the `HVAC_SPECIALIST_ENGAGE` Ask operation: it resolves one already-delivered HVAC repair-or-replace Home Action from `getHomeActionFeed()` and drives the Phase 2 Specialist runtime via `invokeAgentRuntime`, sharing the `AgentRun` ledger and canonical `decisionThreadId` with the in-app panel. It reuses the agent's existing `HOME_ACTION_ENGAGEMENT` trigger (no `AgentDefinition` version bump), never ranks or promotes, and leaves the generic `HVAC_DECISION_START` flow unchanged for bare forward-looking questions.
 
+**Closure audit (2026-08-29):** the documented natural roof question now emits the exact typed property/component Envelope scope shown in §24.5; a context-dependent bare replacement-recommendation question reaches the Specialist adapter and fails closed unless one canonical delivered HVAC action resolves; behavioral coverage verifies canonical origin, thread reuse, and retry nonce stability. The `REMOTE_FALLBACK` synthesis boundary now implements §14.2 directly: its registered `ASK_COZY_REMOTE_FALLBACK_SYNTHESIS` purpose requires structured output, exposes only deterministic typed-claim candidates, rejects invented references/operators, re-resolves stored values, and renders all claim substance in code. No free-form remote prose is accepted as an answer.
+
 | | |
 |---|---|
 | **Objective** | Wire `REMOTE_FALLBACK`; add the Specialist Agent and `query-envelope` as routable Ask targets |

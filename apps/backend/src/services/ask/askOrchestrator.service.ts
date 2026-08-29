@@ -167,6 +167,7 @@ import { attachAskAuthoritativeSourceEvidence, includeAskContextSourceEvidence }
 import type { AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { askOperationSemanticIndexVersion, normalizeAskMessage, retrieveAskOperationCandidates } from './askSemanticRouter';
 import { isIncompleteInventoryRequest } from './askInventoryIntent';
+import { resolveAskEnvelopeQueryScope } from './askEnvelopeQueryScope';
 import { ClaimsService } from '../claims/claims.service';
 import type { ClaimStatus, ClaimType } from '../../types/claims.types';
 import { isValidTransition as isValidClaimTransition } from '../claims/claims.transitions';
@@ -5650,10 +5651,12 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   };
 }
 
-async function intelligenceEnvelopeQueryResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+async function intelligenceEnvelopeQueryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const scope = resolveAskEnvelopeQueryScope(propertyId, message);
   const page = await queryIntelligenceEnvelope({
     propertyId,
     principal: { kind: 'HOMEOWNER_SESSION', userId },
+    ...scope,
     limit: 20,
   });
   if (!page.items.length && !page.diagnostics.length) {
@@ -5825,18 +5828,31 @@ function specialistProjectionBlocks(
   return blocks;
 }
 
-async function hvacSpecialistEngageResult(
+export interface HvacSpecialistEngageDependencies {
+  authorize: typeof ensurePropertyAccess;
+  loadHomeActionFeed: typeof getHomeActionFeed;
+  invokeRuntime: typeof invokeAgentRuntime;
+}
+
+const DEFAULT_HVAC_SPECIALIST_ENGAGE_DEPENDENCIES: HvacSpecialistEngageDependencies = {
+  authorize: ensurePropertyAccess,
+  loadHomeActionFeed: getHomeActionFeed,
+  invokeRuntime: invokeAgentRuntime,
+};
+
+export async function hvacSpecialistEngageResult(
   userId: string,
   propertyId: string,
   message: string,
   executionId: string,
   launchContext?: CreateAskExecutionRequest['launchContext'],
+  dependencies: HvacSpecialistEngageDependencies = DEFAULT_HVAC_SPECIALIST_ENGAGE_DEPENDENCIES,
 ): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
+  await dependencies.authorize(userId, propertyId);
 
   let feed: Awaited<ReturnType<typeof getHomeActionFeed>>;
   try {
-    feed = await getHomeActionFeed(propertyId, userId);
+    feed = await dependencies.loadHomeActionFeed(propertyId, userId);
   } catch {
     return {
       status: 'UNAVAILABLE', reasonCode: 'HOME_ACTION_FEED_UNAVAILABLE',
@@ -5914,7 +5930,7 @@ async function hvacSpecialistEngageResult(
   };
 
   const runOperation = async (): Promise<AskOperationResult> => {
-    const status = await invokeAgentRuntime({
+    const status = await dependencies.invokeRuntime({
       operation: 'GET_STATUS',
       principalUserId: userId,
       propertyId,
@@ -5933,7 +5949,7 @@ async function hvacSpecialistEngageResult(
     let mutated = false;
 
     if (noRunYet || wantsRestart || (paused && wantsResume)) {
-      const advanced = await invokeAgentRuntime({
+      const advanced = await dependencies.invokeRuntime({
         operation: 'START_OR_RESUME',
         principalUserId: userId,
         propertyId,
@@ -6040,7 +6056,7 @@ async function dispatchOperationAdapterResult(
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
     case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
-    case 'INTELLIGENCE_ENVELOPE_QUERY': return intelligenceEnvelopeQueryResult(input.userId, input.propertyId!);
+    case 'INTELLIGENCE_ENVELOPE_QUERY': return intelligenceEnvelopeQueryResult(input.userId, input.propertyId!, input.message);
     case 'HOME_ACTIONS': return homeActionsResult(
       input.userId,
       input.propertyId!,

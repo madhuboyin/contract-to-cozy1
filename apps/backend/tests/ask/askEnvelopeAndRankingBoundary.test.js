@@ -12,6 +12,7 @@ const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingC
 const { SKILL_DEFINITIONS, getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
 const { getAskAudiencePolicy } = require('../../src/services/ask/askAudiencePolicy.ts');
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
+const { resolveAskEnvelopeQueryScope } = require('../../src/services/ask/askEnvelopeQueryScope.ts');
 
 function routeOf(message) {
   return resolveAskRoutingCascade(message).operation.operationId;
@@ -22,9 +23,18 @@ test('non-actionable intelligence questions route to INTELLIGENCE_ENVELOPE_QUERY
     'Show my intelligence envelope',
     'Query the intelligence envelope for my home',
     'What derived intelligence does this property have?',
+    'What do you know about my roof?',
   ]) {
     assert.equal(routeOf(message), 'INTELLIGENCE_ENVELOPE_QUERY', message);
   }
+});
+
+test('natural component questions compile to a typed, property-bound Envelope scope', () => {
+  assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'What do you know about my roof?'), {
+    domains: ['ASSET_LIFECYCLE'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' }],
+  });
+  assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'Show my intelligence envelope'), {});
 });
 
 test('proactive / priority questions still route to HOME_ACTIONS, never to the Envelope', () => {

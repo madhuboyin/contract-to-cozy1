@@ -173,6 +173,64 @@ class GeminiService {
     }
   }
 
+  public async selectAskRemoteFallbackTypedClaims(input: {
+    purpose: 'ASK_COZY_REMOTE_FALLBACK_SYNTHESIS';
+    question: string;
+    candidates: readonly unknown[];
+  }): Promise<unknown> {
+    const model = resolveGovernedAIModel('FAST');
+    const response = await geminiChatCircuit.execute(async () =>
+      withTimeout(
+        async () => executeGovernedAIRequest({
+          routeId: 'ai:ask',
+          model,
+          structuredOutputRequired: true,
+          structuredOutputConfigured: true,
+          maxAttempts: 1,
+          work: () => this.getAI().models.generateContent({
+            model,
+            contents: JSON.stringify({
+              purpose: input.purpose,
+              question: minimizeAskQuestion(input.question),
+              instruction: 'Select only relevant entries from candidates. Copy claimType, factRefs, and comparisonOperator exactly. Return no prose and invent nothing.',
+              candidates: input.candidates,
+            }),
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: 'object',
+                properties: {
+                  claims: {
+                    type: 'array',
+                    maxItems: 6,
+                    items: {
+                      type: 'object',
+                      properties: {
+                        claimType: { type: 'string', enum: ['SEVERITY_STATEMENT', 'DEADLINE_STATEMENT', 'COST_COMPARISON'] },
+                        factRefs: {
+                          type: 'array', minItems: 1, maxItems: 2,
+                          items: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+                        },
+                        comparisonOperator: { type: 'string', enum: ['GREATER_THAN', 'LESS_THAN', 'APPROXIMATELY_EQUAL'] },
+                      },
+                      required: ['claimType', 'factRefs'],
+                    },
+                  },
+                },
+                required: ['claims'],
+              },
+              temperature: 0,
+              maxOutputTokens: 500,
+            },
+          }),
+        }),
+        { timeoutMs: GEMINI_CHAT_TIMEOUT_MS, operation: 'ask_remote_fallback_typed_claim_selection' },
+      ),
+    );
+    if (!response.text) throw new APIError('AI typed-claim selection returned an empty response.', 502, 'AI_EMPTY_RESPONSE');
+    return JSON.parse(response.text);
+  }
+
   public async synthesizeAskResult(resultOnlyPayload: string): Promise<unknown> {
     const response = await geminiChatCircuit.execute(async () =>
       withTimeout(

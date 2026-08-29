@@ -35,6 +35,35 @@ function signalResult(id, createdAt) {
   });
 }
 
+function lifecycleSignalResult(id, category) {
+  return envelope.signalEnvelopeAdapter.map({
+    id,
+    propertyId: 'property-1',
+    signalKey: 'SYSTEM_DEGRADATION',
+    homeItemId: `item-${id}`,
+    version: 1,
+    sourceModel: 'Fixture',
+    sourceId: id,
+    capturedAt: NOW,
+    validUntil: '2026-08-29T12:00:00.000Z',
+    createdAt: NOW,
+    updatedAt: NOW,
+    inventory: { category, assetType: null },
+  }, {
+    propertyId: 'property-1',
+    userId: 'user-1',
+    evidence: [{
+      id: `evidence-${id}`,
+      type: 'SYSTEM_DERIVATION',
+      label: 'Fixture evidence',
+      source: 'query-test',
+      observedAt: NOW,
+      freshness: 'CURRENT',
+      confidence: 0.9,
+    }],
+  });
+}
+
 function readers(overrides = {}) {
   return Object.fromEntries(PRODUCERS.map((producerModel) => [producerModel, overrides[producerModel] ?? {
     producerModel,
@@ -119,6 +148,23 @@ test('empty healthy producers return an empty page without failure diagnostics',
   assert.deepEqual(page.items, []);
   assert.deepEqual(page.diagnostics, []);
   assert.equal(page.nextCursor, null);
+});
+
+test('a PROPERTY roof component scope matches roof inventory intelligence but not unrelated assets', async () => {
+  const queryReaders = readers({ Signal: {
+    producerModel: 'Signal',
+    read: async () => [lifecycleSignalResult('roof', 'ROOF_EXTERIOR'), lifecycleSignalResult('hvac', 'HVAC')],
+  } });
+  const page = await envelope.queryIntelligenceEnvelope({
+    propertyId: 'property-1',
+    principal: { kind: 'HOMEOWNER_SESSION', userId: 'user-1' },
+    sourceModels: ['Signal'],
+    domains: ['ASSET_LIFECYCLE'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' }],
+  }, dependencies({ readers: queryReaders }));
+
+  assert.equal(page.items.length, 1);
+  assert.equal(page.items[0].subject.entityRef.assetCategory, 'ROOF_EXTERIOR');
 });
 
 test('coverage query preserves exact internal adapter capabilities without widening the public page', async () => {

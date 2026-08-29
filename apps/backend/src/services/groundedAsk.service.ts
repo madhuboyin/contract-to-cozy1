@@ -7,6 +7,11 @@ import { capturePropertyFact } from '../modules/propertyContext/application/capt
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { APIError } from '../middleware/error.middleware';
+import { selectRelevantAskFacts } from './ask/askPromptMinimization';
+import {
+  selectAndRenderAskRemoteFallbackClaims,
+  type AskRemoteFallbackFact,
+} from './ask/askRemoteFallbackTypedClaims';
 
 const humanize = (key: string) => key.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 
@@ -14,22 +19,38 @@ export async function answerGroundedAsk(input: { userId: string; sessionId: stri
   const context = input.propertyId
     ? await getAggregationPropertyContext(input.propertyId, input.userId, 'SEARCH_ASSISTANT')
     : null;
-  const rawText = await geminiService.sendMessageToChat(input.userId, input.sessionId, input.message, input.propertyId);
   const facts = context ? Object.values(context.facts) : [];
-  const citedFactKeys = new Set([...rawText.matchAll(/\[fact:([a-zA-Z0-9._-]+)\]/g)].map((match) => match[1]));
-  const messageTokens = new Set(input.message.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2));
-  const isLexicallyRelevant = (key: string) => key.toLowerCase().split(/[^a-z0-9]+/).some((token) => token.length > 2 && messageTokens.has(token));
-  const relevantFacts = facts.filter((fact) => citedFactKeys.has(fact.key) || (!citedFactKeys.size && isLexicallyRelevant(fact.key)));
-  const known = relevantFacts.filter((fact) => fact.state === 'KNOWN');
+  const relevantFacts = selectRelevantAskFacts(input.message, facts);
+  const knownCandidates: AskRemoteFallbackFact[] = relevantFacts.flatMap((selected) => {
+    const fact = context?.facts[selected.key];
+    return fact?.state === 'KNOWN' && fact.value !== null ? [{
+      key: fact.key,
+      value: fact.value,
+      source: fact.source,
+      observedAt: fact.observedAt,
+      confidence: fact.confidence,
+    }] : [];
+  });
+  const rendered = context ? await selectAndRenderAskRemoteFallbackClaims({
+    question: input.message,
+    facts: knownCandidates,
+    provider: { select: (request) => geminiService.selectAskRemoteFallbackTypedClaims(request) },
+  }) : [];
+  const usedFactKeys = new Set(rendered.flatMap((claim) => claim.facts.map((fact) => fact.key)));
+  const known = facts.filter((fact) => usedFactKeys.has(fact.key));
   const missing = relevantFacts.filter((fact) => fact.state !== 'KNOWN');
   const averageConfidence = known.length === 0 ? null : known.reduce((sum, fact) => sum + (fact.confidence ?? (fact.verified ? 1 : 0.6)), 0) / known.length;
   const confidenceLabel = averageConfidence == null || averageConfidence < 0.55 ? 'LOW' : averageConfidence < 0.8 ? 'MEDIUM' : 'HIGH';
   return GroundedAskResponseSchema.parse({
-    text: rawText.replace(/\s*\[fact:[a-zA-Z0-9._-]+\]/g, '').trim(),
+    text: rendered.length
+      ? rendered.map((claim) => claim.text).join(' ')
+      : context
+        ? 'The current Living Home Record does not contain a supported severity, deadline, or cost comparison for this question. Ask will not generate an unsupported property-specific answer.'
+        : 'Select a property to receive a response reconstructed from supported typed claims in its Living Home Record.',
     groundingMode: context ? 'PROPERTY' : 'GENERAL',
     knownFacts: known.map((fact) => ({ key: fact.key, label: humanize(fact.key), value: fact.value, source: fact.source, observedAt: fact.observedAt })),
     assumptions: context
-      ? (known.length ? [] : ['No Living Home Record fact was identified as evidence for this answer.'])
+      ? (known.length ? [] : ['No supported typed claim could be reconstructed from the Living Home Record.'])
       : ['No property was selected, so this answer is general educational guidance.'],
     missingFacts: missing.map((fact) => fact.key),
     evidence: known.map((fact) => ({ factKey: fact.key, label: humanize(fact.key), source: fact.source, observedAt: fact.observedAt, confidence: fact.confidence })),
