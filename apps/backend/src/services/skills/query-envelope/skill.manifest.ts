@@ -1,6 +1,7 @@
 import type { AskOperationId } from '../../ask/askOperationRegistry';
 import type { SkillDefinition } from '../skill.contract';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from '../context/propertyIdentityContext.contract';
+import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyContext.contract';
 
 export const QUERY_ENVELOPE_SKILL_OPERATIONS: AskOperationId[] = ['INTELLIGENCE_ENVELOPE_QUERY'];
 
@@ -17,10 +18,12 @@ export const QUERY_ENVELOPE_SKILL = Object.freeze({
     operationId: 'INTELLIGENCE_ENVELOPE_QUERY',
     version: '1.0',
     requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
-    optionalContextProviders: [],
+    // Audience-governed operations declare the journey provider so the audience
+    // layer can neutrally frame the read by operating mode (never gate on it).
+    optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   }],
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
-  optionalContextProviders: [],
+  optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   allowedAdapters: [{ id: 'intelligence-envelope.query', version: '1.0' }],
   allowedExternalConnectors: [],
   consumerPolicy: [
@@ -38,6 +41,7 @@ export const QUERY_ENVELOPE_SKILL = Object.freeze({
   allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
+    { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
     { type: 'OPERATION_CONTRACT', id: 'INTELLIGENCE_ENVELOPE_QUERY', version: '1.0', required: true },
     { type: 'CANONICAL_SERVICE_CAPABILITY', id: 'intelligence-envelope-query', version: '1.0', required: true },
   ],

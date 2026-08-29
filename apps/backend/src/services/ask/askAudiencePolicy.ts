@@ -94,6 +94,10 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('OWNERSHIP_COSTS', ALL_MODES),
   definePolicy('INVENTORY_LOOKUP', ALL_MODES),
   definePolicy('PROPERTY_SUMMARY', ALL_MODES),
+  // A bounded read of normalized intelligence already derived for this home.
+  // It does not become more reliable when a buying/owning/selling stage is
+  // known, and the records exist in every mode — keep the framing neutral.
+  definePolicy('INTELLIGENCE_ENVELOPE_QUERY', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_CHANGE_SUMMARY', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_ACTIONS', ALL_MODES),
   definePolicy('OPERATIONAL_WORK_UPDATE', ALL_MODES),
