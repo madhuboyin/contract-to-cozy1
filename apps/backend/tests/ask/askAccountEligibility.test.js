@@ -32,7 +32,7 @@ test('the account-role guard protects the complete Ask router after authenticati
   const middleware = readFileSync(resolve(__dirname, '../../src/middleware/askAccountEligibility.middleware.ts'), 'utf8');
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
 
-  assert.match(routes, /router\.use\(authenticate, requireAskEligibleAccount\)/);
+  assert.match(routes, /router\.use\('\/ask', authenticate, requireAskEligibleAccount\)/);
   assert.match(middleware, /ASK_ACCOUNT_ROLE_NOT_ELIGIBLE/);
   assert.match(middleware, /status\(403\)/);
   assert.match(orchestrator, /ensureAskServiceAccountEligibility\(userId, accountRole\)/);

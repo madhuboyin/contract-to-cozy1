@@ -5,7 +5,7 @@ import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonit
 
 const router = Router();
 
-router.use(authenticate, requireAskEligibleAccount);
+router.use('/ask', authenticate, requireAskEligibleAccount);
 router.get('/ask/concierge-home', getAskConciergeHome);
 router.post('/ask/executions', postAskExecution);
 router.post('/ask/executions/:executionId/captures', postAskCapture);
