@@ -31,6 +31,7 @@ import {
 import { recordToolInvocation } from './agentInvocationAudit.service';
 import { recordAgentOperation, recordAgentRunOutcome } from './agentMetrics.service';
 import { runHvacSpecialist, type SpecialistThreadPort } from './hvacRepairReplaceSpecialist.service';
+import { applyHvacSpecialistContextIntake } from './hvacSpecialistContextIntake';
 import { ACCEPTED_INTAKE_KEYS } from './specialistTypedClaims';
 import type {
   AgentRunStatusProjection,
@@ -124,18 +125,16 @@ export interface AgentRuntimeDependencies {
   now?: () => Date;
 }
 
-const NOOP_INTAKE: NonNullable<AgentRuntimeDependencies['contextIntakeHandler']> = async () => {
-  // v1 seam: PR 11 wires this to the inventory-item / quote / property-fact
-  // write paths. Until then SUBMIT_CONTEXT validates and resumes, and the
-  // homeowner supplies facts through the correction path in `outstanding`.
-};
+// PR 11: SUBMIT_CONTEXT's fact writes go through the existing
+// InventoryService.updateItem path (which owns HVAC thread staleness).
+const DEFAULT_INTAKE: NonNullable<AgentRuntimeDependencies['contextIntakeHandler']> = applyHvacSpecialistContextIntake;
 
 export async function invokeAgentRuntime(
   invocation: AgentRuntimeInvocation,
   deps: AgentRuntimeDependencies = {},
 ): Promise<AgentRuntimeResult> {
   const now = deps.now ?? (() => new Date());
-  const intakeHandler = deps.contextIntakeHandler ?? NOOP_INTAKE;
+  const intakeHandler = deps.contextIntakeHandler ?? DEFAULT_INTAKE;
 
   // §7.3.2 — real principal, canonical resolver. requestingAgentId is never authz.
   const authorize = deps.authorize ?? (async (userId, propertyId) => Boolean(await resolvePropertyAccess(userId, propertyId)));

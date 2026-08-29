@@ -41,7 +41,10 @@ export const HVAC_REPAIR_REPLACE_AGENT_DEFINITION = Object.freeze({
   },
   killSwitch: 'AGENT_HVAC_REPAIR_REPLACE_KILL_SWITCH',
   featureFlag: 'AGENT_HVAC_REPAIR_REPLACE_ENABLED',
-  releaseState: 'DEV',
+  // PR 11 / IPD-005: trigger handler (PR 10) and evaluation suite are both
+  // AVAILABLE. Version 1.0.0 had not shipped to any environment or user, so it
+  // is finalized here rather than bumped; the digest baseline is regenerated.
+  releaseState: 'ENABLED',
   retryPolicy: { maxAttempts: 2, backoffMs: 250 },
   timeoutMs: 30_000,
   escalationPolicy: {

@@ -37,10 +37,11 @@ function validateDefinition(definition, dependencies = {}) {
   });
 }
 
-test('the code-owned HVAC definition is immutable, DEV-only, and matches its digest baseline', () => {
+test('the code-owned HVAC definition is immutable, ENABLED, and matches its digest baseline', () => {
   assert.ok(active);
   assert.equal(active.version, '1.0.0');
-  assert.equal(active.releaseState, 'DEV');
+  // PR 11 / IPD-005: trigger handler + evaluation suite are both AVAILABLE.
+  assert.equal(active.releaseState, 'ENABLED');
   assert.equal(active.supportedDomains.includes('HVAC'), false);
   assert.equal(active.supportedDomains.includes('ASSET_LIFECYCLE'), true);
   assert.equal(Object.isFrozen(AGENT_DEFINITION_REGISTRY), true);
@@ -74,16 +75,17 @@ test('missing Skill, operation, context, trigger, output, and evaluation referen
   assert.ok(validateDefinition(active, { evaluationSuites: {} }).some((issue) => issue.includes('missing evaluation suite')));
 });
 
-test('a pending evaluation contract cannot cross the DEV release boundary', () => {
-  // PR 10 made the HOME_ACTION_ENGAGEMENT trigger handler AVAILABLE, so the
-  // evaluation suite (gated by IPD-005) is now the only PENDING dependency
-  // holding the definition at DEV.
-  const promoted = { ...active, releaseState: 'EVAL_APPROVED' };
-  const issues = validateDefinition(promoted);
-  assert.ok(issues.some((issue) => issue.includes('evaluation suite') && issue.includes('permits only DEV')));
+test('a PENDING runtime or evaluation dependency still forces DEV', () => {
+  // Both deps are AVAILABLE now (PR 10 + PR 11 / IPD-005), so an ENABLED
+  // definition validates. The DEV-only guard is still enforced when a
+  // dependency is PENDING — proven by overriding each one.
+  assert.deepEqual(validateDefinition(active), []);
 
-  const pendingTrigger = { ...active, releaseState: 'EVAL_APPROVED' };
-  assert.ok(validateDefinition(pendingTrigger, {
+  assert.ok(validateDefinition({ ...active, releaseState: 'EVAL_APPROVED' }, {
+    evaluationSuites: { 'agent-hvac-repair-replace-eval@1.0.0': 'PENDING' },
+  }).some((issue) => issue.includes('evaluation suite') && issue.includes('permits only DEV')));
+
+  assert.ok(validateDefinition({ ...active, releaseState: 'ENABLED' }, {
     triggerHandlers: { 'agent.hvac.home-action-engagement@1.0.0': 'PENDING' },
   }).some((issue) => issue.includes('trigger handler') && issue.includes('permits only DEV')));
 });

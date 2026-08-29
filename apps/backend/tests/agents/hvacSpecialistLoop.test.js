@@ -112,9 +112,11 @@ test('selectOutstanding classifies facts, documents, and transient-only', () => 
   assert.equal(mixed.transientOnly, false);
 });
 
-test('ACCEPTED_INTAKE_KEYS matches the outstanding fact/document keys', () => {
+test('ACCEPTED_INTAKE_KEYS is the FACT asks only — documents are never submitted back', () => {
   assert.ok(ACCEPTED_INTAKE_KEYS.has('hvac.installDate'));
-  assert.ok(ACCEPTED_INTAKE_KEYS.has('hvac.technicianAssessment'));
+  assert.ok(ACCEPTED_INTAKE_KEYS.has('hvac.condition'));
+  assert.ok(ACCEPTED_INTAKE_KEYS.has('hvac.replacementCost'));
+  assert.equal(ACCEPTED_INTAKE_KEYS.has('hvac.technicianAssessment'), false);
   assert.equal(ACCEPTED_INTAKE_KEYS.has('hvac.somethingElse'), false);
 });
 

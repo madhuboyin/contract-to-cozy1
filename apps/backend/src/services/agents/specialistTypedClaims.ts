@@ -102,7 +102,12 @@ export function selectOutstanding(limitationCodes: readonly string[]): Outstandi
   return { facts, documents, transientOnly: actionable === 0 && transient > 0 };
 }
 
-/** Keys a SUBMIT_CONTEXT intake is permitted to carry. */
+/**
+ * Keys a SUBMIT_CONTEXT intake is permitted to carry — the FACT asks only.
+ * Document asks (kind: 'DOCUMENT') are never submitted back through the
+ * runtime; they are surfaced as an `outstanding` item with a correction path
+ * and resolved by the upload flow, after which the thread recomputes.
+ */
 export const ACCEPTED_INTAKE_KEYS: ReadonlySet<string> = new Set(
-  Object.values(LIMITATION_OUTSTANDING).map((spec) => spec.key),
+  Object.values(LIMITATION_OUTSTANDING).filter((spec) => spec.kind === 'FACT').map((spec) => spec.key),
 );

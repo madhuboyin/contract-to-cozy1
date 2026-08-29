@@ -14,6 +14,7 @@ import type { RankedHomeActionDTO } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { HomeActionSpecialistPanel } from '@/components/home/HomeActionSpecialistPanel';
 
 const CHANGE_CATEGORY_LABELS: Record<string, string> = {
   MATERIAL: 'The recommendation itself changed',
@@ -178,6 +179,12 @@ export function HomeActionDecisionDetail({
     Boolean(governance.professionalBoundary) || Boolean(governance.conservativeFallback);
   const contextFeature = action.propertyContextFeature;
   const changeThread = action.decisionLineage?.thread;
+  // PR 11: "Get help deciding" for an eligible, delivered HVAC repair-or-replace
+  // action. Uses the same DecisionThread the card already shows.
+  const hvacSpecialist = action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+    && action.decisionLineage.primaryEntityId
+    ? { inventoryItemId: action.decisionLineage.primaryEntityId }
+    : null;
 
   if (!hasAssumptions && !hasOptions && !hasTradeoffs && !degraded && !hasDisclosure && !action.decisionLineage && !contextFeature) {
     return null;
@@ -204,6 +211,14 @@ export function HomeActionDecisionDetail({
       />
       <LimitationCodeNotices limitationCodes={action.decisionLineage?.thread?.limitationCodes} />
       <DecisionLineageStatus decisionLineage={action.decisionLineage} />
+
+      {hvacSpecialist && (
+        <HomeActionSpecialistPanel
+          propertyId={propertyId}
+          inventoryItemId={hvacSpecialist.inventoryItemId}
+          homeActionId={action.id}
+        />
+      )}
 
       {degraded && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 md:col-span-2">
