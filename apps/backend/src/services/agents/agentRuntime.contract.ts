@@ -57,6 +57,33 @@ export interface PendingToolInvocation {
   finishedAt: string;
 }
 
+export interface PendingLlmInvocation {
+  sequence: number;
+  purpose: 'HVAC_TYPED_CLAIM_NARRATION';
+  modelId: string;
+  policyId?: string | null;
+  prompt: unknown;
+  response?: unknown;
+  typedClaimIds: readonly string[];
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  outcome: 'OK' | 'REJECTED' | 'FAILED';
+  errorCode?: string | null;
+  startedAt: string;
+  finishedAt: string;
+}
+
+export interface HvacSpecialistHomeActionOrigin {
+  homeActionId: string;
+  lineageId: string;
+  sourceEntityId: string;
+  sourceVersion: string | null;
+  contextVersion: string | null;
+  /** Stable for retries of one click; a new homeowner engagement gets a new nonce. */
+  engagementNonce: string;
+}
+
 export interface AgentContextRequestItem {
   /** Stable key the homeowner surface uses to render the ask and route the fix. */
   key: string;
@@ -88,6 +115,8 @@ export interface AgentRunStatusProjection {
   explanation: AgentTypedClaim[];
   abstentionReason: AgentAbstentionReason | null;
   paused: boolean;
+  /** Required by every state-mutating continuation; null when no live pause exists. */
+  casVersion: number | null;
   expectedOperation: AgentRuntimeOperation | null;
 }
 
@@ -105,7 +134,7 @@ export interface AgentRuntimeInvocation {
   /** Resume path: the CAS version the caller last saw. */
   expectedCasVersion?: number;
   /** Provenance for a HOME_ACTION_ENGAGEMENT trigger. */
-  homeActionId?: string;
+  homeActionOrigin?: HvacSpecialistHomeActionOrigin;
   askExecutionId?: string;
 }
 

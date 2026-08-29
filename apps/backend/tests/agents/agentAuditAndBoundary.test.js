@@ -21,6 +21,8 @@ const RUN_INPUT = {
   agentVersion: '1.0.0', budgets: BUDGETS,
 };
 const AUTHORIZED = async () => ({ authorized: true, snapshot: null });
+const ENABLED_ENV = { AGENT_HVAC_REPAIR_REPLACE_ENABLED: 'true' };
+const PASS_THROUGH_GOVERNANCE = async (input) => input.work();
 
 function deps(states, over = {}) {
   let i = 0;
@@ -88,17 +90,38 @@ test('an enabled provider may only re-select from the closed set; invented claim
   const env = { AGENT_HVAC_NARRATION_LLM_ENABLED: 'true' };
 
   const reorder = await narrateTypedClaims(deterministic, {
-    env, provider: { narrate: async () => [{ claimId: 'b', text: 'hallucinated', sourceCode: 'Z' }] },
+    env, provider: {
+      modelId: 'test-model', maxCostUsd: 0.01, executeGovernedRequest: PASS_THROUGH_GOVERNANCE,
+      narrate: async () => ({ claims: [{ claimId: 'b', text: 'hallucinated', sourceCode: 'Z' }], inputTokens: 4, outputTokens: 1, costUsd: 0.001 }),
+    },
   });
   assert.equal(reorder.usedLlm, true);
   assert.deepEqual(reorder.claims.map((c) => c.claimId), ['b']);
   assert.equal(reorder.claims[0].text, 'B'); // text comes from the deterministic claim, not the LLM
 
   const invented = await narrateTypedClaims(deterministic, {
-    env, provider: { narrate: async () => [{ claimId: 'c', text: 'new', sourceCode: 'Z' }] },
+    env, provider: {
+      modelId: 'test-model', maxCostUsd: 0.01, executeGovernedRequest: PASS_THROUGH_GOVERNANCE,
+      narrate: async () => ({ claims: [{ claimId: 'c', text: 'new', sourceCode: 'Z' }], inputTokens: 4, outputTokens: 1, costUsd: 0.001 }),
+    },
   });
-  assert.equal(invented.usedLlm, false);
+  assert.equal(invented.usedLlm, true);
+  assert.equal(invented.invocation.outcome, 'REJECTED');
   assert.deepEqual(invented.claims, deterministic);
+});
+
+test('the specialist accounts for and emits bounded LLM audit metadata when narration runs', async () => {
+  const result = await runHvacSpecialist({ ...RUN_INPUT, env: { AGENT_HVAC_NARRATION_LLM_ENABLED: 'true' } }, deps([readyState()], {
+    narrationProvider: {
+      modelId: 'test-model', policyId: 'policy-v1', maxCostUsd: 0.01, executeGovernedRequest: PASS_THROUGH_GOVERNANCE,
+      narrate: async (claims) => ({ claims: [claims[0]], inputTokens: 5, outputTokens: 2, costUsd: 0.003 }),
+    },
+  }));
+  assert.equal(result.ledger.llmInvocationsUsed, 1);
+  assert.equal(result.ledger.llmCostUsdUsed, 0.003);
+  assert.equal(result.llmInvocations.length, 1);
+  assert.equal(result.llmInvocations[0].outcome, 'OK');
+  assert.deepEqual(result.llmInvocations[0].typedClaimIds, ['hvac.reason.SYSTEM_AT_OR_BEYOND_TYPICAL_LIFESPAN']);
 });
 
 // ── §7.5 pause expiry ──────────────────────────────────────────────────────
@@ -106,8 +129,12 @@ test('an enabled provider may only re-select from the closed set; invented claim
 test('SUBMIT_CONTEXT against an expired pause fails closed', async () => {
   await assert.rejects(
     invokeAgentRuntime({ operation: 'SUBMIT_CONTEXT', principalUserId: 'u', propertyId: 'p', inventoryItemId: 'i', requestingAgentId: 't', contextIntake: {} }, {
+      env: ENABLED_ENV,
       authorize: async () => true,
-      resolvePausedRun: async () => ({ runId: 'r', agentVersion: '1.0.0', casVersion: 1, decisionThreadId: 'thr', pauseExpiresAt: new Date(Date.now() - 1000) }),
+      resolvePausedRun: async () => ({
+        runId: 'r', agentVersion: '1.0.0', casVersion: 1, decisionThreadId: 'thr',
+        pauseExpiresAt: new Date(Date.now() - 1000), serializedState: {}, expectedEvent: 'SUBMIT_CONTEXT',
+      }),
     }),
     /expired/i,
   );
@@ -133,4 +160,17 @@ test('the runtime only touches its own persistence tables directly', () => {
   for (const model of prismaAccesses) {
     assert.ok(allowed.has(model), `agentRuntime.service.ts reads prisma.${model} directly`);
   }
+});
+
+test('the runtime claims idempotency and CAS ownership before any specialist or intake side effect', () => {
+  const source = readFileSync(resolve(__dirname, '../../src/services/agents/agentRuntime.service.ts'), 'utf8');
+  const body = source.slice(source.indexOf('async function advanceRun'));
+  assert.ok(body.indexOf('claimAgentRunReservation({') < body.indexOf('runHvacSpecialist({'));
+  assert.ok(body.indexOf('compareAndSwapAgentState({') < body.indexOf('await intakeHandler({'));
+  assert.doesNotMatch(body, /episodeDay/);
+  assert.match(body, /origin\.lineageId/);
+  assert.match(body, /origin\.engagementNonce/);
+  assert.match(body, /verifyCanonicalHomeActionOrigin/);
+  assert.match(source, /action\.decisionLineage\?\.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'/);
+  assert.match(source, /action\.decisionLineage\.primaryEntityId === input\.inventoryItemId/);
 });

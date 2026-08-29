@@ -43,6 +43,7 @@ export const AI_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Ob
   ai('ai:home-modification', 'apps/backend/src/services/homeModificationAdvisor.service.ts', ['renovation'], 'Show canonical project and permit context only.'),
   ai('ai:budget-forecaster', 'apps/backend/src/services/budgetForecaster.service.ts', ['capital-planning'], 'Show recorded costs without a generated forecast.'),
   ai('ai:energy-auditor', 'apps/backend/src/services/energyAuditor.service.ts', ['energy'], 'Show recorded equipment and deterministic efficiency checks.'),
+  ai('ai:agent-hvac-typed-claim-narration', 'apps/backend/src/services/agents/agentLlmPurpose.contract.ts', ['home-actions'], 'Use the deterministic registered typed claims without generated narration.'),
   ai('ai:climate-risk', 'apps/backend/src/services/climateRiskPredictor.service.ts', ['climate-risk'], 'Disclose that no property-grounded risk estimate is available.'),
   ai('ai:moving-concierge', 'apps/backend/src/services/movingConcierge.service.ts', ['buyer-closing'], 'Show the canonical moving checklist only.'),
 ]);

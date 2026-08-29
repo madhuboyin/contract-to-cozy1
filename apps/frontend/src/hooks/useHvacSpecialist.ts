@@ -5,6 +5,7 @@ import {
   getHvacSpecialistStatus,
   startHvacSpecialist,
   submitHvacSpecialistContext,
+  type HvacSpecialistHomeActionOrigin,
   type SpecialistResult,
 } from '@/lib/api/hvacSpecialist';
 
@@ -15,20 +16,24 @@ function key(propertyId: string, inventoryItemId: string) {
 export function useHvacSpecialistStatus(
   propertyId: string,
   inventoryItemId: string | null,
-  options: { enabled?: boolean; homeActionId?: string } = {},
+  options: { enabled?: boolean } = {},
 ) {
   return useQuery({
     queryKey: key(propertyId, inventoryItemId ?? ''),
-    queryFn: () => getHvacSpecialistStatus(propertyId, inventoryItemId as string, options.homeActionId),
+    queryFn: () => getHvacSpecialistStatus(propertyId, inventoryItemId as string),
     enabled: Boolean(inventoryItemId) && (options.enabled ?? true),
     staleTime: 10_000,
   });
 }
 
-export function useStartHvacSpecialist(propertyId: string, inventoryItemId: string, homeActionId?: string) {
+export function useStartHvacSpecialist(
+  propertyId: string,
+  inventoryItemId: string,
+  homeActionOrigin: HvacSpecialistHomeActionOrigin,
+) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => startHvacSpecialist(propertyId, inventoryItemId, homeActionId),
+    mutationFn: () => startHvacSpecialist(propertyId, inventoryItemId, homeActionOrigin),
     onSuccess: (result: SpecialistResult) => {
       qc.setQueryData(key(propertyId, inventoryItemId), result);
     },

@@ -21,6 +21,8 @@ test('AgentRun is an immutable single terminal insert (IPD-007): no RUNNING stat
   assert.match(agentRun, /outcome\s+AgentRunOutcome/);
   assert.doesNotMatch(agentRun, /updatedAt/);
   assert.doesNotMatch(agentRun, /\bstatus\b/);
+  assert.match(agentRun, /primaryEntityId\s+String/);
+  assert.match(agentRun, /statusJson\s+Json/);
 
   const outcome = schema.slice(schema.indexOf('enum AgentRunOutcome {'));
   assert.match(outcome, /COMPLETED[\s\S]*ABSTAINED[\s\S]*PAUSED[\s\S]*FAILED/);
@@ -33,6 +35,7 @@ test('the reservation carries the idempotency key and a nullable unique result l
   assert.match(reservation, /resultRunId\s+String\?\s+@unique/);
   assert.match(reservation, /leaseExpiresAt\s+DateTime/);
   assert.match(reservation, /expiresAt\s+DateTime/);
+  assert.match(reservation, /primaryEntityId\s+String/);
   assert.match(reservation, /onDelete: Cascade/);
 });
 

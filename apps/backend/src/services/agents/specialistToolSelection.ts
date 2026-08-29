@@ -20,6 +20,8 @@ export interface SpecialistBudgets {
   maxContextFactsPerRun: number;
   maxLLMInvocationsPerRun: number;
   maxLLMCostPerRunUsd: number;
+  maxToolAttempts?: number;
+  retryBackoffMs?: number;
 }
 
 export interface SpecialistBudgetLedger {
@@ -54,8 +56,6 @@ export type SpecialistStep =
   | { kind: 'PAUSE'; tool: 'REQUEST_CONTEXT' | 'REQUEST_DOCUMENT'; phase: Extract<AgentRunPhase, 'NEEDS_CONTEXT' | 'NEEDS_DOCUMENT'>; outstanding: AgentContextRequestItem[] }
   | { kind: 'TERMINAL'; phase: Extract<AgentRunPhase, 'RECOMMENDATION_READY' | 'ABSTAINED'>; abstentionReason: AgentAbstentionReason | null };
 
-const MAX_THREAD_RESUMES = 2;
-
 export function selectNextSpecialistStep(
   observation: SpecialistObservation,
   ledger: SpecialistBudgetLedger,
@@ -73,12 +73,12 @@ export function selectNextSpecialistStep(
   // The engine hit only transient lookup timeouts — resume once to retry, then
   // abstain rather than asking the homeowner for something the system knows.
   if (outstanding.transientOnly) {
-    if (observation.resumeCount < MAX_THREAD_RESUMES) return { kind: 'RESUME_THREAD' };
+    if (observation.resumeCount < (budgets.maxToolAttempts ?? MAX_ATTEMPTS_PER_TOOL)) return { kind: 'RESUME_THREAD' };
     return { kind: 'TERMINAL', phase: 'ABSTAINED', abstentionReason: 'TOOL_FAILURE' };
   }
 
   if (observation.contextStatus !== null && observation.contextStatus !== 'CURRENT') {
-    if (observation.resumeCount < MAX_THREAD_RESUMES) return { kind: 'RESUME_THREAD' };
+    if (observation.resumeCount < (budgets.maxToolAttempts ?? MAX_ATTEMPTS_PER_TOOL)) return { kind: 'RESUME_THREAD' };
     return { kind: 'TERMINAL', phase: 'ABSTAINED', abstentionReason: 'CONTEXT_UNRESOLVED' };
   }
 
@@ -111,7 +111,7 @@ export function budgetExceeded(ledger: SpecialistBudgetLedger, budgets: Speciali
   if (ledger.llmInvocationsUsed > budgets.maxLLMInvocationsPerRun) return 'TOOL_FAILURE';
   if (ledger.llmCostUsdUsed > budgets.maxLLMCostPerRunUsd) return 'TOOL_FAILURE';
   for (const [tool, attempts] of Object.entries(ledger.toolAttempts)) {
-    if ((attempts ?? 0) > MAX_ATTEMPTS_PER_TOOL) {
+    if ((attempts ?? 0) >= (budgets.maxToolAttempts ?? MAX_ATTEMPTS_PER_TOOL)) {
       void tool;
       return 'LOOP_BUDGET_EXHAUSTED';
     }

@@ -18,6 +18,7 @@ export interface AgentContextRequest {
   principalUserId: string;
   requestingAgentId: string;
   scopes: readonly PropertyContextScope[];
+  maxFacts: number;
 }
 
 export interface AgentContextResult {
@@ -34,7 +35,8 @@ export const readAgentPropertyContext: AgentPropertyContextReader = async (reque
       { userId: request.principalUserId },
       { scopes: [...request.scopes] },
     );
-    return { authorized: true, snapshot };
+    const boundedFacts = Object.fromEntries(Object.entries(snapshot.facts).slice(0, request.maxFacts));
+    return { authorized: true, snapshot: { ...snapshot, facts: boundedFacts } };
   } catch (error) {
     if (error instanceof PropertyContextAccessDeniedError) return { authorized: false, snapshot: null };
     throw error;

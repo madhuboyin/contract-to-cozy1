@@ -7,6 +7,13 @@ import { validateReferencedAgentDefinitionVersions } from './agentRegistryValida
 
 type AgentRunDb = Pick<typeof prisma, 'agentRun' | 'agentRunReservation' | 'agentState' | '$transaction'>;
 
+export class AgentRunReservationOwnershipError extends Error {
+  constructor() {
+    super('The terminal agent run could not be linked to its owning reservation.');
+    this.name = 'AgentRunReservationOwnershipError';
+  }
+}
+
 export type AgentRunReservationInput = Readonly<{
   idempotencyKey: string;
   agentId: string;
@@ -14,6 +21,7 @@ export type AgentRunReservationInput = Readonly<{
   trigger: AgentRunTrigger;
   principalUserId: string;
   propertyId: string;
+  primaryEntityId: string;
   decisionThreadId?: string | null;
   correlationId: string;
 }>;
@@ -29,12 +37,14 @@ export type TerminalAgentRunInput = Readonly<{
   correlationId: string;
   principalUserId: string;
   propertyId: string;
+  primaryEntityId: string;
   decisionThreadId?: string | null;
   originHomeActionId?: string | null;
   originAskExecutionId?: string | null;
   outcome: AgentRunOutcome;
   abstentionReason?: string | null;
   failureCode?: string | null;
+  status: Prisma.InputJsonValue;
   budgetUsage: {
     contextFactsUsed: number;
     llmInvocationsUsed: number;
@@ -64,7 +74,25 @@ export async function claimAgentRunReservation(
 ): Promise<Readonly<{ claimed: boolean; reservation: Awaited<ReturnType<AgentRunDb['agentRunReservation']['findUniqueOrThrow']>> }>> {
   const cfg = controls(runtime);
   const existing = await db.agentRunReservation.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
-  if (existing) return { claimed: false, reservation: existing };
+  if (existing) {
+    if (!existing.resultRunId && existing.leaseExpiresAt.getTime() <= now.getTime()) {
+      const reclaimed = await db.agentRunReservation.updateMany({
+        where: { id: existing.id, resultRunId: null, leaseExpiresAt: { lte: now } },
+        data: {
+          correlationId: input.correlationId,
+          claimedAt: now,
+          leaseExpiresAt: new Date(now.getTime() + cfg.reservationLeaseMs),
+        },
+      });
+      if (reclaimed.count === 1) {
+        return {
+          claimed: true,
+          reservation: await db.agentRunReservation.findUniqueOrThrow({ where: { idempotencyKey: input.idempotencyKey } }),
+        };
+      }
+    }
+    return { claimed: false, reservation: existing };
+  }
   try {
     const reservation = await db.agentRunReservation.create({
       data: {
@@ -74,6 +102,7 @@ export async function claimAgentRunReservation(
         trigger: input.trigger,
         principalUserId: input.principalUserId,
         propertyId: input.propertyId,
+        primaryEntityId: input.primaryEntityId,
         decisionThreadId: input.decisionThreadId ?? null,
         correlationId: input.correlationId,
         claimedAt: now,
@@ -122,12 +151,14 @@ export async function writeTerminalAgentRun(
           correlationId: input.correlationId,
           principalUserId: input.principalUserId,
           propertyId: input.propertyId,
+          primaryEntityId: input.primaryEntityId,
           decisionThreadId: input.decisionThreadId ?? null,
           originHomeActionId: input.originHomeActionId ?? null,
           originAskExecutionId: input.originAskExecutionId ?? null,
           outcome: input.outcome,
           abstentionReason: input.abstentionReason ?? null,
           failureCode: input.failureCode ?? null,
+          statusJson: input.status,
           contextFactsUsed: input.budgetUsage.contextFactsUsed,
           llmInvocationsUsed: input.budgetUsage.llmInvocationsUsed,
           llmCostUsdUsed: input.budgetUsage.llmCostUsdUsed,
@@ -139,10 +170,15 @@ export async function writeTerminalAgentRun(
         },
       });
       // CAS: only the reservation that has not yet been linked may claim this run.
-      await tx.agentRunReservation.updateMany({
-        where: { id: input.reservationId, resultRunId: null },
+      const linked = await tx.agentRunReservation.updateMany({
+        where: {
+          id: input.reservationId,
+          idempotencyKey: input.idempotencyKey,
+          resultRunId: null,
+        },
         data: { resultRunId: run.id },
       });
+      if (linked.count !== 1) throw new AgentRunReservationOwnershipError();
       return run;
     });
   } catch (error) {
@@ -160,6 +196,18 @@ export async function getAgentRunById(id: string, db: AgentRunDb = prisma) {
 export async function getLatestAgentRunForThread(decisionThreadId: string, db: AgentRunDb = prisma) {
   return db.agentRun.findFirst({
     where: { decisionThreadId },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function getLatestAgentRunForSubject(
+  propertyId: string,
+  principalUserId: string,
+  primaryEntityId: string,
+  db: AgentRunDb = prisma,
+) {
+  return db.agentRun.findFirst({
+    where: { propertyId, principalUserId, primaryEntityId, agentId: 'hvac-repair-replace-specialist' },
     orderBy: { createdAt: 'desc' },
   });
 }

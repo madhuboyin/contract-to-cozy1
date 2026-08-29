@@ -68,3 +68,13 @@ test('IPD-005: the corpus exercises every expected phase', () => {
     assert.ok(phases.has(phase), `missing coverage for ${phase}`);
   }
 });
+
+test('IPD-005: the versioned acceptance contract declares baseline, sample, window, and failure action', () => {
+  const c = HVAC_SPECIALIST_EVAL_THRESHOLDS;
+  assert.equal(c.fixtureCorpusVersion, 'hvac-specialist-fixtures@1.0.0');
+  assert.equal(c.baselineMeasurement.sampleSize, HVAC_SPECIALIST_EVAL_CASES.length);
+  assert.ok(c.sampleSizeMinimum <= HVAC_SPECIALIST_EVAL_CASES.length);
+  assert.match(c.measurementWindow, /CI_RUN/);
+  assert.match(c.failureAction, /FAIL_CI/);
+  assert.equal(c.missingBaselineStatus, 'NOT_MEASURED');
+});

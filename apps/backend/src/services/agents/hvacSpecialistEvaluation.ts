@@ -130,6 +130,17 @@ export const HVAC_SPECIALIST_EVAL_CASES: readonly HvacSpecialistEvalCase[] = [
  */
 export const HVAC_SPECIALIST_EVAL_THRESHOLDS = Object.freeze({
   contractVersion: '1.0.0',
+  fixtureCorpusVersion: 'hvac-specialist-fixtures@1.0.0',
+  baselineMeasurement: {
+    sampleSize: 10,
+    abstentionRate: 0.3,
+    deterministicCompletionRate: 1.0,
+    llmInvocationRate: 0,
+  },
+  sampleSizeMinimum: 10,
+  measurementWindow: 'CHECKED_IN_FIXTURE_CORPUS_PER_CI_RUN',
+  failureAction: 'FAIL_CI_AND_KEEP_AGENT_BELOW_EVAL_APPROVED',
+  missingBaselineStatus: 'NOT_MEASURED',
   abstentionBand: { min: 0.2, max: 0.5 },
   minDeterministicCompletionRate: 1.0,
   requireZeroLlmInvocations: true,

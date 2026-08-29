@@ -183,7 +183,16 @@ export function HomeActionDecisionDetail({
   // action. Uses the same DecisionThread the card already shows.
   const hvacSpecialist = action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
     && action.decisionLineage.primaryEntityId
-    ? { inventoryItemId: action.decisionLineage.primaryEntityId }
+    ? {
+      inventoryItemId: action.decisionLineage.primaryEntityId,
+      homeActionOrigin: {
+        homeActionId: action.id,
+        lineageId: action.lineageId,
+        sourceEntityId: action.source.entityId,
+        sourceVersion: action.source.version,
+        contextVersion: null,
+      },
+    }
     : null;
 
   if (!hasAssumptions && !hasOptions && !hasTradeoffs && !degraded && !hasDisclosure && !action.decisionLineage && !contextFeature) {
@@ -216,7 +225,7 @@ export function HomeActionDecisionDetail({
         <HomeActionSpecialistPanel
           propertyId={propertyId}
           inventoryItemId={hvacSpecialist.inventoryItemId}
-          homeActionId={action.id}
+          homeActionOrigin={hvacSpecialist.homeActionOrigin}
         />
       )}
 

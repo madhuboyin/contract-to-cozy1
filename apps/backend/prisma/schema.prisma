@@ -15699,6 +15699,7 @@ model AgentRunReservation {
   trigger          AgentRunTrigger
   principalUserId  String
   propertyId       String
+  primaryEntityId  String
   decisionThreadId String?
   correlationId    String
   claimedAt        DateTime        @default(now())
@@ -15712,6 +15713,7 @@ model AgentRunReservation {
 
   @@index([principalUserId])
   @@index([propertyId])
+  @@index([propertyId, primaryEntityId])
   @@index([agentId, agentVersion])
   @@index([leaseExpiresAt])
   @@index([expiresAt])
@@ -15729,12 +15731,14 @@ model AgentRun {
   correlationId       String
   principalUserId     String
   propertyId          String
+  primaryEntityId     String
   decisionThreadId    String?
   originHomeActionId  String?
   originAskExecutionId String?
   outcome             AgentRunOutcome
   abstentionReason    String?
   failureCode         String?
+  statusJson          Json
   contextFactsUsed    Int             @default(0)
   llmInvocationsUsed  Int             @default(0)
   llmCostUsdUsed      Float           @default(0)
@@ -15752,6 +15756,7 @@ model AgentRun {
 
   @@index([principalUserId, createdAt])
   @@index([propertyId, createdAt])
+  @@index([propertyId, primaryEntityId, createdAt])
   @@index([decisionThreadId])
   @@index([agentId, agentVersion, outcome])
   @@index([outcome, expiresAt])

@@ -6,7 +6,7 @@
 // working, needs context / document, recommendation ready, abstained. Calls
 // the same backend operation Ask uses.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { CheckCircle2, HelpCircle, Loader2, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,11 @@ import {
   useStartHvacSpecialist,
   useSubmitHvacSpecialistContext,
 } from '@/hooks/useHvacSpecialist';
-import type { SpecialistOutstandingItem, SpecialistStatus } from '@/lib/api/hvacSpecialist';
+import type {
+  HvacSpecialistHomeActionOrigin,
+  SpecialistOutstandingItem,
+  SpecialistStatus,
+} from '@/lib/api/hvacSpecialist';
 
 const VERDICT_COPY: Record<string, string> = {
   REPAIR: 'Repair is the better call right now.',
@@ -121,7 +125,7 @@ function StatusBody({
         </p>
         <ContextForm
           outstanding={status.outstanding}
-          casVersion={undefined}
+          casVersion={status.casVersion ?? undefined}
           pending={submit.isPending}
           onSubmit={(intake, casVersion) => submit.mutate({ contextIntake: intake, expectedCasVersion: casVersion })}
         />
@@ -168,15 +172,19 @@ function StatusBody({
 export function HomeActionSpecialistPanel({
   propertyId,
   inventoryItemId,
-  homeActionId,
+  homeActionOrigin,
 }: {
   propertyId: string;
   inventoryItemId: string;
-  homeActionId?: string;
+  homeActionOrigin: Omit<HvacSpecialistHomeActionOrigin, 'engagementNonce'>;
 }) {
   const [opened, setOpened] = useState(false);
-  const statusQuery = useHvacSpecialistStatus(propertyId, inventoryItemId, { enabled: opened, homeActionId });
-  const start = useStartHvacSpecialist(propertyId, inventoryItemId, homeActionId);
+  const engagementNonce = useRef(
+    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  const origin = useMemo(() => ({ ...homeActionOrigin, engagementNonce: engagementNonce.current }), [homeActionOrigin]);
+  const statusQuery = useHvacSpecialistStatus(propertyId, inventoryItemId, { enabled: opened });
+  const start = useStartHvacSpecialist(propertyId, inventoryItemId, origin);
   const status = start.data?.status ?? statusQuery.data?.status ?? null;
 
   const heading = useMemo(() => (

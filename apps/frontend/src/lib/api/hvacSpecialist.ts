@@ -42,7 +42,17 @@ export interface SpecialistStatus {
   explanation: SpecialistTypedClaim[];
   abstentionReason: string | null;
   paused: boolean;
+  casVersion: number | null;
   expectedOperation: SpecialistOperation | null;
+}
+
+export interface HvacSpecialistHomeActionOrigin {
+  homeActionId: string;
+  lineageId: string;
+  sourceEntityId: string;
+  sourceVersion: string | null;
+  contextVersion: string | null;
+  engagementNonce: string;
 }
 
 export interface SpecialistResult {
@@ -55,7 +65,7 @@ interface InvokeBody {
   contextIntake?: Record<string, unknown>;
   dispute?: { key: string; note?: string };
   expectedCasVersion?: number;
-  homeActionId?: string;
+  homeActionOrigin?: HvacSpecialistHomeActionOrigin;
 }
 
 async function invoke(
@@ -70,12 +80,12 @@ async function invoke(
   return res.data;
 }
 
-export function getHvacSpecialistStatus(propertyId: string, inventoryItemId: string, homeActionId?: string) {
-  return invoke(propertyId, 'GET_STATUS', { inventoryItemId, homeActionId });
+export function getHvacSpecialistStatus(propertyId: string, inventoryItemId: string) {
+  return invoke(propertyId, 'GET_STATUS', { inventoryItemId });
 }
 
-export function startHvacSpecialist(propertyId: string, inventoryItemId: string, homeActionId?: string) {
-  return invoke(propertyId, 'START_OR_RESUME', { inventoryItemId, homeActionId });
+export function startHvacSpecialist(propertyId: string, inventoryItemId: string, homeActionOrigin: HvacSpecialistHomeActionOrigin) {
+  return invoke(propertyId, 'START_OR_RESUME', { inventoryItemId, homeActionOrigin });
 }
 
 export function submitHvacSpecialistContext(

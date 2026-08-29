@@ -13,6 +13,7 @@ import {
   invokeAgentRuntime,
   AgentRuntimeAuthorizationError,
   AgentRuntimeCasConflictError,
+  AgentRuntimeDisabledError,
   AgentRuntimeStateError,
 } from '../services/agents/agentRuntime.service';
 import { AGENT_RUNTIME_OPERATIONS, type AgentRuntimeOperation } from '../services/agents/agentRuntime.contract';
@@ -22,7 +23,14 @@ const bodySchema = z.object({
   contextIntake: z.record(z.string(), z.unknown()).optional(),
   dispute: z.object({ key: z.string().min(1), note: z.string().max(500).optional() }).optional(),
   expectedCasVersion: z.number().int().nonnegative().optional(),
-  homeActionId: z.string().min(1).optional(),
+  homeActionOrigin: z.object({
+    homeActionId: z.string().min(1),
+    lineageId: z.string().min(1),
+    sourceEntityId: z.string().min(1),
+    sourceVersion: z.string().nullable(),
+    contextVersion: z.string().nullable(),
+    engagementNonce: z.string().min(8).max(200),
+  }).optional(),
   askExecutionId: z.string().min(1).optional(),
 });
 
@@ -55,13 +63,17 @@ export async function invokeHvacSpecialistHandler(req: CustomRequest, res: Respo
       contextIntake: parsed.data.contextIntake,
       dispute: parsed.data.dispute,
       expectedCasVersion: parsed.data.expectedCasVersion,
-      homeActionId: parsed.data.homeActionId,
+      homeActionOrigin: parsed.data.homeActionOrigin,
       askExecutionId: parsed.data.askExecutionId,
     });
     res.json({ success: true, data: result });
   } catch (error) {
     if (error instanceof AgentRuntimeAuthorizationError) {
       res.status(404).json({ success: false, message: 'Property not found or access denied.' });
+      return;
+    }
+    if (error instanceof AgentRuntimeDisabledError) {
+      res.status(503).json({ success: false, message: error.message, code: 'AGENT_DISABLED' });
       return;
     }
     if (error instanceof AgentRuntimeCasConflictError) {

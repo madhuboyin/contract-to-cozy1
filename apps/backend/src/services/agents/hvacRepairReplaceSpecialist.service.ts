@@ -10,9 +10,15 @@
 // records (§7.3.5, persisted by the runtime once the AgentRun row exists).
 
 import { prisma } from '../../lib/prisma';
+import { withTimeout } from '../../lib/aiResilience';
 import { hvacDecisionFamilyAdapter } from '../decisionPlatform/decisionThreadService';
 import { DecisionFamilyAmbiguousThreadError } from '../decisionPlatform/decisionFamilyAdapter';
-import type { AgentRunStatusProjection, PendingToolInvocation } from './agentRuntime.contract';
+import type {
+  AgentRunStatusProjection,
+  HvacSpecialistHomeActionOrigin,
+  PendingLlmInvocation,
+  PendingToolInvocation,
+} from './agentRuntime.contract';
 import { selectTypedClaims } from './specialistTypedClaims';
 import { narrateTypedClaims, type NarrationProvider } from './agentLlmPurpose.contract';
 import {
@@ -22,6 +28,7 @@ import {
 } from './agentPropertyContext.service';
 import {
   emptyLedger,
+  budgetExceeded,
   noteToolAttempt,
   selectNextSpecialistStep,
   type SpecialistBudgetLedger,
@@ -48,7 +55,7 @@ export interface SpecialistThreadPort {
     propertyId: string;
     principalUserId: string;
     inventoryItemId: string;
-    homeActionId?: string;
+    homeActionOrigin?: HvacSpecialistHomeActionOrigin;
     askExecutionId?: string;
   }): Promise<SpecialistThreadState>;
 }
@@ -73,7 +80,7 @@ export const defaultThreadPort: SpecialistThreadPort = {
         userId: input.principalUserId,
         primaryEntityId: input.inventoryItemId,
         askExecutionId: input.askExecutionId,
-        homeActionOrigin: undefined,
+        homeActionOrigin: input.homeActionOrigin,
       });
     } catch (error) {
       if (error instanceof DecisionFamilyAmbiguousThreadError) {
@@ -122,8 +129,10 @@ export interface RunSpecialistInput {
   inventoryItemId: string;
   agentVersion: string;
   budgets: SpecialistBudgets;
-  homeActionId?: string;
+  homeActionOrigin?: HvacSpecialistHomeActionOrigin;
   askExecutionId?: string;
+  initialLedger?: SpecialistBudgetLedger;
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface SpecialistRunDependencies {
@@ -139,12 +148,13 @@ const DEFAULT_RUN_DEPS: SpecialistRunDependencies = {
 };
 
 export interface SpecialistRunResult {
-  status: Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'expectedOperation'>;
+  status: Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'casVersion' | 'expectedOperation'>;
   ledger: SpecialistBudgetLedger;
   /** PAUSE => the runtime persists an AgentState; TERMINAL => it writes a terminal AgentRun. */
   disposition: 'PAUSE' | 'TERMINAL';
   /** §7.3.5 — one per tool call; the runtime persists these against the run id. */
   toolInvocations: PendingToolInvocation[];
+  llmInvocations: PendingLlmInvocation[];
   usedLlm: boolean;
 }
 
@@ -153,10 +163,15 @@ export async function runHvacSpecialist(
   deps: Partial<SpecialistRunDependencies> = {},
 ): Promise<SpecialistRunResult> {
   const { port, contextReader, narrationProvider } = { ...DEFAULT_RUN_DEPS, ...deps };
-  const ledger = emptyLedger();
+  const ledger = input.initialLedger ? {
+    ...input.initialLedger,
+    toolAttempts: { ...input.initialLedger.toolAttempts },
+  } : emptyLedger();
   const toolInvocations: PendingToolInvocation[] = [];
+  const llmInvocations: PendingLlmInvocation[] = [];
   let seq = 0;
   const startedAt = Date.now();
+  const priorElapsedMs = ledger.elapsedMs;
 
   const record = (
     toolId: PendingToolInvocation['toolId'],
@@ -181,7 +196,7 @@ export async function runHvacSpecialist(
     status: SpecialistRunResult['status'],
     disposition: SpecialistRunResult['disposition'],
     usedLlm: boolean,
-  ): SpecialistRunResult => ({ status, disposition, ledger, toolInvocations, usedLlm });
+  ): SpecialistRunResult => ({ status, disposition, ledger, toolInvocations, llmInvocations, usedLlm });
 
   const base = {
     agentId: SPECIALIST_AGENT_ID,
@@ -192,12 +207,14 @@ export async function runHvacSpecialist(
   // the real resolved-owner user ID. Defense in depth over the runtime's own
   // property-access check; also the point the boundary test verifies.
   const gateAt = startedAt;
-  const context = await contextReader({
+  const remainingMs = Math.max(1, input.budgets.maxExecutionMsPerRun - ledger.elapsedMs);
+  const context = await withTimeout(() => contextReader({
     propertyId: input.propertyId,
     principalUserId: input.principalUserId,
     requestingAgentId: input.requestingAgentId,
     scopes: HVAC_SPECIALIST_CONTEXT_SCOPES,
-  });
+    maxFacts: Math.max(0, input.budgets.maxContextFactsPerRun - ledger.contextFactsUsed),
+  }), { timeoutMs: remainingMs, operation: 'agent.hvac.property-context' });
   if (!context.authorized) {
     record('REQUEST_CONTEXT', 'FAILED', { input: { scopes: HVAC_SPECIALIST_CONTEXT_SCOPES }, errorCode: 'CONTEXT_UNAUTHORIZED', at: gateAt });
     return terminal({
@@ -213,12 +230,32 @@ export async function runHvacSpecialist(
     }, 'TERMINAL', false);
   }
 
+  ledger.contextFactsUsed += Object.keys(context.snapshot?.facts ?? {}).length;
+
   let resumeCount = 0;
-  let state = await port.createOrResume(input);
+  let state = await withTimeout(() => port.createOrResume(input), {
+    timeoutMs: Math.max(1, input.budgets.maxExecutionMsPerRun - ledger.elapsedMs),
+    operation: 'agent.hvac.create-or-resume-thread',
+  });
 
   for (;;) {
     ledger.loopIterations += 1;
-    ledger.elapsedMs = Date.now() - startedAt;
+    ledger.elapsedMs = priorElapsedMs + (Date.now() - startedAt);
+
+    const exceeded = budgetExceeded(ledger, input.budgets);
+    if (exceeded) {
+      return terminal({
+        ...base,
+        phase: 'ABSTAINED',
+        decisionThreadId: state.decisionThreadId,
+        currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
+        verdict: null,
+        confidenceLabel: state.confidenceLabel,
+        outstanding: [],
+        explanation: [],
+        abstentionReason: exceeded,
+      }, 'TERMINAL', llmInvocations.length > 0);
+    }
 
     const observation: SpecialistObservation = {
       ambiguous: state.ambiguous,
@@ -235,7 +272,12 @@ export async function runHvacSpecialist(
 
     if (step.kind === 'RESUME_THREAD') {
       resumeCount += 1;
-      state = await port.createOrResume(input);
+      const backoffMs = Math.max(0, input.budgets.retryBackoffMs ?? 0) * resumeCount;
+      if (backoffMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
+      state = await withTimeout(() => port.createOrResume(input), {
+        timeoutMs: Math.max(1, input.budgets.maxExecutionMsPerRun - (priorElapsedMs + (Date.now() - startedAt))),
+        operation: 'agent.hvac.resume-thread',
+      });
       record('SCORE', 'EMPTY', { input: { action: 'RESUME_THREAD', resumeCount }, at: stepAt });
       continue;
     }
@@ -265,8 +307,19 @@ export async function runHvacSpecialist(
       // EXPLAIN — deterministic typed claims are authoritative; a governed LLM
       // (when enabled) may only re-select from that closed set.
       const deterministic = selectTypedClaims(state.reasonCodes);
-      const narrated = await narrateTypedClaims(deterministic, { provider: narrationProvider ?? undefined });
-      if (narrated.usedLlm) ledger.llmInvocationsUsed += 1;
+      const hasLlmBudget = Boolean(narrationProvider)
+        && ledger.llmInvocationsUsed < input.budgets.maxLLMInvocationsPerRun
+        && ledger.llmCostUsdUsed + (narrationProvider?.maxCostUsd ?? 0) <= input.budgets.maxLLMCostPerRunUsd;
+      const narrated = await narrateTypedClaims(deterministic, {
+        provider: hasLlmBudget ? narrationProvider ?? undefined : undefined,
+        env: input.env,
+        sequence: llmInvocations.length,
+      });
+      if (narrated.usedLlm) {
+        ledger.llmInvocationsUsed += 1;
+        ledger.llmCostUsdUsed += narrated.costUsd;
+      }
+      if (narrated.invocation) llmInvocations.push(narrated.invocation);
       record('EXPLAIN', narrated.claims.length ? 'OK' : 'EMPTY', {
         input: { reasonCodes: state.reasonCodes },
         output: { claimIds: narrated.claims.map((c) => c.claimId), usedLlm: narrated.usedLlm },

@@ -17,6 +17,7 @@ const {
   validateAgentDefinitionRegistry,
   validateReferencedAgentDefinitionVersions,
 } = require('../../src/services/agents/agentRegistryValidation.ts');
+const { validateAgentLlmPurposeContracts } = require('../../src/services/agents/agentLlmPurpose.contract.ts');
 
 const active = getAgentDefinition('hvac-repair-replace-specialist');
 
@@ -116,4 +117,8 @@ test('deployment readiness retains every referenced definition version', () => {
 test('Prisma schema does not persist AgentDefinition', () => {
   const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
   assert.doesNotMatch(schema, /^model\s+AgentDefinition\s*\{/m);
+});
+
+test('the optional narration purpose resolves through a registered governed AI route', () => {
+  assert.deepEqual(validateAgentLlmPurposeContracts(), []);
 });

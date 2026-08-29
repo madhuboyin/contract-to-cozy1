@@ -208,6 +208,8 @@ import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/
 import { validateIntelligenceRegistries } from './services/intelligence';
 import { validateEnvelopeRegistry } from './services/intelligenceEnvelope';
 import {
+  assertAgentDeploymentReadiness,
+  validateAgentLlmPurposeContracts,
   validateAgentDefinitionRegistry,
   validateRepairReplaceProfiles,
 } from './services/agents';
@@ -262,6 +264,7 @@ const agentRegistryIssues = [
   ...validateAgentDefinitionRegistry(),
   ...validateRepairReplaceProfiles(),
   ...validateAgentTriggerHandlers(AGENT_TRIGGER_HANDLER_REGISTRY),
+  ...validateAgentLlmPurposeContracts(),
 ];
 if (agentRegistryIssues.length) {
   throw new Error(`FATAL: Agent registry validation failed: ${agentRegistryIssues.join('; ')}`);
@@ -735,7 +738,13 @@ app.use(errorHandler);
 // START SERVER
 // =============================================================================
 
-app.listen(PORT, () => {
+async function startServer(): Promise<void> {
+  const readinessIssues = await assertAgentDeploymentReadiness();
+  if (readinessIssues.length) {
+    throw new Error(`FATAL: Agent deployment readiness failed: ${readinessIssues.join('; ')}`);
+  }
+
+  app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`🔗 API URL: http://localhost:${PORT}`);
@@ -776,6 +785,12 @@ app.listen(PORT, () => {
   logger.info(`   - DELETE /api/room-insights/rooms/:roomId/checklist-items/:itemId`);
   logger.info(`   - GET  /api/room-insights/rooms/:roomId/timeline`);
   logger.info(`   - GET  /api/home-events`);
+  });
+}
+
+void startServer().catch((error) => {
+  logger.fatal({ err: error }, 'Backend startup failed before accepting traffic');
+  process.exitCode = 1;
 });
 
 export default app;

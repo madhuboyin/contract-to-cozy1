@@ -27,6 +27,7 @@ function reservationInput(overrides = {}) {
     trigger: 'HOME_ACTION_ENGAGEMENT',
     principalUserId: 'user-1',
     propertyId: 'property-1',
+    primaryEntityId: 'item-1',
     decisionThreadId: 'thread-1',
     correlationId: 'corr-1',
     ...overrides,
@@ -45,8 +46,10 @@ function terminalRunInput(overrides = {}) {
     correlationId: 'corr-1',
     principalUserId: 'user-1',
     propertyId: 'property-1',
+    primaryEntityId: 'item-1',
     decisionThreadId: 'thread-1',
     outcome: 'COMPLETED',
+    status: { phase: 'RECOMMENDATION_READY', verdict: 'REPLACE' },
     budgetUsage: {
       contextFactsUsed: 12, llmInvocationsUsed: 1, llmCostUsdUsed: 0.02,
       executionMsUsed: 4200, loopIterationsUsed: 3,
@@ -84,7 +87,9 @@ function makeDb({ reservations = [], runs = [], states = [] } = {}) {
       let count = 0;
       for (const [id, row] of reservationRows) {
         if (where.id && row.id !== where.id) continue;
+        if (where.idempotencyKey && row.idempotencyKey !== where.idempotencyKey) continue;
         if ('resultRunId' in where && row.resultRunId !== where.resultRunId) continue;
+        if (where.leaseExpiresAt?.lte && !(row.leaseExpiresAt <= where.leaseExpiresAt.lte)) continue;
         reservationRows.set(id, { ...row, ...data });
         count += 1;
       }
@@ -164,6 +169,19 @@ test('a second claim on the same idempotency key does not run and returns the wi
   assert.equal(store.reservationRows.size, 1);
 });
 
+test('an expired unresolved reservation is reclaimed with a fresh lease', async () => {
+  const store = makeDb({
+    reservations: [{
+      id: 'res-1', ...reservationInput(), resultRunId: null,
+      leaseExpiresAt: new Date(NOW.getTime() - 1),
+    }],
+  });
+  const result = await claimAgentRunReservation(reservationInput({ correlationId: 'corr-retry' }), NOW, store.db, RUNTIME);
+  assert.equal(result.claimed, true);
+  assert.equal(result.reservation.correlationId, 'corr-retry');
+  assert.equal(result.reservation.leaseExpiresAt.toISOString(), '2026-08-28T12:02:00.000Z');
+});
+
 test('a P2002 insert race resolves to the concurrently-created reservation', async () => {
   const store = makeDb();
   const realFindUnique = store.db.agentRunReservation.findUnique;
@@ -185,6 +203,8 @@ test('writeTerminalAgentRun inserts one terminal run and links its reservation',
   const run = await writeTerminalAgentRun(terminalRunInput(), NOW, store.db, RUNTIME);
 
   assert.equal(run.outcome, 'COMPLETED');
+  assert.equal(run.primaryEntityId, 'item-1');
+  assert.deepEqual(run.statusJson, { phase: 'RECOMMENDATION_READY', verdict: 'REPLACE' });
   assert.equal(run.expiresAt.toISOString(), '2026-11-26T12:00:00.000Z');
   assert.equal(store.runRows.size, 1);
   assert.equal(store.reservationRows.get('res-1').resultRunId, run.id);

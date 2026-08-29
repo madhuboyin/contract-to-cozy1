@@ -10,16 +10,18 @@
 // separate AgentRunReservation. A paused run = terminal AgentRun(PAUSED) +
 // one live AgentState (CAS-versioned).
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { resolvePropertyAccess } from '../propertyAccess.service';
+import { getHomeActionFeed } from '../homeActions.service';
 import { selectHvacDecisionThread } from '../decisionPlatform/decisionThreadService';
 import { getAgentDefinition } from './agentDefinitionRegistry';
 import { digestAgentDefinition } from './agentRegistryValidation';
 import {
   claimAgentRunReservation,
   getAgentRunById,
+  getLatestAgentRunForSubject,
   writeTerminalAgentRun,
 } from './agentRunRepository';
 import {
@@ -28,10 +30,10 @@ import {
   loadAgentStateByRun,
   resolveAgentState,
 } from './agentStateRepository';
-import { recordToolInvocation } from './agentInvocationAudit.service';
+import { recordLlmInvocation, recordToolInvocation } from './agentInvocationAudit.service';
 import type { NarrationProvider } from './agentLlmPurpose.contract';
 import type { AgentPropertyContextReader } from './agentPropertyContext.service';
-import type { PendingToolInvocation } from './agentRuntime.contract';
+import type { PendingLlmInvocation, PendingToolInvocation } from './agentRuntime.contract';
 import { recordAgentOperation, recordAgentRunOutcome } from './agentMetrics.service';
 import { runHvacSpecialist, type SpecialistThreadPort } from './hvacRepairReplaceSpecialist.service';
 import { applyHvacSpecialistContextIntake } from './hvacSpecialistContextIntake';
@@ -41,7 +43,7 @@ import type {
   AgentRuntimeInvocation,
   AgentRuntimeResult,
 } from './agentRuntime.contract';
-import type { SpecialistBudgets } from './specialistToolSelection';
+import type { SpecialistBudgetLedger, SpecialistBudgets } from './specialistToolSelection';
 
 const SPECIALIST_AGENT_ID = 'hvac-repair-replace-specialist';
 const SPECIALIST_TRIGGER = 'HOME_ACTION_ENGAGEMENT' as const;
@@ -57,6 +59,9 @@ export class AgentRuntimeCasConflictError extends Error {
 export class AgentRuntimeStateError extends Error {
   constructor(message: string) { super(message); this.name = 'AgentRuntimeStateError'; }
 }
+export class AgentRuntimeDisabledError extends Error {
+  constructor() { super('The HVAC Specialist is currently unavailable.'); this.name = 'AgentRuntimeDisabledError'; }
+}
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -69,13 +74,15 @@ function deploymentRevision(): string {
 function budgetsOf(definitionBudgets: {
   maxLoopIterations: number; maxExecutionMsPerRun: number; maxContextFactsPerRun: number;
   maxLLMInvocationsPerRun: number; maxLLMCostPerRunUsd: number;
-}): SpecialistBudgets {
+}, retryPolicy: { maxAttempts: number; backoffMs: number }): SpecialistBudgets {
   return {
     maxLoopIterations: definitionBudgets.maxLoopIterations,
     maxExecutionMsPerRun: definitionBudgets.maxExecutionMsPerRun,
     maxContextFactsPerRun: definitionBudgets.maxContextFactsPerRun,
     maxLLMInvocationsPerRun: definitionBudgets.maxLLMInvocationsPerRun,
     maxLLMCostPerRunUsd: definitionBudgets.maxLLMCostPerRunUsd,
+    maxToolAttempts: retryPolicy.maxAttempts,
+    retryBackoffMs: retryPolicy.backoffMs,
   };
 }
 
@@ -85,6 +92,8 @@ interface PausedRun {
   casVersion: number;
   decisionThreadId: string | null;
   pauseExpiresAt: Date;
+  serializedState: unknown;
+  expectedEvent: string;
 }
 
 async function findPausedRunForItem(propertyId: string, principalUserId: string, inventoryItemId: string): Promise<PausedRun | null> {
@@ -101,7 +110,7 @@ async function findPausedRunForItem(propertyId: string, principalUserId: string,
       state: { is: { resolvedAt: null } },
     },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, agentVersion: true, decisionThreadId: true, state: { select: { casVersion: true, pauseExpiresAt: true } } },
+    select: { id: true, agentVersion: true, decisionThreadId: true, state: { select: { casVersion: true, pauseExpiresAt: true, serializedStateJson: true, expectedEvent: true } } },
   });
   if (!run || !run.state) return null;
   return {
@@ -110,6 +119,8 @@ async function findPausedRunForItem(propertyId: string, principalUserId: string,
     casVersion: run.state.casVersion,
     decisionThreadId: run.decisionThreadId,
     pauseExpiresAt: run.state.pauseExpiresAt,
+    serializedState: run.state.serializedStateJson,
+    expectedEvent: run.state.expectedEvent,
   };
 }
 
@@ -131,11 +142,29 @@ async function persistToolInvocations(runId: string, correlationId: string, pend
   }
 }
 
-function projectionFor(status: Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'expectedOperation'>, runId: string | null, paused: boolean): AgentRunStatusProjection {
+async function persistLlmInvocations(runId: string, correlationId: string, pending: readonly PendingLlmInvocation[]): Promise<void> {
+  for (const invocation of pending) {
+    await recordLlmInvocation({
+      ...invocation,
+      runId,
+      correlationId,
+      startedAt: new Date(invocation.startedAt),
+      finishedAt: new Date(invocation.finishedAt),
+    });
+  }
+}
+
+function projectionFor(
+  status: Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'casVersion' | 'expectedOperation'>,
+  runId: string | null,
+  paused: boolean,
+  casVersion: number | null = null,
+): AgentRunStatusProjection {
   return {
     ...status,
     runId,
     paused,
+    casVersion: paused ? casVersion : null,
     expectedOperation: paused ? (status.phase === 'NEEDS_DOCUMENT' || status.phase === 'NEEDS_CONTEXT' ? 'SUBMIT_CONTEXT' : 'GET_STATUS') : null,
   };
 }
@@ -150,11 +179,39 @@ export interface AgentRuntimeDependencies {
   authorize?: (principalUserId: string, propertyId: string) => Promise<boolean>;
   /** Live paused-run lookup seam — defaults to the DecisionThread-scoped query. */
   resolvePausedRun?: (propertyId: string, principalUserId: string, inventoryItemId: string) => Promise<PausedRun | null>;
+  resolveLatestRun?: typeof getLatestAgentRunForSubject;
   /** §7.3.7 property-context authorization gate — defaults to getPropertyContext. */
   contextReader?: AgentPropertyContextReader;
   /** §7.3.9 governed narration — default null keeps EXPLAIN fully deterministic. */
   narrationProvider?: NarrationProvider | null;
   now?: () => Date;
+  env?: NodeJS.ProcessEnv;
+  verifyHomeActionOrigin?: (input: {
+    propertyId: string;
+    principalUserId: string;
+    inventoryItemId: string;
+    origin: NonNullable<AgentRuntimeInvocation['homeActionOrigin']>;
+  }) => Promise<boolean>;
+}
+
+function enabled(definition: NonNullable<ReturnType<typeof getAgentDefinition>>, env: NodeJS.ProcessEnv): boolean {
+  const truthy = (value: string | undefined) => ['1', 'true', 'on', 'yes'].includes((value ?? '').trim().toLowerCase());
+  return definition.releaseState === 'ENABLED' && truthy(env[definition.featureFlag]) && !truthy(env[definition.killSwitch]);
+}
+
+async function verifyCanonicalHomeActionOrigin(input: {
+  propertyId: string;
+  principalUserId: string;
+  inventoryItemId: string;
+  origin: NonNullable<AgentRuntimeInvocation['homeActionOrigin']>;
+}): Promise<boolean> {
+  const feed = await getHomeActionFeed(input.propertyId, input.principalUserId);
+  return feed.actions.some((action) => action.id === input.origin.homeActionId
+    && action.lineageId === input.origin.lineageId
+    && action.source.entityId === input.origin.sourceEntityId
+    && action.source.version === input.origin.sourceVersion
+    && action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+    && action.decisionLineage.primaryEntityId === input.inventoryItemId);
 }
 
 // PR 11: SUBMIT_CONTEXT's fact writes go through the existing
@@ -167,6 +224,12 @@ export async function invokeAgentRuntime(
 ): Promise<AgentRuntimeResult> {
   const now = deps.now ?? (() => new Date());
   const intakeHandler = deps.contextIntakeHandler ?? DEFAULT_INTAKE;
+  const activeDefinition = getAgentDefinition(SPECIALIST_AGENT_ID);
+  if (!activeDefinition) throw new AgentRuntimeStateError('The active HVAC Specialist definition is not registered.');
+  if (invocation.operation !== 'GET_STATUS' && !enabled(activeDefinition, deps.env ?? process.env)) {
+    recordAgentOperation(SPECIALIST_AGENT_ID, invocation.operation, 'DENIED');
+    throw new AgentRuntimeDisabledError();
+  }
 
   // §7.3.2 — real principal, canonical resolver. requestingAgentId is never authz.
   const authorize = deps.authorize ?? (async (userId, propertyId) => Boolean(await resolvePropertyAccess(userId, propertyId)));
@@ -194,14 +257,19 @@ export async function invokeAgentRuntime(
     }
   }
 
+  if (paused?.expectedEvent === 'RESUME_IN_PROGRESS' && invocation.operation !== 'GET_STATUS') {
+    return readStatus(invocation, paused, deps);
+  }
+
   if (invocation.operation === 'GET_STATUS') {
-    const result = await readStatus(invocation, paused);
+    const result = await readStatus(invocation, paused, deps);
     recordAgentOperation(SPECIALIST_AGENT_ID, 'GET_STATUS', 'OK');
     return result;
   }
 
   if (invocation.operation === 'DISPUTE_INPUT') {
-    return disputeInput(invocation, paused, nowDate);
+    if (paused) assertCas(invocation, paused);
+    return disputeInput(invocation, paused, nowDate, deps);
   }
 
   if (invocation.operation === 'SUBMIT_CONTEXT') {
@@ -210,31 +278,32 @@ export async function invokeAgentRuntime(
     const intake = invocation.contextIntake ?? {};
     const unknownKeys = Object.keys(intake).filter((key) => !ACCEPTED_INTAKE_KEYS.has(key));
     if (unknownKeys.length) throw new AgentRuntimeStateError(`Unsupported context keys: ${unknownKeys.join(', ')}`);
-    await intakeHandler({
-      propertyId: invocation.propertyId,
-      principalUserId: invocation.principalUserId,
-      inventoryItemId: invocation.inventoryItemId,
-      intake,
-    });
-    return advanceRun({ invocation, paused, deps, now: nowDate });
+    return advanceRun({ invocation, paused, deps, now: nowDate, intakeHandler });
   }
 
   // START_OR_RESUME
-  return advanceRun({ invocation, paused, deps, now: nowDate });
+  if (paused && invocation.expectedCasVersion === undefined) return readStatus(invocation, paused, deps);
+  if (paused) assertCas(invocation, paused);
+  return advanceRun({ invocation, paused, deps, now: nowDate, intakeHandler });
 }
 
 function assertCas(invocation: AgentRuntimeInvocation, paused: PausedRun): void {
-  if (invocation.expectedCasVersion !== undefined && invocation.expectedCasVersion !== paused.casVersion) {
+  if (invocation.expectedCasVersion === undefined || invocation.expectedCasVersion !== paused.casVersion) {
     recordAgentOperation(SPECIALIST_AGENT_ID, invocation.operation, 'CAS_CONFLICT');
     throw new AgentRuntimeCasConflictError();
   }
 }
 
-async function readStatus(invocation: AgentRuntimeInvocation, paused: PausedRun | null): Promise<AgentRuntimeResult> {
+async function readStatus(
+  invocation: AgentRuntimeInvocation,
+  paused: PausedRun | null,
+  deps: AgentRuntimeDependencies = {},
+): Promise<AgentRuntimeResult> {
   if (paused) {
     const run = await getAgentRunById(paused.runId);
     const state = await loadAgentStateByRun(paused.runId);
-    const snapshot = (state?.serializedStateJson ?? {}) as Partial<AgentRunStatusProjection>;
+    const raw = (state?.serializedStateJson ?? {}) as { status?: Partial<AgentRunStatusProjection> } & Partial<AgentRunStatusProjection>;
+    const snapshot = raw.status ?? raw;
     return {
       mutated: false,
       status: projectionFor({
@@ -248,7 +317,30 @@ async function readStatus(invocation: AgentRuntimeInvocation, paused: PausedRun 
         outstanding: snapshot.outstanding ?? [],
         explanation: snapshot.explanation ?? [],
         abstentionReason: null,
-      }, paused.runId, true),
+      }, paused.runId, true, state?.casVersion ?? paused.casVersion),
+    };
+  }
+  const latest = await (deps.resolveLatestRun ?? getLatestAgentRunForSubject)(
+    invocation.propertyId,
+    invocation.principalUserId,
+    invocation.inventoryItemId,
+  );
+  if (latest) {
+    const snapshot = latest.statusJson as unknown as Partial<AgentRunStatusProjection>;
+    return {
+      mutated: false,
+      status: projectionFor({
+        agentId: snapshot.agentId ?? SPECIALIST_AGENT_ID,
+        agentVersion: snapshot.agentVersion ?? latest.agentVersion,
+        phase: snapshot.phase ?? (latest.outcome === 'COMPLETED' ? 'RECOMMENDATION_READY' : 'ABSTAINED'),
+        decisionThreadId: snapshot.decisionThreadId ?? latest.decisionThreadId,
+        currentRecommendationSnapshotId: snapshot.currentRecommendationSnapshotId ?? null,
+        verdict: snapshot.verdict ?? null,
+        confidenceLabel: snapshot.confidenceLabel ?? null,
+        outstanding: snapshot.outstanding ?? [],
+        explanation: snapshot.explanation ?? [],
+        abstentionReason: snapshot.abstentionReason ?? (latest.outcome === 'FAILED' ? 'TOOL_FAILURE' : null),
+      }, latest.id, false),
     };
   }
   const def = getAgentDefinition(SPECIALIST_AGENT_ID)!;
@@ -269,7 +361,12 @@ async function readStatus(invocation: AgentRuntimeInvocation, paused: PausedRun 
   };
 }
 
-async function disputeInput(invocation: AgentRuntimeInvocation, paused: PausedRun | null, now: Date): Promise<AgentRuntimeResult> {
+async function disputeInput(
+  invocation: AgentRuntimeInvocation,
+  paused: PausedRun | null,
+  now: Date,
+  deps: AgentRuntimeDependencies,
+): Promise<AgentRuntimeResult> {
   // v1: a dispute is recorded as bounded audit against the run (if one exists)
   // and surfaces the correction path; it does not mutate canonical decision
   // state — the homeowner corrects the underlying record, which marks the
@@ -288,7 +385,7 @@ async function disputeInput(invocation: AgentRuntimeInvocation, paused: PausedRu
     });
   }
   recordAgentOperation(SPECIALIST_AGENT_ID, 'DISPUTE_INPUT', 'OK');
-  return readStatus(invocation, paused);
+  return readStatus(invocation, paused, deps);
 }
 
 async function advanceRun(args: {
@@ -296,62 +393,48 @@ async function advanceRun(args: {
   paused: PausedRun | null;
   deps: AgentRuntimeDependencies;
   now: Date;
+  intakeHandler: NonNullable<AgentRuntimeDependencies['contextIntakeHandler']>;
 }): Promise<AgentRuntimeResult> {
-  const { invocation, paused, deps, now } = args;
+  const { invocation, paused, deps, now, intakeHandler } = args;
 
   // §7.3.3 — resume pins the originating version; a fresh start uses active.
   const version = paused?.agentVersion;
   const definition = getAgentDefinition(SPECIALIST_AGENT_ID, version);
   if (!definition) throw new AgentRuntimeStateError(`Pinned agent version ${version ?? 'active'} is not registered.`);
   const digest = digestAgentDefinition(definition);
+  const correlationId = randomUUID();
+  const triggerIdentity = paused
+    ? ['RESUME', paused.runId, paused.casVersion]
+    : (() => {
+      const origin = invocation.homeActionOrigin;
+      if (!origin) throw new AgentRuntimeStateError('A delivered Home Action origin is required to start the HVAC Specialist.');
+      return [
+        'HOME_ACTION_ENGAGEMENT',
+        invocation.principalUserId,
+        invocation.propertyId,
+        origin.lineageId,
+        definition.version,
+        origin.engagementNonce,
+      ];
+    })();
+  const identityDigest = createHash('sha256').update(JSON.stringify(triggerIdentity)).digest('hex');
+  const idempotencyKey = `${SPECIALIST_AGENT_ID}:${definition.version}:${identityDigest}`;
 
-  const startedAt = now;
-  const invocationCorrelationId = randomUUID();
-  const specialist = await runHvacSpecialist({
-    propertyId: invocation.propertyId,
-    principalUserId: invocation.principalUserId,
-    requestingAgentId: invocation.requestingAgentId,
-    inventoryItemId: invocation.inventoryItemId,
-    agentVersion: definition.version,
-    budgets: budgetsOf(definition.budgets),
-    homeActionId: invocation.homeActionId,
-    askExecutionId: invocation.askExecutionId,
-  }, {
-    port: deps.threadPort,
-    contextReader: deps.contextReader,
-    narrationProvider: deps.narrationProvider ?? null,
-  });
-  const finishedAt = new Date();
-
-  if (paused) {
-    // Resume path: advance or resolve the existing paused run's state.
-    // §7.3.5 — this invocation's tool calls join the original run's audit trail.
-    await persistToolInvocations(paused.runId, invocationCorrelationId, specialist.toolInvocations);
-    if (specialist.disposition === 'PAUSE') {
-      const swap = await compareAndSwapAgentState({
-        runId: paused.runId,
-        expectedCasVersion: paused.casVersion,
-        serializedState: asJson(specialist.status),
-        expectedEvent: 'SUBMIT_CONTEXT',
-        pauseExpiresAt: new Date(now.getTime() + PAUSE_TTL_MS),
-      });
-      if (!swap.swapped) throw new AgentRuntimeCasConflictError();
-      recordAgentRunOutcome(SPECIALIST_AGENT_ID, 'PAUSED');
-      return { mutated: true, status: projectionFor(specialist.status, paused.runId, true) };
+  if (!paused) {
+    const origin = invocation.homeActionOrigin!;
+    const verified = await (deps.verifyHomeActionOrigin ?? verifyCanonicalHomeActionOrigin)({
+      propertyId: invocation.propertyId,
+      principalUserId: invocation.principalUserId,
+      inventoryItemId: invocation.inventoryItemId,
+      origin,
+    });
+    if (!verified) {
+      throw new AgentRuntimeStateError('The HVAC Specialist can only start from the matching canonical HVAC Home Action.');
     }
-    const consumed = await resolveAgentState(paused.runId, paused.casVersion, finishedAt);
-    if (!consumed) throw new AgentRuntimeCasConflictError();
-    recordAgentRunOutcome(SPECIALIST_AGENT_ID, specialist.status.phase);
-    // The terminal AgentRun for a resumed run was already written when it first
-    // paused (outcome PAUSED). The canonical outcome now lives on the
-    // DecisionThread; the run's audit trail is complete.
-    return { mutated: true, status: projectionFor(specialist.status, paused.runId, false) };
   }
 
-  // Fresh episode: reserve, run, write exactly one terminal AgentRun.
-  const episodeDay = now.toISOString().slice(0, 10);
-  const idempotencyKey = `${SPECIALIST_AGENT_ID}:${definition.version}:${invocation.propertyId}:${invocation.inventoryItemId}:${episodeDay}`;
-  const correlationId = randomUUID();
+  // IPD-007: reservation ownership is acquired before context intake, Decision
+  // Platform creation/resume, or any other side effect.
   const reservation = await claimAgentRunReservation({
     idempotencyKey,
     agentId: SPECIALIST_AGENT_ID,
@@ -359,19 +442,121 @@ async function advanceRun(args: {
     trigger: SPECIALIST_TRIGGER,
     principalUserId: invocation.principalUserId,
     propertyId: invocation.propertyId,
-    decisionThreadId: specialist.status.decisionThreadId,
+    primaryEntityId: invocation.inventoryItemId,
+    decisionThreadId: paused?.decisionThreadId ?? null,
     correlationId,
   }, now);
 
-  if (!reservation.claimed && reservation.reservation.resultRunId) {
-    const existing = await getAgentRunById(reservation.reservation.resultRunId);
-    const existingState = existing ? await loadAgentStateByRun(existing.id) : null;
+  if (!reservation.claimed) {
+    if (reservation.reservation.resultRunId) {
+      const existing = await getAgentRunById(reservation.reservation.resultRunId);
+      if (existing) {
+        const state = await loadAgentStateByRun(existing.id);
+        const snapshot = existing.statusJson as unknown as Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'casVersion' | 'expectedOperation'>;
+        return {
+          mutated: false,
+          status: projectionFor(snapshot, existing.id, Boolean(state && !state.resolvedAt), state?.casVersion ?? null),
+        };
+      }
+    }
     return {
       mutated: false,
-      status: projectionFor(specialist.status, existing?.id ?? null, Boolean(existingState && !existingState.resolvedAt)),
+      status: projectionFor({
+        agentId: SPECIALIST_AGENT_ID,
+        agentVersion: definition.version,
+        phase: 'WORKING',
+        decisionThreadId: paused?.decisionThreadId ?? null,
+        currentRecommendationSnapshotId: null,
+        verdict: null,
+        confidenceLabel: null,
+        outstanding: [],
+        explanation: [],
+        abstentionReason: null,
+      }, null, false),
     };
   }
 
+  let claimedPausedCasVersion: number | null = null;
+  let initialLedger: SpecialistBudgetLedger | undefined;
+  if (paused) {
+    const serialized = paused.serializedState as {
+      status?: unknown;
+      ledger?: SpecialistBudgetLedger;
+    };
+    initialLedger = serialized?.ledger;
+    const swap = await compareAndSwapAgentState({
+      runId: paused.runId,
+      expectedCasVersion: paused.casVersion,
+      serializedState: asJson(paused.serializedState),
+      expectedEvent: 'RESUME_IN_PROGRESS',
+      pauseExpiresAt: paused.pauseExpiresAt,
+    });
+    if (!swap.swapped) throw new AgentRuntimeCasConflictError();
+    claimedPausedCasVersion = swap.casVersion;
+
+  }
+
+  const startedAt = now;
+  let specialist: Awaited<ReturnType<typeof runHvacSpecialist>>;
+  let failureCode: string | null = null;
+  try {
+    // Intake is part of the claimed invocation. If its canonical write fails,
+    // persist a terminal FAILED run and consume the in-progress pause instead
+    // of stranding it forever at RESUME_IN_PROGRESS.
+    if (paused && invocation.operation === 'SUBMIT_CONTEXT') {
+      await intakeHandler({
+        propertyId: invocation.propertyId,
+        principalUserId: invocation.principalUserId,
+        inventoryItemId: invocation.inventoryItemId,
+        intake: invocation.contextIntake ?? {},
+      });
+    }
+    specialist = await runHvacSpecialist({
+      propertyId: invocation.propertyId,
+      principalUserId: invocation.principalUserId,
+      requestingAgentId: invocation.requestingAgentId,
+      inventoryItemId: invocation.inventoryItemId,
+      agentVersion: definition.version,
+      budgets: budgetsOf(definition.budgets, definition.retryPolicy),
+      homeActionOrigin: invocation.homeActionOrigin,
+      askExecutionId: invocation.askExecutionId,
+      initialLedger,
+      env: deps.env,
+    }, {
+      port: deps.threadPort,
+      contextReader: deps.contextReader,
+      narrationProvider: deps.narrationProvider ?? null,
+    });
+  } catch (error) {
+    failureCode = error instanceof Error ? error.name.slice(0, 100) : 'SPECIALIST_RUNTIME_FAILED';
+    specialist = {
+      disposition: 'TERMINAL',
+      usedLlm: false,
+      ledger: initialLedger ?? {
+        loopIterations: 0,
+        elapsedMs: 0,
+        contextFactsUsed: 0,
+        llmInvocationsUsed: 0,
+        llmCostUsdUsed: 0,
+        toolAttempts: {},
+      },
+      toolInvocations: [],
+      llmInvocations: [],
+      status: {
+        agentId: SPECIALIST_AGENT_ID,
+        agentVersion: definition.version,
+        phase: 'ABSTAINED',
+        decisionThreadId: paused?.decisionThreadId ?? null,
+        currentRecommendationSnapshotId: null,
+        verdict: null,
+        confidenceLabel: null,
+        outstanding: [],
+        explanation: [],
+        abstentionReason: 'TOOL_FAILURE',
+      },
+    };
+  }
+  const finishedAt = deps.now?.() ?? new Date();
   const outcome = specialist.disposition === 'PAUSE' ? 'PAUSED' : specialist.status.phase === 'RECOMMENDATION_READY' ? 'COMPLETED' : 'ABSTAINED';
   const run = await writeTerminalAgentRun({
     reservationId: reservation.reservation.id,
@@ -384,12 +569,14 @@ async function advanceRun(args: {
     correlationId,
     principalUserId: invocation.principalUserId,
     propertyId: invocation.propertyId,
+    primaryEntityId: invocation.inventoryItemId,
     decisionThreadId: specialist.status.decisionThreadId,
-    originHomeActionId: invocation.homeActionId ?? null,
+    originHomeActionId: invocation.homeActionOrigin?.homeActionId ?? null,
     originAskExecutionId: invocation.askExecutionId ?? null,
-    outcome,
+    outcome: failureCode ? 'FAILED' : outcome,
     abstentionReason: specialist.status.abstentionReason,
-    failureCode: null,
+    failureCode,
+    status: asJson(specialist.status),
     budgetUsage: {
       contextFactsUsed: specialist.ledger.contextFactsUsed,
       llmInvocationsUsed: specialist.ledger.llmInvocationsUsed,
@@ -401,21 +588,32 @@ async function advanceRun(args: {
     finishedAt,
   }, now);
 
-  await persistToolInvocations(run.id, invocationCorrelationId, specialist.toolInvocations);
-
+  let stateCasVersion: number | null = null;
   if (specialist.disposition === 'PAUSE') {
-    await createAgentState({
+    const state = await createAgentState({
       runId: run.id,
       agentId: SPECIALIST_AGENT_ID,
       agentVersion: definition.version,
       stateShape: STATE_SHAPE,
-      serializedState: asJson(specialist.status),
+      serializedState: asJson({ status: specialist.status, ledger: specialist.ledger }),
       expectedEvent: 'SUBMIT_CONTEXT',
       pauseExpiresAt: new Date(now.getTime() + PAUSE_TTL_MS),
     });
+    stateCasVersion = state.casVersion;
+  }
+
+  if (paused && claimedPausedCasVersion !== null) {
+    const consumed = await resolveAgentState(paused.runId, claimedPausedCasVersion, finishedAt);
+    if (!consumed) throw new AgentRuntimeCasConflictError();
+  }
+
+  await persistToolInvocations(run.id, correlationId, specialist.toolInvocations);
+  await persistLlmInvocations(run.id, correlationId, specialist.llmInvocations);
+
+  if (specialist.disposition === 'PAUSE') {
     recordAgentRunOutcome(SPECIALIST_AGENT_ID, 'PAUSED');
     recordAgentOperation(SPECIALIST_AGENT_ID, invocation.operation, 'OK');
-    return { mutated: true, status: projectionFor(specialist.status, run.id, true) };
+    return { mutated: true, status: projectionFor(specialist.status, run.id, true, stateCasVersion) };
   }
 
   recordAgentRunOutcome(SPECIALIST_AGENT_ID, specialist.status.phase);
