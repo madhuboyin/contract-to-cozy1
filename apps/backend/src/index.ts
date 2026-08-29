@@ -65,6 +65,7 @@ import sellerPrepRoutes from './sellerPrep/sellerPrep.routes';
 import feedbackRoutes from './feedback/feedback.routes';
 import localUpdatesRoutes from './localUpdates/localUpdates.routes';
 import homeActionsRoutes from './routes/homeActions.routes';
+import adminEnvelopeCoverageRoutes from './routes/adminEnvelopeCoverage.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -675,6 +676,7 @@ app.use('/api', adminBookingOpsRoutes);
 app.use('/api', adminHomeOperationsRoutes);
 app.use('/api', adminIntelligenceRecomputeRoutes);
 app.use('/api', adminSourceHealthRoutes);
+app.use('/api', adminEnvelopeCoverageRoutes);
 app.use('/api', adminFeedbackQualityRoutes);
 app.use('/api', adminCaseRoutes);
 app.use('/api', adminWorkQueuesRoutes);

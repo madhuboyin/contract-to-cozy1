@@ -15551,6 +15551,18 @@ enum CoverageAuditEvidenceBasis {
   DECLARED_AND_OBSERVED
 }
 
+enum CoverageAuditRunTrigger {
+  SCHEDULED
+  MANUAL
+}
+
+enum CoverageAuditRunStatus {
+  RUNNING
+  COMPLETE
+  PARTIAL
+  FAILED
+}
+
 enum IntelligencePropertyMatchMethod {
   EXACT_POINT_DISTANCE
   POLYGON_OVERLAP
@@ -15610,6 +15622,46 @@ model CoverageAuditFinding {
   @@index([active, determination, lastAuditedAt(sort: Desc)])
   @@index([producerModel, active])
   @@map("coverage_audit_findings")
+}
+
+model CoverageAuditRun {
+  id                        String                   @id @default(uuid())
+  idempotencyKey            String                   @unique
+  trigger                   CoverageAuditRunTrigger
+  status                    CoverageAuditRunStatus   @default(RUNNING)
+  workerJobKey              String
+  correlationId             String
+  auditInputsDigest         String
+  taxonomyVersion           String
+  deploymentRevision        String
+  evaluationContractVersion String?
+  evaluationStatus          String                   @default("NOT_MEASURED")
+  startedAt                 DateTime                 @default(now())
+  finishedAt                DateTime?
+  propertiesExamined        Int                      @default(0)
+  propertiesAudited         Int                      @default(0)
+  ownerUnresolved           Int                      @default(0)
+  propertyFailures          Int                      @default(0)
+  adapterFailures           Int                      @default(0)
+  envelopePagesRead         Int                      @default(0)
+  observedCapabilities      Int                      @default(0)
+  findings                  Int                      @default(0)
+  reviewRequired            Int                      @default(0)
+  declarationDrift          Int                      @default(0)
+  certificationIssueCount   Int                      @default(0)
+  findingsCreated           Int                      @default(0)
+  findingsUpdated           Int                      @default(0)
+  findingsRetired           Int                      @default(0)
+  diagnostics               String[]                 @default([])
+  certificationIssues       String[]                 @default([])
+  failureCode               String?
+  failureSummary            String?
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+
+  @@index([status, startedAt(sort: Desc)])
+  @@index([trigger, startedAt(sort: Desc)])
+  @@map("coverage_audit_runs")
 }
 
 model IntelligenceSource {

@@ -67,6 +67,7 @@ import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
 import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAudit.job';
 import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
 import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.job';
+import { runEvaluateEnvelopePromotionCoverageJob } from './jobs/evaluateEnvelopePromotionCoverage.job';
 import { generateDiyAiGuideJob, GENERATE_DIY_AI_GUIDE_JOB } from './jobs/generateDiyAiGuide.job';
 import { DIY_AI_GUIDE_QUEUE } from '@worker-shared/services/diyAiGuide.service';
 import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPermitHistory.job';
@@ -254,7 +255,14 @@ async function sendMaintenanceReminders() {
 // appear in the Worker Jobs admin dashboard.
 // =============================================================================
 
-const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: string }) => Promise<void | WorkerRunResult>> = {
+interface WorkerHandlerOptions {
+  dryRun?: boolean;
+  propertyId?: string;
+  trigger?: 'MANUAL';
+  invocationId?: string;
+}
+
+const CRON_HANDLERS: Record<string, (opts?: WorkerHandlerOptions) => Promise<void | WorkerRunResult>> = {
   'maintenance-reminders':           async () => sendMaintenanceReminders(),
   'daily-email-digest':              async () => { await runDailyEmailDigest(); },
   'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
@@ -424,6 +432,11 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'expire-stale-weather-preparations': async (opts) => runExpireStaleWeatherPreparationsJob(opts),
   'shared-data-backfill':            async (opts) => { await runSharedDataBackfillJob(opts); },
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
+  'envelope-promotion-coverage-audit': async (opts) => runEvaluateEnvelopePromotionCoverageJob(
+    opts?.trigger === 'MANUAL'
+      ? { trigger: 'MANUAL', invocationId: opts.invocationId }
+      : undefined,
+  ),
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
@@ -1550,7 +1563,7 @@ const cronTriggerWorker = new Worker(
     // scheduled run of the same job, or vice versa.
     const leaseOutcome = await runWithCronLease(
       canonicalJobKey,
-      () => handler({ dryRun, propertyId }),
+      () => handler({ dryRun, propertyId, trigger: 'MANUAL', invocationId: String(job.id) }),
     );
     if (leaseOutcome.status === 'skipped') {
       throw new Error(

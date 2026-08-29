@@ -23,6 +23,8 @@ export interface WorkerExecutionPolicy {
   impact: WorkerImpact;
   customerJob: CustomerJob;
   defaultEnabledInBeta: boolean;
+  /** Defaults to true. Set false when manual execution is approved but cron activation is not. */
+  defaultScheduledEnabled?: boolean;
   supportsDryRun: boolean;
   supportsPropertyScope: boolean;
   externalProvider?: string;
@@ -231,6 +233,10 @@ export function evaluateWorkerExecution(
 
   if (!policy.defaultEnabledInBeta) {
     return { allowed: false, reason: 'defaultEnabledInBeta=false' };
+  }
+
+  if (triggerType !== 'manual' && policy.defaultScheduledEnabled === false) {
+    return { allowed: false, reason: 'defaultScheduledEnabled=false' };
   }
 
   if (policy.externalProvider && !isWorkerExternalIngestEnabled(env)) {

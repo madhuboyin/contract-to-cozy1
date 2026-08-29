@@ -119,6 +119,19 @@ test('defaultEnabledInBeta=false blocks even with every flag on', () => {
   assert.match(decision.reason, /defaultEnabledInBeta=false/);
 });
 
+test('defaultScheduledEnabled=false keeps cron closed while allowing manual execution', () => {
+  const launchClosed = policy({ defaultScheduledEnabled: false });
+  const scheduled = evaluateWorkerExecution('job-a', 'scheduled', launchClosed, {
+    WORKER_AUTOMATION_ENABLED: 'true',
+  });
+  const manual = evaluateWorkerExecution('job-a', 'manual', launchClosed, {
+    WORKER_MANUAL_TRIGGERS_ENABLED: 'true',
+  });
+  assert.equal(scheduled.allowed, false);
+  assert.match(scheduled.reason, /defaultScheduledEnabled=false/);
+  assert.equal(manual.allowed, true);
+});
+
 test('externalProvider jobs require WORKER_EXTERNAL_INGEST_ENABLED', () => {
   const env = { WORKER_AUTOMATION_ENABLED: 'true' };
   const blocked = evaluateWorkerExecution('recall-ingest', 'scheduled', policy({ externalProvider: 'CPSC' }), env);

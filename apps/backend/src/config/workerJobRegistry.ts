@@ -906,6 +906,27 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'envelope-promotion-coverage-audit',
+    name: 'Envelope Promotion Coverage Audit',
+    description: 'Audits registered Envelope producer coverage and persists governed findings and run history without homeowner delivery.',
+    category: 'HOME_INTELLIGENCE',
+    schedule: 'Sundays at 04:30 UTC',
+    cronExpression: '30 4 * * 0',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'envelope-promotion-coverage-audit',
+    triggerSupported: true,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    // IPD-002 is unresolved: manual inspection is allowed, scheduled launch is not.
+    defaultScheduledEnabled: false,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    broadSweep: false,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'shared-signal-refresh',
     name: 'Shared Signal Refresh',
     description:

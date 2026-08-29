@@ -144,6 +144,15 @@ export const ADMIN_NAV: NavJob[] = [
     globalHref: true,
   },
   {
+    key: 'admin-envelope-coverage',
+    name: 'Envelope Coverage',
+    href: '/dashboard/envelope-coverage',
+    icon: ShieldQuestion,
+    description: 'Which registered Envelope producers have a hand-authored promotion path',
+    engines: [],
+    globalHref: true,
+  },
+  {
     key: 'admin-radar-sources',
     name: 'Radar Sources',
     href: '/dashboard/admin/radar-sources',

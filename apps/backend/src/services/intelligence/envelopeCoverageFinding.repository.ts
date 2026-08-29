@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma';
+import type { Prisma } from '@prisma/client';
 import type { EnvelopeCoverageFindingProjection } from './envelopeCoverageAudit.service';
 
 export type EnvelopeCoverageReconciliationResult = Readonly<{
@@ -33,7 +34,19 @@ export async function reconcileEnvelopeCoverageFindings(
   options: Readonly<{ complete: boolean; auditedAt: Date }>,
   db: Pick<typeof prisma, '$transaction'> = prisma,
 ): Promise<EnvelopeCoverageReconciliationResult> {
-  return db.$transaction(async (tx) => {
+  return db.$transaction((tx) => reconcileEnvelopeCoverageFindingsInTransaction(
+    tx,
+    findings,
+    options,
+  ));
+}
+
+/** Transaction-scoped variant used to atomically reconcile and terminalize a run. */
+export async function reconcileEnvelopeCoverageFindingsInTransaction(
+  tx: Pick<Prisma.TransactionClient, 'coverageAuditFinding'>,
+  findings: readonly EnvelopeCoverageFindingProjection[],
+  options: Readonly<{ complete: boolean; auditedAt: Date }>,
+): Promise<EnvelopeCoverageReconciliationResult> {
     const existingRows = await tx.coverageAuditFinding.findMany({
       select: {
         id: true,
@@ -100,6 +113,5 @@ export async function reconcileEnvelopeCoverageFindings(
         data: { active: false, retiredAt: options.auditedAt, lastAuditedAt: options.auditedAt },
       });
     }
-    return { created, updated, retired: retirementIds.length };
-  });
+  return { created, updated, retired: retirementIds.length };
 }

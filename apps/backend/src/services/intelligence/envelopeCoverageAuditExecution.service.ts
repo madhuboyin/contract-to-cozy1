@@ -11,6 +11,10 @@ import {
   reconcileEnvelopeCoverageFindings,
   type EnvelopeCoverageReconciliationResult,
 } from './envelopeCoverageFinding.repository';
+import {
+  finalizeCoverageAuditRun,
+  type CoverageAuditRunSummary,
+} from './envelopeCoverageRun.repository';
 
 const DEFAULT_PROPERTY_PAGE_SIZE = 100;
 const DEFAULT_ENVELOPE_PAGE_SIZE = 100;
@@ -44,6 +48,13 @@ export type EnvelopeCoverageAuditExecutionDependencies = Readonly<{
     findings: ReturnType<typeof auditEnvelopeCoverage>['findings'],
     options: { complete: boolean; auditedAt: Date },
   ): Promise<EnvelopeCoverageReconciliationResult>;
+  finalizeRun(input: {
+    runId: string;
+    auditedAt: Date;
+    finishedAt: Date;
+    findings: ReturnType<typeof auditEnvelopeCoverage>['findings'];
+    summary: CoverageAuditRunSummary;
+  }): Promise<EnvelopeCoverageReconciliationResult>;
   now(): Date;
 }>;
 
@@ -84,6 +95,7 @@ const DEFAULT_DEPENDENCIES: EnvelopeCoverageAuditExecutionDependencies = {
     });
   },
   reconcile: reconcileEnvelopeCoverageFindings,
+  finalizeRun: finalizeCoverageAuditRun,
   now: () => new Date(),
 };
 
@@ -91,6 +103,7 @@ export async function executeEnvelopeCoverageAudit(input: Readonly<{
   propertyPageSize?: number;
   envelopePageSize?: number;
   maxEnvelopePagesPerProperty?: number;
+  runId?: string;
 }> = {}, dependencyOverrides: Partial<EnvelopeCoverageAuditExecutionDependencies> = {}): Promise<EnvelopeCoverageAuditExecutionResult> {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
   const propertyPageSize = Math.max(1, Math.min(input.propertyPageSize ?? DEFAULT_PROPERTY_PAGE_SIZE, 500));
@@ -197,13 +210,8 @@ export async function executeEnvelopeCoverageAudit(input: Readonly<{
     observedCapabilities,
     auditedAt: auditedAt.toISOString(),
   });
-  const reconciliation = await dependencies.reconcile(audit.findings, {
-    complete: operationallyComplete,
-    auditedAt,
-  });
   const certificationIssues = [...audit.certificationIssues, ...unmappedCertificationIssues].sort();
-
-  return {
+  const summary: CoverageAuditRunSummary = {
     status: operationallyComplete ? 'COMPLETE' : 'PARTIAL',
     evaluationStatus: 'NOT_MEASURED',
     propertiesExamined,
@@ -218,6 +226,22 @@ export async function executeEnvelopeCoverageAudit(input: Readonly<{
     declarationDrift: audit.declarationDrift.length,
     certificationIssues,
     diagnostics: [...new Set(diagnostics)].sort(),
+  };
+  const reconciliation = input.runId
+    ? await dependencies.finalizeRun({
+      runId: input.runId,
+      auditedAt,
+      finishedAt: dependencies.now(),
+      findings: audit.findings,
+      summary,
+    })
+    : await dependencies.reconcile(audit.findings, {
+      complete: operationallyComplete,
+      auditedAt,
+    });
+
+  return {
+    ...summary,
     reconciliation,
   };
 }
