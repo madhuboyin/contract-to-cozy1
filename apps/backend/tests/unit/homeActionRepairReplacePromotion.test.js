@@ -265,7 +265,7 @@ test('multiple analyses for the same item are deduped, preferring the CURRENT ma
 // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
 // category-aware decision-family routing. `id` is category-independent;
 // only `lineageId` picks the family.
-test('a non-HVAC analysis routes to the appliance-repair-replace lineage; HVAC keeps repair-replace', async () => {
+test('an APPLIANCE analysis routes to the appliance family; HVAC keeps its family', async () => {
   const applianceDb = stubSources({ analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'APPLIANCE' } })] });
   const { actions: applianceActions } = await getPromotedHomeActions('property-1', applianceDb, { evaluatedAt: NOW, includePersonalization: false });
   assert.equal(applianceActions[0].id, 'repair-replace:analysis-1');
@@ -278,6 +278,14 @@ test('a non-HVAC analysis routes to the appliance-repair-replace lineage; HVAC k
   const { actions: hvacActions } = await getPromotedHomeActions('property-1', hvacDb, { evaluatedAt: NOW, includePersonalization: false });
   assert.equal(hvacActions[0].id, 'repair-replace:analysis-1');
   assert.equal(hvacActions[0].lineageId, 'repair-replace:item-1');
+});
+
+test('higher-risk non-HVAC categories abstain at ingress instead of falling back to APPLIANCE', async () => {
+  for (const category of ['PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'STRUCTURAL']) {
+    const db = stubSources({ analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Unsupported system', category } })] });
+    const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+    assert.equal(actions.length, 0, `${category} must not be promoted into a repair/replace decision family`);
+  }
 });
 
 test('a db stub without replaceRepairAnalysis does not throw and yields no actions', async () => {

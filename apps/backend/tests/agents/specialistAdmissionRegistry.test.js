@@ -35,14 +35,14 @@ test('HVAC is the ADMITTED reference implementation with every gate cleared', ()
   assert.equal(deriveSpecialistAdmissionStatus(hvac), 'ADMITTED');
 });
 
-test('GENERIC_APPLIANCE is PENDING_REVIEW and blocked on the IPD-006 evaluation suite', () => {
+test('GENERIC_APPLIANCE is ADMITTED after the approved IPD-006 evaluation suite', () => {
   const record = getSpecialistAdmissionRecord('GENERIC_APPLIANCE');
   assert.ok(record);
-  assert.equal(record.status, 'PENDING_REVIEW');
+  assert.equal(record.status, 'ADMITTED');
   assert.equal(record.ownerInputId, 'IPD-006');
-  assert.equal(record.gateReviews.EVALUATION_SUITE.status, 'NOT_REVIEWED');
-  assert.equal(deriveSpecialistAdmissionStatus(record), 'PENDING_REVIEW');
-  assert.equal(isProfileAdmitted('GENERIC_APPLIANCE'), false);
+  assert.equal(record.gateReviews.EVALUATION_SUITE.status, 'PASS');
+  assert.equal(deriveSpecialistAdmissionStatus(record), 'ADMITTED');
+  assert.equal(isProfileAdmitted('GENERIC_APPLIANCE'), true);
 });
 
 test('the four higher-risk families are explicit NOT_ADMITTED exclusions', () => {

@@ -190,9 +190,8 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
     notes: 'Phase 2. The pattern every Phase 4B candidate is compared against.',
   }),
 
-  // Phase 4A stood up the APPLIANCE_REPAIR_REPLACE decision family and the
-  // category-aware ingress. The GENERIC_APPLIANCE *profile* (the agent
-  // layer) is the outstanding half and is gated on IPD-006.
+  // IPD-006 approved the APPLIANCE-only profile, verdict mapping, and
+  // deterministic evaluation contract on 2026-08-29.
   Object.freeze({
     candidateId: 'GENERIC_APPLIANCE',
     title: 'Generic non-HVAC appliance Repair-or-Replace profile',
@@ -222,13 +221,13 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
         case 'AUTONOMY_CEILING_REJUSTIFICATION':
           return passed('Reuses the HVAC specialist loop and its Level 0-2 ceiling unchanged — no re-justification needed for NEW_PROFILE_EXISTING_SHAPE, recorded for completeness.', '2026-08-29');
         case 'EVALUATION_SUITE':
-          return notReviewed('IPD-006: versioned generic-appliance evaluation contract + reviewed ReplaceRepairAnalysis -> verdict-code mapping. Not yet delivered.');
+          return passed('agent-generic-appliance-repair-replace-eval@1.0.0: >=10 checked-in fixtures, 100% deterministic non-abstention completion, zero LLM calls, and 20-50% abstention band.', '2026-08-29');
         default:
           return notReviewed('unreachable');
       }
     }),
-    status: 'PENDING_REVIEW',
-    notes: 'Blocks: cannot add GENERIC_APPLIANCE to REPAIR_REPLACE_PROFILES until EVALUATION_SUITE passes (IPD-006). validateSpecialistAdmissionRegistry enforces this.',
+    status: 'ADMITTED',
+    notes: 'IPD-006 approved on 2026-08-29. Eligibility is APPLIANCE only; water heaters remain PLUMBING and are excluded. Verdict mapping: REPLACE_NOW/REPLACE_SOON -> REPLACE; REPAIR_AND_MONITOR/REPAIR_ONLY -> REPAIR.',
   }),
 
   // Higher-risk families — explicit exclusions, not silent omissions

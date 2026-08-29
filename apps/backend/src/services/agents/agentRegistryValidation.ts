@@ -24,12 +24,15 @@ export const AGENT_TRIGGER_HANDLER_REGISTRY: Readonly<Record<string, AgentDepend
 
 export const AGENT_OUTPUT_CONTRACT_REGISTRY: Readonly<Record<string, AgentDependencyReadiness>> = Object.freeze({
   'decision-platform.hvac-repair-replace-projection@1.0.0': 'AVAILABLE',
+  'decision-platform.repair-replace-projection@1.1.0': 'AVAILABLE',
 });
 
 export const AGENT_EVALUATION_SUITE_REGISTRY: Readonly<Record<string, AgentDependencyReadiness>> = Object.freeze({
   // PR 11 / IPD-005: hvacSpecialistEvaluation.ts is the checked-in fixture
   // contract; hvacSpecialistEvaluation.test.js runs it in CI.
   'agent-hvac-repair-replace-eval@1.0.0': 'AVAILABLE',
+  // IPD-006: deterministic, versioned APPLIANCE-only corpus.
+  'agent-generic-appliance-repair-replace-eval@1.0.0': 'AVAILABLE',
 });
 
 export const AGENT_PLATFORM_BUDGET_MAXIMUMS = Object.freeze({

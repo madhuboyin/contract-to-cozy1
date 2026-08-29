@@ -35,8 +35,9 @@ import type { NarrationProvider } from './agentLlmPurpose.contract';
 import type { AgentPropertyContextReader } from './agentPropertyContext.service';
 import type { PendingLlmInvocation, PendingToolInvocation } from './agentRuntime.contract';
 import { recordAgentOperation, recordAgentRunOutcome } from './agentMetrics.service';
-import { runHvacSpecialist, type SpecialistThreadPort } from './hvacRepairReplaceSpecialist.service';
+import { createSpecialistThreadPort, runHvacSpecialist, type SpecialistThreadPort } from './hvacRepairReplaceSpecialist.service';
 import { applyHvacSpecialistContextIntake } from './hvacSpecialistContextIntake';
+import { REPAIR_REPLACE_PROFILES, type RepairReplaceProfile } from './repairReplaceProfileRegistry';
 import { ACCEPTED_INTAKE_KEYS } from './specialistTypedClaims';
 import type {
   AgentRunStatusProjection,
@@ -47,7 +48,6 @@ import type { SpecialistBudgetLedger, SpecialistBudgets } from './specialistTool
 
 const SPECIALIST_AGENT_ID = 'hvac-repair-replace-specialist';
 const SPECIALIST_TRIGGER = 'HOME_ACTION_ENGAGEMENT' as const;
-const STATE_SHAPE = 'agent.hvac-repair-replace.state@1.0.0';
 const PAUSE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days to respond before the pause is abandoned.
 
 export class AgentRuntimeAuthorizationError extends Error {
@@ -60,7 +60,7 @@ export class AgentRuntimeStateError extends Error {
   constructor(message: string) { super(message); this.name = 'AgentRuntimeStateError'; }
 }
 export class AgentRuntimeDisabledError extends Error {
-  constructor() { super('The HVAC Specialist is currently unavailable.'); this.name = 'AgentRuntimeDisabledError'; }
+  constructor() { super('The Repair-or-Replace Specialist is currently unavailable.'); this.name = 'AgentRuntimeDisabledError'; }
 }
 
 function asJson(value: unknown): Prisma.InputJsonValue {
@@ -191,6 +191,7 @@ export interface AgentRuntimeDependencies {
     principalUserId: string;
     inventoryItemId: string;
     origin: NonNullable<AgentRuntimeInvocation['homeActionOrigin']>;
+    decisionDefinitionId: RepairReplaceProfile['decisionDefinitionId'];
   }) => Promise<boolean>;
 }
 
@@ -204,14 +205,37 @@ async function verifyCanonicalHomeActionOrigin(input: {
   principalUserId: string;
   inventoryItemId: string;
   origin: NonNullable<AgentRuntimeInvocation['homeActionOrigin']>;
+  decisionDefinitionId: RepairReplaceProfile['decisionDefinitionId'];
 }): Promise<boolean> {
   const feed = await getHomeActionFeed(input.propertyId, input.principalUserId);
   return feed.actions.some((action) => action.id === input.origin.homeActionId
     && action.lineageId === input.origin.lineageId
     && action.source.entityId === input.origin.sourceEntityId
     && action.source.version === input.origin.sourceVersion
-    && action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+    && action.decisionLineage?.decisionDefinitionId === input.decisionDefinitionId
     && action.decisionLineage.primaryEntityId === input.inventoryItemId);
+}
+
+export function resolveSpecialistProfileForLineage(lineageId: string): RepairReplaceProfile {
+  const profileId = lineageId.startsWith('appliance-repair-replace:')
+    ? 'GENERIC_APPLIANCE'
+    : lineageId.startsWith('repair-replace:')
+      ? 'HVAC'
+      : null;
+  if (!profileId) throw new AgentRuntimeStateError('This Home Action does not identify an admitted repair-or-replace profile.');
+  const profile = REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === profileId);
+  if (!profile) throw new AgentRuntimeStateError(`Repair-or-Replace profile ${profileId} is not registered.`);
+  return profile;
+}
+
+function profileForInvocation(invocation: AgentRuntimeInvocation): RepairReplaceProfile {
+  // Only HVAC can currently pause for context. Generic APPLIANCE snapshots
+  // are already complete or abstain, so a continuation without origin is an
+  // HVAC continuation. Fresh starts always resolve the profile from their
+  // canonical lineage prefix and fail closed on anything else.
+  return invocation.homeActionOrigin
+    ? resolveSpecialistProfileForLineage(invocation.homeActionOrigin.lineageId)
+    : REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === 'HVAC')!;
 }
 
 // PR 11: SUBMIT_CONTEXT's fact writes go through the existing
@@ -225,7 +249,7 @@ export async function invokeAgentRuntime(
   const now = deps.now ?? (() => new Date());
   const intakeHandler = deps.contextIntakeHandler ?? DEFAULT_INTAKE;
   const activeDefinition = getAgentDefinition(SPECIALIST_AGENT_ID);
-  if (!activeDefinition) throw new AgentRuntimeStateError('The active HVAC Specialist definition is not registered.');
+  if (!activeDefinition) throw new AgentRuntimeStateError('The active Repair-or-Replace Specialist definition is not registered.');
   if (invocation.operation !== 'GET_STATUS' && !enabled(activeDefinition, deps.env ?? process.env)) {
     recordAgentOperation(SPECIALIST_AGENT_ID, invocation.operation, 'DENIED');
     throw new AgentRuntimeDisabledError();
@@ -273,7 +297,7 @@ export async function invokeAgentRuntime(
   }
 
   if (invocation.operation === 'SUBMIT_CONTEXT') {
-    if (!paused) throw new AgentRuntimeStateError('No paused HVAC Specialist run is awaiting context for this system.');
+    if (!paused) throw new AgentRuntimeStateError('No paused Repair-or-Replace Specialist run is awaiting context for this item.');
     assertCas(invocation, paused);
     const intake = invocation.contextIntake ?? {};
     const unknownKeys = Object.keys(intake).filter((key) => !ACCEPTED_INTAKE_KEYS.has(key));
@@ -396,6 +420,7 @@ async function advanceRun(args: {
   intakeHandler: NonNullable<AgentRuntimeDependencies['contextIntakeHandler']>;
 }): Promise<AgentRuntimeResult> {
   const { invocation, paused, deps, now, intakeHandler } = args;
+  const profile = profileForInvocation(invocation);
 
   // §7.3.3 — resume pins the originating version; a fresh start uses active.
   const version = paused?.agentVersion;
@@ -407,7 +432,7 @@ async function advanceRun(args: {
     ? ['RESUME', paused.runId, paused.casVersion]
     : (() => {
       const origin = invocation.homeActionOrigin;
-      if (!origin) throw new AgentRuntimeStateError('A delivered Home Action origin is required to start the HVAC Specialist.');
+      if (!origin) throw new AgentRuntimeStateError('A delivered Home Action origin is required to start the Repair-or-Replace Specialist.');
       return [
         'HOME_ACTION_ENGAGEMENT',
         invocation.principalUserId,
@@ -427,9 +452,10 @@ async function advanceRun(args: {
       principalUserId: invocation.principalUserId,
       inventoryItemId: invocation.inventoryItemId,
       origin,
+      decisionDefinitionId: profile.decisionDefinitionId,
     });
     if (!verified) {
-      throw new AgentRuntimeStateError('The HVAC Specialist can only start from the matching canonical HVAC Home Action.');
+      throw new AgentRuntimeStateError('The Specialist can only start from a matching canonical repair-or-replace Home Action.');
     }
   }
 
@@ -522,8 +548,9 @@ async function advanceRun(args: {
       askExecutionId: invocation.askExecutionId,
       initialLedger,
       env: deps.env,
+      contextScopes: profile.requiredFacts,
     }, {
-      port: deps.threadPort,
+      port: deps.threadPort ?? createSpecialistThreadPort(profile.decisionDefinitionId),
       contextReader: deps.contextReader,
       narrationProvider: deps.narrationProvider ?? null,
     });
@@ -594,7 +621,7 @@ async function advanceRun(args: {
       runId: run.id,
       agentId: SPECIALIST_AGENT_ID,
       agentVersion: definition.version,
-      stateShape: STATE_SHAPE,
+      stateShape: definition.stateRequirements.stateShape ?? 'agent.repair-replace.state@1.1.0',
       serializedState: asJson({ status: specialist.status, ledger: specialist.ledger }),
       expectedEvent: 'SUBMIT_CONTEXT',
       pauseExpiresAt: new Date(now.getTime() + PAUSE_TTL_MS),

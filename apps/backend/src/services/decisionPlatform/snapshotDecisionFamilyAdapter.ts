@@ -72,6 +72,14 @@ export interface SnapshotDecisionFamilyDomainConfig {
   loadSourceState(propertyId: string, primaryEntityId: string): Promise<SnapshotSourceState | null>;
 }
 
+/** Injection seam for environment-independent behavioral tests. */
+export interface SnapshotDecisionFamilyAdapterDependencies {
+  db?: typeof prisma;
+  loadRecommendationChange?: typeof loadUnacknowledgedRecommendationChange;
+  emitRecommendationChange?: typeof emitDecisionRecommendationChange;
+  recordOriginLink?: typeof recordHomeActionOriginLink;
+}
+
 export function hashSourceState(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
@@ -93,7 +101,12 @@ function toLineage(
   };
 }
 
-export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFamilyDomainConfig): DecisionFamilyAdapter {
+export function createSnapshotDecisionFamilyAdapter(
+  config: SnapshotDecisionFamilyDomainConfig,
+  dependencies: SnapshotDecisionFamilyAdapterDependencies = {},
+): DecisionFamilyAdapter {
+  const db = dependencies.db ?? prisma;
+  const emitRecommendationChange = dependencies.emitRecommendationChange ?? emitDecisionRecommendationChange;
   function buildSnapshotData(
     decisionThreadId: string,
     propertyId: string,
@@ -137,7 +150,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
   }
 
   async function selectThread(propertyId: string, primaryEntityId: string): Promise<ThreadSelection<DecisionFamilyThreadLineage>> {
-    const candidates = await prisma.decisionThread.findMany({
+    const candidates = await db.decisionThread.findMany({
       where: {
         propertyId,
         decisionDefinitionId: config.decisionDefinitionId,
@@ -152,6 +165,10 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       // Phase 3 review finding 4: read-only, but not always null anymore —
       // diffs two already-persisted snapshots when the homeowner hasn't
       // acknowledged the current one yet. No recompute, no write.
+      if (dependencies.loadRecommendationChange) {
+        const change = await dependencies.loadRecommendationChange(selection.thread);
+        return { kind: 'UNIQUE', thread: toLineage(selection.thread, change) };
+      }
       const change = await loadUnacknowledgedRecommendationChange(selection.thread);
       return { kind: 'UNIQUE', thread: toLineage(selection.thread, change) };
     }
@@ -168,7 +185,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
     source: SnapshotSourceState,
     homeActionOrigin?: HomeActionOriginRef,
   ): Promise<DecisionFamilyThreadLineage> {
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx) => {
       const current = await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
       const previousSnapshot = current.currentRecommendationSnapshotId
         ? await tx.recommendationSnapshot.findUnique({ where: { id: current.currentRecommendationSnapshotId } })
@@ -198,7 +215,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
       if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(threadId);
 
       const change = previousSnapshot ? compareRecommendationSnapshots(previousSnapshot, newSnapshot, []) : null;
-      await emitDecisionRecommendationChange({
+      await emitRecommendationChange({
         propertyId: current.propertyId,
         decisionThreadId: threadId,
         snapshotId: newSnapshot.id,
@@ -213,7 +230,8 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
     // resume produced a new snapshot -- a no-op (unchanged digest) resume
     // is still a real "this Home Action version was open against this
     // thread" event worth attributing later.
-    await recordHomeActionOriginLink(threadId, homeActionOrigin);
+    if (dependencies.recordOriginLink) await dependencies.recordOriginLink(threadId, homeActionOrigin);
+    else await recordHomeActionOriginLink(threadId, homeActionOrigin);
     // The Home interaction navigates immediately and does not render this
     // response. Keep a recomputed change unread until the persisted Home
     // notice is explicitly acknowledged by the homeowner.
@@ -230,7 +248,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
     const identityKey = activeDecisionThreadIdentityKey(input.propertyId, config.decisionDefinitionId, config.primaryEntityType, input.primaryEntityId);
     let result;
     try {
-      result = await prisma.$transaction(async (tx) => {
+      result = await db.$transaction(async (tx) => {
         const thread = await tx.decisionThread.create({
           data: {
             propertyId: input.propertyId,
@@ -267,7 +285,7 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
           });
         }
 
-        await emitDecisionRecommendationChange({
+        await emitRecommendationChange({
           propertyId: input.propertyId,
           decisionThreadId: updatedThread.id,
           snapshotId: snapshot.id,
@@ -295,7 +313,8 @@ export function createSnapshotDecisionFamilyAdapter(config: SnapshotDecisionFami
     // — the first snapshot already embeds origin in its own
     // signalReferences, but the durable link table is the one source
     // every downstream consumer can query without re-parsing snapshot JSON.
-    await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
+    if (dependencies.recordOriginLink) await dependencies.recordOriginLink(result.thread.id, input.homeActionOrigin);
+    else await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
     return toLineage(result.thread, null);
   }
 

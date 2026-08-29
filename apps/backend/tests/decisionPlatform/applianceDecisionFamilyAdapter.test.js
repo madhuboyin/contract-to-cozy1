@@ -4,13 +4,14 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 // C2C Intelligence & Agentic Evolution — Phase 4A (§9.1 of the
-// implementation plan; architecture §12.7). Pure-logic + registry-wiring
-// coverage for the APPLIANCE_REPAIR_REPLACE decision family. Full
-// DecisionThread create/resume against live Prisma is integration-only
-// per the plan's §12 validation strategy.
+// implementation plan; architecture §12.7). Includes environment-independent
+// behavioral coverage of thread creation/resume, immutable provenance, and
+// snapshot supersession through the adapter's injected persistence seam.
 
 const {
   applianceDecisionFamilyAdapter,
+  createApplianceDecisionFamilyAdapter,
+  loadApplianceRepairReplaceSourceState,
   mapApplianceVerdictToDecisionVerdict,
   APPLIANCE_VERDICT_TO_DECISION_VERDICT,
   APPLIANCE_REPAIR_REPLACE_ELIGIBLE_CATEGORIES,
@@ -35,10 +36,117 @@ test('all four ReplaceRepairVerdict values map explicitly to a Decision Platform
   assert.equal(mapApplianceVerdictToDecisionVerdict('REPAIR_ONLY'), 'REPAIR');
 });
 
-test('the eligible-category boundary is every inventory category except HVAC', () => {
-  assert.ok(APPLIANCE_REPAIR_REPLACE_ELIGIBLE_CATEGORIES.includes('APPLIANCE'));
-  assert.ok(APPLIANCE_REPAIR_REPLACE_ELIGIBLE_CATEGORIES.includes('PLUMBING'));
-  assert.ok(!APPLIANCE_REPAIR_REPLACE_ELIGIBLE_CATEGORIES.includes('HVAC'));
+test('the approved eligibility boundary is APPLIANCE only', () => {
+  assert.deepEqual(APPLIANCE_REPAIR_REPLACE_ELIGIBLE_CATEGORIES, ['APPLIANCE']);
+  for (const unsupported of ['HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'STRUCTURAL']) {
+    assert.ok(!APPLIANCE_REPAIR_REPLACE_ELIGIBLE_CATEGORIES.includes(unsupported));
+  }
+});
+
+test('source projection requires a READY APPLIANCE analysis and preserves provenance', async () => {
+  let capturedWhere;
+  const projected = await loadApplianceRepairReplaceSourceState('property-1', 'item-1', {
+    replaceRepairAnalysis: {
+      findFirst: async (query) => {
+        capturedWhere = query.where;
+        return {
+          id: 'analysis-1', verdict: 'REPLACE_SOON', confidence: 'MEDIUM', impactLevel: 'HIGH', summary: 'Replace soon',
+          ageYears: 12, remainingYears: 1, estimatedNextRepairCostCents: 50000,
+          estimatedReplacementCostCents: 120000, breakEvenMonths: 8,
+          updatedAt: new Date('2026-08-29T12:00:00.000Z'), inventoryItem: { name: 'Dishwasher' },
+        };
+      },
+    },
+  });
+  assert.deepEqual(capturedWhere.inventoryItem.category.in, ['APPLIANCE']);
+  assert.equal(projected.verdictCode, 'REPLACE');
+  assert.deepEqual(projected.canonicalFactReferences, [
+    { entityType: 'REPLACE_REPAIR_ANALYSIS', entityId: 'analysis-1' },
+    { entityType: 'INVENTORY_ITEM', entityId: 'item-1', fieldPath: 'condition' },
+  ]);
+});
+
+function behavioralHarness() {
+  const threads = [];
+  const snapshots = [];
+  const factRefs = [];
+  const origins = [];
+  const emissions = [];
+  let sequence = 0;
+  let source = {
+    title: 'Repair or replace Dishwasher', goalCode: 'APPLIANCE_REPAIR_REPLACE_DECISION',
+    verdictCode: 'REPAIR', reasonCodes: ['SOURCE_VERDICT_REPAIR_ONLY'],
+    confidenceBreakdown: { label: 'HIGH' }, inputDigest: 'digest-1',
+    canonicalFactReferences: [{ entityType: 'REPLACE_REPAIR_ANALYSIS', entityId: 'analysis-1' }],
+  };
+  const db = {
+    decisionThread: {
+      findMany: async ({ where }) => threads.filter((row) => row.propertyId === where.propertyId
+        && row.decisionDefinitionId === where.decisionDefinitionId && row.primaryEntityId === where.primaryEntityId
+        && where.lifecycleStatus.in.includes(row.lifecycleStatus)),
+    },
+    $transaction: async (work) => work({
+      decisionThread: {
+        create: async ({ data }) => { const row = { id: `thread-${++sequence}`, version: 0, createdAt: new Date(), currentRecommendationSnapshotId: null, contextIssueCodes: [], staleAt: null, ...data }; threads.push(row); return { ...row }; },
+        findUniqueOrThrow: async ({ where }) => ({ ...threads.find((row) => row.id === where.id) }),
+        update: async ({ where, data }) => { const row = threads.find((candidate) => candidate.id === where.id); Object.assign(row, data, data.version ? { version: row.version + data.version.increment } : {}); return { ...row }; },
+        updateMany: async ({ where, data }) => { const row = threads.find((candidate) => candidate.id === where.id && candidate.version === where.version); if (!row) return { count: 0 }; Object.assign(row, data, data.version ? { version: row.version + data.version.increment } : {}); return { count: 1 }; },
+      },
+      recommendationSnapshot: {
+        findUnique: async ({ where }) => snapshots.find((row) => row.id === where.id) ?? null,
+        create: async ({ data }) => { const row = { id: `snapshot-${++sequence}`, generatedAt: new Date(), ...data }; snapshots.push(row); return row; },
+      },
+      decisionThreadFactReference: { createMany: async ({ data }) => { factRefs.push(...data); return { count: data.length }; } },
+    }),
+  };
+  const adapter = createApplianceDecisionFamilyAdapter({
+    db,
+    loadSourceState: async () => source,
+    loadRecommendationChange: async () => null,
+    emitRecommendationChange: async (event) => { emissions.push(event); },
+    recordOriginLink: async (threadId, origin) => { if (origin) origins.push({ threadId, ...origin }); },
+  });
+  return { adapter, threads, snapshots, factRefs, origins, emissions, setSource: (next) => { source = next; } };
+}
+
+test('adapter creates once, resumes idempotently, preserves origin provenance, and supersedes on source change', async () => {
+  const harness = behavioralHarness();
+  const origin = {
+    homeActionId: 'action-1', lineageId: 'appliance-repair-replace:item-1', sourceEntityId: 'analysis-1',
+    sourceVersion: 'v1', contextVersion: null,
+  };
+  const first = await harness.adapter.createOrResumeThread({
+    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', homeActionOrigin: origin,
+  });
+  assert.equal(harness.threads.length, 1);
+  assert.equal(harness.snapshots.length, 1);
+  assert.equal(first.currentRecommendationSnapshotId, harness.snapshots[0].id);
+  assert.equal(harness.snapshots[0].supersedesSnapshotId, null);
+  assert.equal(harness.snapshots[0].signalReferences[0].homeActionId, 'action-1');
+  assert.equal(harness.factRefs[0].canonicalEntityId, 'analysis-1');
+
+  const unchanged = await harness.adapter.createOrResumeThread({
+    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', homeActionOrigin: { ...origin, sourceVersion: 'v2' },
+  });
+  assert.equal(unchanged.decisionThreadId, first.decisionThreadId);
+  assert.equal(harness.threads.length, 1);
+  assert.equal(harness.snapshots.length, 1, 'unchanged digest must not create a snapshot');
+
+  harness.setSource({
+    title: 'Repair or replace Dishwasher', goalCode: 'APPLIANCE_REPAIR_REPLACE_DECISION',
+    verdictCode: 'REPLACE', reasonCodes: ['SOURCE_VERDICT_REPLACE_NOW'],
+    confidenceBreakdown: { label: 'HIGH' }, inputDigest: 'digest-2',
+    canonicalFactReferences: [{ entityType: 'REPLACE_REPAIR_ANALYSIS', entityId: 'analysis-2' }],
+  });
+  const changed = await harness.adapter.createOrResumeThread({
+    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', homeActionOrigin: { ...origin, sourceEntityId: 'analysis-2', sourceVersion: 'v3' },
+  });
+  assert.equal(changed.decisionThreadId, first.decisionThreadId);
+  assert.equal(harness.snapshots.length, 2);
+  assert.equal(harness.snapshots[1].supersedesSnapshotId, harness.snapshots[0].id);
+  assert.equal(harness.snapshots[1].verdictCode, 'REPLACE');
+  assert.equal(harness.origins.length, 3, 'creation and every resume retain durable origin attribution');
+  assert.equal(harness.emissions.length, 2, 'first snapshot and superseding snapshot emit changes');
 });
 
 test('APPLIANCE_REPAIR_REPLACE is a fully registered Decision Platform family', () => {

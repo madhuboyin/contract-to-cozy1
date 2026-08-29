@@ -2399,7 +2399,10 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
     journeysByItemId.set(journey.inventoryItemId, journey);
   });
 
-  const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses);
+  // IPD-006 admits only canonical APPLIANCE items alongside HVAC. Higher-risk
+  // non-HVAC categories abstain at ingress and receive no fallback family.
+  const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses)
+    .filter((analysis) => analysis.inventoryItem?.category === 'HVAC' || analysis.inventoryItem?.category === 'APPLIANCE');
   const inventoryItemIds = deduped.map((analysis) => analysis.inventoryItemId);
   const [recurringFailureEventsByItem, currentHvacPublishedVerdicts] = await Promise.all([
     findRecentRepairEventsByInventoryItem(db, inventoryItemIds, now),
@@ -2413,7 +2416,11 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   ]);
 
   return deduped.map((analysis) => {
-    const itemName = analysis.inventoryItem?.name || 'Inventory Item';
+    const namedItem = analysis.inventoryItem?.name?.trim();
+    const itemName = namedItem || 'Inventory Item';
+    // For homeowner-facing copy, name the actual system when we have it and
+    // fall back to a generic phrase only when the inventory record has no name.
+    const itemPhrase = namedItem ? `your ${namedItem}` : 'this item';
     const isHvac = analysis.inventoryItem?.category === 'HVAC';
     const journey = journeysByItemId.get(analysis.inventoryItemId);
     let href: string;
@@ -2474,8 +2481,9 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
       // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
       // category-aware decision-family routing. `id` is untouched (evidence/
       // href construction only); `lineageId` picks the decision family —
-      // HVAC keeps `repair-replace:` (HVAC_REPAIR_REPLACE), every other
-      // category gets `appliance-repair-replace:` (APPLIANCE_REPAIR_REPLACE),
+      // HVAC keeps `repair-replace:` (HVAC_REPAIR_REPLACE); the only other
+      // admitted category is APPLIANCE, which gets
+      // `appliance-repair-replace:` (APPLIANCE_REPAIR_REPLACE),
       // reached through PREFIX_TO_DECISION_DEFINITION in
       // homeActionDecisionLineage.ts.
       lineageId: `${isHvac ? 'repair-replace:' : 'appliance-repair-replace:'}${analysis.inventoryItemId}`,
@@ -2485,8 +2493,10 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
       priority: (isHvac ? publishedHvacVerdict?.verdict === 'REPLACE' : analysis.verdict === 'REPLACE_NOW') || hasRecurringFailure ? 'SOON' : 'PLAN',
       signal: `Repair vs Replace: ${itemName}`,
       whyItMatters: isHvac ? hvacWhyItMatters : `${analysis.summary || `Our AI has a recommendation for ${itemName}.`}${recurringFailureSentence}`,
-      recommendedAction: isHvac ? hvacRecommendedAction : favorsReplace ? 'Consider replacing this item.' : 'Consider repairing this item.',
-      expectedOutcome: 'A documented repair-or-replace decision for this item.',
+      recommendedAction: isHvac
+        ? hvacRecommendedAction
+        : favorsReplace ? `Consider replacing ${itemPhrase}.` : `Consider repairing ${itemPhrase}.`,
+      expectedOutcome: `A documented repair-or-replace decision for ${itemPhrase}.`,
       timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
       evidence: [
         ...(publishedHvacVerdict

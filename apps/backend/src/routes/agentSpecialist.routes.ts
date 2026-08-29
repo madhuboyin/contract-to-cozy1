@@ -13,6 +13,14 @@ router.use(authenticate);
 // SUBMIT_CONTEXT, DISPUTE_INPUT, GET_STATUS). Ask and the in-app Home Action
 // surface both call this same operation.
 router.post(
+  '/properties/:propertyId/agents/repair-replace/:operation',
+  propertyAuthMiddleware,
+  invokeHvacSpecialistHandler,
+);
+
+// Backward-compatible Phase 2 route. Both routes enter the same
+// profile-selected Repair-or-Replace Specialist runtime.
+router.post(
   '/properties/:propertyId/agents/hvac-repair-replace/:operation',
   propertyAuthMiddleware,
   invokeHvacSpecialistHandler,

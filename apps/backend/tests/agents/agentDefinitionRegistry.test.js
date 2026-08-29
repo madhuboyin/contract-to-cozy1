@@ -38,9 +38,9 @@ function validateDefinition(definition, dependencies = {}) {
   });
 }
 
-test('the code-owned HVAC definition is immutable, ENABLED, and matches its digest baseline', () => {
+test('the code-owned shared Repair-or-Replace definition is immutable, ENABLED, and matches its digest baseline', () => {
   assert.ok(active);
-  assert.equal(active.version, '1.0.0');
+  assert.equal(active.version, '1.1.0');
   // PR 11 / IPD-005: trigger handler + evaluation suite are both AVAILABLE.
   assert.equal(active.releaseState, 'ENABLED');
   assert.equal(active.supportedDomains.includes('HVAC'), false);
@@ -49,7 +49,9 @@ test('the code-owned HVAC definition is immutable, ENABLED, and matches its dige
   assert.equal(Object.isFrozen(active), true);
   assert.equal(Object.isFrozen(active.allowedSkills), true);
   assert.equal(Object.isFrozen(active.allowedSkills[0].operations), true);
-  assert.equal(digestAgentDefinition(active), AGENT_DEFINITION_DIGEST_BASELINE['hvac-repair-replace-specialist@1.0.0']);
+  assert.equal(active.name, 'Repair-or-Replace Specialist');
+  assert.ok(active.allowedSkills[0].operations.includes('REPLACEMENT_GUIDANCE'));
+  assert.equal(digestAgentDefinition(active), AGENT_DEFINITION_DIGEST_BASELINE['hvac-repair-replace-specialist@1.1.0']);
   assert.deepEqual(validateAgentDefinitionRegistry(), []);
 });
 

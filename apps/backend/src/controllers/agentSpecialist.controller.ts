@@ -1,6 +1,6 @@
 // apps/backend/src/controllers/agentSpecialist.controller.ts
 //
-// §7.4: authenticated HVAC Specialist endpoint. Property authorization is
+// §7.4: authenticated profile-selected Repair-or-Replace Specialist endpoint. Property authorization is
 // enforced by propertyAuthMiddleware AND re-checked inside invokeAgentRuntime
 // (defense in depth). The response is the bounded run-status projection plus
 // the canonical decisionThreadId — never raw AgentRun / AgentState rows.
@@ -85,6 +85,6 @@ export async function invokeHvacSpecialistHandler(req: CustomRequest, res: Respo
       return;
     }
     logger.error({ err: error }, '[AGENT-SPECIALIST] runtime invocation failed');
-    res.status(500).json({ success: false, message: 'HVAC Specialist request failed.' });
+    res.status(500).json({ success: false, message: 'Repair-or-Replace Specialist request failed.' });
   }
 }

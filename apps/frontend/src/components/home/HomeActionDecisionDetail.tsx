@@ -181,10 +181,14 @@ export function HomeActionDecisionDetail({
   const changeThread = action.decisionLineage?.thread;
   // PR 11: "Get help deciding" for an eligible, delivered HVAC repair-or-replace
   // action. Uses the same DecisionThread the card already shows.
-  const hvacSpecialist = action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+  const specialist = (action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+    || action.decisionLineage?.decisionDefinitionId === 'APPLIANCE_REPAIR_REPLACE')
     && action.decisionLineage.primaryEntityId
     ? {
       inventoryItemId: action.decisionLineage.primaryEntityId,
+      profileLabel: action.decisionLineage.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+        ? 'HVAC Repair-or-Replace Specialist'
+        : 'Appliance Repair-or-Replace Specialist',
       homeActionOrigin: {
         homeActionId: action.id,
         lineageId: action.lineageId,
@@ -221,11 +225,12 @@ export function HomeActionDecisionDetail({
       <LimitationCodeNotices limitationCodes={action.decisionLineage?.thread?.limitationCodes} />
       <DecisionLineageStatus decisionLineage={action.decisionLineage} />
 
-      {hvacSpecialist && (
+      {specialist && (
         <HomeActionSpecialistPanel
           propertyId={propertyId}
-          inventoryItemId={hvacSpecialist.inventoryItemId}
-          homeActionOrigin={hvacSpecialist.homeActionOrigin}
+          inventoryItemId={specialist.inventoryItemId}
+          homeActionOrigin={specialist.homeActionOrigin}
+          profileLabel={specialist.profileLabel}
         />
       )}
 

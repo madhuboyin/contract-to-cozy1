@@ -171,6 +171,7 @@ test('the runtime claims idempotency and CAS ownership before any specialist or 
   assert.match(body, /origin\.lineageId/);
   assert.match(body, /origin\.engagementNonce/);
   assert.match(body, /verifyCanonicalHomeActionOrigin/);
-  assert.match(source, /action\.decisionLineage\?\.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'/);
+  assert.match(source, /action\.decisionLineage\?\.decisionDefinitionId === input\.decisionDefinitionId/);
+  assert.match(source, /resolveSpecialistProfileForLineage/);
   assert.match(source, /action\.decisionLineage\.primaryEntityId === input\.inventoryItemId/);
 });

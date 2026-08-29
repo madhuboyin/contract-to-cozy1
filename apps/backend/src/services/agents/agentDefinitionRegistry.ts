@@ -1,4 +1,4 @@
-import { HVAC_REPAIR_REPLACE_AGENT_DEFINITION } from './definitions/hvacRepairReplaceAgent.definition';
+import { HVAC_REPAIR_REPLACE_AGENT_DEFINITION, REPAIR_REPLACE_AGENT_DEFINITION_V1_1 } from './definitions/hvacRepairReplaceAgent.definition';
 import type { AgentDefinition, VersionedAgentRegistryEntry } from './agent.contract';
 
 function deepFreeze<T>(value: T): T {
@@ -11,9 +11,10 @@ function deepFreeze<T>(value: T): T {
 
 export const AGENT_DEFINITION_REGISTRY = deepFreeze({
   [HVAC_REPAIR_REPLACE_AGENT_DEFINITION.agentId]: {
-    activeVersion: HVAC_REPAIR_REPLACE_AGENT_DEFINITION.version,
+    activeVersion: REPAIR_REPLACE_AGENT_DEFINITION_V1_1.version,
     versions: {
       [HVAC_REPAIR_REPLACE_AGENT_DEFINITION.version]: HVAC_REPAIR_REPLACE_AGENT_DEFINITION,
+      [REPAIR_REPLACE_AGENT_DEFINITION_V1_1.version]: REPAIR_REPLACE_AGENT_DEFINITION_V1_1,
     },
   },
 } satisfies Readonly<Record<string, VersionedAgentRegistryEntry>>);

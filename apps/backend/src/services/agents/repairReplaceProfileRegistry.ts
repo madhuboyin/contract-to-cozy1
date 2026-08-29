@@ -27,6 +27,19 @@ export const REPAIR_REPLACE_PROFILES: readonly RepairReplaceProfile[] = Object.f
     professionalBoundary: 'licensed HVAC technician',
     evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.0.0',
   }),
+  Object.freeze({
+    profileId: 'GENERIC_APPLIANCE',
+    eligibleCategories: Object.freeze(['APPLIANCE'] as const),
+    decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+    // The existing repair-replace Skill is the registered scoring capability;
+    // this profile selects the APPLIANCE Decision Platform adapter, whose
+    // authoritative source is ReplaceRepairService output.
+    scoringSkillId: 'repair-replace',
+    requiredFacts: Object.freeze(['INVENTORY'] as const),
+    supportedDocuments: Object.freeze([]),
+    professionalBoundary: 'general appliance repair professional',
+    evaluationSuiteId: 'agent-generic-appliance-repair-replace-eval@1.0.0',
+  }),
 ]);
 
 export function resolveRepairReplaceProfile(

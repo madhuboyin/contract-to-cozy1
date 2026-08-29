@@ -74,7 +74,7 @@ async function invoke(
   body: InvokeBody,
 ): Promise<SpecialistResult> {
   const res = await api.post<SpecialistResult>(
-    `/api/properties/${propertyId}/agents/hvac-repair-replace/${operation}`,
+    `/api/properties/${propertyId}/agents/repair-replace/${operation}`,
     body,
   );
   return res.data;

@@ -30,9 +30,8 @@ export type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOw
 
 const REPAIR_REPLACE_ID_PREFIX = 'repair-replace:';
 // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
-// non-HVAC repair-or-replace routes here instead of the HVAC family.
-// loadRepairReplaceDecisionActions attaches this prefix for every
-// ReplaceRepairAnalysis whose inventory item is not HVAC.
+// admitted APPLIANCE repair-or-replace routes here instead of the HVAC
+// family. Higher-risk categories do not receive either prefix.
 const APPLIANCE_REPAIR_REPLACE_ID_PREFIX = 'appliance-repair-replace:';
 // Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
 // delivery step 6 — one prefix per new decision-family adapter
@@ -258,14 +257,19 @@ export async function resolveWorkItemDecisionFamilyRefs(
         // Phase 4A (architecture §12.7): the same category-aware split
         // loadRepairReplaceDecisionActions applies to the Home Action
         // lineageId prefix — HVAC keeps HVAC_REPAIR_REPLACE; every other
-        // category resolves to APPLIANCE_REPAIR_REPLACE.
-        refs.push({
-          decisionDefinitionId: analysis.inventoryItem?.category === 'HVAC'
-            ? 'HVAC_REPAIR_REPLACE'
-            : 'APPLIANCE_REPAIR_REPLACE',
-          primaryEntityId: analysis.inventoryItemId,
-          sourceLabel: 'repair/replace',
-        });
+        // category resolves to APPLIANCE_REPAIR_REPLACE. Unsupported
+        // categories abstain instead of falling through to the appliance
+        // family.
+        const category = analysis.inventoryItem?.category;
+        if (category === 'HVAC' || category === 'APPLIANCE') {
+          refs.push({
+            decisionDefinitionId: category === 'HVAC'
+              ? 'HVAC_REPAIR_REPLACE'
+              : 'APPLIANCE_REPAIR_REPLACE',
+            primaryEntityId: analysis.inventoryItemId,
+            sourceLabel: 'repair/replace',
+          });
+        }
       }
       continue;
     }

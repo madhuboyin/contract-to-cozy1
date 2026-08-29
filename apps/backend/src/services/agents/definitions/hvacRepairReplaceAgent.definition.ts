@@ -56,3 +56,29 @@ export const HVAC_REPAIR_REPLACE_AGENT_DEFINITION = Object.freeze({
   safetyLevel: 'DRAFT',
   evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.0.0',
 } satisfies AgentDefinition);
+
+// Phase 4A: the same bounded loop now serves the HVAC and admitted
+// GENERIC_APPLIANCE profiles. Keep 1.0.0 registered for pinned continuations;
+// new runs use this behavior-bearing version.
+export const REPAIR_REPLACE_AGENT_DEFINITION_V1_1 = Object.freeze({
+  ...HVAC_REPAIR_REPLACE_AGENT_DEFINITION,
+  version: '1.1.0',
+  name: 'Repair-or-Replace Specialist',
+  responsibility: 'Help a homeowner complete an admitted repair-or-replace decision using the authoritative Decision Platform workflow selected by its RepairReplaceProfile.',
+  requiredContext: ['SYSTEMS', 'INVENTORY', 'MAINTENANCE', 'SAFETY'],
+  allowedSkills: [{
+    id: 'repair-replace',
+    version: '1.0.0',
+    operations: ['REPLACEMENT_GUIDANCE', 'HVAC_DECISION_START', 'HVAC_DECISION_CONTINUE'],
+  }],
+  stateRequirements: {
+    persistsAcrossInvocations: true,
+    stateShape: 'agent.repair-replace.state@1.1.0',
+  },
+  outputContract: {
+    contractId: 'decision-platform.repair-replace-projection@1.1.0',
+    producerCommandsAllowed: ['REPLACEMENT_GUIDANCE', 'HVAC_DECISION_START', 'HVAC_DECISION_CONTINUE'],
+    producesRecommendation: true,
+    maxAutonomyLevel: 2,
+  },
+} satisfies AgentDefinition);

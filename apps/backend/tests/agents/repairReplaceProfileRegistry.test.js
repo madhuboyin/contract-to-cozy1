@@ -8,15 +8,26 @@ const {
   resolveRepairReplaceProfile,
   validateRepairReplaceProfiles,
 } = require('../../src/services/agents/repairReplaceProfileRegistry.ts');
+const { resolveSpecialistProfileForLineage } = require('../../src/services/agents/agentRuntime.service.ts');
 
-test('Phase 2 registers only the HVAC repair-or-replace profile', () => {
-  assert.equal(REPAIR_REPLACE_PROFILES.length, 1);
+test('Phase 4A registers HVAC and the admitted generic-appliance profile', () => {
+  assert.equal(REPAIR_REPLACE_PROFILES.length, 2);
   assert.equal(REPAIR_REPLACE_PROFILES[0].profileId, 'HVAC');
   assert.equal(REPAIR_REPLACE_PROFILES[0].decisionDefinitionId, 'HVAC_REPAIR_REPLACE');
   assert.equal(REPAIR_REPLACE_PROFILES[0].scoringSkillId, 'repair-replace');
   assert.deepEqual(validateRepairReplaceProfiles(), []);
   assert.equal(resolveRepairReplaceProfile('HVAC').profileId, 'HVAC');
-  assert.equal(resolveRepairReplaceProfile('APPLIANCE'), 'NO_MATCH');
+  assert.equal(resolveRepairReplaceProfile('APPLIANCE').profileId, 'GENERIC_APPLIANCE');
+  assert.equal(resolveRepairReplaceProfile('APPLIANCE').decisionDefinitionId, 'APPLIANCE_REPAIR_REPLACE');
+  for (const unsupported of ['PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'STRUCTURAL']) {
+    assert.equal(resolveRepairReplaceProfile(unsupported), 'NO_MATCH');
+  }
+});
+
+test('the shared runtime resolves each admitted lineage to exactly one profile and rejects fallback prefixes', () => {
+  assert.equal(resolveSpecialistProfileForLineage('repair-replace:item-1').profileId, 'HVAC');
+  assert.equal(resolveSpecialistProfileForLineage('appliance-repair-replace:item-1').profileId, 'GENERIC_APPLIANCE');
+  assert.throws(() => resolveSpecialistProfileForLineage('plumbing-repair-replace:item-1'), /does not identify an admitted/);
 });
 
 test('profile resolution and validation fail closed on category overlap', () => {

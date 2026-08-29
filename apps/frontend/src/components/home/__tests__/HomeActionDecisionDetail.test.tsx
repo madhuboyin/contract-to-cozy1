@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HomeActionDecisionDetail } from '@/components/home/HomeActionDecisionDetail';
 import type { RankedHomeActionDTO } from '@/types';
 
+jest.mock('@/components/home/HomeActionSpecialistPanel', () => ({
+  HomeActionSpecialistPanel: ({ profileLabel }: { profileLabel?: string }) => <div>{profileLabel}</div>,
+}));
+
 function actionWithChange(): RankedHomeActionDTO {
   return {
     assumptions: [],
@@ -70,4 +74,19 @@ test('renders the persisted change and acknowledges the exact thread and snapsho
   expect(acknowledge).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
   await waitFor(() => expect(acknowledge).toHaveBeenCalledWith('thread-1', 'snapshot-2'));
+});
+
+test('renders the shared Specialist entry point for APPLIANCE_REPAIR_REPLACE', () => {
+  const action = actionWithChange();
+  action.decisionLineage = {
+    status: 'NOT_STARTED',
+    decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+    primaryEntityId: 'dishwasher-1',
+  };
+  Object.assign(action, {
+    id: 'action-1', lineageId: 'appliance-repair-replace:dishwasher-1',
+    source: { entityId: 'analysis-1', version: 'v1' },
+  });
+  render(<HomeActionDecisionDetail action={action} propertyId="property-1" />);
+  expect(screen.getByText('Appliance Repair-or-Replace Specialist')).toBeInTheDocument();
 });

@@ -11,8 +11,9 @@
 
 import { prisma } from '../../lib/prisma';
 import { withTimeout } from '../../lib/aiResilience';
-import { hvacDecisionFamilyAdapter } from '../decisionPlatform/decisionThreadService';
 import { DecisionFamilyAmbiguousThreadError } from '../decisionPlatform/decisionFamilyAdapter';
+import { getDecisionFamilyAdapter } from '../decisionPlatform/decisionFamilyAdapterRegistry';
+import type { DecisionDefinitionId } from '../decisionPlatform/decisionDefinitionRegistry';
 import type {
   AgentRunStatusProjection,
   HvacSpecialistHomeActionOrigin,
@@ -21,11 +22,8 @@ import type {
 } from './agentRuntime.contract';
 import { selectTypedClaims } from './specialistTypedClaims';
 import { narrateTypedClaims, type NarrationProvider } from './agentLlmPurpose.contract';
-import {
-  HVAC_SPECIALIST_CONTEXT_SCOPES,
-  readAgentPropertyContext,
-  type AgentPropertyContextReader,
-} from './agentPropertyContext.service';
+import { HVAC_SPECIALIST_CONTEXT_SCOPES, readAgentPropertyContext, type AgentPropertyContextReader } from './agentPropertyContext.service';
+import type { PropertyContextScope } from '../../modules/propertyContext/domain/contracts';
 import {
   emptyLedger,
   budgetExceeded,
@@ -70,12 +68,15 @@ function parseConfidenceLabel(value: unknown): 'HIGH' | 'MEDIUM' | 'LOW' | null 
 
 const SUPPORTED_VERDICTS = new Set(['REPAIR', 'REPLACE', 'MONITOR']);
 
-/** Default port: the canonical HVAC decision-family adapter + snapshot read. */
-export const defaultThreadPort: SpecialistThreadPort = {
+/** Shared port: profile selection chooses the canonical decision-family adapter. */
+export function createSpecialistThreadPort(decisionDefinitionId: DecisionDefinitionId): SpecialistThreadPort {
+  const adapter = getDecisionFamilyAdapter(decisionDefinitionId);
+  if (!adapter) throw new Error(`No decision-family adapter is registered for ${decisionDefinitionId}.`);
+  return {
   async createOrResume(input) {
     let lineage;
     try {
-      lineage = await hvacDecisionFamilyAdapter.createOrResumeThread({
+      lineage = await adapter.createOrResumeThread({
         propertyId: input.propertyId,
         userId: input.principalUserId,
         primaryEntityId: input.inventoryItemId,
@@ -120,7 +121,11 @@ export const defaultThreadPort: SpecialistThreadPort = {
       limitationCodes: [...new Set([...(snapshot?.limitationCodes ?? []), ...lineage.limitationCodes])],
     };
   },
-};
+  };
+}
+
+/** Backward-compatible HVAC default for existing callers and tests. */
+export const defaultThreadPort: SpecialistThreadPort = createSpecialistThreadPort('HVAC_REPAIR_REPLACE');
 
 export interface RunSpecialistInput {
   propertyId: string;
@@ -133,6 +138,7 @@ export interface RunSpecialistInput {
   askExecutionId?: string;
   initialLedger?: SpecialistBudgetLedger;
   env?: NodeJS.ProcessEnv;
+  contextScopes?: readonly PropertyContextScope[];
 }
 
 export interface SpecialistRunDependencies {
@@ -208,15 +214,16 @@ export async function runHvacSpecialist(
   // property-access check; also the point the boundary test verifies.
   const gateAt = startedAt;
   const remainingMs = Math.max(1, input.budgets.maxExecutionMsPerRun - ledger.elapsedMs);
+  const contextScopes = input.contextScopes ?? HVAC_SPECIALIST_CONTEXT_SCOPES;
   const context = await withTimeout(() => contextReader({
     propertyId: input.propertyId,
     principalUserId: input.principalUserId,
     requestingAgentId: input.requestingAgentId,
-    scopes: HVAC_SPECIALIST_CONTEXT_SCOPES,
+    scopes: contextScopes,
     maxFacts: Math.max(0, input.budgets.maxContextFactsPerRun - ledger.contextFactsUsed),
   }), { timeoutMs: remainingMs, operation: 'agent.hvac.property-context' });
   if (!context.authorized) {
-    record('REQUEST_CONTEXT', 'FAILED', { input: { scopes: HVAC_SPECIALIST_CONTEXT_SCOPES }, errorCode: 'CONTEXT_UNAUTHORIZED', at: gateAt });
+    record('REQUEST_CONTEXT', 'FAILED', { input: { scopes: contextScopes }, errorCode: 'CONTEXT_UNAUTHORIZED', at: gateAt });
     return terminal({
       ...base,
       phase: 'ABSTAINED',

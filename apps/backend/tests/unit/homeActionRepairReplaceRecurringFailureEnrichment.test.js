@@ -40,7 +40,7 @@ function analysis(overrides = {}) {
     impactLevel: 'MEDIUM',
     summary: 'This water heater shows minor wear.',
     computedAt: NOW,
-    inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'PLUMBING' },
+    inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'APPLIANCE' },
     ...overrides,
   };
 }

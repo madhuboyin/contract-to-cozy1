@@ -153,7 +153,7 @@ function StatusBody({
           This uses the same recommendation shown on the decision card — the Specialist just walks you through it.
         </p>
         <p className="text-xs text-slate-500">
-          Once you act, tell Cozy what you decided (&ldquo;record the outcome for this HVAC decision&rdquo;) so it can
+          Once you act, tell Cozy what you decided (&ldquo;record the outcome for this repair-or-replace decision&rdquo;) so it can
           learn from what actually worked. Disagree with the recommendation? Correct the underlying record and it
           re-runs.
         </p>
@@ -173,10 +173,12 @@ export function HomeActionSpecialistPanel({
   propertyId,
   inventoryItemId,
   homeActionOrigin,
+  profileLabel = 'HVAC Repair-or-Replace Specialist',
 }: {
   propertyId: string;
   inventoryItemId: string;
   homeActionOrigin: Omit<HvacSpecialistHomeActionOrigin, 'engagementNonce'>;
+  profileLabel?: string;
 }) {
   const [opened, setOpened] = useState(false);
   const engagementNonce = useRef(
@@ -190,9 +192,9 @@ export function HomeActionSpecialistPanel({
   const heading = useMemo(() => (
     <div className="flex items-center gap-2">
       <Wrench className="h-4 w-4 text-slate-500" />
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">HVAC Repair-or-Replace Specialist</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{profileLabel}</span>
     </div>
-  ), []);
+  ), [profileLabel]);
 
   if (!opened) {
     return (
