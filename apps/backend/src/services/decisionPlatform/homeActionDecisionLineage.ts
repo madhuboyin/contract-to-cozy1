@@ -29,6 +29,11 @@ export type { HomeActionOriginRef } from './decisionFamilyAdapter';
 export type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
 
 const REPAIR_REPLACE_ID_PREFIX = 'repair-replace:';
+// C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
+// non-HVAC repair-or-replace routes here instead of the HVAC family.
+// loadRepairReplaceDecisionActions attaches this prefix for every
+// ReplaceRepairAnalysis whose inventory item is not HVAC.
+const APPLIANCE_REPAIR_REPLACE_ID_PREFIX = 'appliance-repair-replace:';
 // Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
 // delivery step 6 — one prefix per new decision-family adapter
 // (domainSnapshotAdapters.ts), matching each producer's own lineageId
@@ -59,6 +64,7 @@ export interface HomeActionDecisionFamilyRef {
 
 const PREFIX_TO_DECISION_DEFINITION: Array<{ prefix: string; decisionDefinitionId: DecisionDefinitionId }> = [
   { prefix: REPAIR_REPLACE_ID_PREFIX, decisionDefinitionId: 'HVAC_REPAIR_REPLACE' },
+  { prefix: APPLIANCE_REPAIR_REPLACE_ID_PREFIX, decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE' },
   { prefix: REFINANCE_OPPORTUNITY_ID_PREFIX, decisionDefinitionId: 'REFINANCE_OPPORTUNITY' },
   { prefix: HOME_CAPITAL_TIMELINE_WINDOW_ID_PREFIX, decisionDefinitionId: 'HOME_CAPITAL_TIMELINE_WINDOW' },
   { prefix: OWNERSHIP_COST_CHANGE_ID_PREFIX, decisionDefinitionId: 'OWNERSHIP_COST_CHANGE' },
@@ -246,11 +252,17 @@ export async function resolveWorkItemDecisionFamilyRefs(
     if (source.sourceType === 'GUIDANCE') {
       const analysis = await db.replaceRepairAnalysis.findFirst({
         where: { id: source.sourceEntityId, propertyId },
-        select: { inventoryItemId: true },
+        select: { inventoryItemId: true, inventoryItem: { select: { category: true } } },
       });
       if (analysis) {
+        // Phase 4A (architecture §12.7): the same category-aware split
+        // loadRepairReplaceDecisionActions applies to the Home Action
+        // lineageId prefix — HVAC keeps HVAC_REPAIR_REPLACE; every other
+        // category resolves to APPLIANCE_REPAIR_REPLACE.
         refs.push({
-          decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+          decisionDefinitionId: analysis.inventoryItem?.category === 'HVAC'
+            ? 'HVAC_REPAIR_REPLACE'
+            : 'APPLIANCE_REPAIR_REPLACE',
           primaryEntityId: analysis.inventoryItemId,
           sourceLabel: 'repair/replace',
         });

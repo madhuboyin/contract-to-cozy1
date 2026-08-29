@@ -40,6 +40,10 @@ const SNAPSHOT_CONTEXT_CONTRACT_IDS = [
   'SAVINGS_BENEFIT_MATCH',
   'COVERAGE_QUESTION',
   'SELL_HOLD_RENT',
+  // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
+  // non-HVAC repair/replace, snapshotting an already-authoritative
+  // ReplaceRepairAnalysis (applianceDecisionFamilyAdapter.ts).
+  'APPLIANCE_REPAIR_REPLACE',
 ];
 
 test('every DecisionContextContract is complete and only references known preference keys (FRD §12)', () => {

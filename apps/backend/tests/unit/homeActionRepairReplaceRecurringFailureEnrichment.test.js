@@ -40,7 +40,7 @@ function analysis(overrides = {}) {
     impactLevel: 'MEDIUM',
     summary: 'This water heater shows minor wear.',
     computedAt: NOW,
-    inventoryItem: { id: 'item-1', name: 'Water Heater' },
+    inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'PLUMBING' },
     ...overrides,
   };
 }
@@ -84,8 +84,10 @@ test('two or more repair/maintenance events in the lookback window bumps priorit
   assert.equal(maintenanceEvidence.label, 'Maintenance logged');
   assert.equal(maintenanceEvidence.observedAt, '2026-03-01T00:00:00.000Z');
   // Identity/decision-lineage fields must be untouched by enrichment.
+  // Phase 4A: a non-HVAC item routes to the appliance decision family via
+  // its own lineageId prefix (category-aware, not enrichment-driven).
   assert.equal(action.id, 'repair-replace:analysis-1');
-  assert.equal(action.lineageId, 'repair-replace:item-1');
+  assert.equal(action.lineageId, 'appliance-repair-replace:item-1');
 });
 
 test('all contributing events remain in canonical evidence even for a long repair history', async () => {

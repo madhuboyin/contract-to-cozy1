@@ -58,7 +58,7 @@ test('repair/replace and coverage sources resolve to their registered decision f
       { workItemId: 'work-1', sourceType: 'GUIDANCE', sourceEntityId: 'analysis-1', active: true },
       { workItemId: 'work-1', sourceType: 'COVERAGE', sourceEntityId: 'review-1', active: true },
     ],
-    analyses: { 'analysis-1': { propertyId: 'property-1', inventoryItemId: 'hvac-1' } },
+    analyses: { 'analysis-1': { propertyId: 'property-1', inventoryItemId: 'hvac-1', inventoryItem: { category: 'HVAC' } } },
     coverageReviews: {
       'review-1': { propertyId: 'property-1', questions: [{ questionKey: 'coverage-question-1' }] },
     },
@@ -67,6 +67,20 @@ test('repair/replace and coverage sources resolve to their registered decision f
   assert.deepEqual(await resolveWorkItemDecisionFamilyRefs('property-1', 'work-1', db), [
     { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId: 'hvac-1', sourceLabel: 'repair/replace' },
     { decisionDefinitionId: 'COVERAGE_QUESTION', primaryEntityId: 'coverage-question-1', sourceLabel: 'coverage' },
+  ]);
+});
+
+// C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
+// category-aware ingress — a non-HVAC ReplaceRepairAnalysis work-item
+// source resolves to APPLIANCE_REPAIR_REPLACE, not the HVAC family.
+test('a non-HVAC repair/replace source resolves to the APPLIANCE_REPAIR_REPLACE family', async () => {
+  const db = fakeDb({
+    sources: [{ workItemId: 'work-1', sourceType: 'GUIDANCE', sourceEntityId: 'analysis-2', active: true }],
+    analyses: { 'analysis-2': { propertyId: 'property-1', inventoryItemId: 'fridge-1', inventoryItem: { category: 'APPLIANCE' } } },
+  });
+
+  assert.deepEqual(await resolveWorkItemDecisionFamilyRefs('property-1', 'work-1', db), [
+    { decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE', primaryEntityId: 'fridge-1', sourceLabel: 'repair/replace' },
   ]);
 });
 

@@ -9,6 +9,7 @@
 import { DECISION_DEFINITIONS, type DecisionDefinitionId } from './decisionDefinitionRegistry';
 import type { DecisionFamilyAdapter } from './decisionFamilyAdapter';
 import { hvacDecisionFamilyAdapter } from './decisionThreadService';
+import { applianceDecisionFamilyAdapter } from './applianceDecisionFamilyAdapter';
 import {
   coverageQuestionDecisionFamilyAdapter,
   homeCapitalTimelineWindowDecisionFamilyAdapter,
@@ -26,6 +27,7 @@ const DECISION_FAMILY_ADAPTERS: Partial<Record<DecisionDefinitionId, DecisionFam
   SAVINGS_BENEFIT_MATCH: savingsBenefitMatchDecisionFamilyAdapter,
   COVERAGE_QUESTION: coverageQuestionDecisionFamilyAdapter,
   SELL_HOLD_RENT: sellHoldRentDecisionFamilyAdapter,
+  APPLIANCE_REPAIR_REPLACE: applianceDecisionFamilyAdapter,
 };
 
 export function getDecisionFamilyAdapter(decisionDefinitionId: DecisionDefinitionId): DecisionFamilyAdapter | null {

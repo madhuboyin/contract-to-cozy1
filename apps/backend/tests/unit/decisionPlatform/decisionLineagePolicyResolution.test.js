@@ -39,6 +39,16 @@ test('a repair-replace item resolves to the registered HVAC decision family', ()
   );
 });
 
+// C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
+// non-HVAC repair/replace routes to APPLIANCE_REPAIR_REPLACE via its own
+// lineageId prefix, still DECISION_REQUIRED under MATERIAL_FINANCIAL.
+test('an appliance-repair-replace item resolves to the APPLIANCE_REPAIR_REPLACE decision family', () => {
+  assert.deepEqual(
+    resolveActionDecisionLineagePolicy(action('appliance-repair-replace:item-1', 'MATERIAL_FINANCIAL')),
+    { kind: 'DECISION_REQUIRED', decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE' },
+  );
+});
+
 test('a material action with no registered decision family fails closed with a null decisionDefinitionId', () => {
   // Phase 3 review finding 4 delivery step 6 registered adapters for every
   // producer that was null at Phase 3's original review — this exercises

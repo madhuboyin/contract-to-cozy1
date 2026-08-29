@@ -15,6 +15,22 @@ test('a repair-replace lineageId resolves to the HVAC_REPAIR_REPLACE decision fa
   assert.deepEqual(ref, { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId: 'item-123' });
 });
 
+// C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7): the
+// non-HVAC repair/replace prefix routes to its own family; the HVAC prefix
+// is unchanged and neither prefix is a substring of the other.
+test('an appliance-repair-replace lineageId resolves to the APPLIANCE_REPAIR_REPLACE decision family', () => {
+  const ref = resolveDecisionFamilyRef({ lineageId: 'appliance-repair-replace:item-9' });
+  assert.deepEqual(ref, { decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE', primaryEntityId: 'item-9' });
+});
+
+test('the HVAC repair-replace prefix does not swallow the appliance prefix', () => {
+  assert.deepEqual(
+    resolveDecisionFamilyRef({ lineageId: 'repair-replace:item-9' }),
+    { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId: 'item-9' },
+  );
+  assert.equal(resolveDecisionFamilyRef({ lineageId: 'appliance-repair-replace:' }), null);
+});
+
 test('a lineageId with no matching decision-family prefix resolves to null, not a fail-closed state', () => {
   assert.equal(resolveDecisionFamilyRef({ lineageId: 'operational-work:work-1' }), null);
   assert.equal(resolveDecisionFamilyRef({ lineageId: 'maintenance:task-1' }), null);

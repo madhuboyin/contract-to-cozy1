@@ -8,6 +8,10 @@ export const QUALIFIED_CLAIM_PROPOSITION_TYPES = [
   'SAVINGS_BENEFIT_MATCH_VERDICT',
   'COVERAGE_QUESTION_VERDICT',
   'SELL_HOLD_RENT_VERDICT',
+  // C2C Intelligence & Agentic Evolution Phase 4A: non-HVAC repair/replace
+  // (APPLIANCE_REPAIR_REPLACE decision family). Distinct from
+  // HVAC_REPAIR_REPLACE_VERDICT — the two families are never compared.
+  'APPLIANCE_REPAIR_REPLACE_VERDICT',
 ] as const;
 
 export const QualifiedClaimPropositionTypeSchema = z.enum(QUALIFIED_CLAIM_PROPOSITION_TYPES);

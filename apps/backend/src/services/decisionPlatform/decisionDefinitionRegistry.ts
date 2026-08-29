@@ -16,7 +16,13 @@ export type DecisionDefinitionId =
   | 'OWNERSHIP_COST_CHANGE'
   | 'SAVINGS_BENEFIT_MATCH'
   | 'COVERAGE_QUESTION'
-  | 'SELL_HOLD_RENT';
+  | 'SELL_HOLD_RENT'
+  // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
+  // non-HVAC repair-or-replace. HVAC keeps HVAC_REPAIR_REPLACE unchanged —
+  // its own engine, context contract, and professional boundary. This
+  // family snapshots the already-authoritative non-HVAC
+  // ReplaceRepairAnalysis (applianceDecisionFamilyAdapter.ts).
+  | 'APPLIANCE_REPAIR_REPLACE';
 
 const decisionDefinition = (overrides: DecisionDefinition): DecisionDefinition => overrides;
 
@@ -61,6 +67,7 @@ export const DECISION_DEFINITIONS: Readonly<Record<DecisionDefinitionId, Decisio
   SAVINGS_BENEFIT_MATCH: snapshotDefinition('SAVINGS_BENEFIT_MATCH', 'Pursue this savings or benefits match'),
   COVERAGE_QUESTION: snapshotDefinition('COVERAGE_QUESTION', 'Resolve this coverage question'),
   SELL_HOLD_RENT: snapshotDefinition('SELL_HOLD_RENT', 'Sell, hold, or rent this property'),
+  APPLIANCE_REPAIR_REPLACE: snapshotDefinition('APPLIANCE_REPAIR_REPLACE', 'Repair or replace this appliance'),
 });
 
 export function getDecisionDefinition(id: DecisionDefinitionId): DecisionDefinition {

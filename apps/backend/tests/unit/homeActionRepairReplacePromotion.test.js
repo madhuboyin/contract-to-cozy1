@@ -262,6 +262,24 @@ test('multiple analyses for the same item are deduped, preferring the CURRENT ma
   assert.equal(actions[0].id, 'repair-replace:current-analysis');
 });
 
+// C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
+// category-aware decision-family routing. `id` is category-independent;
+// only `lineageId` picks the family.
+test('a non-HVAC analysis routes to the appliance-repair-replace lineage; HVAC keeps repair-replace', async () => {
+  const applianceDb = stubSources({ analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'APPLIANCE' } })] });
+  const { actions: applianceActions } = await getPromotedHomeActions('property-1', applianceDb, { evaluatedAt: NOW, includePersonalization: false });
+  assert.equal(applianceActions[0].id, 'repair-replace:analysis-1');
+  assert.equal(applianceActions[0].lineageId, 'appliance-repair-replace:item-1');
+
+  const hvacDb = stubSources({
+    analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Furnace', category: 'HVAC' } })],
+    decisionThreads: [],
+  });
+  const { actions: hvacActions } = await getPromotedHomeActions('property-1', hvacDb, { evaluatedAt: NOW, includePersonalization: false });
+  assert.equal(hvacActions[0].id, 'repair-replace:analysis-1');
+  assert.equal(hvacActions[0].lineageId, 'repair-replace:item-1');
+});
+
 test('a db stub without replaceRepairAnalysis does not throw and yields no actions', async () => {
   const db = {
     guidanceJourney: { findMany: async () => [] },

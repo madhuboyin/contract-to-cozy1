@@ -2471,7 +2471,14 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
     return adaptHomeActionSource('GUIDANCE', {
       id: `repair-replace:${analysis.id}`,
       propertyId,
-      lineageId: `repair-replace:${analysis.inventoryItemId}`,
+      // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
+      // category-aware decision-family routing. `id` is untouched (evidence/
+      // href construction only); `lineageId` picks the decision family —
+      // HVAC keeps `repair-replace:` (HVAC_REPAIR_REPLACE), every other
+      // category gets `appliance-repair-replace:` (APPLIANCE_REPAIR_REPLACE),
+      // reached through PREFIX_TO_DECISION_DEFINITION in
+      // homeActionDecisionLineage.ts.
+      lineageId: `${isHvac ? 'repair-replace:' : 'appliance-repair-replace:'}${analysis.inventoryItemId}`,
       sourceEntityId: analysis.id,
       sourceVersion: publishedHvacVerdict ? `snapshot:${publishedHvacVerdict.snapshotId}` : analysis.computedAt.toISOString(),
       state: 'OPEN',

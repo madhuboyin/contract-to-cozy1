@@ -26,6 +26,8 @@ test('every registered DecisionDefinition has a matching decision-family adapter
     'SAVINGS_BENEFIT_MATCH',
     'COVERAGE_QUESTION',
     'SELL_HOLD_RENT',
+    // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7).
+    'APPLIANCE_REPAIR_REPLACE',
   ]));
 });
 

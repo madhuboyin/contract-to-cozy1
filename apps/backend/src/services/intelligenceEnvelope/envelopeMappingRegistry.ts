@@ -41,6 +41,7 @@ const decisionMappings: Record<DecisionDefinitionId, {
   SAVINGS_BENEFIT_MATCH: { domain: 'FINANCIAL', propositionType: 'SAVINGS_BENEFIT_MATCH_VERDICT' },
   COVERAGE_QUESTION: { domain: 'INSURANCE', propositionType: 'COVERAGE_QUESTION_VERDICT' },
   SELL_HOLD_RENT: { domain: 'MARKET_VALUE', propositionType: 'SELL_HOLD_RENT_VERDICT' },
+  APPLIANCE_REPAIR_REPLACE: { domain: 'ASSET_LIFECYCLE', propositionType: 'APPLIANCE_REPAIR_REPLACE_VERDICT' },
 };
 
 const personalizationDomains: Readonly<Record<string, EnvelopeDomain>> = {

@@ -13,7 +13,11 @@ export type DecisionContextContractId =
   | 'OWNERSHIP_COST_CHANGE'
   | 'SAVINGS_BENEFIT_MATCH'
   | 'COVERAGE_QUESTION'
-  | 'SELL_HOLD_RENT';
+  | 'SELL_HOLD_RENT'
+  // Phase 4A (architecture §12.7): thin, since applianceDecisionFamily
+  // Adapter.ts snapshots an already-persisted ReplaceRepairAnalysis rather
+  // than composing a decision from Property Context facts.
+  | 'APPLIANCE_REPAIR_REPLACE';
 
 const contract = (overrides: DecisionContextContract): DecisionContextContract => overrides;
 
@@ -102,6 +106,7 @@ export const DECISION_CONTEXT_CONTRACTS: Readonly<Record<DecisionContextContract
   SAVINGS_BENEFIT_MATCH: snapshotContract('SAVINGS_BENEFIT_MATCH'),
   COVERAGE_QUESTION: snapshotContract('COVERAGE_QUESTION'),
   SELL_HOLD_RENT: snapshotContract('SELL_HOLD_RENT'),
+  APPLIANCE_REPAIR_REPLACE: snapshotContract('APPLIANCE_REPAIR_REPLACE'),
 });
 
 export function getDecisionContextContract(id: DecisionContextContractId): DecisionContextContract {

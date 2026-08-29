@@ -8,6 +8,19 @@ const HVAC_INCOMPATIBLE_VERDICT_PAIRS = new Set([
   'REPAIR|REPLACE',
 ]);
 
+// C2C Intelligence & Agentic Evolution Phase 4A: the non-HVAC repair/
+// replace family projects only REPAIR / REPLACE (see
+// applianceDecisionFamilyAdapter.ts's verdict table) — the two are a
+// direct contradiction when the full claim key otherwise matches.
+const APPLIANCE_REPAIR_REPLACE_INCOMPATIBLE_VERDICT_PAIRS = new Set([
+  'REPAIR|REPLACE',
+]);
+
+const INCOMPATIBLE_VERDICT_PAIRS_BY_PROPOSITION: Partial<Record<QualifiedClaimPropositionType, ReadonlySet<string>>> = {
+  HVAC_REPAIR_REPLACE_VERDICT: HVAC_INCOMPATIBLE_VERDICT_PAIRS,
+  APPLIANCE_REPAIR_REPLACE_VERDICT: APPLIANCE_REPAIR_REPLACE_INCOMPATIBLE_VERDICT_PAIRS,
+};
+
 function pair(left: string, right: string): string {
   return [left.toUpperCase(), right.toUpperCase()].sort().join('|');
 }
@@ -20,10 +33,8 @@ export function evaluateQualifiedClaimVerdicts(input: {
   const left = input.leftVerdict.toUpperCase();
   const right = input.rightVerdict.toUpperCase();
   if (left === right) return 'COMPATIBLE';
-  if (
-    input.propositionType === 'HVAC_REPAIR_REPLACE_VERDICT'
-    && HVAC_INCOMPATIBLE_VERDICT_PAIRS.has(pair(left, right))
-  ) return 'CONFLICTED';
+  const incompatiblePairs = INCOMPATIBLE_VERDICT_PAIRS_BY_PROPOSITION[input.propositionType];
+  if (incompatiblePairs?.has(pair(left, right))) return 'CONFLICTED';
   return 'UNKNOWN';
 }
 
