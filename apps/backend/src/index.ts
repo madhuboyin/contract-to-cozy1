@@ -65,6 +65,7 @@ import sellerPrepRoutes from './sellerPrep/sellerPrep.routes';
 import feedbackRoutes from './feedback/feedback.routes';
 import localUpdatesRoutes from './localUpdates/localUpdates.routes';
 import homeActionsRoutes from './routes/homeActions.routes';
+import agentSpecialistRoutes from './routes/agentSpecialist.routes';
 import adminEnvelopeCoverageRoutes from './routes/adminEnvelopeCoverage.routes';
 
 // Import middleware
@@ -210,6 +211,8 @@ import {
   validateAgentDefinitionRegistry,
   validateRepairReplaceProfiles,
 } from './services/agents';
+import { AGENT_TRIGGER_HANDLER_REGISTRY } from './services/agents/agentRegistryValidation';
+import { validateAgentTriggerHandlers } from './services/agents/agentTriggerRegistry';
 dotenv.config();
 
 const askRegistryIssues = [
@@ -258,6 +261,7 @@ if (intelligenceRegistryIssues.length) {
 const agentRegistryIssues = [
   ...validateAgentDefinitionRegistry(),
   ...validateRepairReplaceProfiles(),
+  ...validateAgentTriggerHandlers(AGENT_TRIGGER_HANDLER_REGISTRY),
 ];
 if (agentRegistryIssues.length) {
   throw new Error(`FATAL: Agent registry validation failed: ${agentRegistryIssues.join('; ')}`);
@@ -604,6 +608,7 @@ app.use('/api/seller-prep', sellerPrepRoutes);
 app.use('/api', feedbackRoutes);
 app.use('/api/local-updates', localUpdatesRoutes);
 app.use('/api', homeActionsRoutes);
+app.use('/api', agentSpecialistRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api', seasonalChecklistRoutes);
 app.use('/api/home-buyer-tasks', homeBuyerTaskRoutes);

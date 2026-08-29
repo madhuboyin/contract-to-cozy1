@@ -5,3 +5,8 @@ export * from './repairReplaceProfileRegistry';
 export * from './agentRunRepository';
 export * from './agentStateRepository';
 export * from './agentRetention.service';
+export * from './agentRuntime.contract';
+export * from './agentRuntime.service';
+export * from './agentTriggerRegistry';
+export * from './hvacRepairReplaceSpecialist.service';
+export * from './agentPropertyContext.service';

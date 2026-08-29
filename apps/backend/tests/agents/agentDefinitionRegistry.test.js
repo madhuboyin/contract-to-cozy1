@@ -74,11 +74,18 @@ test('missing Skill, operation, context, trigger, output, and evaluation referen
   assert.ok(validateDefinition(active, { evaluationSuites: {} }).some((issue) => issue.includes('missing evaluation suite')));
 });
 
-test('pending runtime and evaluation contracts cannot cross the DEV release boundary', () => {
+test('a pending evaluation contract cannot cross the DEV release boundary', () => {
+  // PR 10 made the HOME_ACTION_ENGAGEMENT trigger handler AVAILABLE, so the
+  // evaluation suite (gated by IPD-005) is now the only PENDING dependency
+  // holding the definition at DEV.
   const promoted = { ...active, releaseState: 'EVAL_APPROVED' };
   const issues = validateDefinition(promoted);
-  assert.ok(issues.some((issue) => issue.includes('trigger handler') && issue.includes('permits only DEV')));
   assert.ok(issues.some((issue) => issue.includes('evaluation suite') && issue.includes('permits only DEV')));
+
+  const pendingTrigger = { ...active, releaseState: 'EVAL_APPROVED' };
+  assert.ok(validateDefinition(pendingTrigger, {
+    triggerHandlers: { 'agent.hvac.home-action-engagement@1.0.0': 'PENDING' },
+  }).some((issue) => issue.includes('trigger handler') && issue.includes('permits only DEV')));
 });
 
 test('budget and autonomy ceilings are enforced', () => {

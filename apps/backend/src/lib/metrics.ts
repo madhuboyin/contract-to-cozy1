@@ -264,6 +264,27 @@ export const agentRuntimeDeletionsTotal = new Counter({
   registers: [register],
 });
 
+export const agentRuntimeOperationsTotal = new Counter({
+  name: 'agent_runtime_operations_total',
+  help: 'Agent runtime typed-operation invocations by agent, operation, and outcome',
+  labelNames: ['agent', 'operation', 'outcome'] as const,
+  registers: [register],
+});
+
+export const agentRuntimeRunOutcomesTotal = new Counter({
+  name: 'agent_runtime_run_outcomes_total',
+  help: 'Terminal agent run outcomes by agent and phase/outcome',
+  labelNames: ['agent', 'outcome'] as const,
+  registers: [register],
+});
+
+export const agentRuntimeToolInvocationsTotal = new Counter({
+  name: 'agent_runtime_tool_invocations_total',
+  help: 'Specialist tool invocations by agent, tool, and outcome',
+  labelNames: ['agent', 'tool', 'outcome'] as const,
+  registers: [register],
+});
+
 export const askInlineCapturesTotal = new Counter({
   name: 'ask_inline_captures_total',
   help: 'Ask inline capture lifecycle outcomes by registered operation',

@@ -18,7 +18,8 @@ const RUNTIME_CONTROL_PATTERN = /^AGENT_[A-Z0-9_]+_(?:ENABLED|KILL_SWITCH)$/;
 export type AgentDependencyReadiness = 'AVAILABLE' | 'PENDING';
 
 export const AGENT_TRIGGER_HANDLER_REGISTRY: Readonly<Record<string, AgentDependencyReadiness>> = Object.freeze({
-  'agent.hvac.home-action-engagement@1.0.0': 'PENDING',
+  // PR 10 implements the runtime entry point (agentTriggerRegistry.ts).
+  'agent.hvac.home-action-engagement@1.0.0': 'AVAILABLE',
 });
 
 export const AGENT_OUTPUT_CONTRACT_REGISTRY: Readonly<Record<string, AgentDependencyReadiness>> = Object.freeze({
