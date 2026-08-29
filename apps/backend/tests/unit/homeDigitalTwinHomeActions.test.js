@@ -123,7 +123,7 @@ test('a HIGH-priority capital item becomes a standalone evidence-backed lifecycl
   assert.match(action.primaryCta.href, /contextVersion=context-v4/);
   assert.equal(action.primaryCta.label, 'Plan Roof replacement');
   assert.equal(action.presentation.variant, 'ASSET_LIFECYCLE');
-  assert.equal(action.presentation.headline, 'Plan ahead for Roof');
+  assert.equal(action.presentation.headline, 'Plan for Roof replacement');
   assert.equal(action.presentation.subject.id, 'roof-1');
   assert.equal(action.presentation.group, null);
   assert.equal(action.presentation.detailLabel, 'Why this estimate?');

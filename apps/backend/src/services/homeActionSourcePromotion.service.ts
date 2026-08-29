@@ -4364,8 +4364,8 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       },
       presentation: {
         variant: 'ASSET_LIFECYCLE',
-        eyebrow: 'Plan ahead',
-        headline: `Plan ahead for ${label}`.slice(0, 180).trim(),
+        eyebrow: 'Capital plan',
+        headline: `Plan for ${label} replacement`.slice(0, 180).trim(),
         summary: `Nothing here says ${label} has failed. Use the known history and protection details to decide when and how much to set aside.`,
         whyNow: whyNow.slice(0, 500).trim(),
         keyFacts: [],
