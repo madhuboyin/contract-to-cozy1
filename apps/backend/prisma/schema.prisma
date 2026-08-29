@@ -15664,6 +15664,184 @@ model CoverageAuditRun {
   @@map("coverage_audit_runs")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Agent runtime persistence — C2C Intelligence & Agentic Evolution Phase 2 / PR 9
+// (implementation plan §7.2; IPD-003 retention, IPD-007 run lifecycle).
+//
+// AgentRun is an immutable single terminal insert (IPD-007 option a): there is
+// no RUNNING state and no updatedAt. Concurrency/idempotency is a separate
+// AgentRunReservation row. Mid-flight mutability lives only in AgentState
+// (CAS via casVersion). Every row is stamped a fixed expiresAt at creation and
+// purged by the `purge-agent-runtime` worker; ToolInvocation/LlmInvocation/
+// AgentState also cascade-delete from AgentRun as a structural backstop.
+// Payloads are bounded — IDs, hashes, counters, enums, and typed references
+// only; never raw prompts, documents, unscoped context, or secrets.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AgentRunTrigger {
+  USER_INITIATED
+  HOME_ACTION_ENGAGEMENT
+  SPECIALIST_HANDOFF
+}
+
+enum AgentRunOutcome {
+  COMPLETED
+  ABSTAINED
+  PAUSED
+  FAILED
+}
+
+model AgentRunReservation {
+  id               String          @id @default(uuid())
+  idempotencyKey   String          @unique
+  agentId          String
+  agentVersion     String
+  trigger          AgentRunTrigger
+  principalUserId  String
+  propertyId       String
+  decisionThreadId String?
+  correlationId    String
+  claimedAt        DateTime        @default(now())
+  leaseExpiresAt   DateTime
+  resultRunId      String?         @unique
+  expiresAt        DateTime
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  resultRun AgentRun? @relation(fields: [resultRunId], references: [id], onDelete: Cascade)
+
+  @@index([principalUserId])
+  @@index([propertyId])
+  @@index([agentId, agentVersion])
+  @@index([leaseExpiresAt])
+  @@index([expiresAt])
+  @@map("agent_run_reservations")
+}
+
+model AgentRun {
+  id                  String          @id @default(uuid())
+  agentId             String
+  agentVersion        String
+  definitionDigest    String
+  deploymentRevision  String
+  trigger             AgentRunTrigger
+  idempotencyKey      String          @unique
+  correlationId       String
+  principalUserId     String
+  propertyId          String
+  decisionThreadId    String?
+  originHomeActionId  String?
+  originAskExecutionId String?
+  outcome             AgentRunOutcome
+  abstentionReason    String?
+  failureCode         String?
+  contextFactsUsed    Int             @default(0)
+  llmInvocationsUsed  Int             @default(0)
+  llmCostUsdUsed      Float           @default(0)
+  executionMsUsed     Int             @default(0)
+  loopIterationsUsed  Int             @default(0)
+  startedAt           DateTime
+  finishedAt          DateTime
+  expiresAt           DateTime
+  createdAt           DateTime        @default(now())
+
+  state           AgentState?
+  toolInvocations ToolInvocation[]
+  llmInvocations  LlmInvocation[]
+  reservation     AgentRunReservation?
+
+  @@index([principalUserId, createdAt])
+  @@index([propertyId, createdAt])
+  @@index([decisionThreadId])
+  @@index([agentId, agentVersion, outcome])
+  @@index([outcome, expiresAt])
+  @@index([expiresAt])
+  @@map("agent_runs")
+}
+
+model AgentState {
+  id                  String    @id @default(uuid())
+  runId               String    @unique
+  agentId             String
+  agentVersion        String
+  casVersion          Int       @default(0)
+  stateShape          String
+  serializedStateJson Json
+  expectedEvent       String
+  delayedJobId        String?
+  pauseExpiresAt      DateTime
+  expiresAt           DateTime
+  resolvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, agentVersion])
+  @@index([expectedEvent, pauseExpiresAt])
+  @@index([expiresAt])
+  @@map("agent_states")
+}
+
+model ToolInvocation {
+  id               String   @id @default(uuid())
+  runId            String
+  correlationId    String
+  sequence         Int
+  toolId           String
+  toolVersion      String
+  operationId      String?
+  inputHash        String
+  outputHash       String?
+  outcome          String
+  errorCode        String?
+  startedAt        DateTime
+  finishedAt       DateTime
+  durationMs       Int
+  redactionVersion String   @default("1")
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, sequence])
+  @@index([correlationId])
+  @@index([expiresAt])
+  @@map("tool_invocations")
+}
+
+model LlmInvocation {
+  id                String   @id @default(uuid())
+  runId             String
+  correlationId     String
+  sequence          Int
+  purpose           String
+  modelId           String
+  policyId          String?
+  promptHash        String
+  responseHash      String?
+  typedClaimIdsJson Json?
+  inputTokens       Int      @default(0)
+  outputTokens      Int      @default(0)
+  costUsd           Float    @default(0)
+  outcome           String
+  errorCode         String?
+  startedAt         DateTime
+  finishedAt        DateTime
+  durationMs        Int
+  redactionVersion  String   @default("1")
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, sequence])
+  @@index([correlationId])
+  @@index([modelId, createdAt])
+  @@index([expiresAt])
+  @@map("llm_invocations")
+}
+
 model IntelligenceSource {
   id                        String                         @id @default(uuid())
   key                       String                         @unique

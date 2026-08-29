@@ -1,0 +1,213 @@
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
+import { addDays, readAgentRuntimeControls, type AgentRuntimeControls } from '../../config/agentRuntimeControls';
+import type { AgentRunOutcome, AgentRunTrigger } from '@prisma/client';
+import type { ReferencedAgentDefinitionVersion } from './agent.contract';
+import { validateReferencedAgentDefinitionVersions } from './agentRegistryValidation';
+
+type AgentRunDb = Pick<typeof prisma, 'agentRun' | 'agentRunReservation' | 'agentState' | '$transaction'>;
+
+export type AgentRunReservationInput = Readonly<{
+  idempotencyKey: string;
+  agentId: string;
+  agentVersion: string;
+  trigger: AgentRunTrigger;
+  principalUserId: string;
+  propertyId: string;
+  decisionThreadId?: string | null;
+  correlationId: string;
+}>;
+
+export type TerminalAgentRunInput = Readonly<{
+  reservationId: string;
+  idempotencyKey: string;
+  agentId: string;
+  agentVersion: string;
+  definitionDigest: string;
+  deploymentRevision: string;
+  trigger: AgentRunTrigger;
+  correlationId: string;
+  principalUserId: string;
+  propertyId: string;
+  decisionThreadId?: string | null;
+  originHomeActionId?: string | null;
+  originAskExecutionId?: string | null;
+  outcome: AgentRunOutcome;
+  abstentionReason?: string | null;
+  failureCode?: string | null;
+  budgetUsage: {
+    contextFactsUsed: number;
+    llmInvocationsUsed: number;
+    llmCostUsdUsed: number;
+    executionMsUsed: number;
+    loopIterationsUsed: number;
+  };
+  startedAt: Date;
+  finishedAt: Date;
+}>;
+
+function controls(override?: Partial<AgentRuntimeControls>): AgentRuntimeControls {
+  return { ...readAgentRuntimeControls(), ...override };
+}
+
+/**
+ * IPD-007 concurrency primitive: claiming an invocation is an insert against a
+ * unique idempotency key. A unique violation means another invocation is
+ * already running or has already finished — the caller reads `resultRunId` to
+ * decide whether to wait or to return the completed run.
+ */
+export async function claimAgentRunReservation(
+  input: AgentRunReservationInput,
+  now: Date = new Date(),
+  db: AgentRunDb = prisma,
+  runtime?: Partial<AgentRuntimeControls>,
+): Promise<Readonly<{ claimed: boolean; reservation: Awaited<ReturnType<AgentRunDb['agentRunReservation']['findUniqueOrThrow']>> }>> {
+  const cfg = controls(runtime);
+  const existing = await db.agentRunReservation.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+  if (existing) return { claimed: false, reservation: existing };
+  try {
+    const reservation = await db.agentRunReservation.create({
+      data: {
+        idempotencyKey: input.idempotencyKey,
+        agentId: input.agentId,
+        agentVersion: input.agentVersion,
+        trigger: input.trigger,
+        principalUserId: input.principalUserId,
+        propertyId: input.propertyId,
+        decisionThreadId: input.decisionThreadId ?? null,
+        correlationId: input.correlationId,
+        claimedAt: now,
+        leaseExpiresAt: new Date(now.getTime() + cfg.reservationLeaseMs),
+        expiresAt: addDays(now, cfg.reservationRetentionDays),
+      },
+    });
+    return { claimed: true, reservation };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return {
+        claimed: false,
+        reservation: await db.agentRunReservation.findUniqueOrThrow({ where: { idempotencyKey: input.idempotencyKey } }),
+      };
+    }
+    throw error;
+  }
+}
+
+/**
+ * IPD-007: AgentRun is an immutable single terminal insert. This writes the
+ * run row (already in a terminal outcome) and links it back to its reservation
+ * in one transaction. A duplicate terminal write for the same idempotency key
+ * returns the already-recorded run rather than inserting a second one.
+ */
+export async function writeTerminalAgentRun(
+  input: TerminalAgentRunInput,
+  now: Date = new Date(),
+  db: AgentRunDb = prisma,
+  runtime?: Partial<AgentRuntimeControls>,
+): Promise<Awaited<ReturnType<AgentRunDb['agentRun']['findUniqueOrThrow']>>> {
+  const cfg = controls(runtime);
+  const existing = await db.agentRun.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+  if (existing) return existing;
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const run = await tx.agentRun.create({
+        data: {
+          agentId: input.agentId,
+          agentVersion: input.agentVersion,
+          definitionDigest: input.definitionDigest,
+          deploymentRevision: input.deploymentRevision,
+          trigger: input.trigger,
+          idempotencyKey: input.idempotencyKey,
+          correlationId: input.correlationId,
+          principalUserId: input.principalUserId,
+          propertyId: input.propertyId,
+          decisionThreadId: input.decisionThreadId ?? null,
+          originHomeActionId: input.originHomeActionId ?? null,
+          originAskExecutionId: input.originAskExecutionId ?? null,
+          outcome: input.outcome,
+          abstentionReason: input.abstentionReason ?? null,
+          failureCode: input.failureCode ?? null,
+          contextFactsUsed: input.budgetUsage.contextFactsUsed,
+          llmInvocationsUsed: input.budgetUsage.llmInvocationsUsed,
+          llmCostUsdUsed: input.budgetUsage.llmCostUsdUsed,
+          executionMsUsed: input.budgetUsage.executionMsUsed,
+          loopIterationsUsed: input.budgetUsage.loopIterationsUsed,
+          startedAt: input.startedAt,
+          finishedAt: input.finishedAt,
+          expiresAt: addDays(now, cfg.runRetentionDays),
+        },
+      });
+      // CAS: only the reservation that has not yet been linked may claim this run.
+      await tx.agentRunReservation.updateMany({
+        where: { id: input.reservationId, resultRunId: null },
+        data: { resultRunId: run.id },
+      });
+      return run;
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return db.agentRun.findUniqueOrThrow({ where: { idempotencyKey: input.idempotencyKey } });
+    }
+    throw error;
+  }
+}
+
+export async function getAgentRunById(id: string, db: AgentRunDb = prisma) {
+  return db.agentRun.findUnique({ where: { id } });
+}
+
+export async function getLatestAgentRunForThread(decisionThreadId: string, db: AgentRunDb = prisma) {
+  return db.agentRun.findFirst({
+    where: { decisionThreadId },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+/**
+ * Deployment-readiness input (§7.1 task 4 / IPD-007): the definition versions
+ * that code must still contain because a paused run can resume onto them or an
+ * in-flight invocation is pinned to them. Delayed follow-up jobs are added here
+ * once IPD-004 enables the SCHEDULE_FOLLOW_UP tool.
+ */
+export async function collectReferencedAgentDefinitionVersions(
+  now: Date = new Date(),
+  db: AgentRunDb = prisma,
+): Promise<ReferencedAgentDefinitionVersion[]> {
+  const [pausedStates, liveReservations] = await Promise.all([
+    db.agentState.findMany({
+      where: { resolvedAt: null },
+      select: { runId: true, agentId: true, agentVersion: true },
+    }),
+    db.agentRunReservation.findMany({
+      where: { resultRunId: null, leaseExpiresAt: { gt: now } },
+      select: { id: true, agentId: true, agentVersion: true },
+    }),
+  ]);
+  return [
+    ...pausedStates.map((state) => ({
+      agentId: state.agentId,
+      version: state.agentVersion,
+      source: 'PAUSED_STATE' as const,
+      sourceId: state.runId,
+    })),
+    ...liveReservations.map((reservation) => ({
+      agentId: reservation.agentId,
+      version: reservation.agentVersion,
+      source: 'NONTERMINAL_RUN' as const,
+      sourceId: reservation.id,
+    })),
+  ];
+}
+
+/**
+ * Deploy-time gate (not a boot-time check): fails if code no longer contains a
+ * definition version that a paused run could resume onto or an in-flight
+ * invocation is pinned to. Returns the list of blocking issues (empty = ready).
+ */
+export async function assertAgentDeploymentReadiness(
+  now: Date = new Date(),
+  db: AgentRunDb = prisma,
+): Promise<string[]> {
+  return validateReferencedAgentDefinitionVersions(await collectReferencedAgentDefinitionVersions(now, db));
+}

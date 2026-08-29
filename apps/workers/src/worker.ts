@@ -68,6 +68,7 @@ import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAu
 import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
 import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.job';
 import { runEvaluateEnvelopePromotionCoverageJob } from './jobs/evaluateEnvelopePromotionCoverage.job';
+import { runPurgeAgentRuntimeJob } from './jobs/purgeAgentRuntime.job';
 import { generateDiyAiGuideJob, GENERATE_DIY_AI_GUIDE_JOB } from './jobs/generateDiyAiGuide.job';
 import { DIY_AI_GUIDE_QUEUE } from '@worker-shared/services/diyAiGuide.service';
 import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPermitHistory.job';
@@ -437,6 +438,7 @@ const CRON_HANDLERS: Record<string, (opts?: WorkerHandlerOptions) => Promise<voi
       ? { trigger: 'MANUAL', invocationId: opts.invocationId }
       : undefined,
   ),
+  'purge-agent-runtime':             async () => runPurgeAgentRuntimeJob(),
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },

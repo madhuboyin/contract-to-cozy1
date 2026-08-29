@@ -257,6 +257,13 @@ export const askRetentionDeletionsTotal = new Counter({
   registers: [register],
 });
 
+export const agentRuntimeDeletionsTotal = new Counter({
+  name: 'agent_runtime_deletions_total',
+  help: 'Agent runtime rows deleted by retention purge or homeowner erasure, by table and reason',
+  labelNames: ['table', 'reason'] as const,
+  registers: [register],
+});
+
 export const askInlineCapturesTotal = new Counter({
   name: 'ask_inline_captures_total',
   help: 'Ask inline capture lifecycle outcomes by registered operation',

@@ -9,6 +9,7 @@ import {
   HouseholdOwnershipBlockedError,
 } from '../services/accountDeletionCascade.service';
 import { eraseHouseholdDataForUser } from '../modules/personalization/application/eraseHouseholdDataForUser.usecase';
+import { eraseAgentRuntimeForUser } from '../services/agents/agentRetention.service';
 
 const updateProfileSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -233,6 +234,10 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       // optional profile answers and property links — anonymizing the User
       // row below does not do this on its own.
       await eraseHouseholdDataForUser(tx, userId);
+
+      // Phase 2 agent runtime (IPD-003): account deletion only anonymizes the
+      // User row, so a User FK cascade never fires — erase these explicitly.
+      await eraseAgentRuntimeForUser(tx, userId);
 
       await deactivateProviderFootprint(tx, userId);
 
