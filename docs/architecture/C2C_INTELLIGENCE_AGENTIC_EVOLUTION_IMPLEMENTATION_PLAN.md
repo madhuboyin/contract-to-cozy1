@@ -477,6 +477,17 @@ For each candidate, separately decide whether it is:
 
 Require a safety-tier review, autonomy ceiling, authoritative engine/source, typed context contract, professional boundary, evaluation suite, and complete promotion/lineage path. Do not admit higher-risk home systems by analogy to HVAC.
 
+**Implementation status (2026-08-29): the admission process is implemented as an enforced code artifact (uncommitted). No new specialist is admitted — that was never Phase 4B's deliverable.** `apps/backend/src/services/agents/specialistAdmissionRegistry.ts` makes §9.2 executable rather than prose:
+
+- `SpecialistAdmissionClassification` — the three-way test above as a closed enum.
+- `SpecialistAdmissionGate` (7 gates) + `REQUIRED_GATES_BY_CLASSIFICATION` — the review checklist above, with per-classification required subsets. Every classification requires `EVALUATION_SUITE` (§12.6's "same bar as an AgentDefinition"). `NEW_SPECIALIST` requires all 7.
+- `HIGHER_RISK_INVENTORY_CATEGORIES` (`PLUMBING`, `ELECTRICAL`, `ROOF_EXTERIOR`, `STRUCTURAL`) — `requiredGatesFor` forces `SAFETY_TIER_REVIEW` + `AUTONOMY_CEILING_REJUSTIFICATION` for any candidate touching one, regardless of classification ("do not admit higher-risk home systems by analogy to HVAC").
+- `SPECIALIST_ADMISSION_RECORDS` — one row per candidate with a per-gate review (`PASS` / `FAIL` / `NOT_REVIEWED`, each with evidence text): `HVAC` = `ADMITTED` reference implementation (all 7 gates `PASS`); `GENERIC_APPLIANCE` = `PENDING_REVIEW`, blocked on `IPD-006`'s `EVALUATION_SUITE` gate; `ELECTRICAL_REPAIR_REPLACE` / `PLUMBING_REPAIR_REPLACE` / `ROOFING_REPAIR_REPLACE` / `STRUCTURAL_REPAIR_REPLACE` = explicit `NOT_ADMITTED` (`decision: 'DECLINED'`) scaffolds.
+- `deriveSpecialistAdmissionStatus` — the status a record's gates actually justify; validation asserts the declared `status` matches.
+- `validateSpecialistAdmissionRegistry` — wired into `index.ts` startup / CI alongside `validateAgentDefinitionRegistry` and `validateRepairReplaceProfiles`. Fails closed if: a registered `RepairReplaceProfile` has no `ADMITTED` record; a non-`DEV` `AgentDefinition` has no `ADMITTED` record; a declared status contradicts its gates; or a higher-risk category rides in on an `ADMITTED` record without its forced gates `PASS`.
+
+Net effect: adding `GENERIC_APPLIANCE` to `REPAIR_REPLACE_PROFILES` (Phase 4A task 7) now fails startup until its admission record flips to `ADMITTED` — which needs `IPD-006`. Tests: `tests/agents/specialistAdmissionRegistry.test.js`. `npx tsc --noEmit` clean.
+
 ## 10. Cross-cutting schema and data rules
 
 1. Update `apps/backend/prisma/schema.prisma` and every affected contract/service together.
@@ -549,3 +560,5 @@ Start with PR 1 (shared contracts) and PR 4's investigation in parallel at the e
 `IPD-001`, `IPD-003`, `IPD-007`, `IPD-008`, and `IPD-009` are resolved. Phase 1's weekly/manual worker and durable run contract are implemented, with scheduled execution disabled until `IPD-002` operational acceptance. Phase 2 schema work (PR 9) is unblocked and implemented. Do not build the PR 10 runtime loop / API or enable follow-up until `IPD-004` is resolved, do not move the HVAC definition to `EVAL_APPROVED` until `IPD-005`, and do not enable generic appliance profiles without `IPD-006`.
 
 Phase 4A's `APPLIANCE_REPAIR_REPLACE` Decision Platform family and category-aware ingress are implemented (§9.1) — a non-HVAC repair/replace Home Action now reaches a real `DecisionThread` instead of failing closed under the HVAC family. The `GENERIC_APPLIANCE` agent profile and the Specialist conversation on top of that thread stay gated on `IPD-006` (evaluation contract + reviewed verdict mapping).
+
+Phase 4B's admission process is implemented as an enforced code artifact (`specialistAdmissionRegistry.ts`, §9.2) — a classification + gate checklist that fails startup if any `RepairReplaceProfile` or non-`DEV` `AgentDefinition` lacks a passing admission record. It admits no new specialist; adding `GENERIC_APPLIANCE` now also requires flipping its admission record, which `IPD-006` unblocks.

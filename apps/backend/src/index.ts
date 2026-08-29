@@ -212,6 +212,7 @@ import {
   validateAgentLlmPurposeContracts,
   validateAgentDefinitionRegistry,
   validateRepairReplaceProfiles,
+  validateSpecialistAdmissionRegistry,
 } from './services/agents';
 import { AGENT_TRIGGER_HANDLER_REGISTRY } from './services/agents/agentRegistryValidation';
 import { validateAgentTriggerHandlers } from './services/agents/agentTriggerRegistry';
@@ -263,6 +264,9 @@ if (intelligenceRegistryIssues.length) {
 const agentRegistryIssues = [
   ...validateAgentDefinitionRegistry(),
   ...validateRepairReplaceProfiles(),
+  // Phase 4B: no RepairReplaceProfile or non-DEV AgentDefinition may exist
+  // without a recorded, passing admission decision.
+  ...validateSpecialistAdmissionRegistry(),
   ...validateAgentTriggerHandlers(AGENT_TRIGGER_HANDLER_REGISTRY),
   ...validateAgentLlmPurposeContracts(),
 ];
