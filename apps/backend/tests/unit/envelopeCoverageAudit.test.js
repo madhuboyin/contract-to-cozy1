@@ -200,6 +200,7 @@ test('coverage audit modules cannot import promotion, ranking, eligibility, or d
     'envelopeCoverageValidation.ts',
     'envelopeCoverageAudit.service.ts',
     'envelopeCoverageFinding.repository.ts',
+    'envelopeCoverageRun.repository.ts',
     'envelopeCoverageAuditExecution.service.ts',
   ];
   const source = files.map((file) => fs.readFileSync(path.resolve(

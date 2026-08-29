@@ -8,7 +8,8 @@
 
 import { api } from '@/lib/api/client';
 
-export type CoverageDetermination = 'COVERED' | 'REVIEW_REQUIRED' | 'NOT_ACTIONABLE';
+// Mirrors the backend Prisma enum CoverageAuditDetermination.
+export type CoverageDetermination = 'COVERED' | 'INTENTIONALLY_NON_ACTIONABLE' | 'REVIEW_REQUIRED';
 export type CoverageEvidenceBasis = 'DECLARED_ONLY' | 'OBSERVED_ONLY' | 'DECLARED_AND_OBSERVED';
 export type CoverageRunTrigger = 'SCHEDULED' | 'MANUAL';
 export type CoverageRunStatus = 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED';
