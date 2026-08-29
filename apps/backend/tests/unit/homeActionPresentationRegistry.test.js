@@ -152,3 +152,16 @@ test('legacy generic workflow headlines are replaced by the grounded source sign
   assert.equal(presented.presentation.headline, 'Furnace replacement window is open');
   assert.equal(presented.presentation.subject.label, 'Furnace replacement window is open');
 });
+
+test('the generic health-fact review headline falls back to the specific factor signal', () => {
+  const presented = ensureHomeActionPresentation({
+    ...action(),
+    presentation: undefined,
+    signal: 'HVAC Age',
+    recommendedAction: 'Review and update this home fact.',
+    whyItMatters: 'Status: Needs Review. Requires resolution.',
+    source: { kind: 'SYSTEM', entityId: 'property-1', version: 'v1' },
+    confidence: { score: 0.7, label: 'MEDIUM', missing: [] },
+  });
+  assert.equal(presented.presentation.headline, 'HVAC Age');
+});

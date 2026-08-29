@@ -2,7 +2,7 @@ import type { HomeAction } from './homeAction.contract';
 
 type PresentationVariant = NonNullable<HomeAction['presentation']>['variant'];
 
-const ABSTRACT_HOME_HEADLINE = /^(?:review a financial exposure|review and address before listing|review the flagged home facts|(?:review|continue|address|resolve)\s+(?:(?:this|the|a|an)\s+)?(?:action|decision|journey|issue|item|exposure|details?))$/i;
+const ABSTRACT_HOME_HEADLINE = /^(?:review a financial exposure|review and address before listing|review the flagged home facts|review and update (?:this|the) home fact\.?|(?:review|continue|address|resolve)\s+(?:(?:this|the|a|an)\s+)?(?:action|decision|journey|issue|item|exposure|details?|home fact))$/i;
 
 export type HomeActionPresentationEligibility = {
   eligible: boolean;
