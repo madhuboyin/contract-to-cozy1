@@ -166,6 +166,28 @@ function priorityLabel(priority: RankedHomeActionDTO['priority']) {
   return priority.charAt(0) + priority.slice(1).toLowerCase();
 }
 
+// "Active major moment" stage badge — the backend sends the raw
+// ProjectRecordStatus (project) or GuidanceDecisionStage (guided plan)
+// enum. Homeowners see one shared vocabulary regardless of the source.
+const MAJOR_MOMENT_STAGE_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  PLANNING: 'Planning',
+  IN_PROGRESS: 'In progress',
+  PAUSED: 'Paused',
+  DISPUTED: 'In dispute',
+  AWARENESS: 'Reviewing',
+  DIAGNOSIS: 'Diagnosing',
+  DECISION: 'Deciding',
+  EXECUTION: 'In progress',
+  VALIDATION: 'Verifying',
+  TRACKING: 'Monitoring',
+};
+
+function majorMomentStageLabel(stage: string): string {
+  return MAJOR_MOMENT_STAGE_LABELS[stage]
+    ?? stage.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+}
+
 function homeownerPropertyName(name: string, address: string): string {
   if (name.trim() && !/^(main|primary|home)$/i.test(name.trim())) return name.trim();
   return address.split(',')[0]?.trim() || 'Your home';
@@ -1654,7 +1676,7 @@ export function UnifiedHomeSurface({
             <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Milestone className="h-5 w-5 text-indigo-600" />Active major moment</CardTitle><CardDescription>Your current project or guided plan.</CardDescription></CardHeader>
             <CardContent>
               {home.activeMajorMoment ? (
-                <div className="space-y-3"><Badge variant="outline">{home.activeMajorMoment.stage.replace(/_/g, ' ')}</Badge><h3 className="font-semibold text-slate-950">{home.activeMajorMoment.title}</h3>{home.activeMajorMoment.context && <p className="text-sm text-slate-600">{home.activeMajorMoment.context}</p>}{home.activeMajorMoment.blocker && <p className="flex gap-2 text-sm text-amber-700"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{home.activeMajorMoment.blocker}</p>}<p className="text-sm text-slate-600">Next: {home.activeMajorMoment.nextMilestone}</p><Button asChild size="sm" variant="outline" className="rounded-full"><Link href={home.activeMajorMoment.href}>Continue</Link></Button></div>
+                <div className="space-y-3"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium uppercase tracking-wide text-slate-500">{home.activeMajorMoment.kind === 'PROJECT' ? 'Project' : 'Guided plan'}</span><Badge variant="outline">{majorMomentStageLabel(home.activeMajorMoment.stage)}</Badge></div><h3 className="font-semibold text-slate-950">{home.activeMajorMoment.title}</h3>{home.activeMajorMoment.context && <p className="text-sm text-slate-600">{home.activeMajorMoment.context}</p>}{home.activeMajorMoment.blocker && <p className="flex gap-2 text-sm text-amber-700"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{home.activeMajorMoment.blocker}</p>}<p className="text-sm text-slate-600">Next: {home.activeMajorMoment.nextMilestone}</p><Button asChild size="sm" variant="outline" className="rounded-full"><Link href={home.activeMajorMoment.href}>Continue</Link></Button></div>
               ) : <p className="text-sm text-slate-500">No major project or guided plan is active.</p>}
             </CardContent>
           </Card>
