@@ -93,6 +93,46 @@ test('HVAC stays neutral before a current Decision Platform snapshot exists', as
   assert.equal(action.evidence[0].source, 'Lifespan Engine (supporting evidence only)');
 });
 
+test('generic HVAC verdict fields cannot affect neutral Home Action presentation or priority', async () => {
+  const guidanceJourneys = [{
+    id: 'journey-1', inventoryItemId: 'item-1', currentStepKey: 'compare-options', issueType: 'Repair or replace',
+  }];
+  const variants = [
+    analysis({
+      verdict: 'REPLACE_NOW', confidence: 'HIGH', impactLevel: 'HIGH',
+      summary: 'The generic analysis says replace immediately.',
+      inventoryItem: { id: 'item-1', name: 'Furnace', category: 'HVAC' },
+    }),
+    analysis({
+      verdict: 'REPAIR_ONLY', confidence: 'LOW', impactLevel: 'LOW',
+      summary: 'The generic analysis says repair this furnace.',
+      inventoryItem: { id: 'item-1', name: 'Furnace', category: 'HVAC' },
+    }),
+  ];
+
+  const actions = [];
+  for (const candidate of variants) {
+    const result = await getPromotedHomeActions('property-1', stubSources({ analyses: [candidate], guidanceJourneys }), {
+      evaluatedAt: NOW,
+      includePersonalization: false,
+    });
+    actions.push(result.actions[0]);
+  }
+
+  const presentation = (action) => ({
+    priority: action.priority,
+    signal: action.signal,
+    whyItMatters: action.whyItMatters,
+    recommendedAction: action.recommendedAction,
+    options: action.options,
+    confidence: action.confidence,
+    href: action.primaryCta.href,
+  });
+  assert.deepEqual(presentation(actions[0]), presentation(actions[1]));
+  assert.equal(actions[0].primaryCta.href.includes('customIssueLabel='), false);
+  assert.doesNotMatch(JSON.stringify(presentation(actions[0])), /replace immediately|repair this furnace/i);
+});
+
 test('current HVAC snapshot is the sole published verdict even when the generic analysis disagrees', async () => {
   const db = stubSources({
     analyses: [analysis({
@@ -125,6 +165,51 @@ test('current HVAC snapshot is the sole published verdict even when the generic 
   assert.equal(action.evidence[0].source, 'Decision Platform');
   assert.equal(action.confidence.label, 'MEDIUM');
   assert.deepEqual(action.confidence.missing, []);
+});
+
+test('generic HVAC verdict fields cannot affect snapshot-authoritative Home Action presentation or priority', async () => {
+  const snapshotThread = {
+    primaryEntityId: 'item-1',
+    contextStatus: 'CURRENT',
+    currentRecommendationSnapshot: {
+      id: 'snapshot-repair', verdictCode: 'REPAIR', generatedAt: NOW,
+      confidenceBreakdown: { label: 'MEDIUM' },
+    },
+  };
+  const variants = [
+    analysis({
+      verdict: 'REPLACE_NOW', confidence: 'HIGH', impactLevel: 'HIGH',
+      summary: 'The generic analysis says replace immediately.',
+      inventoryItem: { id: 'item-1', name: 'Furnace', category: 'HVAC' },
+    }),
+    analysis({
+      verdict: 'REPAIR_ONLY', confidence: 'LOW', impactLevel: 'LOW',
+      summary: 'The generic analysis says repair this furnace.',
+      inventoryItem: { id: 'item-1', name: 'Furnace', category: 'HVAC' },
+    }),
+  ];
+
+  const actions = [];
+  for (const candidate of variants) {
+    const result = await getPromotedHomeActions('property-1', stubSources({
+      analyses: [candidate],
+      decisionThreads: [snapshotThread],
+    }), { evaluatedAt: NOW, includePersonalization: false });
+    actions.push(result.actions[0]);
+  }
+
+  const presentation = (action) => ({
+    priority: action.priority,
+    signal: action.signal,
+    whyItMatters: action.whyItMatters,
+    recommendedAction: action.recommendedAction,
+    options: action.options,
+    confidence: action.confidence,
+    sourceVersion: action.source.version,
+  });
+  assert.deepEqual(presentation(actions[0]), presentation(actions[1]));
+  assert.match(actions[0].whyItMatters, /favors repair/i);
+  assert.doesNotMatch(JSON.stringify(presentation(actions[0])), /replace immediately|repair this furnace/i);
 });
 
 test('stale or ambiguous HVAC lineage cannot publish a snapshot verdict', async () => {

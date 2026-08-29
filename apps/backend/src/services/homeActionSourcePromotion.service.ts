@@ -2414,6 +2414,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
 
   return deduped.map((analysis) => {
     const itemName = analysis.inventoryItem?.name || 'Inventory Item';
+    const isHvac = analysis.inventoryItem?.category === 'HVAC';
     const journey = journeysByItemId.get(analysis.inventoryItemId);
     let href: string;
     if (journey?.id) {
@@ -2425,13 +2426,17 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
       params.set('inventoryItemId', analysis.inventoryItemId);
       params.set('assetName', itemName);
       if (journey.issueType) params.set('issueType', journey.issueType);
-      if (analysis.summary) params.set('customIssueLabel', analysis.summary);
+      // ARD-003: a generic HVAC analysis may trigger this action, but its
+      // summary can encode the same non-authoritative verdict as `verdict`.
+      // Do not carry it into the Guidance URL, where it becomes visible and
+      // may be persisted as journey context. Non-HVAC analyses retain their
+      // existing authoritative summary behavior.
+      if (!isHvac && analysis.summary) params.set('customIssueLabel', analysis.summary);
       href = `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
     } else {
       href = `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`;
     }
 
-    const isHvac = analysis.inventoryItem?.category === 'HVAC';
     const publishedHvacVerdict = isHvac ? currentHvacPublishedVerdicts.get(analysis.inventoryItemId) : undefined;
     const favorsReplace = isHvac
       ? publishedHvacVerdict?.verdict === 'REPLACE'

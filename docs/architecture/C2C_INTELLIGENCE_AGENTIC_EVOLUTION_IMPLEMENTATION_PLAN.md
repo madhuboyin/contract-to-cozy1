@@ -200,6 +200,8 @@ Create shared product-framework contracts before adapters so Guidance, Home Acti
 
 ### 5.4 Work package P0D — authoritative HVAC presentation correction
 
+**Implementation status (2026-08-28): Complete.** HVAC-category `ReplaceRepairAnalysis` records now act only as review triggers and supporting evidence in this promotion path. `loadRepairReplaceDecisionActions` fails closed unless exactly one active HVAC Decision Thread has current context and a supported current snapshot verdict; missing, stale, invalid, or ambiguous lineage produces neutral review copy. Verdict-dependent copy, option recommendation, confidence, priority, published-verdict evidence, and source revision come only from that snapshot; neutral urgency may still come from canonical non-verdict evidence such as recurring failures. Generic HVAC verdict-bearing summaries are also excluded from Guidance journey URLs. Non-HVAC analysis behavior and the canonical Home Action ranking, eligibility, and delivery owners are unchanged.
+
 **Existing files to change**
 
 - `apps/backend/src/services/homeActionSourcePromotion.service.ts`

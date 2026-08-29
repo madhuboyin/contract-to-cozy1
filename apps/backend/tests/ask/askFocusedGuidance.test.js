@@ -78,3 +78,35 @@ test('contextual Ask prompts resolve exact subjects and produce focused Home Act
   assert.equal(result.blocks.some((block) => JSON.stringify(block).includes('View in Home Actions')), false);
   assert.equal(result.blocks.find((block) => block.type === 'EVIDENCE').items.length, 1);
 });
+
+test('focused Ask preserves neutral pre-snapshot HVAC guidance without manufacturing a verdict', () => {
+  const action = {
+    ...weatherAction(),
+    id: 'repair-replace:analysis-1',
+    source: { kind: 'GUIDANCE' },
+    signal: 'Repair vs Replace: Furnace',
+    whyItMatters: 'This HVAC system is ready for a repair-or-replace review, but no current Decision Platform recommendation is available yet.',
+    recommendedAction: 'Review the available facts and start or resume the tracked HVAC decision.',
+    expectedOutcome: 'A documented repair-or-replace decision for this item.',
+    presentation: null,
+    evidence: [{
+      id: 'analysis-1',
+      label: 'Supporting HVAC lifecycle analysis: Furnace',
+      source: 'Lifespan Engine (supporting evidence only)',
+      observedAt: '2026-08-14T12:00:00.000Z',
+    }],
+    confidence: { label: 'LOW' },
+    recommendationResponse: {
+      status: 'NEEDS_INPUT',
+      reasonCode: 'CURRENT_HVAC_RECOMMENDATION_MISSING',
+      safeNextAction: 'Start or resume the tracked HVAC decision.',
+    },
+    primaryCta: { label: 'Review Decision', href: '/dashboard/properties/property-1/inventory/items/item-1/replace-repair' },
+  };
+
+  const result = buildFocusedHomeActionGuidance(action, 'context-v1');
+  const rendered = JSON.stringify(result.blocks);
+  assert.match(rendered, /no current Decision Platform recommendation/i);
+  assert.match(rendered, /start or resume the tracked HVAC decision/i);
+  assert.doesNotMatch(rendered, /favors (?:repair|replacement)|replace immediately|verdict:/i);
+});
