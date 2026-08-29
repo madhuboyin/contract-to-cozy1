@@ -205,6 +205,10 @@ import { validateDecisionThreadTransitionContract } from './services/decisionPla
 import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
 import { validateIntelligenceRegistries } from './services/intelligence';
 import { validateEnvelopeRegistry } from './services/intelligenceEnvelope';
+import {
+  validateAgentDefinitionRegistry,
+  validateRepairReplaceProfiles,
+} from './services/agents';
 dotenv.config();
 
 const askRegistryIssues = [
@@ -246,6 +250,16 @@ const intelligenceRegistryIssues = [
 ];
 if (intelligenceRegistryIssues.length) {
   throw new Error(`FATAL: Home Intelligence registry validation failed: ${intelligenceRegistryIssues.join('; ')}`);
+}
+
+// Agent definitions are immutable code-owned contracts. Runtime/evaluation
+// dependencies may remain explicitly PENDING only while a definition is DEV.
+const agentRegistryIssues = [
+  ...validateAgentDefinitionRegistry(),
+  ...validateRepairReplaceProfiles(),
+];
+if (agentRegistryIssues.length) {
+  throw new Error(`FATAL: Agent registry validation failed: ${agentRegistryIssues.join('; ')}`);
 }
 
 const app = express();

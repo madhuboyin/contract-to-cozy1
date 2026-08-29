@@ -305,6 +305,8 @@ The dashboard is admin-only and read-only. It shows active `REVIEW_REQUIRED` fin
 
 ## 7. Phase 2 — HVAC Specialist Agent
 
+**Implementation status (2026-08-28): In progress.** Pull-request increment 8's code-owned foundation is implemented: the immutable multi-version `AgentDefinition` registry, canonical definition digest and checked-in baseline, active-version lookup, startup parity checks, referenced-version deployment-readiness seam, and the HVAC-only `RepairReplaceProfileRegistry`. The HVAC definition narrows the existing `repair-replace` Skill to its registered Decision Platform start/continue operations; it does not duplicate HVAC scoring. `ARD-002` is preserved by declaring `ASSET_LIFECYCLE` as the Envelope domain and keeping HVAC in the profile's typed inventory category. No `AgentDefinition` database model was added. The runtime trigger handler and the versioned agent evaluation suite are explicitly registered as `PENDING`, which validation permits only for `DEV`; moving the definition to `EVAL_APPROVED` or `ENABLED` fails closed until those dependencies are real. Runtime persistence and execution remain gated by `IPD-003`, `IPD-004`, `IPD-005`, and `IPD-007` as described below.
+
 ### 7.1 Code-owned definition and profile registries
 
 **Proposed new files**
