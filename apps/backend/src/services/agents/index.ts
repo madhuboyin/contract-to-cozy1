@@ -10,3 +10,5 @@ export * from './agentRuntime.service';
 export * from './agentTriggerRegistry';
 export * from './hvacRepairReplaceSpecialist.service';
 export * from './agentPropertyContext.service';
+export * from './agentLlmPurpose.contract';
+export * from './agentInvocationAudit.service';

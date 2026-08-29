@@ -24,7 +24,11 @@ const BASE = {
 };
 
 function pausedRun(overrides = {}) {
-  return { runId: 'run-1', agentVersion: '1.0.0', casVersion: 2, decisionThreadId: 'thr-1', ...overrides };
+  return {
+    runId: 'run-1', agentVersion: '1.0.0', casVersion: 2, decisionThreadId: 'thr-1',
+    pauseExpiresAt: new Date(Date.now() + 60_000),
+    ...overrides,
+  };
 }
 
 test('an unauthorized principal fails closed regardless of requestingAgentId', async () => {

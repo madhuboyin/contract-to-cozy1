@@ -5,13 +5,21 @@
 // and reads the verdict ONLY from a contextStatus=CURRENT snapshot. It never
 // recomputes HVAC scoring and never reads a generic verdict. The bounded
 // selectNextTool loop lives in specialistToolSelection; this file wires it to
-// the real decision state and the deterministic typed-claim explanation.
+// the real decision state, the property-context authorization gate (§7.3.7),
+// the deterministic typed-claim explanation (§7.3.9), and per-tool audit
+// records (§7.3.5, persisted by the runtime once the AgentRun row exists).
 
 import { prisma } from '../../lib/prisma';
 import { hvacDecisionFamilyAdapter } from '../decisionPlatform/decisionThreadService';
 import { DecisionFamilyAmbiguousThreadError } from '../decisionPlatform/decisionFamilyAdapter';
-import type { AgentRunStatusProjection } from './agentRuntime.contract';
+import type { AgentRunStatusProjection, PendingToolInvocation } from './agentRuntime.contract';
 import { selectTypedClaims } from './specialistTypedClaims';
+import { narrateTypedClaims, type NarrationProvider } from './agentLlmPurpose.contract';
+import {
+  HVAC_SPECIALIST_CONTEXT_SCOPES,
+  readAgentPropertyContext,
+  type AgentPropertyContextReader,
+} from './agentPropertyContext.service';
 import {
   emptyLedger,
   noteToolAttempt,
@@ -110,6 +118,7 @@ export const defaultThreadPort: SpecialistThreadPort = {
 export interface RunSpecialistInput {
   propertyId: string;
   principalUserId: string;
+  requestingAgentId: string;
   inventoryItemId: string;
   agentVersion: string;
   budgets: SpecialistBudgets;
@@ -117,19 +126,93 @@ export interface RunSpecialistInput {
   askExecutionId?: string;
 }
 
+export interface SpecialistRunDependencies {
+  port: SpecialistThreadPort;
+  contextReader: AgentPropertyContextReader;
+  narrationProvider: NarrationProvider | null;
+}
+
+const DEFAULT_RUN_DEPS: SpecialistRunDependencies = {
+  port: defaultThreadPort,
+  contextReader: readAgentPropertyContext,
+  narrationProvider: null,
+};
+
 export interface SpecialistRunResult {
   status: Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'expectedOperation'>;
   ledger: SpecialistBudgetLedger;
   /** PAUSE => the runtime persists an AgentState; TERMINAL => it writes a terminal AgentRun. */
   disposition: 'PAUSE' | 'TERMINAL';
+  /** §7.3.5 — one per tool call; the runtime persists these against the run id. */
+  toolInvocations: PendingToolInvocation[];
+  usedLlm: boolean;
 }
 
 export async function runHvacSpecialist(
   input: RunSpecialistInput,
-  port: SpecialistThreadPort = defaultThreadPort,
+  deps: Partial<SpecialistRunDependencies> = {},
 ): Promise<SpecialistRunResult> {
+  const { port, contextReader, narrationProvider } = { ...DEFAULT_RUN_DEPS, ...deps };
   const ledger = emptyLedger();
+  const toolInvocations: PendingToolInvocation[] = [];
+  let seq = 0;
   const startedAt = Date.now();
+
+  const record = (
+    toolId: PendingToolInvocation['toolId'],
+    outcome: PendingToolInvocation['outcome'],
+    detail: { input: unknown; output?: unknown; errorCode?: string | null; at: number },
+  ): void => {
+    toolInvocations.push({
+      sequence: seq++,
+      toolId,
+      toolVersion: '1.0',
+      input: detail.input,
+      output: detail.output,
+      outcome,
+      errorCode: detail.errorCode ?? null,
+      startedAt: new Date(detail.at).toISOString(),
+      finishedAt: new Date().toISOString(),
+    });
+    recordSpecialistToolInvocation(SPECIALIST_AGENT_ID, toolId, outcome);
+  };
+
+  const terminal = (
+    status: SpecialistRunResult['status'],
+    disposition: SpecialistRunResult['disposition'],
+    usedLlm: boolean,
+  ): SpecialistRunResult => ({ status, disposition, ledger, toolInvocations, usedLlm });
+
+  const base = {
+    agentId: SPECIALIST_AGENT_ID,
+    agentVersion: input.agentVersion,
+  };
+
+  // §7.3.7 — the agent's context access goes through getPropertyContext with
+  // the real resolved-owner user ID. Defense in depth over the runtime's own
+  // property-access check; also the point the boundary test verifies.
+  const gateAt = startedAt;
+  const context = await contextReader({
+    propertyId: input.propertyId,
+    principalUserId: input.principalUserId,
+    requestingAgentId: input.requestingAgentId,
+    scopes: HVAC_SPECIALIST_CONTEXT_SCOPES,
+  });
+  if (!context.authorized) {
+    record('REQUEST_CONTEXT', 'FAILED', { input: { scopes: HVAC_SPECIALIST_CONTEXT_SCOPES }, errorCode: 'CONTEXT_UNAUTHORIZED', at: gateAt });
+    return terminal({
+      ...base,
+      phase: 'ABSTAINED',
+      decisionThreadId: null,
+      currentRecommendationSnapshotId: null,
+      verdict: null,
+      confidenceLabel: null,
+      outstanding: [],
+      explanation: [],
+      abstentionReason: 'CONTEXT_UNAUTHORIZED',
+    }, 'TERMINAL', false);
+  }
+
   let resumeCount = 0;
   let state = await port.createOrResume(input);
 
@@ -148,77 +231,75 @@ export async function runHvacSpecialist(
     };
 
     const step = selectNextSpecialistStep(observation, ledger, input.budgets);
+    const stepAt = Date.now();
 
     if (step.kind === 'RESUME_THREAD') {
       resumeCount += 1;
       state = await port.createOrResume(input);
+      record('SCORE', 'EMPTY', { input: { action: 'RESUME_THREAD', resumeCount }, at: stepAt });
       continue;
     }
 
     if (step.kind === 'PAUSE') {
       noteToolAttempt(ledger, step.tool);
-      recordSpecialistToolInvocation(SPECIALIST_AGENT_ID, step.tool, 'OK');
-      return {
-        disposition: 'PAUSE',
-        ledger,
-        status: {
-          agentId: SPECIALIST_AGENT_ID,
-          agentVersion: input.agentVersion,
-          phase: step.phase,
-          decisionThreadId: state.decisionThreadId,
-          currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
-          verdict: state.verdict,
-          confidenceLabel: state.confidenceLabel,
-          outstanding: step.outstanding,
-          explanation: [],
-          abstentionReason: null,
-        },
-      };
+      record(step.tool, 'OK', { input: { limitationCodes: state.limitationCodes }, output: { outstanding: step.outstanding.map((o) => o.key) }, at: stepAt });
+      return terminal({
+        ...base,
+        phase: step.phase,
+        decisionThreadId: state.decisionThreadId,
+        currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
+        verdict: state.verdict,
+        confidenceLabel: state.confidenceLabel,
+        outstanding: step.outstanding,
+        explanation: [],
+        abstentionReason: null,
+      }, 'PAUSE', false);
     }
 
     if (step.kind === 'TOOL') {
       noteToolAttempt(ledger, step.tool);
       if (step.tool === 'SCORE') {
-        recordSpecialistToolInvocation(SPECIALIST_AGENT_ID, 'SCORE', state.verdict ? 'OK' : 'EMPTY');
+        record('SCORE', state.verdict ? 'OK' : 'EMPTY', { input: { snapshotId: state.currentRecommendationSnapshotId }, output: { verdict: state.verdict }, at: stepAt });
         continue;
       }
-      // EXPLAIN — deterministic typed-claim composition (LLM-optional; none in v1).
-      const explanation = selectTypedClaims(state.reasonCodes);
-      recordSpecialistToolInvocation(SPECIALIST_AGENT_ID, 'EXPLAIN', explanation.length ? 'OK' : 'EMPTY');
-      return {
-        disposition: 'TERMINAL',
-        ledger,
-        status: {
-          agentId: SPECIALIST_AGENT_ID,
-          agentVersion: input.agentVersion,
-          phase: 'RECOMMENDATION_READY',
-          decisionThreadId: state.decisionThreadId,
-          currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
-          verdict: state.verdict,
-          confidenceLabel: state.confidenceLabel,
-          outstanding: [],
-          explanation,
-          abstentionReason: null,
-        },
-      };
+      // EXPLAIN — deterministic typed claims are authoritative; a governed LLM
+      // (when enabled) may only re-select from that closed set.
+      const deterministic = selectTypedClaims(state.reasonCodes);
+      const narrated = await narrateTypedClaims(deterministic, { provider: narrationProvider ?? undefined });
+      if (narrated.usedLlm) ledger.llmInvocationsUsed += 1;
+      record('EXPLAIN', narrated.claims.length ? 'OK' : 'EMPTY', {
+        input: { reasonCodes: state.reasonCodes },
+        output: { claimIds: narrated.claims.map((c) => c.claimId), usedLlm: narrated.usedLlm },
+        at: stepAt,
+      });
+      return terminal({
+        ...base,
+        phase: 'RECOMMENDATION_READY',
+        decisionThreadId: state.decisionThreadId,
+        currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
+        verdict: state.verdict,
+        confidenceLabel: state.confidenceLabel,
+        outstanding: [],
+        explanation: narrated.claims,
+        abstentionReason: null,
+      }, 'TERMINAL', narrated.usedLlm);
     }
 
     // TERMINAL — abstain (or, defensively, a ready phase with no verdict).
-    return {
-      disposition: 'TERMINAL',
-      ledger,
-      status: {
-        agentId: SPECIALIST_AGENT_ID,
-        agentVersion: input.agentVersion,
-        phase: step.phase,
-        decisionThreadId: state.decisionThreadId,
-        currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
-        verdict: step.phase === 'RECOMMENDATION_READY' ? state.verdict : null,
-        confidenceLabel: state.confidenceLabel,
-        outstanding: [],
-        explanation: step.phase === 'RECOMMENDATION_READY' ? selectTypedClaims(state.reasonCodes) : [],
-        abstentionReason: step.abstentionReason,
-      },
-    };
+    const readyClaims = step.phase === 'RECOMMENDATION_READY' ? selectTypedClaims(state.reasonCodes) : [];
+    record(step.phase === 'RECOMMENDATION_READY' ? 'EXPLAIN' : 'SCORE', 'ABSTAINED', {
+      input: { reason: step.abstentionReason }, at: stepAt,
+    });
+    return terminal({
+      ...base,
+      phase: step.phase,
+      decisionThreadId: state.decisionThreadId,
+      currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
+      verdict: step.phase === 'RECOMMENDATION_READY' ? state.verdict : null,
+      confidenceLabel: state.confidenceLabel,
+      outstanding: [],
+      explanation: readyClaims,
+      abstentionReason: step.abstentionReason,
+    }, 'TERMINAL', false);
   }
 }

@@ -29,6 +29,9 @@ import {
   resolveAgentState,
 } from './agentStateRepository';
 import { recordToolInvocation } from './agentInvocationAudit.service';
+import type { NarrationProvider } from './agentLlmPurpose.contract';
+import type { AgentPropertyContextReader } from './agentPropertyContext.service';
+import type { PendingToolInvocation } from './agentRuntime.contract';
 import { recordAgentOperation, recordAgentRunOutcome } from './agentMetrics.service';
 import { runHvacSpecialist, type SpecialistThreadPort } from './hvacRepairReplaceSpecialist.service';
 import { applyHvacSpecialistContextIntake } from './hvacSpecialistContextIntake';
@@ -81,6 +84,7 @@ interface PausedRun {
   agentVersion: string;
   casVersion: number;
   decisionThreadId: string | null;
+  pauseExpiresAt: Date;
 }
 
 async function findPausedRunForItem(propertyId: string, principalUserId: string, inventoryItemId: string): Promise<PausedRun | null> {
@@ -97,10 +101,34 @@ async function findPausedRunForItem(propertyId: string, principalUserId: string,
       state: { is: { resolvedAt: null } },
     },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, agentVersion: true, decisionThreadId: true, state: { select: { casVersion: true } } },
+    select: { id: true, agentVersion: true, decisionThreadId: true, state: { select: { casVersion: true, pauseExpiresAt: true } } },
   });
   if (!run || !run.state) return null;
-  return { runId: run.id, agentVersion: run.agentVersion, casVersion: run.state.casVersion, decisionThreadId: run.decisionThreadId };
+  return {
+    runId: run.id,
+    agentVersion: run.agentVersion,
+    casVersion: run.state.casVersion,
+    decisionThreadId: run.decisionThreadId,
+    pauseExpiresAt: run.state.pauseExpiresAt,
+  };
+}
+
+async function persistToolInvocations(runId: string, correlationId: string, pending: readonly PendingToolInvocation[]): Promise<void> {
+  for (const invocation of pending) {
+    await recordToolInvocation({
+      runId,
+      correlationId,
+      sequence: invocation.sequence,
+      toolId: invocation.toolId,
+      toolVersion: invocation.toolVersion,
+      input: invocation.input,
+      output: invocation.output,
+      outcome: invocation.outcome,
+      errorCode: invocation.errorCode,
+      startedAt: new Date(invocation.startedAt),
+      finishedAt: new Date(invocation.finishedAt),
+    });
+  }
 }
 
 function projectionFor(status: Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'expectedOperation'>, runId: string | null, paused: boolean): AgentRunStatusProjection {
@@ -122,6 +150,10 @@ export interface AgentRuntimeDependencies {
   authorize?: (principalUserId: string, propertyId: string) => Promise<boolean>;
   /** Live paused-run lookup seam — defaults to the DecisionThread-scoped query. */
   resolvePausedRun?: (propertyId: string, principalUserId: string, inventoryItemId: string) => Promise<PausedRun | null>;
+  /** §7.3.7 property-context authorization gate — defaults to getPropertyContext. */
+  contextReader?: AgentPropertyContextReader;
+  /** §7.3.9 governed narration — default null keeps EXPLAIN fully deterministic. */
+  narrationProvider?: NarrationProvider | null;
   now?: () => Date;
 }
 
@@ -144,7 +176,23 @@ export async function invokeAgentRuntime(
   }
 
   const resolvePaused = deps.resolvePausedRun ?? findPausedRunForItem;
-  const paused = await resolvePaused(invocation.propertyId, invocation.principalUserId, invocation.inventoryItemId);
+  const rawPaused = await resolvePaused(invocation.propertyId, invocation.principalUserId, invocation.inventoryItemId);
+  const nowDate = now();
+
+  // §7.5 expiry: a pause the homeowner never returned to is abandoned. A new
+  // START_OR_RESUME resolves the stale state and begins a fresh episode;
+  // SUBMIT_CONTEXT against it fails closed with a clear message.
+  const expired = Boolean(rawPaused && rawPaused.pauseExpiresAt.getTime() <= nowDate.getTime());
+  let paused = rawPaused;
+  if (expired && rawPaused) {
+    if (invocation.operation === 'SUBMIT_CONTEXT') {
+      throw new AgentRuntimeStateError('This repair-or-replace session expired. Start it again to continue.');
+    }
+    if (invocation.operation === 'START_OR_RESUME') {
+      await resolveAgentState(rawPaused.runId, rawPaused.casVersion, nowDate);
+      paused = null;
+    }
+  }
 
   if (invocation.operation === 'GET_STATUS') {
     const result = await readStatus(invocation, paused);
@@ -153,7 +201,7 @@ export async function invokeAgentRuntime(
   }
 
   if (invocation.operation === 'DISPUTE_INPUT') {
-    return disputeInput(invocation, paused, now());
+    return disputeInput(invocation, paused, nowDate);
   }
 
   if (invocation.operation === 'SUBMIT_CONTEXT') {
@@ -168,11 +216,11 @@ export async function invokeAgentRuntime(
       inventoryItemId: invocation.inventoryItemId,
       intake,
     });
-    return advanceRun({ invocation, paused, deps, now: now() });
+    return advanceRun({ invocation, paused, deps, now: nowDate });
   }
 
   // START_OR_RESUME
-  return advanceRun({ invocation, paused, deps, now: now() });
+  return advanceRun({ invocation, paused, deps, now: nowDate });
 }
 
 function assertCas(invocation: AgentRuntimeInvocation, paused: PausedRun): void {
@@ -258,19 +306,27 @@ async function advanceRun(args: {
   const digest = digestAgentDefinition(definition);
 
   const startedAt = now;
+  const invocationCorrelationId = randomUUID();
   const specialist = await runHvacSpecialist({
     propertyId: invocation.propertyId,
     principalUserId: invocation.principalUserId,
+    requestingAgentId: invocation.requestingAgentId,
     inventoryItemId: invocation.inventoryItemId,
     agentVersion: definition.version,
     budgets: budgetsOf(definition.budgets),
     homeActionId: invocation.homeActionId,
     askExecutionId: invocation.askExecutionId,
-  }, deps.threadPort);
+  }, {
+    port: deps.threadPort,
+    contextReader: deps.contextReader,
+    narrationProvider: deps.narrationProvider ?? null,
+  });
   const finishedAt = new Date();
 
   if (paused) {
     // Resume path: advance or resolve the existing paused run's state.
+    // §7.3.5 — this invocation's tool calls join the original run's audit trail.
+    await persistToolInvocations(paused.runId, invocationCorrelationId, specialist.toolInvocations);
     if (specialist.disposition === 'PAUSE') {
       const swap = await compareAndSwapAgentState({
         runId: paused.runId,
@@ -344,6 +400,8 @@ async function advanceRun(args: {
     startedAt,
     finishedAt,
   }, now);
+
+  await persistToolInvocations(run.id, invocationCorrelationId, specialist.toolInvocations);
 
   if (specialist.disposition === 'PAUSE') {
     await createAgentState({

@@ -35,9 +35,27 @@ export type AgentAbstentionReason =
   | 'AMBIGUOUS_DECISION_THREAD'
   | 'LOOP_BUDGET_EXHAUSTED'
   | 'CONTEXT_UNRESOLVED'
+  | 'CONTEXT_UNAUTHORIZED'
   | 'LOW_CONFIDENCE'
   | 'TOOL_FAILURE'
   | 'UNSUPPORTED_VERDICT';
+
+/**
+ * §7.3.5 audit: one bounded record per tool call, accumulated by the loop and
+ * persisted by the runtime once the AgentRun row exists. Payload is hashed at
+ * persist time — see agentInvocationAudit.service.
+ */
+export interface PendingToolInvocation {
+  sequence: number;
+  toolId: HvacSpecialistTool;
+  toolVersion: string;
+  input: unknown;
+  output?: unknown;
+  outcome: 'OK' | 'EMPTY' | 'FAILED' | 'ABSTAINED';
+  errorCode?: string | null;
+  startedAt: string;
+  finishedAt: string;
+}
 
 export interface AgentContextRequestItem {
   /** Stable key the homeowner surface uses to render the ask and route the fix. */

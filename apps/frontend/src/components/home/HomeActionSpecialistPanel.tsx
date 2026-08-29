@@ -148,6 +148,11 @@ function StatusBody({
         <p className="text-xs text-slate-500">
           This uses the same recommendation shown on the decision card — the Specialist just walks you through it.
         </p>
+        <p className="text-xs text-slate-500">
+          Once you act, tell Cozy what you decided (&ldquo;record the outcome for this HVAC decision&rdquo;) so it can
+          learn from what actually worked. Disagree with the recommendation? Correct the underlying record and it
+          re-runs.
+        </p>
       </div>
     );
   }

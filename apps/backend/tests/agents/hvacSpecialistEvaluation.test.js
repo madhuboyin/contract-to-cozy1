@@ -14,12 +14,16 @@ const BUDGETS = {
   maxLLMInvocationsPerRun: 1, maxLLMCostPerRunUsd: 0.25,
 };
 const RUN_INPUT = {
-  propertyId: 'p', principalUserId: 'u', inventoryItemId: 'i', agentVersion: '1.0.0', budgets: BUDGETS,
+  propertyId: 'p', principalUserId: 'u', requestingAgentId: 'eval', inventoryItemId: 'i', agentVersion: '1.0.0', budgets: BUDGETS,
 };
 
 function portFor(states) {
   let i = 0;
-  return { createOrResume: async () => states[Math.min(i++, states.length - 1)] };
+  return {
+    port: { createOrResume: async () => states[Math.min(i++, states.length - 1)] },
+    contextReader: async () => ({ authorized: true, snapshot: null }),
+    narrationProvider: null,
+  };
 }
 
 test('IPD-005: every evaluation fixture reaches its expected phase deterministically', async () => {

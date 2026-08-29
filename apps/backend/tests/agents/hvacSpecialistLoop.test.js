@@ -122,13 +122,22 @@ test('ACCEPTED_INTAKE_KEYS is the FACT asks only — documents are never submitt
 
 // ── full loop over an injected thread port ───────────────────────────────────
 
-function portReturning(...states) {
+const AUTHORIZED_CONTEXT = async () => ({ authorized: true, snapshot: null });
+
+function deps(...states) {
   let i = 0;
-  return { createOrResume: async () => states[Math.min(i++, states.length - 1)] };
+  return {
+    port: { createOrResume: async () => states[Math.min(i++, states.length - 1)] },
+    contextReader: AUTHORIZED_CONTEXT,
+    narrationProvider: null,
+  };
 }
 
+// Back-compat name used by several tests below.
+const portReturning = (...states) => deps(...states);
+
 const RUN_INPUT = {
-  propertyId: 'prop-1', principalUserId: 'user-1', inventoryItemId: 'item-1',
+  propertyId: 'prop-1', principalUserId: 'user-1', requestingAgentId: 'test', inventoryItemId: 'item-1',
   agentVersion: '1.0.0', budgets: BUDGETS,
 };
 
