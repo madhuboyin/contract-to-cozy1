@@ -65,7 +65,10 @@ export const TRANSIENT_LIMITATION_CODES: ReadonlySet<string> = new Set([
   'HVAC_CURRENT_QUOTE_LOOKUP_TIMED_OUT',
 ]);
 
-export function selectTypedClaims(reasonCodes: readonly string[]): AgentTypedClaim[] {
+export function selectTypedClaims(
+  reasonCodes: readonly string[],
+  professionalBoundary?: string,
+): AgentTypedClaim[] {
   const seen = new Set<string>();
   const claims: AgentTypedClaim[] = [];
   for (const code of reasonCodes) {
@@ -74,6 +77,13 @@ export function selectTypedClaims(reasonCodes: readonly string[]): AgentTypedCla
     if (!text) continue;
     seen.add(code);
     claims.push({ claimId: `hvac.reason.${code}`, text, sourceCode: code });
+  }
+  if (professionalBoundary?.trim()) {
+    claims.push({
+      claimId: 'repair-replace.professional-boundary',
+      text: `This guidance does not replace an assessment by a ${professionalBoundary.trim()}.`,
+      sourceCode: 'PROFILE_PROFESSIONAL_BOUNDARY',
+    });
   }
   return claims;
 }

@@ -100,7 +100,13 @@ export async function narrateTypedClaims(
       work: () => options.provider!.narrate(deterministic),
     });
     const valid = result.claims.filter((claim) => allowed.has(claim.claimId)).map((claim) => allowed.get(claim.claimId)!);
-    const accepted = valid.length > 0 && valid.length <= cap && valid.length <= deterministic.length;
+    const requiredClaimIds = deterministic
+      .filter((claim) => claim.sourceCode === 'PROFILE_PROFESSIONAL_BOUNDARY')
+      .map((claim) => claim.claimId);
+    const accepted = valid.length > 0
+      && valid.length <= cap
+      && valid.length <= deterministic.length
+      && requiredClaimIds.every((claimId) => valid.some((claim) => claim.claimId === claimId));
     const finishedAt = new Date();
     const invocation: PendingLlmInvocation = {
       sequence: options.sequence ?? 0,

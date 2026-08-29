@@ -549,6 +549,7 @@ async function advanceRun(args: {
       initialLedger,
       env: deps.env,
       contextScopes: profile.requiredFacts,
+      professionalBoundary: profile.professionalBoundary,
     }, {
       port: deps.threadPort ?? createSpecialistThreadPort(profile.decisionDefinitionId),
       contextReader: deps.contextReader,

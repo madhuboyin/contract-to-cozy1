@@ -139,6 +139,8 @@ export interface RunSpecialistInput {
   initialLedger?: SpecialistBudgetLedger;
   env?: NodeJS.ProcessEnv;
   contextScopes?: readonly PropertyContextScope[];
+  /** Reviewed profile boundary that EXPLAIN must always render. */
+  professionalBoundary?: string;
 }
 
 export interface SpecialistRunDependencies {
@@ -313,7 +315,7 @@ export async function runHvacSpecialist(
       }
       // EXPLAIN — deterministic typed claims are authoritative; a governed LLM
       // (when enabled) may only re-select from that closed set.
-      const deterministic = selectTypedClaims(state.reasonCodes);
+      const deterministic = selectTypedClaims(state.reasonCodes, input.professionalBoundary);
       const hasLlmBudget = Boolean(narrationProvider)
         && ledger.llmInvocationsUsed < input.budgets.maxLLMInvocationsPerRun
         && ledger.llmCostUsdUsed + (narrationProvider?.maxCostUsd ?? 0) <= input.budgets.maxLLMCostPerRunUsd;
@@ -346,7 +348,9 @@ export async function runHvacSpecialist(
     }
 
     // TERMINAL — abstain (or, defensively, a ready phase with no verdict).
-    const readyClaims = step.phase === 'RECOMMENDATION_READY' ? selectTypedClaims(state.reasonCodes) : [];
+    const readyClaims = step.phase === 'RECOMMENDATION_READY'
+      ? selectTypedClaims(state.reasonCodes, input.professionalBoundary)
+      : [];
     record(step.phase === 'RECOMMENDATION_READY' ? 'EXPLAIN' : 'SCORE', 'ABSTAINED', {
       input: { reason: step.abstentionReason }, at: stepAt,
     });

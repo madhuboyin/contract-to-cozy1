@@ -479,14 +479,14 @@ For each candidate, separately decide whether it is:
 
 Require a safety-tier review, autonomy ceiling, authoritative engine/source, typed context contract, professional boundary, evaluation suite, and complete promotion/lineage path. Do not admit higher-risk home systems by analogy to HVAC.
 
-**Implementation status (2026-08-29): the admission process is implemented as an enforced code artifact (uncommitted). No new specialist is admitted — that was never Phase 4B's deliverable.** `apps/backend/src/services/agents/specialistAdmissionRegistry.ts` makes §9.2 executable rather than prose:
+**Implementation status (2026-08-29): the admission process is implemented as an enforced code artifact. No new specialist is admitted — that was never Phase 4B's deliverable.** `apps/backend/src/services/agents/specialistAdmissionRegistry.ts` makes §9.2 executable rather than prose:
 
 - `SpecialistAdmissionClassification` — the three-way test above as a closed enum.
 - `SpecialistAdmissionGate` (7 gates) + `REQUIRED_GATES_BY_CLASSIFICATION` — the review checklist above, with per-classification required subsets. Every classification requires `EVALUATION_SUITE` (§12.6's "same bar as an AgentDefinition"). `NEW_SPECIALIST` requires all 7.
 - `HIGHER_RISK_INVENTORY_CATEGORIES` (`PLUMBING`, `ELECTRICAL`, `ROOF_EXTERIOR`, `STRUCTURAL`) — `requiredGatesFor` forces `SAFETY_TIER_REVIEW` + `AUTONOMY_CEILING_REJUSTIFICATION` for any candidate touching one, regardless of classification ("do not admit higher-risk home systems by analogy to HVAC").
-- `SPECIALIST_ADMISSION_RECORDS` — `HVAC` and `GENERIC_APPLIANCE` are `ADMITTED`; the generic profile's evaluation gate records the IPD-006 contract. Electrical, plumbing, roofing, and structural remain explicit `NOT_ADMITTED` scaffolds.
+- `SPECIALIST_ADMISSION_RECORDS` — `HVAC` and `GENERIC_APPLIANCE` are `ADMITTED`; the generic candidate is classified as a new Decision Platform definition on the shared Specialist loop, and its evaluation gate records the IPD-006 contract. Electrical, plumbing, roofing, and structural remain explicit `NOT_ADMITTED` scaffolds.
 - `deriveSpecialistAdmissionStatus` — the status a record's gates actually justify; validation asserts the declared `status` matches.
-- `validateSpecialistAdmissionRegistry` — wired into `index.ts` startup / CI alongside `validateAgentDefinitionRegistry` and `validateRepairReplaceProfiles`. Fails closed if: a registered `RepairReplaceProfile` has no `ADMITTED` record; a non-`DEV` `AgentDefinition` has no `ADMITTED` record; a declared status contradicts its gates; or a higher-risk category rides in on an `ADMITTED` record without its forced gates `PASS`.
+- `validateSpecialistAdmissionRegistry` — wired into `index.ts` startup and the `test:phase4b` CI gate alongside `validateAgentDefinitionRegistry` and `validateRepairReplaceProfiles`. It binds reviewed profile metadata, DecisionDefinition versions, and canonical AgentDefinition version digests to the registered artifacts; validates the three-way classification against the target shape; and fails closed on missing or contradictory admission evidence. The shared EXPLAIN path also renders the admitted profile's professional boundary as a mandatory deterministic claim.
 
 Net effect: `GENERIC_APPLIANCE` is admitted only because every required gate now passes; later profiles still fail startup without an `ADMITTED` record. Tests: `tests/agents/specialistAdmissionRegistry.test.js`.
 

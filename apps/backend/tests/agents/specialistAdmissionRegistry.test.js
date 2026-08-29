@@ -40,6 +40,7 @@ test('GENERIC_APPLIANCE is ADMITTED after the approved IPD-006 evaluation suite'
   assert.ok(record);
   assert.equal(record.status, 'ADMITTED');
   assert.equal(record.ownerInputId, 'IPD-006');
+  assert.equal(record.classification, 'NEW_DECISION_DEFINITION_SAME_LOOP');
   assert.equal(record.gateReviews.EVALUATION_SUITE.status, 'PASS');
   assert.equal(deriveSpecialistAdmissionStatus(record), 'ADMITTED');
   assert.equal(isProfileAdmitted('GENERIC_APPLIANCE'), true);
@@ -91,7 +92,7 @@ test('validation rejects a non-DEV AgentDefinition with no ADMITTED record', () 
       'ghost-specialist': { activeVersion: '1.0.0', versions: { '1.0.0': { releaseState: 'ENABLED' } } },
     },
   });
-  assert.ok(issues.some((issue) => issue.includes('ghost-specialist') && issue.includes('no ADMITTED admission record')));
+  assert.ok(issues.some((issue) => issue.includes('ghost-specialist@1.0.0') && issue.includes('no ADMITTED version review')));
 });
 
 test('validation catches a declared status that the gate reviews do not justify', () => {
@@ -118,4 +119,80 @@ test('HIGHER_RISK_INVENTORY_CATEGORIES names electrical, plumbing, roofing and s
   assert.deepEqual([...HIGHER_RISK_INVENTORY_CATEGORIES].sort(), ['ELECTRICAL', 'PLUMBING', 'ROOF_EXTERIOR', 'STRUCTURAL']);
   assert.ok(!HIGHER_RISK_INVENTORY_CATEGORIES.includes('APPLIANCE'));
   assert.ok(!HIGHER_RISK_INVENTORY_CATEGORIES.includes('HVAC'));
+});
+
+test('validation rejects profile metadata drift under an admitted profileId', () => {
+  const drifted = REPAIR_REPLACE_PROFILES.map((profile) => profile.profileId === 'GENERIC_APPLIANCE'
+    ? { ...profile, eligibleCategories: ['PLUMBING'], professionalBoundary: 'unreviewed boundary' }
+    : profile);
+  const issues = validateSpecialistAdmissionRegistry(SPECIALIST_ADMISSION_RECORDS, {
+    profiles: drifted,
+    agentRegistry: {},
+  });
+  assert.ok(issues.some((issue) => issue.includes('GENERIC_APPLIANCE') && issue.includes('eligibleCategories changed after admission')));
+  assert.ok(issues.some((issue) => issue.includes('GENERIC_APPLIANCE') && issue.includes('professionalBoundary changed after admission')));
+});
+
+test('validation rejects an unreviewed version under an admitted agentId', () => {
+  const issues = validateSpecialistAdmissionRegistry(SPECIALIST_ADMISSION_RECORDS, {
+    profiles: [],
+    agentRegistry: {
+      'hvac-repair-replace-specialist': {
+        activeVersion: '99.0.0',
+        versions: { '99.0.0': { releaseState: 'ENABLED' } },
+      },
+    },
+  });
+  assert.ok(issues.some((issue) => issue.includes('hvac-repair-replace-specialist@99.0.0') && issue.includes('no ADMITTED version review')));
+});
+
+test('validation rejects a new agent misclassified as an existing-shape profile', () => {
+  const gates = Object.fromEntries(SPECIALIST_ADMISSION_GATES.map((gate) => [gate, {
+    status: REQUIRED_GATES_BY_CLASSIFICATION.NEW_PROFILE_EXISTING_SHAPE.includes(gate) ? 'PASS' : 'NOT_REVIEWED',
+    evidence: 'x',
+    reviewedOn: REQUIRED_GATES_BY_CLASSIFICATION.NEW_PROFILE_EXISTING_SHAPE.includes(gate) ? '2026-08-29' : null,
+  }]));
+  const disguised = {
+    candidateId: 'DISGUISED_SPECIALIST', title: 'x', notes: 'x',
+    classification: 'NEW_PROFILE_EXISTING_SHAPE', decision: 'PURSUE',
+    wouldRegister: {
+      agentId: 'new-specialist',
+      agentDefinitions: [{ version: '1.0.0', digest: 'not-reviewed' }],
+    },
+    gateReviews: gates, status: 'ADMITTED',
+  };
+  const issues = validateSpecialistAdmissionRegistry([disguised], {
+    profiles: [],
+    agentRegistry: { 'new-specialist': { activeVersion: '1.0.0', versions: { '1.0.0': { releaseState: 'ENABLED' } } } },
+  });
+  assert.ok(issues.some((issue) => issue.includes('NEW_PROFILE_EXISTING_SHAPE requires a profile target')));
+});
+
+test('validation binds decision-definition and AgentDefinition content to the reviewed versions', () => {
+  const decisionIssues = validateSpecialistAdmissionRegistry(SPECIALIST_ADMISSION_RECORDS, {
+    profiles: [], agentRegistry: {},
+    decisionDefinitions: {
+      HVAC_REPAIR_REPLACE: { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', version: '2.0' },
+      APPLIANCE_REPAIR_REPLACE: { decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE', version: '1.0' },
+    },
+  });
+  assert.ok(decisionIssues.some((issue) => issue.includes('HVAC_REPAIR_REPLACE') && issue.includes('version 2.0 was not admitted')));
+
+  const records = SPECIALIST_ADMISSION_RECORDS.map((record) => record.candidateId === 'HVAC'
+    ? { ...record, wouldRegister: { ...record.wouldRegister, agentDefinitions: record.wouldRegister.agentDefinitions.map((ref) => ({ ...ref, digest: 'wrong' })) } }
+    : record);
+  const digestIssues = validateSpecialistAdmissionRegistry(records, { profiles: [] });
+  assert.ok(digestIssues.some((issue) => issue.includes('digest changed after admission')));
+});
+
+test('validation requires real ISO review dates for completed reviews', () => {
+  const record = SPECIALIST_ADMISSION_RECORDS.find((candidate) => candidate.candidateId === 'HVAC');
+  const invalid = [{ ...record, gateReviews: {
+    ...record.gateReviews,
+    SAFETY_TIER_REVIEW: { status: 'PASS', evidence: 'x', reviewedOn: null },
+    EVALUATION_SUITE: { status: 'PASS', evidence: 'x', reviewedOn: '2026-99-99' },
+  } }];
+  const issues = validateSpecialistAdmissionRegistry(invalid, { profiles: [], agentRegistry: {}, decisionDefinitions: {} });
+  assert.ok(issues.some((issue) => issue.includes('SAFETY_TIER_REVIEW is PASS but has no reviewedOn date')));
+  assert.ok(issues.some((issue) => issue.includes('EVALUATION_SUITE reviewedOn is not a valid ISO calendar date')));
 });

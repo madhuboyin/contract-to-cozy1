@@ -27,10 +27,13 @@
 
 import type { InventoryItemCategory } from '../../productFramework/intelligence/entityRef.contract';
 import { AGENT_DEFINITION_REGISTRY } from './agentDefinitionRegistry';
+import { digestAgentDefinition } from './agentRegistryValidation';
 import type { VersionedAgentRegistryEntry } from './agent.contract';
+import { DECISION_DEFINITIONS, type DecisionDefinitionId } from '../decisionPlatform/decisionDefinitionRegistry';
+import type { DecisionDefinition } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
 import { REPAIR_REPLACE_PROFILES, type RepairReplaceProfile } from './repairReplaceProfileRegistry';
 
-export const SPECIALIST_ADMISSION_CONTRACT_VERSION = '1.0.0';
+export const SPECIALIST_ADMISSION_CONTRACT_VERSION = '1.1.0';
 
 // §9.2's three-way classification. These are independent tests, not a
 // severity ladder — a candidate is exactly one of them.
@@ -132,6 +135,14 @@ export interface SpecialistAdmissionRecord {
     agentId?: string;
     decisionDefinitionId?: string;
     eligibleCategories?: readonly InventoryItemCategory[];
+    /** Exact reviewed profile contract. Runtime metadata must remain identical. */
+    profileContract?: RepairReplaceProfile;
+    /** Exact reviewed decision-definition version. */
+    decisionDefinitionVersion?: string;
+    /** Immutable AgentDefinition versions and canonical digests cleared by this review. */
+    agentDefinitions?: readonly { version: string; digest: string }[];
+    /** Required for a new profile that reuses a decision shape admitted by another candidate. */
+    reusesDecisionDefinitionFrom?: string;
   };
   /** The owner-input ticket that unblocks the outstanding gate(s), when there is one. */
   ownerInputId?: string;
@@ -143,6 +154,12 @@ export interface SpecialistAdmissionRecord {
 
 const notReviewed = (evidence: string): GateReview => ({ status: 'NOT_REVIEWED', evidence, reviewedOn: null });
 const passed = (evidence: string, reviewedOn: string): GateReview => ({ status: 'PASS', evidence, reviewedOn });
+
+function isIsoCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
 
 function allGates(build: (gate: SpecialistAdmissionGate) => GateReview): Readonly<Record<SpecialistAdmissionGate, GateReview>> {
   return Object.freeze(Object.fromEntries(
@@ -165,6 +182,21 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
       agentId: 'hvac-repair-replace-specialist',
       decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
       eligibleCategories: Object.freeze(['HVAC'] as const),
+      profileContract: Object.freeze({
+        profileId: 'HVAC',
+        eligibleCategories: Object.freeze(['HVAC'] as const),
+        decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+        scoringSkillId: 'repair-replace',
+        requiredFacts: Object.freeze(['SYSTEMS', 'INVENTORY', 'MAINTENANCE', 'SAFETY'] as const),
+        supportedDocuments: Object.freeze(['hvac-nameplate-photo']),
+        professionalBoundary: 'licensed HVAC technician',
+        evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.0.0',
+      }),
+      decisionDefinitionVersion: '1.0',
+      agentDefinitions: Object.freeze([
+        Object.freeze({ version: '1.0.0', digest: 'be4e9d0cdfe501aa55b3d473a558a9d40b9a881c29cf40b03da66f13bd1fb2aa' }),
+        Object.freeze({ version: '1.1.0', digest: '0ea576a2635b5b1446079173b4c5f434568ffc2e9daa5c22ff325bc2246ce3eb' }),
+      ]),
     },
     gateReviews: allGates((gate) => {
       switch (gate) {
@@ -195,7 +227,7 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
   Object.freeze({
     candidateId: 'GENERIC_APPLIANCE',
     title: 'Generic non-HVAC appliance Repair-or-Replace profile',
-    classification: 'NEW_PROFILE_EXISTING_SHAPE',
+    classification: 'NEW_DECISION_DEFINITION_SAME_LOOP',
     decision: 'PURSUE',
     ownerInputId: 'IPD-006',
     wouldRegister: {
@@ -205,6 +237,17 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
       // family's non-HVAC boundary — APPLIANCE only, per architecture
       // §12.6's illustrative profile.
       eligibleCategories: Object.freeze(['APPLIANCE'] as const),
+      profileContract: Object.freeze({
+        profileId: 'GENERIC_APPLIANCE',
+        eligibleCategories: Object.freeze(['APPLIANCE'] as const),
+        decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+        scoringSkillId: 'repair-replace',
+        requiredFacts: Object.freeze(['INVENTORY'] as const),
+        supportedDocuments: Object.freeze([]),
+        professionalBoundary: 'general appliance repair professional',
+        evaluationSuiteId: 'agent-generic-appliance-repair-replace-eval@1.0.0',
+      }),
+      decisionDefinitionVersion: '1.0',
     },
     gateReviews: allGates((gate) => {
       switch (gate) {
@@ -219,7 +262,7 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
         case 'PROMOTION_AND_LINEAGE_PATH':
           return passed('appliance-repair-replace: lineage prefix -> APPLIANCE_REPAIR_REPLACE family (Phase 4A); HomeAction + work-item lineage category-aware.', '2026-08-29');
         case 'AUTONOMY_CEILING_REJUSTIFICATION':
-          return passed('Reuses the HVAC specialist loop and its Level 0-2 ceiling unchanged — no re-justification needed for NEW_PROFILE_EXISTING_SHAPE, recorded for completeness.', '2026-08-29');
+          return passed('Reuses the HVAC specialist loop and its Level 0-2 ceiling unchanged — the new decision definition does not change autonomy, recorded for completeness.', '2026-08-29');
         case 'EVALUATION_SUITE':
           return passed('agent-generic-appliance-repair-replace-eval@1.0.0: >=10 checked-in fixtures, 100% deterministic non-abstention completion, zero LLM calls, and 20-50% abstention band.', '2026-08-29');
         default:
@@ -290,13 +333,32 @@ export function isProfileAdmitted(
   profileId: string,
   records: readonly SpecialistAdmissionRecord[] = SPECIALIST_ADMISSION_RECORDS,
 ): boolean {
-  return records.some((record) =>
-    record.wouldRegister.profileId === profileId && record.status === 'ADMITTED');
+  const profile = REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === profileId);
+  const admission = records.find((record) => record.wouldRegister.profileId === profileId && record.status === 'ADMITTED');
+  return Boolean(profile && admission && profileContractIssues(profile, admission.wouldRegister.profileContract).length === 0);
 }
 
 export interface SpecialistAdmissionValidationDependencies {
   profiles?: readonly RepairReplaceProfile[];
   agentRegistry?: Readonly<Record<string, VersionedAgentRegistryEntry>>;
+  decisionDefinitions?: Readonly<Partial<Record<DecisionDefinitionId, DecisionDefinition>>>;
+}
+
+function profileContractIssues(
+  actual: RepairReplaceProfile,
+  reviewed: RepairReplaceProfile | undefined,
+): string[] {
+  if (!reviewed) return ['has no reviewed profileContract'];
+  const issues: string[] = [];
+  const scalarFields = ['profileId', 'decisionDefinitionId', 'scoringSkillId', 'professionalBoundary', 'evaluationSuiteId'] as const;
+  for (const field of scalarFields) {
+    if (actual[field] !== reviewed[field]) issues.push(`${field} changed after admission`);
+  }
+  const arrayFields = ['eligibleCategories', 'requiredFacts', 'supportedDocuments'] as const;
+  for (const field of arrayFields) {
+    if (JSON.stringify(actual[field]) !== JSON.stringify(reviewed[field])) issues.push(`${field} changed after admission`);
+  }
+  return issues;
 }
 
 /**
@@ -315,6 +377,7 @@ export function validateSpecialistAdmissionRegistry(
   const issues: string[] = [];
   const profiles = dependencies.profiles ?? REPAIR_REPLACE_PROFILES;
   const agentRegistry = dependencies.agentRegistry ?? AGENT_DEFINITION_REGISTRY;
+  const decisionDefinitions = dependencies.decisionDefinitions ?? DECISION_DEFINITIONS;
 
   const seenCandidateIds = new Set<string>();
   const seenProfileTargets = new Map<string, string>();
@@ -333,10 +396,9 @@ export function validateSpecialistAdmissionRegistry(
         continue;
       }
       if (!review.evidence.trim()) issues.push(`${label}: gate ${gate} review has no evidence`);
-      if (review.status === 'PASS' && !review.reviewedOn) issues.push(`${label}: gate ${gate} is PASS but has no reviewedOn date`);
-      if (review.status !== 'PASS' && review.reviewedOn && review.status !== 'FAIL') {
-        issues.push(`${label}: gate ${gate} has a reviewedOn date but status ${review.status}`);
-      }
+      if (review.status === 'NOT_REVIEWED' && review.reviewedOn) issues.push(`${label}: gate ${gate} is NOT_REVIEWED but has a reviewedOn date`);
+      if (review.status !== 'NOT_REVIEWED' && !review.reviewedOn) issues.push(`${label}: gate ${gate} is ${review.status} but has no reviewedOn date`);
+      if (review.reviewedOn && !isIsoCalendarDate(review.reviewedOn)) issues.push(`${label}: gate ${gate} reviewedOn is not a valid ISO calendar date`);
     }
 
     const derived = deriveSpecialistAdmissionStatus(record);
@@ -348,6 +410,42 @@ export function validateSpecialistAdmissionRegistry(
     }
 
     const target = record.wouldRegister;
+    const hasAgentDefinitions = Boolean(target.agentDefinitions?.length);
+    if (record.decision === 'PURSUE') {
+      if (record.classification === 'NEW_PROFILE_EXISTING_SHAPE') {
+        if (!target.profileId || target.agentId || hasAgentDefinitions) {
+          issues.push(`${label}: NEW_PROFILE_EXISTING_SHAPE requires a profile target and forbids an AgentDefinition target`);
+        }
+        const reused = records.find((candidate) => candidate.candidateId === target.reusesDecisionDefinitionFrom);
+        if (!target.reusesDecisionDefinitionFrom || !reused || reused.status !== 'ADMITTED'
+          || reused.wouldRegister.decisionDefinitionId !== target.decisionDefinitionId
+          || reused.candidateId === record.candidateId) {
+          issues.push(`${label}: NEW_PROFILE_EXISTING_SHAPE must reuse a decision definition admitted by another candidate`);
+        }
+      } else if (record.classification === 'NEW_DECISION_DEFINITION_SAME_LOOP') {
+        if (!target.profileId || !target.decisionDefinitionId || target.agentId || hasAgentDefinitions) {
+          issues.push(`${label}: NEW_DECISION_DEFINITION_SAME_LOOP requires profile and decision-definition targets and forbids an AgentDefinition target`);
+        }
+      } else if (!target.agentId || !hasAgentDefinitions) {
+        issues.push(`${label}: NEW_SPECIALIST requires an agent target with reviewed AgentDefinition versions`);
+      }
+    }
+
+    if (target.profileId && target.profileContract?.profileId !== target.profileId) {
+      issues.push(`${label}: profileContract does not match profile target "${target.profileId}"`);
+    }
+    if (target.profileContract
+      && (target.profileContract.decisionDefinitionId !== target.decisionDefinitionId
+        || JSON.stringify(target.profileContract.eligibleCategories) !== JSON.stringify(target.eligibleCategories ?? []))) {
+      issues.push(`${label}: profile target metadata does not match its reviewed profileContract`);
+    }
+    if (target.decisionDefinitionId) {
+      const definition = decisionDefinitions[target.decisionDefinitionId as DecisionDefinitionId];
+      if (!definition) issues.push(`${label}: decision definition "${target.decisionDefinitionId}" is not registered`);
+      else if (definition.version !== target.decisionDefinitionVersion) {
+        issues.push(`${label}: decision definition "${target.decisionDefinitionId}" version ${definition.version} was not admitted`);
+      }
+    }
     if (target.profileId) {
       const owner = seenProfileTargets.get(target.profileId);
       if (owner) issues.push(`${label}: profile target "${target.profileId}" already claimed by ${owner}`);
@@ -377,17 +475,26 @@ export function validateSpecialistAdmissionRegistry(
   }
 
   for (const profile of profiles) {
-    if (!isProfileAdmitted(profile.profileId, records)) {
+    const admission = records.find((record) => record.wouldRegister.profileId === profile.profileId && record.status === 'ADMITTED');
+    if (!admission) {
       issues.push(`SpecialistAdmissionRegistry: RepairReplaceProfile "${profile.profileId}" is registered without an ADMITTED admission record`);
+      continue;
+    }
+    for (const issue of profileContractIssues(profile, admission.wouldRegister.profileContract)) {
+      issues.push(`SpecialistAdmissionRegistry: RepairReplaceProfile "${profile.profileId}" ${issue}`);
     }
   }
 
   for (const [agentId, entry] of Object.entries(agentRegistry)) {
-    const anyNonDev = Object.values(entry.versions).some((definition) => definition.releaseState !== 'DEV');
-    if (!anyNonDev) continue;
-    const admitted = records.some((record) => record.wouldRegister.agentId === agentId && record.status === 'ADMITTED');
-    if (!admitted) {
-      issues.push(`SpecialistAdmissionRegistry: AgentDefinition "${agentId}" has a non-DEV release state but no ADMITTED admission record`);
+    for (const [version, definition] of Object.entries(entry.versions)) {
+      if (definition.releaseState === 'DEV') continue;
+      const reviewed = records.flatMap((record) => record.status === 'ADMITTED' && record.wouldRegister.agentId === agentId
+        ? record.wouldRegister.agentDefinitions ?? [] : []).find((candidate) => candidate.version === version);
+      if (!reviewed) {
+        issues.push(`SpecialistAdmissionRegistry: AgentDefinition "${agentId}@${version}" has a non-DEV release state but no ADMITTED version review`);
+      } else if (reviewed.digest !== digestAgentDefinition(definition)) {
+        issues.push(`SpecialistAdmissionRegistry: AgentDefinition "${agentId}@${version}" digest changed after admission`);
+      }
     }
   }
 

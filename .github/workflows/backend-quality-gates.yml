@@ -77,6 +77,9 @@ jobs:
       - name: Ask governance, golden routing, and negative boundaries
         run: npm run test:ask
 
+      - name: Phase 4B specialist admission and boundary enforcement
+        run: npm run test:phase4b
+
       - name: Integration smoke
         run: npm run test:integration
 
