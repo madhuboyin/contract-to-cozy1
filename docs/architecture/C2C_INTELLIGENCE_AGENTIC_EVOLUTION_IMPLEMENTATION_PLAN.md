@@ -403,6 +403,8 @@ Constraints: unique idempotency identity on both `AgentRunReservation` and `Agen
 
 ## 8. Phase 3 — Ask Cozy integration
 
+**Implementation status (2026-08-29): tasks 1, 3–5 done (uncommitted); task 2 carried to PR 12b.** `query-envelope` / `INTELLIGENCE_ENVELOPE_QUERY` was fully wired for Ask in Phase 0 P0C — operation registry, `askOrchestrator` execution case, semantic packages (routing), calibration evidence, trust-certification corpus, and (after the 2026-08-29 hotfix) audience policy. PR 12 adds `askEnvelopeAndRankingBoundary.test.js` locking in the acceptance criteria: the envelope operation stays read-only (autonomy 0, `effects: ['READ']`) and journey-neutral; proactive/priority phrasings route to `HOME_ACTIONS` (`getHomeActionFeed()`), never to the envelope or a raw-item ranking; ordinary-record phrasings route away from the envelope; the orchestrator's envelope case imports no promotion / ranking / coverage owner. **Task 2** (routing HVAC "help me decide" in Ask to the PR 10 Specialist runtime) is deferred to **PR 12b**: it needs either a new fully-governed Ask operation (skill adapter + evaluation fixtures + audience policy + semantic package + orchestrator case + trust corpus — six fail-closed registries) or a rewire of the `HVAC_DECISION_START` confirmation/ambiguity flow corrected in P0D. Ask HVAC engagement already continues the canonical `DecisionThread` today via `HVAC_DECISION_START` / `HVAC_DECISION_CONTINUE`; PR 12b adds the shared `AgentRun` idempotency ledger.
+
 **Existing files to change**
 
 - `apps/backend/src/services/ask/askOperationRegistry.ts`
