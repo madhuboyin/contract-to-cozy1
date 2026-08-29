@@ -1640,7 +1640,11 @@ export function UnifiedHomeSurface({
             <CardContent className="space-y-3">
               {home.decisions.length === 0 ? <p className="text-sm text-slate-500">No decisions need your attention.</p> : home.decisions.map((decision) => (
                 <Link key={decision.id} href={decision.primaryCta.href} className="block rounded-xl border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50/40">
-                  <p className="font-semibold text-slate-900">{decision.recommendedAction}</p><p className="mt-1 text-xs text-slate-500">{decision.expectedOutcome}</p>
+                  {/* Lead with the subject so degraded decisions (whose recommendedAction
+                      collapses to generic safe copy) stay distinguishable — matches how the
+                      main feed cards render. */}
+                  <p className="font-semibold text-slate-900">{decision.presentation?.headline ?? decision.signal}</p>
+                  <p className="mt-1 text-xs text-slate-500">{decision.recommendedAction}</p>
                 </Link>
               ))}
             </CardContent>
