@@ -180,6 +180,19 @@ export const HOME_ACTION_PRESENTATION_REGISTRY: Partial<Record<PresentationVaria
       return reasons;
     },
   },
+  HEALTH_FACTOR_REVIEW: {
+    // Property Health Score factor surfaced as a maintenance / data-gap /
+    // warranty-gap prompt. Copy comes from content/healthFactorCopy.ts.
+    requiredFactLabels: ['Current status'],
+    requiredLaunchParams: CORE_LAUNCH_PARAMS,
+    allowedPrimaryCtaKinds: ['REVIEW', 'CORRECT_FACT'],
+    evaluate: (action) => {
+      const reasons = basePresentationReasons(action);
+      if (action.presentation?.subject?.kind !== 'PROPERTY') reasons.push('MISSING_PROPERTY_SUBJECT');
+      if ((action.presentation?.keyFacts.length ?? 0) === 0) reasons.push('MISSING_EXACT_FACTS');
+      return reasons;
+    },
+  },
   COVERAGE_REVIEW: {
     requiredFactLabels: ['Subject', 'Evidence', 'Provider', 'Policy', 'Renewal / expiry', 'Gap'],
     requiredLaunchParams: CORE_LAUNCH_PARAMS,

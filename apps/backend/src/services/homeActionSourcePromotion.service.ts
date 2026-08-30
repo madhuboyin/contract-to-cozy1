@@ -21,6 +21,14 @@ import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinanc
 import { analyticsEmitter } from './analytics';
 import { ProductAnalyticsEventType } from '@prisma/client';
 import { calculateHealthScore } from '../utils/propertyScore.util';
+import {
+  displayHealthFactorName,
+  healthFactorKeyFacts,
+  normalizeHealthStatus,
+  resolveHealthFactorCopy,
+  type HealthFactorCopy,
+  type HealthFactorCopyContext,
+} from '../content/healthFactorCopy';
 import { hasGovernedPlanGuidance } from './riskPremiumOptimizer.service';
 import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from './coverageConflict.service';
 import { createHash } from 'node:crypto';
@@ -1916,7 +1924,10 @@ async function loadCoverageRenewalActions(propertyId: string, db: HomeActionSour
 // action), while every other named factor is surfaced generically from
 // calculateHealthScore()'s own insights, matched to an inventory item by
 // fuzzy name where possible.
-const HEALTH_INSIGHT_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+// Canonical title-case. Compared against normalizeHealthStatus(insight.status)
+// so the score util's historic 'Needs Attention' vs downstream 'Needs attention'
+// casing drift can no longer drop a card (Exterior drainage was the victim).
+const HEALTH_INSIGHT_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 const ACTIVE_BOOKING_STATUSES_FOR_HEALTH_SCORE = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] as const;
 
 function normalizeHealthFactorText(value: string): string {
@@ -2005,15 +2016,29 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
     items: inventoryItems.map((item) => `${item.id}:${item.category}:${item.installedOn?.toISOString() ?? ''}:${item.name}:${item.assetType ?? ''}`).sort(),
   })).digest('hex');
 
+  // Install year to surface as a key fact, by factor.
+  const installYearForFactor = (factor: string): number | null => {
+    const p = property as unknown as Record<string, number | null | undefined>;
+    if (factor === 'HVAC Age') return p.hvacInstallYear ?? null;
+    if (factor === 'Water Heater Age') return p.waterHeaterInstallYear ?? null;
+    if (factor === 'Roof Age') return p.roofReplacementYear ?? null;
+    return null;
+  };
+  const propertyYearBuilt = (property as unknown as { yearBuilt?: number | null }).yearBuilt ?? null;
+
   const actions: HomeAction[] = [];
   const buildInsightAction = (params: {
     factorSlug: string;
-    title: string;
-    description: string;
+    factor: string;
+    status: string;
+    copy: HealthFactorCopy;
     href: string;
+    ctx: HealthFactorCopyContext;
     itemId?: string;
-    assetName?: string;
   }) => {
+    const { copy, ctx } = params;
+    const subjectLabel = displayHealthFactorName(params.factor);
+    const keyFacts = healthFactorKeyFacts(copy, ctx);
     actions.push(adaptHomeActionSource('SYSTEM', {
       id: `health-insight:${propertyId}:${params.factorSlug}`,
       propertyId,
@@ -2022,24 +2047,38 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
       sourceVersion: healthInsightVersion,
       state: 'OPEN',
       priority: 'PLAN',
-      signal: params.title,
-      whyItMatters: params.description,
-      recommendedAction: 'Review and update this home fact.',
-      expectedOutcome: 'The home health score reflects the property\'s current condition.',
+      signal: params.factor,
+      whyItMatters: copy.whyItMatters,
+      recommendedAction: copy.headline,
+      expectedOutcome: copy.mode === 'DATA_GAP'
+        ? 'Your Home Record and health score reflect the real property.'
+        : 'You stay ahead of age-related work instead of reacting to a failure.',
       timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
       evidence: [{
         id: `${propertyId}:${params.factorSlug}`,
         type: 'SYSTEM_DERIVATION',
-        label: params.title,
+        label: subjectLabel,
         source: 'Property health score',
         observedAt: now.toISOString(),
         freshness: 'CURRENT',
         confidence: 0.7,
       }],
       assumptions: [], options: [], tradeoffs: [],
-      confidence: { score: 0.7, label: 'MEDIUM', missing: params.itemId ? [] : ['Matched inventory item'] },
+      confidence: { score: 0.7, label: 'MEDIUM', missing: [] },
       governance: lowConsequenceGovernance('resolution-center-parity-v1'),
-      primaryCta: { kind: 'REVIEW', label: 'Review', href: params.href },
+      presentation: {
+        variant: 'HEALTH_FACTOR_REVIEW',
+        eyebrow: 'Home health',
+        headline: copy.headline.slice(0, 180),
+        summary: copy.summary.slice(0, 320),
+        whyNow: copy.whyItMatters.slice(0, 500),
+        keyFacts,
+        factGroups: [],
+        subject: { kind: 'PROPERTY', id: propertyId, label: subjectLabel.slice(0, 180) },
+        detailLabel: 'Why this matters',
+        group: null,
+      },
+      primaryCta: { kind: 'REVIEW', label: copy.ctaLabel, href: params.href },
       secondaryCtas: [],
       feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
@@ -2054,7 +2093,7 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
       if (isAggregateApplianceFactor(insight.factor)) {
         return applianceRecords.length === 0 || appliancesMissingInstallYear.length > 0;
       }
-      return HEALTH_INSIGHT_STATUSES.includes(insight.status);
+      return HEALTH_INSIGHT_STATUSES.includes(normalizeHealthStatus(insight.status));
     })
     .forEach((insight) => {
       if (!insightsByFactor.has(insight.factor)) insightsByFactor.set(insight.factor, insight);
@@ -2062,18 +2101,40 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
 
   insightsByFactor.forEach(({ factor, status }) => {
     const factorSlug = factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const baseCtx: HealthFactorCopyContext = { propertyId, observedAt: now.toISOString() };
+
     if (isAggregateApplianceFactor(factor)) {
       const missingNames = appliancesMissingInstallYear.map((item) => item.name);
       const hasRecordedAppliances = applianceRecords.length > 0;
-      const title = hasRecordedAppliances
-        ? missingNames.length === 1
-          ? `Add installation year for ${missingNames[0]}`
-          : `Complete installation years for ${missingNames.length} appliances`
-        : 'Add major appliances';
-      const description = hasRecordedAppliances
-        ? `Installation year is missing for ${missingNames.join(', ')}. Add an approximate year to improve lifecycle and recall guidance.`
-        : 'No major appliances are recorded. Add only the appliances that are present in this home.';
-      buildInsightAction({ factorSlug, title, description, href: `/dashboard/properties/${propertyId}/edit?focus=appliances` });
+      const applianceCopy: HealthFactorCopy = hasRecordedAppliances
+        ? {
+            mode: 'DATA_GAP',
+            headline: missingNames.length === 1
+              ? `Add the installation year for your ${missingNames[0]}`
+              : `Add installation years for ${missingNames.length} appliances`,
+            summary: `An install year is missing for ${missingNames.join(', ')} — add an approximate year to unlock lifecycle and recall guidance.`,
+            whyItMatters: 'An approximate installation year is enough for us to track each appliance against its typical service life, match it to recalls, and warn you before it reaches end of life.',
+            ctaLabel: 'Complete appliance details',
+            statusLabel: 'Partly recorded',
+            extraFacts: () => [{ label: 'Effort', value: '~30 seconds each' }],
+          }
+        : {
+            mode: 'DATA_GAP',
+            headline: 'Add your major appliances',
+            summary: 'No appliances are recorded yet — add the ones this home has to unlock lifecycle, coverage, and recall tracking.',
+            whyItMatters: 'Once your appliances are in inventory, we can track their age against typical service life, match them to recalls, and tell you when a warranty is worth it.',
+            ctaLabel: 'Add appliances',
+            statusLabel: 'Not recorded yet',
+            extraFacts: () => [{ label: 'Effort', value: '~1 minute each' }],
+          };
+      buildInsightAction({
+        factorSlug,
+        factor,
+        status,
+        copy: applianceCopy,
+        ctx: baseCtx,
+        href: `/dashboard/properties/${propertyId}/edit?focus=appliances`,
+      });
       return;
     }
 
@@ -2090,13 +2151,21 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
         })()
       : `/dashboard/properties/${propertyId}/focus/health/${factorSlug}`;
 
+    const ctx: HealthFactorCopyContext = {
+      ...baseCtx,
+      yearBuilt: propertyYearBuilt,
+      installYear: installYearForFactor(factor),
+      assetName: matchedItem?.name ?? extractHealthInsightAssetName(factor) ?? undefined,
+    };
+
     buildInsightAction({
       factorSlug,
-      title: factor,
-      description: `Status: ${status}. Requires resolution.`,
+      factor,
+      status,
+      copy: resolveHealthFactorCopy(factor, status, ctx),
+      ctx,
       href,
       itemId: matchedItem?.id,
-      assetName: matchedItem?.name ?? extractHealthInsightAssetName(factor) ?? undefined,
     });
   });
 

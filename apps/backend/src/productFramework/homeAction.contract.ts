@@ -114,6 +114,7 @@ const HomeActionPresentationSchema = z.object({
     'FINANCIAL_EXPOSURE',
     'SALE_PREPARATION',
     'HOME_FACT_REVIEW',
+    'HEALTH_FACTOR_REVIEW',
     'ACCEPTED_WORK',
     'GENERIC_ACTION',
   ]),

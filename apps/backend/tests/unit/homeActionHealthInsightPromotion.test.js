@@ -67,7 +67,11 @@ test('an appliance missing its installation year produces a SYSTEM Home Action',
   const [action] = actions;
   assert.equal(action.source.kind, 'SYSTEM');
   assert.equal(action.id, 'health-insight:property-1:appliances');
-  assert.equal(action.signal, 'Add installation year for Refrigerator');
+  // signal is the canonical health factor (grounding subject); the
+  // homeowner-facing task lives in presentation.headline / recommendedAction.
+  assert.equal(action.signal, 'Appliances');
+  assert.match(action.recommendedAction, /installation year for your Refrigerator/i);
+  assert.equal(action.presentation.variant, 'HEALTH_FACTOR_REVIEW');
   assert.equal(action.priority, 'PLAN');
   assert.equal(action.governance.safetyTier, 'LOW_CONSEQUENCE');
   assert.equal(action.primaryCta.href, '/dashboard/properties/property-1/edit?focus=appliances');
@@ -79,7 +83,47 @@ test('no recorded appliances produces an "add major appliances" Home Action', as
   const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
 
   assert.equal(actions.length, 1);
-  assert.equal(actions[0].signal, 'Add major appliances');
+  assert.equal(actions[0].signal, 'Appliances');
+  assert.equal(actions[0].recommendedAction, 'Add your major appliances');
+  assert.equal(actions[0].presentation.headline, 'Add your major appliances');
+});
+
+test('health-factor cards carry HEALTH_FACTOR_REVIEW presentation with homeowner copy, not workflow status', async () => {
+  const property = baseProperty({ waterHeaterInstallYear: 2013 }); // 13y as of NOW -> 'Needs Review'
+  const db = stubSources({ property });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+
+  const wh = actions.find((a) => a.signal === 'Water Heater Age');
+  assert.ok(wh, `expected a Water Heater Age card among: ${actions.map((a) => a.signal).join(', ')}`);
+  assert.equal(wh.presentation.variant, 'HEALTH_FACTOR_REVIEW');
+  assert.equal(wh.presentation.subject.kind, 'PROPERTY');
+  // Task-phrased headline — not the factor name, not "Review and update this home fact."
+  assert.match(wh.recommendedAction, /inspect/i);
+  assert.equal(wh.presentation.headline, wh.recommendedAction);
+  // No internal workflow vocabulary anywhere homeowner-facing.
+  const homeownerText = [
+    wh.recommendedAction, wh.whyItMatters, wh.expectedOutcome,
+    wh.presentation.summary, wh.presentation.whyNow,
+    ...wh.presentation.keyFacts.flatMap((f) => [f.label, f.value]),
+    wh.primaryCta.label,
+  ].join(' | ');
+  assert.doesNotMatch(homeownerText, /Requires resolution|Needs Review|Status:/);
+  // Home-relevant key facts, not provenance telemetry.
+  const factLabels = wh.presentation.keyFacts.map((f) => f.label);
+  assert.ok(factLabels.includes('Current status'));
+  assert.ok(wh.presentation.keyFacts.some((f) => /service life/i.test(f.label)));
+  assert.ok(!factLabels.includes('Confidence'));
+});
+
+test('an exterior drainage issue surfaces a Home Action (Needs Attention casing fixed)', async () => {
+  const property = baseProperty({ hasDrainageIssues: true });
+  const db = stubSources({ property });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+
+  const drainage = actions.find((a) => a.signal === 'Exterior');
+  assert.ok(drainage, `expected an Exterior card among: ${actions.map((a) => a.signal).join(', ')}`);
+  assert.match(drainage.recommendedAction, /drainage/i);
+  assert.equal(drainage.presentation.variant, 'HEALTH_FACTOR_REVIEW');
 });
 
 test('an old HVAC install year produces an unmatched, factor-page-linked Home Action', async () => {

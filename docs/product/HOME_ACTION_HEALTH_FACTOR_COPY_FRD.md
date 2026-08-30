@@ -1,0 +1,354 @@
+# Home Action Health-Factor Copy FRD and Implementation Plan
+
+Version: 1.0
+Date: 2026-08-29
+Status: Approved — Phase 1 implementing
+Owner: Product + Engineering
+Related: `HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md` (§8.1 Canonical Attention Authority, row "Property health insight"), commits `b9efddb2` / `25dd4c45` / `56bae882` (card-humanization pass)
+
+---
+
+## 1. Problem statement
+
+Property Health Score insights surface on the Home "Plan ahead" feed as Home Action
+cards. Today those cards read as internal telemetry, not homeowner guidance:
+
+- **Title** is the raw scoring-factor name — `"Property Age (Year Built)"`, `"Water Heater Age"`.
+  These are constants in `propertyScore.util.ts` (analyst column headers), not tasks a
+  homeowner can act on.
+- **Supporting line** is the template `` `Status: ${status}. Requires resolution.` `` —
+  it restates an internal workflow state (`"Needs Review"` is a score enum; "Requires
+  resolution" implies a ticketing model the homeowner does not share).
+- **Key-facts grid** is generic provenance — Source / Confidence / Observed — rather than
+  facts about the home.
+- **CTA** is a bare `"Review"`.
+
+Contrast the well-formed card produced by `appendAcceptedOperationalWork`
+("Inspect exterior drainage" / "Check grading, drains, and downspout discharge after heavy
+rain." / Task · Work state · Due · Execution). That producer authors a full
+`presentation`; the health-insight producer authors none and falls through to
+`ensureHomeActionPresentation`, the generic safety-net builder.
+
+### 1.1 Root cause
+
+`loadHealthInsightActions` (`homeActionSourcePromotion.service.ts`) emits each flagged
+factor as a Home Action with:
+
+- `signal` = raw factor name
+- `recommendedAction` = the fixed placeholder `"Review and update this home fact."`
+- `whyItMatters` = `` `Status: ${status}. Requires resolution.` ``
+- **no `presentation` object**
+
+With no `presentation`, `ensureHomeActionPresentation` runs. It matches
+`recommendedAction` against `ABSTRACT_HOME_HEADLINE`, so `headline = signal` (the factor
+name), `summary = whyItMatters` (the status template), and `keyFacts` = the provenance
+triple. `variant` is `GENERIC_ACTION` — by design a fallback, not a destination.
+
+Commit `25dd4c45` (2026-08-29) routed the headline to the factor name deliberately,
+because the prior render showed `"Review and update this home fact."` as the title. That
+was choosing the lesser of two placeholders.
+
+### 1.2 Copy is authored in five uncoordinated places
+
+| Location | Holds | Form |
+|---|---|---|
+| `apps/backend/src/utils/propertyScore.util.ts` | emits `{factor, status}` — the taxonomy (~13 factors × ~9 statuses) | bare `string` |
+| `apps/backend/src/services/homeActionSourcePromotion.service.ts` `buildInsightAction` | `` `Status: ${status}. Requires resolution.` `` | inline template |
+| `apps/backend/src/productFramework/homeActionPresentationRegistry.ts` | the generic fallback card | inline |
+| `apps/frontend/.../focus/health/[factor]/page.tsx` | **6 dicts** — `getFactorDescription`, `getInsightStatusExplanation`, `getFactorActionHint`, positive-state map, `getUserFriendlyStatus`, `getDisplayFactorName` | client-side `Record<factor, Record<status, string>>` |
+| `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` | `getCompactHealthInsightTitle`, `buildHealthInsightActionMeta` | inline |
+
+Consequences observed:
+
+- **Casing drift / real bug**: `propertyScore.util.ts` emits `'Needs Attention'` (title
+  case) for the `Exterior` factor, but `HEALTH_INSIGHT_STATUSES` in the promotion service
+  lists `'Needs attention'` (lower `a`). The Exterior-drainage insight therefore **never
+  becomes a Home Action card** today. The frontend focus page keys its dicts on
+  `'Needs attention'`, mismatched with the backend emitter.
+- The good homeowner phrasing already exists — `getInsightStatusExplanation`'s
+  `whyThisMatters` map ("Your water heater is still working but getting up there in age —
+  a quick annual check helps you spot early issues before they become expensive."),
+  `getFactorActionHint` ("Schedule a water heater inspection — most cost $75–150.") — but
+  it lives only on the page the homeowner reaches *after* clicking the card.
+- No exhaustiveness guarantee: unmapped `factor × status` cells fall to generic strings
+  silently.
+- `getDisplayFactorName` (canonical → friendly) exists only on the frontend and is
+  partial.
+
+---
+
+## 2. Goals
+
+1. Every health-factor Home Action card leads with an **action phrased as a task**, a
+   plain-language reason, homeowner-relevant key facts, and a specific CTA — parity with
+   the `ACCEPTED_WORK` card.
+2. Health-factor homeowner copy has **one canonical source**, typed and
+   exhaustive-checked, reviewable as a standalone file.
+3. The Home card producer and the `focus/health/[factor]` page read **the same copy**.
+4. Fix the `Needs Attention` casing defect so Exterior-drainage insights surface.
+5. Distinguish the three homeowner situations the single template currently flattens:
+   **maintenance/inspection**, **data gap**, **warranty gap**.
+
+## 3. Non-goals
+
+- No change to how the Property Health Score is *computed* or *scored*
+  (`calculateHealthScore` scoring logic is untouched).
+- No DB-backed / admin-editable copy catalog (documented as a future option, §9).
+- No LLM-generated card narration.
+- No i18n framework (repo has none; the `src/content/*.ts` typed-record convention is
+  followed instead).
+- No change to the canonical identity, eligibility, source-version, evidence, timing,
+  governance, or lifecycle-command semantics of the health-insight Home Action
+  (`HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD` §8.1 constraints hold).
+
+---
+
+## 4. Product principles
+
+- **The card names a task, not a metric.** "Have your water heater inspected", not
+  "Water Heater Age".
+- **The reason describes the situation, not the workflow.** "Your water heater is near the
+  end of its typical service life" — never "Status: Needs Review. Requires resolution."
+- **Key facts are about the home.** Install year, typical lifespan, rough cost range,
+  "No deadline — plan ahead" — not "medium confidence".
+- **One source of truth.** A new copy string is added in exactly one file.
+- **Fail safe, not silent.** An unmapped `factor × status` resolves to a conservative
+  generic that still passes the grounding gate; it is never a crash and never an empty
+  card.
+
+---
+
+## 5. Target architecture
+
+### 5.1 Canonical copy module
+
+`apps/backend/src/content/healthFactorCopy.ts` — a typed record, same shape convention as
+`apps/frontend/src/content/toolExplainers.ts`.
+
+```ts
+export const HEALTH_FACTOR_KEYS = [
+  'Property Age (Year Built)', 'Structure Factor', 'Systems Factor',
+  'Usage/Wear Factor', 'Size Factor', 'HVAC Age', 'Water Heater Age',
+  'Roof Age', 'Safety', 'Exterior', 'Documents', 'Appliances',
+] as const;
+export type HealthFactorKey = typeof HEALTH_FACTOR_KEYS[number];
+// Dynamic "<Asset> aging" factors (status 'Needs Warranty') resolve via a
+// dedicated branch, not a key.
+
+export const HEALTH_FACTOR_STATUS_KEYS = [
+  'Excellent', 'Good', 'Modern', 'Optimal', 'Complete', 'Low Density',
+  'Average', 'Standard', 'Aging', 'High Density', 'Partial', 'Incomplete',
+  'Action Pending', 'Missing Data', 'Needs Review', 'Needs Inspection',
+  'Needs Attention', 'Needs Warranty',
+] as const;
+export type HealthFactorStatusKey = typeof HEALTH_FACTOR_STATUS_KEYS[number];
+
+export type HealthFactorMode = 'MAINTENANCE' | 'DATA_GAP' | 'WARRANTY_GAP';
+
+export interface HealthFactorCopy {
+  mode: HealthFactorMode;
+  /** Task-phrased card headline. Imperative. Never matches ABSTRACT_HOME_HEADLINE. */
+  headline: string;
+  /** One-sentence plain-language situation. Card summary. */
+  summary: string;
+  /** Longer "why you're seeing this" for the expanded detail. */
+  whyItMatters: string;
+  /** Primary CTA label. */
+  ctaLabel: string;
+  /** Homeowner-friendly rendering of the raw status. */
+  statusLabel: string;
+  /** Optional extra key facts (typical lifespan, cost range). Context-filled. */
+  extraFacts?: (ctx: HealthFactorCopyContext) => Array<{ label: string; value: string }>;
+}
+
+export interface HealthFactorCopyContext {
+  propertyId: string;
+  yearBuilt?: number | null;
+  installYear?: number | null;
+  assetName?: string | null;
+  observedAt: string;
+}
+```
+
+Exports:
+
+- `HEALTH_FACTOR_COPY: Record<HealthFactorKey, Partial<Record<HealthFactorStatusKey, HealthFactorCopy>>>`
+  — populated for every status that can become a card (`Needs Review`,
+  `Needs Inspection`, `Needs Attention`, `Missing Data`, `Needs Warranty`), plus the
+  watch/positive statuses the focus page needs. Compile-time `satisfies`.
+- `resolveHealthFactorCopy(factor: string, status: string, ctx): HealthFactorCopy` — exact
+  lookup → dynamic `"<Asset> aging"` branch → conservative generic fallback. Never throws.
+- `displayHealthFactorName(factor: string): string` — canonical → friendly
+  (`'Systems Factor'` → `"Major Systems Health"`, etc.). Single home for the mapping that
+  is today frontend-only.
+- `friendlyHealthStatus(status: string): string` — replaces the focus page's
+  `getUserFriendlyStatus`.
+- `normalizeHealthStatus(status: string): HealthFactorStatusKey | string` — trims and
+  title-cases the known `Needs *` variants so legacy/emitter casing drift cannot cause a
+  miss.
+
+The canonical `factor` strings stay byte-for-byte as emitted (they are matched against
+`Booking.insightFactor` in `isInsightBeingAddressed`). Only *display* is remapped.
+
+### 5.2 New presentation variant `HEALTH_FACTOR_REVIEW`
+
+- Added to `HomeActionPresentationSchema.variant` enum (`homeAction.contract.ts`) and the
+  mirrored union in `apps/frontend/src/types/index.ts`.
+- Registry rule in `homeActionPresentationRegistry.ts`:
+  - `allowedPrimaryCtaKinds`: `['REVIEW', 'CORRECT_FACT']`
+  - requires `subject` (label present), non-abstract `headline`, `summary`/`whyNow`,
+    and **≥ 1 key fact**
+  - `requiredLaunchParams`: `CORE_LAUNCH_PARAMS`
+- `ensureHomeActionPresentation` is unchanged and remains the safety net for any producer
+  that still emits no `presentation`.
+
+### 5.3 Producer rework — `loadHealthInsightActions`
+
+`buildInsightAction` gains a `presentation` built from `resolveHealthFactorCopy`:
+
+| Field | Source |
+|---|---|
+| `recommendedAction` | `copy.headline` (real task text — no longer hits the fallback) |
+| `whyItMatters` | `copy.whyItMatters` |
+| `signal` | unchanged (`factor` — grounding subject) |
+| `presentation.variant` | `HEALTH_FACTOR_REVIEW` |
+| `presentation.headline` | `copy.headline` |
+| `presentation.summary` | `copy.summary` |
+| `presentation.whyNow` | `copy.whyItMatters` |
+| `presentation.eyebrow` | `"Home health"` |
+| `presentation.subject` | `{ kind: 'PROPERTY', id: propertyId, label: displayHealthFactorName(factor) }` |
+| `presentation.keyFacts` | mode-specific — see below |
+| `presentation.detailLabel` | `"Why this matters"` |
+| `primaryCta` | `{ kind: 'REVIEW', label: copy.ctaLabel, href }` (DATA_GAP keeps the edit href; MAINTENANCE keeps the guidance/focus href) |
+
+Key facts by mode:
+
+- **MAINTENANCE**: `Current status` = `copy.statusLabel`; `Installed` / `Year built` when
+  known; `Typical lifespan` and `Typical cost` from `extraFacts`; `Timing` = "No deadline
+  — plan ahead".
+- **DATA_GAP**: `What's missing` = the field; `Why it helps` = one line; `Effort` =
+  "~1 minute".
+- **WARRANTY_GAP**: `Appliance`; `Age`; `Coverage` = "No active home warranty found".
+
+The `HEALTH_INSIGHT_STATUSES` filter is updated to use `normalizeHealthStatus` so
+`'Needs Attention'` matches.
+
+### 5.4 Focus page consumes the same copy (Phase 2)
+
+`property.service.ts` `getPropertyById` enriches each `healthScore.insights[]` entry with a
+`copy` object (`resolveHealthFactorCopy` + `displayHealthFactorName` +
+`friendlyHealthStatus`). `focus/health/[factor]/page.tsx` reads `insight.copy.*` and its 6
+local dicts are deleted. `dashboard/page.tsx` helpers switch to `insight.copy.headline` /
+`displayName`.
+
+Phase 2 is separately committable and lower-urgency; Phase 1 fixes the user-visible feed.
+
+---
+
+## 6. Functional requirements
+
+| ID | Requirement |
+|---|---|
+| HFC-001 | A single typed module (`healthFactorCopy.ts`) is the only place health-factor homeowner copy is authored. |
+| HFC-002 | Every `factor × status` combination that can produce a Home Action card has an explicit `HealthFactorCopy` entry; the map is `satisfies`-checked. |
+| HFC-003 | `resolveHealthFactorCopy` never throws and always returns copy whose `headline` does not match `ABSTRACT_HOME_HEADLINE` / `UNGROUNDED_HOME_COPY`. |
+| HFC-004 | Health-factor cards render `variant: 'HEALTH_FACTOR_REVIEW'` with a task headline, plain-language summary, ≥ 1 home-relevant key fact, and a mode-appropriate CTA label. |
+| HFC-005 | The string "Requires resolution" and raw status enums (`Needs Review`, `Needs Attention`, …) do not appear in any homeowner-facing string produced for these cards. |
+| HFC-006 | `Exterior` factor with drainage issues produces a Home Action card (casing defect fixed). |
+| HFC-007 | Canonical `factor` strings emitted by `calculateHealthScore` are unchanged; `Booking.insightFactor` suppression still matches. |
+| HFC-008 | MAINTENANCE, DATA_GAP, and WARRANTY_GAP modes are visually and behaviourally distinct (headline verb, CTA, key facts, destination). |
+| HFC-009 | The health-insight Home Action keeps its existing id, `lineageId`, `sourceVersion`, evidence, governance tier, priority (`PLAN`), and allowed feedback controls. |
+| HFC-010 | `HEALTH_FACTOR_REVIEW` actions pass `isGroundedHomeAction` and `evaluateHomeActionPresentationEligibility`. |
+| HFC-011 | (Phase 2) `healthScore.insights[]` in the property read carries a `copy` object; the `focus/health/[factor]` page and `dashboard/page.tsx` consume it and hold no local copy dictionaries. |
+
+---
+
+## 7. Acceptance scenarios
+
+**A — Aging water heater.** `waterHeaterInstallYear` = 12 years ago. Card: headline
+"Have your water heater inspected"; summary "Your water heater is near the end of its
+typical 10–12 year service life."; key facts Installed 20xx · Typical lifespan 10–12 years
+· Typical inspection $75–150 · No deadline — plan ahead; CTA "Book an inspection". No
+"Needs Review", no "Requires resolution".
+
+**B — Missing year built.** `yearBuilt` null. Card: headline "Add your home's year built";
+mode DATA_GAP; key facts What's missing "Year built" · Why it helps "Sharpens age-based
+maintenance and score" · Effort "~1 minute"; CTA "Add year built" → property edit
+`#structure`.
+
+**C — Aging appliance, no warranty.** Insight `"Dishwasher aging" / Needs Warranty`. Card:
+headline "Consider a warranty for your aging dishwasher"; mode WARRANTY_GAP; key facts
+Appliance Dishwasher · Age 16 years · Coverage "No active home warranty found"; CTA
+"Review warranty options".
+
+**D — Drainage issue.** `hasDrainageIssues` true. A Home Action card now exists (was
+suppressed by the casing mismatch); headline "Inspect your exterior drainage".
+
+**E — Unmapped combination.** A new status is added to the score util before copy is
+written. `resolveHealthFactorCopy` returns the generic fallback ("Review this home-health
+item" + display factor name + neutral reason); card still renders, still grounded, no
+crash.
+
+**F — Booking suppression.** A booking with `insightFactor = 'Water Heater Age'` exists.
+The insight status becomes `Action Pending` and no card is produced — unchanged from
+today.
+
+---
+
+## 8. Implementation plan
+
+### Phase 1 — Canonical module + feed cards (this change)
+
+1. `apps/backend/src/content/healthFactorCopy.ts` — module + full copy map (migrated from
+   the focus-page dicts and `getFactorActionHint`) + `resolveHealthFactorCopy` +
+   `displayHealthFactorName` + `friendlyHealthStatus` + `normalizeHealthStatus`.
+2. `homeAction.contract.ts` — add `HEALTH_FACTOR_REVIEW` to the variant enum.
+3. `apps/frontend/src/types/index.ts` — mirror the enum value.
+4. `homeActionPresentationRegistry.ts` — add the `HEALTH_FACTOR_REVIEW` registry rule.
+5. `homeActionSourcePromotion.service.ts` — rework `buildInsightAction` /
+   `loadHealthInsightActions`: build the `presentation`, use real `recommendedAction` /
+   `whyItMatters`, mode-specific key facts and CTA; update the `HEALTH_INSIGHT_STATUSES`
+   filter to normalize status casing.
+6. Tests:
+   - `healthFactorCopy.test.js` — exhaustiveness, no-throw, non-abstract headline,
+     dynamic-asset branch, casing normalization.
+   - `homeActionPresentationRegistry.test.js` — `HEALTH_FACTOR_REVIEW` eligibility.
+   - extend the health-insight producer test — presentation shape, mode routing, Exterior
+     now surfaces, grounding passes.
+7. Update this FRD status to "Phase 1 shipped".
+
+### Phase 2 — Focus page + dashboard consolidation (follow-up commit)
+
+8. `property.service.ts` — enrich `healthScore.insights[]` with `copy`.
+9. `focus/health/[factor]/page.tsx` — consume `insight.copy`; delete the 6 local dicts.
+10. `dashboard/page.tsx` — consume `insight.copy` / `displayName`.
+11. Delete now-dead frontend helpers; update their tests.
+
+### Phase 3 — Optional, not scheduled
+
+12. If health copy volume or non-engineer editing need grows: migrate
+    `HEALTH_FACTOR_COPY` to a DRAFT/published DB catalog behind `resolveHealthFactorCopy`
+    (same pattern as `modules/personalization/catalog`). The resolver signature does not
+    change, so no consumer is touched.
+
+---
+
+## 9. Alternatives considered
+
+| Option | Why not (now) |
+|---|---|
+| Inline `switch` in `buildInsightAction` | Adds a 6th copy site; ~100-cell matrix inside a 5k-line service; no exhaustiveness. |
+| Copy attached inside `calculateHealthScore` | Muddies a pure scoring util; largest blast radius (many callers, payload grows everywhere). Phase 2's enrichment step gets the same reuse with a bounded change. Still the right long-term home — Phase 3 can move there. |
+| DB-backed catalog | Heavy for ~100 rarely-changing cells; needs schema, seed, admin surface, caching. Kept as Phase 3. |
+| LLM narration at render | Latency/cost/nondeterminism on every home load; fights the grounding apparatus; safety-review surface. |
+
+## 10. Risks
+
+- **Grounding gate filters a card.** Mitigation: `resolveHealthFactorCopy` guarantees a
+  non-abstract headline and a subject; tests assert `isGroundedHomeAction` for every
+  mapped cell and the fallback.
+- **Variant enum drift between backend contract and frontend union.** Mitigation: a
+  frontend type test referencing the backend enum value; single PR touches both.
+- **Phase 1 / Phase 2 copy divergence window.** Between phases the focus page still uses
+  its own dicts. Acceptable — the strings are migrated *from* those dicts, so they match
+  at Phase 1; Phase 2 deletes the duplicates. FRD tracks it.

@@ -255,6 +255,7 @@ export type ActivationHomeActionDTO = {
         | 'FINANCIAL_EXPOSURE'
         | 'SALE_PREPARATION'
         | 'HOME_FACT_REVIEW'
+        | 'HEALTH_FACTOR_REVIEW'
         | 'ACCEPTED_WORK'
         | 'GENERIC_ACTION';
       eyebrow: string | null;

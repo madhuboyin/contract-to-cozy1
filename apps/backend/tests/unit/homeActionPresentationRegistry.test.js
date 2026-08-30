@@ -165,3 +165,44 @@ test('the generic health-fact review headline falls back to the specific factor 
   });
   assert.equal(presented.presentation.headline, 'HVAC Age');
 });
+
+test('HEALTH_FACTOR_REVIEW requires a PROPERTY subject, a task headline, and at least one key fact', () => {
+  const healthFactorAction = (presentationOverrides = {}) => ({
+    ...action(),
+    recommendedAction: 'Have your water heater inspected',
+    expectedOutcome: 'You stay ahead of age-related work.',
+    primaryCta: { kind: 'REVIEW', label: 'Book an inspection', href: '/dashboard' },
+    source: { kind: 'SYSTEM', entityId: 'property-1', version: 'v1' },
+    presentation: {
+      variant: 'HEALTH_FACTOR_REVIEW',
+      eyebrow: 'Home health',
+      headline: 'Have your water heater inspected',
+      summary: 'Your water heater is near the end of its typical service life.',
+      whyNow: 'A quick check helps you spot early issues before they become expensive.',
+      keyFacts: [{ label: 'Current status', value: 'Worth a look' }],
+      factGroups: [],
+      subject: { kind: 'PROPERTY', id: 'property-1', label: 'Water Heater Age' },
+      detailLabel: 'Why this matters',
+      group: null,
+      ...presentationOverrides,
+    },
+  });
+
+  assert.equal(evaluateHomeActionPresentationEligibility(healthFactorAction()).eligible, true);
+
+  const noFacts = evaluateHomeActionPresentationEligibility(healthFactorAction({ keyFacts: [] }));
+  assert.equal(noFacts.eligible, false);
+  assert.ok(noFacts.reasons.includes('MISSING_EXACT_FACTS'));
+
+  const abstractHeadline = evaluateHomeActionPresentationEligibility(
+    healthFactorAction({ headline: 'Review and update this home fact.' }),
+  );
+  assert.equal(abstractHeadline.eligible, false);
+  assert.ok(abstractHeadline.reasons.includes('GENERIC_HEADLINE'));
+
+  const wrongSubject = evaluateHomeActionPresentationEligibility(
+    healthFactorAction({ subject: { kind: 'EVENT', id: 'e1', label: 'x' } }),
+  );
+  assert.equal(wrongSubject.eligible, false);
+  assert.ok(wrongSubject.reasons.includes('MISSING_PROPERTY_SUBJECT'));
+});
