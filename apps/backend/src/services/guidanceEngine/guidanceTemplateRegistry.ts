@@ -1,5 +1,6 @@
 import { GuidanceJourneyTemplate, GuidanceJourneyTemplateDefinition, GuidanceStepSkipPolicy } from './guidanceTypes';
 import { applyGuidanceGovernance } from './guidanceGovernance.catalog';
+import { humanizeHomeActionLabel } from '../../productFramework/homeAssetDisplay';
 
 const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
   // ── Asset Lifecycle ─────────────────────────────────────────────────────────
@@ -1916,6 +1917,14 @@ const JOURNEY_DISPLAY_TITLES: Record<string, string> = {
 };
 
 function humanizeGuidanceKey(value: string): string {
+  // Risk-derived issue keys ("HIGH Risk: HVAC_FURNACE") carry an enum
+  // system name — route the whole string through the shared humanizer so it
+  // becomes "Review the HVAC Furnace risk" rather than "High risk hvac furnace".
+  if (/^(?:LOW|MODERATE|MEDIUM|ELEVATED|HIGH|CRITICAL|URGENT)\s+RISK\s*[:\-–]/i.test(value.trim()) ||
+    /[A-Z0-9]+_[A-Z0-9]+/.test(value)) {
+    const humanized = humanizeHomeActionLabel(value);
+    if (humanized && humanized !== value.trim()) return humanized;
+  }
   const words = value
     .trim()
     .replace(/[^a-zA-Z0-9]+/g, ' ')

@@ -1,4 +1,5 @@
 import type { HomeAction } from './homeAction.contract';
+import { humanizeHomeActionLabel } from './homeAssetDisplay';
 
 type PresentationVariant = NonNullable<HomeAction['presentation']>['variant'];
 
@@ -49,11 +50,40 @@ function basePresentationReasons(action: HomeAction): string[] {
 }
 
 export function ensureHomeActionPresentation(action: HomeAction): HomeAction {
-  if (action.presentation) return action;
-  const subjectLabel = action.evidence.find((evidence) => evidence.label?.trim())?.label.trim() || action.signal.trim();
-  const headline = ABSTRACT_HOME_HEADLINE.test(action.recommendedAction.trim())
-    ? action.signal.trim()
-    : action.recommendedAction.trim();
+  if (action.presentation) {
+    // Even a producer-authored presentation can carry a raw enum / risk-level
+    // prefix in its headline or subject (e.g. a risk-derived signal copied
+    // straight through). humanizeHomeActionLabel is a no-op on prose.
+    const headline = humanizeHomeActionLabel(action.presentation.headline);
+    const subjectLabel = action.presentation.subject
+      ? humanizeHomeActionLabel(action.presentation.subject.label)
+      : null;
+    if (headline === action.presentation.headline &&
+      (!action.presentation.subject || subjectLabel === action.presentation.subject.label)) {
+      return action;
+    }
+    return {
+      ...action,
+      presentation: {
+        ...action.presentation,
+        headline: headline.slice(0, 180),
+        subject: action.presentation.subject && subjectLabel
+          ? { ...action.presentation.subject, label: subjectLabel.slice(0, 180) }
+          : action.presentation.subject,
+      },
+    };
+  }
+  // The fallback headline/subject are built from producer-internal strings
+  // (evidence label, signal, recommendedAction) that can carry raw enums or
+  // risk-level prefixes ("HIGH Risk: HVAC_FURNACE"). Humanize before display.
+  const subjectLabel = humanizeHomeActionLabel(
+    action.evidence.find((evidence) => evidence.label?.trim())?.label.trim() || action.signal.trim(),
+  );
+  const headline = humanizeHomeActionLabel(
+    ABSTRACT_HOME_HEADLINE.test(action.recommendedAction.trim())
+      ? action.signal.trim()
+      : action.recommendedAction.trim(),
+  );
   const observed = action.evidence.find((evidence) => evidence.observedAt)?.observedAt;
   return {
     ...action,

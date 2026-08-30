@@ -1664,9 +1664,21 @@ export function UnifiedHomeSurface({
                 <Link key={decision.id} href={decision.primaryCta.href} className="block rounded-xl border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50/40">
                   {/* Lead with the subject so degraded decisions (whose recommendedAction
                       collapses to generic safe copy) stay distinguishable — matches how the
-                      main feed cards render. */}
-                  <p className="font-semibold text-slate-900">{decision.presentation?.headline ?? decision.signal}</p>
-                  <p className="mt-1 text-xs text-slate-500">{decision.recommendedAction}</p>
+                      main feed cards render. Prefer the summary (plain-language "what's the
+                      choice") for the supporting line; fall back to recommendedAction, and
+                      suppress it when it just repeats the headline. */}
+                  {(() => {
+                    const headline = decision.presentation?.headline ?? decision.signal;
+                    const support = decision.presentation?.summary ?? decision.recommendedAction;
+                    const showSupport = support.trim().length > 0 &&
+                      support.trim().toLowerCase() !== headline.trim().toLowerCase();
+                    return (
+                      <>
+                        <p className="font-semibold text-slate-900">{headline}</p>
+                        {showSupport && <p className="mt-1 text-xs text-slate-500">{support}</p>}
+                      </>
+                    );
+                  })()}
                 </Link>
               ))}
             </CardContent>

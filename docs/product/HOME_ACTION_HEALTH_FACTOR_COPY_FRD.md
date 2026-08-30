@@ -1,8 +1,8 @@
 # Home Action Health-Factor Copy FRD and Implementation Plan
 
-Version: 1.1
+Version: 1.2
 Date: 2026-08-29
-Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped · Phase 3 not scheduled
+Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped · Phase 3 not scheduled
 Owner: Product + Engineering
 Related: `HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md` (§8.1 Canonical Attention Authority, row "Property health insight"), commits `b9efddb2` / `25dd4c45` / `56bae882` (card-humanization pass)
 
@@ -381,3 +381,62 @@ code (see §5.4) — not touched; a separate dead-code cleanup, not a copy conce
 - **Phase 1 / Phase 2 copy divergence window.** Between phases the focus page still uses
   its own dicts. Acceptable — the strings are migrated *from* those dicts, so they match
   at Phase 1; Phase 2 deletes the duplicates. FRD tracks it.
+
+---
+
+## 12. "Decisions to make" card verbiage (extension)
+
+Status: fix shipped · producer-side hardening tracked as future work
+
+### 12.1 Problem
+
+On the Home "Decisions to make" card (`UnifiedHomeSurface.tsx`, card built from
+`home.decisions` = `feed.actions` filtered to `job === 'DECIDE'` /
+`MATERIAL_FINANCIAL` / `REGULATED_COVERAGE`), a row rendered:
+
+- **Title:** `HIGH Risk: HVAC_FURNACE` — a raw `riskLevel` + `systemType` enum pair.
+- **Subtitle:** `Add the missing home information or continue with a qualified
+  professional using the original records.` — the `DATA_UNAVAILABLE.safeNextAction`
+  boilerplate, identical across every withheld decision.
+- A separate row showed the title and subtitle as the **same string**
+  ("Review coverage for Water Heater" twice).
+
+### 12.2 Mechanism (confirmed)
+
+1. The card (commit `35e46ef1`) leads with `presentation.headline ?? signal` because
+   `recommendedAction` collapses to safe copy whenever a material recommendation is
+   withheld (`homeActionSourceAdapters.ts` `mustWithhold` →
+   `recommendationResponse.safeNextAction`).
+2. `signal` / `presentation.headline` for the affected decision carried a
+   producer-internal string. No live code builds `"${riskLevel} Risk: ${systemType}"`
+   as a title — the only occurrence is a stale doc comment
+   (`riskAssessmentIntegration.service.ts:240`); current risk→task paths humanize via
+   `getHomeAssetDisplayLabel`. So the string is **stale persisted data** (a
+   `GuidanceJourney.issueType`, `GuidanceSignal` payload,
+   `PropertyRadarCompoundInsight.title`, or `PropertyMaintenanceTask.title` written
+   by since-removed code) flowing through unchanged.
+3. `signal` is a grounding / dedup key, not display copy — producers set it freely
+   (`item.title`, `row.title`, `${homeSystem}: ${recommendation}`, raw enums).
+
+### 12.3 Fix (shipped)
+
+| Change | File |
+|---|---|
+| `humanizeHomeActionLabel(value)` — strips a `(LOW…CRITICAL) Risk:` prefix, expands `SCREAMING_SNAKE` tokens through the asset-label map, drops generic decision-filler suffixes (`: continue the active decision`), and returns prose unchanged. | `productFramework/homeAssetDisplay.ts` |
+| `ensureHomeActionPresentation` runs it on the fallback headline **and** on a producer-authored `presentation.headline` / `subject.label` (no-op on prose; returns the same object when nothing changed). | `productFramework/homeActionPresentationRegistry.ts` |
+| `humanizeGuidanceKey` routes a risk-enum issue key through the same humanizer, so `getGuidanceJourneyDisplayTitle('…','HIGH Risk: HVAC_FURNACE')` → `"Review the HVAC Furnace risk"` instead of `"High risk hvac furnace"`. | `guidanceEngine/guidanceTemplateRegistry.ts` |
+| Decisions card: supporting line prefers `presentation.summary`, falls back to `recommendedAction`, and is **suppressed when it just repeats the headline**. | `components/home/UnifiedHomeSurface.tsx` |
+| Tests: `humanizeHomeActionLabel.test.js` (new); extended registry test. | — |
+
+### 12.4 Future work (not in this change)
+
+- **Producers should author a real `presentation`.** The non-weather / non-financial
+  branch of `loadGuidanceActions` and `loadCompoundRadarInsightActions` return no
+  `presentation` and lean on `signal` + the generic fallback. They should emit a
+  subject-named headline and a plain-language "what's the choice" summary.
+- **Withheld-state presentation.** When a material recommendation is withheld, the card
+  should still name the subject ("Coverage decision for your water heater — needs more
+  info"), not `signal` + one boilerplate sentence shared by every withheld decision.
+- **Stale-data cleanup.** Re-derive whichever entity holds `"HIGH Risk: HVAC_FURNACE"`
+  through `getHomeAssetDisplayLabel` (risk-assessment recompute +
+  `reconcileActiveMaintenanceTaskWork`, or a one-off row fix).
