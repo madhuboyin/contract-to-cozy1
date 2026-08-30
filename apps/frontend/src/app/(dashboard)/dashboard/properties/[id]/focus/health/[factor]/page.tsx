@@ -102,187 +102,17 @@ function getUserFriendlyStatus(status: string | undefined): string {
   return map[String(status || "")] || String(status || "Unknown");
 }
 
-function getFactorDescription(factorName: string | undefined, condition: string | undefined): string {
-  const factor = getDisplayFactorName(factorName);
-  const cond = String(condition || "");
-  const map: Record<string, Record<string, string>> = {
-    "Property Age (Year Built)": {
-      Excellent: "Recently built home — strong age signal",
-      Good: "Home age is within a typical maintenance window",
-      "Needs Review": "Older home based on year built — review recommended",
-      "Needs attention": "Older home age is increasing maintenance risk",
-      "Action Pending": "Age-related review is already in progress",
-      "Missing Data": "Year built is missing — add it to improve score accuracy",
-    },
-    "Water Heater Age": {
-      "Needs Review": "Approaching end of typical lifespan — review recommended",
-      "Needs attention": "Past typical lifespan — replacement evaluation recommended",
-      Aging: "Getting older — monitor for performance issues",
-      Modern: "Recently installed — no action needed",
-    },
-    "Roof Age": {
-      Aging: "Mid-life — inspect after next major storm",
-      "Needs Review": "Past typical replacement window — inspection recommended",
-      "Needs attention": "Past replacement window — inspection recommended",
-      Modern: "Recently replaced — no action needed",
-    },
-    "HVAC Age": {
-      Aging: "Aging system — schedule annual maintenance",
-      "Needs Review": "Nearing end of service life — start planning replacement",
-      "Needs attention": "Past typical service life — plan replacement",
-      Modern: "Recently serviced — maintain current schedule",
-    },
-    "Occupancy & Wear": {
-      "High Density": "More occupants for your home's size means faster wear on fixtures and systems",
-      Average: "Occupancy is in a normal range — standard maintenance schedule applies",
-      "Low Density": "Light occupancy — lower day-to-day wear on fixtures and systems",
-    },
-    "Major Systems Health": {
-      Modern: "Heating, cooling, and water systems are up to date",
-      Mixed: "Some major systems may need attention",
-      Aging: "Major systems are showing age — schedule a review",
-      Good: "Major systems are in good condition",
-      Standard: "Major systems are functioning at a standard level",
-    },
-    "Safety Factor": {
-      Complete: "Safety systems up to date",
-      Incomplete: "Some safety items need attention",
-      "Needs Review": "Safety review recommended",
-    },
-    "Documents Factor": {
-      Complete: "Property documents are up to date",
-      Incomplete: "Some documents are missing",
-      "Missing Data": "Property documentation needed",
-    },
-    "Structure Factor": {
-      Excellent: "Structural elements are in excellent condition",
-      Good: "Structural elements are in good condition",
-      Standard: "Structure is stable — periodic checks recommended",
-      Aging: "Some structural wear detected — monitoring advised",
-      Incomplete: "Structural assessment incomplete — add records to refine this score",
-      "Missing Data": "Structural condition not recorded",
-      "Needs Review": "Structural review recommended",
-      "Needs attention": "Structural issues require attention",
-    },
-    "Roof Condition": {
-      Excellent: "Roof is in excellent condition",
-      Good: "Roof is in good condition — no issues identified",
-      Standard: "Roof condition is acceptable — monitor for wear",
-      Aging: "Roof showing signs of wear — inspection recommended",
-      "Missing Data": "Roof condition not recorded",
-      "Needs Review": "Roof inspection recommended",
-      "Needs attention": "Roof condition requires immediate attention",
-    },
-  };
-  if (map[factor]?.[cond]) return map[factor][cond];
-  if (POSITIVE_STATUSES.includes(cond)) return `${getUserFriendlyStatus(cond)} — no issues flagged`;
-  return `${cond || "Status unavailable"} — review recommended`;
-}
-
 function isApplianceFactor(factorName: string | undefined): boolean {
   return String(factorName || "").toLowerCase().includes("appliance");
 }
 
-function getInsightStatusExplanation(
-  status: string | undefined,
-  factorName?: string,
-  applianceCount = 0,
-  incompleteApplianceCount = 0,
-): string {
-  const s = String(status || "");
-  if (s === "Missing Data") {
-    if (isApplianceFactor(factorName)) {
-      if (applianceCount > 0) {
-        return `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked. Add any missing appliance details to improve health, coverage, and recall guidance.`;
-      }
-      return "No appliance data has been added yet. Adding items to your inventory lets us track health, coverage, and recall status for each appliance.";
-    }
-    return "Data for this factor hasn't been recorded yet. Adding it unlocks a real score for this factor and specific next steps.";
-  }
-  if (s === "Incomplete") {
-    return "This factor is partially set up. Completing the missing information will unlock a more accurate score and targeted guidance.";
-  }
-  if (REQUIRED_ACTION_STATUSES.includes(s)) {
-    return "";
-  }
-  if (IN_PROGRESS_STATUSES.includes(s)) {
-    return "Work is already underway on this factor. Its contribution should improve once the task is completed.";
-  }
-  if (WATCH_STATUSES.includes(s)) {
-    const factor = getDisplayFactorName(factorName);
-    const watchMap: Record<string, string> = {
-      'Water Heater Age': 'Your water heater is still working but getting up there in age — a quick annual check helps you spot early issues before they become expensive.',
-      'HVAC Age': 'Your HVAC is running but older systems work harder to keep up — a seasonal tune-up now is cheaper than an emergency repair later.',
-      'Property Age (Year Built)': 'Older homes develop quirks over time — periodic walkthroughs help you stay ahead of small issues before they add up.',
-      'Roof Age': 'Your roof is within its expected lifespan but worth watching — noting any curling shingles or soft spots after storms helps you stay ahead of leaks.',
-      'Safety Factor': 'Your safety devices are in place but could use some attention — testing smoke and CO detectors twice a year keeps your home protected.',
-      'Documents Factor': 'Your documentation is partially there — filling in the gaps makes this factor stronger and helps if you ever sell or make a claim.',
-      'Major Systems Health': 'Your major systems are running but some are showing age — logging service visits as they happen helps you track what\'s been done and what\'s coming up.',
-      'Occupancy & Wear': 'Your home sees active daily use — staying current on routine maintenance keeps wear from piling up over time.',
-      'Structure Factor': 'Your structural elements look okay but warrant a closer look — a periodic inspection every few years is a smart habit for any home.',
-      'Roof Condition': 'Your roof is intact but showing some wear — keeping an eye on it after storms helps you catch issues early.',
-      'Appliances': applianceCount > 0
-        ? incompleteApplianceCount > 0
-          ? `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked. Add an approximate installation year for ${incompleteApplianceCount} appliance${incompleteApplianceCount === 1 ? "" : "s"} to improve lifecycle guidance.`
-          : `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked with the lifecycle information needed for health guidance.`
-        : 'Add your major appliances to start tracking their health, coverage, and recall status.',
-    };
-    return watchMap[factor] ?? 'This area is in decent shape but worth keeping an eye on — periodic checks help you stay ahead of anything that might come up.';
-  }
-  if (POSITIVE_STATUSES.includes(s)) {
-    const factor = getDisplayFactorName(factorName);
-    const positiveMap: Record<string, string> = {
-      'Water Heater Age': 'Your water heater is relatively new — it\'s a reliable, low-maintenance part of your home right now.',
-      'HVAC Age': 'Your HVAC system is in its prime years — efficient, reliable, and with plenty of service life ahead.',
-      'Property Age (Year Built)': 'Your home\'s age is working in its favor — newer construction typically means fewer deferred maintenance surprises.',
-      'Roof Age': 'Your roof has plenty of life left — no immediate concerns, just keep up the occasional inspection.',
-      'Safety Factor': 'Your safety devices are up to date — your home and household are well-protected.',
-      'Documents Factor': 'Your home has solid documentation on file — this helps with insurance, resale value, and future planning.',
-      'Major Systems Health': 'Your heating, cooling, and water systems are in good shape — well-maintained systems are one of the strongest signs of a well-cared-for home.',
-      'Occupancy & Wear': 'Your home\'s size is well-matched to your household — lower wear means fixtures and systems last longer and cost less to maintain.',
-      'Structure Factor': 'Your home\'s structural elements are in good condition — a solid foundation protects everything built on top of it.',
-      'Roof Condition': 'Your roof is in good condition — it\'s doing its job keeping weather out and protecting your home.',
-    };
-    return positiveMap[factor] ?? 'This area is in great shape — keep doing what you\'re doing and it should stay that way.';
-  }
-  return "This factor is under review. Add more property records to unlock a more precise score explanation.";
-}
-
-function getFactorActionHint(factorName: string | undefined, status: string | undefined): string | null {
-  const factor = getDisplayFactorName(factorName);
-  const s = String(status || "");
-  const impact = getInsightImpact(status);
-  if (impact !== "negative") return null;
-  const hints: Record<string, Partial<Record<string, string>>> = {
-    "Water Heater Age": {
-      "Needs Review": "Schedule a water heater inspection — most cost $75–150.",
-      "Needs attention": "Get replacement quotes — water heaters typically run $900–2,000 installed.",
-      "Needs Inspection": "Book a plumbing inspection to assess the unit.",
-    },
-    "HVAC Age": {
-      "Needs Review": "Schedule HVAC servicing — annual tune-ups typically run $80–150.",
-      "Needs Inspection": "Have a technician assess the system before next season.",
-      "Needs attention": "Start planning HVAC replacement — systems typically cost $5,000–12,000 installed.",
-    },
-    "Property Age (Year Built)": {
-      "Needs Review": "Consider a general home inspection to surface age-related items — typically $300–500.",
-      "Needs attention": "Schedule a comprehensive inspection to identify and prioritize risks.",
-    },
-    "Roof Age": {
-      "Needs Review": "Get a roof inspection — many contractors offer free assessments.",
-      "Needs attention": "Get 2–3 replacement quotes — costs typically range $8,000–20,000.",
-    },
-    "Safety Factor": {
-      Incomplete: "Check smoke and CO detectors, fire extinguisher, and security system.",
-      "Needs Review": "Confirm all safety devices are functional and within service date.",
-    },
-    "Documents Factor": {
-      Incomplete: "Upload service records and inspection reports to improve your score.",
-      "Missing Data": "Add property documents in the Vault to unlock full factor scoring.",
-    },
-  };
-  return hints[factor]?.[s] ?? null;
-}
+// Health-factor homeowner copy (factor description, status explanation, action
+// hint, friendly status, display name) is authored once in the backend:
+// apps/backend/src/content/healthFactorCopy.ts. It arrives on each insight as
+// `insight.copy` (property.service.ts attachHealthScore). The small helpers
+// below (getUserFriendlyStatus / getInsightImpact / getDisplayFactorName)
+// remain only as a defensive fallback when `insight.copy` is absent.
+// See docs/product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md.
 
 function getFactorIcon(factorName: string | undefined) {
   const factor = String(factorName || "").toLowerCase();
@@ -1206,11 +1036,25 @@ function getSystemChecklistItems(age: number, kind: SystemKind): SystemChecklist
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type HealthInsightCopy = {
+  displayName?: string;
+  statusLabel?: string;
+  impact?: "positive" | "neutral" | "negative";
+  summary?: string;
+  explanation?: string;
+  actionHint?: string | null;
+  ctaLabel?: string;
+  mode?: "MAINTENANCE" | "DATA_GAP" | "WARRANTY_GAP" | null;
+};
+
 type HealthInsight = {
   factor?: string;
   status?: string;
   score?: number;
   details?: string[];
+  // Authored in apps/backend/src/content/healthFactorCopy.ts, attached by
+  // property.service.ts attachHealthScore.
+  copy?: HealthInsightCopy;
 };
 
 type PropertyWithHealth = {
@@ -1263,7 +1107,10 @@ function normalizeInsight(item: unknown): HealthInsight | null {
   const details = rawDetails
     .map((d) => (typeof d === "string" ? d.trim() : ""))
     .filter(Boolean);
-  return { factor, status, score, details: details.length ? details : undefined };
+  const copy = raw.copy && typeof raw.copy === "object"
+    ? (raw.copy as HealthInsightCopy)
+    : undefined;
+  return { factor, status, score, details: details.length ? details : undefined, copy };
 }
 
 // ── Inline property-record editors ──────────────────────────────────────────
@@ -1425,25 +1272,24 @@ export default function HealthInsightFocusPage() {
     (appliance) => !appliance.assetType || !appliance.installationYear,
   ).length;
   const applianceFactor = isApplianceFactor(insight?.factor);
-  const displayName = getDisplayFactorName(insight?.factor);
   // Defend against a stale health snapshot while the canonical property
   // appliance projection is already available on this response.
   const status = applianceFactor && applianceCount > 0 && insight?.status === "Missing Data"
     ? incompleteApplianceCount > 0 ? "Partial" : "Complete"
     : insight?.status;
   const score = asNumber(insight?.score) ?? 0;
-  const impact = getInsightImpact(status);
   const details = insight?.details ?? [];
-  const factorDescription = getFactorDescription(insight?.factor, status);
-  const statusExplanation = getInsightStatusExplanation(
-    status,
-    insight?.factor,
-    applianceCount,
-    incompleteApplianceCount,
-  );
-  const actionHint = getFactorActionHint(insight?.factor, status);
+
+  // Homeowner copy is authored once in the backend (healthFactorCopy.ts) and
+  // arrives on insight.copy. The get*() fallbacks cover a copy-less payload.
+  const copy = insight?.copy;
+  const impact = copy?.impact ?? getInsightImpact(status);
+  const displayName = copy?.displayName ?? getDisplayFactorName(insight?.factor);
+  const factorDescription = copy?.summary ?? `${getUserFriendlyStatus(status)} — review recommended`;
+  const statusExplanation = copy?.explanation ?? "";
+  const actionHint = copy?.actionHint ?? null;
   const primaryCta = getPrimaryCta(insight?.factor, status, propertyId);
-  const friendlyStatus = getUserFriendlyStatus(status);
+  const friendlyStatus = copy?.statusLabel ?? getUserFriendlyStatus(status);
   const healthScoreHref = `/dashboard/properties/${propertyId}/status-board`;
   const FactorIcon = getFactorIcon(insight?.factor);
 

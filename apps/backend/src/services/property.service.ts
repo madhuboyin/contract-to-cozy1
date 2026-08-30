@@ -1,7 +1,8 @@
 // apps/backend/src/services/property.service.ts
 
 import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, BasementConfiguration, Prisma, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty, Season } from '@prisma/client';
-import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
+import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util';
+import { resolveHealthFactorInsightCopy } from '../content/healthFactorCopy';
 import JobQueueService from './JobQueue.service';
 import type { PropertyApplianceDTO } from './propertyApplianceInventory.service';
 import {
@@ -354,6 +355,45 @@ async function hydrateMajorAppliancesFromInventory<T extends { id: string }>(
 // --- SCORE ATTACHMENT ---
 
 /**
+ * Attach homeowner-facing copy to each health-score insight. Pure projection —
+ * the scoring logic never sees this. Single source of truth is
+ * content/healthFactorCopy.ts, shared with the Home "Plan ahead" card producer.
+ * See docs/product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md §5.4.
+ */
+function attachHealthInsightCopy(
+    property: PropertyWithAssets,
+    insights: HealthScoreResult['insights'],
+): HealthScoreResult['insights'] {
+    const appliances = Array.isArray(property.majorAppliances) ? property.majorAppliances : [];
+    const applianceCount = appliances.length;
+    const incompleteApplianceCount = appliances.filter(
+        (a) => !a.assetType || !a.installationYear,
+    ).length;
+    const observedAt = new Date().toISOString();
+    const installYearFor = (factor: string): number | null => {
+        if (factor === 'HVAC Age') return property.hvacInstallYear ?? null;
+        if (factor === 'Water Heater Age') return property.waterHeaterInstallYear ?? null;
+        if (factor === 'Roof Age') return property.roofReplacementYear ?? null;
+        return null;
+    };
+    return insights.map((insight) => {
+        try {
+            const copy = resolveHealthFactorInsightCopy(insight.factor, insight.status, {
+                propertyId: property.id,
+                observedAt,
+                yearBuilt: property.yearBuilt ?? null,
+                installYear: installYearFor(insight.factor),
+                applianceCount,
+                incompleteApplianceCount,
+            });
+            return { ...insight, copy };
+        } catch {
+            return insight;
+        }
+    });
+}
+
+/**
  * Helper function to calculate and attach the score to a property object.
  * UPDATED: Now fetches full booking objects to support insightFactor-based suppression
  */
@@ -389,6 +429,7 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
     try {
         // UPDATED CALL: Pass full booking objects instead of just category strings
         healthScore = calculateHealthScore(property, documentCount, bookingsForScore);
+        healthScore = { ...healthScore, insights: attachHealthInsightCopy(property, healthScore.insights) };
     } catch (error) {
         logger.error({ err: error }, `CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score`);
         // Fallback to a zero score and default insights to prevent server crash

@@ -8,11 +8,14 @@ export interface HealthScoreResult {
   unlockedScore: number;
   maxBaseScore: number;
   maxExtraScore: number;
-  insights: { 
-    factor: string; 
-    status: string; 
+  insights: {
+    factor: string;
+    status: string;
     score: number;
     details?: string[]; // Optional: specific items for this insight (e.g., appliance names)
+    // Homeowner copy, attached downstream by property.service.ts attachHealthScore
+    // (never by the scoring logic itself). See content/healthFactorCopy.ts.
+    copy?: import('../content/healthFactorCopy').HealthFactorInsightCopy;
   }[];
   ctaNeeded: boolean;
 }

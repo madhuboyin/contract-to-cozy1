@@ -1,8 +1,8 @@
 # Home Action Health-Factor Copy FRD and Implementation Plan
 
-Version: 1.0
+Version: 1.1
 Date: 2026-08-29
-Status: Approved — Phase 1 implementing
+Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped · Phase 3 not scheduled
 Owner: Product + Engineering
 Related: `HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md` (§8.1 Canonical Attention Authority, row "Property health insight"), commits `b9efddb2` / `25dd4c45` / `56bae882` (card-humanization pass)
 
@@ -233,15 +233,29 @@ Key facts by mode:
 The `HEALTH_INSIGHT_STATUSES` filter is updated to use `normalizeHealthStatus` so
 `'Needs Attention'` matches.
 
-### 5.4 Focus page consumes the same copy (Phase 2)
+### 5.4 Focus page consumes the same copy (Phase 2 — shipped)
 
-`property.service.ts` `getPropertyById` enriches each `healthScore.insights[]` entry with a
-`copy` object (`resolveHealthFactorCopy` + `displayHealthFactorName` +
-`friendlyHealthStatus`). `focus/health/[factor]/page.tsx` reads `insight.copy.*` and its 6
-local dicts are deleted. `dashboard/page.tsx` helpers switch to `insight.copy.headline` /
-`displayName`.
+`property.service.ts` `attachHealthScore` calls `attachHealthInsightCopy`, which enriches
+each `healthScore.insights[]` entry with a `copy: HealthFactorInsightCopy`
+(`{ displayName, statusLabel, impact, summary, explanation, actionHint, ctaLabel, mode }`)
+via the new `resolveHealthFactorInsightCopy(factor, status, ctx)` — one resolver behind
+both the Home card (negative/card states → the `HEALTH_FACTOR_COPY` card entry) and the
+non-actionable states (`HEALTH_FACTOR_STATE_COPY` + fallbacks, migrated from the focus
+page's `watchMap` / `positiveMap` / `getFactorDescription`). It never throws.
 
-Phase 2 is separately committable and lower-urgency; Phase 1 fixes the user-visible feed.
+`focus/health/[factor]/page.tsx` reads `insight.copy.*` for the factor description, status
+explanation, action hint, friendly status, and display name. `getFactorDescription`,
+`getInsightStatusExplanation`, and `getFactorActionHint` are **deleted** (~170 lines).
+`getUserFriendlyStatus` / `getInsightImpact` / `getDisplayFactorName` remain only as a
+`?? fallback` for a `copy`-less payload, and because `getPrimaryCta` (href routing, a UI
+concern) still uses the display-name map.
+
+`dashboard/page.tsx`'s health-insight helpers (`getCompactHealthInsightTitle`,
+`buildHealthInsightActionMeta`, the local `resolveUrgentActionHref`) and
+`lib/dashboard/urgentActions.ts` were found to be **dead code** — `dashboard/page.tsx`
+computes `primaryActionHero` / `heroNarrative` into an unused `const` and every render
+path returns `<UnifiedHomeSurface>`; `lib/dashboard/urgentActions.ts` is imported only by
+its own test. Left untouched (separate dead-code cleanup); no user-visible copy there.
 
 ---
 
@@ -259,7 +273,8 @@ Phase 2 is separately committable and lower-urgency; Phase 1 fixes the user-visi
 | HFC-008 | MAINTENANCE, DATA_GAP, and WARRANTY_GAP modes are visually and behaviourally distinct (headline verb, CTA, key facts, destination). |
 | HFC-009 | The health-insight Home Action keeps its existing id, `lineageId`, `sourceVersion`, evidence, governance tier, priority (`PLAN`), and allowed feedback controls. |
 | HFC-010 | `HEALTH_FACTOR_REVIEW` actions pass `isGroundedHomeAction` and `evaluateHomeActionPresentationEligibility`. |
-| HFC-011 | (Phase 2) `healthScore.insights[]` in the property read carries a `copy` object; the `focus/health/[factor]` page and `dashboard/page.tsx` consume it and hold no local copy dictionaries. |
+| HFC-011 | (Phase 2 — done) `healthScore.insights[]` in the property read carries a `copy` object; `focus/health/[factor]/page.tsx` consumes it and holds no factor-description / status-explanation / action-hint dictionaries. `dashboard/page.tsx` / `urgentActions.ts` health-insight copy is dead code (unrendered) and out of scope. |
+| HFC-012 | (Phase 2) A `copy`-less insight payload (old cache, direct `calculateHealthScore` callers) still renders — the focus page keeps `?? getUserFriendlyStatus / getInsightImpact / getDisplayFactorName` fallbacks; `attachHealthInsightCopy` failures are swallowed. |
 
 ---
 
@@ -317,12 +332,26 @@ today.
      now surfaces, grounding passes.
 7. Update this FRD status to "Phase 1 shipped".
 
-### Phase 2 — Focus page + dashboard consolidation (follow-up commit)
+**Shipped `4d6bdfee`.**
 
-8. `property.service.ts` — enrich `healthScore.insights[]` with `copy`.
-9. `focus/health/[factor]/page.tsx` — consume `insight.copy`; delete the 6 local dicts.
-10. `dashboard/page.tsx` — consume `insight.copy` / `displayName`.
-11. Delete now-dead frontend helpers; update their tests.
+### Phase 2 — Focus page consolidation (shipped)
+
+8. `healthFactorCopy.ts` — add `actionHint` / `explanation` to card entries;
+   `HEALTH_FACTOR_STATE_COPY` (positive / watch / in-progress, migrated from the focus
+   page); `healthFactorImpact`; `HealthFactorInsightCopy` + `resolveHealthFactorInsightCopy`
+   (one resolver, both surfaces; handles the stale-appliance-snapshot remap).
+9. `propertyScore.util.ts` — type-only: `insights[].copy?: HealthFactorInsightCopy`
+   (scoring logic untouched).
+10. `property.service.ts` — `attachHealthInsightCopy` in `attachHealthScore`; try/catch so
+    a copy failure never breaks the property read.
+11. `focus/health/[factor]/page.tsx` — consume `insight.copy`; delete
+    `getFactorDescription` / `getInsightStatusExplanation` / `getFactorActionHint`
+    (~170 lines); `HealthInsight` type + `normalizeInsight` carry `copy`.
+12. Tests: `healthFactorCopy.test.js` extended — `resolveHealthFactorInsightCopy` impact
+    routing, actionHint/cost, stale-appliance remap, `healthFactorImpact`.
+
+`dashboard/page.tsx` health-insight helpers and `lib/dashboard/urgentActions.ts` are dead
+code (see §5.4) — not touched; a separate dead-code cleanup, not a copy concern.
 
 ### Phase 3 — Optional, not scheduled
 

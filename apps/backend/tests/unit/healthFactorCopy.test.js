@@ -7,6 +7,8 @@ const {
   HEALTH_FACTOR_COPY,
   CARD_PRODUCING_HEALTH_STATUSES,
   resolveHealthFactorCopy,
+  resolveHealthFactorInsightCopy,
+  healthFactorImpact,
   healthFactorKeyFacts,
   displayHealthFactorName,
   friendlyHealthStatus,
@@ -90,6 +92,62 @@ test('friendlyHealthStatus never leaks a raw Needs* enum', () => {
     assert.notEqual(friendly, s);
     assert.doesNotMatch(friendly, /^Needs /);
   }
+});
+
+test('resolveHealthFactorInsightCopy (Phase 2): negatives carry the card copy, positives carry encouragement, never a raw enum', () => {
+  const cases = [
+    ['Water Heater Age', 'Needs Review', 'negative'],
+    ['HVAC Age', 'Needs Inspection', 'negative'],
+    ['Exterior', 'Needs Attention', 'negative'],
+    ['Property Age (Year Built)', 'Missing Data', 'negative'],
+    ['Water Heater Age', 'Aging', 'neutral'],
+    ['HVAC Age', 'Good', 'positive'],
+    ['Systems Factor', 'Modern', 'positive'],
+    ['Documents', 'Complete', 'positive'],
+    ['Dishwasher aging', 'Needs Warranty', 'negative'],
+  ];
+  for (const [factor, status, expectedImpact] of cases) {
+    const c = resolveHealthFactorInsightCopy(factor, status, { ...CTX, installYear: 2013, assetName: 'Dishwasher' });
+    assert.equal(c.impact, expectedImpact, `${factor}/${status}`);
+    assert.ok(c.displayName && c.statusLabel && c.summary && c.explanation);
+    assert.doesNotMatch(
+      [c.displayName, c.statusLabel, c.summary, c.explanation, c.actionHint ?? ''].join(' | '),
+      /Requires resolution|Status:|Needs Review\b|Needs Inspection\b|Needs Attention\b/,
+    );
+    if (expectedImpact === 'negative') {
+      assert.ok(['MAINTENANCE', 'DATA_GAP', 'WARRANTY_GAP'].includes(c.mode));
+      assert.match(c.explanation, /\w+/);
+    } else {
+      assert.equal(c.mode, null);
+      assert.equal(c.actionHint, null);
+    }
+  }
+});
+
+test('resolveHealthFactorInsightCopy: maintenance negatives expose an actionHint with a rough cost', () => {
+  const wh = resolveHealthFactorInsightCopy('Water Heater Age', 'Needs Review', { ...CTX, installYear: 2013 });
+  assert.match(wh.actionHint, /\$/);
+  const exterior = resolveHealthFactorInsightCopy('Exterior', 'Needs Attention', CTX);
+  assert.match(exterior.actionHint, /drain|downspout|grad/i);
+});
+
+test('resolveHealthFactorInsightCopy: a stale "Missing Data" appliance snapshot with records present reads as recorded', () => {
+  const c = resolveHealthFactorInsightCopy('Appliances', 'Missing Data', {
+    ...CTX, applianceCount: 3, incompleteApplianceCount: 1,
+  });
+  assert.equal(c.impact, 'neutral');
+  assert.match(c.summary, /3 appliances/);
+  assert.match(c.explanation, /installation year/i);
+});
+
+test('healthFactorImpact classifies the score-util statuses', () => {
+  assert.equal(healthFactorImpact('Needs Attention'), 'negative');
+  assert.equal(healthFactorImpact('Needs attention'), 'negative');
+  assert.equal(healthFactorImpact('Missing Data'), 'negative');
+  assert.equal(healthFactorImpact('Aging'), 'neutral');
+  assert.equal(healthFactorImpact('Action Pending'), 'neutral');
+  assert.equal(healthFactorImpact('Good'), 'positive');
+  assert.equal(healthFactorImpact('Modern'), 'positive');
 });
 
 test('key facts lead with Current status and never include Confidence telemetry', () => {
