@@ -188,14 +188,15 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
         decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
         scoringSkillId: 'repair-replace',
         requiredFacts: Object.freeze(['SYSTEMS', 'INVENTORY', 'MAINTENANCE', 'SAFETY'] as const),
-        supportedDocuments: Object.freeze(['hvac-nameplate-photo']),
+        supportedDocuments: Object.freeze(['hvac-nameplate-photo', 'hvac-technician-assessment', 'hvac-written-estimate']),
         professionalBoundary: 'licensed HVAC technician',
-        evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.0.0',
+        evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.1.0',
       }),
       decisionDefinitionVersion: '1.0',
       agentDefinitions: Object.freeze([
         Object.freeze({ version: '1.0.0', digest: 'be4e9d0cdfe501aa55b3d473a558a9d40b9a881c29cf40b03da66f13bd1fb2aa' }),
         Object.freeze({ version: '1.1.0', digest: '0ea576a2635b5b1446079173b4c5f434568ffc2e9daa5c22ff325bc2246ce3eb' }),
+        Object.freeze({ version: '1.2.0', digest: 'f4b71fd75489107102e16daf3dd3778e1ae540241ed8e6c63d055fc9cec78228' }),
       ]),
     },
     gateReviews: allGates((gate) => {
@@ -211,7 +212,7 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
         case 'PROFESSIONAL_BOUNDARY':
           return passed('"licensed HVAC technician"; NOT_A_TECHNICIAN_ASSESSMENT boundary code.', '2026-08-27');
         case 'EVALUATION_SUITE':
-          return passed('agent-hvac-repair-replace-eval@1.0.0 (IPD-005), checked in as hvacSpecialistEvaluation.ts + test.', '2026-08-29');
+          return passed('agent-hvac-repair-replace-eval@1.1.0 (IPD-005), checked in as hvacSpecialistEvaluation.ts + explicit resume and low-confidence assertions.', '2026-08-30');
         case 'PROMOTION_AND_LINEAGE_PATH':
           return passed('repair-replace: lineage prefix -> HVAC_REPAIR_REPLACE family; hvacDecisionFamilyAdapter; HomeAction + work-item lineage.', '2026-08-29');
         default:

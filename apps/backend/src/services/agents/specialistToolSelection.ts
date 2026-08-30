@@ -60,6 +60,7 @@ export function selectNextSpecialistStep(
   observation: SpecialistObservation,
   ledger: SpecialistBudgetLedger,
   budgets: SpecialistBudgets,
+  enforceLowConfidenceEscalation = false,
 ): SpecialistStep {
   if (observation.ambiguous) {
     return { kind: 'TERMINAL', phase: 'ABSTAINED', abstentionReason: 'AMBIGUOUS_DECISION_THREAD' };
@@ -93,6 +94,27 @@ export function selectNextSpecialistStep(
 
   if (observation.verdict === null) {
     return { kind: 'TERMINAL', phase: 'ABSTAINED', abstentionReason: 'UNSUPPORTED_VERDICT' };
+  }
+
+  // The immutable definition declares ASK_HOMEOWNER on low confidence. Give
+  // the homeowner one bounded opportunity to confirm the most consequential
+  // structured input; if the canonical snapshot remains LOW afterward, fail
+  // closed instead of presenting it as recommendation-ready.
+  if (enforceLowConfidenceEscalation && observation.confidenceLabel === 'LOW') {
+    if ((ledger.toolAttempts.REQUEST_CONTEXT ?? 0) === 0) {
+      return {
+        kind: 'PAUSE',
+        tool: 'REQUEST_CONTEXT',
+        phase: 'NEEDS_CONTEXT',
+        outstanding: [{
+          key: 'hvac.condition',
+          label: 'Confirm the current condition of the HVAC system',
+          correctionPath: 'inventory-item:hvac',
+          kind: 'FACT',
+        }],
+      };
+    }
+    return { kind: 'TERMINAL', phase: 'ABSTAINED', abstentionReason: 'LOW_CONFIDENCE' };
   }
 
   // SCORE is satisfied by the authoritative snapshot; EXPLAIN composes the

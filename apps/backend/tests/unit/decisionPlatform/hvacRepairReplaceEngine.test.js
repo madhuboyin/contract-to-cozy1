@@ -95,9 +95,11 @@ test('unknown age, condition, and replacement cost are disclosed as limitations,
   assert.equal(result.confidenceBreakdown.label, 'LOW');
 });
 
-test('every result discloses the standing no-technician-assessment limitation (FRD §12.3)', () => {
+test('the technician-assessment limitation clears only when qualifying evidence is on file', () => {
   const result = evaluateHvacRepairReplace(baseContext());
   assert.ok(result.limitationCodes.includes('NO_TECHNICIAN_ASSESSMENT_ON_FILE'));
+  const withEvidence = evaluateHvacRepairReplace(baseContext({ technicianAssessmentOnFile: true }));
+  assert.ok(!withEvidence.limitationCodes.includes('NO_TECHNICIAN_ASSESSMENT_ON_FILE'));
 });
 
 test('confidence is HIGH only when age, condition, replacement cost, and ownership horizon are all known', () => {

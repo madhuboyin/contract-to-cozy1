@@ -9,6 +9,7 @@ const {
   AgentRuntimeCasConflictError,
   AgentRuntimeDisabledError,
   AgentRuntimeStateError,
+  resolveAgentDeploymentRevision,
 } = require('../../src/services/agents/agentRuntime.service.ts');
 const {
   validateAgentTriggerHandlers,
@@ -132,6 +133,64 @@ test('GET_STATUS restores the latest terminal bounded status instead of returnin
   assert.equal(result.status.phase, 'RECOMMENDATION_READY');
   assert.equal(result.status.runId, 'run-done');
   assert.equal(result.status.verdict, 'REPLACE');
+});
+
+test('an expired RESUME_IN_PROGRESS claim restores the paused session instead of stranding it', async () => {
+  const now = new Date('2026-08-30T12:00:00.000Z');
+  const status = {
+    agentId: 'hvac-repair-replace-specialist', agentVersion: '1.0.0', phase: 'NEEDS_CONTEXT',
+    decisionThreadId: 'thr-1', currentRecommendationSnapshotId: 'snap-1', verdict: null,
+    confidenceLabel: 'LOW', outstanding: [], explanation: [], abstentionReason: null,
+  };
+  let recoveredInput = null;
+  const result = await invokeAgentRuntime({ ...BASE, operation: 'START_OR_RESUME' }, runtimeDeps({
+    now: () => now,
+    authorize: async () => true,
+    resolvePausedRun: async () => pausedRun({
+      casVersion: 3,
+      expectedEvent: 'RESUME_IN_PROGRESS',
+      serializedState: { status, ledger: {}, resumeClaim: { reservationId: 'res-dead', previousExpectedEvent: 'SUBMIT_CONTEXT' } },
+    }),
+    resolveReservation: async () => ({ id: 'res-dead', resultRunId: null, leaseExpiresAt: new Date(now.getTime() - 1) }),
+    recoverPausedState: async (input) => { recoveredInput = input; return { swapped: true, casVersion: 4 }; },
+    resolveRunById: async () => ({ id: 'run-1', statusJson: status }),
+    resolveStateByRun: async () => ({ runId: 'run-1', casVersion: 4, resolvedAt: null, serializedStateJson: { status } }),
+  }));
+
+  assert.equal(recoveredInput.expectedEvent, 'SUBMIT_CONTEXT');
+  assert.equal(result.status.phase, 'NEEDS_CONTEXT');
+  assert.equal(result.status.casVersion, 4);
+});
+
+test('DISPUTE_INPUT accepts only canonical keys and preserves the bounded note for hashing', async () => {
+  const terminal = {
+    id: 'run-done', correlationId: 'corr-done', agentVersion: '1.0.0', outcome: 'COMPLETED',
+    statusJson: {
+      agentId: 'hvac-repair-replace-specialist', agentVersion: '1.0.0', phase: 'RECOMMENDATION_READY',
+      decisionThreadId: 'thr-1', currentRecommendationSnapshotId: 'snap-1', verdict: 'REPLACE',
+      confidenceLabel: 'HIGH', outstanding: [], explanation: [], abstentionReason: null,
+    },
+  };
+  let audit = null;
+  const deps = runtimeDeps({
+    authorize: async () => true,
+    resolvePausedRun: async () => null,
+    resolveLatestRun: async () => terminal,
+    recordDispute: async (input) => { audit = input; },
+  });
+  await invokeAgentRuntime({ ...BASE, operation: 'DISPUTE_INPUT', dispute: { key: 'hvac.condition', note: 'The inspection says good.' } }, deps);
+  assert.equal(audit.input.key, 'hvac.condition');
+  assert.equal(audit.input.note, 'The inspection says good.');
+  await assert.rejects(
+    invokeAgentRuntime({ ...BASE, operation: 'DISPUTE_INPUT', dispute: { key: 'arbitrary.secret' } }, deps),
+    /supported Specialist input key/,
+  );
+});
+
+test('deployment provenance fails closed when no concrete revision is present', () => {
+  assert.throws(() => resolveAgentDeploymentRevision({}), /concrete deployment revision/);
+  assert.throws(() => resolveAgentDeploymentRevision({ DEPLOYMENT_REVISION: 'UNSPECIFIED' }), /concrete deployment revision/);
+  assert.equal(resolveAgentDeploymentRevision({ GIT_SHA: 'deadbeef' }), 'deadbeef');
 });
 
 test('trigger-handler parity: every AVAILABLE ref has a concrete handler and vice versa', () => {

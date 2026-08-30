@@ -9,7 +9,7 @@
 
 import type { SpecialistThreadState } from './hvacRepairReplaceSpecialist.service';
 
-export const HVAC_SPECIALIST_EVAL_SUITE_ID = 'agent-hvac-repair-replace-eval@1.0.0';
+export const HVAC_SPECIALIST_EVAL_SUITE_ID = 'agent-hvac-repair-replace-eval@1.1.0';
 
 export type EvalExpectedPhase = 'RECOMMENDATION_READY' | 'NEEDS_CONTEXT' | 'NEEDS_DOCUMENT' | 'ABSTAINED';
 
@@ -21,6 +21,8 @@ export interface HvacSpecialistEvalCase {
   expectedPhase: EvalExpectedPhase;
   expectedVerdict?: 'REPAIR' | 'REPLACE' | 'MONITOR';
   expectedAbstentionReason?: string;
+  /** Run another invocation with the prior ledger and the next port state. */
+  resumeAfterPause?: boolean;
   /** This case must complete without any LLM invocation (all v1 cases: true). */
   deterministic: true;
 }
@@ -72,6 +74,18 @@ export const HVAC_SPECIALIST_EVAL_CASES: readonly HvacSpecialistEvalCase[] = [
     deterministic: true,
   },
   {
+    id: 'low-confidence-confirm-then-abstain',
+    description: 'A supported but LOW-confidence verdict asks once for confirmation, then fails closed if confidence remains low.',
+    portStates: [
+      state({ verdict: 'REPAIR', confidenceLabel: 'LOW', reasonCodes: ['SYSTEM_RELATIVELY_NEW'] }),
+      state({ verdict: 'REPAIR', confidenceLabel: 'LOW', reasonCodes: ['SYSTEM_RELATIVELY_NEW'] }),
+    ],
+    expectedPhase: 'ABSTAINED',
+    expectedAbstentionReason: 'LOW_CONFIDENCE',
+    resumeAfterPause: true,
+    deterministic: true,
+  },
+  {
     id: 'needs-condition',
     description: 'Condition unknown — ask the homeowner.',
     portStates: [state({ verdict: null, confidenceLabel: 'LOW', limitationCodes: ['CONDITION_UNKNOWN'] })],
@@ -92,7 +106,9 @@ export const HVAC_SPECIALIST_EVAL_CASES: readonly HvacSpecialistEvalCase[] = [
       state({ verdict: null, confidenceLabel: 'LOW', limitationCodes: ['INSTALL_DATE_UNKNOWN'] }),
       state({ verdict: 'REPLACE', confidenceLabel: 'MEDIUM', reasonCodes: ['SYSTEM_AT_OR_BEYOND_TYPICAL_LIFESPAN'] }),
     ],
-    expectedPhase: 'NEEDS_CONTEXT',
+    expectedPhase: 'RECOMMENDATION_READY',
+    expectedVerdict: 'REPLACE',
+    resumeAfterPause: true,
     deterministic: true,
   },
   {
@@ -125,19 +141,19 @@ export const HVAC_SPECIALIST_EVAL_CASES: readonly HvacSpecialistEvalCase[] = [
  * The passing bar. `abstentionBand` is the acceptable fraction of the corpus
  * that ends in ABSTAINED (too low = the loop is guessing; too high = it is
  * useless). `minDeterministicCompletionRate` is the fraction of
- * non-abstain-designed cases that reach their expected non-abstain phase with
- * zero LLM invocations.
+ * recommendation-designed cases that reach RECOMMENDATION_READY with zero
+ * LLM invocations. A pause alone is not counted as completion.
  */
 export const HVAC_SPECIALIST_EVAL_THRESHOLDS = Object.freeze({
-  contractVersion: '1.0.0',
-  fixtureCorpusVersion: 'hvac-specialist-fixtures@1.0.0',
+  contractVersion: '1.1.0',
+  fixtureCorpusVersion: 'hvac-specialist-fixtures@1.1.0',
   baselineMeasurement: {
-    sampleSize: 10,
-    abstentionRate: 0.3,
+    sampleSize: 11,
+    abstentionRate: 4 / 11,
     deterministicCompletionRate: 1.0,
     llmInvocationRate: 0,
   },
-  sampleSizeMinimum: 10,
+  sampleSizeMinimum: 11,
   measurementWindow: 'CHECKED_IN_FIXTURE_CORPUS_PER_CI_RUN',
   failureAction: 'FAIL_CI_AND_KEEP_AGENT_BELOW_EVAL_APPROVED',
   missingBaselineStatus: 'NOT_MEASURED',

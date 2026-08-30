@@ -31,7 +31,7 @@ export const HVAC_ESTIMATE_FAMILY_ID = 'HVAC_REPAIR_REPLACE';
 // quote", "warranty applicability", "confirmed ownership horizon",
 // "registered replacement cost range and freshness" (optional, degrade on
 // absence), and "explicit technician-assessment absence as a limitation"
-// (always disclosed — no technician-assessment integration exists yet).
+// (cleared only by linked inspection/estimate evidence for this HVAC item).
 export interface HvacDecisionContext {
   propertyId: string;
   inventoryItemId: string;
@@ -43,6 +43,8 @@ export interface HvacDecisionContext {
   warrantyActive: boolean;
   currentQuoteAmountCents: number | null;
   currentQuoteVendor: string | null;
+  /** A linked, non-rejected inspection report or estimate for this system. */
+  technicianAssessmentOnFile?: boolean;
   // A recorded single value from the homeowner's own record, not a sourced
   // "range" — FRD §12.3 asks for a registered range with freshness, which no
   // data source in this codebase provides yet (see decisionContextContracts.ts
@@ -126,9 +128,9 @@ export function evaluateHvacRepairReplace(
   weights: HvacEngineWeights = DEFAULT_HVAC_ENGINE_WEIGHTS,
 ): HvacRepairReplaceResult {
   const reasonCodes: string[] = [];
-  // FRD §12.3: always disclosed for the first slice — no technician
-  // assessment integration exists yet.
-  const limitationCodes: string[] = ['NO_TECHNICIAN_ASSESSMENT_ON_FILE'];
+  const limitationCodes: string[] = context.technicianAssessmentOnFile
+    ? []
+    : ['NO_TECHNICIAN_ASSESSMENT_ON_FILE'];
   const knownFactors: string[] = [];
   const unknownFactors: string[] = [];
 
@@ -257,6 +259,15 @@ export async function composeHvacDecisionContext(
         id: true, name: true, condition: true, installedOn: true, purchasedOn: true,
         replacementCostCents: true, warrantyId: true,
         warranty: { select: { expiryDate: true } },
+        documents: {
+          where: {
+            deletedAt: null,
+            verificationStatus: { not: 'REJECTED' },
+            type: { in: ['INSPECTION_REPORT', 'ESTIMATE'] },
+          },
+          select: { id: true },
+          take: 1,
+        },
       },
     }),
     contract.requiredFactLatencyMs,
@@ -316,6 +327,7 @@ export async function composeHvacDecisionContext(
       warrantyActive: Boolean(item.warranty?.expiryDate && item.warranty.expiryDate.getTime() > Date.now()),
       currentQuoteAmountCents: bestQuote?.amount ? Math.round(Number(bestQuote.amount) * 100) : null,
       currentQuoteVendor: bestQuote?.vendorName ?? null,
+      technicianAssessmentOnFile: item.documents.length > 0,
       recordedReplacementCostCents: item.replacementCostCents ?? null,
       ownershipHorizonMonths: preferences.ownershipHorizonMonths,
       repairReplaceApproach: preferences.repairReplaceApproach,

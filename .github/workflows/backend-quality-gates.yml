@@ -80,6 +80,9 @@ jobs:
       - name: Phase 4B specialist admission and boundary enforcement
         run: npm run test:phase4b
 
+      - name: Phase 2 HVAC specialist evaluation gate
+        run: node --test tests/agents/hvacSpecialistEvaluation.test.js
+
       - name: Integration smoke
         run: npm run test:integration
 

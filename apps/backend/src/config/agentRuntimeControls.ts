@@ -36,6 +36,10 @@ export const AGENT_RUNTIME_RETENTION_BOUNDS = Object.freeze({
   invocationRetentionDays: { min: 7, max: 180, default: 30 },
   stateGraceDays: { min: 1, max: 30, default: 7 },
   reservationRetentionDays: { min: 1, max: 30, default: 7 },
+  // Active definitions permit up to 30 seconds of execution. A lease must
+  // outlive that budget plus persistence overhead so a second owner cannot
+  // begin canonical work while the first owner is still within policy.
+  reservationLeaseMs: { min: 60_000, max: 600_000, default: 120_000 },
 });
 
 export function readAgentRuntimeControls(env: NodeJS.ProcessEnv = process.env): AgentRuntimeControls {
@@ -45,7 +49,12 @@ export function readAgentRuntimeControls(env: NodeJS.ProcessEnv = process.env): 
     invocationRetentionDays: clampedIntegerEnv(env.AGENT_INVOCATION_RETENTION_DAYS, b.invocationRetentionDays.default, b.invocationRetentionDays.min, b.invocationRetentionDays.max),
     stateGraceDays: clampedIntegerEnv(env.AGENT_STATE_GRACE_DAYS, b.stateGraceDays.default, b.stateGraceDays.min, b.stateGraceDays.max),
     reservationRetentionDays: clampedIntegerEnv(env.AGENT_RESERVATION_RETENTION_DAYS, b.reservationRetentionDays.default, b.reservationRetentionDays.min, b.reservationRetentionDays.max),
-    reservationLeaseMs: clampedIntegerEnv(env.AGENT_RESERVATION_LEASE_MS, 120_000, 10_000, 600_000),
+    reservationLeaseMs: clampedIntegerEnv(
+      env.AGENT_RESERVATION_LEASE_MS,
+      b.reservationLeaseMs.default,
+      b.reservationLeaseMs.min,
+      b.reservationLeaseMs.max,
+    ),
     purgeBatchSize: clampedIntegerEnv(env.AGENT_RUNTIME_PURGE_BATCH_SIZE, 500, 100, 2_000),
   };
 }

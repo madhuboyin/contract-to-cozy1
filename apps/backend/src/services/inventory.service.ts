@@ -658,13 +658,10 @@ export class InventoryService {
 
     // Ask Intelligence FRD §10.4 correction/invalidation flow: a canonical
     // fact this item's active Decision Thread(s) depend on just changed.
-    // Non-blocking, matching the twin-refresh/lifespan-recalc pattern above
-    // -- the correction has already been durably written; marking dependent
-    // threads stale is a side effect, not part of this write's own success.
+    // The Specialist may recompute immediately after this method resolves, so
+    // staleness is part of the correction contract and must be visible first.
     if (existing.category === 'HVAC' && ['condition', 'installedOn', 'purchasedOn', 'warrantyId', 'replacementCostCents'].some((field) => field in patch)) {
-      markThreadStaleOnFactCorrection(propertyId, itemId, 'HVAC_ITEM_FACT_CORRECTED').catch((err) => {
-        logger.error({ err }, '[INVENTORY_UPDATE] Decision thread staleness marking failed (non-blocking)');
-      });
+      await markThreadStaleOnFactCorrection(propertyId, itemId, 'HVAC_ITEM_FACT_CORRECTED');
     }
 
     return updated;
@@ -739,7 +736,7 @@ export class InventoryService {
     // Ensure item belongs to property
     const item = await prisma.inventoryItem.findFirst({
       where: { id: itemId, propertyId },
-      select: { id: true },
+      select: { id: true, category: true },
     });
     if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
 
@@ -767,13 +764,16 @@ export class InventoryService {
       'Document evidence was linked to a home system.',
       { sourceReferenceIds: [itemId] },
     ).catch((err) => logger.error({ err }, '[INVENTORY_DOCUMENT_LINK] Twin refresh enqueue failed'));
+    if (item.category === 'HVAC') {
+      await markThreadStaleOnFactCorrection(propertyId, itemId, 'HVAC_DOCUMENT_EVIDENCE_LINKED');
+    }
     return updated;
   }
 
   async unlinkDocument(propertyId: string, itemId: string, documentId: string) {
     const item = await prisma.inventoryItem.findFirst({
       where: { id: itemId, propertyId },
-      select: { id: true },
+      select: { id: true, category: true },
     });
     if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
 
@@ -792,6 +792,9 @@ export class InventoryService {
       'Document evidence was removed from a home system.',
       { sourceReferenceIds: [itemId] },
     ).catch((err) => logger.error({ err }, '[INVENTORY_DOCUMENT_UNLINK] Twin refresh enqueue failed'));
+    if (item.category === 'HVAC') {
+      await markThreadStaleOnFactCorrection(propertyId, itemId, 'HVAC_DOCUMENT_EVIDENCE_REMOVED');
+    }
   }
 
   // ---------------- Import Batches ----------------

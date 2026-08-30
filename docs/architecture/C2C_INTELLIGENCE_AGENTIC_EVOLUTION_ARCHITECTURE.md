@@ -944,7 +944,7 @@ interface RepairReplaceProfile {
 }
 
 const REPAIR_REPLACE_PROFILES: readonly RepairReplaceProfile[] = [
-  { profileId: "HVAC", eligibleCategories: ["HVAC"], decisionDefinitionId: "HVAC_REPAIR_REPLACE", scoringSkillId: "hvac-repair-replace", requiredFacts: [/* ... */], supportedDocuments: ["hvac-nameplate-photo"], professionalBoundary: "licensed HVAC technician", evaluationSuiteId: "hvac-repair-replace-eval" },
+  { profileId: "HVAC", eligibleCategories: ["HVAC"], decisionDefinitionId: "HVAC_REPAIR_REPLACE", scoringSkillId: "hvac-repair-replace", requiredFacts: [/* ... */], supportedDocuments: ["hvac-nameplate-photo", "hvac-technician-assessment", "hvac-written-estimate"], professionalBoundary: "licensed HVAC technician", evaluationSuiteId: "hvac-repair-replace-eval" },
   { profileId: "GENERIC_APPLIANCE", eligibleCategories: ["APPLIANCE"], decisionDefinitionId: "APPLIANCE_REPAIR_REPLACE", scoringSkillId: "replace-repair-analysis", requiredFacts: [/* ... */], supportedDocuments: [], professionalBoundary: "general appliance repair", evaluationSuiteId: "appliance-repair-replace-eval" },
 ];
 
@@ -1486,6 +1486,8 @@ sequenceDiagram
 | **Exit criteria** | Every pair projected from the `ARD-004` exact declared ∪ authorized-observed capability universe has an explicit determination; declared-only pairs remain visible; an observed exact capability missing from its descriptor fails certification even if its coarse pair is covered; a zero-row database cannot pass vacuously; manifest validation rejects stale/contradictory/unknown entries; run creation is idempotent and terminalization is CAS-protected; reconciliation and terminal run recording are atomic; complete runs alone retire removed keys; interrupted runs fail and restart globally without cursor-only continuation; a `REVIEW_REQUIRED` finding closes only after both rule and manifest are authored (§11.3)—with no automated promotion |
 
 ### Phase 2 — HVAC Specialist Agent (HVAC-only — `GENERIC_APPLIANCE` moved to Phase 4)
+
+**Implementation closure (2026-08-30): complete.** The runtime now commits each immutable run episode, reservation ownership, state transition, and bounded invocation audit atomically; fences reclaimed reservations by correlation; recovers abandoned resume claims; rejects missing deployment provenance; and enforces the low-confidence and actual-cost boundaries. The homeowner flow supports fact submission, document upload/attachment/resume, and bounded input disputes without stale mutation responses. The versioned evaluation contract performs real pause/resume and is an explicit CI gate.
 
 A prior draft shipped the `GENERIC_APPLIANCE` profile, a new `APPLIANCE_REPAIR_REPLACE` decision family, and its adapter in this same phase, while naming the phase "HVAC Specialist Agent" and writing exit criteria that validate HVAC only — a scope/exit-criteria mismatch with no generic-appliance tests to back the extra scope. Fixed: this phase is HVAC-only, full stop. §12.7's full decision-platform-family build-out for `APPLIANCE_REPAIR_REPLACE` (new `DecisionDefinitionId`, `DECISION_DEFINITIONS` entry, `DecisionContextContract`, `applianceDecisionFamilyAdapter`, the bridge from `ReplaceRepairAnalysis` to `RecommendationSnapshot`) moves to Phase 4, where it belongs as the first concrete instance of "add a profile," not folded into the phase that proves the agent runtime works at all.
 

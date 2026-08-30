@@ -20,25 +20,24 @@ import { getAgentDefinition } from './agentDefinitionRegistry';
 import { digestAgentDefinition } from './agentRegistryValidation';
 import {
   claimAgentRunReservation,
+  commitAgentRunEpisode,
   getAgentRunById,
+  getAgentRunReservationById,
   getLatestAgentRunForSubject,
-  writeTerminalAgentRun,
 } from './agentRunRepository';
 import {
   compareAndSwapAgentState,
-  createAgentState,
   loadAgentStateByRun,
   resolveAgentState,
 } from './agentStateRepository';
-import { recordLlmInvocation, recordToolInvocation } from './agentInvocationAudit.service';
+import { recordToolInvocation } from './agentInvocationAudit.service';
 import type { NarrationProvider } from './agentLlmPurpose.contract';
 import type { AgentPropertyContextReader } from './agentPropertyContext.service';
-import type { PendingLlmInvocation, PendingToolInvocation } from './agentRuntime.contract';
 import { recordAgentOperation, recordAgentRunOutcome } from './agentMetrics.service';
 import { createSpecialistThreadPort, runHvacSpecialist, type SpecialistThreadPort } from './hvacRepairReplaceSpecialist.service';
 import { applyHvacSpecialistContextIntake } from './hvacSpecialistContextIntake';
 import { REPAIR_REPLACE_PROFILES, type RepairReplaceProfile } from './repairReplaceProfileRegistry';
-import { ACCEPTED_INTAKE_KEYS } from './specialistTypedClaims';
+import { ACCEPTED_INTAKE_KEYS, DISPUTABLE_INPUT_KEYS } from './specialistTypedClaims';
 import type {
   AgentRunStatusProjection,
   AgentRuntimeInvocation,
@@ -67,8 +66,12 @@ function asJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
-function deploymentRevision(): string {
-  return process.env.DEPLOYMENT_REVISION ?? process.env.RENDER_GIT_COMMIT ?? process.env.GIT_SHA ?? 'UNSPECIFIED';
+export function resolveAgentDeploymentRevision(env: NodeJS.ProcessEnv = process.env): string {
+  const revision = (env.DEPLOYMENT_REVISION ?? env.RENDER_GIT_COMMIT ?? env.GIT_SHA)?.trim();
+  if (!revision || revision.toUpperCase() === 'UNSPECIFIED') {
+    throw new AgentRuntimeStateError('The Specialist cannot start without a concrete deployment revision.');
+  }
+  return revision;
 }
 
 function budgetsOf(definitionBudgets: {
@@ -124,36 +127,6 @@ async function findPausedRunForItem(propertyId: string, principalUserId: string,
   };
 }
 
-async function persistToolInvocations(runId: string, correlationId: string, pending: readonly PendingToolInvocation[]): Promise<void> {
-  for (const invocation of pending) {
-    await recordToolInvocation({
-      runId,
-      correlationId,
-      sequence: invocation.sequence,
-      toolId: invocation.toolId,
-      toolVersion: invocation.toolVersion,
-      input: invocation.input,
-      output: invocation.output,
-      outcome: invocation.outcome,
-      errorCode: invocation.errorCode,
-      startedAt: new Date(invocation.startedAt),
-      finishedAt: new Date(invocation.finishedAt),
-    });
-  }
-}
-
-async function persistLlmInvocations(runId: string, correlationId: string, pending: readonly PendingLlmInvocation[]): Promise<void> {
-  for (const invocation of pending) {
-    await recordLlmInvocation({
-      ...invocation,
-      runId,
-      correlationId,
-      startedAt: new Date(invocation.startedAt),
-      finishedAt: new Date(invocation.finishedAt),
-    });
-  }
-}
-
 function projectionFor(
   status: Omit<AgentRunStatusProjection, 'runId' | 'paused' | 'casVersion' | 'expectedOperation'>,
   runId: string | null,
@@ -180,10 +153,16 @@ export interface AgentRuntimeDependencies {
   /** Live paused-run lookup seam — defaults to the DecisionThread-scoped query. */
   resolvePausedRun?: (propertyId: string, principalUserId: string, inventoryItemId: string) => Promise<PausedRun | null>;
   resolveLatestRun?: typeof getLatestAgentRunForSubject;
+  resolveRunById?: typeof getAgentRunById;
+  resolveStateByRun?: typeof loadAgentStateByRun;
+  resolveReservation?: typeof getAgentRunReservationById;
+  recoverPausedState?: typeof compareAndSwapAgentState;
+  recordDispute?: typeof recordToolInvocation;
   /** §7.3.7 property-context authorization gate — defaults to getPropertyContext. */
   contextReader?: AgentPropertyContextReader;
   /** §7.3.9 governed narration — default null keeps EXPLAIN fully deterministic. */
   narrationProvider?: NarrationProvider | null;
+  deploymentRevision?: () => string;
   now?: () => Date;
   env?: NodeJS.ProcessEnv;
   verifyHomeActionOrigin?: (input: {
@@ -282,6 +261,32 @@ export async function invokeAgentRuntime(
   }
 
   if (paused?.expectedEvent === 'RESUME_IN_PROGRESS' && invocation.operation !== 'GET_STATUS') {
+    const serialized = paused.serializedState as {
+      resumeClaim?: { reservationId: string; previousExpectedEvent: string };
+    };
+    const claim = serialized.resumeClaim
+      ? await (deps.resolveReservation ?? getAgentRunReservationById)(serialized.resumeClaim.reservationId)
+      : null;
+    if (!claim || (!claim.resultRunId && claim.leaseExpiresAt.getTime() <= nowDate.getTime())) {
+      const { resumeClaim: _resumeClaim, ...restoredState } = serialized;
+      const recovered = await (deps.recoverPausedState ?? compareAndSwapAgentState)({
+        runId: paused.runId,
+        expectedCasVersion: paused.casVersion,
+        serializedState: asJson(restoredState),
+        expectedEvent: serialized.resumeClaim?.previousExpectedEvent ?? 'SUBMIT_CONTEXT',
+        pauseExpiresAt: paused.pauseExpiresAt,
+      });
+      if (!recovered.swapped) throw new AgentRuntimeCasConflictError();
+      paused = {
+        ...paused,
+        casVersion: recovered.casVersion,
+        serializedState: restoredState,
+        expectedEvent: serialized.resumeClaim?.previousExpectedEvent ?? 'SUBMIT_CONTEXT',
+      };
+    }
+    // Whether another owner is still live or this request recovered an
+    // interrupted claim, return the durable status and current CAS. A caller
+    // never waits until pause expiry and never double-applies submitted facts.
     return readStatus(invocation, paused, deps);
   }
 
@@ -324,8 +329,8 @@ async function readStatus(
   deps: AgentRuntimeDependencies = {},
 ): Promise<AgentRuntimeResult> {
   if (paused) {
-    const run = await getAgentRunById(paused.runId);
-    const state = await loadAgentStateByRun(paused.runId);
+    const run = await (deps.resolveRunById ?? getAgentRunById)(paused.runId);
+    const state = await (deps.resolveStateByRun ?? loadAgentStateByRun)(paused.runId);
     const raw = (state?.serializedStateJson ?? {}) as { status?: Partial<AgentRunStatusProjection> } & Partial<AgentRunStatusProjection>;
     const snapshot = raw.status ?? raw;
     return {
@@ -395,14 +400,28 @@ async function disputeInput(
   // and surfaces the correction path; it does not mutate canonical decision
   // state — the homeowner corrects the underlying record, which marks the
   // thread stale through the existing fact-correction path.
-  if (paused && invocation.dispute) {
-    await recordToolInvocation({
-      runId: paused.runId,
-      correlationId: randomUUID(),
+  const targetRun = paused
+    ? await getAgentRunById(paused.runId)
+    : await (deps.resolveLatestRun ?? getLatestAgentRunForSubject)(
+      invocation.propertyId,
+      invocation.principalUserId,
+      invocation.inventoryItemId,
+    );
+  if (!targetRun) throw new AgentRuntimeStateError('No Specialist run exists to dispute.');
+  if (!invocation.dispute || !DISPUTABLE_INPUT_KEYS.has(invocation.dispute.key)) {
+    throw new AgentRuntimeStateError('A supported Specialist input key is required to record a dispute.');
+  }
+  {
+    await (deps.recordDispute ?? recordToolInvocation)({
+      runId: targetRun.id,
+      correlationId: targetRun.correlationId,
       sequence: 0,
       toolId: 'DISPUTE_INPUT',
       toolVersion: '1.0',
-      input: { key: invocation.dispute.key },
+      input: {
+        key: invocation.dispute.key.slice(0, 120),
+        note: invocation.dispute.note?.slice(0, 500) ?? null,
+      },
       outcome: 'OK',
       startedAt: now,
       finishedAt: now,
@@ -427,6 +446,7 @@ async function advanceRun(args: {
   const definition = getAgentDefinition(SPECIALIST_AGENT_ID, version);
   if (!definition) throw new AgentRuntimeStateError(`Pinned agent version ${version ?? 'active'} is not registered.`);
   const digest = digestAgentDefinition(definition);
+  const runDeploymentRevision = deps.deploymentRevision?.() ?? resolveAgentDeploymentRevision(deps.env ?? process.env);
   const correlationId = randomUUID();
   const triggerIdentity = paused
     ? ['RESUME', paused.runId, paused.casVersion]
@@ -513,7 +533,13 @@ async function advanceRun(args: {
     const swap = await compareAndSwapAgentState({
       runId: paused.runId,
       expectedCasVersion: paused.casVersion,
-      serializedState: asJson(paused.serializedState),
+      serializedState: asJson({
+        ...(paused.serializedState as Record<string, unknown>),
+        resumeClaim: {
+          reservationId: reservation.reservation.id,
+          previousExpectedEvent: paused.expectedEvent,
+        },
+      }),
       expectedEvent: 'RESUME_IN_PROGRESS',
       pauseExpiresAt: paused.pauseExpiresAt,
     });
@@ -550,6 +576,7 @@ async function advanceRun(args: {
       env: deps.env,
       contextScopes: profile.requiredFacts,
       professionalBoundary: profile.professionalBoundary,
+      enforceLowConfidenceEscalation: profile.profileId === 'HVAC',
     }, {
       port: deps.threadPort ?? createSpecialistThreadPort(profile.decisionDefinitionId),
       contextReader: deps.contextReader,
@@ -586,13 +613,13 @@ async function advanceRun(args: {
   }
   const finishedAt = deps.now?.() ?? new Date();
   const outcome = specialist.disposition === 'PAUSE' ? 'PAUSED' : specialist.status.phase === 'RECOMMENDATION_READY' ? 'COMPLETED' : 'ABSTAINED';
-  const run = await writeTerminalAgentRun({
+  const episode = await commitAgentRunEpisode({
     reservationId: reservation.reservation.id,
     idempotencyKey,
     agentId: SPECIALIST_AGENT_ID,
     agentVersion: definition.version,
     definitionDigest: digest,
-    deploymentRevision: deploymentRevision(),
+    deploymentRevision: runDeploymentRevision,
     trigger: SPECIALIST_TRIGGER,
     correlationId,
     principalUserId: invocation.principalUserId,
@@ -614,29 +641,20 @@ async function advanceRun(args: {
     },
     startedAt,
     finishedAt,
-  }, now);
-
-  let stateCasVersion: number | null = null;
-  if (specialist.disposition === 'PAUSE') {
-    const state = await createAgentState({
-      runId: run.id,
-      agentId: SPECIALIST_AGENT_ID,
-      agentVersion: definition.version,
+    pausedState: specialist.disposition === 'PAUSE' ? {
       stateShape: definition.stateRequirements.stateShape ?? 'agent.repair-replace.state@1.1.0',
       serializedState: asJson({ status: specialist.status, ledger: specialist.ledger }),
       expectedEvent: 'SUBMIT_CONTEXT',
       pauseExpiresAt: new Date(now.getTime() + PAUSE_TTL_MS),
-    });
-    stateCasVersion = state.casVersion;
-  }
-
-  if (paused && claimedPausedCasVersion !== null) {
-    const consumed = await resolveAgentState(paused.runId, claimedPausedCasVersion, finishedAt);
-    if (!consumed) throw new AgentRuntimeCasConflictError();
-  }
-
-  await persistToolInvocations(run.id, correlationId, specialist.toolInvocations);
-  await persistLlmInvocations(run.id, correlationId, specialist.llmInvocations);
+    } : undefined,
+    consumedState: paused && claimedPausedCasVersion !== null
+      ? { runId: paused.runId, expectedCasVersion: claimedPausedCasVersion }
+      : undefined,
+    toolInvocations: specialist.toolInvocations,
+    llmInvocations: specialist.llmInvocations,
+  }, now);
+  const run = episode.run;
+  const stateCasVersion = episode.stateCasVersion;
 
   if (specialist.disposition === 'PAUSE') {
     recordAgentRunOutcome(SPECIALIST_AGENT_ID, 'PAUSED');

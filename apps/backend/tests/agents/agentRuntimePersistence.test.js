@@ -6,6 +6,7 @@ require('ts-node/register');
 const { Prisma } = require('@prisma/client');
 const {
   claimAgentRunReservation,
+  commitAgentRunEpisode,
   writeTerminalAgentRun,
   collectReferencedAgentDefinitionVersions,
   assertAgentDeploymentReadiness,
@@ -64,6 +65,8 @@ function makeDb({ reservations = [], runs = [], states = [] } = {}) {
   const reservationRows = new Map(reservations.map((r) => [r.id, { ...r }]));
   const runRows = new Map(runs.map((r) => [r.id, { ...r }]));
   const stateRows = new Map(states.map((s) => [s.runId, { ...s }]));
+  const toolRows = [];
+  const llmRows = [];
   let seq = 0;
 
   const agentRunReservation = {
@@ -88,6 +91,7 @@ function makeDb({ reservations = [], runs = [], states = [] } = {}) {
       for (const [id, row] of reservationRows) {
         if (where.id && row.id !== where.id) continue;
         if (where.idempotencyKey && row.idempotencyKey !== where.idempotencyKey) continue;
+        if (where.correlationId && row.correlationId !== where.correlationId) continue;
         if ('resultRunId' in where && row.resultRunId !== where.resultRunId) continue;
         if (where.leaseExpiresAt?.lte && !(row.leaseExpiresAt <= where.leaseExpiresAt.lte)) continue;
         reservationRows.set(id, { ...row, ...data });
@@ -134,6 +138,7 @@ function makeDb({ reservations = [], runs = [], states = [] } = {}) {
       const row = stateRows.get(where.runId);
       if (!row) return { count: 0 };
       if (where.casVersion !== undefined && row.casVersion !== where.casVersion) return { count: 0 };
+      if (where.expectedEvent !== undefined && row.expectedEvent !== where.expectedEvent) return { count: 0 };
       if ('resolvedAt' in where && row.resolvedAt !== where.resolvedAt) return { count: 0 };
       stateRows.set(where.runId, { ...row, ...data });
       return { count: 1 };
@@ -142,11 +147,14 @@ function makeDb({ reservations = [], runs = [], states = [] } = {}) {
       !('resolvedAt' in where) || s.resolvedAt === where.resolvedAt),
   };
 
+  const toolInvocation = { create: async ({ data }) => { toolRows.push(data); return data; } };
+  const llmInvocation = { create: async ({ data }) => { llmRows.push(data); return data; } };
+
   const db = {
-    agentRunReservation, agentRun, agentState,
-    $transaction: async (cb) => cb({ agentRunReservation, agentRun, agentState }),
+    agentRunReservation, agentRun, agentState, toolInvocation, llmInvocation,
+    $transaction: async (cb) => cb({ agentRunReservation, agentRun, agentState, toolInvocation, llmInvocation }),
   };
-  return { db, reservationRows, runRows, stateRows };
+  return { db, reservationRows, runRows, stateRows, toolRows, llmRows };
 }
 
 test('claiming a reservation is an insert that stamps a lease and a retention clock', async () => {
@@ -198,7 +206,7 @@ test('a P2002 insert race resolves to the concurrently-created reservation', asy
 
 test('writeTerminalAgentRun inserts one terminal run and links its reservation', async () => {
   const store = makeDb({
-    reservations: [{ id: 'res-1', idempotencyKey: reservationInput().idempotencyKey, resultRunId: null }],
+    reservations: [{ id: 'res-1', ...reservationInput(), resultRunId: null }],
   });
   const run = await writeTerminalAgentRun(terminalRunInput(), NOW, store.db, RUNTIME);
 
@@ -220,6 +228,45 @@ test('a duplicate terminal write returns the recorded run without inserting agai
   assert.equal(run.id, 'run-1');
   assert.equal(run.outcome, 'PAUSED');
   assert.equal(store.runRows.size, 1);
+});
+
+test('an episode atomically links ownership, consumes the prior pause, creates the next pause, and writes bounded audits', async () => {
+  const store = makeDb({
+    reservations: [{ id: 'res-1', ...reservationInput(), resultRunId: null }],
+    runs: [{ id: 'run-old', idempotencyKey: 'old', outcome: 'PAUSED' }],
+    states: [{ runId: 'run-old', casVersion: 3, expectedEvent: 'RESUME_IN_PROGRESS', resolvedAt: null }],
+  });
+  const result = await commitAgentRunEpisode({
+    ...terminalRunInput({ outcome: 'PAUSED' }),
+    consumedState: { runId: 'run-old', expectedCasVersion: 3 },
+    pausedState: {
+      stateShape: 'agent.repair-replace.state@1.1.0', serializedState: { status: { phase: 'NEEDS_CONTEXT' } },
+      expectedEvent: 'SUBMIT_CONTEXT', pauseExpiresAt: new Date('2026-09-04T12:00:00.000Z'),
+    },
+    toolInvocations: [{
+      sequence: 0, toolId: 'REQUEST_CONTEXT', toolVersion: '1.0', input: { key: 'hvac.condition' },
+      output: { paused: true }, outcome: 'OK', startedAt: NOW.toISOString(), finishedAt: NOW.toISOString(),
+    }],
+    llmInvocations: [],
+  }, NOW, store.db, RUNTIME);
+
+  assert.equal(store.reservationRows.get('res-1').resultRunId, result.run.id);
+  assert.ok(store.stateRows.get('run-old').resolvedAt instanceof Date);
+  assert.equal(store.stateRows.get(result.run.id).expectedEvent, 'SUBMIT_CONTEXT');
+  assert.equal(result.stateCasVersion, 0);
+  assert.equal(store.toolRows.length, 1);
+  assert.match(store.toolRows[0].inputHash, /^[0-9a-f]{64}$/);
+});
+
+test('a reclaimed reservation fences the expired owner by correlation id', async () => {
+  const store = makeDb({
+    reservations: [{ id: 'res-1', ...reservationInput({ correlationId: 'corr-new' }), resultRunId: null }],
+  });
+  await assert.rejects(
+    commitAgentRunEpisode(terminalRunInput({ correlationId: 'corr-expired' }), NOW, store.db, RUNTIME),
+    /owning reservation/,
+  );
+  assert.equal(store.reservationRows.get('res-1').resultRunId, null);
 });
 
 test('AgentState CAS advances on the expected version and rejects a stale writer', async () => {

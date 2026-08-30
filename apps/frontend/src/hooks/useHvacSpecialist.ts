@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getHvacSpecialistStatus,
+  disputeHvacSpecialistInput,
+  uploadHvacDocumentAndResume,
   startHvacSpecialist,
   submitHvacSpecialistContext,
   type HvacSpecialistHomeActionOrigin,
@@ -50,5 +52,30 @@ export function useSubmitHvacSpecialistContext(propertyId: string, inventoryItem
       qc.invalidateQueries({ queryKey: ['home-actions'] });
       qc.invalidateQueries({ queryKey: ['unified-home'] });
     },
+  });
+}
+
+export function useUploadHvacSpecialistDocument(propertyId: string, inventoryItemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { file: File; expectedCasVersion: number }) =>
+      uploadHvacDocumentAndResume(propertyId, inventoryItemId, vars.file, vars.expectedCasVersion),
+    onSuccess: (result: SpecialistResult) => {
+      qc.setQueryData(key(propertyId, inventoryItemId), result);
+      qc.invalidateQueries({ queryKey: ['home-actions'] });
+      qc.invalidateQueries({ queryKey: ['unified-home'] });
+    },
+  });
+}
+
+export function useDisputeHvacSpecialistInput(propertyId: string, inventoryItemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { key: string; note?: string; expectedCasVersion?: number }) =>
+      disputeHvacSpecialistInput(propertyId, inventoryItemId, {
+        key: vars.key,
+        note: vars.note,
+      }, vars.expectedCasVersion),
+    onSuccess: (result: SpecialistResult) => qc.setQueryData(key(propertyId, inventoryItemId), result),
   });
 }

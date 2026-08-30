@@ -121,3 +121,8 @@ export function selectOutstanding(limitationCodes: readonly string[]): Outstandi
 export const ACCEPTED_INTAKE_KEYS: ReadonlySet<string> = new Set(
   Object.values(LIMITATION_OUTSTANDING).filter((spec) => spec.kind === 'FACT').map((spec) => spec.key),
 );
+
+/** Closed set of canonical inputs a homeowner may dispute through the API. */
+export const DISPUTABLE_INPUT_KEYS: ReadonlySet<string> = new Set(
+  Object.values(LIMITATION_OUTSTANDING).map((spec) => spec.key),
+);

@@ -88,6 +88,10 @@ export function startHvacSpecialist(propertyId: string, inventoryItemId: string,
   return invoke(propertyId, 'START_OR_RESUME', { inventoryItemId, homeActionOrigin });
 }
 
+export function resumeHvacSpecialist(propertyId: string, inventoryItemId: string, expectedCasVersion: number) {
+  return invoke(propertyId, 'START_OR_RESUME', { inventoryItemId, expectedCasVersion });
+}
+
 export function submitHvacSpecialistContext(
   propertyId: string,
   inventoryItemId: string,
@@ -95,4 +99,29 @@ export function submitHvacSpecialistContext(
   expectedCasVersion?: number,
 ) {
   return invoke(propertyId, 'SUBMIT_CONTEXT', { inventoryItemId, contextIntake, expectedCasVersion });
+}
+
+export function disputeHvacSpecialistInput(
+  propertyId: string,
+  inventoryItemId: string,
+  dispute: { key: string; note?: string },
+  expectedCasVersion?: number,
+) {
+  return invoke(propertyId, 'DISPUTE_INPUT', { inventoryItemId, dispute, expectedCasVersion });
+}
+
+export async function uploadHvacDocumentAndResume(
+  propertyId: string,
+  inventoryItemId: string,
+  file: File,
+  expectedCasVersion: number,
+): Promise<SpecialistResult> {
+  const uploaded = await api.analyzeDocument(file, propertyId);
+  if (!uploaded.success || !uploaded.data.document?.id) {
+    throw new Error(uploaded.message || 'The document could not be uploaded.');
+  }
+  await api.post(`/api/properties/${propertyId}/inventory/items/${inventoryItemId}/documents`, {
+    documentId: uploaded.data.document.id,
+  });
+  return resumeHvacSpecialist(propertyId, inventoryItemId, expectedCasVersion);
 }

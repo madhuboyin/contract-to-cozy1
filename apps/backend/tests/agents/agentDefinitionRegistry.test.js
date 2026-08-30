@@ -40,7 +40,7 @@ function validateDefinition(definition, dependencies = {}) {
 
 test('the code-owned shared Repair-or-Replace definition is immutable, ENABLED, and matches its digest baseline', () => {
   assert.ok(active);
-  assert.equal(active.version, '1.1.0');
+  assert.equal(active.version, '1.2.0');
   // PR 11 / IPD-005: trigger handler + evaluation suite are both AVAILABLE.
   assert.equal(active.releaseState, 'ENABLED');
   assert.equal(active.supportedDomains.includes('HVAC'), false);
@@ -51,7 +51,7 @@ test('the code-owned shared Repair-or-Replace definition is immutable, ENABLED, 
   assert.equal(Object.isFrozen(active.allowedSkills[0].operations), true);
   assert.equal(active.name, 'Repair-or-Replace Specialist');
   assert.ok(active.allowedSkills[0].operations.includes('REPLACEMENT_GUIDANCE'));
-  assert.equal(digestAgentDefinition(active), AGENT_DEFINITION_DIGEST_BASELINE['hvac-repair-replace-specialist@1.1.0']);
+  assert.equal(digestAgentDefinition(active), AGENT_DEFINITION_DIGEST_BASELINE['hvac-repair-replace-specialist@1.2.0']);
   assert.deepEqual(validateAgentDefinitionRegistry(), []);
 });
 
@@ -85,7 +85,7 @@ test('a PENDING runtime or evaluation dependency still forces DEV', () => {
   assert.deepEqual(validateDefinition(active), []);
 
   assert.ok(validateDefinition({ ...active, releaseState: 'EVAL_APPROVED' }, {
-    evaluationSuites: { 'agent-hvac-repair-replace-eval@1.0.0': 'PENDING' },
+    evaluationSuites: { 'agent-hvac-repair-replace-eval@1.1.0': 'PENDING' },
   }).some((issue) => issue.includes('evaluation suite') && issue.includes('permits only DEV')));
 
   assert.ok(validateDefinition({ ...active, releaseState: 'ENABLED' }, {

@@ -31,6 +31,7 @@ export const AGENT_EVALUATION_SUITE_REGISTRY: Readonly<Record<string, AgentDepen
   // PR 11 / IPD-005: hvacSpecialistEvaluation.ts is the checked-in fixture
   // contract; hvacSpecialistEvaluation.test.js runs it in CI.
   'agent-hvac-repair-replace-eval@1.0.0': 'AVAILABLE',
+  'agent-hvac-repair-replace-eval@1.1.0': 'AVAILABLE',
   // IPD-006: deterministic, versioned APPLIANCE-only corpus.
   'agent-generic-appliance-repair-replace-eval@1.0.0': 'AVAILABLE',
 });

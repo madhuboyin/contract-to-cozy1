@@ -141,6 +141,8 @@ export interface RunSpecialistInput {
   contextScopes?: readonly PropertyContextScope[];
   /** Reviewed profile boundary that EXPLAIN must always render. */
   professionalBoundary?: string;
+  /** HVAC's definition requires one homeowner confirmation before a LOW-confidence result can terminate. */
+  enforceLowConfidenceEscalation?: boolean;
 }
 
 export interface SpecialistRunDependencies {
@@ -276,7 +278,7 @@ export async function runHvacSpecialist(
       resumeCount,
     };
 
-    const step = selectNextSpecialistStep(observation, ledger, input.budgets);
+    const step = selectNextSpecialistStep(observation, ledger, input.budgets, input.enforceLowConfidenceEscalation);
     const stepAt = Date.now();
 
     if (step.kind === 'RESUME_THREAD') {
@@ -329,6 +331,33 @@ export async function runHvacSpecialist(
         ledger.llmCostUsdUsed += narrated.costUsd;
       }
       if (narrated.invocation) llmInvocations.push(narrated.invocation);
+      if (ledger.llmCostUsdUsed > input.budgets.maxLLMCostPerRunUsd) {
+        const invocation = llmInvocations.at(-1);
+        if (invocation) {
+          llmInvocations[llmInvocations.length - 1] = {
+            ...invocation,
+            outcome: 'REJECTED',
+            errorCode: 'LLM_COST_BUDGET_EXCEEDED',
+          };
+        }
+        record('EXPLAIN', 'ABSTAINED', {
+          input: { reasonCodes: state.reasonCodes },
+          output: { usedLlm: narrated.usedLlm, budgetExceeded: true },
+          errorCode: 'LLM_COST_BUDGET_EXCEEDED',
+          at: stepAt,
+        });
+        return terminal({
+          ...base,
+          phase: 'ABSTAINED',
+          decisionThreadId: state.decisionThreadId,
+          currentRecommendationSnapshotId: state.currentRecommendationSnapshotId,
+          verdict: null,
+          confidenceLabel: state.confidenceLabel,
+          outstanding: [],
+          explanation: [],
+          abstentionReason: 'TOOL_FAILURE',
+        }, 'TERMINAL', narrated.usedLlm);
+      }
       record('EXPLAIN', narrated.claims.length ? 'OK' : 'EMPTY', {
         input: { reasonCodes: state.reasonCodes },
         output: { claimIds: narrated.claims.map((c) => c.claimId), usedLlm: narrated.usedLlm },

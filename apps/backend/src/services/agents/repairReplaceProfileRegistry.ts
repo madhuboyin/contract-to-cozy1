@@ -23,9 +23,9 @@ export const REPAIR_REPLACE_PROFILES: readonly RepairReplaceProfile[] = Object.f
     decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
     scoringSkillId: 'repair-replace',
     requiredFacts: Object.freeze(['SYSTEMS', 'INVENTORY', 'MAINTENANCE', 'SAFETY'] as const),
-    supportedDocuments: Object.freeze(['hvac-nameplate-photo']),
+    supportedDocuments: Object.freeze(['hvac-nameplate-photo', 'hvac-technician-assessment', 'hvac-written-estimate']),
     professionalBoundary: 'licensed HVAC technician',
-    evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.0.0',
+    evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.1.0',
   }),
   Object.freeze({
     profileId: 'GENERIC_APPLIANCE',

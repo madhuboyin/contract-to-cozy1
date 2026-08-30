@@ -124,6 +124,20 @@ test('the specialist accounts for and emits bounded LLM audit metadata when narr
   assert.deepEqual(result.llmInvocations[0].typedClaimIds, ['hvac.reason.SYSTEM_AT_OR_BEYOND_TYPICAL_LIFESPAN']);
 });
 
+test('an actual narration cost above budget is rejected and no recommendation is published', async () => {
+  const result = await runHvacSpecialist({ ...RUN_INPUT, env: { AGENT_HVAC_NARRATION_LLM_ENABLED: 'true' } }, deps([readyState()], {
+    narrationProvider: {
+      modelId: 'test-model', policyId: 'policy-v1', maxCostUsd: 0.01, executeGovernedRequest: PASS_THROUGH_GOVERNANCE,
+      narrate: async (claims) => ({ claims: [claims[0]], inputTokens: 5, outputTokens: 2, costUsd: 0.30 }),
+    },
+  }));
+  assert.equal(result.status.phase, 'ABSTAINED');
+  assert.equal(result.status.verdict, null);
+  assert.equal(result.status.abstentionReason, 'TOOL_FAILURE');
+  assert.equal(result.llmInvocations[0].outcome, 'REJECTED');
+  assert.equal(result.llmInvocations[0].errorCode, 'LLM_COST_BUDGET_EXCEEDED');
+});
+
 // ── §7.5 pause expiry ──────────────────────────────────────────────────────
 
 test('SUBMIT_CONTEXT against an expired pause fails closed', async () => {

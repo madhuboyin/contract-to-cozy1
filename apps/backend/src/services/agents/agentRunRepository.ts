@@ -1,11 +1,13 @@
+import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { addDays, readAgentRuntimeControls, type AgentRuntimeControls } from '../../config/agentRuntimeControls';
 import type { AgentRunOutcome, AgentRunTrigger } from '@prisma/client';
 import type { ReferencedAgentDefinitionVersion } from './agent.contract';
 import { validateReferencedAgentDefinitionVersions } from './agentRegistryValidation';
+import type { PendingLlmInvocation, PendingToolInvocation } from './agentRuntime.contract';
 
-type AgentRunDb = Pick<typeof prisma, 'agentRun' | 'agentRunReservation' | 'agentState' | '$transaction'>;
+type AgentRunDb = Pick<typeof prisma, 'agentRun' | 'agentRunReservation' | 'agentState' | 'toolInvocation' | 'llmInvocation' | '$transaction'>;
 
 export class AgentRunReservationOwnershipError extends Error {
   constructor() {
@@ -54,6 +56,21 @@ export type TerminalAgentRunInput = Readonly<{
   };
   startedAt: Date;
   finishedAt: Date;
+}>;
+
+export type AgentEpisodeCommitInput = TerminalAgentRunInput & Readonly<{
+  pausedState?: {
+    stateShape: string;
+    serializedState: Prisma.InputJsonValue;
+    expectedEvent: string;
+    pauseExpiresAt: Date;
+  };
+  consumedState?: {
+    runId: string;
+    expectedCasVersion: number;
+  };
+  toolInvocations?: readonly PendingToolInvocation[];
+  llmInvocations?: readonly PendingLlmInvocation[];
 }>;
 
 function controls(override?: Partial<AgentRuntimeControls>): AgentRuntimeControls {
@@ -134,9 +151,34 @@ export async function writeTerminalAgentRun(
   db: AgentRunDb = prisma,
   runtime?: Partial<AgentRuntimeControls>,
 ): Promise<Awaited<ReturnType<AgentRunDb['agentRun']['findUniqueOrThrow']>>> {
+  return (await commitAgentRunEpisode(input, now, db, runtime)).run;
+}
+
+function boundedHash(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value ?? null)).digest('hex');
+}
+
+/**
+ * Commits the immutable run, reservation link, optional new pause, consumed
+ * prior pause, and every invocation audit as one episode. An idempotent replay
+ * can therefore never observe a result run whose resumable state or audit is
+ * only partly persisted.
+ */
+export async function commitAgentRunEpisode(
+  input: AgentEpisodeCommitInput,
+  now: Date = new Date(),
+  db: AgentRunDb = prisma,
+  runtime?: Partial<AgentRuntimeControls>,
+): Promise<Readonly<{
+  run: Awaited<ReturnType<AgentRunDb['agentRun']['findUniqueOrThrow']>>;
+  stateCasVersion: number | null;
+}>> {
   const cfg = controls(runtime);
   const existing = await db.agentRun.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
-  if (existing) return existing;
+  if (existing) {
+    const state = await db.agentState.findUnique({ where: { runId: existing.id } });
+    return { run: existing, stateCasVersion: state && !state.resolvedAt ? state.casVersion : null };
+  }
 
   try {
     return await db.$transaction(async (tx) => {
@@ -174,19 +216,110 @@ export async function writeTerminalAgentRun(
         where: {
           id: input.reservationId,
           idempotencyKey: input.idempotencyKey,
+          correlationId: input.correlationId,
           resultRunId: null,
         },
         data: { resultRunId: run.id },
       });
       if (linked.count !== 1) throw new AgentRunReservationOwnershipError();
-      return run;
+
+      if (input.consumedState) {
+        const consumed = await tx.agentState.updateMany({
+          where: {
+            runId: input.consumedState.runId,
+            casVersion: input.consumedState.expectedCasVersion,
+            expectedEvent: 'RESUME_IN_PROGRESS',
+            resolvedAt: null,
+          },
+          data: { resolvedAt: input.finishedAt },
+        });
+        if (consumed.count !== 1) {
+          throw new Error('The prior paused state could not be atomically consumed.');
+        }
+      }
+
+      let stateCasVersion: number | null = null;
+      if (input.pausedState) {
+        const state = await tx.agentState.create({
+          data: {
+            runId: run.id,
+            agentId: input.agentId,
+            agentVersion: input.agentVersion,
+            casVersion: 0,
+            stateShape: input.pausedState.stateShape,
+            serializedStateJson: input.pausedState.serializedState,
+            expectedEvent: input.pausedState.expectedEvent,
+            delayedJobId: null,
+            pauseExpiresAt: input.pausedState.pauseExpiresAt,
+            expiresAt: addDays(input.pausedState.pauseExpiresAt, cfg.stateGraceDays),
+          },
+        });
+        stateCasVersion = state.casVersion;
+      }
+
+      for (const invocation of input.toolInvocations ?? []) {
+        const startedAt = new Date(invocation.startedAt);
+        const finishedAt = new Date(invocation.finishedAt);
+        await tx.toolInvocation.create({
+          data: {
+            runId: run.id,
+            correlationId: input.correlationId,
+            sequence: invocation.sequence,
+            toolId: invocation.toolId,
+            toolVersion: invocation.toolVersion,
+            inputHash: boundedHash(invocation.input),
+            outputHash: invocation.output === undefined ? null : boundedHash(invocation.output),
+            outcome: invocation.outcome,
+            errorCode: invocation.errorCode ?? null,
+            startedAt,
+            finishedAt,
+            durationMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+            redactionVersion: '1',
+            expiresAt: addDays(finishedAt, cfg.invocationRetentionDays),
+          },
+        });
+      }
+      for (const invocation of input.llmInvocations ?? []) {
+        const startedAt = new Date(invocation.startedAt);
+        const finishedAt = new Date(invocation.finishedAt);
+        await tx.llmInvocation.create({
+          data: {
+            runId: run.id,
+            correlationId: input.correlationId,
+            sequence: invocation.sequence,
+            purpose: invocation.purpose,
+            modelId: invocation.modelId,
+            policyId: invocation.policyId ?? null,
+            promptHash: boundedHash(invocation.prompt),
+            responseHash: invocation.response === undefined ? null : boundedHash(invocation.response),
+            typedClaimIdsJson: [...invocation.typedClaimIds],
+            inputTokens: invocation.inputTokens,
+            outputTokens: invocation.outputTokens,
+            costUsd: invocation.costUsd,
+            outcome: invocation.outcome,
+            errorCode: invocation.errorCode ?? null,
+            startedAt,
+            finishedAt,
+            durationMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+            redactionVersion: '1',
+            expiresAt: addDays(finishedAt, cfg.invocationRetentionDays),
+          },
+        });
+      }
+      return { run, stateCasVersion };
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return db.agentRun.findUniqueOrThrow({ where: { idempotencyKey: input.idempotencyKey } });
+      const run = await db.agentRun.findUniqueOrThrow({ where: { idempotencyKey: input.idempotencyKey } });
+      const state = await db.agentState.findUnique({ where: { runId: run.id } });
+      return { run, stateCasVersion: state && !state.resolvedAt ? state.casVersion : null };
     }
     throw error;
   }
+}
+
+export async function getAgentRunReservationById(id: string, db: AgentRunDb = prisma) {
+  return db.agentRunReservation.findUnique({ where: { id } });
 }
 
 export async function getAgentRunById(id: string, db: AgentRunDb = prisma) {

@@ -82,3 +82,11 @@ export const REPAIR_REPLACE_AGENT_DEFINITION_V1_1 = Object.freeze({
     maxAutonomyLevel: 2,
   },
 } satisfies AgentDefinition);
+
+// Phase 2 audit: bind new invocations to the corrected evaluation contract.
+// 1.0.0 and 1.1.0 remain immutable and registered for pinned continuations.
+export const REPAIR_REPLACE_AGENT_DEFINITION_V1_2 = Object.freeze({
+  ...REPAIR_REPLACE_AGENT_DEFINITION_V1_1,
+  version: '1.2.0',
+  evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.1.0',
+} satisfies AgentDefinition);

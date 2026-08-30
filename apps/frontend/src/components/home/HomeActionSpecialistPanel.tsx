@@ -7,14 +7,17 @@
 // the same backend operation Ask uses.
 
 import { useMemo, useRef, useState } from 'react';
-import { CheckCircle2, HelpCircle, Loader2, Wrench } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, HelpCircle, Loader2, Upload, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   useHvacSpecialistStatus,
+  useDisputeHvacSpecialistInput,
   useStartHvacSpecialist,
   useSubmitHvacSpecialistContext,
+  useUploadHvacSpecialistDocument,
 } from '@/hooks/useHvacSpecialist';
 import type {
   HvacSpecialistHomeActionOrigin,
@@ -108,6 +111,45 @@ function StatusBody({
   inventoryItemId: string;
 }) {
   const submit = useSubmitHvacSpecialistContext(propertyId, inventoryItemId);
+  const upload = useUploadHvacSpecialistDocument(propertyId, inventoryItemId);
+  const dispute = useDisputeHvacSpecialistInput(propertyId, inventoryItemId);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeKey, setDisputeKey] = useState('hvac.condition');
+  const [disputeNote, setDisputeNote] = useState('');
+
+  const disputeControl = (
+    <div className="border-t border-slate-100 pt-2">
+      {!disputeOpen ? (
+        <Button size="sm" variant="ghost" onClick={() => setDisputeOpen(true)}>Dispute an input</Button>
+      ) : (
+        <div className="space-y-2">
+          <select
+            value={disputeKey}
+            onChange={(event) => setDisputeKey(event.target.value)}
+            className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+          >
+            <option value="hvac.condition">System condition</option>
+            <option value="hvac.installDate">Install date</option>
+            <option value="hvac.replacementCost">Replacement estimate</option>
+            <option value="hvac.technicianAssessment">Technician assessment</option>
+          </select>
+          <Input value={disputeNote} onChange={(event) => setDisputeNote(event.target.value)} maxLength={500} placeholder="What looks wrong? (optional)" />
+          <Button
+            size="sm"
+            disabled={dispute.isPending}
+            onClick={() => dispute.mutate({
+              key: disputeKey,
+              note: disputeNote.trim() || undefined,
+              expectedCasVersion: status.paused ? status.casVersion ?? undefined : undefined,
+            })}
+          >
+            Record dispute
+          </Button>
+          {dispute.isError && <p className="text-xs text-rose-600">Couldn’t record the dispute. Reload and try again.</p>}
+        </div>
+      )}
+    </div>
+  );
 
   if (status.phase === 'WORKING') {
     return (
@@ -129,7 +171,30 @@ function StatusBody({
           pending={submit.isPending}
           onSubmit={(intake, casVersion) => submit.mutate({ contextIntake: intake, expectedCasVersion: casVersion })}
         />
+        {status.phase === 'NEEDS_DOCUMENT' && (
+          <div className="space-y-2 rounded-lg border border-dashed border-slate-300 p-3">
+            <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <Upload className="mr-1.5 h-4 w-4" />
+              {upload.isPending ? 'Uploading and rechecking…' : 'Upload assessment or estimate'}
+              <input
+                type="file"
+                className="sr-only"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                disabled={upload.isPending || status.casVersion === null}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file && status.casVersion !== null) upload.mutate({ file, expectedCasVersion: status.casVersion });
+                }}
+              />
+            </label>
+            <Link className="block text-xs text-blue-700 underline" href={`/dashboard/properties/${propertyId}/documents`}>
+              Or review this property’s documents
+            </Link>
+            {upload.isError && <p className="text-xs text-rose-600">The document could not be attached and rechecked.</p>}
+          </div>
+        )}
         {submit.isError && <p className="text-xs text-rose-600">Couldn’t save that — reload and try again.</p>}
+        {disputeControl}
       </div>
     );
   }
@@ -152,6 +217,7 @@ function StatusBody({
         <p className="text-xs text-slate-500">
           This uses the same recommendation shown on the decision card — the Specialist just walks you through it.
         </p>
+        {disputeControl}
         <p className="text-xs text-slate-500">
           Once you act, tell Cozy what you decided (&ldquo;record the outcome for this repair-or-replace decision&rdquo;) so it can
           learn from what actually worked. Disagree with the recommendation? Correct the underlying record and it
@@ -163,9 +229,12 @@ function StatusBody({
 
   // ABSTAINED
   return (
-    <p className="text-sm text-amber-800">
-      {status.abstentionReason ? ABSTENTION_COPY[status.abstentionReason] ?? 'The Specialist couldn’t give a confident recommendation.' : 'The Specialist couldn’t give a confident recommendation.'}
-    </p>
+    <div className="space-y-2">
+      <p className="text-sm text-amber-800">
+        {status.abstentionReason ? ABSTENTION_COPY[status.abstentionReason] ?? 'The Specialist couldn’t give a confident recommendation.' : 'The Specialist couldn’t give a confident recommendation.'}
+      </p>
+      {disputeControl}
+    </div>
   );
 }
 
@@ -187,7 +256,9 @@ export function HomeActionSpecialistPanel({
   const origin = useMemo(() => ({ ...homeActionOrigin, engagementNonce: engagementNonce.current }), [homeActionOrigin]);
   const statusQuery = useHvacSpecialistStatus(propertyId, inventoryItemId, { enabled: opened });
   const start = useStartHvacSpecialist(propertyId, inventoryItemId, origin);
-  const status = start.data?.status ?? statusQuery.data?.status ?? null;
+  // Every mutation writes the canonical query cache. Reading only that cache
+  // prevents an old START response from masking a successful continuation.
+  const status = statusQuery.data?.status ?? null;
 
   const heading = useMemo(() => (
     <div className="flex items-center gap-2">

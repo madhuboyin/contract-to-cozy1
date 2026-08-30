@@ -15,6 +15,7 @@ const BUDGETS = {
 };
 const RUN_INPUT = {
   propertyId: 'p', principalUserId: 'u', requestingAgentId: 'eval', inventoryItemId: 'i', agentVersion: '1.0.0', budgets: BUDGETS,
+  enforceLowConfidenceEscalation: true,
 };
 
 function portFor(states) {
@@ -26,23 +27,32 @@ function portFor(states) {
   };
 }
 
+async function evaluate(evalCase) {
+  const deps = portFor(evalCase.portStates);
+  const first = await runHvacSpecialist(RUN_INPUT, deps);
+  if (!evalCase.resumeAfterPause) return { result: first, invocations: [first] };
+  assert.match(first.status.phase, /^NEEDS_(CONTEXT|DOCUMENT)$/, `${evalCase.id}: first invocation pauses`);
+  const second = await runHvacSpecialist({ ...RUN_INPUT, initialLedger: first.ledger }, deps);
+  return { result: second, invocations: [first, second] };
+}
+
 test('IPD-005: every evaluation fixture reaches its expected phase deterministically', async () => {
   for (const evalCase of HVAC_SPECIALIST_EVAL_CASES) {
-    const result = await runHvacSpecialist(RUN_INPUT, portFor(evalCase.portStates));
+    const { result, invocations } = await evaluate(evalCase);
     assert.equal(result.status.phase, evalCase.expectedPhase, `${evalCase.id}: phase`);
     if (evalCase.expectedVerdict) assert.equal(result.status.verdict, evalCase.expectedVerdict, `${evalCase.id}: verdict`);
     if (evalCase.expectedAbstentionReason) {
       assert.equal(result.status.abstentionReason, evalCase.expectedAbstentionReason, `${evalCase.id}: abstention`);
     }
     // requireZeroLlmInvocations — the v1 loop must never invoke an LLM.
-    assert.equal(result.ledger.llmInvocationsUsed, 0, `${evalCase.id}: no LLM`);
+    for (const invocation of invocations) assert.equal(invocation.ledger.llmInvocationsUsed, 0, `${evalCase.id}: no LLM`);
   }
 });
 
 test('IPD-005: abstention rate is inside the acceptable band', async () => {
   let abstained = 0;
   for (const evalCase of HVAC_SPECIALIST_EVAL_CASES) {
-    const result = await runHvacSpecialist(RUN_INPUT, portFor(evalCase.portStates));
+    const { result } = await evaluate(evalCase);
     if (result.status.phase === 'ABSTAINED') abstained += 1;
   }
   const rate = abstained / HVAC_SPECIALIST_EVAL_CASES.length;
@@ -51,13 +61,13 @@ test('IPD-005: abstention rate is inside the acceptable band', async () => {
 });
 
 test('IPD-005: deterministic completion rate meets the threshold', async () => {
-  const nonAbstainCases = HVAC_SPECIALIST_EVAL_CASES.filter((c) => c.expectedPhase !== 'ABSTAINED');
+  const completionCases = HVAC_SPECIALIST_EVAL_CASES.filter((c) => c.expectedPhase === 'RECOMMENDATION_READY');
   let completed = 0;
-  for (const evalCase of nonAbstainCases) {
-    const result = await runHvacSpecialist(RUN_INPUT, portFor(evalCase.portStates));
+  for (const evalCase of completionCases) {
+    const { result } = await evaluate(evalCase);
     if (result.status.phase === evalCase.expectedPhase && result.ledger.llmInvocationsUsed === 0) completed += 1;
   }
-  const rate = completed / nonAbstainCases.length;
+  const rate = completed / completionCases.length;
   assert.ok(rate >= HVAC_SPECIALIST_EVAL_THRESHOLDS.minDeterministicCompletionRate,
     `deterministic completion ${rate} < ${HVAC_SPECIALIST_EVAL_THRESHOLDS.minDeterministicCompletionRate}`);
 });
@@ -71,7 +81,7 @@ test('IPD-005: the corpus exercises every expected phase', () => {
 
 test('IPD-005: the versioned acceptance contract declares baseline, sample, window, and failure action', () => {
   const c = HVAC_SPECIALIST_EVAL_THRESHOLDS;
-  assert.equal(c.fixtureCorpusVersion, 'hvac-specialist-fixtures@1.0.0');
+  assert.equal(c.fixtureCorpusVersion, 'hvac-specialist-fixtures@1.1.0');
   assert.equal(c.baselineMeasurement.sampleSize, HVAC_SPECIALIST_EVAL_CASES.length);
   assert.ok(c.sampleSizeMinimum <= HVAC_SPECIALIST_EVAL_CASES.length);
   assert.match(c.measurementWindow, /CI_RUN/);
