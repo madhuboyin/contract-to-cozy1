@@ -329,6 +329,7 @@ export const getPropertyResolutions = async (req: AuthRequest, res: Response) =>
         propertyId: id,
         homeownerProfileId,
         status: 'READY',
+        inventoryItem: { category: { not: 'HVAC' } },
       },
       include: {
         inventoryItem: {

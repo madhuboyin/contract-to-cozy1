@@ -8,9 +8,9 @@
  * determines that a journey has transitioned to COMPLETED for the first time.
  *
  * Side effects (only for isUserInitiated journeys):
- *   FR-12 — Sets InventoryItem.condition based on repair/replace verdict:
- *           REPLACE_NOW | REPLACE_SOON → condition = NEW, installedOn = now
- *           REPAIR_AND_MONITOR | REPAIR_ONLY | (no verdict) → condition = GOOD
+ *   FR-12 — Sets InventoryItem.condition based on the authoritative decision
+ *           verdict. HVAC uses only the current Decision Platform snapshot;
+ *           other assets use the Guidance-derived repair/replace result.
  *   FR-11 — Creates a HomeEvent of type VERIFIED_RESOLUTION linked to the journey
  *
  * The Inventory write-back and VERIFIED_RESOLUTION badge only fire when a
@@ -156,6 +156,7 @@ export async function runJourneyCompletionHooks(journeyId: string): Promise<void
       issueType: true,
       isUserInitiated: true,
       derivedSnapshotJson: true,
+      inventoryItem: { select: { category: true } },
     },
   });
 
@@ -178,20 +179,48 @@ export async function runJourneyCompletionHooks(journeyId: string): Promise<void
       step.evidences.some(isNonSelfReportedEvidence),
   );
 
-  // FR-12: Determine whether the resolution was a replacement or a repair by
-  // reading the replaceRepairVerdict stored in derivedSnapshotJson when the
-  // repair_replace_decision step was completed.
+  // FR-12: Generic asset journeys retain their Guidance-derived verdict. HVAC
+  // is a material decision family and must use the unique current Decision
+  // Platform snapshot; an old generic verdict must never mutate the asset.
   const derivedLatest =
     journey.derivedSnapshotJson &&
     typeof journey.derivedSnapshotJson === 'object' &&
     !Array.isArray(journey.derivedSnapshotJson)
       ? ((journey.derivedSnapshotJson as Record<string, unknown>).latest as Record<string, unknown> | undefined)
       : undefined;
-  const replaceRepairVerdict =
+  const genericReplaceRepairVerdict =
     typeof derivedLatest?.replaceRepairVerdict === 'string'
       ? derivedLatest.replaceRepairVerdict
       : null;
-  const isReplacement = replaceRepairVerdict !== null && REPLACEMENT_VERDICTS.has(replaceRepairVerdict);
+  const isHvac = journey.inventoryItem?.category === 'HVAC';
+  let authoritativeHvacVerdict: 'REPAIR' | 'REPLACE' | 'MONITOR' | null = null;
+  if (isHvac && journey.inventoryItemId) {
+    const lineage = await resolveHomeActionDecisionLineage(journey.propertyId, {
+      decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+      primaryEntityId: journey.inventoryItemId,
+    }).catch(() => null);
+    if (
+      lineage?.status === 'LINKED' &&
+      lineage.thread.contextStatus === 'CURRENT' &&
+      lineage.thread.currentRecommendationSnapshotId
+    ) {
+      const snapshot = await prisma.recommendationSnapshot.findUnique({
+        where: { id: lineage.thread.currentRecommendationSnapshotId },
+        select: { verdictCode: true },
+      });
+      if (
+        snapshot?.verdictCode === 'REPAIR' ||
+        snapshot?.verdictCode === 'REPLACE' ||
+        snapshot?.verdictCode === 'MONITOR'
+      ) {
+        authoritativeHvacVerdict = snapshot.verdictCode;
+      }
+    }
+  }
+  const hasAuthoritativeAssetVerdict = !isHvac || authoritativeHvacVerdict !== null;
+  const isReplacement = isHvac
+    ? authoritativeHvacVerdict === 'REPLACE'
+    : genericReplaceRepairVerdict !== null && REPLACEMENT_VERDICTS.has(genericReplaceRepairVerdict);
 
   const now = new Date();
 
@@ -200,7 +229,7 @@ export async function runJourneyCompletionHooks(journeyId: string): Promise<void
     // evidence beyond the homeowner's own say-so. Completing every step is a
     // decision-completeness signal, not proof the work happened — see the
     // module doc comment above.
-    if (isEvidenceVerified && journey.inventoryItemId) {
+    if (isEvidenceVerified && journey.inventoryItemId && hasAuthoritativeAssetVerdict) {
       if (isReplacement) {
         // FR-12 (replacement path): Asset was replaced — reset age and mark as NEW.
         // installedOn is set to today so all age-based calculations (health score,
@@ -255,7 +284,7 @@ export async function runJourneyCompletionHooks(journeyId: string): Promise<void
   // Home Operations Slice 7: Status Board's own condition model is separate
   // from InventoryItem.condition and doesn't refresh on its own — nudge it
   // to recompute on the next read rather than staying stale for up to 24h.
-  if (isEvidenceVerified && journey.inventoryItemId) {
+  if (isEvidenceVerified && journey.inventoryItemId && hasAuthoritativeAssetVerdict) {
     await invalidateStatusForInventoryItem(journey.propertyId, journey.inventoryItemId);
   }
 }

@@ -15,7 +15,9 @@ export function mapReplaceRepairAnalysesToDecisionInsights(
   analyses: ReplaceRepairResolution[],
   propertyId?: string,
 ): DecisionInsight[] {
-  return analyses.map((analysis) => ({
+  return analyses
+    .filter((analysis) => analysis.inventoryItem?.category !== 'HVAC')
+    .map((analysis) => ({
     id: analysis.id,
     propertyId: analysis.propertyId,
     kind: 'repair_replace',
@@ -40,7 +42,7 @@ export function mapReplaceRepairAnalysesToDecisionInsights(
       computedAt: analysis.computedAt,
       impactLevel: analysis.impactLevel,
     },
-  }));
+    }));
 }
 
 export function mapBookingsToExecutionItems(bookings: Booking[]): ExecutionItem[] {

@@ -1,6 +1,7 @@
 import {
   ASSET_KIND_REGISTRY,
   INVENTORY_ITEM_CATEGORIES,
+  INTELLIGENCE_ISSUE_DOMAINS,
   INTELLIGENCE_ISSUE_DOMAIN_TAXONOMY_VERSION,
   SHARED_SIGNAL_KEYS,
 } from '../../productFramework/intelligence';
@@ -22,6 +23,7 @@ export function validateEnvelopeRegistry(): string[] {
   const issues: string[] = [];
   const adapterOwners = new Set<string>();
   const mappingKeys = new Set<string>();
+  const approvedDomains = new Set<string>(INTELLIGENCE_ISSUE_DOMAINS);
 
   for (const adapter of ENVELOPE_ADAPTERS) {
     const { descriptor } = adapter;
@@ -40,6 +42,9 @@ export function validateEnvelopeRegistry(): string[] {
     }
     for (const capability of descriptor.capabilities) {
       const key = `${descriptor.producerModel}:${capability.nativeSubtype}`;
+      if (!approvedDomains.has(capability.domain)) {
+        issues.push(`${key}: descriptor capability has invalid domain ${String(capability.domain)}`);
+      }
       if (mappingKeys.has(key)) issues.push(`${key}: duplicate capability ownership`);
       mappingKeys.add(key);
       const mapping = ENVELOPE_MAPPINGS.find((candidate) =>
@@ -57,6 +62,9 @@ export function validateEnvelopeRegistry(): string[] {
   }
   for (const mapping of ENVELOPE_MAPPINGS) {
     const key = `${mapping.producerModel}:${mapping.nativeSubtype}`;
+    if (!approvedDomains.has(mapping.domain)) {
+      issues.push(`${key}: mapping has invalid domain ${String(mapping.domain)}`);
+    }
     if (!mappingKeys.has(key)) issues.push(`${key}: mapping is not declared by its adapter`);
   }
 

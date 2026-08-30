@@ -56,7 +56,7 @@ export type ReplaceRepairAnalysisDTO = {
 };
 
 export type ReplaceRepairAnalysisStatusResponse = (
-  | { exists: false }
+  | { exists: false; authority?: 'DECISION_PLATFORM' }
   | { exists: true; analysis: ReplaceRepairAnalysisDTO }
 ) & { propertyContext?: PropertyContextEnvelope };
 

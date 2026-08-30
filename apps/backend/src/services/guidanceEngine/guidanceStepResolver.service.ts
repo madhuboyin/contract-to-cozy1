@@ -195,6 +195,7 @@ export class GuidanceStepResolverService {
               journeyTypeKey: true,
               missingContextKeys: true,
               isLowContext: true,
+              inventoryItem: { select: { category: true } },
             },
           },
         },
@@ -213,6 +214,7 @@ export class GuidanceStepResolverService {
               journeyTypeKey: true,
               missingContextKeys: true,
               isLowContext: true,
+              inventoryItem: { select: { category: true } },
             },
           },
         },
@@ -221,6 +223,18 @@ export class GuidanceStepResolverService {
 
     if (!step) {
       throw new APIError('Guidance journey step not found.', 404, 'GUIDANCE_STEP_NOT_FOUND');
+    }
+
+    if (
+      step.toolKey === 'replace-repair' &&
+      step.journey?.inventoryItem?.category === 'HVAC' &&
+      params.producedData?.proofType === 'repair_replace_analysis'
+    ) {
+      throw new APIError(
+        'HVAC repair-or-replace results must come from the HVAC Decision Platform.',
+        409,
+        'HVAC_DECISION_PLATFORM_REQUIRED'
+      );
     }
 
     const allowed = VALID_STEP_TRANSITIONS[step.status as GuidanceStepStatus] ?? [];
@@ -447,6 +461,7 @@ export class GuidanceStepResolverService {
         propertyId: params.propertyId,
       },
       include: {
+        inventoryItem: { select: { category: true } },
         steps: {
           orderBy: [{ stepOrder: 'asc' }],
         },

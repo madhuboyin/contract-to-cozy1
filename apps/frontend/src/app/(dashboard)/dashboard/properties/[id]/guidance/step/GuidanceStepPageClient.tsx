@@ -255,6 +255,7 @@ export default function GuidanceStepPageClient() {
           stepId={targetStep.id}
           stepKey={targetStep.stepKey}
           assetName={assetName}
+          assetCategory={journey.inventoryItem?.category ?? null}
           onComplete={() => refreshGuidance()}
         />
       );

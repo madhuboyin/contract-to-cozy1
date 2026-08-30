@@ -48,7 +48,56 @@ export function mapGuidanceSignal(signal: any) {
   };
 }
 
-export function mapGuidanceStep(step: any) {
+function isGenericRepairReplacePayload(value: unknown): boolean {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>).proofType === 'repair_replace_analysis'
+  );
+}
+
+function suppressHvacGenericDerivedVerdict(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value ?? null;
+  const snapshot = value as Record<string, unknown>;
+  const latest = snapshot.latest && typeof snapshot.latest === 'object' && !Array.isArray(snapshot.latest)
+    ? { ...(snapshot.latest as Record<string, unknown>) }
+    : {};
+  for (const key of [
+    'replaceRepairVerdict',
+    'replaceRepairConfidence',
+    'breakEvenMonths',
+    'expectedAnnualRepairRiskCents',
+    'estimatedReplacementCostCents',
+    'replace-repairObservedAt',
+    'replace-repairStale',
+  ]) {
+    delete latest[key];
+  }
+
+  const byStep = Object.fromEntries(
+    Object.entries(
+      snapshot.byStep && typeof snapshot.byStep === 'object' && !Array.isArray(snapshot.byStep)
+        ? snapshot.byStep as Record<string, unknown>
+        : {}
+    ).filter(([, entry]) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return true;
+      const record = entry as Record<string, unknown>;
+      return record.toolKey !== 'replace-repair' && !isGenericRepairReplacePayload(record.raw);
+    })
+  );
+  const byTool = {
+    ...(snapshot.byTool && typeof snapshot.byTool === 'object' && !Array.isArray(snapshot.byTool)
+      ? snapshot.byTool as Record<string, unknown>
+      : {}),
+  };
+  delete byTool['replace-repair'];
+
+  return { ...snapshot, byStep, byTool, latest };
+}
+
+export function mapGuidanceStep(step: any, options?: { suppressGenericRepairReplace?: boolean }) {
+  const producedData = step.producedDataJson ?? null;
   return {
     id: step.id,
     journeyId: step.journeyId,
@@ -77,7 +126,10 @@ export function mapGuidanceStep(step: any) {
     blockedReason: step.blockedReason ?? null,
     skippedReasonCode: step.skippedReasonCode ?? null,
     skippedReason: step.skippedReason ?? null,
-    producedData: step.producedDataJson ?? null,
+    producedData:
+      options?.suppressGenericRepairReplace && isGenericRepairReplacePayload(producedData)
+        ? null
+        : producedData,
     startedAt: asIso(step.startedAt),
     completedAt: asIso(step.completedAt),
     skippedAt: asIso(step.skippedAt),
@@ -87,7 +139,10 @@ export function mapGuidanceStep(step: any) {
 }
 
 export function mapGuidanceJourney(journey: any) {
-  const allSteps = (journey.steps ?? []).map(mapGuidanceStep);
+  const isHvac = journey.inventoryItem?.category === 'HVAC';
+  const allSteps = (journey.steps ?? []).map((step: any) =>
+    mapGuidanceStep(step, { suppressGenericRepairReplace: isHvac })
+  );
   // Exclude steps that were silently removed from the template (TEMPLATE_REMOVED).
   // These are historically persisted steps that no longer exist in the current
   // template version — they should be invisible to the frontend in all contexts:
@@ -118,7 +173,9 @@ export function mapGuidanceJourney(journey: any) {
     isLowContext: Boolean(journey.isLowContext),
     missingContextKeys: journey.missingContextKeys ?? [],
     contextSnapshot: journey.contextSnapshotJson ?? null,
-    derivedSnapshot: journey.derivedSnapshotJson ?? null,
+    derivedSnapshot: isHvac
+      ? suppressHvacGenericDerivedVerdict(journey.derivedSnapshotJson)
+      : journey.derivedSnapshotJson ?? null,
     templateVersion: journey.templateVersion ?? null,
     scopeCategory: journey.scopeCategory ?? null,
     scopeId: journey.scopeId ?? null,
@@ -128,7 +185,7 @@ export function mapGuidanceJourney(journey: any) {
     branchFromStepKey: journey.branchFromStepKey ?? null,
     branchType: journey.branchType ?? null,
     branchChoice: journey.branchChoice ?? null,
-    sourceVerdict: journey.sourceVerdict ?? null,
+    sourceVerdict: isHvac ? null : journey.sourceVerdict ?? null,
     branchedAt: asIso(journey.branchedAt),
     isUserInitiated: Boolean(journey.isUserInitiated),
     dismissedReason: journey.dismissedReason ?? null,
@@ -171,7 +228,18 @@ export function mapGuidanceJourney(journey: any) {
   };
 }
 
-export function mapGuidanceEvent(event: any) {
+export function mapGuidanceEvent(event: any, options?: { suppressGenericRepairReplace?: boolean }) {
+  const payload = event.payloadJson ?? null;
+  const payloadRecord =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : null;
+  const containsGenericRepairReplace = Boolean(
+    payloadRecord &&
+      (isGenericRepairReplacePayload(payloadRecord) ||
+        payloadRecord.proofType === 'repair_replace_branch_decision' ||
+        (Array.isArray(payloadRecord.keys) && payloadRecord.keys.includes('replaceRepairVerdict')))
+  );
   return {
     id: event.id,
     journeyId: event.journeyId,
@@ -185,7 +253,7 @@ export function mapGuidanceEvent(event: any) {
     actorUserId: event.actorUserId ?? null,
     reasonCode: event.reasonCode ?? null,
     reasonMessage: event.reasonMessage ?? null,
-    payload: event.payloadJson ?? null,
+    payload: options?.suppressGenericRepairReplace && containsGenericRepairReplace ? null : payload,
     createdAt: asIso(event.createdAt),
   };
 }

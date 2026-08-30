@@ -42,7 +42,7 @@ export const guidanceSignalEnvelopeAdapter: EnvelopeAdapter<GuidanceSignalEnvelo
           assetType: row.inventoryItem.assetType,
         })
       : undefined;
-    const statusCurrentness = ['RESOLVED', 'ARCHIVED', 'DISMISSED'].includes(row.status)
+    const statusCurrentness = ['RESOLVED', 'ARCHIVED', 'SUPPRESSED'].includes(row.status)
       ? 'STALE' as const
       : currentnessFromExpiry(row.expiresAt, new Date());
     return buildMappedItem({

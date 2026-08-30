@@ -19,6 +19,7 @@ import {
   type RepairReplaceBranchChoice,
 } from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
+import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 
 // ---------------------------------------------------------------------------
 // Verdict config
@@ -61,6 +62,7 @@ type RepairReplaceGateProps = {
   stepId: string;
   stepKey: string;
   assetName?: string;
+  assetCategory?: string | null;
   presentation?: 'default' | 'guided';
   onComplete: (result?: {
     activeJourneyId: string;
@@ -80,6 +82,7 @@ export function RepairReplaceGate({
   stepId: _stepId,
   stepKey,
   assetName = 'this item',
+  assetCategory = null,
   presentation = 'default',
   onComplete,
 }: RepairReplaceGateProps) {
@@ -87,11 +90,13 @@ export function RepairReplaceGate({
   const [completing, setCompleting] = React.useState(false);
   const [completeDone, setCompleteDone] = React.useState(false);
   const isGuided = presentation === 'guided';
+  const isHvac = assetCategory === 'HVAC';
 
   // Fetch existing analysis
   const analysisQuery = useQuery({
     queryKey: ['replace-repair', propertyId, inventoryItemId],
     queryFn: () => getReplaceRepairAnalysis(propertyId, inventoryItemId),
+    enabled: !isHvac,
     staleTime: 5 * 60_000,
   });
 
@@ -154,6 +159,27 @@ export function RepairReplaceGate({
   }
 
   const displayAnalysis = runMutation.data ?? existingAnalysis;
+
+  if (isHvac) {
+    const askHref = buildAskWorkspaceHref({
+      propertyId,
+      question: `Should I repair or replace my ${assetName}?`,
+      from: 'guidance',
+    });
+    return (
+      <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4">
+        <div>
+          <p className="text-sm font-semibold text-teal-950">Review the tracked HVAC decision</p>
+          <p className="mt-1 text-sm text-teal-800">
+            HVAC recommendations come from the current Decision Platform snapshot. If no current recommendation exists, Ask Cozy will help start or resume the decision without substituting a quick-estimate verdict.
+          </p>
+        </div>
+        <Button asChild className="min-h-[48px] w-full rounded-2xl">
+          <Link href={askHref}>Open HVAC decision</Link>
+        </Button>
+      </div>
+    );
+  }
 
   // Loading state
   if (analysisQuery.isLoading) {

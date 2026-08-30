@@ -136,6 +136,24 @@ describe('guidance mappers', () => {
     expect(mapped.nextStep?.label).toBe('Compare repair vs replace');
   });
 
+  it('routes HVAC repair-or-replace guidance to the tracked Decision Platform through Ask', () => {
+    const step = buildStep({ toolKey: 'replace-repair' });
+    const journey = buildJourney([step]);
+    journey.inventoryItem = { name: 'Heat Pump', category: 'HVAC' };
+
+    const href = resolveGuidanceStepHref({
+      propertyId: 'property-1',
+      journey,
+      step,
+    });
+    const parsed = new URL(href!, 'https://example.test');
+
+    expect(parsed.pathname).toBe('/dashboard/ask');
+    expect(parsed.searchParams.get('propertyId')).toBe('property-1');
+    expect(parsed.searchParams.get('question')).toBe('Should I repair or replace my Heat Pump?');
+    expect(parsed.searchParams.get('launchCapabilityId')).toBe('hvac-decision-platform');
+  });
+
   it('filters actions by issue domain and tool key', () => {
     const lifecycleStep = buildStep({ id: 's1', toolKey: 'replace-repair' });
     const insuranceStep = buildStep({

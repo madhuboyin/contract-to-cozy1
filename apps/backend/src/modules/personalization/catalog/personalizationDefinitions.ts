@@ -62,7 +62,7 @@ function safetyGovernance(): RecommendationGovernance {
   };
 }
 
-export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] = [
+export const PERSONALIZATION_DEFINITIONS = [
   {
     code: 'hvac_filter_replacement_check_proof',
     category: 'low_cost_prevention',
@@ -135,7 +135,9 @@ export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] =
     modules: ['DASHBOARD', 'MAINTENANCE', 'HEALTH'],
     maintenanceTask: { assetType: 'ROOF', priority: 'MEDIUM' },
   },
-] as const;
+] as const satisfies readonly PersonalizationDefinition[];
+
+export type PersonalizationDefinitionCode = typeof PERSONALIZATION_DEFINITIONS[number]['code'];
 
 export function findPersonalizationDefinition(code: string): PersonalizationDefinition | undefined {
   return PERSONALIZATION_DEFINITIONS.find((definition) => definition.code === code);

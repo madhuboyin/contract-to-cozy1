@@ -30,6 +30,7 @@ import { useJourney } from '@/features/guidance/hooks/useJourney';
 import { mapGuidanceJourneyToActionModel } from '@/features/guidance/utils/guidanceMappers';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { getProviderCategoryForSystemType, getProviderWorkCategory } from '@/lib/config/serviceCategoryMapping';
 const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
@@ -178,8 +179,9 @@ export default function ReplaceRepairClient() {
         getReplaceRepairAnalysis(propertyId, itemId),
       ]);
 
-      if (itemResult.status === 'fulfilled') {
-        const nextItem = itemResult.value;
+      const resolvedItem = itemResult.status === 'fulfilled' ? itemResult.value : null;
+      if (resolvedItem) {
+        const nextItem = resolvedItem;
         setItem(nextItem);
         if (!didAutoPrefill) {
           setInputs((prev) => mergeInputs(prev, buildPrefillInputs(nextItem)));
@@ -190,7 +192,7 @@ export default function ReplaceRepairClient() {
       }
 
       if (analysisResult.status === 'fulfilled') {
-        if (analysisResult.value.exists) {
+        if (analysisResult.value.exists && resolvedItem?.category !== 'HVAC') {
           setHasAnalysis(true);
           setAnalysis(analysisResult.value.analysis);
         } else {
@@ -331,7 +333,7 @@ export default function ReplaceRepairClient() {
       : null);
 
   const runAnalysis = useCallback(async () => {
-    if (!propertyId || !itemId) return;
+    if (!propertyId || !itemId || item?.category === 'HVAC') return;
     setRunning(true);
     setError(null);
     try {
@@ -343,7 +345,7 @@ export default function ReplaceRepairClient() {
     } finally {
       setRunning(false);
     }
-  }, [guidanceContext, itemId, overrides, propertyId]);
+  }, [guidanceContext, item, itemId, overrides, propertyId]);
 
   const handlePropertyContextCaptured = useCallback(async () => {
     if (!propertyId || !itemId) return;
@@ -365,6 +367,36 @@ export default function ReplaceRepairClient() {
     if (analysis.status === 'ERROR') return 'danger';
     return 'good';
   }, [analysis]);
+
+  if (item?.category === 'HVAC') {
+    const askHref = buildAskWorkspaceHref({
+      propertyId,
+      question: `Should I repair or replace my ${item.name || 'HVAC system'}?`,
+      backTo: `/dashboard/properties/${propertyId}/inventory/items/${itemId}/replace-repair`,
+      from: 'repair-replace',
+    });
+    return (
+      <MobileToolWorkspace
+        className="space-y-6 lg:max-w-4xl lg:px-8 lg:pb-10"
+        intro={<MobilePageIntro eyebrow="Inventory Decision" title="HVAC Repair or Replace" subtitle="Decision Platform recommendation" action={<Wrench className="h-5 w-5 text-teal-600" />} />}
+        summary={
+          <ResultHeroCard
+            title={item.name || 'HVAC system'}
+            value="Decision review required"
+            status={<StatusChip tone="info">Decision Platform</StatusChip>}
+            summary="HVAC recommendations are published only from the current tracked decision snapshot. A quick-estimate verdict is not used on this surface."
+          />
+        }
+        footer={<BottomSafeAreaReserve size="chatAware" />}
+      >
+        <ScenarioInputCard title="Continue the HVAC decision" subtitle="Ask Cozy will open the current decision or start one if needed.">
+          <Button asChild className="w-full rounded-xl sm:w-auto">
+            <Link href={askHref}>Open HVAC decision</Link>
+          </Button>
+        </ScenarioInputCard>
+      </MobileToolWorkspace>
+    );
+  }
 
   return (
     <MobileToolWorkspace

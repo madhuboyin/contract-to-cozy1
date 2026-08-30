@@ -120,6 +120,8 @@ export function GuidanceStepCta({
         resolvedJourney?.inventoryItem?.name?.trim() ||
         selectedAssetOption?.assetName ||
         'this item';
+      const assetCategory =
+        resolvedJourney?.inventoryItem?.category ?? selectedAssetOption?.category ?? null;
       return (
         <RepairReplaceGate
           propertyId={propertyId}
@@ -128,6 +130,7 @@ export function GuidanceStepCta({
           stepId={step.id}
           stepKey={step.stepKey}
           assetName={displayAssetName}
+          assetCategory={assetCategory}
           presentation="guided"
           onComplete={(result) => {
             invalidate();

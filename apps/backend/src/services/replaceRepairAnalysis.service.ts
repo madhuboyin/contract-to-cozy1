@@ -314,9 +314,21 @@ export class ReplaceRepairService {
     return item;
   }
 
+  async getItemCategory(propertyId: string, itemId: string, userId: string): Promise<string> {
+    await assertPropertyForUser(propertyId, userId);
+    return (await this.assertItemForProperty(propertyId, itemId)).category;
+  }
+
   async getLatestForItem(propertyId: string, itemId: string, userId: string) {
     await assertPropertyForUser(propertyId, userId);
-    await this.assertItemForProperty(propertyId, itemId);
+    const item = await this.assertItemForProperty(propertyId, itemId);
+
+    // ARD-003: a generic HVAC analysis may exist as supporting evidence, but
+    // this homeowner-facing read contract must never publish it as the HVAC
+    // repair-or-replace authority.
+    if (item.category === 'HVAC') {
+      return { exists: false as const, authority: 'DECISION_PLATFORM' as const };
+    }
 
     const candidates = await prisma.replaceRepairAnalysis.findMany({
       where: { propertyId, inventoryItemId: itemId },

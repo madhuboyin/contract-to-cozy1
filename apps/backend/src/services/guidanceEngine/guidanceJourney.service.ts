@@ -1352,7 +1352,8 @@ export class GuidanceJourneyService {
     const journey = args.journey;
     if (
       journey?.journeyTypeKey !== 'asset_lifecycle_resolution' ||
-      !journey?.inventoryItemId
+      !journey?.inventoryItemId ||
+      journey?.inventoryItem?.category === 'HVAC'
     ) {
       return false;
     }
@@ -1442,7 +1443,8 @@ export class GuidanceJourneyService {
     const journey = args.journey;
     if (
       journey?.journeyTypeKey !== 'asset_lifecycle_resolution' ||
-      !journey?.inventoryItemId
+      !journey?.inventoryItemId ||
+      journey?.inventoryItem?.category === 'HVAC'
     ) {
       return false;
     }
@@ -2108,6 +2110,14 @@ export class GuidanceJourneyService {
         'Repair vs replace branching is only supported on asset lifecycle journeys.',
         400,
         'GUIDANCE_BRANCH_UNSUPPORTED_JOURNEY'
+      );
+    }
+
+    if (sourceJourney.inventoryItem?.category === 'HVAC') {
+      throw new APIError(
+        'HVAC repair-or-replace decisions must be completed through the HVAC Decision Platform.',
+        409,
+        'HVAC_DECISION_PLATFORM_REQUIRED'
       );
     }
 

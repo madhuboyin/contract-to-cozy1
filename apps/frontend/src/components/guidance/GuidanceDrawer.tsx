@@ -691,26 +691,40 @@ function CompletedStepDetail({
   allJourneyEvidences: GuidanceEvidenceView[];
   onBack: () => void;
 }) {
+  const isHvac = journey.inventoryItem?.category === 'HVAC';
+  const safeEvidences = isHvac
+    ? evidences.filter((evidence) => evidence.proofType !== 'repair_replace_analysis')
+    : evidences;
+  const safeJourneyEvidences = isHvac
+    ? allJourneyEvidences.filter((evidence) => evidence.proofType !== 'repair_replace_analysis')
+    : allJourneyEvidences;
   const preferredEvidence = pickPreferredEvidence({
     journey,
     step,
-    evidences,
-    allJourneyEvidences,
+    evidences: safeEvidences,
+    allJourneyEvidences: safeJourneyEvidences,
   });
-  const fallbackStepEvidence = buildRepairReplaceStepEvidenceFallback({
-    journey,
-    selectedStep: step,
-  });
+  const fallbackStepEvidence = isHvac
+    ? null
+    : buildRepairReplaceStepEvidenceFallback({
+        journey,
+        selectedStep: step,
+      });
   const preferredDisplayEvidence = preferredEvidence ?? fallbackStepEvidence;
+  const isHvacRepairReplaceStep = isHvac && step.toolKey === 'replace-repair';
+  const stepProducedDataIsGenericHvacVerdict =
+    isHvacRepairReplaceStep && step.producedData?.proofType === 'repair_replace_analysis';
   const displayedPayload =
     preferredDisplayEvidence?.payload && Object.keys(preferredDisplayEvidence.payload).length > 0
       ? preferredDisplayEvidence.payload
-      : step.producedData ?? {};
+      : stepProducedDataIsGenericHvacVerdict
+        ? {}
+        : step.producedData ?? {};
   const summaryItems = Object.entries(displayedPayload);
   const completedAt = formatDateTime(step.completedAt);
   const skippedAt = formatDateTime(step.skippedAt);
   const latestEvent = events[0] ?? null;
-  const primaryEvidence = preferredDisplayEvidence ?? evidences[0] ?? null;
+  const primaryEvidence = preferredDisplayEvidence ?? safeEvidences[0] ?? null;
   const expectedScopeCategory =
     primaryEvidence?.expectedScopeCategory ??
     (journey.scopeCategory === 'SERVICE'
@@ -777,6 +791,13 @@ function CompletedStepDetail({
         ) : null}
       </div>
 
+      {isHvacRepairReplaceStep ? (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+          Generic repair-or-replace results are not used for HVAC decisions. Open the HVAC Decision
+          Platform through Ask to review the current, tracked recommendation.
+        </div>
+      ) : null}
+
       {primaryEvidence ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -787,7 +808,7 @@ function CompletedStepDetail({
             {compatibility === 'BROADER_CONTEXT' ? ' planning context' : ' result'}
           </p>
           <p className="mb-0 mt-1 text-xs text-slate-600">{scopeMessage}</p>
-          {primaryEvidence && !evidences.some((evidence) => evidence.id === primaryEvidence.id) ? (
+          {primaryEvidence && !safeEvidences.some((evidence) => evidence.id === primaryEvidence.id) ? (
             <p className="mb-0 mt-1 text-xs text-slate-600">
               Showing the item-specific repair vs replace result because it is more relevant than the older home-wide estimate for this legacy step.
             </p>
@@ -842,13 +863,13 @@ function CompletedStepDetail({
         </div>
       ) : null}
 
-      {evidences.length > 0 ? (
+      {safeEvidences.length > 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Evidence used
           </p>
           <ul className="space-y-2">
-            {evidences.slice(0, 3).map((evidence) => (
+            {safeEvidences.slice(0, 3).map((evidence) => (
               <li key={evidence.id} className="text-sm text-slate-900">
                 <p className="mb-0 font-medium">
                   {buildEvidenceTitle(evidence)}

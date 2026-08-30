@@ -127,8 +127,18 @@ export async function getGuidanceJourneyDetail(req: CustomRequest, res: Response
       data: {
         journey: mapGuidanceJourney(journey),
         next: next ?? null,
-        events: (journey.events ?? []).map(mapGuidanceEvent),
-        evidences: (journey.evidences ?? []).map(mapGuidanceEvidence),
+        events: (journey.events ?? []).map((event: any) =>
+          mapGuidanceEvent(event, {
+            suppressGenericRepairReplace: journey.inventoryItem?.category === 'HVAC',
+          })
+        ),
+        evidences: (journey.evidences ?? [])
+          .filter(
+            (evidence: any) =>
+              journey.inventoryItem?.category !== 'HVAC' ||
+              evidence.proofType !== 'repair_replace_analysis'
+          )
+          .map(mapGuidanceEvidence),
       },
     });
   } catch (error) {
@@ -194,7 +204,9 @@ export async function completeGuidanceStep(req: CustomRequest, res: Response, ne
     res.json({
       success: true,
       data: {
-        step: mapGuidanceStep(result.step),
+        step: mapGuidanceStep(result.step, {
+          suppressGenericRepairReplace: result.journey?.inventoryItem?.category === 'HVAC',
+        }),
         journey: mapGuidanceJourney(result.journey),
       },
     });
@@ -222,7 +234,9 @@ export async function skipGuidanceStep(req: CustomRequest, res: Response, next: 
     res.json({
       success: true,
       data: {
-        step: mapGuidanceStep(result.step),
+        step: mapGuidanceStep(result.step, {
+          suppressGenericRepairReplace: result.journey?.inventoryItem?.category === 'HVAC',
+        }),
         journey: mapGuidanceJourney(result.journey),
       },
     });
@@ -250,7 +264,9 @@ export async function blockGuidanceStep(req: CustomRequest, res: Response, next:
     res.json({
       success: true,
       data: {
-        step: mapGuidanceStep(result.step),
+        step: mapGuidanceStep(result.step, {
+          suppressGenericRepairReplace: result.journey?.inventoryItem?.category === 'HVAC',
+        }),
         journey: mapGuidanceJourney(result.journey),
       },
     });
@@ -330,7 +346,9 @@ export async function recordGuidanceToolCompletion(req: CustomRequest, res: Resp
       data: {
         signal: result.signal ? mapGuidanceSignal(result.signal) : null,
         journey: mapGuidanceJourney(result.journey),
-        step: mapGuidanceStep(result.step),
+        step: mapGuidanceStep(result.step, {
+          suppressGenericRepairReplace: result.journey?.inventoryItem?.category === 'HVAC',
+        }),
         next: result.next,
       },
     });

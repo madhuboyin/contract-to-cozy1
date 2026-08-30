@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { prisma } from '../../lib/prisma';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import {
+  EvidenceRefSchema,
   entityRefKey,
+  normalizeConfidenceRatio,
   type EvidenceRef,
   type EnvelopeEntityRef,
   type InventoryItemCategory,
@@ -52,6 +54,7 @@ export type EnvelopeProducerReadInput = Readonly<{
   createdBefore?: Date;
   createdAtOnOrBefore?: Date;
   rowLimit: number;
+  offset: number;
 }>;
 
 export interface EnvelopeProducerReader {
@@ -99,6 +102,133 @@ function sourceEvidence(input: {
   }];
 }
 
+function jsonRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function jsonArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function dateOrNull(value: unknown): string | null {
+  if (typeof value !== 'string' && !(value instanceof Date)) return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+}
+
+function dedupeEvidence(...groups: readonly EvidenceRef[][]): EvidenceRef[] {
+  const byId = new Map<string, EvidenceRef>();
+  for (const evidence of groups.flat()) {
+    const parsed = EvidenceRefSchema.safeParse(evidence);
+    if (parsed.success && !byId.has(parsed.data.id)) byId.set(parsed.data.id, parsed.data);
+  }
+  return [...byId.values()];
+}
+
+function storedEvidenceRefs(value: unknown): EvidenceRef[] {
+  const candidates = Array.isArray(value)
+    ? value
+    : jsonArray(jsonRecord(value)?.evidence);
+  return candidates.flatMap((candidate) => {
+    const parsed = EvidenceRefSchema.safeParse(candidate);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
+function snapshotFactEvidence(value: unknown, observedAt: Date | string): EvidenceRef[] {
+  return jsonArray(value).flatMap((candidate, index) => {
+    const fact = jsonRecord(candidate);
+    if (!fact) return [];
+    const entityType = typeof fact.entityType === 'string' ? fact.entityType : 'PROPERTY';
+    const entityId = typeof fact.entityId === 'string' ? fact.entityId : 'unknown';
+    const fieldPath = typeof fact.fieldPath === 'string' ? fact.fieldPath : `fact-${index + 1}`;
+    return [{
+      id: `canonical-fact:${entityType}:${entityId}:${fieldPath}`.slice(0, 120),
+      type: 'PROPERTY_FACT' as const,
+      label: `${entityType.toLowerCase().replace(/_/g, ' ')} ${fieldPath.replace(/\./g, ' ')}`.slice(0, 240),
+      source: 'Decision Platform canonical fact reference',
+      observedAt: dateOrNull(observedAt),
+      freshness: 'UNKNOWN' as const,
+      confidence: null,
+    }];
+  });
+}
+
+function snapshotSignalEvidence(value: unknown, observedAt: Date | string): EvidenceRef[] {
+  return jsonArray(value).flatMap((candidate, index) => {
+    const signal = jsonRecord(candidate);
+    if (!signal) return [];
+    const sourceId = ['homeActionId', 'sourceEntityId', 'lineageId']
+      .map((key) => signal[key])
+      .find((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+    if (!sourceId) return [];
+    return [{
+      id: `snapshot-signal:${sourceId}`.slice(0, 120),
+      type: 'SYSTEM_DERIVATION' as const,
+      label: typeof signal.type === 'string' ? signal.type.replace(/_/g, ' ') : `Snapshot signal ${index + 1}`,
+      source: 'Decision Platform signal reference',
+      observedAt: dateOrNull(signal.capturedAt) ?? dateOrNull(observedAt),
+      freshness: 'UNKNOWN' as const,
+      confidence: null,
+    }];
+  });
+}
+
+function personalizationExplanationEvidence(
+  explanations: readonly { id: string; headline: string; evidenceJson: unknown; createdAt: Date }[],
+  confidence: number | null,
+): EvidenceRef[] {
+  return explanations.flatMap((explanation) => dedupeEvidence(
+    storedEvidenceRefs(explanation.evidenceJson),
+    [{
+      id: `RecommendationExplanation:${explanation.id}`,
+      type: 'SYSTEM_DERIVATION',
+      label: explanation.headline.slice(0, 240),
+      source: 'PersonalizationEngine explanation',
+      observedAt: explanation.createdAt.toISOString(),
+      freshness: 'UNKNOWN',
+      confidence: normalizeConfidenceRatio(confidence),
+    }],
+  ));
+}
+
+function compoundEvidence(row: {
+  sourceEvidenceJson: unknown;
+  factEvidenceJson: unknown;
+  evaluatedAt: Date;
+}): EvidenceRef[] {
+  const sources = jsonArray(row.sourceEvidenceJson).flatMap((candidate) => {
+    const source = jsonRecord(candidate);
+    if (!source || typeof source.eventId !== 'string') return [];
+    const expiresAt = dateOrNull(source.expiresAt);
+    return [{
+      id: `RadarEvent:${source.eventId}`,
+      type: 'EXTERNAL_SOURCE' as const,
+      label: `Radar event ${String(source.eventType ?? 'event').replace(/_/g, ' ')}`.slice(0, 240),
+      source: String(source.provider ?? source.sourceName ?? 'HomeEventRadar').slice(0, 300),
+      observedAt: dateOrNull(source.effectiveAt),
+      freshness: expiresAt && Date.parse(expiresAt) < Date.now() ? 'STALE' as const : 'CURRENT' as const,
+      confidence: null,
+    }];
+  });
+  const facts = jsonArray(row.factEvidenceJson).flatMap((candidate) => {
+    const fact = jsonRecord(candidate);
+    if (!fact || typeof fact.factKey !== 'string') return [];
+    return [{
+      id: `radar-fact:${fact.factKey}`.slice(0, 120),
+      type: 'PROPERTY_FACT' as const,
+      label: `${fact.factKey}: ${String(fact.state ?? fact.value ?? 'unknown')}`.slice(0, 240),
+      source: 'HomeEventRadar property facts',
+      observedAt: row.evaluatedAt.toISOString(),
+      freshness: fact.state === 'unknown' ? 'UNKNOWN' as const : 'CURRENT' as const,
+      confidence: null,
+    }];
+  });
+  return dedupeEvidence(sources, facts);
+}
+
 function createdAtWhere(input: EnvelopeProducerReadInput): { gt?: Date; lt?: Date; lte?: Date } | undefined {
   const where = {
     ...(input.createdAfter ? { gt: input.createdAfter } : {}),
@@ -117,6 +247,7 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
         where: { propertyId: input.propertyId, createdAt: createdAtWhere(input) },
         include: { homeItem: { include: { inventoryItem: { select: { category: true, assetType: true } } } } },
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: input.offset,
         take: input.rowLimit,
       });
       return rows.map((row) => signalEnvelopeAdapter.map({
@@ -136,12 +267,24 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
         where: { propertyId: input.propertyId, createdAt: createdAtWhere(input) },
         include: { inventoryItem: { select: { category: true, assetType: true } } },
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: input.offset,
         take: input.rowLimit,
       });
       return rows.map((row) => guidanceSignalEnvelopeAdapter.map(row, {
         propertyId: input.propertyId,
         userId: input.userId,
-        evidence: sourceEvidence({ producerModel: 'GuidanceSignal', sourceRecordId: row.id, observedAt: row.lastObservedAt, confidence: row.confidenceScore == null ? null : Number(row.confidenceScore) }),
+        evidence: dedupeEvidence(
+          row.sourceProvenanceId || row.sourceEntityId || row.sourceRunId ? [{
+            id: `GuidanceProvenance:${row.sourceProvenanceId ?? row.sourceEntityId ?? row.sourceRunId}`.slice(0, 120),
+            type: 'SYSTEM_DERIVATION',
+            label: `${row.sourceType ?? 'Guidance'} provenance`,
+            source: row.sourceFeatureKey ?? row.sourceToolKey ?? 'GuidanceEngine',
+            observedAt: row.lastObservedAt.toISOString(),
+            freshness: 'UNKNOWN',
+            confidence: normalizeConfidenceRatio(row.confidenceScore == null ? null : Number(row.confidenceScore)),
+          }] : [],
+          sourceEvidence({ producerModel: 'GuidanceSignal', sourceRecordId: row.id, observedAt: row.lastObservedAt, confidence: row.confidenceScore == null ? null : Number(row.confidenceScore) }),
+        ),
       }));
     },
   },
@@ -158,6 +301,7 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
           propertyMatches: { where: { propertyId: input.propertyId }, select: { matchConfidence: true }, take: 1 },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: input.offset,
         take: input.rowLimit,
       });
       return observations.map((observation) => intelligenceObservationEnvelopeAdapter.map({
@@ -184,6 +328,7 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
         where: { propertyId: input.propertyId, generatedAt: createdAtWhere(input) },
         include: { decisionThread: { select: { currentRecommendationSnapshotId: true, primaryEntityType: true, primaryEntityId: true } } },
         orderBy: [{ generatedAt: 'desc' }, { id: 'asc' }],
+        skip: input.offset,
         take: input.rowLimit,
       });
       const inventoryIds = rows.flatMap((row) => (
@@ -208,7 +353,12 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
       }, {
         propertyId: input.propertyId,
         userId: input.userId,
-        evidence: sourceEvidence({ producerModel: 'RecommendationSnapshot', sourceRecordId: row.id, observedAt: row.generatedAt }),
+        evidence: dedupeEvidence(
+          storedEvidenceRefs(row.evidenceReferences),
+          snapshotFactEvidence(row.canonicalFactReferences, row.generatedAt),
+          snapshotSignalEvidence(row.signalReferences, row.generatedAt),
+          sourceEvidence({ producerModel: 'RecommendationSnapshot', sourceRecordId: row.id, observedAt: row.generatedAt }),
+        ),
       }));
     },
   },
@@ -217,8 +367,16 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
     async read(input) {
       const rows = await prisma.personalizedRecommendation.findMany({
         where: { propertyId: input.propertyId, firstEligibleAt: createdAtWhere(input) },
-        include: { definition: { select: { code: true } } },
+        include: {
+          definition: { select: { code: true } },
+          explanations: {
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { id: true, headline: true, evidenceJson: true, createdAt: true },
+          },
+        },
         orderBy: [{ firstEligibleAt: 'desc' }, { id: 'asc' }],
+        skip: input.offset,
         take: input.rowLimit,
       });
       return rows.map((row) => personalizedRecommendationEnvelopeAdapter.map({
@@ -227,7 +385,10 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
       }, {
         propertyId: input.propertyId,
         userId: input.userId,
-        evidence: sourceEvidence({ producerModel: 'PersonalizedRecommendation', sourceRecordId: row.id, observedAt: row.lastEvaluatedAt, confidence: row.confidence }),
+        evidence: dedupeEvidence(
+          personalizationExplanationEvidence(row.explanations, row.confidence),
+          sourceEvidence({ producerModel: 'PersonalizedRecommendation', sourceRecordId: row.id, observedAt: row.lastEvaluatedAt, confidence: row.confidence }),
+        ),
       }));
     },
   },
@@ -245,6 +406,7 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
           },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: input.offset,
         take: input.rowLimit,
       });
       return rows.map((row) => propertyRadarMatchEnvelopeAdapter.map({
@@ -257,13 +419,21 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
       }, {
         propertyId: input.propertyId,
         userId: input.userId,
-        evidence: sourceEvidence({
-          producerModel: 'PropertyRadarMatch',
-          sourceRecordId: row.id,
-          observedAt: row.radarEvent.observedAt,
-          source: row.radarEvent.sourceDefinition?.provider ?? String(row.radarEvent.sourceType),
-          confidence: row.confidenceScore == null ? null : Number(row.confidenceScore),
-        }),
+        evidence: dedupeEvidence([{
+          id: `RadarEventRevision:${row.lastEventRevisionId ?? row.radarEvent.revisions[0]?.id ?? row.radarEvent.id}`.slice(0, 120),
+          type: 'EXTERNAL_SOURCE',
+          label: `Global Radar event ${row.radarEvent.eventType.replace(/_/g, ' ')}`,
+          source: String(row.radarEvent.sourceDefinition?.provider ?? row.radarEvent.sourceType).slice(0, 300),
+          observedAt: row.radarEvent.observedAt.toISOString(),
+          freshness: row.sourceFreshnessStatus === 'fresh' ? 'CURRENT' : row.sourceFreshnessStatus === 'stale' ? 'STALE' : 'UNKNOWN',
+          confidence: normalizeConfidenceRatio(row.confidenceScore == null ? null : Number(row.confidenceScore)),
+        }], sourceEvidence({
+            producerModel: 'PropertyRadarMatch',
+            sourceRecordId: row.id,
+            observedAt: row.createdAt,
+            source: 'HomeEventRadar property match',
+            confidence: row.confidenceScore == null ? null : Number(row.confidenceScore),
+          })),
       }));
     },
   },
@@ -273,12 +443,16 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
       const rows = await prisma.propertyRadarCompoundInsight.findMany({
         where: { propertyId: input.propertyId, createdAt: createdAtWhere(input) },
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: input.offset,
         take: input.rowLimit,
       });
       return rows.map((row) => propertyRadarCompoundInsightEnvelopeAdapter.map(row, {
         propertyId: input.propertyId,
         userId: input.userId,
-        evidence: sourceEvidence({ producerModel: 'PropertyRadarCompoundInsight', sourceRecordId: row.id, observedAt: row.evaluatedAt }),
+        evidence: dedupeEvidence(
+          compoundEvidence(row),
+          sourceEvidence({ producerModel: 'PropertyRadarCompoundInsight', sourceRecordId: row.id, observedAt: row.evaluatedAt }),
+        ),
       }));
     },
   },
@@ -370,6 +544,7 @@ async function readWithTimeout(
 async function executeIntelligenceEnvelopeQuery(
   rawQuery: IntelligenceEnvelopeQuery,
   dependencyOverrides: Partial<IntelligenceEnvelopeQueryDependencies> = {},
+  collectAllMatchingRows = false,
 ): Promise<IntelligenceEnvelopeCoveragePage> {
   const query = IntelligenceEnvelopeQuerySchema.parse(rawQuery);
   const dependencies: IntelligenceEnvelopeQueryDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
@@ -381,23 +556,52 @@ async function executeIntelligenceEnvelopeQuery(
     throw new IntelligenceEnvelopeAccessDeniedError();
   }
 
-  const startedAt = dependencies.now().getTime();
+  const wallStartedAt = Date.now();
   const producerModels = query.sourceModels?.length ? query.sourceModels : [...ENVELOPE_PRODUCER_MODELS];
   const rowLimit = Math.min(ENVELOPE_QUERY_MAX_ROWS_PER_PRODUCER, Math.max(100, query.limit * 3));
   const reads = producerModels.map(async (producerModel) => {
     const reader = dependencies.readers[producerModel];
-    const elapsed = dependencies.now().getTime() - startedAt;
-    const remaining = dependencies.totalTimeoutMs - elapsed;
-    if (remaining <= 0) return { producerModel, failed: true as const, timeout: true as const, results: [] as readonly EnvelopeAdapterResult[] };
+    const readerStartedAt = Date.now();
+    const results: EnvelopeAdapterResult[] = [];
+    let offset = 0;
     try {
-      const results = await readWithTimeout(reader, {
-        propertyId: query.propertyId,
-        userId: query.principal.userId,
-        ...(query.createdAfter ? { createdAfter: new Date(query.createdAfter) } : {}),
-        ...(query.createdBefore ? { createdBefore: new Date(query.createdBefore) } : {}),
-        ...(cursor ? { createdAtOnOrBefore: new Date(cursor.createdAt) } : {}),
-        rowLimit,
-      }, Math.min(dependencies.perAdapterTimeoutMs, remaining));
+      while (true) {
+        const totalRemaining = dependencies.totalTimeoutMs - (Date.now() - wallStartedAt);
+        const adapterRemaining = dependencies.perAdapterTimeoutMs - (Date.now() - readerStartedAt);
+        const remaining = Math.min(totalRemaining, adapterRemaining);
+        if (remaining <= 0) throw new Error('ENVELOPE_ADAPTER_TIMEOUT');
+        const batch = await readWithTimeout(reader, {
+          propertyId: query.propertyId,
+          userId: query.principal.userId,
+          ...(query.createdAfter ? { createdAfter: new Date(query.createdAfter) } : {}),
+          ...(query.createdBefore ? { createdBefore: new Date(query.createdBefore) } : {}),
+          ...(cursor ? { createdAtOnOrBefore: new Date(cursor.createdAt) } : {}),
+          rowLimit,
+          offset,
+        }, remaining);
+        results.push(...batch);
+
+        const matchingItems = results
+          .flatMap((result) => result.item ? [result.item] : [])
+          .filter((item) => item.subject.propertyId === query.propertyId)
+          .filter((item) => matchesQuery(item, query))
+          .filter((item) => !cursor || isAfterCursor(item, cursor))
+          .sort(compareItems);
+        const pageBoundary = matchingItems.at(query.limit);
+        const lastMappedItem = [...batch].reverse().find((result) => result.item)?.item;
+        // Database readers order by native created time and id, while the
+        // public contract breaks timestamp ties by envelopeKey. We may stop
+        // only after the native scan has moved strictly past the provisional
+        // page boundary; otherwise an unread same-timestamp row could sort
+        // ahead of it and be skipped forever.
+        const safelyPastPageBoundary = Boolean(
+          pageBoundary
+          && lastMappedItem
+          && Date.parse(lastMappedItem.createdAt) < Date.parse(pageBoundary.createdAt),
+        );
+        if (batch.length < rowLimit || (!collectAllMatchingRows && safelyPastPageBoundary)) break;
+        offset += batch.length;
+      }
       return { producerModel, failed: false as const, timeout: false as const, results };
     } catch (error) {
       return {
@@ -475,5 +679,5 @@ export function queryIntelligenceEnvelopeForCoverage(
   rawQuery: IntelligenceEnvelopeQuery,
   dependencyOverrides: Partial<IntelligenceEnvelopeQueryDependencies> = {},
 ): Promise<IntelligenceEnvelopeCoveragePage> {
-  return executeIntelligenceEnvelopeQuery(rawQuery, dependencyOverrides);
+  return executeIntelligenceEnvelopeQuery(rawQuery, dependencyOverrides, true);
 }

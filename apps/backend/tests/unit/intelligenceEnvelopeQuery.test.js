@@ -8,11 +8,11 @@ const envelope = require('../../src/services/intelligenceEnvelope/index.ts');
 const NOW = '2026-08-28T12:00:00.000Z';
 const PRODUCERS = envelope.ENVELOPE_PRODUCER_MODELS;
 
-function signalResult(id, createdAt) {
+function signalResult(id, createdAt, signalKey = 'RISK_SPIKE') {
   return envelope.signalEnvelopeAdapter.map({
     id,
     propertyId: 'property-1',
-    signalKey: 'RISK_SPIKE',
+    signalKey,
     version: 1,
     sourceModel: 'Fixture',
     sourceId: id,
@@ -119,6 +119,60 @@ test('pagination is deterministic for timestamp ties and cursor is query-bound',
     envelope.queryIntelligenceEnvelope({ ...query, limit: 3, cursor: first.nextCursor }, dependencies({ readers: queryReaders })),
     /does not match the query shape/,
   );
+});
+
+test('filtered queries page native readers until older matching rows are found', async () => {
+  const rows = [
+    ...Array.from({ length: 350 }, (_, index) => signalResult(
+      `safety-${String(index).padStart(3, '0')}`,
+      new Date(Date.parse(NOW) - index * 1000).toISOString(),
+    )),
+    signalResult('financial-match', '2026-08-20T12:00:00.000Z', 'COST_PRESSURE_PATTERN'),
+  ];
+  const queryReaders = readers({ Signal: {
+    producerModel: 'Signal',
+    read: async ({ offset, rowLimit }) => rows.slice(offset, offset + rowLimit),
+  } });
+  const page = await envelope.queryIntelligenceEnvelope({
+    propertyId: 'property-1',
+    principal: { kind: 'HOMEOWNER_SESSION', userId: 'user-1' },
+    sourceModels: ['Signal'],
+    domains: ['FINANCIAL'],
+    limit: 1,
+  }, dependencies({ readers: queryReaders, perAdapterTimeoutMs: 1_000, totalTimeoutMs: 2_000 }));
+
+  assert.deepEqual(page.items.map((item) => item.source.sourceRecordId), ['financial-match']);
+  assert.equal(page.nextCursor, null);
+});
+
+test('pagination reaches rows beyond the first native batch when timestamps tie', async () => {
+  const rows = Array.from({ length: 350 }, (_, index) => signalResult(
+    `signal-${String(index).padStart(3, '0')}`,
+    NOW,
+  ));
+  const queryReaders = readers({ Signal: {
+    producerModel: 'Signal',
+    read: async ({ offset, rowLimit }) => rows.slice(offset, offset + rowLimit),
+  } });
+  const baseQuery = {
+    propertyId: 'property-1',
+    principal: { kind: 'HOMEOWNER_SESSION', userId: 'user-1' },
+    sourceModels: ['Signal'],
+    limit: 100,
+  };
+  const seen = [];
+  let cursor;
+  do {
+    const page = await envelope.queryIntelligenceEnvelope(
+      { ...baseQuery, ...(cursor ? { cursor } : {}) },
+      dependencies({ readers: queryReaders, perAdapterTimeoutMs: 1_000, totalTimeoutMs: 2_000 }),
+    );
+    seen.push(...page.items.map((item) => item.envelopeKey));
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+
+  assert.equal(seen.length, 350);
+  assert.equal(new Set(seen).size, 350);
 });
 
 test('one producer timeout returns a diagnostic while healthy producer items survive', async () => {

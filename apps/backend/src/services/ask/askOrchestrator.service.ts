@@ -1719,7 +1719,7 @@ function yearsSince(value: Date | null): number | null {
   return Math.max(0, Math.floor((Date.now() - value.getTime()) / (365.25 * 24 * 60 * 60 * 1000)));
 }
 
-async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId?: string | null): Promise<AskOperationResult> {
+async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const allItems = await prisma.inventoryItem.findMany({
     where: { propertyId }, orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }], take: 200,
@@ -1768,6 +1768,9 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
   }
 
   const item = items[0];
+  if (item.category === 'HVAC') {
+    return hvacDecisionStartResult(userId, propertyId, message, executionId, item.id);
+  }
   const evaluation = await evaluateFeatureContext(propertyId, userId, {
     featureKey: 'REPAIR_REPLACE', operationKey: 'RUN_ANALYSIS', operationInput: { inventoryItemId: item.id },
   });
@@ -1940,10 +1943,12 @@ async function preferenceReferenceBlocksForSnapshot(idPrefix: string, preference
   }));
 }
 
-async function findHvacItemForMessage(propertyId: string, message: string): Promise<{ items: { id: string; name: string }[]; item: { id: string; name: string } | null }> {
+async function findHvacItemForMessage(propertyId: string, message: string, focusedInventoryItemId?: string | null): Promise<{ items: { id: string; name: string }[]; item: { id: string; name: string } | null }> {
   const items = await prisma.inventoryItem.findMany({ where: { propertyId, category: 'HVAC' }, select: { id: true, name: true }, take: 50 });
   const lower = message.toLowerCase();
-  const matched = items.find((candidate) => lower.includes(candidate.name.toLowerCase()));
+  const matched = focusedInventoryItemId
+    ? items.find((candidate) => candidate.id === focusedInventoryItemId)
+    : items.find((candidate) => lower.includes(candidate.name.toLowerCase()));
   const item = matched ?? (items.length === 1 ? items[0] : null);
   return { items, item };
 }
@@ -1962,8 +1967,8 @@ function hvacDecisionThreadAmbiguousResult(operationId: AskOperationId, candidat
   };
 }
 
-async function hvacDecisionStartResult(userId: string, propertyId: string, message: string, executionId: string): Promise<AskOperationResult> {
-  const { items, item } = await findHvacItemForMessage(propertyId, message);
+async function hvacDecisionStartResult(userId: string, propertyId: string, message: string, executionId: string, focusedInventoryItemId?: string | null): Promise<AskOperationResult> {
+  const { items, item } = await findHvacItemForMessage(propertyId, message, focusedInventoryItemId);
   if (!items.length) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
@@ -6075,6 +6080,7 @@ async function dispatchOperationAdapterResult(
       input.propertyId!,
       input.message,
       input.launchContext?.entityType === 'INVENTORY_ITEM' ? input.launchContext.entityId : null,
+      input.executionId,
     );
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);

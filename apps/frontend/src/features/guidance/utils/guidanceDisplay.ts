@@ -1,5 +1,6 @@
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import {
   GuidanceExecutionReadiness,
   GuidanceIssueDomain,
@@ -250,6 +251,17 @@ export function resolveGuidanceStepHref(args: {
   mode?: 'guided' | 'standalone';
 }): string | null {
   const { propertyId, journey, step, next, mode = 'guided' } = args;
+
+  if (step.toolKey === 'replace-repair' && journey.inventoryItem?.category === 'HVAC') {
+    const assetName = journey.inventoryItem.name?.trim() || 'HVAC system';
+    return buildAskWorkspaceHref({
+      propertyId,
+      question: `Should I repair or replace my ${assetName}?`,
+      from: 'guidance',
+      launchSurface: 'guidance',
+      launchCapabilityId: 'hvac-decision-platform',
+    });
+  }
 
   if (
     mode === 'guided' &&

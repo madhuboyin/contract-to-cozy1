@@ -161,6 +161,16 @@ test('each registered producer adapter emits its reviewed primary domain', () =>
   }
 });
 
+test('suppressed Guidance signals are never emitted as current', () => {
+  const result = envelope.guidanceSignalEnvelopeAdapter.map({
+    id: 'guidance-suppressed', propertyId: 'property-1', issueDomain: 'SAFETY', status: 'SUPPRESSED',
+    severityScore: 75, confidenceScore: 0.8, lastObservedAt: NOW,
+    expiresAt: '2026-08-29T12:00:00.000Z', createdAt: NOW, updatedAt: NOW,
+  }, { propertyId: 'property-1', evidence: EVIDENCE });
+
+  assert.equal(result.item.freshness.currentness, 'STALE');
+});
+
 test('qualified-claim compatibility is explicit and otherwise remains unknown', () => {
   assert.equal(envelope.evaluateQualifiedClaimVerdicts({
     propositionType: 'HVAC_REPAIR_REPLACE_VERDICT',

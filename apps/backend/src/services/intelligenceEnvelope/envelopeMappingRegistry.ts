@@ -6,7 +6,10 @@ import {
   type SharedSignalKey,
 } from '../../productFramework/intelligence';
 import { RADAR_COMPOUND_RULE_CODES } from '../../modules/homeEventRadar/domain/radarCompoundRules';
-import { PERSONALIZATION_DEFINITIONS } from '../../modules/personalization/catalog/personalizationDefinitions';
+import {
+  PERSONALIZATION_DEFINITIONS,
+  type PersonalizationDefinitionCode,
+} from '../../modules/personalization/catalog/personalizationDefinitions';
 import { DECISION_DEFINITIONS, type DecisionDefinitionId } from '../decisionPlatform/decisionDefinitionRegistry';
 import type { EnvelopeProducerModel, EnvelopeType } from './intelligenceEnvelope.contract';
 
@@ -44,7 +47,7 @@ const decisionMappings: Record<DecisionDefinitionId, {
   APPLIANCE_REPAIR_REPLACE: { domain: 'ASSET_LIFECYCLE', propositionType: 'APPLIANCE_REPAIR_REPLACE_VERDICT' },
 };
 
-const personalizationDomains: Readonly<Record<string, EnvelopeDomain>> = {
+const personalizationDomains: Readonly<Record<PersonalizationDefinitionCode, EnvelopeDomain>> = {
   hvac_filter_replacement_check_proof: 'MAINTENANCE',
   smoke_co_detector_battery_check: 'SAFETY',
   dryer_vent_cleaning_reminder: 'SAFETY',

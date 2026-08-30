@@ -63,6 +63,14 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
         : null;
 
     const overrides = (req.body?.overrides ?? {}) as ReplaceRepairOverrides;
+    const itemCategory = await service.getItemCategory(propertyId, itemId, userId);
+    if (itemCategory === 'HVAC') {
+      throw new APIError(
+        'HVAC repair-or-replace decisions are owned by the Decision Platform.',
+        409,
+        'HVAC_DECISION_PLATFORM_REQUIRED',
+      );
+    }
     const currentContext = await assertFinancialContextApplicable(
       propertyId,
       userId,
