@@ -7,6 +7,8 @@ import { capturePropertyFact } from '../modules/propertyContext/application/capt
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { APIError } from '../middleware/error.middleware';
+import { KnowledgeHubService, type KnowledgeHubArticleListItem } from './knowledgeHub.service';
+import { selectAskGeneralGuidance, type AskGeneralGuidanceEntry } from './ask/askGeneralGuidanceCatalog';
 import { selectRelevantAskFacts } from './ask/askPromptMinimization';
 import {
   selectAndRenderAskRemoteFallbackClaims,
@@ -14,12 +16,53 @@ import {
 } from './ask/askRemoteFallbackTypedClaims';
 
 const humanize = (key: string) => key.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+const knowledgeHub = new KnowledgeHubService();
+
+const GUIDANCE_STOP_WORDS = new Set(['about', 'after', 'and', 'are', 'can', 'does', 'for', 'from', 'home', 'how', 'should', 'that', 'the', 'this', 'what', 'when', 'with', 'your']);
+function guidanceTokens(value: string): Set<string> {
+  return new Set(value.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2 && !GUIDANCE_STOP_WORDS.has(token)));
+}
+
+type GeneralGuidanceSource =
+  | { kind: 'PUBLISHED_ARTICLE'; article: KnowledgeHubArticleListItem }
+  | { kind: 'CURATED_CATALOG'; entry: AskGeneralGuidanceEntry };
+
+async function approvedGeneralGuidance(message: string): Promise<GeneralGuidanceSource | null> {
+  const question = guidanceTokens(message);
+  if (!question.size) return null;
+  let articles: KnowledgeHubArticleListItem[] = [];
+  try {
+    articles = await knowledgeHub.getPublishedKnowledgeArticles();
+  } catch {
+    // The code-owned catalog remains available when editorial storage is
+    // temporarily unavailable; no unapproved model prose is substituted.
+  }
+  const ranked = articles.map((article) => {
+    const searchable = [article.title, article.subtitle, article.excerpt, ...article.categories.flatMap((category) => [category.name, category.slug])]
+      .filter((value): value is string => Boolean(value)).join(' ');
+    const articleTokens = guidanceTokens(searchable);
+    const score = [...question].filter((token) => articleTokens.has(token)).length;
+    return { article, score };
+  }).filter(({ article, score }) => score > 0 && Boolean(article.excerpt?.trim() || article.subtitle?.trim()))
+    .sort((left, right) => right.score - left.score || Number(right.article.featured) - Number(left.article.featured) || left.article.sortOrder - right.article.sortOrder);
+  if (ranked[0]?.article) return { kind: 'PUBLISHED_ARTICLE', article: ranked[0].article };
+  const entry = selectAskGeneralGuidance(message);
+  return entry ? { kind: 'CURATED_CATALOG', entry } : null;
+}
 
 export async function answerGroundedAsk(input: { userId: string; sessionId: string; message: string; propertyId?: string }) {
   const context = input.propertyId
     ? await getAggregationPropertyContext(input.propertyId, input.userId, 'SEARCH_ASSISTANT')
     : null;
   const facts = context ? Object.values(context.facts) : [];
+  const generalGuidance = context ? null : await approvedGeneralGuidance(input.message);
+  const generalId = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? generalGuidance.article.slug : generalGuidance?.entry.id;
+  const generalTitle = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? generalGuidance.article.title : generalGuidance?.entry.title;
+  const generalText = generalGuidance?.kind === 'PUBLISHED_ARTICLE'
+    ? generalGuidance.article.excerpt?.trim() || generalGuidance.article.subtitle!.trim()
+    : generalGuidance?.entry.guidance;
+  const generalObservedAt = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? generalGuidance.article.publishedAt : null;
+  const generalSource = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? 'ContractToCozy Knowledge Hub' : 'ContractToCozy curated guidance v1';
   const relevantFacts = selectRelevantAskFacts(input.message, facts);
   const knownCandidates: AskRemoteFallbackFact[] = relevantFacts.flatMap((selected) => {
     const fact = context?.facts[selected.key];
@@ -46,23 +89,29 @@ export async function answerGroundedAsk(input: { userId: string; sessionId: stri
       ? rendered.map((claim) => claim.text).join(' ')
       : context
         ? 'The current Living Home Record does not contain a supported severity, deadline, or cost comparison for this question. Ask will not generate an unsupported property-specific answer.'
-        : 'Select a property to receive a response reconstructed from supported typed claims in its Living Home Record.',
+        : generalGuidance
+          ? generalText!
+          : 'No relevant published Knowledge Hub guidance is available for this question. Ask will not invent general advice from an unapproved source.',
     groundingMode: context ? 'PROPERTY' : 'GENERAL',
-    knownFacts: known.map((fact) => ({ key: fact.key, label: humanize(fact.key), value: fact.value, source: fact.source, observedAt: fact.observedAt })),
+    knownFacts: context
+      ? known.map((fact) => ({ key: fact.key, label: humanize(fact.key), value: fact.value, source: fact.source, observedAt: fact.observedAt }))
+      : generalGuidance ? [{ key: `knowledge.guidance.${generalId}`, label: generalTitle!, value: generalText, source: generalSource, observedAt: generalObservedAt }] : [],
     assumptions: context
       ? (known.length ? [] : ['No supported typed claim could be reconstructed from the Living Home Record.'])
-      : ['No property was selected, so this answer is general educational guidance.'],
+      : [generalGuidance ? 'This general answer uses an approved guidance source and does not depend on a property record.' : 'No matching approved general-guidance source was available.'],
     missingFacts: missing.map((fact) => fact.key),
-    evidence: known.map((fact) => ({ factKey: fact.key, label: humanize(fact.key), source: fact.source, observedAt: fact.observedAt, confidence: fact.confidence })),
+    evidence: context
+      ? known.map((fact) => ({ factKey: fact.key, label: humanize(fact.key), source: fact.source, observedAt: fact.observedAt, confidence: fact.confidence }))
+      : generalGuidance ? [{ factKey: `knowledge.guidance.${generalId}`, label: generalTitle!, source: generalSource, observedAt: generalObservedAt, confidence: 1 }] : [],
     confidence: {
-      score: averageConfidence == null ? null : Number(averageConfidence.toFixed(4)),
-      label: confidenceLabel,
-      rationale: context ? `${known.length} cited or question-relevant facts support this answer; ${missing.length} relevant facts remain unknown, stale, or conflicted.` : 'General guidance is not supported by a selected Living Home Record.',
+      score: context ? (averageConfidence == null ? null : Number(averageConfidence.toFixed(4))) : generalGuidance ? 1 : null,
+      label: context ? confidenceLabel : generalGuidance ? 'HIGH' : 'LOW',
+      rationale: context ? `${known.length} cited or question-relevant facts support this answer; ${missing.length} relevant facts remain unknown, stale, or conflicted.` : generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? 'The answer is reconstructed from a published Knowledge Hub article.' : generalGuidance ? 'The answer is reconstructed from the bounded code-owned general-guidance catalog.' : 'No approved general-guidance source matched the question.',
     },
     safetyBoundary: 'This answer is educational and does not replace emergency services, a licensed professional, controlling contract or policy language, or an authority having jurisdiction.',
     nextAction: context
       ? (known.length ? 'Review the cited facts and correct or add evidence before acting on a material recommendation.' : 'Add or verify the relevant home facts before relying on this answer for a material action.')
-      : 'Select a property to receive an answer grounded in its Living Home Record.',
+      : generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? `Read “${generalTitle}” in the Knowledge Hub for the full published guidance.` : generalGuidance ? 'Use this as a general maintenance starting point and verify the equipment manufacturer guidance or consult a qualified professional when conditions are uncertain.' : 'Browse the Knowledge Hub or ask a record-specific question after selecting a property.',
     proposals: [],
   });
 }

@@ -62,6 +62,16 @@ test('prompt context includes only relevant bounded facts and never sends the co
   assert.equal(JSON.stringify(selected).includes('private@example.com'), false);
 });
 
+test('prompt context bridges homeowner HVAC and urgency language to canonical fact keys', () => {
+  const facts = [
+    { key: 'systems.hvacCondition', state: 'KNOWN', value: 'POOR' },
+    { key: 'risk.severity', state: 'KNOWN', value: 'HIGH' },
+    { key: 'structure.roofType', state: 'KNOWN', value: 'ASPHALT' },
+  ];
+  const selected = selectRelevantAskFacts('How serious is the furnace issue?', facts);
+  assert.deepEqual(new Set(selected.map((fact) => fact.key)), new Set(['risk.severity', 'systems.hvacCondition']));
+});
+
 test('result-only synthesis payload excludes actions, routes, identifiers, and unsafe block families', () => {
   const payload = buildAskResultSynthesisPayload('MAINTENANCE_STATUS', [{
     type: 'SUMMARY', id: 'private-block-id', title: 'Maintenance status', body: 'Two tasks are pending for owner@example.com.', tone: 'DEFAULT',

@@ -73,6 +73,36 @@ test('Ask executes the delivered action through one shared runtime identity and 
   assert.equal(runtimeCalls[1].askExecutionId, 'ask-execution-1');
 });
 
+test('Ask submits a homeowner fact into the paused shared runtime with the current CAS version', async () => {
+  const runtimeCalls = [];
+  const action = {
+    id: 'action-1', lineageId: 'repair-replace:analysis-1', recommendedAction: 'Review the furnace decision', signal: 'HVAC review',
+    presentation: { headline: 'Furnace repair or replace' }, source: { entityId: 'analysis-1', version: '7' },
+    decisionLineage: { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId: 'inventory-1' },
+  };
+  const paused = {
+    runId: 'run-1', agentId: 'hvac-repair-replace-specialist', agentVersion: '1.0.0', phase: 'NEEDS_CONTEXT',
+    decisionThreadId: 'thread-1', currentRecommendationSnapshotId: null, verdict: null, confidenceLabel: null,
+    outstanding: [{ key: 'hvac.condition', label: 'Condition', correctionPath: 'inventory-item:hvac', kind: 'FACT' }],
+    explanation: [], abstentionReason: null, paused: true, casVersion: 4, expectedOperation: 'SUBMIT_CONTEXT',
+  };
+  const ready = { ...paused, phase: 'RECOMMENDATION_READY', verdict: 'REPAIR', confidenceLabel: 'HIGH', outstanding: [], paused: false, casVersion: null, expectedOperation: null };
+  const dependencies = {
+    authorize: async () => ({ role: 'CONTRIBUTOR' }),
+    loadHomeActionFeed: async () => ({ actions: [action] }),
+    invokeRuntime: async (input) => {
+      runtimeCalls.push(input);
+      return input.operation === 'GET_STATUS' ? { mutated: false, status: paused } : { mutated: true, status: ready };
+    },
+  };
+
+  const result = await hvacSpecialistEngageResult('user-1', 'property-1', 'Homeowner follow-up: It is in good condition', 'ask-execution-2', undefined, dependencies);
+  assert.equal(result.status, 'ANSWERED');
+  assert.deepEqual(runtimeCalls.map((call) => call.operation), ['GET_STATUS', 'SUBMIT_CONTEXT']);
+  assert.deepEqual(runtimeCalls[1].contextIntake, { 'hvac.condition': 'GOOD' });
+  assert.equal(runtimeCalls[1].expectedCasVersion, 4);
+});
+
 test('a bare forward-looking HVAC repair-or-replace question still routes to HVAC_DECISION_START', () => {
   assert.equal(routeOf('Should I repair or replace my furnace?'), 'HVAC_DECISION_START');
   assert.equal(routeOf('Should I repair or replace my heat pump?'), 'HVAC_DECISION_START');

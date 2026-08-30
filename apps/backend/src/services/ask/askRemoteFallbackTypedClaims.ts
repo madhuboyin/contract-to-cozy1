@@ -52,6 +52,9 @@ export interface AskRemoteFallbackFact {
   source: string | null;
   observedAt: string | null;
   confidence: number | null;
+  /** Optional explicit numeric metadata. Inference is deliberately conservative. */
+  numericUnit?: 'USD' | 'USD_CENTS';
+  comparisonBasis?: 'ONE_TIME' | 'MONTHLY' | 'ANNUAL' | 'BALANCE';
 }
 
 export interface AskRemoteFallbackClaimProvider {
@@ -73,7 +76,7 @@ export interface RenderedAskRemoteFallbackClaim {
 // keys from being classified while accepting both canonical key styles.
 const severityKey = /(?:severity|risk|condition|priority)(?:\.|$)/i;
 const deadlineKey = /(?:date|due|deadline|expiry|expiration|renewal|expiresAt|validUntil)(?:\.|$)/i;
-const costKey = /(?:cost|price|amount|value|expense|premium|payment)(?:\.|$)/i;
+const costKey = /(?:cost|price|amount|value|expense|premium|payment)(?:cents|usd)?(?:\.|$)/i;
 
 function labelFor(key: string): string {
   return key.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -89,10 +92,38 @@ function scalar(value: unknown): string | null {
 function numeric(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
-    const parsed = Number(value.replace(/[$,%\s,]/g, ''));
+    if (/%/.test(value)) return null;
+    const parsed = Number(value.replace(/[$\s,]/g, ''));
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function moneyMetadata(fact: AskRemoteFallbackFact): { unit: 'USD' | 'USD_CENTS'; basis: 'ONE_TIME' | 'MONTHLY' | 'ANNUAL' | 'BALANCE' } | null {
+  const key = fact.key.toLowerCase();
+  const raw = typeof fact.value === 'string' ? fact.value.trim() : '';
+  if (raw.includes('%')) return null;
+  const unit = fact.numericUnit
+    ?? (/(?:cents)(?:\.|$)/i.test(fact.key) ? 'USD_CENTS'
+      : raw.startsWith('$') || /(?:usd|cost|price|amount|value|expense|premium|payment|balance)(?:cents|usd)?(?:\.|$)/i.test(fact.key) ? 'USD' : null);
+  if (!unit || numeric(fact.value) === null) return null;
+  const basis = fact.comparisonBasis
+    ?? (/monthly|permonth|per_month/i.test(key) ? 'MONTHLY'
+      : /annual|yearly|peryear|per_year|premium/i.test(key) ? 'ANNUAL'
+        : /balance/i.test(key) ? 'BALANCE' : 'ONE_TIME');
+  return { unit, basis };
+}
+
+function normalizedUsd(fact: AskRemoteFallbackFact): number | null {
+  const metadata = moneyMetadata(fact);
+  const value = numeric(fact.value);
+  if (!metadata || value === null) return null;
+  return metadata.unit === 'USD_CENTS' ? value / 100 : value;
+}
+
+function formatUsd(value: number, basis: NonNullable<ReturnType<typeof moneyMetadata>>['basis']): string {
+  const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value);
+  return basis === 'MONTHLY' ? `${amount}/month` : basis === 'ANNUAL' ? `${amount}/year` : amount;
 }
 
 function comparisonOperator(left: number, right: number): AskRemoteFallbackTypedClaim['comparisonOperator'] {
@@ -110,13 +141,19 @@ export function buildAskRemoteFallbackClaimCandidates(
     if (severityKey.test(fact.key)) candidates.push({ claimType: 'SEVERITY_STATEMENT', factRefs: [{ id: fact.key }] });
     if (deadlineKey.test(fact.key)) candidates.push({ claimType: 'DEADLINE_STATEMENT', factRefs: [{ id: fact.key }] });
   }
-  const costs = facts.filter((fact) => costKey.test(fact.key) && numeric(fact.value) !== null).slice(0, 4);
+  const costs = facts.filter((fact) => costKey.test(fact.key) && moneyMetadata(fact) !== null).slice(0, 8);
   for (let left = 0; left < costs.length; left += 1) {
     for (let right = left + 1; right < costs.length; right += 1) {
+      const leftMetadata = moneyMetadata(costs[left]);
+      const rightMetadata = moneyMetadata(costs[right]);
+      if (!leftMetadata || !rightMetadata || leftMetadata.basis !== rightMetadata.basis) continue;
+      const leftValue = normalizedUsd(costs[left]);
+      const rightValue = normalizedUsd(costs[right]);
+      if (leftValue === null || rightValue === null) continue;
       candidates.push({
         claimType: 'COST_COMPARISON',
         factRefs: [{ id: costs[left].key }, { id: costs[right].key }],
-        comparisonOperator: comparisonOperator(numeric(costs[left].value)!, numeric(costs[right].value)!),
+        comparisonOperator: comparisonOperator(leftValue, rightValue),
       });
     }
   }
@@ -138,13 +175,16 @@ function renderClaim(claim: AskRemoteFallbackTypedClaim, factsByKey: ReadonlyMap
     const value = scalar(facts[0].value);
     return value === null ? null : { claim, facts, text: `${labelFor(facts[0].key)} is recorded as ${value}.` };
   }
-  const left = numeric(facts[0].value);
-  const right = numeric(facts[1].value);
-  if (left === null || right === null || comparisonOperator(left, right) !== claim.comparisonOperator) return null;
+  const leftMetadata = moneyMetadata(facts[0]);
+  const rightMetadata = moneyMetadata(facts[1]);
+  const left = normalizedUsd(facts[0]);
+  const right = normalizedUsd(facts[1]);
+  if (!leftMetadata || !rightMetadata || leftMetadata.basis !== rightMetadata.basis
+    || left === null || right === null || comparisonOperator(left, right) !== claim.comparisonOperator) return null;
   const relation = claim.comparisonOperator === 'GREATER_THAN'
     ? 'is greater than'
     : claim.comparisonOperator === 'LESS_THAN' ? 'is less than' : 'is approximately equal to';
-  return { claim, facts, text: `${labelFor(facts[0].key)} (${left}) ${relation} ${labelFor(facts[1].key)} (${right}).` };
+  return { claim, facts, text: `${labelFor(facts[0].key)} (${formatUsd(left, leftMetadata.basis)}) ${relation} ${labelFor(facts[1].key)} (${formatUsd(right, rightMetadata.basis)}).` };
 }
 
 /**

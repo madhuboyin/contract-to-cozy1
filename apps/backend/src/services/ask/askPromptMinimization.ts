@@ -11,16 +11,21 @@ const STOP_WORDS = new Set([
 
 const DOMAIN_EQUIVALENTS: Record<string, string[]> = {
   appliance: ['inventory', 'equipment', 'refrigerator', 'fridge', 'dishwasher', 'washer', 'dryer'],
+  hvac: ['furnace', 'heater', 'heating', 'conditioner', 'cooling', 'heatpump', 'boiler'],
   financing: ['mortgage', 'refinance', 'loan', 'interest', 'payment'],
   insurance: ['coverage', 'policy', 'premium', 'claim', 'warranty'],
   maintenance: ['task', 'service', 'repair', 'inspection', 'due', 'completed'],
   renovation: ['remodel', 'project', 'permit', 'contractor'],
   tax: ['assessment', 'appeal', 'exemption', 'assessed'],
+  severity: ['urgent', 'urgency', 'serious', 'critical', 'dangerous', 'priority', 'condition'],
+  deadline: ['expiry', 'expiration', 'expires', 'renewal', 'due', 'date'],
+  cost: ['price', 'amount', 'expense', 'estimate', 'quote', 'payment', 'premium'],
 };
 
 function tokens(value: string): Set<string> {
-  const expanded = value.toLowerCase().replace(/([a-z])([A-Z])/g, '$1 $2');
+  const expanded = value.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
   const result = new Set(expanded.split(/[^a-z0-9]+/).filter((token) => token.length > 2 && !STOP_WORDS.has(token)));
+  if (result.has('heat') && result.has('pump')) result.add('heatpump');
   for (const [canonical, equivalents] of Object.entries(DOMAIN_EQUIVALENTS)) {
     if (result.has(canonical) || equivalents.some((token) => result.has(token))) {
       result.add(canonical);

@@ -30,6 +30,7 @@ function priorRow(overrides) {
     operationId: 'MAINTENANCE_STATUS',
     message: 'What maintenance is overdue?',
     resultJson: { blocks: [] },
+    parametersJson: {},
     ...overrides,
   };
 }
@@ -40,6 +41,28 @@ test('no prior execution leaves the message unchanged', async () => {
   assert.equal(result.effectiveMessage, 'Now complete it.');
   assert.equal(result.forcedOperationId, null);
   assert.equal(result.sourceExecutionId, null);
+});
+
+test('Envelope pagination reuses the prior server-side cursor without exposing it in chat text', async () => {
+  mockRow = priorRow({
+    operationId: 'INTELLIGENCE_ENVELOPE_QUERY',
+    message: 'What do you know about my roof?',
+    parametersJson: { nextCursor: 'opaque-cursor' },
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'Show more intelligence' });
+  assert.equal(result.forcedOperationId, 'INTELLIGENCE_ENVELOPE_QUERY');
+  assert.equal(result.continuationCursor, 'opaque-cursor');
+  assert.equal(result.effectiveMessage.includes('opaque-cursor'), false);
+});
+
+test('a Specialist fact reply is forced back to the shared Specialist operation', async () => {
+  mockRow = priorRow({
+    operationId: 'HVAC_SPECIALIST_ENGAGE',
+    message: 'Help me decide on the flagged furnace action',
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'It is in good condition' });
+  assert.equal(result.forcedOperationId, 'HVAC_SPECIALIST_ENGAGE');
+  assert.match(result.effectiveMessage, /Homeowner follow-up: It is in good condition/);
 });
 
 test('a non-continuation message is never rewritten even with a fresh prior execution', async () => {

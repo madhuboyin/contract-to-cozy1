@@ -5656,12 +5656,13 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   };
 }
 
-async function intelligenceEnvelopeQueryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function intelligenceEnvelopeQueryResult(userId: string, propertyId: string, message: string, cursor?: string | null): Promise<AskOperationResult> {
   const scope = resolveAskEnvelopeQueryScope(propertyId, message);
   const page = await queryIntelligenceEnvelope({
     propertyId,
     principal: { kind: 'HOMEOWNER_SESSION', userId },
     ...scope,
+    ...(cursor ? { cursor } : {}),
     limit: 20,
   });
   if (!page.items.length && !page.diagnostics.length) {
@@ -5739,7 +5740,7 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
     reasonCode: page.diagnostics.length ? 'INTELLIGENCE_ENVELOPE_PARTIAL' : undefined,
     contextVersion: page.contextVersion,
     blocks,
-    suggestions: page.nextCursor ? ['Ask about a specific intelligence domain'] : [],
+    suggestions: page.nextCursor ? ['Show more intelligence', 'Ask about a specific intelligence domain'] : [],
     parameters: page.nextCursor ? { nextCursor: page.nextCursor } : undefined,
   };
 }
@@ -5757,6 +5758,53 @@ const REQUESTING_AGENT_ID = 'ask.orchestrator.hvac-specialist-engage';
 const RESTART_INTENT = /\b(?:start|restart|re[- ]?run|begin|kick off|redo)\b/i;
 const RESUME_INTENT = /\b(?:resume|continue|pick up|carry on|keep going)\b/i;
 
+function specialistHomeOperationsHref(propertyId: string, homeActionId?: string): string {
+  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}/home-operations`;
+  return homeActionId ? `${base}?focusActionId=${encodeURIComponent(homeActionId)}` : base;
+}
+
+function currentSpecialistTurn(message: string): string {
+  return message.split('Homeowner follow-up:').at(-1)?.trim() || message;
+}
+
+function parseSpecialistContextIntake(message: string, outstanding: AgentRunStatusProjection['outstanding']): Record<string, unknown> {
+  const turn = currentSpecialistTurn(message);
+  const requested = new Set(outstanding.filter((item) => item.kind === 'FACT').map((item) => item.key));
+  const intake: Record<string, unknown> = {};
+  if (requested.has('hvac.installDate')) {
+    const year = /\b(19\d{2}|20\d{2})\b/.exec(turn)?.[1];
+    if (year) intake['hvac.installDate'] = Number(year);
+  }
+  if (requested.has('hvac.condition')) {
+    const condition = /\b(new|good|fair|poor|unknown)\b/i.exec(turn)?.[1];
+    if (condition) intake['hvac.condition'] = condition.toUpperCase();
+  }
+  if (requested.has('hvac.replacementCost') && /\b(?:replacement|replace|cost|estimate|quote|price)\b|\$/i.test(turn)) {
+    const amountMatch = /\$\s*([\d,]+(?:\.\d{1,2})?)|\b([\d,]+(?:\.\d{1,2})?)\s*(k|thousand)\b|\b(?:cost|estimate|quote|price)(?:\s+(?:is|was|about|around))?\s*([\d,]+(?:\.\d{1,2})?)/i.exec(turn);
+    const raw = amountMatch?.[1] ?? amountMatch?.[2] ?? amountMatch?.[4];
+    if (raw) {
+      const parsed = Number(raw.replace(/,/g, '')) * (amountMatch?.[3] ? 1_000 : 1);
+      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 1_000_000) intake['hvac.replacementCost'] = parsed;
+    }
+  }
+  return intake;
+}
+
+function parseSpecialistDispute(message: string): { key: string; note?: string } | null {
+  const turn = currentSpecialistTurn(message);
+  if (!/\b(?:wrong|incorrect|not right|dispute|challenge|do not agree|don't agree)\b/i.test(turn)) return null;
+  const key = /\b(?:install|installed|installation|age|year)\b/i.test(turn)
+    ? 'hvac.installDate'
+    : /\bcondition\b/i.test(turn)
+      ? 'hvac.condition'
+      : /\b(?:replacement|replace|cost|estimate|price)\b/i.test(turn)
+        ? 'hvac.replacementCost'
+        : /\b(?:technician|assessment|quote|document|report)\b/i.test(turn)
+          ? 'hvac.technicianAssessment'
+          : null;
+  return key ? { key, note: turn.slice(0, 500) } : null;
+}
+
 function specialistUnavailableRedirect(propertyId: string, reason: string): AskOperationResult {
   return {
     status: 'NOT_APPLICABLE',
@@ -5766,7 +5814,7 @@ function specialistUnavailableRedirect(propertyId: string, reason: string): AskO
       id: 'hvac-specialist-no-action',
       title: 'No flagged HVAC repair-or-replace action to work from',
       body: `${reason} Ask can start a durable repair-or-replace decision instead, or you can open Home Actions to engage a flagged one.`,
-      actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/home-actions`, style: 'PRIMARY' }],
+      actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'PRIMARY' }],
     }],
     suggestions: ['Should I repair or replace my furnace?', 'What needs my attention?'],
   };
@@ -5775,6 +5823,7 @@ function specialistUnavailableRedirect(propertyId: string, reason: string): AskO
 function specialistProjectionBlocks(
   headline: string,
   projection: AgentRunStatusProjection,
+  correctionHref: string,
 ): AskPresentationBlock[] {
   const blocks: AskPresentationBlock[] = [];
   const verdictLabel = projection.verdict
@@ -5799,8 +5848,8 @@ function specialistProjectionBlocks(
     blocks.push({
       type: 'SUMMARY', id: 'hvac-specialist-needs-input', tone: 'CAUTION',
       title: `The HVAC Specialist needs more information for ${headline}`,
-      body: 'Add the items below to the home record — the Specialist picks them up automatically and updates the recommendation. Ask does not submit them back through the runtime itself.',
-      actions: [],
+      body: 'Reply in Ask with the requested fact, or open the Specialist panel to enter facts and upload supporting documents. The same canonical run will continue.',
+      actions: [{ id: 'open-specialist-panel', label: 'Open Specialist panel', href: correctionHref, style: 'PRIMARY' }],
     });
     if (projection.outstanding.length) {
       blocks.push({
@@ -5810,7 +5859,7 @@ function specialistProjectionBlocks(
           id: 'outstanding', title: 'Outstanding items', count: projection.outstanding.length,
           items: projection.outstanding.map((item) => ({
             id: item.key, title: item.label, description: item.kind === 'DOCUMENT' ? 'Document' : 'Fact',
-            meta: [], status: null, href: item.correctionPath ?? null,
+            meta: [], status: null, href: correctionHref,
           })),
         }],
         actions: [],
@@ -5865,7 +5914,7 @@ export async function hvacSpecialistEngageResult(
         type: 'SUMMARY', id: 'hvac-specialist-feed-unavailable', tone: 'CAUTION',
         title: 'Home Actions are temporarily unavailable',
         body: 'Ask could not load the governed action feed needed to engage the HVAC Specialist. It will not substitute a raw recommendation.',
-        actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/home-actions`, style: 'PRIMARY' }],
+        actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'PRIMARY' }],
       }],
       suggestions: ['Should I repair or replace my furnace?'],
     };
@@ -5895,6 +5944,24 @@ export async function hvacSpecialistEngageResult(
         return name && lower.includes(name);
       }) ?? null;
       if (!action) {
+        const generic = new Set(['about', 'action', 'decide', 'decision', 'flagged', 'help', 'home', 'hvac', 'item', 'one', 'recommendation', 'repair', 'replace', 'system', 'the', 'this', 'through', 'with']);
+        const messageTokens = new Set(lower.split(/[^a-z0-9]+/).filter((token) => token.length > 2 && !generic.has(token)));
+        let best: { candidate: typeof hvacActions[number]; score: number } | null = null;
+        let tied = false;
+        for (const candidate of hvacActions) {
+          const headline = (candidate.presentation?.headline ?? candidate.recommendedAction).toLowerCase();
+          const tokens = new Set(headline.split(/[^a-z0-9]+/).filter((token) => token.length > 2 && !generic.has(token)));
+          const score = [...tokens].filter((token) => messageTokens.has(token)).length;
+          if (!best || score > best.score) {
+            best = { candidate, score };
+            tied = false;
+          } else if (score > 0 && score === best.score) {
+            tied = true;
+          }
+        }
+        if (best && best.score > 0 && !tied) action = best.candidate;
+      }
+      if (!action) {
         return {
           status: 'NEEDS_ENTITY', reasonCode: 'HVAC_SPECIALIST_ACTION_AMBIGUOUS',
           blocks: [{
@@ -5905,12 +5972,13 @@ export async function hvacSpecialistEngageResult(
               id: 'candidates', title: 'Flagged HVAC actions', count: hvacActions.length,
               items: hvacActions.map((candidate) => ({
                 id: candidate.id, title: candidate.presentation?.headline ?? candidate.recommendedAction,
-                description: candidate.signal, meta: [], status: null, href: null,
+                description: candidate.signal, meta: [], status: null,
+                href: specialistHomeOperationsHref(propertyId, candidate.id),
               })),
             }],
-            actions: [],
+            actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'SECONDARY' }],
           }],
-          suggestions: [],
+          suggestions: hvacActions.slice(0, 5).map((candidate) => `Help me decide about ${candidate.presentation?.headline ?? candidate.recommendedAction} from my Home Actions`),
         };
       }
     } else {
@@ -5945,7 +6013,7 @@ export async function hvacSpecialistEngageResult(
       askExecutionId: executionId,
     });
 
-    const wantsRestart = RESTART_INTENT.test(message);
+    const wantsRestart = RESTART_INTENT.test(currentSpecialistTurn(message));
     const wantsResume = RESUME_INTENT.test(message);
     const noRunYet = status.status.runId === null;
     const paused = status.status.paused;
@@ -5953,7 +6021,38 @@ export async function hvacSpecialistEngageResult(
     let projection = status.status;
     let mutated = false;
 
-    if (noRunYet || wantsRestart || (paused && wantsResume)) {
+    const dispute = parseSpecialistDispute(message);
+    const contextIntake = paused ? parseSpecialistContextIntake(message, status.status.outstanding) : {};
+
+    if (dispute) {
+      const advanced = await dependencies.invokeRuntime({
+        operation: 'DISPUTE_INPUT',
+        principalUserId: userId,
+        propertyId,
+        inventoryItemId,
+        requestingAgentId: REQUESTING_AGENT_ID,
+        homeActionOrigin: origin,
+        askExecutionId: executionId,
+        dispute,
+        ...(paused && status.status.casVersion !== null ? { expectedCasVersion: status.status.casVersion } : {}),
+      });
+      projection = advanced.status;
+      mutated = advanced.mutated;
+    } else if (paused && Object.keys(contextIntake).length > 0 && status.status.casVersion !== null) {
+      const advanced = await dependencies.invokeRuntime({
+        operation: 'SUBMIT_CONTEXT',
+        principalUserId: userId,
+        propertyId,
+        inventoryItemId,
+        requestingAgentId: REQUESTING_AGENT_ID,
+        homeActionOrigin: origin,
+        askExecutionId: executionId,
+        contextIntake,
+        expectedCasVersion: status.status.casVersion,
+      });
+      projection = advanced.status;
+      mutated = advanced.mutated;
+    } else if (noRunYet || wantsRestart || (paused && wantsResume)) {
       const advanced = await dependencies.invokeRuntime({
         operation: 'START_OR_RESUME',
         principalUserId: userId,
@@ -5968,7 +6067,7 @@ export async function hvacSpecialistEngageResult(
       mutated = advanced.mutated;
     }
 
-    const blocks = specialistProjectionBlocks(headline, projection);
+    const blocks = specialistProjectionBlocks(headline, projection, specialistHomeOperationsHref(propertyId, action.id));
     const answered = projection.phase === 'RECOMMENDATION_READY';
     return {
       status: answered ? 'ANSWERED' : 'READY_WITH_LIMITATIONS',
@@ -5980,7 +6079,9 @@ export async function hvacSpecialistEngageResult(
       blocks,
       suggestions: projection.phase === 'RECOMMENDATION_READY'
         ? ['What changed about this decision?', 'Compare a new quote for this decision']
-        : ['Open my Home Actions'],
+        : projection.phase === 'NEEDS_CONTEXT'
+          ? ['My HVAC condition is good', 'It was installed in 2012', 'The replacement estimate is $8,000']
+          : ['Open my Home Actions'],
     };
   };
 
@@ -6028,7 +6129,7 @@ export async function hvacSpecialistEngageResult(
 }
 
 async function dispatchOperationAdapterResult(
-  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] },
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
   trace?: SkillExecutionTimingTrace,
 ): Promise<AskOperationResult> {
@@ -6061,7 +6162,7 @@ async function dispatchOperationAdapterResult(
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
     case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
-    case 'INTELLIGENCE_ENVELOPE_QUERY': return intelligenceEnvelopeQueryResult(input.userId, input.propertyId!, input.message);
+    case 'INTELLIGENCE_ENVELOPE_QUERY': return intelligenceEnvelopeQueryResult(input.userId, input.propertyId!, input.message, input.continuationCursor);
     case 'HOME_ACTIONS': return homeActionsResult(
       input.userId,
       input.propertyId!,
@@ -6169,7 +6270,7 @@ function canonicalAdapterSourceEvidence(
 }
 
 async function dispatchOperationAdapter(
-  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] },
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
   composedContext: ComposedSkillContext | null,
   trace?: SkillExecutionTimingTrace,
 ): Promise<AskOperationResult> {
@@ -6180,7 +6281,7 @@ async function dispatchOperationAdapter(
   );
 }
 
-async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext'] }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   const skill = getSkillForOperation(input.operation.operationId);
@@ -6343,7 +6444,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
 // Functional Completeness FRD Phase 0) — same computed values, single-sourced
 // and validated at startup instead of an untyped inline map.
 
-async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; deferSemanticValidation?: boolean }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; deferSemanticValidation?: boolean }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const skill = getSkillForOperation(input.operation.operationId);
   const skillStartedAt = skill ? Date.now() : null;
   let coreResult: AskOperationResult;
@@ -6982,7 +7083,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
         ))
-        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext, deferSemanticValidation: true }, skillTelemetryTrace),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext, continuationCursor: followUp.continuationCursor, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification

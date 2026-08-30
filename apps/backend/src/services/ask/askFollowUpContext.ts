@@ -18,6 +18,9 @@ const FILTER_CONTINUABLE_OPERATIONS: ReadonlySet<AskOperationId> = new Set([
   'HOME_ACTIONS',
 ]);
 
+const ENVELOPE_PAGINATION_PATTERN = /^\s*(?:(?:show|load|see|get)\s+(?:me\s+)?(?:the\s+)?(?:next|more)|continue\s+(?:the\s+)?(?:intelligence|results?))\b/i;
+const SPECIALIST_CONTINUATION_PATTERN = /\b(?:new|good|fair|poor|unknown|installed|installation|year|cost|estimate|quote|assessment|wrong|incorrect|not right|dispute|resume|continue|hvac|furnace|heater|heat pump|boiler|air conditioner|a\/?c|unit|system|one)\b/i;
+
 // Resolved executions worth treating as follow-up context. Boundary,
 // expired, cancelled, and failed executions carry no reusable content.
 const REUSABLE_PRIOR_STATUSES: AskExecutionStatus[] = [
@@ -42,6 +45,7 @@ export interface AskFollowUpResolution {
   effectiveMessage: string;
   forcedOperationId: AskOperationId | null;
   sourceExecutionId: string | null;
+  continuationCursor: string | null;
 }
 
 interface PriorExecutionRow {
@@ -49,6 +53,7 @@ interface PriorExecutionRow {
   operationId: string | null;
   message: string;
   resultJson: unknown;
+  parametersJson: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -115,7 +120,7 @@ async function findRecentPriorExecution(sessionId: string, propertyId: string | 
       createdAt: { gte: new Date(Date.now() - FOLLOW_UP_LOOKBACK_MS) },
     },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, operationId: true, message: true, resultJson: true },
+    select: { id: true, operationId: true, message: true, resultJson: true, parametersJson: true },
   });
   return row;
 }
@@ -131,10 +136,12 @@ export async function resolveAskFollowUpMessage(input: {
   propertyId: string | null | undefined;
   message: string;
 }): Promise<AskFollowUpResolution> {
-  const fallback: AskFollowUpResolution = { effectiveMessage: input.message, forcedOperationId: null, sourceExecutionId: null };
+  const fallback: AskFollowUpResolution = { effectiveMessage: input.message, forcedOperationId: null, sourceExecutionId: null, continuationCursor: null };
   const entityMatch = ENTITY_CONTINUATION_PATTERN.exec(input.message);
   const isFilterContinuation = FILTER_CONTINUATION_PATTERN.test(input.message);
-  if (!entityMatch && !isFilterContinuation) return fallback;
+  const isEnvelopePagination = ENVELOPE_PAGINATION_PATTERN.test(input.message);
+  const isSpecialistContinuation = SPECIALIST_CONTINUATION_PATTERN.test(input.message);
+  if (!entityMatch && !isFilterContinuation && !isEnvelopePagination && !isSpecialistContinuation) return fallback;
 
   const prior = await findRecentPriorExecution(input.sessionId, input.propertyId);
   if (!prior || !prior.operationId) return fallback;
@@ -153,7 +160,29 @@ export async function resolveAskFollowUpMessage(input: {
     const groupStart = entityMatch.index + entityMatch[0].length - pronounSpan.length;
     const groupEnd = groupStart + pronounSpan.length;
     const rewritten = `${input.message.slice(0, groupStart)}${entityTitle}${input.message.slice(groupEnd)}`;
-    return { effectiveMessage: rewritten, forcedOperationId: null, sourceExecutionId: prior.id };
+    return { effectiveMessage: rewritten, forcedOperationId: null, sourceExecutionId: prior.id, continuationCursor: null };
+  }
+
+  if (isEnvelopePagination && prior.operationId === 'INTELLIGENCE_ENVELOPE_QUERY') {
+    const parameters = isRecord(prior.parametersJson) ? prior.parametersJson : {};
+    const cursor = typeof parameters.nextCursor === 'string' ? parameters.nextCursor : null;
+    if (cursor) {
+      return {
+        effectiveMessage: `${prior.message}. ${input.message}`,
+        forcedOperationId: 'INTELLIGENCE_ENVELOPE_QUERY',
+        sourceExecutionId: prior.id,
+        continuationCursor: cursor,
+      };
+    }
+  }
+
+  if (isSpecialistContinuation && prior.operationId === 'HVAC_SPECIALIST_ENGAGE') {
+    return {
+      effectiveMessage: `${prior.message}. Homeowner follow-up: ${input.message}`,
+      forcedOperationId: 'HVAC_SPECIALIST_ENGAGE',
+      sourceExecutionId: prior.id,
+      continuationCursor: null,
+    };
   }
 
   if (isFilterContinuation && FILTER_CONTINUABLE_OPERATIONS.has(prior.operationId as AskOperationId)) {
@@ -161,6 +190,7 @@ export async function resolveAskFollowUpMessage(input: {
       effectiveMessage: `${prior.message}. ${input.message}`,
       forcedOperationId: prior.operationId as AskOperationId,
       sourceExecutionId: prior.id,
+      continuationCursor: null,
     };
   }
 
