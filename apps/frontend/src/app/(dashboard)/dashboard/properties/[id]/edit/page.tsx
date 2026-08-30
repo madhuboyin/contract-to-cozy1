@@ -338,6 +338,7 @@ const propertySchema = z.object({
   inHurricaneZone: z.boolean().nullable().optional(),
   inFloodZone: z.boolean().nullable().optional(),
   inWildfireZone: z.boolean().nullable().optional(),
+  isCoastal: z.boolean().nullable().optional(),
   hasPrivateOutdoorSpace: z.boolean().nullable().optional(),
   outdoorSpaceTypes: z.array(z.enum(OUTDOOR_SPACE_TYPE_OPTIONS)),
   hasLawn: z.boolean().nullable().optional(),
@@ -432,6 +433,7 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         inHurricaneZone: property.inHurricaneZone ?? null,
         inFloodZone: property.inFloodZone ?? null,
         inWildfireZone: property.inWildfireZone ?? null,
+        isCoastal: property.isCoastal ?? null,
         hasPrivateOutdoorSpace: property.exteriorProfile?.hasPrivateOutdoorSpace ?? null,
         outdoorSpaceTypes: normalizeOutdoorSpaceTypes(
           property.exteriorProfile?.hasPrivateOutdoorSpace,
@@ -734,7 +736,7 @@ export default function EditPropertyPage() {
       hasIrrigation: null,
       utilityProvider: null, gasProvider: null,
       inHistoricDistrict: null, historicRegistryStatus: null,
-      inHurricaneZone: null, inFloodZone: null, inWildfireZone: null,
+      inHurricaneZone: null, inFloodZone: null, inWildfireZone: null, isCoastal: null,
       hasPrivateOutdoorSpace: null, outdoorSpaceTypes: [], hasLawn: null, hasTreesOrShrubs: null, hasDriveway: null,
       purchasePriceDollars: null,
       purchaseDate: null,
@@ -831,6 +833,7 @@ export default function EditPropertyPage() {
         inHurricaneZone: data.inHurricaneZone ?? undefined,
         inFloodZone: data.inFloodZone ?? undefined,
         inWildfireZone: data.inWildfireZone ?? undefined,
+        isCoastal: data.isCoastal ?? undefined,
         exteriorProfile: {
           hasPrivateOutdoorSpace: data.hasPrivateOutdoorSpace,
           outdoorSpaceTypes: normalizeOutdoorSpaceTypes(data.hasPrivateOutdoorSpace, data.outdoorSpaceTypes),
@@ -1258,6 +1261,12 @@ export default function EditPropertyPage() {
       onHint: "Noted — we'll check for wildfire-zone-specific benefits.",
       impact: "neutral" as const,
     },
+    isCoastal: {
+      label: "Coastal Property",
+      offHint: "Helps us tailor salt-air maintenance, coastal exposure, and coverage guidance.",
+      onHint: "Noted — we'll factor in coastal exposure and salt-air upkeep.",
+      impact: "neutral" as const,
+    },
   } as const;
 
   type CheckboxField = keyof typeof CHECKBOX_META;
@@ -1282,6 +1291,95 @@ export default function EditPropertyPage() {
       hint: "text-gray-500 dark:text-slate-400",
     },
   } as const;
+
+  const SAFETY_CHECKBOX_FIELDS: CheckboxField[] = [
+    "hasSmokeDetectors", "hasCoDetectors", "hasDrainageIssues",
+    "hasSecuritySystem", "hasFireExtinguisher", "hasIrrigation",
+  ];
+  const LOCATION_CONTEXT_CHECKBOX_FIELDS: CheckboxField[] = [
+    "inHistoricDistrict", "inHurricaneZone", "inFloodZone", "inWildfireZone", "isCoastal",
+  ];
+
+  const renderCheckboxCard = (fieldName: CheckboxField) => {
+    const meta = CHECKBOX_META[fieldName];
+    const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
+    return (
+      <FormField
+        key={fieldName}
+        control={form.control}
+        name={fieldName}
+        render={({ field }) => {
+          const value = field.value as boolean | null | undefined;
+          const isYes = value === true;
+          const isNo = value === false;
+          const isDrainage = fieldName === "hasDrainageIssues";
+          const cardStyle = isYes
+            ? styles.checked
+            : isNo
+              ? "border-slate-200 bg-slate-50/60 dark:border-white/10 dark:bg-slate-900/20"
+              : styles.unchecked;
+          const dotClass = cn(
+            "safety-card-dot mt-[3px] h-2 w-2 shrink-0 rounded-full",
+            isYes
+              ? cn(styles.dot, "ring-2 ring-offset-0", isDrainage ? "ring-amber-100 dark:ring-amber-900/40" : "ring-teal-100 dark:ring-teal-900/50")
+              : isNo
+                ? "bg-slate-400 dark:bg-slate-500"
+                : "bg-gray-300 dark:bg-slate-600",
+          );
+          const noHint = isDrainage
+            ? "No drainage issues — noted."
+            : fieldName === "hasIrrigation"
+              ? "No irrigation system — noted."
+              : meta.offHint;
+          const hint = isYes ? meta.onHint : isNo ? noHint : meta.offHint;
+          return (
+            <FormItem>
+              <FormControl>
+                <div className={cn(
+                  "safety-card flex items-start justify-between gap-2.5 rounded-md border-[1.5px] px-3 py-2.5 transition-colors",
+                  cardStyle,
+                )}>
+                  <div className="safety-card-content min-w-0 flex flex-1 items-start gap-2.5">
+                    <span className={dotClass} />
+                    <div>
+                      <p className="safety-card-title m-0 mb-0.5 text-[13px] font-semibold leading-tight text-gray-800 dark:text-slate-200">{meta.label}</p>
+                      <p className={cn("safety-card-subtitle m-0 text-[11px] leading-[1.3]", styles.hint)}>{hint}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(true)}
+                      className={cn(
+                        "h-6 px-2.5 rounded text-[11px] font-semibold transition-colors",
+                        isYes
+                          ? isDrainage ? "bg-amber-500 text-white" : "bg-teal-500 text-white"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700",
+                      )}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(false)}
+                      className={cn(
+                        "h-6 px-2.5 rounded text-[11px] font-semibold transition-colors",
+                        isNo
+                          ? "bg-slate-600 text-white dark:bg-slate-500"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700",
+                      )}
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              </FormControl>
+            </FormItem>
+          );
+        }}
+      />
+    );
+  };
 
   if (isLoadingProperty) {
     return (
@@ -2065,93 +2163,20 @@ export default function EditPropertyPage() {
               helperText="Quick checks that help protect your home."
               defaultExpandedDesktop={true}
               defaultExpandedMobile={false}
-              forceExpandOnMobile={startSectionId === "safety" || correctionAnchor === 'safety'}
+              forceExpandOnMobile={startSectionId === "safety" || correctionAnchor === 'safety' || correctionAnchor === 'location-context'}
               headerChip={startSectionId === "safety" ? <FieldNudgeChip variant="start" /> : undefined}
               className="safety-section-card"
               headerClassName="p-4 pb-2.5 sm:px-5 sm:pb-2.5 sm:pt-4"
               contentClassName="p-4 pt-0 sm:px-5 sm:pb-4 sm:pt-0"
             >
               <div className="safety-cards-grid mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                {(Object.keys(CHECKBOX_META) as CheckboxField[]).map((fieldName) => {
-                  const meta = CHECKBOX_META[fieldName];
-                  const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
-                  return (
-                    <FormField
-                      key={fieldName}
-                      control={form.control}
-                      name={fieldName}
-                      render={({ field }) => {
-                        const value = field.value as boolean | null | undefined;
-                        const isYes = value === true;
-                        const isNo = value === false;
-                        const isDrainage = fieldName === "hasDrainageIssues";
-                        const cardStyle = isYes
-                          ? styles.checked
-                          : isNo
-                            ? "border-slate-200 bg-slate-50/60 dark:border-white/10 dark:bg-slate-900/20"
-                            : styles.unchecked;
-                        const dotClass = cn(
-                          "safety-card-dot mt-[3px] h-2 w-2 shrink-0 rounded-full",
-                          isYes
-                            ? cn(styles.dot, "ring-2 ring-offset-0", isDrainage ? "ring-amber-100 dark:ring-amber-900/40" : "ring-teal-100 dark:ring-teal-900/50")
-                            : isNo
-                              ? "bg-slate-400 dark:bg-slate-500"
-                              : "bg-gray-300 dark:bg-slate-600",
-                        );
-                        const noHint = isDrainage
-                          ? "No drainage issues — noted."
-                          : fieldName === "hasIrrigation"
-                            ? "No irrigation system — noted."
-                            : meta.offHint;
-                        const hint = isYes ? meta.onHint : isNo ? noHint : meta.offHint;
-                        return (
-                          <FormItem>
-                            <FormControl>
-                              <div className={cn(
-                                "safety-card flex items-start justify-between gap-2.5 rounded-md border-[1.5px] px-3 py-2.5 transition-colors",
-                                cardStyle,
-                              )}>
-                                <div className="safety-card-content min-w-0 flex flex-1 items-start gap-2.5">
-                                  <span className={dotClass} />
-                                  <div>
-                                    <p className="safety-card-title m-0 mb-0.5 text-[13px] font-semibold leading-tight text-gray-800 dark:text-slate-200">{meta.label}</p>
-                                    <p className={cn("safety-card-subtitle m-0 text-[11px] leading-[1.3]", styles.hint)}>{hint}</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0 pt-0.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => field.onChange(true)}
-                                    className={cn(
-                                      "h-6 px-2.5 rounded text-[11px] font-semibold transition-colors",
-                                      isYes
-                                        ? isDrainage ? "bg-amber-500 text-white" : "bg-teal-500 text-white"
-                                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700",
-                                    )}
-                                  >
-                                    Yes
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => field.onChange(false)}
-                                    className={cn(
-                                      "h-6 px-2.5 rounded text-[11px] font-semibold transition-colors",
-                                      isNo
-                                        ? "bg-slate-600 text-white dark:bg-slate-500"
-                                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700",
-                                    )}
-                                  >
-                                    No
-                                  </button>
-                                </div>
-                              </div>
-                            </FormControl>
-                          </FormItem>
-                        );
-                      }}
-                    />
-                  );
-                })}
+                {SAFETY_CHECKBOX_FIELDS.map(renderCheckboxCard)}
+              </div>
+              <div id="location-context" className="scroll-mt-24 mt-4 rounded-lg border border-black/10 p-3 dark:border-white/10">
+                <p className="m-0 mb-2 text-[13px] font-semibold text-gray-800 dark:text-slate-200">Location &amp; risk context</p>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {LOCATION_CONTEXT_CHECKBOX_FIELDS.map(renderCheckboxCard)}
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <FormField

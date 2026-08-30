@@ -94,6 +94,7 @@ const FACT_LABEL_OVERRIDES: Record<string, string> = {
   'core.isPrimary': 'Primary-home status',
   'location.zipCode': 'ZIP code',
   'location.geocoded': 'Map location',
+  'location.isCoastal': 'Coastal property',
   'structure.roofAgeYears': 'Roof age',
   'structure.electricalPanelAgeYears': 'Electrical panel age',
   'systems.hvacInstallYear': 'HVAC installation year',

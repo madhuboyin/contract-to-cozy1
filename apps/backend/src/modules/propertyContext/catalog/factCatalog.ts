@@ -27,7 +27,7 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'location.timezone', scope: 'LOCATION', canonicalOwner: 'Property.timezone', correctionPath: propertyPath('address'), writable: true },
   { key: 'location.geocoded', scope: 'LOCATION', canonicalOwner: 'Property.latitude/longitude', correctionPath: propertyPath('address'), writable: false },
   { key: 'location.climateRegion', scope: 'LOCATION', canonicalOwner: 'PropertyClimateSetting.climateRegion', correctionPath: '/dashboard/properties/:propertyId/environment', writable: false },
-  { key: 'location.isCoastal', scope: 'LOCATION', canonicalOwner: 'Verified location exposure source', correctionPath: propertyPath('address'), writable: false },
+  { key: 'location.isCoastal', scope: 'LOCATION', canonicalOwner: 'Property.isCoastal', correctionPath: propertyPath('location-context'), writable: true },
   { key: 'location.inHistoricDistrict', scope: 'LOCATION', canonicalOwner: 'Property.inHistoricDistrict', correctionPath: propertyPath('location-context'), writable: true },
   { key: 'location.inHurricaneZone', scope: 'LOCATION', canonicalOwner: 'Property.inHurricaneZone', correctionPath: propertyPath('location-context'), writable: true },
   { key: 'location.inFloodZone', scope: 'LOCATION', canonicalOwner: 'Property.inFloodZone', correctionPath: propertyPath('location-context'), writable: true },

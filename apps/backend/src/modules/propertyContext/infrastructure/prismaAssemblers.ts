@@ -119,6 +119,7 @@ export const locationAssembler: PropertyContextAssembler = {
           inHurricaneZone: true,
           inFloodZone: true,
           inWildfireZone: true,
+          isCoastal: true,
           climateSetting: { select: { climateRegion: true } },
         },
       }),
@@ -132,9 +133,10 @@ export const locationAssembler: PropertyContextAssembler = {
       'location.timezone': property.timezone,
       'location.geocoded': property.latitude !== null && property.longitude !== null,
       'location.climateRegion': property.climateSetting?.climateRegion,
-      // No canonical coastal-exposure source exists yet. Do not infer it from
-      // state or ZIP; consumers must see UNKNOWN until a verified source lands.
-      'location.isCoastal': null,
+      // Homeowner-reported, like the hazard-zone flags below. We deliberately do
+      // not infer coastal exposure from state or ZIP; consumers see UNKNOWN until
+      // the homeowner answers or a verified source lands.
+      'location.isCoastal': property.isCoastal,
       'location.inHistoricDistrict': property.inHistoricDistrict,
       'location.inHurricaneZone': property.inHurricaneZone,
       'location.inFloodZone': property.inFloodZone,

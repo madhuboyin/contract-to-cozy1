@@ -101,7 +101,7 @@ for (const key of [
   'safety.hasCoDetectors', 'safety.hasSecuritySystem', 'safety.hasFireExtinguisher',
   'safety.hasSumpPump', 'safety.hasSumpPumpBackup',
   'location.inHistoricDistrict', 'location.inHurricaneZone', 'location.inFloodZone',
-  'location.inWildfireZone', 'systems.hasSolar', 'systems.hasFireplace',
+  'location.inWildfireZone', 'location.isCoastal', 'systems.hasSolar', 'systems.hasFireplace',
 ]) inputSchemas[key] = booleanSchema;
 
 for (const definition of PROPERTY_FACT_CATALOG.filter(({ key }) => key.startsWith('responsibility.'))) {
@@ -128,6 +128,7 @@ const copy: Record<string, CaptureCopy> = {
   'systems.sewerSystem': { title: 'Sewer system', question: 'Is the home connected to public sewer, or does it have a septic system?', allowNotSure: true },
   'systems.hasSolar': { title: 'Solar panels', question: 'Does the home have solar panels?', allowNotSure: true },
   'systems.hasFireplace': { title: 'Fireplace or chimney', question: 'Does the home have a fireplace, wood stove, or chimney?', allowNotSure: true },
+  'location.isCoastal': { title: 'Coastal property', question: 'Is this home in a coastal area?', helpText: 'Helps us check for coastal exposure, salt-air maintenance, and coverage guidance.', allowNotSure: true },
   'salePrep.paintCondition': { title: 'Interior paint', question: 'What condition is the interior paint in?', allowNotSure: true },
   'salePrep.curbAppealCondition': { title: 'Curb appeal & landscaping', question: 'What condition is the curb appeal in?', allowNotSure: true },
   'salePrep.flooringCondition': { title: 'Flooring', question: 'What condition is the flooring in?', allowNotSure: true },

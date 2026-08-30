@@ -3986,6 +3986,7 @@ model Property {
   inHurricaneZone        Boolean?
   inFloodZone            Boolean?
   inWildfireZone         Boolean?
+  isCoastal              Boolean?
 
   geocodingStatus   PropertyGeocodingStatus                @default(PENDING)
   geocodingProvider String?

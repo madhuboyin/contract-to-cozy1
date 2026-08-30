@@ -59,6 +59,7 @@ const propertyFacts = {
   'location.inHurricaneZone': { field: 'inHurricaneZone', schema: nullableBoolean },
   'location.inFloodZone': { field: 'inFloodZone', schema: nullableBoolean },
   'location.inWildfireZone': { field: 'inWildfireZone', schema: nullableBoolean },
+  'location.isCoastal': { field: 'isCoastal', schema: nullableBoolean },
   'structure.roofType': { field: 'roofType', schema: z.nativeEnum(RoofType).nullable() },
   'structure.roofReplacementYear': { field: 'roofReplacementYear', schema: nullableNonNegativeInteger },
   'structure.foundationType': { field: 'foundationType', schema: z.nativeEnum(FoundationType).nullable() },

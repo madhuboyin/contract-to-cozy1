@@ -495,6 +495,10 @@ catalog.
 - `location.climateRegion`
 - coastal, flood, wildfire, radon, freeze, heat, drought, and storm exposure
   only with source, confidence, and validity
+- `location.isCoastal`, `location.inHurricaneZone`, `location.inFloodZone`,
+  `location.inWildfireZone`, `location.inHistoricDistrict` are homeowner-reported
+  (writable, `USER_REPORTED` source); they are never inferred from state or ZIP.
+  Their correction path is the property edit form's `#location-context` block.
 
 ### 11.3 STRUCTURE
 

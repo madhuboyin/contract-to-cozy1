@@ -265,6 +265,7 @@ export const createPropertySchema = z.object({
   inHurricaneZone: z.boolean().nullable().optional(),
   inFloodZone: z.boolean().nullable().optional(),
   inWildfireZone: z.boolean().nullable().optional(),
+  isCoastal: z.boolean().nullable().optional(),
   isResilienceVerified: z.boolean().optional(),
   isUtilityVerified: z.boolean().optional(),
   purchasePriceCents: z.number().int().nonnegative().nullable().optional(),

@@ -1905,6 +1905,7 @@ export interface Property {
   inHurricaneZone: boolean | null;
   inFloodZone: boolean | null;
   inWildfireZone: boolean | null;
+  isCoastal: boolean | null;
   isResilienceVerified: boolean;
   isUtilityVerified: boolean;
   currentStreak: number;

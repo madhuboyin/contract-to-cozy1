@@ -112,6 +112,7 @@ interface CreatePropertyData {
   inHurricaneZone?: boolean | null;
   inFloodZone?: boolean | null;
   inWildfireZone?: boolean | null;
+  isCoastal?: boolean | null;
   isResilienceVerified?: boolean;
   isUtilityVerified?: boolean;
   purchasePriceCents?: number | null;
@@ -173,6 +174,7 @@ const SAVINGS_BENEFITS_RELEVANT_PROPERTY_UPDATE_FIELDS = new Set<keyof UpdatePro
   'inHurricaneZone',
   'inFloodZone',
   'inWildfireZone',
+  'isCoastal',
   'lastAppraisedValue',
 ]);
 
@@ -1055,6 +1057,7 @@ export async function updateProperty(
   if (data.inHurricaneZone !== undefined) updatePayload.inHurricaneZone = data.inHurricaneZone;
   if (data.inFloodZone !== undefined) updatePayload.inFloodZone = data.inFloodZone;
   if (data.inWildfireZone !== undefined) updatePayload.inWildfireZone = data.inWildfireZone;
+  if (data.isCoastal !== undefined) updatePayload.isCoastal = data.isCoastal;
   if (data.isResilienceVerified !== undefined) updatePayload.isResilienceVerified = data.isResilienceVerified;
   if (data.isUtilityVerified !== undefined) updatePayload.isUtilityVerified = data.isUtilityVerified;
   if (data.lastAppraisedValue !== undefined) updatePayload.lastAppraisedValue = data.lastAppraisedValue ?? null;

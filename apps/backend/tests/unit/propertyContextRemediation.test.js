@@ -45,7 +45,7 @@ test('property forms expose canonical fields and working correction anchors', ()
     assert.match(source, /exteriorProfile|hasPrivateOutdoorSpace/);
     assert.doesNotMatch(source, /occupantsCount/);
   }
-  for (const anchor of ['address', 'property-type', 'structure', 'systems', 'safety', 'occupancy', 'exterior', 'responsibility']) {
+  for (const anchor of ['address', 'property-type', 'structure', 'systems', 'safety', 'location-context', 'occupancy', 'exterior', 'responsibility']) {
     assert.match(edit, new RegExp(`id=["']${anchor}["']`), anchor);
   }
 });
