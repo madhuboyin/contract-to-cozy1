@@ -3376,10 +3376,28 @@ class APIClient {
     workItemId: string,
     to: OperationalWorkItemState,
     disposition?: OperationalWorkItemDisposition,
+    deferUntil?: string,
   ) {
     return this.request<WorkItemDetailDTO>(
       `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/transition`,
-      { method: 'POST', body: JSON.stringify({ to, disposition }) },
+      { method: 'POST', body: JSON.stringify({ to, disposition, ...(deferUntil ? { deferUntil } : {}) }) },
+    );
+  }
+
+  // Item #19 (§5.15): snooze only suppresses reminders/visibility until the
+  // date passes — it never changes state or the due date. `null` clears it.
+  async snoozeWorkItem(propertyId: string, workItemId: string, snoozedUntil: string | null) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/snooze`,
+      { method: 'POST', body: JSON.stringify({ snoozedUntil }) },
+    );
+  }
+
+  // Item #19 (§5.15): reschedule deliberately overwrites the commitment date.
+  async rescheduleWorkItem(propertyId: string, workItemId: string, dueAt: string | null) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/reschedule`,
+      { method: 'POST', body: JSON.stringify({ dueAt }) },
     );
   }
 

@@ -1,8 +1,8 @@
 # Home Action Health-Factor Copy FRD and Implementation Plan
 
-Version: 1.4
-Date: 2026-08-29
-Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped (`1e651fd7`) · §13 cross-producer replacement duplication shipped (`b6414386`) · §14 seasonal aggregate double-count shipped · Phase 3 not scheduled
+Version: 1.5
+Date: 2026-08-30
+Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped (`1e651fd7`) · §13 cross-producer replacement duplication shipped (`b6414386`) · §14 seasonal aggregate double-count shipped (`feeeec22`) · §15 "Manage work item" drawer redesign shipped · Phase 3 not scheduled
 Owner: Product + Engineering
 Related: `HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md` (§8.1 Canonical Attention Authority, row "Property health insight"), commits `b9efddb2` / `25dd4c45` / `56bae882` (card-humanization pass)
 
@@ -551,3 +551,58 @@ so no dedup pass reconciles it against its own promoted items.
 - **`SEASONAL_CHECKLIST` registry rule** requires a `Next task` fact even when there is
   genuinely only one pending (critical) task — in that edge case it still repeats.
   Relaxing `requiredFactLabels` would let the card omit it.
+
+---
+
+## 15. "Manage work item" drawer — homeowner redesign
+
+Status: fix shipped
+
+### 15.1 Problem
+
+`WorkItemManageDrawer` (opens from the "Manage" button on the `home-operations`
+portfolio and the "More" menu on Home feed cards) was a 1:1 CRUD view of the
+`OperationalWorkItem` model — an IT-service-desk / issue-tracker UI:
+
+- Title "Manage work item" + "…Completion and verification are controlled by the linked
+  execution record."
+- The raw `workKey` (`property:…:maintenance-…-action-center-hvac-furnace`) in mono font.
+- "Owner" / "Assign owner", "Watchers" / "Add watcher" / "No one is watching this item."
+- "Change status" → a dropdown of the raw 13-state lifecycle enum.
+- "Mark as duplicate…" (a system concern surfaced as a homeowner action).
+- An "Evidence" form with a 6-type picker, "Reference ID (optional)", "Verification status".
+- "Manager approval required" — literally "Manager"; "A property owner must review attached
+  evidence before this material or safety outcome can be verified."
+
+Every backend field got a control. Nothing was translated to the homeowner's mental
+model (what is it / when / who / I did it / not for me).
+
+### 15.2 Fix (shipped)
+
+The drawer is now homeowner-first, with the operational controls preserved under a
+collapsed **"Advanced options"** section (Redesign direction #6 — a power-user / provider
+path, not deleted).
+
+| Change | Detail |
+|---|---|
+| **Header** | Title = the task name (was "Manage work item"); subtitle = `homeownerReason`. |
+| **Status** | `FRIENDLY_STATE` map — "On your list", "Working through it", "Put off for now", "Done", … — never the raw enum. `FRIENDLY_DISPOSITION` likewise. |
+| **Everyday actions** | "Mark done" (opens the existing `RichCompletionDialog`), "Snooze" (presets "In a week"/"In a month" + date → new `api.snoozeWorkItem` / `/snooze`), "Reschedule" (date → new `api.rescheduleWorkItem` / `/reschedule`), "Not for me" (confirm → `transition CLOSED / NOT_RELEVANT`). |
+| **Non-completable work** | Instead of nothing, a plain line: "This gets marked done when the [maintenance plan / guided plan / project] it belongs to is finished." |
+| **"Who's handling this?"** | Replaces "Owner"; shown only when the household has > 1 member. |
+| **Material approval → "Confirm the result"** | Reframed: "This one affects [safety / a big expense] … pick the photo or document that shows it's done, add a short note, and confirm." Same underlying `approveMaterialWorkItem` call, homeowner copy, "Looks good / Needs attention / Failed". |
+| **"Open …" link** | A single row linking to the underlying maintenance / guidance / project record. |
+| **Advanced options** (`<details>`) | The `workKey`, raw "Change status" + disposition, "Watchers", the full "Evidence" recording form, and "Mark as duplicate" — verbatim, so nothing is lost for providers / power users. |
+| API | Added `snoozeWorkItem`, `rescheduleWorkItem` to the client (routes already existed — `/snooze`, `/reschedule`); `transitionWorkItem` gained an optional `deferUntil`. |
+| Tests | `WorkItemManageDrawer.test.tsx` rewritten — 9 tests: friendly status, owner gating, snooze/reschedule endpoints, "Not for me", Advanced-section retention, "Confirm the result", terminal state. |
+
+### 15.3 Future work (not in this change)
+
+- **A dedicated provider surface.** `responsibleParty`, evidence verification, and material
+  approvals genuinely fit a contractor-managed property. The "Advanced" disclosure is a
+  stopgap; a separate provider view would let the homeowner drawer drop it entirely.
+- **Evidence at completion, not as a form.** `RichCompletionDialog` already collects cost /
+  photos / result — that *is* the evidence. The standalone evidence-recording form in
+  Advanced should be retired once every completion path routes through the dialog.
+- **Snooze / reschedule on the feed card itself**, so the drawer isn't the only place to do
+  the two most common actions.
