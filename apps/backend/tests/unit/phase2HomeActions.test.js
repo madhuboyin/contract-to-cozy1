@@ -207,6 +207,29 @@ test('coverage actions use inventory identity for canonical deduplication', () =
   assert.equal(result[0].deduplication.canonicalKey, 'coverage-item:hvac-item');
 });
 
+test('a repair-vs-replace verdict and a capital replacement window for the same item collapse to one card', () => {
+  const verdict = actionFixture('repair-replace:analysis-9', {
+    lineageId: 'appliance-repair-replace:fridge-1',
+    source: { kind: 'GUIDANCE', entityId: 'analysis-9', version: 'v1' },
+    signal: 'Repair vs Replace: Refrigerator',
+    priority: 'SOON',
+  });
+  const capitalPlan = actionFixture('home-capital-timeline-window:line-42', {
+    lineageId: 'home-capital-timeline-window:line-42',
+    source: { kind: 'SYSTEM', entityId: 'fridge-1', version: 'v1' },
+    signal: 'Refrigerator has an estimated replacement window of 2026-2027.',
+    priority: 'SOON',
+  });
+  capitalPlan.presentation = {
+    ...capitalPlan.presentation,
+    subject: { kind: 'INVENTORY_ITEM', id: 'fridge-1', label: 'Refrigerator' },
+  };
+
+  const result = rankAndDeduplicateHomeActions([verdict, capitalPlan]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deduplication.canonicalKey, 'replacement-item:fridge-1');
+});
+
 test('coverage reconciliation exposes exactly one current state per inventory item', () => {
   const correction = actionFixture('coverage-correction', {
     source: { kind: 'GUIDANCE', entityId: 'hvac-item', version: 'phase2-v1' },

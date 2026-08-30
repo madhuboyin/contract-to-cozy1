@@ -355,10 +355,37 @@ export function homeActionCanonicalKey(action: HomeAction): string {
   );
   if (inventoryCoverageAction) return `coverage-item:${action.source.entityId}`;
 
+  // A replacement decision for a specific inventory item is one homeowner
+  // decision regardless of which producer surfaced it — the Lifespan Engine
+  // repair-vs-replace verdict and the Home Capital Timeline replacement
+  // window must not stack as two cards. Both carry the item id (one on
+  // lineageId, one as the presentation subject / source.entityId); collapse
+  // them onto a shared key so the signal-text heuristic can't split them.
+  // See docs/product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md §13.
+  const replacementItemId = resolveReplacementDecisionItemId(action);
+  if (replacementItemId) return `replacement-item:${replacementItemId}`;
+
   const signal = normalizedSignal(action.signal);
   if (signal) return `signal:${signal}`;
   if (action.lineageId) return `lineage:${action.lineageId}`;
   return `entity:${action.source.entityId}`;
+}
+
+/** The inventory item a replacement/lifecycle decision is about, or null. */
+function resolveReplacementDecisionItemId(action: HomeAction): string | null {
+  for (const prefix of ['repair-replace:', 'appliance-repair-replace:']) {
+    if (action.lineageId?.startsWith(prefix)) {
+      const id = action.lineageId.slice(prefix.length).trim();
+      return id || null;
+    }
+  }
+  if (
+    action.id.startsWith('home-capital-timeline-window:') &&
+    action.presentation?.subject?.kind === 'INVENTORY_ITEM'
+  ) {
+    return action.presentation.subject.id.trim() || null;
+  }
+  return null;
 }
 
 type CoverageStateForHomeAction = Pick<InventoryCoveragePresentation, 'coverageState' | 'coverageActionable'>;

@@ -1,8 +1,8 @@
 # Home Action Health-Factor Copy FRD and Implementation Plan
 
-Version: 1.2
+Version: 1.3
 Date: 2026-08-29
-Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped · Phase 3 not scheduled
+Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped (`1e651fd7`) · §13 cross-producer replacement duplication shipped · Phase 3 not scheduled
 Owner: Product + Engineering
 Related: `HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md` (§8.1 Canonical Attention Authority, row "Property health insight"), commits `b9efddb2` / `25dd4c45` / `56bae882` (card-humanization pass)
 
@@ -440,3 +440,48 @@ On the Home "Decisions to make" card (`UnifiedHomeSurface.tsx`, card built from
 - **Stale-data cleanup.** Re-derive whichever entity holds `"HIGH Risk: HVAC_FURNACE"`
   through `getHomeAssetDisplayLabel` (risk-assessment recompute +
   `reconcileActiveMaintenanceTaskWork`, or a one-off row fix).
+
+---
+
+## 13. Cross-producer replacement duplication ("What needs attention")
+
+Status: fix shipped
+
+### 13.1 Problem
+
+"What needs attention" showed **two cards for the same appliance**:
+
+- **"Plan for Refrigerator replacement"** — `loadHomeCapitalTimelineMaterialWindowActions`,
+  `id = home-capital-timeline-window:{lineItemId}`, `source.kind = SYSTEM`, rich
+  `ASSET_LIFECYCLE` presentation (History / Protection / Plan), eyebrow "Capital plan".
+- **"Consider replacing your Refrigerator."** — `loadRepairReplaceDecisionActions`,
+  `id = repair-replace:{analysisId}`, `source.kind = GUIDANCE`,
+  `lineageId = appliance-repair-replace:{inventoryItemId}`, **no `presentation`** → generic
+  `GENERIC_ACTION` fallback (bare Source / Confidence / Observed).
+
+Both `SOON`, both `MATERIAL_FINANCIAL`, both recommending the same replacement.
+
+### 13.2 Why every dedup layer missed it
+
+| Layer | Key it computes | Why it splits |
+|---|---|---|
+| `rankAndDeduplicateHomeActions` → `homeActionCanonicalKey` | `signal:{normalized signal text}` | "Refrigerator has an estimated replacement window…" vs "Repair vs Replace: Refrigerator" — different strings. |
+| `linkWorkItemsAndReconcile` → `proposeWorkItemFromHomeAction` | `work:{workKey}` or `canonical:{key}` | `SYSTEM` is `workKeyEligible: false` (`homeActionAdapterOwnership.ts`) → capital gets no work item. The repair-replace `workKey` uses a `PROPERTY` subject + `guidance-{analysisId}` slug — the inventory-item identity is dropped. |
+| `linkDecisionLineage` | per decision-family | `HOME_CAPITAL_TIMELINE_WINDOW` vs `APPLIANCE_REPAIR_REPLACE` — separate families, keyed on different entity ids (timeline-line id vs inventory-item id). |
+
+Nothing keyed on the real shared subject: "a replacement decision for inventory item X".
+
+### 13.3 Fix (shipped)
+
+| Change | File |
+|---|---|
+| **Cross-suppress (Direction #3).** `loadHomeCapitalTimelineMaterialWindowActions` loads READY `ReplaceRepairAnalysis` item ids and skips the capital-plan card for any item that has an active repair-vs-replace verdict — the verdict is the canonical "decide now" signal; the plan is context on it. | `homeActionSourcePromotion.service.ts` |
+| **Real presentation + capital context (Directions #5 / #2-lite).** `loadRepairReplaceDecisionActions` now authors a `GENERIC_ACTION` presentation (eyebrow "Repair or replace", `INVENTORY_ITEM` subject, headline = the recommendation, key facts = Recommendation / Replacement window / Estimated budget / Typical lifespan / Recorded repairs / Confidence). The window / budget / lifespan facts are pulled from the matching capital-timeline line item so the budgeting context isn't lost when card 1 is suppressed. | `homeActionSourcePromotion.service.ts` |
+| **Subject-aware canonical key (Direction #1, defense-in-depth).** `homeActionCanonicalKey` returns `replacement-item:{inventoryItemId}` for a `repair-replace:` / `appliance-repair-replace:` lineage or a `home-capital-timeline-window:` action with an `INVENTORY_ITEM` presentation subject — so if both ever slip past the suppression, `rankAndDeduplicateHomeActions` collapses them (higher `homeActionScore` wins). | `homeActions.service.ts` |
+| Tests | `homeActionRepairReplacePromotion.test.js` (+3), `phase2HomeActions.test.js` (+1) |
+
+### 13.4 Future work (not in this change)
+
+- **Fold, don't suppress.** The cleaner end state is one card — "Refrigerator: repair-or-replace decision" — where the capital window renders as an evidence *fact group* on the decision card (matching card 1's History / Protection / Plan layout), not just flat key facts. Requires the repair-replace producer to load the full capital line item (condition, warranty, insurance, service history).
+- **Unify the decision families** (or teach `linkDecisionLineage` to treat `HOME_CAPITAL_TIMELINE_WINDOW` + `APPLIANCE_REPAIR_REPLACE` for the same item as one thread), and fix the capital `lineageId` to carry the inventory-item id rather than the timeline-line id.
+- **Direction #4 upgrade:** promote the repair-replace card to the real `ASSET_LIFECYCLE` variant (needs `timing.windowStart/End`, `factGroups`, an `itemId` launch param, and a non-`COMPARE` primary CTA — each a small but real behavior change).

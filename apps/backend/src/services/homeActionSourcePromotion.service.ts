@@ -2484,6 +2484,37 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
     ),
   ]);
 
+  // The capital-plan card for the same item is suppressed (see
+  // loadHomeCapitalTimelineMaterialWindowActions) — carry its planning
+  // context (window, budget, typical lifespan) onto this decision card so
+  // the homeowner keeps the "when / how much to set aside" information.
+  const capitalByItemId = new Map<string, { windowLabel: string; costRange: string | null; typicalLifespan: number | undefined }>();
+  if (db.homeCapitalTimelineAnalysis) {
+    const capital = await db.homeCapitalTimelineAnalysis.findFirst({
+      where: { propertyId, status: 'READY' },
+      orderBy: { computedAt: 'desc' },
+      select: {
+        items: {
+          where: { inventoryItemId: { in: inventoryItemIds } },
+          select: {
+            inventoryItemId: true, category: true, windowStart: true, windowEnd: true,
+            estimatedCostMinCents: true, estimatedCostMaxCents: true,
+          },
+        },
+      },
+    });
+    for (const item of capital?.items ?? []) {
+      if (!item.inventoryItemId) continue;
+      capitalByItemId.set(item.inventoryItemId, {
+        windowLabel: capitalWindowLabel(item.windowStart, item.windowEnd),
+        costRange: item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null
+          ? `$${Math.round(item.estimatedCostMinCents / 100).toLocaleString()}–$${Math.round(item.estimatedCostMaxCents / 100).toLocaleString()}`
+          : null,
+        typicalLifespan: CAPITAL_TIMELINE_TYPICAL_LIFESPAN_YEARS[item.category],
+      });
+    }
+  }
+
   return deduped.map((analysis) => {
     const namedItem = analysis.inventoryItem?.name?.trim();
     const itemName = namedItem || 'Inventory Item';
@@ -2566,6 +2597,43 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
         ? hvacRecommendedAction
         : favorsReplace ? `Consider replacing ${itemPhrase}.` : `Consider repairing ${itemPhrase}.`,
       expectedOutcome: `A documented repair-or-replace decision for ${itemPhrase}.`,
+      presentation: (() => {
+        const recommendation = isHvac
+          ? publishedHvacVerdict?.verdict === 'REPLACE' ? 'Replace'
+            : publishedHvacVerdict?.verdict === 'REPAIR' ? 'Repair'
+            : publishedHvacVerdict?.verdict === 'MONITOR' ? 'Monitor'
+            : 'Review'
+          : favorsReplace ? 'Replace' : favorsRepair ? 'Repair' : 'Review';
+        const capital = capitalByItemId.get(analysis.inventoryItemId);
+        const headline = isHvac
+          ? hvacRecommendedAction
+          : favorsReplace ? `Consider replacing ${itemPhrase}.` : `Consider repairing ${itemPhrase}.`;
+        const summary = (isHvac ? hvacWhyItMatters : (analysis.summary || `A repair-or-replace recommendation is ready for ${itemName}.`)).slice(0, 320);
+        return {
+          variant: 'GENERIC_ACTION' as const,
+          eyebrow: 'Repair or replace',
+          headline: headline.slice(0, 180),
+          summary,
+          whyNow: (isHvac ? hvacWhyItMatters : `${analysis.summary || ''}${recurringFailureSentence}`).trim().slice(0, 500) || summary,
+          keyFacts: [
+            { label: 'Recommendation', value: recommendation },
+            ...(capital?.windowLabel ? [{ label: 'Replacement window', value: capital.windowLabel.slice(0, 240) }] : []),
+            ...(capital?.costRange ? [{ label: 'Estimated budget', value: capital.costRange }] : []),
+            ...(capital?.typicalLifespan ? [{ label: 'Typical lifespan', value: `${capital.typicalLifespan} years` }] : []),
+            {
+              label: 'Recorded repairs',
+              value: recentRepairCount > 0
+                ? `${recentRepairCount} in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months`
+                : 'None recorded recently',
+            },
+            { label: 'Confidence', value: String(confidenceLabel).toLowerCase() },
+          ].slice(0, 8),
+          factGroups: [],
+          subject: { kind: 'INVENTORY_ITEM' as const, id: analysis.inventoryItemId, label: itemName.slice(0, 180) },
+          detailLabel: 'Why this recommendation?',
+          group: null,
+        };
+      })(),
       timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Advisory — not tied to a specific deadline.' },
       evidence: [
         ...(publishedHvacVerdict
@@ -4275,6 +4343,23 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
 ): Promise<HomeAction[]> {
   if (!db.homeCapitalTimelineAnalysis) return [];
 
+  // When the Lifespan Engine has a READY repair-vs-replace verdict for an
+  // item, that decision is the canonical "replace this now" signal for it —
+  // its Home Action carries the capital window as context (see
+  // loadRepairReplaceDecisionActions). Suppress the standalone capital-plan
+  // card for the same item so the homeowner sees one card, not two.
+  // See docs/product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md §13.
+  const repairReplaceItemIds = new Set<string>();
+  if (db.replaceRepairAnalysis) {
+    const rrAnalyses = await db.replaceRepairAnalysis.findMany({
+      where: { propertyId, status: 'READY' },
+      select: { inventoryItemId: true },
+    });
+    for (const rr of rrAnalyses) {
+      if (rr.inventoryItemId) repairReplaceItemIds.add(rr.inventoryItemId);
+    }
+  }
+
   const [analysis, conflictedWarrantyGroups, conflictedPolicyTerms] = await Promise.all([
     db.homeCapitalTimelineAnalysis.findFirst({
     where: { propertyId, status: 'READY' },
@@ -4340,6 +4425,8 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
   // inform the destination's portfolio view, but must not erase item identity
   // or turn several distinct homeowner decisions into one homepage card.
   return analysis.items.flatMap((item) => {
+    // Superseded by an active repair-vs-replace verdict for the same item.
+    if (item.inventoryItemId && repairReplaceItemIds.has(item.inventoryItemId)) return [];
     const record = item.inventoryItem;
     const linkedWarrantyIds = [
       record?.warranty?.id,

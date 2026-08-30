@@ -7,8 +7,8 @@ const { getPromotedHomeActions } = require('../../src/services/homeActionSourceP
 
 const NOW = new Date('2026-08-23T12:00:00.000Z');
 
-function stubSources({ analyses = [], guidanceJourneys = [], decisionThreads = [] } = {}) {
-  return {
+function stubSources({ analyses = [], guidanceJourneys = [], decisionThreads = [], capitalItems = null } = {}) {
+  const base = {
     // loadGuidanceActions() and loadRepairReplaceDecisionActions() both call
     // db.guidanceJourney.findMany with different `where` shapes — route by
     // the replace-repair-specific toolKey filter so this fixture only
@@ -26,6 +26,38 @@ function stubSources({ analyses = [], guidanceJourneys = [], decisionThreads = [
     orchestrationActionSnooze: { findMany: async () => [] },
     replaceRepairAnalysis: { findMany: async () => analyses },
     decisionThread: { findMany: async () => decisionThreads },
+  };
+  if (capitalItems) {
+    base.homeCapitalTimelineAnalysis = {
+      findFirst: async () => ({
+        id: 'capital-1',
+        computedAt: NOW,
+        inputsSnapshot: {},
+        items: capitalItems,
+      }),
+    };
+  }
+  return base;
+}
+
+function capitalItem(overrides = {}) {
+  return {
+    id: 'capital-item-1',
+    category: 'APPLIANCE',
+    priority: 'HIGH',
+    windowStart: new Date('2026-06-01T12:00:00.000Z'),
+    windowEnd: new Date('2027-06-01T12:00:00.000Z'),
+    estimatedCostMinCents: 129600,
+    estimatedCostMaxCents: 194300,
+    confidence: 'HIGH',
+    why: 'Refrigerator is in its lifecycle window.',
+    inventoryItemId: 'item-1',
+    inventoryItem: {
+      name: 'Refrigerator', condition: 'FAIR', installedOn: new Date('2016-01-01T00:00:00.000Z'),
+      purchasedOn: null, lastServicedOn: null, isVerified: true, updatedAt: NOW,
+      warranty: null, linkedWarranties: [], insurancePolicy: null, homeEvents: [],
+    },
+    ...overrides,
   };
 }
 
@@ -59,6 +91,42 @@ test('a REPLACE_NOW analysis produces a SOON-priority, replace-favoring Home Act
   assert.equal(action.options.find((o) => o.id === 'replace').recommended, true);
   assert.equal(action.options.find((o) => o.id === 'repair').recommended, false);
   assert.equal(action.primaryCta.href, '/dashboard/properties/property-1/inventory/items/item-1/replace-repair');
+});
+
+test('the repair-replace action carries an authored presentation (not the generic fallback)', async () => {
+  const db = stubSources({ analyses: [analysis()] });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+
+  const [action] = actions;
+  assert.equal(action.presentation.variant, 'GENERIC_ACTION');
+  assert.equal(action.presentation.eyebrow, 'Repair or replace');
+  assert.equal(action.presentation.subject.kind, 'INVENTORY_ITEM');
+  assert.equal(action.presentation.subject.id, 'item-1');
+  assert.equal(action.presentation.subject.label, 'Water Heater');
+  assert.match(action.presentation.headline, /replac/i);
+  const rec = action.presentation.keyFacts.find((f) => f.label === 'Recommendation');
+  assert.equal(rec.value, 'Replace');
+  // no capital analysis -> no capital facts
+  assert.ok(!action.presentation.keyFacts.some((f) => f.label === 'Replacement window'));
+});
+
+test('capital-plan card is suppressed and its planning context moves onto the repair-replace card', async () => {
+  const db = stubSources({
+    analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE' } })],
+    capitalItems: [capitalItem()],
+  });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+
+  // Exactly one card for the fridge — the decision, not two.
+  assert.equal(actions.length, 1);
+  const [action] = actions;
+  assert.equal(action.id, 'repair-replace:analysis-1');
+  assert.ok(!actions.some((a) => a.id.startsWith('home-capital-timeline-window:')));
+
+  const facts = Object.fromEntries(action.presentation.keyFacts.map((f) => [f.label, f.value]));
+  assert.equal(facts['Replacement window'], '2026–2027');
+  assert.equal(facts['Estimated budget'], '$1,296–$1,943');
+  assert.equal(facts['Typical lifespan'], '12 years');
 });
 
 test('a REPAIR_AND_MONITOR analysis favors repair and gets PLAN priority', async () => {
