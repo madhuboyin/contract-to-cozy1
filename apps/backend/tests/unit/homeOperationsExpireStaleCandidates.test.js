@@ -10,8 +10,10 @@ require('ts-node/register');
 // date rolls out of the live forecast window) nothing ever revisits that
 // work item again — it sits stuck in Home Operations' Today tab forever.
 // expireStaleWorkItemCandidates sweeps and closes exactly that class of
-// item (CANDIDATE, MAINTENANCE_TASK, no execution-backed source, due date
-// past the grace period) while leaving real homeowner-tracked work alone.
+// item (CANDIDATE, MAINTENANCE_TASK or INCIDENT_RESPONSE, no execution-backed
+// source, scheduling window past the grace period) while leaving real
+// homeowner-tracked work alone. The window test prefers dueWindowEnd and
+// falls back to dueAt so a multi-day event is never expired mid-window.
 
 const workItems = new Map();
 const workSources = new Map(); // key: `${workItemId}:${sourceType}:${sourceEntityId}:${sourceRole}`
@@ -31,8 +33,10 @@ function seedWorkItem(overrides = {}) {
     obligationType: 'MAINTENANCE_TASK',
     state: 'CANDIDATE',
     acceptanceState: 'PROPOSED',
+    acceptedAt: null,
     disposition: null,
     dueAt: null,
+    dueWindowEnd: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -58,22 +62,37 @@ function seedSource(workItemId, overrides = {}) {
 }
 
 // Mirrors the subset of Prisma's filter semantics expireStaleWorkItemCandidates
-// actually issues: propertyId/state/obligationType equality, dueAt `lt`, and
-// a `sources: { none: { sourceRole, active } } }` relation filter.
-function matchesWhere(item, where) {
-  if (where.propertyId && item.propertyId !== where.propertyId) return false;
-  if (where.state && item.state !== where.state) return false;
-  if (where.obligationType && item.obligationType !== where.obligationType) return false;
-  if (where.dueAt?.lt) {
-    if (!item.dueAt || !(item.dueAt < where.dueAt.lt)) return false;
+// actually issues: propertyId/state equality, acceptedAt null, obligationType
+// `in`, a dueWindowEnd/dueAt `OR`, and a
+// `sources: { none: { sourceRole, active } } }` relation filter.
+function dateLt(value, bound) {
+  return value != null && new Date(value) < new Date(bound);
+}
+
+function matchesClause(item, clause) {
+  if (clause.propertyId && item.propertyId !== clause.propertyId) return false;
+  if (clause.state && item.state !== clause.state) return false;
+  if ('acceptedAt' in clause && item.acceptedAt !== clause.acceptedAt) return false;
+  if (clause.obligationType?.in && !clause.obligationType.in.includes(item.obligationType)) return false;
+  if (clause.dueWindowEnd !== undefined) {
+    if (clause.dueWindowEnd === null && item.dueWindowEnd != null) return false;
+    if (clause.dueWindowEnd?.not === null && item.dueWindowEnd == null) return false;
+    if (clause.dueWindowEnd?.lt && !dateLt(item.dueWindowEnd, clause.dueWindowEnd.lt)) return false;
   }
-  if (where.sources?.none) {
-    const { sourceRole, active } = where.sources.none;
+  if (clause.dueAt?.lt && !dateLt(item.dueAt, clause.dueAt.lt)) return false;
+  if (clause.sources?.none) {
+    const { sourceRole, active } = clause.sources.none;
     const hasExcludedSource = [...workSources.values()].some(
       (s) => s.workItemId === item.id && s.sourceRole === sourceRole && s.active === active,
     );
     if (hasExcludedSource) return false;
   }
+  return true;
+}
+
+function matchesWhere(item, where) {
+  if (!matchesClause(item, where)) return false;
+  if (Array.isArray(where.OR) && !where.OR.some((clause) => matchesClause(item, clause))) return false;
   return true;
 }
 
@@ -103,7 +122,7 @@ const prismaMock = {
     create: async ({ data }) => {
       const key = `${data.workItemId}:${data.idempotencyKey}`;
       if (workEvents.has(key)) { const err = new Error('dup event'); err.code = 'P2002'; throw err; }
-      const row = { id: crypto.randomUUID(), createdAt: new Date(), ...data };
+      const row = { id: crypto.randomUUID(), createdAt: new Date(), occurredAt: new Date(), ...data };
       workEvents.set(key, row);
       return row;
     },
@@ -112,10 +131,25 @@ const prismaMock = {
       return workEvents.get(`${k.workItemId}:${k.idempotencyKey}`) ?? null;
     },
   },
+  // transitionWorkItem wraps its work in an interactive transaction; the mock
+  // runs the callback against itself since every method above is already a
+  // pure in-memory operation.
+  $transaction: async (fn) => fn(prismaMock),
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
+
+// The lifecycle-change ledger (PropertyChange emission + recompute request)
+// is exercised by its own tests; stub it here so this unit test stays
+// focused on the sweep's own transition behavior.
+const emitterPath = require.resolve('../../src/modules/homeOperations/infrastructure/workItemChangeEmitter.ts');
+require.cache[emitterPath] = {
+  id: emitterPath,
+  filename: emitterPath,
+  loaded: true,
+  exports: { emitWorkItemLifecycleChangeWithTransaction: async () => {} },
+};
 
 const { expireStaleWorkItemCandidates } = require('../../src/modules/homeOperations/application/expireStaleWorkItemCandidates.usecase.ts');
 
@@ -170,7 +204,7 @@ test('never touches an accepted work item', async () => {
   assert.equal(workItems.get(item.id).state, 'ACCEPTED');
 });
 
-test('ignores work items outside the MAINTENANCE_TASK obligation type', async () => {
+test('ignores work items outside the ephemeral obligation types', async () => {
   reset();
   const item = seedWorkItem({ dueAt: FAR_PAST, obligationType: 'COVERAGE_ACTION' });
   seedSource(item.id, { sourceRole: 'TRIGGER', active: true });
@@ -179,6 +213,50 @@ test('ignores work items outside the MAINTENANCE_TASK obligation type', async ()
 
   assert.equal(result.examined, 0);
   assert.equal(workItems.get(item.id).state, 'CANDIDATE');
+});
+
+test('closes a stale INCIDENT_RESPONSE candidate (e.g. a passed weather-preparation checklist)', async () => {
+  reset();
+  const item = seedWorkItem({
+    obligationType: 'INCIDENT_RESPONSE',
+    dueAt: new Date('2026-08-14T00:00:00.000Z'),
+    dueWindowEnd: new Date('2026-08-23T23:59:59.000Z'),
+  });
+  seedSource(item.id, { sourceType: 'INCIDENT', sourceEntityId: 'incident-1', sourceRole: 'TRIGGER', active: true });
+
+  const result = await expireStaleWorkItemCandidates();
+
+  assert.equal(result.examined, 1);
+  assert.equal(result.updated, 1);
+  const updated = workItems.get(item.id);
+  assert.equal(updated.state, 'CLOSED');
+  assert.equal(updated.disposition, 'EXPIRED');
+});
+
+test('keys the grace period off dueWindowEnd, not dueAt — a multi-day event mid-window is left alone', async () => {
+  reset();
+  // Window started 10 days ago (dueAt) but does not end until tomorrow.
+  const item = seedWorkItem({
+    dueAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    dueWindowEnd: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  });
+  seedSource(item.id, { sourceRole: 'TRIGGER', active: true });
+
+  const result = await expireStaleWorkItemCandidates();
+
+  assert.equal(result.examined, 0);
+  assert.equal(workItems.get(item.id).state, 'CANDIDATE');
+});
+
+test('closes an item whose dueWindowEnd is past the grace period even if dueAt is null', async () => {
+  reset();
+  const item = seedWorkItem({ dueAt: null, dueWindowEnd: FAR_PAST });
+  seedSource(item.id, { sourceRole: 'TRIGGER', active: true });
+
+  const result = await expireStaleWorkItemCandidates();
+
+  assert.equal(result.examined, 1);
+  assert.equal(workItems.get(item.id).state, 'CLOSED');
 });
 
 test('dry run reports what would be closed without mutating anything', async () => {

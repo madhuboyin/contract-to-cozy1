@@ -323,7 +323,7 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     key: 'expire-stale-work-item-candidates',
     name: 'Expire Stale Work Item Candidates',
     description:
-      'Closes CANDIDATE OperationalWorkItems (MAINTENANCE_TASK obligations with no execution-backed source — i.e. still just a proposed recommendation, never accepted) once their due date is a few days past. Fixes forecast-anchored environment insights (e.g. "Heavy rain expected Monday") that stop being regenerated once their event date rolls out of the live forecast window, leaving an orphaned candidate stuck in the Home Operations Today tab forever.',
+      'Closes CANDIDATE OperationalWorkItems (MAINTENANCE_TASK or INCIDENT_RESPONSE obligations with no execution-backed source — i.e. still just a proposed recommendation, never accepted) once their scheduling window (dueWindowEnd, falling back to dueAt) is a few days past. Fixes forecast-anchored environment insights (e.g. "Heavy rain expected Monday") and weather-preparation checklists (e.g. "Multi-day heat risk ahead preparation") that stop being regenerated once their window rolls out of the live forecast, leaving an orphaned candidate stuck in the Home Operations Today tab forever.',
     category: 'MAINTENANCE',
     schedule: 'Daily at 1:45 AM EST',
     cronExpression: '45 1 * * *',

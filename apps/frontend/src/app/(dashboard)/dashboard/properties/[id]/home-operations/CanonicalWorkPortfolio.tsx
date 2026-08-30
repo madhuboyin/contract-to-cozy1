@@ -12,6 +12,28 @@ import type { HomeOperationsTabKey } from './HomeOperationsTabs';
 const COMPLETED = new Set(['REPORTED_COMPLETE', 'VERIFIED', 'CLOSED']);
 const WAITING = new Set(['BLOCKED', 'DEFERRED']);
 
+// Mirrors GRACE_PERIOD_MS in expireStaleWorkItemCandidates.usecase.ts.
+const STALE_CANDIDATE_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * A CANDIDATE (never-accepted) recommendation whose scheduling window has
+ * fully elapsed is a forecast/season-anchored proposal that stopped being
+ * regenerated — e.g. a passed "Multi-day heat risk ahead preparation"
+ * checklist or a "Heavy rain expected Monday" insight. The backend sweep
+ * (expireStaleWorkItemCandidates) closes these nightly; this mirrors its
+ * grace period so a missed or lagging sweep cannot strand a dead proposal in
+ * the homeowner's Today list. Accepted work that is merely overdue is
+ * untouched — that is real tracked work, not an expired proposal.
+ */
+function isStaleWindowedCandidate(item: WorkItemListEntryDTO): boolean {
+  if (item.state !== 'CANDIDATE' || item.acceptanceState === 'ACCEPTED') return false;
+  const windowEndIso = item.dueWindowEnd ?? item.dueAt;
+  if (!windowEndIso) return false;
+  const windowEnd = new Date(windowEndIso).getTime();
+  if (Number.isNaN(windowEnd)) return false;
+  return windowEnd < Date.now() - STALE_CANDIDATE_GRACE_MS;
+}
+
 /**
  * Returns null for a work item that was dismissed/not relevant/a duplicate/
  * expired (state CLOSED with a disposition) — that's not "completed" (a
@@ -22,6 +44,7 @@ const WAITING = new Set(['BLOCKED', 'DEFERRED']);
  */
 export function classifyCanonicalWorkItem(item: WorkItemListEntryDTO): HomeOperationsTabKey | null {
   if (item.state === 'CLOSED' && item.disposition) return null;
+  if (isStaleWindowedCandidate(item)) return null;
   if (item.supersededByWorkItemId) return 'completed';
   if (COMPLETED.has(item.state) && !item.disposition) return 'completed';
   if (item.state === 'IN_PROJECT' || item.obligationType === 'PROJECT_EXECUTION') return 'projects';
