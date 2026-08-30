@@ -29,6 +29,7 @@ export type CoverageAuditRunSummary = Readonly<{
   findings: number;
   reviewRequired: number;
   declarationDrift: number;
+  declarationDriftDetails: readonly string[];
   certificationIssues: readonly string[];
   diagnostics: readonly string[];
 }>;
@@ -97,6 +98,32 @@ export async function createCoverageAuditRun(
   }
 }
 
+/**
+ * A BullMQ retry is a fresh global audit, never a resume. Once the shared
+ * execution lease has been acquired, any older RUNNING row for this job is
+ * proof of an interrupted process and is terminalized before the new attempt.
+ */
+export async function failInterruptedCoverageAuditRuns(
+  currentIdempotencyKey: string,
+  finishedAt: Date,
+  db: Pick<typeof prisma, 'coverageAuditRun'> = prisma,
+): Promise<number> {
+  const transition = await db.coverageAuditRun.updateMany({
+    where: {
+      workerJobKey: COVERAGE_AUDIT_WORKER_JOB_KEY,
+      status: 'RUNNING',
+      idempotencyKey: { not: currentIdempotencyKey },
+    },
+    data: {
+      status: 'FAILED',
+      finishedAt,
+      failureCode: 'EXECUTION_INTERRUPTED',
+      failureSummary: 'Coverage audit worker stopped before the attempt reached a terminal state',
+    },
+  });
+  return transition.count;
+}
+
 export async function finalizeCoverageAuditRun(
   input: Readonly<{
     runId: string;
@@ -129,6 +156,7 @@ export async function finalizeCoverageAuditRun(
         findings: input.summary.findings,
         reviewRequired: input.summary.reviewRequired,
         declarationDrift: input.summary.declarationDrift,
+        declarationDriftDetails: bounded(input.summary.declarationDriftDetails, MAX_CERTIFICATION_ISSUES),
         certificationIssueCount: input.summary.certificationIssues.length,
         findingsCreated: reconciliation.created,
         findingsUpdated: reconciliation.updated,

@@ -18,6 +18,7 @@
 // A registry entry with no handler will also log a warning and not run.
 
 import type { WorkerExecutionPolicy } from './workerExecutionPolicy';
+import { envelopeCoverageEvaluationGate } from '../services/intelligence/envelopeCoverageEvaluationContract';
 
 export type JobCategory =
   | 'PROPERTY_INTELLIGENCE'
@@ -919,8 +920,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     impact: 'INTERNAL_WRITE',
     customerJob: 'PLATFORM_OPERATIONS',
     defaultEnabledInBeta: true,
-    // IPD-002 is unresolved: manual inspection is allowed, scheduled launch is not.
+    // Manual inspection remains available, but IPD-002 is a hard product gate:
+    // no environment override may activate the scheduled path.
     defaultScheduledEnabled: false,
+    nonOverridableScheduledBlockReason: envelopeCoverageEvaluationGate().scheduledEligible
+      ? undefined
+      : envelopeCoverageEvaluationGate().reason,
     supportsDryRun: false,
     supportsPropertyScope: false,
     broadSweep: false,

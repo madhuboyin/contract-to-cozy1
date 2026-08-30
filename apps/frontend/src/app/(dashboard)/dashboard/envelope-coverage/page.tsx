@@ -182,13 +182,13 @@ export default function AdminEnvelopeCoveragePage() {
   }
 
   const { summary, reviewRequired, declaredOnly, retired, lastComplete, recentRuns } = report.data;
-  const observedDrift = [...reviewRequired, ...declaredOnly].filter((f) => f.evidenceBasis === 'OBSERVED_ONLY');
+  const observedDrift = recentRuns[0]?.declarationDriftDetails ?? [];
   const partialOrFailed = recentRuns.filter((r) => r.status === 'PARTIAL' || r.status === 'FAILED');
 
   const cards: Array<[string, number | string]> = [
     ['Review required', summary.reviewRequired],
     ['Declared-only', summary.declaredOnly],
-    ['Observed drift', observedDrift.length],
+    ['Observed drift', summary.declarationDrift],
     ['Recent partial / failed', summary.recentPartialOrFailed],
     ['Evaluation', summary.evaluationStatus],
   ];
@@ -220,9 +220,19 @@ export default function AdminEnvelopeCoveragePage() {
       <section className="mt-7">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Observed declaration drift</h2>
         <p className="mb-2 text-[11px] text-slate-500">
-          Producer/domain pairs seen in authorized observations but absent from their adapter descriptor. These fail certification even when the coarse pair is otherwise covered.
+          Exact capabilities seen in authorized observations but absent from their adapter descriptor. These fail certification even when the coarse producer/domain pair is otherwise covered.
         </p>
-        <FindingTable rows={observedDrift} emptyLabel="No observed capability is undeclared." />
+        {observedDrift.length > 0
+          ? (
+            <ul className="space-y-2">
+              {observedDrift.map((detail) => (
+                <li key={detail} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 font-mono text-xs text-amber-950">
+                  {detail}
+                </li>
+              ))}
+            </ul>
+          )
+          : <p className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">No observed capability is undeclared.</p>}
       </section>
 
       <section className="mt-7">

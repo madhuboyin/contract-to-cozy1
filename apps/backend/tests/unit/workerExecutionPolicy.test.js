@@ -132,6 +132,19 @@ test('defaultScheduledEnabled=false keeps cron closed while allowing manual exec
   assert.equal(manual.allowed, true);
 });
 
+test('a non-overridable product gate blocks schedule activation even with a true per-job override', () => {
+  const gated = policy({ nonOverridableScheduledBlockReason: 'IPD-002 is not approved' });
+  const scheduled = evaluateWorkerExecution('job-a', 'scheduled', gated, {
+    WORKER_JOB_JOB_A_ENABLED: 'true',
+  });
+  const manual = evaluateWorkerExecution('job-a', 'manual', gated, {
+    WORKER_MANUAL_TRIGGERS_ENABLED: 'true',
+  });
+  assert.equal(scheduled.allowed, false);
+  assert.match(scheduled.reason, /IPD-002/);
+  assert.equal(manual.allowed, true);
+});
+
 test('externalProvider jobs require WORKER_EXTERNAL_INGEST_ENABLED', () => {
   const env = { WORKER_AUTOMATION_ENABLED: 'true' };
   const blocked = evaluateWorkerExecution('recall-ingest', 'scheduled', policy({ externalProvider: 'CPSC' }), env);

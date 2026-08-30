@@ -60,11 +60,15 @@ function auditResult(overrides = {}) {
 }
 
 function deps(overrides = {}) {
-  const calls = { createRun: [], executeAudit: [], failRun: [] };
+  const calls = { createRun: [], failInterruptedRuns: [], executeAudit: [], failRun: [] };
   const base = {
     createRun: async (input) => {
       calls.createRun.push(input);
       return { created: true, run: runRow() };
+    },
+    failInterruptedRuns: async (idempotencyKey, finishedAt) => {
+      calls.failInterruptedRuns.push({ idempotencyKey, finishedAt });
+      return 0;
     },
     executeAudit: async (input) => {
       calls.executeAudit.push(input);
@@ -92,12 +96,21 @@ test('a MANUAL invocation without the durable queue job ID is rejected', async (
   assert.equal(calls.createRun.length, 0);
 });
 
+test('an audit cannot start without a reproducible deployment revision', async () => {
+  const { deps: d, calls } = deps({
+    deploymentRevision: () => { throw new Error('Envelope coverage audit requires a concrete deployment revision'); },
+  });
+  await assert.rejects(runEvaluateEnvelopePromotionCoverageJob({}, d), /concrete deployment revision/);
+  assert.equal(calls.failInterruptedRuns.length, 0);
+  assert.equal(calls.createRun.length, 0);
+});
+
 test('a SCHEDULED invocation keys the run by calendar day and pins run identity', async () => {
   const { deps: d, calls } = deps();
   const result = await runEvaluateEnvelopePromotionCoverageJob({}, d);
 
   assert.equal(calls.createRun.length, 1);
-  assert.equal(calls.createRun[0].idempotencyKey, 'envelope-promotion-coverage-audit:scheduled:2026-08-28');
+  assert.equal(calls.createRun[0].idempotencyKey, 'envelope-promotion-coverage-audit:scheduled:2026-08-28:attempt-1');
   assert.equal(calls.createRun[0].trigger, 'SCHEDULED');
   assert.equal(calls.createRun[0].auditInputsDigest, 'digest-abc');
   assert.equal(calls.createRun[0].taxonomyVersion, 'itd-v1');
@@ -110,8 +123,22 @@ test('a SCHEDULED invocation keys the run by calendar day and pins run identity'
 test('a MANUAL invocation keys the run by the durable queue job ID', async () => {
   const { deps: d, calls } = deps();
   await runEvaluateEnvelopePromotionCoverageJob({ trigger: 'MANUAL', invocationId: 'bull-job-42' }, d);
-  assert.equal(calls.createRun[0].idempotencyKey, 'envelope-promotion-coverage-audit:manual:bull-job-42');
+  assert.equal(calls.createRun[0].idempotencyKey, 'envelope-promotion-coverage-audit:manual:bull-job-42:attempt-1');
   assert.equal(calls.createRun[0].trigger, 'MANUAL');
+});
+
+test('a BullMQ retry closes interrupted attempts and starts a fresh run identity', async () => {
+  const { deps: d, calls } = deps();
+  await runEvaluateEnvelopePromotionCoverageJob({
+    trigger: 'MANUAL',
+    invocationId: 'bull-job-42',
+    attemptNumber: 2,
+  }, d);
+  assert.equal(
+    calls.failInterruptedRuns[0].idempotencyKey,
+    'envelope-promotion-coverage-audit:manual:bull-job-42:attempt-2',
+  );
+  assert.equal(calls.createRun[0].idempotencyKey, calls.failInterruptedRuns[0].idempotencyKey);
 });
 
 test('a PARTIAL audit surfaces a reason and the not-retired count', async () => {

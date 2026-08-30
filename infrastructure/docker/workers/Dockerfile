@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
 
 # Copy package files for both workers and backend (for prisma client)
 COPY apps/workers/package*.json ./apps/workers/
+COPY apps/workers/scripts/sync-prisma-client.js ./apps/workers/scripts/
 COPY apps/backend/package*.json ./apps/backend/
 COPY apps/backend/prisma ./apps/backend/prisma
 

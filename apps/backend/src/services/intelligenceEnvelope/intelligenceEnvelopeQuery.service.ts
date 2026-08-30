@@ -37,6 +37,8 @@ import { inventoryEntityRef } from './adapters/adapterSupport';
 export const ENVELOPE_QUERY_PER_ADAPTER_TIMEOUT_MS = 2_000;
 export const ENVELOPE_QUERY_TOTAL_TIMEOUT_MS = 5_000;
 export const ENVELOPE_QUERY_MAX_ROWS_PER_PRODUCER = 300;
+export const ENVELOPE_COVERAGE_PER_ADAPTER_TIMEOUT_MS = 30_000;
+export const ENVELOPE_COVERAGE_TOTAL_TIMEOUT_MS = 60_000;
 
 export class IntelligenceEnvelopeAccessDeniedError extends Error {
   readonly code = 'INTELLIGENCE_ENVELOPE_ACCESS_DENIED';
@@ -679,5 +681,9 @@ export function queryIntelligenceEnvelopeForCoverage(
   rawQuery: IntelligenceEnvelopeQuery,
   dependencyOverrides: Partial<IntelligenceEnvelopeQueryDependencies> = {},
 ): Promise<IntelligenceEnvelopeCoveragePage> {
-  return executeIntelligenceEnvelopeQuery(rawQuery, dependencyOverrides, true);
+  return executeIntelligenceEnvelopeQuery(rawQuery, {
+    perAdapterTimeoutMs: ENVELOPE_COVERAGE_PER_ADAPTER_TIMEOUT_MS,
+    totalTimeoutMs: ENVELOPE_COVERAGE_TOTAL_TIMEOUT_MS,
+    ...dependencyOverrides,
+  }, true);
 }

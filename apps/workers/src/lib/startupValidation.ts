@@ -24,6 +24,7 @@ import { logger } from './logger';
 import { JOB_REGISTRY, RUNNER_REGISTRY } from '@worker-shared/config/workerJobRegistry';
 import { evaluateWorkerExecution, type WorkerTriggerType } from '@worker-shared/config/workerExecutionPolicy';
 import { validateIntelligenceRegistries } from '@worker-shared/services/intelligence';
+import { validateEnvelopeRegistry } from '@worker-shared/services/intelligenceEnvelope';
 
 export interface StartupCheckResult {
   name: string;
@@ -39,7 +40,10 @@ export interface StartupCheckResult {
  * registry is internally invalid.
  */
 export function assertValidWorkerIntelligenceRegistries(
-  validate: () => string[] = validateIntelligenceRegistries,
+  validate: () => string[] = () => [
+    ...validateIntelligenceRegistries(),
+    ...validateEnvelopeRegistry(),
+  ],
 ): void {
   const issues = validate();
   if (issues.length > 0) {

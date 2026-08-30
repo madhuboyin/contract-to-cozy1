@@ -261,6 +261,7 @@ interface WorkerHandlerOptions {
   propertyId?: string;
   trigger?: 'MANUAL';
   invocationId?: string;
+  attemptNumber?: number;
 }
 
 const CRON_HANDLERS: Record<string, (opts?: WorkerHandlerOptions) => Promise<void | WorkerRunResult>> = {
@@ -435,7 +436,7 @@ const CRON_HANDLERS: Record<string, (opts?: WorkerHandlerOptions) => Promise<voi
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
   'envelope-promotion-coverage-audit': async (opts) => runEvaluateEnvelopePromotionCoverageJob(
     opts?.trigger === 'MANUAL'
-      ? { trigger: 'MANUAL', invocationId: opts.invocationId }
+      ? { trigger: 'MANUAL', invocationId: opts.invocationId, attemptNumber: opts.attemptNumber }
       : undefined,
   ),
   'purge-agent-runtime':             async () => runPurgeAgentRuntimeJob(),
@@ -1565,7 +1566,13 @@ const cronTriggerWorker = new Worker(
     // scheduled run of the same job, or vice versa.
     const leaseOutcome = await runWithCronLease(
       canonicalJobKey,
-      () => handler({ dryRun, propertyId, trigger: 'MANUAL', invocationId: String(job.id) }),
+      () => handler({
+        dryRun,
+        propertyId,
+        trigger: 'MANUAL',
+        invocationId: String(job.id),
+        attemptNumber: job.attemptsMade + 1,
+      }),
     );
     if (leaseOutcome.status === 'skipped') {
       throw new Error(

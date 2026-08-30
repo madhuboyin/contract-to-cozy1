@@ -4,14 +4,17 @@ import { executeEnvelopeCoverageAudit } from '@worker-shared/services/intelligen
 import { currentEnvelopeCoverageDigest } from '@worker-shared/services/intelligence/envelopeCoverageDigest';
 import {
   createCoverageAuditRun,
+  failInterruptedCoverageAuditRuns,
   failCoverageAuditRun,
   type CoverageAuditRunTriggerValue,
 } from '@worker-shared/services/intelligence/envelopeCoverageRun.repository';
+import { envelopeCoverageEvaluationGate } from '@worker-shared/services/intelligence/envelopeCoverageEvaluationContract';
 import type { WorkerRunResult } from '../lib/workerRunResult';
 
 export type EnvelopeCoverageJobOptions = Readonly<{
   trigger?: 'MANUAL';
   invocationId?: string;
+  attemptNumber?: number;
 }>;
 
 /**
@@ -20,6 +23,7 @@ export type EnvelopeCoverageJobOptions = Readonly<{
  */
 export type EnvelopeCoverageJobDependencies = Readonly<{
   createRun: typeof createCoverageAuditRun;
+  failInterruptedRuns: typeof failInterruptedCoverageAuditRuns;
   executeAudit: typeof executeEnvelopeCoverageAudit;
   failRun: typeof failCoverageAuditRun;
   digest: typeof currentEnvelopeCoverageDigest;
@@ -29,14 +33,18 @@ export type EnvelopeCoverageJobDependencies = Readonly<{
 }>;
 
 function defaultDeploymentRevision(): string {
-  return process.env.DEPLOYMENT_REVISION
+  const revision = process.env.DEPLOYMENT_REVISION
     ?? process.env.RENDER_GIT_COMMIT
-    ?? process.env.GIT_SHA
-    ?? 'UNSPECIFIED';
+    ?? process.env.GIT_SHA;
+  if (!revision?.trim() || revision === 'UNSPECIFIED') {
+    throw new Error('Envelope coverage audit requires a concrete deployment revision');
+  }
+  return revision;
 }
 
 const DEFAULT_DEPENDENCIES: EnvelopeCoverageJobDependencies = {
   createRun: createCoverageAuditRun,
+  failInterruptedRuns: failInterruptedCoverageAuditRuns,
   executeAudit: executeEnvelopeCoverageAudit,
   failRun: failCoverageAuditRun,
   digest: currentEnvelopeCoverageDigest,
@@ -87,16 +95,19 @@ export async function runEvaluateEnvelopePromotionCoverageJob(
     throw new Error('Manual coverage-audit invocation requires the durable queue job ID');
   }
   const invocationId = trigger === 'MANUAL' ? options.invocationId! : scheduledInvocationDate(now);
-  const idempotencyKey = `envelope-promotion-coverage-audit:${trigger.toLowerCase()}:${invocationId}`;
+  const attemptNumber = Math.max(1, Math.floor(options.attemptNumber ?? 1));
+  const idempotencyKey = `envelope-promotion-coverage-audit:${trigger.toLowerCase()}:${invocationId}:attempt-${attemptNumber}`;
+  const deploymentRevision = dependencies.deploymentRevision();
+  await dependencies.failInterruptedRuns(idempotencyKey, now);
+  const evaluationGate = envelopeCoverageEvaluationGate();
   const acquired = await dependencies.createRun({
     idempotencyKey,
     trigger,
     correlationId: randomUUID(),
     auditInputsDigest: dependencies.digest(),
     taxonomyVersion: dependencies.taxonomyVersion,
-    deploymentRevision: dependencies.deploymentRevision(),
-    // IPD-002 is unresolved; no evaluation contract may be implied.
-    evaluationContractVersion: null,
+    deploymentRevision,
+    evaluationContractVersion: evaluationGate.contractVersion,
   });
   if (!acquired.created) return resultFromPersistedRun(acquired.run);
 

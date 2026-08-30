@@ -25,6 +25,8 @@ export interface WorkerExecutionPolicy {
   defaultEnabledInBeta: boolean;
   /** Defaults to true. Set false when manual execution is approved but cron activation is not. */
   defaultScheduledEnabled?: boolean;
+  /** A product/evaluation gate that no environment override may bypass. */
+  nonOverridableScheduledBlockReason?: string;
   supportsDryRun: boolean;
   supportsPropertyScope: boolean;
   externalProvider?: string;
@@ -207,6 +209,9 @@ export function evaluateWorkerExecution(
   policy: WorkerExecutionPolicy,
   env: NodeJS.ProcessEnv = process.env,
 ): WorkerExecutionDecision {
+  if (triggerType !== 'manual' && policy.nonOverridableScheduledBlockReason) {
+    return { allowed: false, reason: policy.nonOverridableScheduledBlockReason };
+  }
   const override = getJobOverride(jobKey, env);
   if (override.value !== undefined) {
     return { allowed: override.value, reason: `per-job override ${override.envKey}=${override.value}` };

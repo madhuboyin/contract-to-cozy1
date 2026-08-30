@@ -15648,6 +15648,7 @@ model CoverageAuditRun {
   findings                  Int                      @default(0)
   reviewRequired            Int                      @default(0)
   declarationDrift          Int                      @default(0)
+  declarationDriftDetails   String[]                 @default([])
   certificationIssueCount   Int                      @default(0)
   findingsCreated           Int                      @default(0)
   findingsUpdated           Int                      @default(0)

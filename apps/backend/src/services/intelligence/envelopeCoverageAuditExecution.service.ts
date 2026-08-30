@@ -18,7 +18,6 @@ import {
 
 const DEFAULT_PROPERTY_PAGE_SIZE = 100;
 const DEFAULT_ENVELOPE_PAGE_SIZE = 100;
-const DEFAULT_MAX_ENVELOPE_PAGES_PER_PROPERTY = 1_000;
 const COVERAGE_AUDIT_AGENT_ID = 'envelope-promotion-coverage-audit';
 
 function exactObservedCapabilityKey(capability: ObservedEnvelopeCapability): string {
@@ -41,7 +40,6 @@ export type EnvelopeCoverageAuditExecutionDependencies = Readonly<{
   queryProperty(input: {
     propertyId: string;
     userId: string;
-    cursor: string | null;
     limit: number;
   }): Promise<IntelligenceEnvelopeCoveragePage>;
   reconcile(
@@ -71,6 +69,7 @@ export type EnvelopeCoverageAuditExecutionResult = Readonly<{
   findings: number;
   reviewRequired: number;
   declarationDrift: number;
+  declarationDriftDetails: readonly string[];
   certificationIssues: readonly string[];
   diagnostics: readonly string[];
   reconciliation: EnvelopeCoverageReconciliationResult;
@@ -85,12 +84,11 @@ const DEFAULT_DEPENDENCIES: EnvelopeCoverageAuditExecutionDependencies = {
       take,
     });
   },
-  queryProperty({ propertyId, userId, cursor, limit }) {
+  queryProperty({ propertyId, userId, limit }) {
     return queryIntelligenceEnvelopeForCoverage({
       propertyId,
       principal: { kind: 'BACKGROUND_JOB_RESOLVED_OWNER', userId },
       requestingAgentId: COVERAGE_AUDIT_AGENT_ID,
-      ...(cursor ? { cursor } : {}),
       limit,
     });
   },
@@ -102,16 +100,11 @@ const DEFAULT_DEPENDENCIES: EnvelopeCoverageAuditExecutionDependencies = {
 export async function executeEnvelopeCoverageAudit(input: Readonly<{
   propertyPageSize?: number;
   envelopePageSize?: number;
-  maxEnvelopePagesPerProperty?: number;
   runId?: string;
 }> = {}, dependencyOverrides: Partial<EnvelopeCoverageAuditExecutionDependencies> = {}): Promise<EnvelopeCoverageAuditExecutionResult> {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
   const propertyPageSize = Math.max(1, Math.min(input.propertyPageSize ?? DEFAULT_PROPERTY_PAGE_SIZE, 500));
   const envelopePageSize = Math.max(1, Math.min(input.envelopePageSize ?? DEFAULT_ENVELOPE_PAGE_SIZE, 100));
-  const maxEnvelopePages = Math.max(1, Math.min(
-    input.maxEnvelopePagesPerProperty ?? DEFAULT_MAX_ENVELOPE_PAGES_PER_PROPERTY,
-    DEFAULT_MAX_ENVELOPE_PAGES_PER_PROPERTY,
-  ));
   const auditedAt = dependencies.now();
   const observedCapabilities: ObservedEnvelopeCapability[] = [];
   const diagnostics: string[] = [];
@@ -144,56 +137,38 @@ export async function executeEnvelopeCoverageAudit(input: Readonly<{
         diagnostics.push(`OWNER_UNRESOLVED:${property.id}`);
         continue;
       }
-      let cursor: string | null = null;
-      const seenCursors = new Set<string>();
       let propertyComplete = true;
-      let pageCount = 0;
-      do {
-        if (pageCount >= maxEnvelopePages) {
-          propertyComplete = false;
-          diagnostics.push(`ENVELOPE_PAGE_LIMIT_EXCEEDED:${property.id}`);
-          break;
-        }
-        try {
-          const result = await dependencies.queryProperty({
-            propertyId: property.id,
-            userId,
-            cursor,
-            limit: envelopePageSize,
-          });
-          envelopePagesRead += 1;
-          pageCount += 1;
-          observedCapabilities.push(...result.observedCapabilities.map((capability) => ({
-            ...capability,
-            // Persistence tracks when this audit observed the combination;
-            // source-record freshness remains on the Envelope item itself.
-            observedAt: auditedAt.toISOString(),
-          })));
-          for (const diagnostic of result.page.diagnostics) {
-            if (diagnostic.code === 'ADAPTER_FAILED' || diagnostic.code === 'TIME_BUDGET_EXHAUSTED') {
-              adapterFailures += diagnostic.count;
-              propertyComplete = false;
-            }
-            if (diagnostic.code === 'UNMAPPED_NATIVE_VALUE') {
-              unmappedCertificationIssues.add(
-                `${diagnostic.producerModel}:${diagnostic.nativeValue ?? 'UNKNOWN'}: observed native value is not mapped`,
-              );
-            }
-          }
-          const nextCursor = result.page.nextCursor;
-          if (nextCursor && seenCursors.has(nextCursor)) {
+      try {
+        // The coverage view already drains every native producer exactly
+        // once. Following the public Envelope cursor here would re-scan the
+        // same native rows for every display page (quadratic work and duplicate
+        // observations), so audit traversal deliberately makes one call.
+        const result = await dependencies.queryProperty({
+          propertyId: property.id,
+          userId,
+          limit: envelopePageSize,
+        });
+        envelopePagesRead += 1;
+        observedCapabilities.push(...result.observedCapabilities.map((capability) => ({
+          ...capability,
+          observedAt: auditedAt.toISOString(),
+        })));
+        for (const diagnostic of result.page.diagnostics) {
+          if (diagnostic.code === 'ADAPTER_FAILED' || diagnostic.code === 'TIME_BUDGET_EXHAUSTED') {
+            adapterFailures += diagnostic.count;
             propertyComplete = false;
-            diagnostics.push(`ENVELOPE_CURSOR_REPEATED:${property.id}`);
-            break;
           }
-          if (nextCursor) seenCursors.add(nextCursor);
-          cursor = nextCursor;
-        } catch (error) {
-          propertyComplete = false;
-          diagnostics.push(`PROPERTY_ENVELOPE_READ_FAILED:${property.id}:${error instanceof Error ? error.message : String(error)}`);
-          break;
+          if (diagnostic.code === 'UNMAPPED_NATIVE_VALUE') {
+            propertyComplete = false;
+            unmappedCertificationIssues.add(
+              `${diagnostic.producerModel}:${diagnostic.nativeValue ?? 'UNKNOWN'}: observed native value is not mapped`,
+            );
+          }
         }
-      } while (cursor);
+      } catch (error) {
+        propertyComplete = false;
+        diagnostics.push(`PROPERTY_ENVELOPE_READ_FAILED:${property.id}:${error instanceof Error ? error.message : String(error)}`);
+      }
       if (propertyComplete) propertiesAudited += 1;
       else propertyFailures += 1;
     }
@@ -224,6 +199,8 @@ export async function executeEnvelopeCoverageAudit(input: Readonly<{
     findings: audit.findings.length,
     reviewRequired: audit.findings.filter(({ determination }) => determination === 'REVIEW_REQUIRED').length,
     declarationDrift: audit.declarationDrift.length,
+    declarationDriftDetails: audit.declarationDrift.map(({ producerModel, capability }) =>
+      `${producerModel}:${capability.type}:${capability.domain}:${capability.nativeSubtype}:${capability.propositionType ?? ''}`),
     certificationIssues,
     diagnostics: [...new Set(diagnostics)].sort(),
   };

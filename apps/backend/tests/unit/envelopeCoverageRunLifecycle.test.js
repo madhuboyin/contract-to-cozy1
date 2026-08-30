@@ -9,6 +9,7 @@ const { Prisma } = require('@prisma/client');
 
 const {
   createCoverageAuditRun,
+  failInterruptedCoverageAuditRuns,
   finalizeCoverageAuditRun,
   failCoverageAuditRun,
   boundedCoverageDiagnosticCodes,
@@ -45,6 +46,7 @@ function summary(overrides = {}) {
     findings: 9,
     reviewRequired: 1,
     declarationDrift: 0,
+    declarationDriftDetails: [],
     certificationIssues: [],
     diagnostics: [],
     ...overrides,
@@ -92,8 +94,10 @@ function makeDb({ runs = [], findings = [] } = {}) {
     updateMany: async ({ where, data }) => {
       let count = 0;
       for (const [id, row] of runRows) {
-        if (row.id !== where.id) continue;
+        if (where.id && row.id !== where.id) continue;
+        if (where.workerJobKey && row.workerJobKey !== where.workerJobKey) continue;
         if (where.status && row.status !== where.status) continue;
+        if (where.idempotencyKey?.not && row.idempotencyKey === where.idempotencyKey.not) continue;
         runRows.set(id, { ...row, ...data });
         count += 1;
       }
@@ -152,6 +156,30 @@ test('CoverageAuditRun schema persists bounded audit identity, never homeowner d
 
   const runStatus = schema.slice(schema.indexOf('enum CoverageAuditRunStatus {'));
   assert.match(runStatus, /RUNNING[\s\S]*COMPLETE[\s\S]*PARTIAL[\s\S]*FAILED/);
+});
+
+test('a fresh attempt terminalizes older interrupted RUNNING audits', async () => {
+  const store = makeDb({
+    runs: [
+      {
+        id: 'run-old',
+        idempotencyKey: 'old-attempt',
+        workerJobKey: COVERAGE_AUDIT_WORKER_JOB_KEY,
+        status: 'RUNNING',
+      },
+      {
+        id: 'run-current',
+        idempotencyKey: 'current-attempt',
+        workerJobKey: COVERAGE_AUDIT_WORKER_JOB_KEY,
+        status: 'RUNNING',
+      },
+    ],
+  });
+  const count = await failInterruptedCoverageAuditRuns('current-attempt', FINISHED_AT, store.db);
+  assert.equal(count, 1);
+  assert.equal(store.runRows.get('run-old').status, 'FAILED');
+  assert.equal(store.runRows.get('run-old').failureCode, 'EXECUTION_INTERRUPTED');
+  assert.equal(store.runRows.get('run-current').status, 'RUNNING');
 });
 
 test('createCoverageAuditRun inserts a RUNNING run under the worker job key', async () => {

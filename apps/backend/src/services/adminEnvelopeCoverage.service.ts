@@ -36,6 +36,7 @@ const RUN_SELECT = {
   findings: true,
   reviewRequired: true,
   declarationDrift: true,
+  declarationDriftDetails: true,
   certificationIssueCount: true,
   findingsCreated: true,
   findingsUpdated: true,
@@ -86,6 +87,7 @@ export async function getAdminEnvelopeCoverageReport(
     summary: {
       reviewRequired: reviewRequired.length,
       declaredOnly: declaredOnly.length,
+      declarationDrift: recentRuns[0]?.declarationDrift ?? 0,
       recentPartialOrFailed: recentRuns.filter(({ status }) => status === 'PARTIAL' || status === 'FAILED').length,
       evaluationStatus: recentRuns[0]?.evaluationStatus ?? 'NOT_MEASURED',
     },

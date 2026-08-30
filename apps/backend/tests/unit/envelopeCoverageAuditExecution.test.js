@@ -40,7 +40,7 @@ test('a zero-property audit still reconciles the declared universe as complete',
   assert.ok(reconciliationInput.findings.every(({ evidenceBasis }) => evidenceBasis === 'DECLARED_ONLY'));
 });
 
-test('stable property and Envelope paging uses resolved owners and accumulates exact observations', async () => {
+test('coverage drains each property once and accumulates exact observations without public-page rescans', async () => {
   const propertyCalls = [];
   const queryCalls = [];
   let reconciledComplete = null;
@@ -60,7 +60,7 @@ test('stable property and Envelope paging uses resolved owners and accumulates e
     },
     queryProperty: async (input) => {
       queryCalls.push(input);
-      return input.cursor ? page() : page({ nextCursor: 'cursor-1', observedCapabilities: [observed] });
+      return page({ nextCursor: 'display-cursor-is-not-a-coverage-cursor', observedCapabilities: [observed] });
     },
     reconcile: async (_findings, options) => {
       reconciledComplete = options.complete;
@@ -71,13 +71,12 @@ test('stable property and Envelope paging uses resolved owners and accumulates e
 
   assert.equal(result.status, 'COMPLETE');
   assert.equal(result.propertiesAudited, 1);
-  assert.equal(result.envelopePagesRead, 2);
+  assert.equal(result.envelopePagesRead, 1);
   assert.equal(result.observedCapabilities, 1);
   assert.equal(reconciledComplete, true);
   assert.deepEqual(propertyCalls, [{ afterId: null, take: 1 }, { afterId: 'property-1', take: 1 }]);
-  assert.deepEqual(queryCalls.map(({ propertyId, userId, cursor }) => ({ propertyId, userId, cursor })), [
-    { propertyId: 'property-1', userId: 'owner-1', cursor: null },
-    { propertyId: 'property-1', userId: 'owner-1', cursor: 'cursor-1' },
+  assert.deepEqual(queryCalls.map(({ propertyId, userId }) => ({ propertyId, userId })), [
+    { propertyId: 'property-1', userId: 'owner-1' },
   ]);
 });
 
@@ -112,7 +111,7 @@ test('unresolved owners and adapter failures make a run partial and prohibit ret
   ]);
 });
 
-test('a repeated Envelope cursor fails closed instead of looping or retiring findings', async () => {
+test('a public Envelope display cursor is ignored after the coverage view drains native rows', async () => {
   let reconciledComplete = null;
   const result = await executeEnvelopeCoverageAudit({}, {
     listProperties: async ({ afterId }) => afterId === null
@@ -126,9 +125,9 @@ test('a repeated Envelope cursor fails closed instead of looping or retiring fin
     now: () => NOW,
   });
 
-  assert.equal(result.status, 'PARTIAL');
-  assert.equal(reconciledComplete, false);
-  assert.ok(result.diagnostics.includes('ENVELOPE_CURSOR_REPEATED:property-1'));
+  assert.equal(result.status, 'COMPLETE');
+  assert.equal(result.envelopePagesRead, 1);
+  assert.equal(reconciledComplete, true);
 });
 
 test('a property-page failure produces a partial run and cannot retire findings', async () => {

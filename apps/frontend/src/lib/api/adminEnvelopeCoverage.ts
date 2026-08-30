@@ -50,6 +50,7 @@ export interface CoverageAuditRun {
   findings: number;
   reviewRequired: number;
   declarationDrift: number;
+  declarationDriftDetails: string[];
   certificationIssueCount: number;
   findingsCreated: number;
   findingsUpdated: number;
@@ -64,6 +65,7 @@ export interface AdminEnvelopeCoverageReport {
   summary: {
     reviewRequired: number;
     declaredOnly: number;
+    declarationDrift: number;
     recentPartialOrFailed: number;
     evaluationStatus: string;
   };
