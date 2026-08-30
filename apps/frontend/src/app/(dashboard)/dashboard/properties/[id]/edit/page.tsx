@@ -241,21 +241,43 @@ function getInstallYearFeedback(year: number | null | undefined): {
   return { label: `${age} yrs · Replace soon`, color: "rose", age };
 }
 
-function SystemAgeBadge({ year }: { year: number | null | undefined }) {
+/** One status vocabulary for every system card: Good / Monitor / Replace soon / Not set. */
+function SystemStatusChip({ year, unsetLabel = "Not set" }: { year: number | null | undefined; unsetLabel?: string }) {
   const feedback = getInstallYearFeedback(year);
-  if (!feedback) return null;
-
-  const colorMap = {
-    emerald: "border-emerald-200 bg-emerald-100/70 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-900/30 dark:text-emerald-300",
-    amber: "border-amber-200 bg-amber-100/70 text-amber-700 dark:border-amber-800/40 dark:bg-amber-900/30 dark:text-amber-300",
-    rose: "border-rose-200 bg-rose-100/70 text-rose-700 dark:border-rose-800/40 dark:bg-rose-900/30 dark:text-rose-300",
-  };
-
+  const tone: "emerald" | "amber" | "rose" | "none" = feedback?.color ?? "none";
+  const label = feedback
+    ? `${tone === "emerald" ? "Good" : tone === "amber" ? "Monitor" : "Replace soon"} · ${feedback.age} yr`
+    : unsetLabel;
+  const surface = {
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300",
+    amber: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300",
+    rose: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-300",
+    none: "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400",
+  }[tone];
+  const dot = {
+    emerald: "bg-emerald-500",
+    amber: "bg-amber-500",
+    rose: "bg-rose-500",
+    none: "bg-slate-300 dark:bg-slate-600",
+  }[tone];
   return (
-    <span className={cn("inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium leading-none", colorMap[feedback.color!])}>
-      {feedback.label}
+    <span className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium leading-5", surface)}>
+      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
+      {label}
     </span>
   );
+}
+
+function formatUsdCompact(value: number | null | undefined): string | null {
+  if (value == null || Number.isNaN(value) || value <= 0) return null;
+  return `$${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function formatMonthYear(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
 function getSaveBarCopy(completionPercent: number): string {
@@ -974,12 +996,14 @@ export default function EditPropertyPage() {
     "hasIrrigation",
     "appliances",
   ]);
-  const completedSystemCount = [
+  const trackedSystemsCount = [
     Boolean(watchHeatingType && watchCoolingType && watchHvacInstallYear),
     Boolean(watchWaterHeaterType && watchWaterHeaterInstallYear),
     Boolean(watchRoofType && watchRoofReplacementYear),
-    Boolean(watchFoundationType),
   ].filter(Boolean).length;
+  const agingSystemsCount = [watchHvacInstallYear, watchWaterHeaterInstallYear, watchRoofReplacementYear]
+    .map((year) => getInstallYearFeedback(year)?.color)
+    .filter((color) => color === "amber" || color === "rose").length;
   const [activeSectionId, setActiveSectionId] = React.useState<PropertySectionId | null>("basics");
   const [lockedStartFieldKey, setLockedStartFieldKey] = React.useState<string | null>(null);
 
@@ -1123,6 +1147,18 @@ export default function EditPropertyPage() {
   const nextBestStepText = startField ? `Add ${startField.label}` : null;
   const saveBarCopy = getSaveBarCopy(confidenceScore);
   const startSectionId = startField?.sectionId ?? null;
+
+  const timezoneValue = form.watch("timezone");
+  const timezoneLabel =
+    PROPERTY_TIMEZONE_OPTIONS.find((option) => option.value === timezoneValue)?.label ??
+    (timezoneValue ? timezoneValue.replaceAll("_", " ") : null);
+  const purchasePriceLabel = formatUsdCompact(form.watch("purchasePriceDollars"));
+  const purchaseWhenLabel = formatMonthYear(form.watch("purchaseDate"));
+  const appraisalLabel = formatUsdCompact(form.watch("lastAppraisedValueDollars"));
+  const valueSummary = [
+    purchasePriceLabel ? `Bought ${purchasePriceLabel}${purchaseWhenLabel ? ` · ${purchaseWhenLabel}` : ""}` : null,
+    appraisalLabel ? `Appraised ${appraisalLabel}` : null,
+  ].filter(Boolean).join("   ·   ");
   const [correctionAnchor, setCorrectionAnchor] = React.useState('');
   const responsibilityPreset = React.useMemo(
     () => getResponsibilityPreset(watchResponsibilities),
@@ -1133,6 +1169,8 @@ export default function EditPropertyPage() {
   const [appliancesExpanded, setAppliancesExpanded] = React.useState(false);
   const [highlightHomeValue, setHighlightHomeValue] = React.useState(false);
   const [highlightPropertyUse, setHighlightPropertyUse] = React.useState(false);
+  const [valueGroupOpen, setValueGroupOpen] = React.useState(false);
+  const [timezoneFieldOpen, setTimezoneFieldOpen] = React.useState(false);
 
   React.useEffect(() => {
     const anchor = window.location.hash.slice(1);
@@ -1161,11 +1199,29 @@ export default function EditPropertyPage() {
     const target = document.getElementById("home-value-section");
     if (!target) return;
 
+    setValueGroupOpen(true);
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     setHighlightHomeValue(true);
     const timeout = window.setTimeout(() => setHighlightHomeValue(false), 2200);
     return () => window.clearTimeout(timeout);
   }, [searchParams]);
+
+  const valueFieldErrors = form.formState.errors;
+  React.useEffect(() => {
+    if (
+      valueFieldErrors.purchasePriceDollars ||
+      valueFieldErrors.purchaseDate ||
+      valueFieldErrors.lastAppraisedValueDollars ||
+      valueFieldErrors.lastAppraisalDate
+    ) {
+      setValueGroupOpen(true);
+    }
+  }, [
+    valueFieldErrors.purchasePriceDollars,
+    valueFieldErrors.purchaseDate,
+    valueFieldErrors.lastAppraisedValueDollars,
+    valueFieldErrors.lastAppraisalDate,
+  ]);
 
   React.useEffect(() => {
     if (searchParams.get("focus") !== "property-use") return;
@@ -1589,213 +1645,261 @@ export default function EditPropertyPage() {
               headerClassName="p-5 pb-3 sm:p-5 sm:pb-3"
               contentClassName="p-5 pt-0 sm:p-5 sm:pt-0"
             >
-              <div id="address" className="grid grid-cols-1 gap-[14px] lg:grid-cols-12">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem className="lg:col-span-6">
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Home nickname</FormLabel>
-                      <FormControl><Input id="field-name" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="Main Home" {...field} value={field.value || ""} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem className="lg:col-span-6">
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Street address</FormLabel>
-                      <FormControl><Input id="field-address" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="123 Main St" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="basics-address-row-2 lg:col-span-12 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(120px,240px)_80px_110px_minmax(170px,220px)] sm:items-end">
-                  <FormField
-                    control={form.control}
-                    name="city"
-                    render={({ field }) => (
-                      <FormItem className="min-w-0 w-full">
-                        <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">City</FormLabel>
-                        <FormControl><Input id="field-city" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="Princeton" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="state"
-                    render={({ field }) => (
-                      <FormItem className="field-state w-full sm:w-[80px]">
-                        <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">State</FormLabel>
-                        <FormControl><Input id="field-state" className="h-9 text-center text-sm tracking-normal focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="NJ" {...field} maxLength={2} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="zipCode"
-                    render={({ field }) => (
-                      <FormItem className="field-zip w-full sm:w-[100px]">
-                        <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Zip</FormLabel>
-                        <FormControl><Input id="field-zipCode" className="h-9 text-sm tracking-normal focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="timezone"
-                    render={({ field }) => (
-                      <FormItem className="min-w-0 w-full">
-                        <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Property timezone</FormLabel>
-                        <Select value={field.value ?? undefined} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger id="field-timezone" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40">
-                              <SelectValue placeholder="Select timezone" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {field.value && !PROPERTY_TIMEZONE_OPTIONS.some((option) => option.value === field.value) ? (
-                              <SelectItem value={field.value}>{field.value.replaceAll('_', ' ')}</SelectItem>
-                            ) : null}
-                            {PROPERTY_TIMEZONE_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="mt-1 text-[11px] leading-4 text-gray-500 dark:text-slate-400">
-                          Used for this property&apos;s reminders, schedules, and local dates.
-                        </p>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <div className="space-y-6">
+                {/* Home & location */}
+                <div id="address" className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Home nickname</FormLabel>
+                          <FormControl><Input id="field-name" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="Main Home" {...field} value={field.value || ""} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Street address</FormLabel>
+                          <FormControl><Input id="field-address" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="123 Main St" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_84px_120px]">
+                    <FormField
+                      control={form.control}
+                      name="city"
+                      render={({ field }) => (
+                        <FormItem className="min-w-0">
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">City</FormLabel>
+                          <FormControl><Input id="field-city" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="Princeton" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="state"
+                      render={({ field }) => (
+                        <FormItem className="min-w-0">
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">State</FormLabel>
+                          <FormControl><Input id="field-state" className="h-9 text-center text-sm tracking-normal tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="NJ" {...field} maxLength={2} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="zipCode"
+                      render={({ field }) => (
+                        <FormItem className="min-w-0">
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">ZIP</FormLabel>
+                          <FormControl><Input id="field-zipCode" className="h-9 text-sm tracking-normal tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200/70 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-slate-900/40">
+                    <button
+                      type="button"
+                      onClick={() => setTimezoneFieldOpen((open) => !open)}
+                      aria-expanded={timezoneFieldOpen}
+                      className="flex w-full items-center justify-between gap-3 text-left"
+                    >
+                      <span className="min-w-0 truncate text-xs text-gray-600 dark:text-slate-300">
+                        <span className="font-medium text-gray-900 dark:text-slate-100">Time zone</span>
+                        <span className="text-gray-500 dark:text-slate-400"> · {timezoneLabel ?? "Eastern Time (default)"}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                        {timezoneFieldOpen ? "Done" : "Change"}
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", timezoneFieldOpen && "rotate-180")} />
+                      </span>
+                    </button>
+                    {timezoneFieldOpen ? (
+                      <FormField
+                        control={form.control}
+                        name="timezone"
+                        render={({ field }) => (
+                          <FormItem className="mt-2.5">
+                            <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger id="field-timezone" className="h-9 bg-white text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40 dark:bg-slate-950/50">
+                                  <SelectValue placeholder="Select timezone" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {field.value && !PROPERTY_TIMEZONE_OPTIONS.some((option) => option.value === field.value) ? (
+                                  <SelectItem value={field.value}>{field.value.replaceAll('_', ' ')}</SelectItem>
+                                ) : null}
+                                {PROPERTY_TIMEZONE_OPTIONS.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="mt-1.5 text-[11px] leading-4 text-gray-500 dark:text-slate-400">
+                              Normally set from your address. Change it only if reminders and digests should
+                              follow a different zone.
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
+                  </div>
                 </div>
+
+                <div className="h-px bg-black/5 dark:bg-white/10" />
+
+                {/* Value & equity */}
                 <div
                   id="home-value-section"
                   className={cn(
-                    "lg:col-span-12 rounded-md border border-black/10 bg-gray-50/60 p-3 transition-shadow dark:border-white/10 dark:bg-slate-900/30",
-                    highlightHomeValue && "border-emerald-300 ring-2 ring-emerald-200",
+                    "rounded-lg border border-slate-200/70 bg-slate-50 transition-shadow dark:border-white/10 dark:bg-slate-900/40",
+                    highlightHomeValue && "border-emerald-300 ring-2 ring-emerald-200 dark:border-emerald-700/60",
                   )}
                 >
-                  <div className="mb-2">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Home value</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">Used for equity and appreciation insights.</p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <FormField
-                      control={form.control}
-                      name="purchasePriceDollars"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Purchase price (USD)</FormLabel>
-                          <FormControl>
-                            <Input
-                              id="field-purchasePriceDollars"
-                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
-                              placeholder="e.g., 600000"
-                              inputMode="decimal"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="purchaseDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Purchase date</FormLabel>
-                          <FormControl>
-                            <Input
-                              id="field-purchaseDate"
-                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
-                              type="date"
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="lastAppraisedValueDollars"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Latest appraisal (USD)</FormLabel>
-                          <FormControl>
-                            <Input
-                              id="field-lastAppraisedValueDollars"
-                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
-                              placeholder="e.g., 725000"
-                              inputMode="decimal"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="lastAppraisalDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Appraisal date</FormLabel>
-                          <FormControl>
-                            <Input
-                              id="field-lastAppraisalDate"
-                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
-                              type="date"
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setValueGroupOpen((open) => !open)}
+                    aria-expanded={valueGroupOpen}
+                    className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-gray-900 dark:text-slate-100">Value &amp; equity</span>
+                      <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-slate-400">
+                        {valueSummary || "Add purchase and appraisal figures for equity insights."}
+                      </span>
+                    </span>
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-gray-400 transition-transform", valueGroupOpen && "rotate-180")} />
+                  </button>
+                  {valueGroupOpen ? (
+                    <div className="grid grid-cols-1 gap-3 border-t border-slate-200/70 px-3.5 pb-3.5 pt-3 sm:grid-cols-2 lg:grid-cols-4 dark:border-white/10">
+                      <FormField
+                        control={form.control}
+                        name="purchasePriceDollars"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Purchase price (USD)</FormLabel>
+                            <FormControl>
+                              <Input
+                                id="field-purchasePriceDollars"
+                                className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                                placeholder="e.g., 600000"
+                                inputMode="decimal"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="purchaseDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Purchase date</FormLabel>
+                            <FormControl>
+                              <Input
+                                id="field-purchaseDate"
+                                className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                                type="date"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="lastAppraisedValueDollars"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Latest appraisal (USD)</FormLabel>
+                            <FormControl>
+                              <Input
+                                id="field-lastAppraisedValueDollars"
+                                className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                                placeholder="e.g., 725000"
+                                inputMode="decimal"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="lastAppraisalDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Appraisal date</FormLabel>
+                            <FormControl>
+                              <Input
+                                id="field-lastAppraisalDate"
+                                className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                                type="date"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  ) : null}
                 </div>
-                <FormField
-                  control={form.control}
-                  name="isPrimary"
-                  render={({ field }) => (
-                    <FormItem className="set-primary-row lg:col-span-12 mt-3 flex items-center gap-2.5 rounded-md border border-black/10 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-slate-900/35">
-                      <FormControl>
-                        <Checkbox id="field-isPrimary" checked={field.value ?? false} onCheckedChange={field.onChange} />
-                      </FormControl>
-                      <div className="set-primary-text flex min-w-0 items-center gap-2">
-                        <FormLabel htmlFor="field-isPrimary" className="set-primary-label m-0 text-[13px] font-medium text-gray-900 dark:text-slate-100">Set as main home</FormLabel>
-                        <CardDescription className="set-primary-hint m-0 text-[11px] text-gray-500 dark:text-slate-400">You can change this anytime.</CardDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
 
-                <div className="lg:col-span-12 space-y-2 rounded-md border border-black/10 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
+                <div className="h-px bg-black/5 dark:bg-white/10" />
+
+                {/* Photo & display */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Photo &amp; display</p>
+
+                  <FormField
+                    control={form.control}
+                    name="isPrimary"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-2.5 space-y-0">
+                        <FormControl>
+                          <Checkbox id="field-isPrimary" checked={field.value ?? false} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2">
+                          <FormLabel htmlFor="field-isPrimary" className="m-0 text-[13px] font-medium text-gray-900 dark:text-slate-100">Set as main home</FormLabel>
+                          <CardDescription className="m-0 text-[11px] text-gray-500 dark:text-slate-400">You can change this anytime.</CardDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="space-y-2 rounded-lg border border-slate-200/70 bg-slate-50 p-3 dark:border-white/10 dark:bg-slate-900/40">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Property photo</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-400">Optional cover photo shown on property cards.</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Cover photo</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">Optional — shown on your property cards.</p>
                     </div>
                     {propertyPhotoFile ? (
                       <StatusChip tone="good">New photo selected</StatusChip>
@@ -1869,268 +1973,103 @@ export default function EditPropertyPage() {
                   <p className="text-xs text-gray-500 dark:text-slate-400">
                     JPG, PNG, WEBP, or HEIC (max {MAX_PROPERTY_PHOTO_SIZE_MB}MB).
                   </p>
+                  </div>
                 </div>
               </div>
             </PropertyEditSection>
 
             <PropertyEditSection
               id="systems"
-              title="Critical systems"
-              helperText="Helps plan maintenance and avoid surprises."
+              title="Systems & structure"
+              helperText="Your building's key facts, and the systems you service over time."
               defaultExpandedDesktop={true}
               defaultExpandedMobile={false}
               forceExpandOnMobile={startSectionId === "systems" || ['property-type', 'structure', 'systems'].includes(correctionAnchor)}
               headerChip={(
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                    completedSystemCount === 4
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300"
-                      : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
-                  )}
-                >
-                  {completedSystemCount} of 4 complete
+                <span className="flex items-center gap-2">
+                  <span className="h-1 w-14 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true">
+                    <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${(trackedSystemsCount / 3) * 100}%` }} />
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    {agingSystemsCount > 0
+                      ? `${agingSystemsCount} aging soon`
+                      : trackedSystemsCount === 3
+                        ? "All tracked"
+                        : `${trackedSystemsCount}/3 tracked`}
+                  </span>
                 </span>
               )}
             >
-              <div className="space-y-5">
-                <div id="structure" className="grid grid-cols-1 gap-4 border-b border-black/10 pb-5 dark:border-white/10 md:grid-cols-[1.2fr_1fr_1fr]">
-                  <FormField
-                    control={form.control}
-                    name="dwellingType"
-                    render={({ field }) => (
-                      <FormItem id="property-type" className="w-full">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Home type</FormLabel>
-                          {isRecommended("dwellingType") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <Select onValueChange={field.onChange} value={field.value}>
+              <div className="space-y-6">
+                {/* About the building */}
+                <div id="structure" className="space-y-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">About the building</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <FormField
+                      control={form.control}
+                      name="dwellingType"
+                      render={({ field }) => (
+                        <FormItem id="property-type" className="w-full">
+                          <div className="mb-1 flex items-center gap-2">
+                            <FormLabel className="text-xs font-medium text-gray-600 dark:text-slate-300">Home type</FormLabel>
+                            {isRecommended("dwellingType") ? <FieldNudgeChip variant="recommended" /> : null}
+                          </div>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger id="field-dwellingType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {DWELLING_TYPE_OPTIONS.map((type) => (
+                                <SelectItem key={type} value={type}>{DWELLING_TYPE_LABELS[type]}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="propertySize"
+                      render={({ field }) => (
+                        <FormItem className="w-full">
+                          <div className="mb-1 flex items-center gap-2">
+                            <FormLabel className="text-xs font-medium text-gray-600 dark:text-slate-300">Approx. size</FormLabel>
+                            {isRecommended("propertySize") ? <FieldNudgeChip variant="recommended" /> : null}
+                          </div>
                           <FormControl>
-                            <SelectTrigger id="field-dwellingType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            <div className="relative">
+                              <Input id="field-propertySize" className="h-9 pr-11 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-slate-500">sq ft</span>
+                            </div>
                           </FormControl>
-                          <SelectContent>
-                            {DWELLING_TYPE_OPTIONS.map((type) => (
-                              <SelectItem key={type} value={type}>{DWELLING_TYPE_LABELS[type]}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="propertySize"
-                    render={({ field }) => (
-                      <FormItem className="w-full">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Approx size (sq ft)</FormLabel>
-                          {isRecommended("propertySize") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <FormControl>
-                          <Input id="field-propertySize" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="yearBuilt"
-                    render={({ field }) => (
-                      <FormItem className="w-full">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Year built</FormLabel>
-                          {isRecommended("yearBuilt") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <FormControl>
-                          <Input id="field-yearBuilt" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 lg:col-span-3 sm:p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
-                      <SystemAgeBadge year={watchHvacInstallYear} />
-                    </div>
-                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-3">
-                      <FormField
-                        control={form.control}
-                        name="heatingType"
-                        render={({ field }) => (
-                          <FormItem className="w-full min-w-0">
-                            <div className="flex min-h-5 items-center">
-                              <FormLabel>Heating type</FormLabel>
-                            </div>
-                            <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger id="field-heatingType" title={field.value ? formatEnumLabel(field.value) : undefined} className="h-9 min-w-0 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40 [&>span]:truncate"><SelectValue placeholder="Select type" /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Object.values(HeatingTypes).map((type) => (
-                                  <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="coolingType"
-                        render={({ field }) => (
-                          <FormItem className="w-full min-w-0">
-                            <div className="flex min-h-5 items-center">
-                              <FormLabel>Cooling type</FormLabel>
-                            </div>
-                            <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger id="field-coolingType" title={field.value ? formatEnumLabel(field.value) : undefined} className="h-9 min-w-0 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40 [&>span]:truncate"><SelectValue placeholder="Select type" /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Object.values(CoolingTypes).map((type) => (
-                                  <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="hvacInstallYear"
-                        render={({ field }) => (
-                          <FormItem className="w-full">
-                            <div className="flex min-h-5 items-center gap-2">
-                              <FormLabel>Install year</FormLabel>
-                              {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                            </div>
-                            <FormControl>
-                              <Input id="field-hvacInstallYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 sm:p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
-                      <SystemAgeBadge year={watchWaterHeaterInstallYear} />
-                    </div>
-                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(120px,0.42fr)]">
-                      <FormField
-                        control={form.control}
-                        name="waterHeaterType"
-                        render={({ field }) => (
-                          <FormItem className="w-full">
-                            <div className="flex min-h-5 items-center">
-                              <FormLabel>Type</FormLabel>
-                            </div>
-                            <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger id="field-waterHeaterType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Object.values(WaterHeaterTypes).map((type) => (
-                                  <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="waterHeaterInstallYear"
-                        render={({ field }) => (
-                          <FormItem className="w-full">
-                            <div className="flex min-h-5 items-center gap-2">
-                              <FormLabel>Install year</FormLabel>
-                              {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                            </div>
-                            <FormControl>
-                              <Input id="field-waterHeaterInstallYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 sm:p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
-                      <SystemAgeBadge year={watchRoofReplacementYear} />
-                    </div>
-                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(120px,0.42fr)]">
-                      <FormField
-                        control={form.control}
-                        name="roofType"
-                        render={({ field }) => (
-                          <FormItem className="w-full">
-                            <div className="flex min-h-5 items-center">
-                              <FormLabel>Roof type</FormLabel>
-                            </div>
-                            <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger id="field-roofType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Object.values(RoofTypes).map((type) => (
-                                  <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="roofReplacementYear"
-                        render={({ field }) => (
-                          <FormItem className="w-full">
-                            <div className="flex min-h-5 items-center gap-2">
-                              <FormLabel>Installed / last replaced</FormLabel>
-                              {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                            </div>
-                            <FormControl>
-                              <Input id="field-roofReplacementYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 sm:p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Foundation</p>
-                      {!watchFoundationType ? (
-                        <span className="inline-flex shrink-0 items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium leading-none text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                          Missing
-                        </span>
-                      ) : null}
-                    </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="yearBuilt"
+                      render={({ field }) => (
+                        <FormItem className="w-full">
+                          <div className="mb-1 flex items-center gap-2">
+                            <FormLabel className="text-xs font-medium text-gray-600 dark:text-slate-300">Year built</FormLabel>
+                            {isRecommended("yearBuilt") ? <FieldNudgeChip variant="recommended" /> : null}
+                          </div>
+                          <FormControl>
+                            <Input id="field-yearBuilt" className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <FormField
                       control={form.control}
                       name="foundationType"
                       render={({ field }) => (
                         <FormItem className="w-full">
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Foundation type</FormLabel>
+                          <div className="mb-1 flex items-center gap-2">
+                            <FormLabel className="text-xs font-medium text-gray-600 dark:text-slate-300">Foundation</FormLabel>
                             {isRecommended("foundationType") ? <FieldNudgeChip variant="recommended" /> : null}
                           </div>
                           <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
@@ -2144,7 +2083,7 @@ export default function EditPropertyPage() {
                             </SelectContent>
                           </Select>
                           {!field.value ? (
-                            <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-slate-400">
+                            <p className="mt-1.5 text-[11px] leading-4 text-gray-500 dark:text-slate-400">
                               Improves drainage, drought, and moisture insights.
                             </p>
                           ) : null}
@@ -2152,6 +2091,169 @@ export default function EditPropertyPage() {
                         </FormItem>
                       )}
                     />
+                  </div>
+                </div>
+
+                <div className="h-px bg-black/5 dark:bg-white/10" />
+
+                {/* Systems */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Systems</p>
+                  <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
+                    <div className="rounded-lg border border-slate-200/70 bg-slate-50 p-3.5 dark:border-white/10 dark:bg-slate-900/40">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
+                        <SystemStatusChip year={watchHvacInstallYear} />
+                      </div>
+                      <div className="space-y-3">
+                        <FormField
+                          control={form.control}
+                          name="heatingType"
+                          render={({ field }) => (
+                            <FormItem className="w-full min-w-0">
+                              <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Heating</FormLabel>
+                              <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger id="field-heatingType" title={field.value ? formatEnumLabel(field.value) : undefined} className="h-9 min-w-0 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40 [&>span]:truncate"><SelectValue placeholder="Select type" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {Object.values(HeatingTypes).map((type) => (
+                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="coolingType"
+                          render={({ field }) => (
+                            <FormItem className="w-full min-w-0">
+                              <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Cooling</FormLabel>
+                              <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger id="field-coolingType" title={field.value ? formatEnumLabel(field.value) : undefined} className="h-9 min-w-0 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40 [&>span]:truncate"><SelectValue placeholder="Select type" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {Object.values(CoolingTypes).map((type) => (
+                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="hvacInstallYear"
+                          render={({ field }) => (
+                            <FormItem className="w-full">
+                              <div className="mb-1 flex items-center gap-2">
+                                <FormLabel className="text-xs font-medium text-gray-600 dark:text-slate-300">Installed</FormLabel>
+                                {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                              </div>
+                              <FormControl>
+                                <Input id="field-hvacInstallYear" className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200/70 bg-slate-50 p-3.5 dark:border-white/10 dark:bg-slate-900/40">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
+                        <SystemStatusChip year={watchWaterHeaterInstallYear} />
+                      </div>
+                      <div className="space-y-3">
+                        <FormField
+                          control={form.control}
+                          name="waterHeaterType"
+                          render={({ field }) => (
+                            <FormItem className="w-full">
+                              <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Type</FormLabel>
+                              <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger id="field-waterHeaterType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {Object.values(WaterHeaterTypes).map((type) => (
+                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="waterHeaterInstallYear"
+                          render={({ field }) => (
+                            <FormItem className="w-full">
+                              <div className="mb-1 flex items-center gap-2">
+                                <FormLabel className="text-xs font-medium text-gray-600 dark:text-slate-300">Installed</FormLabel>
+                                {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                              </div>
+                              <FormControl>
+                                <Input id="field-waterHeaterInstallYear" className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200/70 bg-slate-50 p-3.5 dark:border-white/10 dark:bg-slate-900/40">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
+                        <SystemStatusChip year={watchRoofReplacementYear} />
+                      </div>
+                      <div className="space-y-3">
+                        <FormField
+                          control={form.control}
+                          name="roofType"
+                          render={({ field }) => (
+                            <FormItem className="w-full">
+                              <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Material</FormLabel>
+                              <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger id="field-roofType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {Object.values(RoofTypes).map((type) => (
+                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="roofReplacementYear"
+                          render={({ field }) => (
+                            <FormItem className="w-full">
+                              <div className="mb-1 flex items-center gap-2">
+                                <FormLabel className="text-xs font-medium text-gray-600 dark:text-slate-300">Installed</FormLabel>
+                                {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                              </div>
+                              <FormControl>
+                                <Input id="field-roofReplacementYear" className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2184,7 +2286,7 @@ export default function EditPropertyPage() {
                   name="utilityProvider"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Electric utility provider (optional)</FormLabel>
+                      <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Electric utility provider (optional)</FormLabel>
                       <FormControl>
                         <Input
                           className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
@@ -2202,7 +2304,7 @@ export default function EditPropertyPage() {
                   name="gasProvider"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Gas utility provider (optional)</FormLabel>
+                      <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Gas utility provider (optional)</FormLabel>
                       <FormControl>
                         <Input
                           className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
@@ -2221,7 +2323,7 @@ export default function EditPropertyPage() {
                     name="historicRegistryStatus"
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
-                        <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">
+                        <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">
                           Historic registry status (optional)
                         </FormLabel>
                         <FormControl>
