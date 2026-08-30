@@ -1,8 +1,8 @@
 # Home Action Health-Factor Copy FRD and Implementation Plan
 
-Version: 1.3
+Version: 1.4
 Date: 2026-08-29
-Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped (`1e651fd7`) · §13 cross-producer replacement duplication shipped · Phase 3 not scheduled
+Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped (`1e651fd7`) · §13 cross-producer replacement duplication shipped (`b6414386`) · §14 seasonal aggregate double-count shipped · Phase 3 not scheduled
 Owner: Product + Engineering
 Related: `HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md` (§8.1 Canonical Attention Authority, row "Property health insight"), commits `b9efddb2` / `25dd4c45` / `56bae882` (card-humanization pass)
 
@@ -485,3 +485,69 @@ Nothing keyed on the real shared subject: "a replacement decision for inventory 
 - **Fold, don't suppress.** The cleaner end state is one card — "Refrigerator: repair-or-replace decision" — where the capital window renders as an evidence *fact group* on the decision card (matching card 1's History / Protection / Plan layout), not just flat key facts. Requires the repair-replace producer to load the full capital line item (condition, warranty, insurance, service history).
 - **Unify the decision families** (or teach `linkDecisionLineage` to treat `HOME_CAPITAL_TIMELINE_WINDOW` + `APPLIANCE_REPAIR_REPLACE` for the same item as one thread), and fix the capital `lineageId` to carry the inventory-item id rather than the timeline-line id.
 - **Direction #4 upgrade:** promote the repair-replace card to the real `ASSET_LIFECYCLE` variant (needs `timing.windowStart/End`, `factGroups`, an `itemId` launch param, and a non-`COMPARE` primary CTA — each a small but real behavior change).
+
+---
+
+## 14. Seasonal-checklist aggregate double-counts accepted tasks ("What needs attention")
+
+Status: fix shipped
+
+### 14.1 Problem
+
+"What needs attention" showed **two cards for the same task**:
+
+- **"1 summer task needs attention"** — `loadSeasonalChecklistActions`, `id =
+  seasonal-checklist:{checklistId}`, `SEASONAL_CHECKLIST` variant, `NOW` priority.
+  An **aggregate** over the checklist; `Critical tasks` and `Next task` facts both
+  read "Replace AC filters monthly".
+- **"Replace AC filters monthly"** — `appendAcceptedOperationalWork`, `id =
+  operational-work:{itemId}`, `ACCEPTED_WORK` variant, "In your plan", `WORK STATE:
+  accepted`.
+
+The aggregate counts the exact task shown right below as already accepted.
+
+### 14.2 Root cause
+
+Every seasonal checklist item is **auto-promoted to a `PropertyMaintenanceTask`**
+(schema comment on `SeasonalChecklistItem`) → `OperationalWorkItem` → once
+`acceptanceState: 'ACCEPTED'`, its own "Accepted work" card.
+
+But `loadSeasonalChecklistActions` counted pending items purely by
+`SeasonalChecklistItem.status`:
+
+```js
+item.status === 'RECOMMENDED' || item.status === 'ADDED' || (SNOOZED expired)
+```
+
+- `ADDED` means "a PropertyMaintenanceTask was created / it's in the plan"
+  (`seasonalChecklistIntegration.service.ts`) — but was still counted as pending.
+- No cross-reference to operational-work acceptance: an accepted item stays
+  `RECOMMENDED` on the seasonal record (acceptance is on the work-item side), so the
+  aggregate still counted it as "needs attention now".
+
+The seasonal aggregate is deliberately work-item-ineligible (`isSeasonalAggregate`),
+so no dedup pass reconciles it against its own promoted items.
+
+### 14.3 Fix (shipped)
+
+| Change | File |
+|---|---|
+| **Exclude `ADDED` from `pendingItems`.** An `ADDED` seasonal item is in the plan; it belongs (if actionable) as its own maintenance/work card, not the aggregate count. Kept `RECOMMENDED` and expired `SNOOZED`. | `homeActionSourcePromotion.service.ts` |
+| **Cross-reference accepted operational work.** `loadSeasonalChecklistActions` now reads each item's `maintenanceTask`, queries `operationalWorkItem` (`acceptanceState: 'ACCEPTED'`, non-terminal, not superseded) for those task ids, and drops any matched item from `pendingItems` / `criticalCount` / the `Critical tasks` + `Next task` facts. `operationalWorkItem` added to `HomeActionSourceDb`. | `homeActionSourcePromotion.service.ts` |
+| **Aggregate card self-suppresses when empty.** Existing `.filter(pendingItems.length > 0)` now does the right thing — if every remaining item is in the plan, no card. | (no change needed) |
+| **`Next task` fact no longer repeats a critical task.** It surfaces the first pending item not already shown under `Critical tasks` (falls back to the first pending item only when all pending items are critical). | `homeActionSourcePromotion.service.ts` |
+| Tests | `phase2SourcePromotion.test.js` (+2, 2 fixtures updated to `RECOMMENDED`) |
+
+### 14.4 Future work (not in this change)
+
+- **Un-aggregate seasonal work** (the parent plan's "Slice 3"): once each seasonal
+  task is its own canonical work item, the `SEASONAL_CHECKLIST` aggregate card can be
+  retired in favour of individual cards + a progress summary, and this whole class of
+  double-count disappears.
+- **`SeasonalTaskStatus` needs an "in plan / accepted" state.** Today `ADDED` conflates
+  "promoted to a task" with "homeowner committed"; acceptance lives only on the
+  `OperationalWorkItem`. A single authoritative status per item would remove the
+  cross-reference query.
+- **`SEASONAL_CHECKLIST` registry rule** requires a `Next task` fact even when there is
+  genuinely only one pending (critical) task — in that edge case it still repeats.
+  Relaxing `requiredFactLabels` would let the card omit it.

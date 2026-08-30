@@ -49,7 +49,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense' | 'decisionThread'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense' | 'decisionThread' | 'operationalWorkItem'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1079,8 +1079,42 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     },
     orderBy: { seasonStartDate: 'asc' },
     take: 4,
-    include: { items: { orderBy: [{ priority: 'asc' }, { recommendedDate: 'asc' }] } },
+    include: {
+      items: {
+        orderBy: [{ priority: 'asc' }, { recommendedDate: 'asc' }],
+        include: { maintenanceTask: { select: { id: true } } },
+      },
+    },
   });
+
+  // A seasonal item that has been accepted into the operational work plan is
+  // shown as its own "Accepted work" card (appendAcceptedOperationalWork) and
+  // must not also be counted here as a task that "needs attention". `ADDED`
+  // means a PropertyMaintenanceTask was created for it (seasonalChecklist
+  // Integration.service.ts); an accepted OperationalWorkItem is the stronger
+  // signal that it is actively in the plan.
+  // See docs/product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md §14.
+  const seasonalTaskIds = checklists.flatMap((checklist) =>
+    checklist.items.map((item) => (item as { maintenanceTask?: { id: string } | null }).maintenanceTask?.id)
+      .filter((id): id is string => Boolean(id)));
+  const acceptedTaskIds = new Set<string>();
+  if (db.operationalWorkItem && seasonalTaskIds.length > 0) {
+    const acceptedWork = await db.operationalWorkItem.findMany({
+      where: {
+        propertyId,
+        acceptanceState: 'ACCEPTED',
+        state: { notIn: ['VERIFIED', 'CLOSED'] },
+        supersededByWorkItemId: null,
+        executions: { some: { executionType: 'MAINTENANCE_TASK', executionEntityId: { in: seasonalTaskIds } } },
+      },
+      select: { executions: { where: { executionType: 'MAINTENANCE_TASK' }, select: { executionEntityId: true } } },
+    });
+    for (const workItem of acceptedWork) {
+      for (const execution of workItem.executions) acceptedTaskIds.add(execution.executionEntityId);
+    }
+  }
+  const isInPlan = (item: { status: string; maintenanceTask?: { id: string } | null }): boolean =>
+    item.status === 'ADDED' || Boolean(item.maintenanceTask && acceptedTaskIds.has(item.maintenanceTask.id));
 
   // Generation may prepare the next season before the current one closes.
   // Select only after removing empty/stale candidates so one checklist with
@@ -1088,9 +1122,10 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
   // active checklist, then the nearest upcoming checklist.
   const actionableChecklists = checklists.map((checklist) => {
     const pendingItems = checklist.items.filter((item) =>
-      item.status === 'RECOMMENDED' ||
-      item.status === 'ADDED' ||
-      (item.status === 'SNOOZED' && (!item.snoozedUntil || item.snoozedUntil <= now)),
+      !isInPlan(item as { status: string; maintenanceTask?: { id: string } | null }) && (
+        item.status === 'RECOMMENDED' ||
+        (item.status === 'SNOOZED' && (!item.snoozedUntil || item.snoozedUntil <= now))
+      ),
     );
     return { checklist, pendingItems };
   }).filter(({ pendingItems }) => pendingItems.length > 0)
@@ -1118,6 +1153,10 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       ? `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remain in ${displaySeason.toLowerCase()}.`
       : `${displaySeason} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`;
     const priorityTasks = pendingItems.filter((item) => item.priority === 'CRITICAL');
+    // "Next task" should add information, not repeat a critical task already
+    // listed above — surface the first pending task that isn't shown there.
+    const shownCriticalTitles = new Set(priorityTasks.slice(0, 2).map((item) => item.title));
+    const nextTask = pendingItems.find((item) => !shownCriticalTitles.has(item.title)) ?? pendingItems[0];
     const seasonalHeadline = criticalCount > 0
       ? `${criticalCount} ${displaySeason.toLowerCase()} task${criticalCount === 1 ? ' needs' : 's need'} attention`
       : `${pendingItems.length} ${displaySeason.toLowerCase()} task${pendingItems.length === 1 ? '' : 's'} to plan`;
@@ -1148,7 +1187,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
           { label: 'Progress', value: progress },
           { label: 'Time remaining', value: active ? `${daysRemaining} days` : `Starts in ${daysUntilStart} days` },
           { label: 'Critical tasks', value: criticalCount > 0 ? priorityTasks.slice(0, 2).map((item) => item.title).join(' · ').slice(0, 240) : 'None currently' },
-          { label: 'Next task', value: pendingItems[0].title.slice(0, 240) },
+          { label: 'Next task', value: nextTask.title.slice(0, 240) },
         ],
         factGroups: [],
         subject: { kind: 'CHECKLIST', id: checklist.id, label: `${displaySeason} checklist` },

@@ -187,9 +187,9 @@ function stubSources({
       status: 'IN_PROGRESS', totalTasks: 3, tasksCompleted: 0,
       seasonStartDate: NOW, seasonEndDate: LATER, createdAt: NOW, updatedAt: NOW,
       items: [
-        { id: 'seasonal-item-1', title: 'Test the sump pump', priority: 'CRITICAL', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
-        { id: 'seasonal-item-2', title: 'Clean the outdoor condenser', priority: 'RECOMMENDED', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
-        { id: 'seasonal-item-3', title: 'Inspect exterior drainage', priority: 'RECOMMENDED', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
+        { id: 'seasonal-item-1', title: 'Test the sump pump', priority: 'CRITICAL', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
+        { id: 'seasonal-item-2', title: 'Clean the outdoor condenser', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
+        { id: 'seasonal-item-3', title: 'Inspect exterior drainage', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
       ],
     }] },
     personalizedRecommendation: { findMany: async () => includePersonalization ? [{
@@ -225,7 +225,9 @@ test('promotes guidance, incident, recall, coverage, project, and seasonal recor
   const seasonal = actions.find((action) => action.id === 'seasonal-checklist:seasonal-1');
   assert.equal(seasonal.primaryCta.label, 'See 1 priority task');
   assert.equal(seasonal.presentation.headline, '1 summer task needs attention');
-  assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Next task').value, 'Test the sump pump');
+  assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Critical tasks').value, 'Test the sump pump');
+  // "Next task" surfaces a task not already listed under "Critical tasks".
+  assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Next task').value, 'Clean the outdoor condenser');
   assert.equal(actions.find((action) => action.source.kind === 'COVERAGE').governance.jurisdictionCheck.status, 'UNKNOWN');
 });
 
@@ -532,7 +534,7 @@ test('prefers an active seasonal checklist over an earlier actionable upcoming r
     id: 'seasonal-active', propertyId: 'property-1', season: 'SUMMER', year: 2026,
     status: 'IN_PROGRESS', totalTasks: 1, tasksCompleted: 0,
     seasonStartDate: new Date(now - 10 * 86_400_000), seasonEndDate: new Date(now + 20 * 86_400_000), createdAt: NOW, updatedAt: NOW,
-    items: [{ id: 'active-item', title: 'Complete summer maintenance', priority: 'RECOMMENDED', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW }],
+    items: [{ id: 'active-item', title: 'Complete summer maintenance', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW }],
   };
   // Deliberately return the upcoming record first to prove selection is not
   // dependent on database ordering.
@@ -541,6 +543,53 @@ test('prefers an active seasonal checklist over an earlier actionable upcoming r
   const result = await getPromotedHomeActions('property-1', db);
   assert.ok(result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-active'));
   assert.equal(result.actions.some((action) => action.id === 'seasonal-checklist:seasonal-upcoming'), false);
+});
+
+test('an ADDED seasonal item is in the plan and no longer counted by the "needs attention" aggregate', async () => {
+  const db = stubSources();
+  const start = new Date(Date.now() - 5 * 86_400_000);
+  const end = new Date(Date.now() + 20 * 86_400_000);
+  db.seasonalChecklist.findMany = async () => [{
+    id: 'seasonal-added', propertyId: 'property-1', season: 'SUMMER', year: 2026,
+    status: 'IN_PROGRESS', totalTasks: 3, tasksCompleted: 0,
+    seasonStartDate: start, seasonEndDate: end, createdAt: start, updatedAt: NOW,
+    items: [
+      { id: 'added-critical', title: 'Replace AC filters monthly', priority: 'CRITICAL', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW, maintenanceTask: { id: 'task-a' } },
+      { id: 'added-2', title: 'Flush the water heater', priority: 'RECOMMENDED', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW, maintenanceTask: { id: 'task-b' } },
+    ],
+  }];
+
+  const result = await getPromotedHomeActions('property-1', db);
+  assert.equal(result.actions.some((action) => action.id === 'seasonal-checklist:seasonal-added'), false);
+});
+
+test('a seasonal item with an accepted operational work item is dropped from the aggregate count', async () => {
+  const db = stubSources();
+  const start = new Date(Date.now() - 5 * 86_400_000);
+  const end = new Date(Date.now() + 20 * 86_400_000);
+  db.seasonalChecklist.findMany = async () => [{
+    id: 'seasonal-mixed', propertyId: 'property-1', season: 'SUMMER', year: 2026,
+    status: 'IN_PROGRESS', totalTasks: 3, tasksCompleted: 0,
+    seasonStartDate: start, seasonEndDate: end, createdAt: start, updatedAt: NOW,
+    items: [
+      { id: 'accepted-critical', title: 'Replace AC filters monthly', priority: 'CRITICAL', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW, maintenanceTask: { id: 'task-accepted' } },
+      { id: 'still-pending', title: 'Clean the gutters', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW, maintenanceTask: { id: 'task-pending' } },
+    ],
+  }];
+  db.operationalWorkItem = {
+    findMany: async (args) => {
+      assert.equal(args.where.acceptanceState, 'ACCEPTED');
+      return [{ executions: [{ executionEntityId: 'task-accepted' }] }];
+    },
+  };
+
+  const result = await getPromotedHomeActions('property-1', db);
+  const seasonal = result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-mixed');
+  assert.ok(seasonal, 'the still-pending non-critical task keeps the card alive');
+  // The accepted critical task is no longer counted — headline drops to the "to plan" form.
+  assert.equal(seasonal.presentation.headline, '1 summer task to plan');
+  assert.equal(seasonal.presentation.keyFacts.find((f) => f.label === 'Critical tasks').value, 'None currently');
+  assert.equal(seasonal.presentation.keyFacts.find((f) => f.label === 'Next task').value, 'Clean the gutters');
 });
 
 test('normalizes legacy guidance percentages before trust evaluation and Home Action validation', async () => {
