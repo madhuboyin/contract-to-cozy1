@@ -12,7 +12,9 @@ const {
 
 test('a repair-replace lineageId resolves to the HVAC_REPAIR_REPLACE decision family (Home Intelligence FRD HI-DEC-002)', () => {
   const ref = resolveDecisionFamilyRef({ lineageId: 'repair-replace:item-123' });
-  assert.deepEqual(ref, { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId: 'item-123' });
+  assert.equal(ref.decisionDefinitionId, 'HVAC_REPAIR_REPLACE');
+  assert.equal(ref.primaryEntityId, 'item-123');
+  assert.equal(ref.specialistProfile.profileId, 'HVAC');
 });
 
 // C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7): the
@@ -20,14 +22,13 @@ test('a repair-replace lineageId resolves to the HVAC_REPAIR_REPLACE decision fa
 // is unchanged and neither prefix is a substring of the other.
 test('an appliance-repair-replace lineageId resolves to the APPLIANCE_REPAIR_REPLACE decision family', () => {
   const ref = resolveDecisionFamilyRef({ lineageId: 'appliance-repair-replace:item-9' });
-  assert.deepEqual(ref, { decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE', primaryEntityId: 'item-9' });
+  assert.equal(ref.decisionDefinitionId, 'APPLIANCE_REPAIR_REPLACE');
+  assert.equal(ref.primaryEntityId, 'item-9');
+  assert.equal(ref.specialistProfile.profileId, 'GENERIC_APPLIANCE');
 });
 
 test('the HVAC repair-replace prefix does not swallow the appliance prefix', () => {
-  assert.deepEqual(
-    resolveDecisionFamilyRef({ lineageId: 'repair-replace:item-9' }),
-    { decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityId: 'item-9' },
-  );
+  assert.equal(resolveDecisionFamilyRef({ lineageId: 'repair-replace:item-9' }).decisionDefinitionId, 'HVAC_REPAIR_REPLACE');
   assert.equal(resolveDecisionFamilyRef({ lineageId: 'appliance-repair-replace:' }), null);
 });
 

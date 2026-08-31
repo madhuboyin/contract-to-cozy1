@@ -933,6 +933,9 @@ A prior draft used an arbitrary `inventoryMatcher: (item) => boolean` predicate 
 // not by testing arbitrary predicates against hypothetical inputs.
 interface RepairReplaceProfile {
   profileId: string;                                  // stable, e.g. "HVAC", "GENERIC_APPLIANCE"
+  lineagePrefixes: readonly string[];                 // runtime selectors, exact-bound by admission
+  displayLabel: string;                               // projected to the homeowner UI
+  eligibilityPolicy: "CATEGORY_ONLY" | "CANONICAL_GENERIC_APPLIANCE";
   eligibleCategories: readonly InventoryItemCategory[];  // declarative — a closed enum, not a predicate function
   decisionDefinitionId: DecisionDefinitionId;          // HVAC_REPAIR_REPLACE | APPLIANCE_REPAIR_REPLACE
   scoringSkillId: string;                              // the Skill (§9) wrapping the profile's scoring engine
@@ -941,6 +944,9 @@ interface RepairReplaceProfile {
   professionalBoundary: string;                        // e.g. "licensed HVAC technician" vs. "general appliance repair" —
                                                          // rendered in EXPLAIN's narration, never asserted beyond this string
   evaluationSuiteId: string;                           // required before this profile is enabled, same bar as an AgentDefinition
+  disputableInputs: readonly { key: string; label: string }[];
+  inventoryCorrectionLabel: string | null;
+  enforceLowConfidenceEscalation: boolean;
 }
 
 const REPAIR_REPLACE_PROFILES: readonly RepairReplaceProfile[] = [
@@ -1534,7 +1540,7 @@ The first concrete instance of §12.6's extension pattern, not pattern-only pros
 
 Building a genuinely new specialist (a materially different decision shape, per §12.6's test) or admitting a higher-risk family (electrical, plumbing, roofing) requires the explicit review §12.6 describes before any new `AgentDefinition` is registered, independent of this phase's `GENERIC_APPLIANCE` work — no build order beyond that is committed for further profiles, rules, or specialists. Pattern E's precondition is narrower than "a second thing exists": it activates only when one homeowner decision genuinely spans **multiple decision shapes or multiple distinct specialists** producing independently-reasoned recommendations that must be reconciled — e.g., a structural issue that is simultaneously a repair-or-replace question and an insurance-coverage question, not two appliances each cleanly handled by their own profile.
 
-**Implementation status (2026-08-29): the Phase 4B admission process is an enforced code artifact.** `HVAC` and the IPD-006-approved `GENERIC_APPLIANCE` candidate are `ADMITTED`; the latter is classified as a new Decision Platform definition on the existing Specialist loop. Electrical, plumbing, roofing, and structural remain explicit `NOT_ADMITTED` scaffolds. Startup and the dedicated Phase 4B CI gate bind admission to exact profile metadata, DecisionDefinition versions, and canonical AgentDefinition version digests; reject classification/target mismatches; require valid review dates; render the admitted profile's professional boundary in EXPLAIN; and fail closed on missing evidence, contradictory status, or an improperly admitted higher-risk category.
+**Implementation status (2026-08-30): the Phase 4B admission process is an enforced, executable artifact.** `HVAC` and the IPD-006-approved `GENERIC_APPLIANCE` candidate are `ADMITTED`; electrical, plumbing, roofing, and structural remain explicit `NOT_ADMITTED` scaffolds. All seven gates are mandatory for every classification and any failed gate revokes admission. Completed reviews require reviewer/approval provenance and cannot be future-dated. Startup and the composite Phase 4B CI gate bind exact profile metadata, DecisionDefinition and context-contract content digests, adapter authority/version metadata, evaluation-corpus digests, canonical AgentDefinition version digests, and runtime activation/lineage bindings. The immutable profile catalog drives promotion, lineage resolution, runtime profile selection, correction controls, and homeowner presentation, so an admission record cannot claim a path that the product cannot execute.
 
 ---
 

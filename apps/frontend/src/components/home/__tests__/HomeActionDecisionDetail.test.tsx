@@ -82,6 +82,12 @@ test('renders the shared Specialist entry point for APPLIANCE_REPAIR_REPLACE', (
     status: 'NOT_STARTED',
     decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
     primaryEntityId: 'dishwasher-1',
+    specialistProfile: {
+      profileId: 'GENERIC_APPLIANCE',
+      displayLabel: 'Appliance Repair-or-Replace Specialist',
+      disputableInputs: [{ key: 'appliance.condition', label: 'Appliance condition' }],
+      inventoryCorrectionLabel: 'Correct this appliance’s inventory record',
+    },
   };
   Object.assign(action, {
     id: 'action-1', lineageId: 'appliance-repair-replace:dishwasher-1',

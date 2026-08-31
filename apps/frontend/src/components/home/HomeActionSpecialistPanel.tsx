@@ -105,31 +105,20 @@ function StatusBody({
   status,
   propertyId,
   inventoryItemId,
-  profileId,
+  disputableInputs,
+  inventoryCorrectionLabel,
 }: {
   status: SpecialistStatus;
   propertyId: string;
   inventoryItemId: string;
-  profileId: 'HVAC' | 'GENERIC_APPLIANCE';
+  disputableInputs: ReadonlyArray<{ key: string; label: string }>;
+  inventoryCorrectionLabel: string | null;
 }) {
   const submit = useSubmitHvacSpecialistContext(propertyId, inventoryItemId);
   const upload = useUploadHvacSpecialistDocument(propertyId, inventoryItemId);
   const dispute = useDisputeHvacSpecialistInput(propertyId, inventoryItemId);
   const [disputeOpen, setDisputeOpen] = useState(false);
-  const disputeOptions = profileId === 'HVAC'
-    ? [
-      ['hvac.condition', 'System condition'],
-      ['hvac.installDate', 'Install date'],
-      ['hvac.replacementCost', 'Replacement estimate'],
-      ['hvac.technicianAssessment', 'Technician assessment'],
-    ] as const
-    : [
-      ['appliance.condition', 'Appliance condition'],
-      ['appliance.installDate', 'Install date'],
-      ['appliance.replacementCost', 'Replacement estimate'],
-      ['appliance.analysis', 'Repair-or-replace analysis'],
-    ] as const;
-  const [disputeKey, setDisputeKey] = useState<string>(disputeOptions[0][0]);
+  const [disputeKey, setDisputeKey] = useState<string>(disputableInputs[0]?.key ?? '');
   const [disputeNote, setDisputeNote] = useState('');
 
   const disputeControl = (
@@ -143,7 +132,7 @@ function StatusBody({
             onChange={(event) => setDisputeKey(event.target.value)}
             className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
           >
-            {disputeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {disputableInputs.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
           </select>
           <Input value={disputeNote} onChange={(event) => setDisputeNote(event.target.value)} maxLength={500} placeholder="What looks wrong? (optional)" />
           <Button
@@ -158,9 +147,9 @@ function StatusBody({
             Record dispute
           </Button>
           {dispute.isError && <p className="text-xs text-rose-600">Couldn’t record the dispute. Reload and try again.</p>}
-          {profileId === 'GENERIC_APPLIANCE' && (
+          {inventoryCorrectionLabel && (
             <Link className="block text-xs text-blue-700 underline" href={`/dashboard/properties/${propertyId}/inventory/items/${inventoryItemId}`}>
-              Correct this appliance’s inventory record
+              {inventoryCorrectionLabel}
             </Link>
           )}
         </div>
@@ -261,12 +250,21 @@ export function HomeActionSpecialistPanel({
   homeActionOrigin,
   profileLabel = 'HVAC Repair-or-Replace Specialist',
   profileId = 'HVAC',
+  disputableInputs = [
+    { key: 'hvac.condition', label: 'System condition' },
+    { key: 'hvac.installDate', label: 'Install date' },
+    { key: 'hvac.replacementCost', label: 'Replacement estimate' },
+    { key: 'hvac.technicianAssessment', label: 'Technician assessment' },
+  ],
+  inventoryCorrectionLabel = null,
 }: {
   propertyId: string;
   inventoryItemId: string;
   homeActionOrigin: Omit<HvacSpecialistHomeActionOrigin, 'engagementNonce'>;
   profileLabel?: string;
-  profileId?: 'HVAC' | 'GENERIC_APPLIANCE';
+  profileId?: string;
+  disputableInputs?: ReadonlyArray<{ key: string; label: string }>;
+  inventoryCorrectionLabel?: string | null;
 }) {
   const [opened, setOpened] = useState(false);
   const engagementNonce = useRef(
@@ -308,7 +306,7 @@ export function HomeActionSpecialistPanel({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 md:col-span-2">
+    <div data-specialist-profile={profileId} className="rounded-xl border border-slate-200 bg-white p-3 md:col-span-2">
       {heading}
       <div className="mt-2">
         {start.isPending || (statusQuery.isLoading && !status) ? (
@@ -323,7 +321,13 @@ export function HomeActionSpecialistPanel({
         ) : statusQuery.isError && !status ? (
           <p className="text-sm text-rose-600">The Specialist status couldn’t be loaded. Try again shortly.</p>
         ) : status ? (
-          <StatusBody status={status} propertyId={propertyId} inventoryItemId={inventoryItemId} profileId={profileId} />
+          <StatusBody
+            status={status}
+            propertyId={propertyId}
+            inventoryItemId={inventoryItemId}
+            disputableInputs={disputableInputs}
+            inventoryCorrectionLabel={inventoryCorrectionLabel}
+          />
         ) : (
           <p className="text-sm text-rose-600">The Specialist is unavailable right now.</p>
         )}

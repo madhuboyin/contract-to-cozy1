@@ -43,6 +43,7 @@ import {
 } from './hvacRepairReplaceSpecialist.service';
 import { applyHvacSpecialistContextIntake } from './hvacSpecialistContextIntake';
 import { REPAIR_REPLACE_PROFILES, type RepairReplaceProfile } from './repairReplaceProfileRegistry';
+import { isProfileAdmitted, resolveAdmittedProfileForLineage } from './specialistAdmissionRegistry';
 import { ACCEPTED_INTAKE_KEYS, DISPUTABLE_INPUT_KEYS, isDisputableInputKey, selectTypedClaims } from './specialistTypedClaims';
 import type {
   AgentRunStatusProjection,
@@ -206,29 +207,31 @@ async function verifyCanonicalHomeActionOrigin(input: {
 }
 
 export function resolveSpecialistProfileForLineage(lineageId: string): RepairReplaceProfile {
-  const profileId = lineageId.startsWith('appliance-repair-replace:')
-    ? 'GENERIC_APPLIANCE'
-    : lineageId.startsWith('repair-replace:')
-      ? 'HVAC'
-      : null;
-  if (!profileId) throw new AgentRuntimeStateError('This Home Action does not identify an admitted repair-or-replace profile.');
-  const profile = REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === profileId);
-  if (!profile) throw new AgentRuntimeStateError(`Repair-or-Replace profile ${profileId} is not registered.`);
+  const profile = resolveAdmittedProfileForLineage(lineageId);
+  if (profile === 'NO_MATCH') throw new AgentRuntimeStateError('This Home Action does not identify an admitted repair-or-replace profile.');
+  if (profile === 'AMBIGUOUS') throw new AgentRuntimeStateError('This Home Action identifies more than one admitted repair-or-replace profile.');
   return profile;
 }
 
-function profileForInvocation(invocation: AgentRuntimeInvocation): RepairReplaceProfile {
-  // Only HVAC can currently pause for context. Generic APPLIANCE snapshots
-  // are already complete or abstain, so a continuation without origin is an
-  // HVAC continuation. Fresh starts always resolve the profile from their
-  // canonical lineage prefix and fail closed on anything else.
-  return invocation.homeActionOrigin
-    ? resolveSpecialistProfileForLineage(invocation.homeActionOrigin.lineageId)
-    : REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === 'HVAC')!;
+function profileForInvocation(invocation: AgentRuntimeInvocation, paused: PausedRun | null): RepairReplaceProfile {
+  if (invocation.homeActionOrigin) return resolveSpecialistProfileForLineage(invocation.homeActionOrigin.lineageId);
+  const profileId = (paused?.serializedState as { profileId?: unknown } | undefined)?.profileId;
+  const profile = typeof profileId === 'string'
+    ? REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === profileId)
+    : undefined;
+  if (!profile || !isProfileAdmitted(profile.profileId)) {
+    throw new AgentRuntimeStateError('The paused Specialist run does not identify an admitted repair-or-replace profile.');
+  }
+  return profile;
 }
 
 function profileForDecisionDefinition(decisionDefinitionId: RepairReplaceProfile['decisionDefinitionId']): RepairReplaceProfile | null {
   return REPAIR_REPLACE_PROFILES.find((candidate) => candidate.decisionDefinitionId === decisionDefinitionId) ?? null;
+}
+
+function admittedProfileById(profileId: string | undefined): RepairReplaceProfile | null {
+  if (!profileId || !isProfileAdmitted(profileId)) return null;
+  return REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === profileId) ?? null;
 }
 
 // PR 11: SUBMIT_CONTEXT's fact writes go through the existing
@@ -379,7 +382,9 @@ async function readStatus(
       // `undefined` is reserved for injected tests/consumers that cannot
       // provide canonical persistence. Production returns an object or null.
       if (canonical !== undefined) {
-        const profile = canonical ? profileForDecisionDefinition(canonical.decisionDefinitionId) : null;
+        const profile = canonical
+          ? admittedProfileById(snapshot.profileId) ?? profileForDecisionDefinition(canonical.decisionDefinitionId)
+          : null;
         const state = canonical?.state ?? null;
         const abstentionReason = state?.ambiguous
           ? 'AMBIGUOUS_DECISION_THREAD'
@@ -459,7 +464,12 @@ async function disputeInput(
       invocation.inventoryItemId,
     );
   if (!targetRun) throw new AgentRuntimeStateError('No Specialist run exists to dispute.');
-  let disputeProfileId: string | null = paused ? 'HVAC' : null;
+  const targetStatus = targetRun.statusJson as unknown as Partial<AgentRunStatusProjection>;
+  let disputeProfileId: string | null = paused
+    ? typeof (paused.serializedState as { profileId?: unknown }).profileId === 'string'
+      ? (paused.serializedState as { profileId: string }).profileId
+      : null
+    : admittedProfileById(targetStatus.profileId)?.profileId ?? null;
   let canonicalProfileUnavailable = false;
   if (!paused && targetRun.decisionThreadId) {
     const canonical = await (deps.resolveCurrentThreadState ?? readCurrentSpecialistThreadState)({
@@ -470,14 +480,16 @@ async function disputeInput(
     if (canonical === undefined) {
       // An injected environment may intentionally omit canonical persistence.
       // Production never takes this compatibility branch.
-      disputeProfileId = null;
+      disputeProfileId = disputeProfileId ?? null;
     } else if (canonical) {
-      disputeProfileId = profileForDecisionDefinition(canonical.decisionDefinitionId)?.profileId ?? null;
+      disputeProfileId = disputeProfileId
+        ?? profileForDecisionDefinition(canonical.decisionDefinitionId)?.profileId
+        ?? null;
       canonicalProfileUnavailable = !disputeProfileId;
     } else {
       canonicalProfileUnavailable = true;
     }
-  } else if (!paused) {
+  } else if (!paused && !disputeProfileId) {
     canonicalProfileUnavailable = true;
   }
   const supportedDispute = !canonicalProfileUnavailable && invocation.dispute && (disputeProfileId
@@ -514,7 +526,7 @@ async function advanceRun(args: {
   intakeHandler: NonNullable<AgentRuntimeDependencies['contextIntakeHandler']>;
 }): Promise<AgentRuntimeResult> {
   const { invocation, paused, deps, now, intakeHandler } = args;
-  const profile = profileForInvocation(invocation);
+  const profile = profileForInvocation(invocation, paused);
 
   // §7.3.3 — resume pins the originating version; a fresh start uses active.
   const version = paused?.agentVersion;
@@ -651,7 +663,7 @@ async function advanceRun(args: {
       env: deps.env,
       contextScopes: profile.requiredFacts,
       professionalBoundary: profile.professionalBoundary,
-      enforceLowConfidenceEscalation: profile.profileId === 'HVAC',
+      enforceLowConfidenceEscalation: profile.enforceLowConfidenceEscalation,
     }, {
       port: deps.threadPort ?? createSpecialistThreadPort(profile.decisionDefinitionId),
       contextReader: deps.contextReader,
@@ -688,6 +700,7 @@ async function advanceRun(args: {
   }
   const finishedAt = deps.now?.() ?? new Date();
   const outcome = specialist.disposition === 'PAUSE' ? 'PAUSED' : specialist.status.phase === 'RECOMMENDATION_READY' ? 'COMPLETED' : 'ABSTAINED';
+  const statusWithProfile = { ...specialist.status, profileId: profile.profileId };
   const episode = await commitAgentRunEpisode({
     reservationId: reservation.reservation.id,
     idempotencyKey,
@@ -706,7 +719,7 @@ async function advanceRun(args: {
     outcome: failureCode ? 'FAILED' : outcome,
     abstentionReason: specialist.status.abstentionReason,
     failureCode,
-    status: asJson(specialist.status),
+    status: asJson(statusWithProfile),
     budgetUsage: {
       contextFactsUsed: specialist.ledger.contextFactsUsed,
       llmInvocationsUsed: specialist.ledger.llmInvocationsUsed,
@@ -718,7 +731,7 @@ async function advanceRun(args: {
     finishedAt,
     pausedState: specialist.disposition === 'PAUSE' ? {
       stateShape: definition.stateRequirements.stateShape ?? 'agent.repair-replace.state@1.1.0',
-      serializedState: asJson({ status: specialist.status, ledger: specialist.ledger }),
+      serializedState: asJson({ status: statusWithProfile, ledger: specialist.ledger, profileId: profile.profileId }),
       expectedEvent: 'SUBMIT_CONTEXT',
       pauseExpiresAt: new Date(now.getTime() + PAUSE_TTL_MS),
     } : undefined,
@@ -734,10 +747,10 @@ async function advanceRun(args: {
   if (specialist.disposition === 'PAUSE') {
     recordAgentRunOutcome(SPECIALIST_AGENT_ID, 'PAUSED');
     recordAgentOperation(SPECIALIST_AGENT_ID, invocation.operation, 'OK');
-    return { mutated: true, status: projectionFor(specialist.status, run.id, true, stateCasVersion) };
+    return { mutated: true, status: projectionFor(statusWithProfile, run.id, true, stateCasVersion) };
   }
 
   recordAgentRunOutcome(SPECIALIST_AGENT_ID, specialist.status.phase);
   recordAgentOperation(SPECIALIST_AGENT_ID, invocation.operation, 'OK');
-  return { mutated: true, status: projectionFor(specialist.status, run.id, false) };
+  return { mutated: true, status: projectionFor(statusWithProfile, run.id, false) };
 }

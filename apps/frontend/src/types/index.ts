@@ -479,6 +479,12 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
     // never falls through to the ungated plain-link render path.
     decisionDefinitionId: string | null;
     primaryEntityId: string | null;
+    specialistProfile?: {
+      profileId: string;
+      displayLabel: string;
+      disputableInputs: Array<{ key: string; label: string }>;
+      inventoryCorrectionLabel: string | null;
+    };
     reason?: string;
     thread?: {
       decisionThreadId: string;

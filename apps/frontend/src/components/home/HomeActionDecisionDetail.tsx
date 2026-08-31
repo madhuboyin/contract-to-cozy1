@@ -181,18 +181,18 @@ export function HomeActionDecisionDetail({
   const changeThread = action.decisionLineage?.thread;
   // PR 11: "Get help deciding" for an eligible, delivered HVAC repair-or-replace
   // action. Uses the same DecisionThread the card already shows.
-  const specialist = (action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
-    || action.decisionLineage?.decisionDefinitionId === 'APPLIANCE_REPAIR_REPLACE')
-    && (action.decisionLineage.status === 'NOT_STARTED' || action.decisionLineage.status === 'LINKED')
-    && action.decisionLineage.primaryEntityId
+  const decisionLineage = action.decisionLineage;
+  const specialistProfile = decisionLineage?.specialistProfile;
+  const specialist = specialistProfile
+    && decisionLineage
+    && (decisionLineage.status === 'NOT_STARTED' || decisionLineage.status === 'LINKED')
+    && decisionLineage.primaryEntityId
     ? {
-      inventoryItemId: action.decisionLineage.primaryEntityId,
-      profileLabel: action.decisionLineage.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
-        ? 'HVAC Repair-or-Replace Specialist'
-        : 'Appliance Repair-or-Replace Specialist',
-      profileId: action.decisionLineage.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
-        ? 'HVAC' as const
-        : 'GENERIC_APPLIANCE' as const,
+      inventoryItemId: decisionLineage.primaryEntityId,
+      profileLabel: specialistProfile.displayLabel,
+      profileId: specialistProfile.profileId,
+      disputableInputs: specialistProfile.disputableInputs,
+      inventoryCorrectionLabel: specialistProfile.inventoryCorrectionLabel,
       homeActionOrigin: {
         homeActionId: action.id,
         lineageId: action.lineageId,
@@ -236,6 +236,8 @@ export function HomeActionDecisionDetail({
           homeActionOrigin={specialist.homeActionOrigin}
           profileLabel={specialist.profileLabel}
           profileId={specialist.profileId}
+          disputableInputs={specialist.disputableInputs}
+          inventoryCorrectionLabel={specialist.inventoryCorrectionLabel}
         />
       )}
 

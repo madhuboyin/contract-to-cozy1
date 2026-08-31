@@ -104,6 +104,8 @@ export interface AgentRunStatusProjection {
   runId: string | null;
   agentId: string;
   agentVersion: string;
+  /** Exact admitted profile selected for this run; retained across status reconstruction. */
+  profileId?: string;
   phase: AgentRunPhase;
   decisionThreadId: string | null;
   currentRecommendationSnapshotId: string | null;

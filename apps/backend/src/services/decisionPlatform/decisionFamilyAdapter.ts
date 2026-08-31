@@ -59,6 +59,11 @@ export interface HomeActionOriginRef {
 export interface DecisionFamilyAdapter {
   decisionDefinitionId: DecisionDefinitionId;
   primaryEntityType: string;
+  /** Versioned executable artifacts used by specialist admission validation. */
+  governance: {
+    authoritativeSourceRef: string;
+    contextContractVersion: string;
+  };
 
   /**
    * Fail-closed eligibility check (e.g. "is this InventoryItem actually a

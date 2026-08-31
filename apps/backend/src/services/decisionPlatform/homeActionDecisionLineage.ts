@@ -24,16 +24,15 @@ import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
 import type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
 import { OPERATIONAL_WORK_ID_PREFIX, OWNERSHIP_COST_CHANGE_ID_PREFIX } from '../intelligence/homeActionProducerOwnership';
 import { prisma } from '../../lib/prisma';
-import { isGenericApplianceRepairReplaceEligible } from '../repairReplaceEligibility';
+import {
+  isRepairReplaceProfileEligible,
+  REPAIR_REPLACE_PROFILES,
+  resolveRepairReplaceProfile,
+} from '../agents/repairReplaceProfileCatalog';
 
 export type { HomeActionOriginRef } from './decisionFamilyAdapter';
 export type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
 
-const REPAIR_REPLACE_ID_PREFIX = 'repair-replace:';
-// C2C Intelligence & Agentic Evolution Phase 4A (architecture §12.7):
-// admitted APPLIANCE repair-or-replace routes here instead of the HVAC
-// family. Higher-risk categories do not receive either prefix.
-const APPLIANCE_REPAIR_REPLACE_ID_PREFIX = 'appliance-repair-replace:';
 // Home Intelligence Functional Completeness FRD Phase 3 review finding 4,
 // delivery step 6 — one prefix per new decision-family adapter
 // (domainSnapshotAdapters.ts), matching each producer's own lineageId
@@ -60,11 +59,19 @@ const PROPERTY_TAX_APPEAL_CASE_ID_PREFIX = 'property-tax-appeal-case:';
 export interface HomeActionDecisionFamilyRef {
   decisionDefinitionId: DecisionDefinitionId;
   primaryEntityId: string;
+  specialistProfile?: {
+    profileId: string;
+    displayLabel: string;
+    disputableInputs: readonly { key: string; label: string }[];
+    inventoryCorrectionLabel: string | null;
+  };
 }
 
 const PREFIX_TO_DECISION_DEFINITION: Array<{ prefix: string; decisionDefinitionId: DecisionDefinitionId }> = [
-  { prefix: REPAIR_REPLACE_ID_PREFIX, decisionDefinitionId: 'HVAC_REPAIR_REPLACE' },
-  { prefix: APPLIANCE_REPAIR_REPLACE_ID_PREFIX, decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE' },
+  ...REPAIR_REPLACE_PROFILES.flatMap((profile) => profile.lineagePrefixes.map((prefix) => ({
+    prefix,
+    decisionDefinitionId: profile.decisionDefinitionId,
+  }))),
   { prefix: REFINANCE_OPPORTUNITY_ID_PREFIX, decisionDefinitionId: 'REFINANCE_OPPORTUNITY' },
   { prefix: HOME_CAPITAL_TIMELINE_WINDOW_ID_PREFIX, decisionDefinitionId: 'HOME_CAPITAL_TIMELINE_WINDOW' },
   { prefix: OWNERSHIP_COST_CHANGE_ID_PREFIX, decisionDefinitionId: 'OWNERSHIP_COST_CHANGE' },
@@ -84,12 +91,25 @@ export function resolveDecisionFamilyRef(action: { lineageId: string }): HomeAct
     if (!action.lineageId.startsWith(prefix)) continue;
     const primaryEntityId = action.lineageId.slice(prefix.length);
     if (!primaryEntityId) return null;
-    return { decisionDefinitionId, primaryEntityId };
+    const profile = REPAIR_REPLACE_PROFILES.find((candidate) => candidate.decisionDefinitionId === decisionDefinitionId
+      && candidate.lineagePrefixes.includes(prefix));
+    return {
+      decisionDefinitionId,
+      primaryEntityId,
+      ...(profile ? {
+        specialistProfile: {
+          profileId: profile.profileId,
+          displayLabel: profile.displayLabel,
+          disputableInputs: profile.disputableInputs,
+          inventoryCorrectionLabel: profile.inventoryCorrectionLabel,
+        },
+      } : {}),
+    };
   }
   return null;
 }
 
-export type HomeActionDecisionLineage =
+export type HomeActionDecisionLineage = (
   | { status: 'LINKED'; decisionDefinitionId: DecisionDefinitionId; primaryEntityId: string; thread: DecisionFamilyThreadLineage }
   | { status: 'NOT_STARTED'; decisionDefinitionId: DecisionDefinitionId; primaryEntityId: string }
   | { status: 'AMBIGUOUS'; decisionDefinitionId: DecisionDefinitionId; primaryEntityId: string }
@@ -107,7 +127,10 @@ export type HomeActionDecisionLineage =
   // MORE severe instance of "lineage unavailable," not a different case,
   // and must still produce a truthy HomeActionDecisionLineage so the
   // frontend never falls through to its ungated plain-link render path.
-  | { status: 'UNAVAILABLE'; decisionDefinitionId: DecisionDefinitionId | null; primaryEntityId: string | null; reason: string };
+  | { status: 'UNAVAILABLE'; decisionDefinitionId: DecisionDefinitionId | null; primaryEntityId: string | null; reason: string }
+) & {
+  specialistProfile?: NonNullable<HomeActionDecisionFamilyRef['specialistProfile']>;
+};
 
 /**
  * Phase 3 review finding 1: the single place every "this DECISION_REQUIRED
@@ -262,11 +285,11 @@ export async function resolveWorkItemDecisionFamilyRefs(
         // categories abstain instead of falling through to the appliance
         // family.
         const category = analysis.inventoryItem?.category;
-        if (category === 'HVAC' || isGenericApplianceRepairReplaceEligible(analysis.inventoryItem)) {
+        const profile = category ? resolveRepairReplaceProfile(category) : 'NO_MATCH';
+        if (profile !== 'NO_MATCH' && profile !== 'AMBIGUOUS'
+          && isRepairReplaceProfileEligible(profile, analysis.inventoryItem)) {
           refs.push({
-            decisionDefinitionId: category === 'HVAC'
-              ? 'HVAC_REPAIR_REPLACE'
-              : 'APPLIANCE_REPAIR_REPLACE',
+            decisionDefinitionId: profile.decisionDefinitionId,
             primaryEntityId: analysis.inventoryItemId,
             sourceLabel: 'repair/replace',
           });

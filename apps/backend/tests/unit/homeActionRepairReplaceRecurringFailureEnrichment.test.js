@@ -38,9 +38,9 @@ function analysis(overrides = {}) {
     verdict: 'REPAIR_AND_MONITOR',
     confidence: 'HIGH',
     impactLevel: 'MEDIUM',
-    summary: 'This water heater shows minor wear.',
+    summary: 'This dishwasher shows minor wear.',
     computedAt: NOW,
-    inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'APPLIANCE' },
+    inventoryItem: { id: 'item-1', name: 'Dishwasher', category: 'APPLIANCE' },
     ...overrides,
   };
 }

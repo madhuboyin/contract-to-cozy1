@@ -765,6 +765,10 @@ function toDecisionFamilyLineage(
 export const hvacDecisionFamilyAdapter: DecisionFamilyAdapter = {
   decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
   primaryEntityType: 'InventoryItem',
+  governance: {
+    authoritativeSourceRef: 'hvac-repair-replace-engine@1.0',
+    contextContractVersion: '1.0',
+  },
 
   async isEligiblePrimaryEntity(propertyId, primaryEntityId) {
     // Same eligibility gate composeHvacDecisionContext enforces

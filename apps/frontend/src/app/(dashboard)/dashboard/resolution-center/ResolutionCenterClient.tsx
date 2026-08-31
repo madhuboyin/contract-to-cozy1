@@ -1364,7 +1364,21 @@ export default function ResolutionCenterClient() {
       };
     };
 
-    const activeActions = actions.map(enrichWithReplaceRepair);
+    // Safety net: the server feed already collapses cross-producer duplicates,
+    // but if two actions still arrive stating the identical concern to the
+    // homeowner (same headline), show one — a differently-labelled system on
+    // each is exactly how the cross-producer duplicate reads. The list is
+    // already server-ranked, so the first occurrence is the keeper.
+    const seenConcernHeadlines = new Set<string>();
+    const activeActions = actions
+      .map(enrichWithReplaceRepair)
+      .filter((action) => {
+        const headline = String(action?.title ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (headline.length <= 15) return true;
+        if (seenConcernHeadlines.has(headline)) return false;
+        seenConcernHeadlines.add(headline);
+        return true;
+      });
 
     const claimedActionKeys = new Set<string>();
     const takeActions = (predicate: (action: any) => boolean) => {

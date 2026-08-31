@@ -16,9 +16,12 @@ const {
   requiredGatesFor,
   getSpecialistAdmissionRecord,
   isProfileAdmitted,
+  resolveAdmittedProfileForLineage,
   validateSpecialistAdmissionRegistry,
+  SPECIALIST_EVALUATION_ARTIFACTS,
 } = require('../../src/services/agents/specialistAdmissionRegistry.ts');
 const { REPAIR_REPLACE_PROFILES } = require('../../src/services/agents/repairReplaceProfileRegistry.ts');
+const { DECISION_CONTEXT_CONTRACTS } = require('../../src/services/decisionPlatform/decisionContextContracts.ts');
 
 test('the real registry passes its own validation', () => {
   assert.deepEqual(validateSpecialistAdmissionRegistry(), []);
@@ -195,4 +198,93 @@ test('validation requires real ISO review dates for completed reviews', () => {
   const issues = validateSpecialistAdmissionRegistry(invalid, { profiles: [], agentRegistry: {}, decisionDefinitions: {} });
   assert.ok(issues.some((issue) => issue.includes('SAFETY_TIER_REVIEW is PASS but has no reviewedOn date')));
   assert.ok(issues.some((issue) => issue.includes('EVALUATION_SUITE reviewedOn is not a valid ISO calendar date')));
+});
+
+test('any failed gate revokes admission even when the classification previously treated it as reusable', () => {
+  const record = SPECIALIST_ADMISSION_RECORDS.find((candidate) => candidate.candidateId === 'GENERIC_APPLIANCE');
+  const failed = {
+    ...record,
+    gateReviews: {
+      ...record.gateReviews,
+      PROMOTION_AND_LINEAGE_PATH: {
+        status: 'FAIL', evidence: 'Lineage is not reachable.', reviewedOn: '2026-08-30',
+        reviewedBy: 'C2C_ARCHITECTURE_REVIEW_BOARD', approvalRef: 'PHASE4B-NEGATIVE-REVIEW',
+      },
+    },
+  };
+  assert.equal(deriveSpecialistAdmissionStatus(failed), 'NOT_ADMITTED');
+  assert.equal(isProfileAdmitted('GENERIC_APPLIANCE', [failed]), false);
+});
+
+test('validation rejects future-dated reviews and completed reviews without accountable provenance', () => {
+  const record = SPECIALIST_ADMISSION_RECORDS.find((candidate) => candidate.candidateId === 'GENERIC_APPLIANCE');
+  const invalid = [{ ...record, gateReviews: {
+    ...record.gateReviews,
+    SAFETY_TIER_REVIEW: {
+      status: 'PASS', evidence: 'x', reviewedOn: '2099-01-01', reviewedBy: null, approvalRef: null,
+    },
+  } }];
+  const issues = validateSpecialistAdmissionRegistry(invalid, {
+    profiles: [], agentRegistry: {}, decisionDefinitions: {}, now: new Date('2026-08-30T12:00:00.000Z'),
+  });
+  assert.ok(issues.some((issue) => issue.includes('reviewedOn cannot be in the future')));
+  assert.ok(issues.some((issue) => issue.includes('has no reviewer or approval reference')));
+});
+
+test('validation detects same-version context, evaluation, source, and lineage drift', () => {
+  const contextIssues = validateSpecialistAdmissionRegistry(SPECIALIST_ADMISSION_RECORDS, {
+    profiles: [], agentRegistry: {},
+    contextContracts: {
+      ...DECISION_CONTEXT_CONTRACTS,
+      APPLIANCE_REPAIR_REPLACE: { ...DECISION_CONTEXT_CONTRACTS.APPLIANCE_REPAIR_REPLACE, maximumFacts: 99 },
+    },
+  });
+  assert.ok(contextIssues.some((issue) => issue.includes('context contract "APPLIANCE_REPAIR_REPLACE" content changed')));
+
+  const evaluationIssues = validateSpecialistAdmissionRegistry(SPECIALIST_ADMISSION_RECORDS, {
+    profiles: [], agentRegistry: {},
+    evaluationArtifacts: {
+      ...SPECIALIST_EVALUATION_ARTIFACTS,
+      'agent-generic-appliance-repair-replace-eval@1.0.0': { cases: [] },
+    },
+  });
+  assert.ok(evaluationIssues.some((issue) => issue.includes('evaluation suite "agent-generic-appliance-repair-replace-eval@1.0.0" content changed')));
+
+  const generic = SPECIALIST_ADMISSION_RECORDS.find((candidate) => candidate.candidateId === 'GENERIC_APPLIANCE');
+  const drifted = [{
+    ...generic,
+    wouldRegister: {
+      ...generic.wouldRegister,
+      reviewedArtifacts: {
+        ...generic.wouldRegister.reviewedArtifacts,
+        authoritativeSourceRef: 'unreviewed-engine@9',
+        lineagePrefixes: ['unreachable:'],
+      },
+    },
+  }];
+  const bindingIssues = validateSpecialistAdmissionRegistry(drifted, { profiles: [], agentRegistry: {} });
+  assert.ok(bindingIssues.some((issue) => issue.includes('authoritative source binding')));
+  assert.ok(bindingIssues.some((issue) => issue.includes('promotion/lineage prefixes')));
+
+  const activationIssues = validateSpecialistAdmissionRegistry(SPECIALIST_ADMISSION_RECORDS, {
+    profiles: [], agentRegistry: {}, runtimeActivationBindings: {},
+  });
+  assert.ok(activationIssues.some((issue) => issue.includes('executable runtime activation binding')));
+});
+
+test('lineage resolution returns only profiles whose current admission still derives ADMITTED', () => {
+  assert.equal(resolveAdmittedProfileForLineage('appliance-repair-replace:item-1').profileId, 'GENERIC_APPLIANCE');
+  const records = SPECIALIST_ADMISSION_RECORDS.map((record) => record.candidateId === 'GENERIC_APPLIANCE'
+    ? {
+      ...record,
+      gateReviews: {
+        ...record.gateReviews,
+        PROMOTION_AND_LINEAGE_PATH: {
+          status: 'FAIL', evidence: 'revoked', reviewedOn: '2026-08-30',
+          reviewedBy: 'C2C_ARCHITECTURE_REVIEW_BOARD', approvalRef: 'REVOCATION-1',
+        },
+      },
+    }
+    : record);
+  assert.equal(resolveAdmittedProfileForLineage('appliance-repair-replace:item-1', REPAIR_REPLACE_PROFILES, records), 'NO_MATCH');
 });

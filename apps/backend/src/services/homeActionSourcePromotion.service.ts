@@ -5,7 +5,11 @@ import {
   type HomeAction,
 } from '../productFramework';
 import { prisma } from '../lib/prisma';
-import { isGenericApplianceRepairReplaceEligible } from './repairReplaceEligibility';
+import {
+  isRepairReplaceProfileEligible,
+  REPAIR_REPLACE_PROFILES,
+  resolveRepairReplaceProfile,
+} from './agents/repairReplaceProfileCatalog';
 import { RecommendationGovernanceSchema } from '../productFramework/recommendationGovernance.contract';
 import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
@@ -2489,7 +2493,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
         propertyId,
         status: 'READY',
         currentMarker: 'CURRENT',
-        inventoryItem: { category: { in: ['HVAC', 'APPLIANCE'] } },
+        inventoryItem: { category: { in: [...new Set(REPAIR_REPLACE_PROFILES.flatMap((profile) => profile.eligibleCategories))] } },
       },
       include: { inventoryItem: { select: { id: true, name: true, category: true } } },
       orderBy: { computedAt: 'desc' },
@@ -2516,8 +2520,12 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   // IPD-006 admits only canonical APPLIANCE items alongside HVAC. Higher-risk
   // non-HVAC categories abstain at ingress and receive no fallback family.
   const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses)
-    .filter((analysis) => analysis.inventoryItem?.category === 'HVAC'
-      || isGenericApplianceRepairReplaceEligible(analysis.inventoryItem ?? { category: null, name: null }));
+    .filter((analysis) => {
+      const category = analysis.inventoryItem?.category;
+      const profile = category ? resolveRepairReplaceProfile(category) : 'NO_MATCH';
+      return profile !== 'NO_MATCH' && profile !== 'AMBIGUOUS'
+        && isRepairReplaceProfileEligible(profile, analysis.inventoryItem);
+    });
   const inventoryItemIds = deduped.map((analysis) => analysis.inventoryItemId);
   const [recurringFailureEventsByItem, currentHvacPublishedVerdicts] = await Promise.all([
     findRecentRepairEventsByInventoryItem(db, inventoryItemIds, now),
@@ -2568,6 +2576,10 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
     // fall back to a generic phrase only when the inventory record has no name.
     const itemPhrase = namedItem ? `your ${namedItem}` : 'this item';
     const isHvac = analysis.inventoryItem?.category === 'HVAC';
+    const profile = resolveRepairReplaceProfile(analysis.inventoryItem!.category);
+    if (profile === 'NO_MATCH' || profile === 'AMBIGUOUS') {
+      throw new Error(`No unique admitted Repair-or-Replace profile for ${analysis.inventoryItem!.category}.`);
+    }
     const journey = journeysByItemId.get(analysis.inventoryItemId);
     let href: string;
     if (journey?.id) {
@@ -2632,7 +2644,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
       // `appliance-repair-replace:` (APPLIANCE_REPAIR_REPLACE),
       // reached through PREFIX_TO_DECISION_DEFINITION in
       // homeActionDecisionLineage.ts.
-      lineageId: `${isHvac ? 'repair-replace:' : 'appliance-repair-replace:'}${analysis.inventoryItemId}`,
+      lineageId: `${profile.lineagePrefixes[0]}${analysis.inventoryItemId}`,
       sourceEntityId: analysis.id,
       sourceVersion: publishedHvacVerdict ? `snapshot:${publishedHvacVerdict.snapshotId}` : analysis.computedAt.toISOString(),
       state: 'OPEN',

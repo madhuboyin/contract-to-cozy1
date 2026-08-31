@@ -33,6 +33,7 @@ export interface SpecialistStatus {
   runId: string | null;
   agentId: string;
   agentVersion: string;
+  profileId?: string;
   phase: SpecialistPhase;
   decisionThreadId: string | null;
   currentRecommendationSnapshotId: string | null;

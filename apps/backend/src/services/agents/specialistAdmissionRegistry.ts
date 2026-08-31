@@ -25,6 +25,7 @@
 // explicit `NOT_ADMITTED` records so the exclusion is visible and a future
 // pursuit has a scaffold, not a blank page.
 
+import { createHash } from 'node:crypto';
 import type { InventoryItemCategory } from '../../productFramework/intelligence/entityRef.contract';
 import { AGENT_DEFINITION_REGISTRY } from './agentDefinitionRegistry';
 import { digestAgentDefinition } from './agentRegistryValidation';
@@ -32,8 +33,18 @@ import type { VersionedAgentRegistryEntry } from './agent.contract';
 import { DECISION_DEFINITIONS, type DecisionDefinitionId } from '../decisionPlatform/decisionDefinitionRegistry';
 import type { DecisionDefinition } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
 import { REPAIR_REPLACE_PROFILES, type RepairReplaceProfile } from './repairReplaceProfileRegistry';
+import { DECISION_CONTEXT_CONTRACTS } from '../decisionPlatform/decisionContextContracts';
+import { getDecisionFamilyAdapter } from '../decisionPlatform/decisionFamilyAdapterRegistry';
+import {
+  GENERIC_APPLIANCE_SPECIALIST_EVAL_CASES,
+  GENERIC_APPLIANCE_SPECIALIST_EVAL_THRESHOLDS,
+} from './genericApplianceSpecialistEvaluation';
+import {
+  HVAC_SPECIALIST_EVAL_CASES,
+  HVAC_SPECIALIST_EVAL_THRESHOLDS,
+} from './hvacSpecialistEvaluation';
 
-export const SPECIALIST_ADMISSION_CONTRACT_VERSION = '1.1.0';
+export const SPECIALIST_ADMISSION_CONTRACT_VERSION = '2.0.0';
 
 // §9.2's three-way classification. These are independent tests, not a
 // severity ladder — a candidate is exactly one of them.
@@ -69,35 +80,15 @@ export const SPECIALIST_ADMISSION_GATES: readonly SpecialistAdmissionGate[] = Ob
   'PROMOTION_AND_LINEAGE_PATH',
 ]);
 
-// Which gates a classification must clear before it can be ADMITTED.
-// - A new specialist re-opens everything, including the autonomy ceiling
-//   and the tool set the shared loop assumes.
-// - A new decision definition on the same loop keeps the loop's autonomy
-//   ceiling but still needs its own verdict shape, context contract,
-//   engine, boundary, eval suite, and lineage path proven.
-// - A new profile under an existing shape reuses the decision definition,
-//   context contract, and loop — but a new inventory category can still
-//   carry a different safety tier (this is the electrical/plumbing guard),
-//   and §12.6 requires a profile to clear the same evaluation bar as an
-//   AgentDefinition.
+// §9.2 requires all seven reviews for every candidate. Reuse may make a
+// review short, but it never makes the review optional: a reviewer must
+// explicitly confirm the reused autonomy/context/lineage artifacts.
 export const REQUIRED_GATES_BY_CLASSIFICATION: Readonly<Record<
   SpecialistAdmissionClassification,
   readonly SpecialistAdmissionGate[]
 >> = Object.freeze({
-  NEW_PROFILE_EXISTING_SHAPE: Object.freeze([
-    'SAFETY_TIER_REVIEW',
-    'AUTHORITATIVE_ENGINE_OR_SOURCE',
-    'PROFESSIONAL_BOUNDARY',
-    'EVALUATION_SUITE',
-  ] as const),
-  NEW_DECISION_DEFINITION_SAME_LOOP: Object.freeze([
-    'SAFETY_TIER_REVIEW',
-    'AUTHORITATIVE_ENGINE_OR_SOURCE',
-    'TYPED_CONTEXT_CONTRACT',
-    'PROFESSIONAL_BOUNDARY',
-    'EVALUATION_SUITE',
-    'PROMOTION_AND_LINEAGE_PATH',
-  ] as const),
+  NEW_PROFILE_EXISTING_SHAPE: SPECIALIST_ADMISSION_GATES,
+  NEW_DECISION_DEFINITION_SAME_LOOP: SPECIALIST_ADMISSION_GATES,
   NEW_SPECIALIST: SPECIALIST_ADMISSION_GATES,
 });
 
@@ -120,6 +111,20 @@ export interface GateReview {
   evidence: string;
   /** ISO date of the review, or null when NOT_REVIEWED. */
   reviewedOn: string | null;
+  /** Stable reviewer/team identity; required for PASS/FAIL. */
+  reviewedBy: string | null;
+  /** Immutable approval/decision reference; required for PASS/FAIL. */
+  approvalRef: string | null;
+}
+
+export interface ReviewedSpecialistArtifacts {
+  decisionDefinitionDigest?: string;
+  contextContractId?: string;
+  contextContractDigest?: string;
+  authoritativeSourceRef?: string;
+  evaluationSuiteId?: string;
+  evaluationSuiteDigest?: string;
+  lineagePrefixes?: readonly string[];
 }
 
 export interface SpecialistAdmissionRecord {
@@ -143,6 +148,8 @@ export interface SpecialistAdmissionRecord {
     agentDefinitions?: readonly { version: string; digest: string }[];
     /** Required for a new profile that reuses a decision shape admitted by another candidate. */
     reusesDecisionDefinitionFrom?: string;
+    /** Exact executable artifacts cleared by the seven reviews. */
+    reviewedArtifacts?: ReviewedSpecialistArtifacts;
   };
   /** The owner-input ticket that unblocks the outstanding gate(s), when there is one. */
   ownerInputId?: string;
@@ -152,8 +159,63 @@ export interface SpecialistAdmissionRecord {
   notes: string;
 }
 
-const notReviewed = (evidence: string): GateReview => ({ status: 'NOT_REVIEWED', evidence, reviewedOn: null });
-const passed = (evidence: string, reviewedOn: string): GateReview => ({ status: 'PASS', evidence, reviewedOn });
+const notReviewed = (evidence: string): GateReview => Object.freeze({
+  status: 'NOT_REVIEWED', evidence, reviewedOn: null, reviewedBy: null, approvalRef: null,
+});
+const passed = (
+  evidence: string,
+  reviewedOn: string,
+  approvalRef = 'C2C-PHASE4B-ADMISSION-REVIEW',
+  reviewedBy = 'C2C_ARCHITECTURE_REVIEW_BOARD',
+): GateReview => Object.freeze({ status: 'PASS', evidence, reviewedOn, reviewedBy, approvalRef });
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => [key, canonicalize(child)]));
+  }
+  return value;
+}
+
+export function digestSpecialistAdmissionArtifact(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
+}
+
+export const SPECIALIST_EVALUATION_ARTIFACTS: Readonly<Record<string, unknown>> = Object.freeze({
+  'agent-hvac-repair-replace-eval@1.1.0': Object.freeze({
+    cases: HVAC_SPECIALIST_EVAL_CASES,
+    thresholds: HVAC_SPECIALIST_EVAL_THRESHOLDS,
+  }),
+  'agent-generic-appliance-repair-replace-eval@1.0.0': Object.freeze({
+    cases: GENERIC_APPLIANCE_SPECIALIST_EVAL_CASES,
+    thresholds: GENERIC_APPLIANCE_SPECIALIST_EVAL_THRESHOLDS,
+  }),
+});
+
+export interface SpecialistRuntimeActivationBinding {
+  candidateId: string;
+  profileId?: string;
+  agentId?: string;
+  lineagePrefixes: readonly string[];
+}
+
+/**
+ * Executable activation manifest. Admission cannot assert a promotion path
+ * that no runtime entry point owns; later candidates must register their
+ * actual agent/profile target and lineage selectors here.
+ */
+export const SPECIALIST_RUNTIME_ACTIVATION_BINDINGS: Readonly<Record<string, SpecialistRuntimeActivationBinding>> = Object.freeze({
+  HVAC: Object.freeze({
+    candidateId: 'HVAC', profileId: 'HVAC', agentId: 'hvac-repair-replace-specialist',
+    lineagePrefixes: Object.freeze(['repair-replace:'] as const),
+  }),
+  GENERIC_APPLIANCE: Object.freeze({
+    candidateId: 'GENERIC_APPLIANCE', profileId: 'GENERIC_APPLIANCE',
+    lineagePrefixes: Object.freeze(['appliance-repair-replace:'] as const),
+  }),
+});
 
 function isIsoCalendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -184,6 +246,9 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
       eligibleCategories: Object.freeze(['HVAC'] as const),
       profileContract: Object.freeze({
         profileId: 'HVAC',
+        lineagePrefixes: Object.freeze(['repair-replace:'] as const),
+        displayLabel: 'HVAC Repair-or-Replace Specialist',
+        eligibilityPolicy: 'CATEGORY_ONLY',
         eligibleCategories: Object.freeze(['HVAC'] as const),
         decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
         scoringSkillId: 'repair-replace',
@@ -191,8 +256,25 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
         supportedDocuments: Object.freeze(['hvac-nameplate-photo', 'hvac-technician-assessment', 'hvac-written-estimate']),
         professionalBoundary: 'licensed HVAC technician',
         evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.1.0',
+        disputableInputs: Object.freeze([
+          Object.freeze({ key: 'hvac.condition', label: 'System condition' }),
+          Object.freeze({ key: 'hvac.installDate', label: 'Install date' }),
+          Object.freeze({ key: 'hvac.replacementCost', label: 'Replacement estimate' }),
+          Object.freeze({ key: 'hvac.technicianAssessment', label: 'Technician assessment' }),
+        ]),
+        inventoryCorrectionLabel: null,
+        enforceLowConfidenceEscalation: true,
       }),
       decisionDefinitionVersion: '1.0',
+      reviewedArtifacts: Object.freeze({
+        decisionDefinitionDigest: 'd3b57d8c4341b33328dc9561d126593541a60bbe6ba0c677cdb270b88425dc84',
+        contextContractId: 'HVAC_REPAIR_REPLACE',
+        contextContractDigest: '5f99f1a5929238741b408c72a0e203e4d83e09aa3bbd46b3af56236434b9e986',
+        authoritativeSourceRef: 'hvac-repair-replace-engine@1.0',
+        evaluationSuiteId: 'agent-hvac-repair-replace-eval@1.1.0',
+        evaluationSuiteDigest: '822baf95528d571ae1be889caf5d198237acd8f051c21d8e9b519d594caac1f6',
+        lineagePrefixes: Object.freeze(['repair-replace:'] as const),
+      }),
       agentDefinitions: Object.freeze([
         Object.freeze({ version: '1.0.0', digest: 'be4e9d0cdfe501aa55b3d473a558a9d40b9a881c29cf40b03da66f13bd1fb2aa' }),
         Object.freeze({ version: '1.1.0', digest: '0ea576a2635b5b1446079173b4c5f434568ffc2e9daa5c22ff325bc2246ce3eb' }),
@@ -240,6 +322,9 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
       eligibleCategories: Object.freeze(['APPLIANCE'] as const),
       profileContract: Object.freeze({
         profileId: 'GENERIC_APPLIANCE',
+        lineagePrefixes: Object.freeze(['appliance-repair-replace:'] as const),
+        displayLabel: 'Appliance Repair-or-Replace Specialist',
+        eligibilityPolicy: 'CANONICAL_GENERIC_APPLIANCE',
         eligibleCategories: Object.freeze(['APPLIANCE'] as const),
         decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
         scoringSkillId: 'repair-replace',
@@ -247,8 +332,25 @@ export const SPECIALIST_ADMISSION_RECORDS: readonly SpecialistAdmissionRecord[] 
         supportedDocuments: Object.freeze([]),
         professionalBoundary: 'general appliance repair professional',
         evaluationSuiteId: 'agent-generic-appliance-repair-replace-eval@1.0.0',
+        disputableInputs: Object.freeze([
+          Object.freeze({ key: 'appliance.condition', label: 'Appliance condition' }),
+          Object.freeze({ key: 'appliance.installDate', label: 'Install date' }),
+          Object.freeze({ key: 'appliance.replacementCost', label: 'Replacement estimate' }),
+          Object.freeze({ key: 'appliance.analysis', label: 'Repair-or-replace analysis' }),
+        ]),
+        inventoryCorrectionLabel: 'Correct this appliance’s inventory record',
+        enforceLowConfidenceEscalation: false,
       }),
       decisionDefinitionVersion: '1.0',
+      reviewedArtifacts: Object.freeze({
+        decisionDefinitionDigest: '1ea340bb08fe3e44214a4e9e97235b820c61113e8189fdc57eb4fc50714d821b',
+        contextContractId: 'APPLIANCE_REPAIR_REPLACE',
+        contextContractDigest: '716607423810e200a0c313280ac49d2d06f5f6f959130d37293370c797484573',
+        authoritativeSourceRef: 'replace-repair-analysis-v1',
+        evaluationSuiteId: 'agent-generic-appliance-repair-replace-eval@1.0.0',
+        evaluationSuiteDigest: 'b24d8076f2a94e7adc74ef96ffdf158e8d6f20adcfc5cb47d34b35dd048ae726',
+        lineagePrefixes: Object.freeze(['appliance-repair-replace:'] as const),
+      }),
     },
     gateReviews: allGates((gate) => {
       switch (gate) {
@@ -333,16 +435,39 @@ export function getSpecialistAdmissionRecord(
 export function isProfileAdmitted(
   profileId: string,
   records: readonly SpecialistAdmissionRecord[] = SPECIALIST_ADMISSION_RECORDS,
+  profiles: readonly RepairReplaceProfile[] = REPAIR_REPLACE_PROFILES,
 ): boolean {
-  const profile = REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === profileId);
-  const admission = records.find((record) => record.wouldRegister.profileId === profileId && record.status === 'ADMITTED');
-  return Boolean(profile && admission && profileContractIssues(profile, admission.wouldRegister.profileContract).length === 0);
+  const profile = profiles.find((candidate) => candidate.profileId === profileId);
+  const admission = records.find((record) => record.wouldRegister.profileId === profileId
+    && record.status === 'ADMITTED'
+    && deriveSpecialistAdmissionStatus(record) === 'ADMITTED');
+  return Boolean(profile && admission
+    && profileContractIssues(profile, admission.wouldRegister.profileContract).length === 0
+    && validateSpecialistAdmissionRegistry(records, { profiles: [profile], agentRegistry: {} }).length === 0);
+}
+
+export function resolveAdmittedProfileForLineage(
+  lineageId: string,
+  profiles: readonly RepairReplaceProfile[] = REPAIR_REPLACE_PROFILES,
+  records: readonly SpecialistAdmissionRecord[] = SPECIALIST_ADMISSION_RECORDS,
+): RepairReplaceProfile | 'NO_MATCH' | 'AMBIGUOUS' {
+  const matches = profiles.filter((profile) => profile.lineagePrefixes.some((prefix) => lineageId.startsWith(prefix)))
+    .filter((profile) => {
+      return isProfileAdmitted(profile.profileId, records, profiles);
+    });
+  if (matches.length === 0) return 'NO_MATCH';
+  if (matches.length > 1) return 'AMBIGUOUS';
+  return matches[0];
 }
 
 export interface SpecialistAdmissionValidationDependencies {
   profiles?: readonly RepairReplaceProfile[];
   agentRegistry?: Readonly<Record<string, VersionedAgentRegistryEntry>>;
   decisionDefinitions?: Readonly<Partial<Record<DecisionDefinitionId, DecisionDefinition>>>;
+  contextContracts?: Readonly<Record<string, unknown>>;
+  evaluationArtifacts?: Readonly<Record<string, unknown>>;
+  runtimeActivationBindings?: Readonly<Record<string, SpecialistRuntimeActivationBinding>>;
+  now?: Date;
 }
 
 function profileContractIssues(
@@ -351,11 +476,14 @@ function profileContractIssues(
 ): string[] {
   if (!reviewed) return ['has no reviewed profileContract'];
   const issues: string[] = [];
-  const scalarFields = ['profileId', 'decisionDefinitionId', 'scoringSkillId', 'professionalBoundary', 'evaluationSuiteId'] as const;
+  const scalarFields = [
+    'profileId', 'displayLabel', 'eligibilityPolicy', 'decisionDefinitionId', 'scoringSkillId', 'professionalBoundary',
+    'evaluationSuiteId', 'inventoryCorrectionLabel', 'enforceLowConfidenceEscalation',
+  ] as const;
   for (const field of scalarFields) {
     if (actual[field] !== reviewed[field]) issues.push(`${field} changed after admission`);
   }
-  const arrayFields = ['eligibleCategories', 'requiredFacts', 'supportedDocuments'] as const;
+  const arrayFields = ['lineagePrefixes', 'eligibleCategories', 'requiredFacts', 'supportedDocuments', 'disputableInputs'] as const;
   for (const field of arrayFields) {
     if (JSON.stringify(actual[field]) !== JSON.stringify(reviewed[field])) issues.push(`${field} changed after admission`);
   }
@@ -379,6 +507,10 @@ export function validateSpecialistAdmissionRegistry(
   const profiles = dependencies.profiles ?? REPAIR_REPLACE_PROFILES;
   const agentRegistry = dependencies.agentRegistry ?? AGENT_DEFINITION_REGISTRY;
   const decisionDefinitions = dependencies.decisionDefinitions ?? DECISION_DEFINITIONS;
+  const contextContracts: Readonly<Record<string, unknown>> = dependencies.contextContracts ?? DECISION_CONTEXT_CONTRACTS;
+  const evaluationArtifacts: Readonly<Record<string, unknown>> = dependencies.evaluationArtifacts ?? SPECIALIST_EVALUATION_ARTIFACTS;
+  const runtimeActivationBindings = dependencies.runtimeActivationBindings ?? SPECIALIST_RUNTIME_ACTIVATION_BINDINGS;
+  const today = (dependencies.now ?? new Date()).toISOString().slice(0, 10);
 
   const seenCandidateIds = new Set<string>();
   const seenProfileTargets = new Map<string, string>();
@@ -400,6 +532,11 @@ export function validateSpecialistAdmissionRegistry(
       if (review.status === 'NOT_REVIEWED' && review.reviewedOn) issues.push(`${label}: gate ${gate} is NOT_REVIEWED but has a reviewedOn date`);
       if (review.status !== 'NOT_REVIEWED' && !review.reviewedOn) issues.push(`${label}: gate ${gate} is ${review.status} but has no reviewedOn date`);
       if (review.reviewedOn && !isIsoCalendarDate(review.reviewedOn)) issues.push(`${label}: gate ${gate} reviewedOn is not a valid ISO calendar date`);
+      if (review.reviewedOn && isIsoCalendarDate(review.reviewedOn) && review.reviewedOn > today) issues.push(`${label}: gate ${gate} reviewedOn cannot be in the future`);
+      if (review.status === 'NOT_REVIEWED' && (review.reviewedBy || review.approvalRef)) issues.push(`${label}: gate ${gate} is NOT_REVIEWED but has reviewer provenance`);
+      if (review.status !== 'NOT_REVIEWED' && (!review.reviewedBy?.trim() || !review.approvalRef?.trim())) {
+        issues.push(`${label}: gate ${gate} is ${review.status} but has no reviewer or approval reference`);
+      }
     }
 
     const derived = deriveSpecialistAdmissionStatus(record);
@@ -445,6 +582,59 @@ export function validateSpecialistAdmissionRegistry(
       if (!definition) issues.push(`${label}: decision definition "${target.decisionDefinitionId}" is not registered`);
       else if (definition.version !== target.decisionDefinitionVersion) {
         issues.push(`${label}: decision definition "${target.decisionDefinitionId}" version ${definition.version} was not admitted`);
+      } else if (record.status === 'ADMITTED'
+        && target.reviewedArtifacts?.decisionDefinitionDigest !== digestSpecialistAdmissionArtifact(definition)) {
+        issues.push(`${label}: decision definition "${target.decisionDefinitionId}" content changed after admission`);
+      }
+    }
+    if (record.status === 'ADMITTED') {
+      const artifacts = target.reviewedArtifacts;
+      if (!artifacts) {
+        issues.push(`${label}: ADMITTED candidate has no reviewed executable artifacts`);
+      } else {
+        const contextId = artifacts.contextContractId;
+        const contextContract = contextId ? contextContracts[contextId] : undefined;
+        if (!contextId || !contextContract) issues.push(`${label}: reviewed context contract is not registered`);
+        else if (artifacts.contextContractDigest !== digestSpecialistAdmissionArtifact(contextContract)) {
+          issues.push(`${label}: context contract "${contextId}" content changed after admission`);
+        }
+        const decisionDefinitionId = target.decisionDefinitionId as DecisionDefinitionId | undefined;
+        const adapter = decisionDefinitionId ? getDecisionFamilyAdapter(decisionDefinitionId) : null;
+        if (!adapter || adapter.governance.authoritativeSourceRef !== artifacts.authoritativeSourceRef) {
+          issues.push(`${label}: authoritative source binding does not match the registered decision-family adapter`);
+        }
+        const contractVersion = contextContract && typeof contextContract === 'object'
+          ? String((contextContract as { version?: unknown }).version ?? '') : '';
+        if (!adapter || adapter.governance.contextContractVersion !== contractVersion) {
+          issues.push(`${label}: adapter context-contract version does not match the reviewed contract`);
+        }
+        const suiteId = artifacts.evaluationSuiteId;
+        const suite = suiteId ? evaluationArtifacts[suiteId] : undefined;
+        if (!suiteId || !suite) issues.push(`${label}: reviewed evaluation suite is not registered as an executable artifact`);
+        else if (artifacts.evaluationSuiteDigest !== digestSpecialistAdmissionArtifact(suite)) {
+          issues.push(`${label}: evaluation suite "${suiteId}" content changed after admission`);
+        }
+        if (target.profileContract && target.profileContract.evaluationSuiteId !== suiteId) {
+          issues.push(`${label}: reviewed evaluation suite does not match the profile contract`);
+        } else if (!target.profileContract && target.agentId) {
+          const agentSuiteIds = Object.values(agentRegistry[target.agentId]?.versions ?? {})
+            .map((definition) => definition.evaluationSuiteId);
+          if (!suiteId || !agentSuiteIds.includes(suiteId)) {
+            issues.push(`${label}: reviewed evaluation suite does not match the AgentDefinition target`);
+          }
+        }
+        if (target.profileContract
+          && JSON.stringify(artifacts.lineagePrefixes ?? []) !== JSON.stringify(target.profileContract.lineagePrefixes)) {
+          issues.push(`${label}: reviewed promotion/lineage prefixes do not match the profile contract`);
+        }
+        const activation = runtimeActivationBindings[record.candidateId];
+        if (!activation
+          || activation.candidateId !== record.candidateId
+          || activation.profileId !== target.profileId
+          || activation.agentId !== target.agentId
+          || JSON.stringify(activation.lineagePrefixes) !== JSON.stringify(artifacts.lineagePrefixes ?? [])) {
+          issues.push(`${label}: reviewed promotion/lineage path does not match an executable runtime activation binding`);
+        }
       }
     }
     if (target.profileId) {

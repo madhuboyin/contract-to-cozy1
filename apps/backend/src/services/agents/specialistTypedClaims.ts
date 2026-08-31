@@ -8,6 +8,7 @@
 // (the agent never invents explanatory text or quantitative facts).
 
 import type { AgentContextRequestItem, AgentTypedClaim } from './agentRuntime.contract';
+import { REPAIR_REPLACE_PROFILES } from './repairReplaceProfileCatalog';
 
 const REASON_CLAIMS: Readonly<Record<string, string>> = {
   SYSTEM_AT_OR_BEYOND_TYPICAL_LIFESPAN: 'The system is at or beyond the typical service life for its type.',
@@ -138,27 +139,16 @@ export const ACCEPTED_INTAKE_KEYS: ReadonlySet<string> = new Set(
 
 /** Closed set of canonical inputs a homeowner may dispute through the API. */
 export const DISPUTABLE_INPUT_KEYS: ReadonlySet<string> = new Set(
-  [
-    ...Object.values(LIMITATION_OUTSTANDING).map((spec) => spec.key),
-    'appliance.condition',
-    'appliance.installDate',
-    'appliance.replacementCost',
-    'appliance.analysis',
-  ],
+  REPAIR_REPLACE_PROFILES.flatMap((profile) => profile.disputableInputs.map((input) => input.key)),
 );
 
-export const DISPUTABLE_INPUT_KEYS_BY_PROFILE: Readonly<Record<'HVAC' | 'GENERIC_APPLIANCE', ReadonlySet<string>>> = Object.freeze({
-  HVAC: new Set(Object.values(LIMITATION_OUTSTANDING).map((spec) => spec.key)),
-  GENERIC_APPLIANCE: new Set([
-    'appliance.condition',
-    'appliance.installDate',
-    'appliance.replacementCost',
-    'appliance.analysis',
-  ]),
-});
+export const DISPUTABLE_INPUT_KEYS_BY_PROFILE: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze(
+  Object.fromEntries(REPAIR_REPLACE_PROFILES.map((profile) => [
+    profile.profileId,
+    new Set(profile.disputableInputs.map((input) => input.key)),
+  ])),
+);
 
 export function isDisputableInputKey(profileId: string, key: string): boolean {
-  return profileId === 'HVAC' || profileId === 'GENERIC_APPLIANCE'
-    ? DISPUTABLE_INPUT_KEYS_BY_PROFILE[profileId].has(key)
-    : false;
+  return DISPUTABLE_INPUT_KEYS_BY_PROFILE[profileId]?.has(key) ?? false;
 }

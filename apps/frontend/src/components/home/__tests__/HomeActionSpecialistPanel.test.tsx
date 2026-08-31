@@ -127,6 +127,13 @@ test('shows appliance-specific dispute inputs and the canonical inventory correc
       propertyId="property-1"
       inventoryItemId="dishwasher-1"
       profileId="GENERIC_APPLIANCE"
+      disputableInputs={[
+        { key: 'appliance.condition', label: 'Appliance condition' },
+        { key: 'appliance.installDate', label: 'Install date' },
+        { key: 'appliance.replacementCost', label: 'Replacement estimate' },
+        { key: 'appliance.analysis', label: 'Repair-or-replace analysis' },
+      ]}
+      inventoryCorrectionLabel="Correct this appliance’s inventory record"
       homeActionOrigin={{
         homeActionId: 'action-1', lineageId: 'appliance-repair-replace:dishwasher-1', sourceEntityId: 'analysis-1',
         sourceVersion: 'v1', contextVersion: null,

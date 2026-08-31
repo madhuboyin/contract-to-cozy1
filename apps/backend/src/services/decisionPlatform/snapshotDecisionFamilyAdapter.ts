@@ -336,6 +336,10 @@ export function createSnapshotDecisionFamilyAdapter(
   return {
     decisionDefinitionId: config.decisionDefinitionId,
     primaryEntityType: config.primaryEntityType,
+    governance: {
+      authoritativeSourceRef: config.engineVersion,
+      contextContractVersion: config.contextContractVersion,
+    },
 
     async isEligiblePrimaryEntity(propertyId, primaryEntityId) {
       return (await config.loadSourceState(propertyId, primaryEntityId)) !== null;
