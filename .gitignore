@@ -96,3 +96,6 @@ npm-debug.log*
 # Claude Code — local settings have machine-specific absolute paths
 .claude/settings.local.json
 .claude/worktrees/
+
+# graphify skill working output
+graphify-out/
