@@ -48,6 +48,7 @@ import {
   adaptHomeActionSource,
   getHomeAssetDisplayLabel,
   normalizeHomeActionConfidenceScore,
+  resolveCanonicalAssetLabel,
   type HomeAction,
 } from '../productFramework';
 
@@ -365,15 +366,29 @@ export function adaptOrchestratedActionToHomeAction(
   const coverageItemDisplayName = coverageRoomMatch
     ? coverageItemName?.slice(0, coverageRoomMatch.index).trim()
     : coverageItemName;
-  const displayTitle = getHomeAssetDisplayLabel({
-    name: coverageItemDisplayName ?? action.title,
-    assetType: isCoverageAction ? null : action.systemType,
+  const actionName = coverageItemDisplayName ?? action.title;
+  const namedAssetLabel = resolveCanonicalAssetLabel(actionName);
+  const typedAssetLabel = isCoverageAction ? null : resolveCanonicalAssetLabel(action.systemType);
+  const assetIdentityConflict = Boolean(
+    namedAssetLabel && typedAssetLabel && namedAssetLabel !== typedAssetLabel,
+  );
+  // A homeowner-facing name is closer to the source observation than a broad
+  // or stale system classification. Never let a conflicting systemType rewrite
+  // the card identity and rationale into a different appliance.
+  const displayTitle = namedAssetLabel ?? getHomeAssetDisplayLabel({
+    name: actionName,
+    assetType: assetIdentityConflict || isCoverageAction ? null : action.systemType,
     category: action.category,
   });
+  const identityConflictMessage = assetIdentityConflict
+    ? `Your Home Record names this item as ${namedAssetLabel} but classifies its system as ${typedAssetLabel}. Confirm the correct asset before scheduling service.`
+    : null;
   const ctaLabel = action.cta?.label?.trim();
   const description = action.description?.trim();
   const isServiceAction = ctaLabel?.toLowerCase() === 'schedule service';
-  const recommendedAction = isCoverageAction
+  const recommendedAction = identityConflictMessage
+    ? `Confirm asset details for ${displayTitle}`
+    : isCoverageAction
     ? `Review coverage for ${displayTitle}`
     : isServiceAction
     ? `Schedule service for ${displayTitle}`
@@ -384,8 +399,11 @@ export function adaptOrchestratedActionToHomeAction(
         : `Review ${displayTitle}`;
   const serviceSubject = displayTitle.replace(/^HVAC\s+/i, '').toLowerCase();
   const serviceTiming = action.overdue ? 'now' : action.priority >= 70 ? 'soon' : 'when convenient';
-  const serviceHref = isServiceAction && !critical
+  const serviceHref = isServiceAction && !critical && !assetIdentityConflict
     ? buildProviderSearchHref(action, displayTitle)
+    : null;
+  const identityReviewHref = assetIdentityConflict
+    ? `/dashboard/properties/${encodeURIComponent(action.propertyId)}/inventory`
     : null;
   const coverageHref = isCoverageAction
     ? buildInventoryCoverageHref(action)
@@ -397,13 +415,13 @@ export function adaptOrchestratedActionToHomeAction(
         maximumFractionDigits: 0,
       }).format(action.exposure)
     : null;
-  const homeownerRationale = isCoverageAction
+  const homeownerRationale = identityConflictMessage ?? (isCoverageAction
     ? coverageExposure
       ? `No active warranty or insurance is linked to ${displayTitle}${coverageRoomName ? ` in ${coverageRoomName}` : ''}. Its recorded or estimated replacement exposure is ${coverageExposure}, so a repair or replacement may be paid out of pocket. Review whether protection or self-funding fits your home.`
       : `No active warranty or insurance is linked to ${displayTitle}. Review its age, condition, replacement value, and coverage information before deciding whether protection is useful.`
     : isServiceAction
     ? `Routine ${serviceSubject} maintenance is recommended ${serviceTiming} based on the information in your Home Record.`
-    : description ?? `This open action is supported by the current maintenance or risk context for ${displayTitle}.`;
+    : description ?? `This open action is supported by the current maintenance or risk context for ${displayTitle}.`);
 
   return adaptHomeActionSource(sourceKind, {
     id: action.actionKey,
@@ -416,16 +434,20 @@ export function adaptOrchestratedActionToHomeAction(
     job: critical ? 'MAJOR_MOMENT' : undefined,
     state: action.snooze ? 'SNOOZED' : 'OPEN',
     priority: critical || action.overdue ? 'NOW' : action.priority >= 70 ? 'SOON' : 'PLAN',
-    signal: isCoverageAction
+    signal: identityConflictMessage
+      ? identityConflictMessage
+      : isCoverageAction
       ? `No active coverage is linked to ${displayTitle}`
       : isServiceAction
         ? `Schedule service for ${displayTitle}`
         : action.description ?? displayTitle,
-    whyItMatters: critical
+    whyItMatters: identityConflictMessage ?? (critical
       ? 'The current risk assessment marks this condition critical and requiring prompt review.'
-      : homeownerRationale,
+      : homeownerRationale),
     recommendedAction,
-    expectedOutcome: isCoverageAction
+    expectedOutcome: identityConflictMessage
+      ? 'Resolve the conflicting Home Record identity before choosing or scheduling service.'
+      : isCoverageAction
       ? `Compare coverage with self-funding using ${displayTitle}'s recorded home and financial context.`
       : critical
       ? 'Escalate the condition safely and confirm the appropriate professional response.'
@@ -485,6 +507,7 @@ export function adaptOrchestratedActionToHomeAction(
       score: confidenceScore,
       label: action.confidence?.level ?? 'MEDIUM',
       missing: action.cta?.reason === 'MISSING_DATA' ? ['Source context requested by the action'] : [],
+      conflicted: identityConflictMessage ? [identityConflictMessage] : [],
     },
     governance: {
       safetyTier: critical ? 'SAFETY_EMERGENCY' : hasSavedCoverageAnalysis ? 'MATERIAL_FINANCIAL' : 'LOW_CONSEQUENCE',
@@ -518,11 +541,13 @@ export function adaptOrchestratedActionToHomeAction(
       policyVersion: 'phase0-v1',
     },
     primaryCta: {
-      kind: critical ? 'ESCALATE' : 'REVIEW',
-      label: isCoverageAction
+      kind: critical && !identityConflictMessage ? 'ESCALATE' : 'REVIEW',
+      label: identityConflictMessage
+        ? 'Review asset details'
+        : isCoverageAction
         ? 'Review coverage options'
         : action.cta?.label ?? (critical ? 'Review safety escalation' : 'Review action'),
-      href: coverageHref ?? serviceHref ?? `/dashboard/resolution-center?propertyId=${encodeURIComponent(action.propertyId)}`,
+      href: identityReviewHref ?? coverageHref ?? serviceHref ?? `/dashboard/resolution-center?propertyId=${encodeURIComponent(action.propertyId)}`,
     },
     secondaryCtas: [],
     // No source kind adapted here (MAINTENANCE checklist items, orchestrated

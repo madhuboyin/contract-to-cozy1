@@ -118,9 +118,7 @@ const FILTER_META: Record<
   },
 };
 
-const ACTIVE_BOOKING_STATUSES = new Set(['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS']);
 const COMPLETED_BOOKING_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
-const HIGH_RISK_LEVELS = new Set(['CRITICAL', 'HIGH']);
 const COVERAGE_CATEGORY_KEYWORDS = ['COVERAGE', 'INSURANCE', 'WARRANTY', 'POLICY'];
 const SAVINGS_CATEGORY_KEYWORDS = [
   'RISK_PREMIUM',
@@ -280,107 +278,38 @@ function toDisplayLabel(value: string | null | undefined): string {
     .join(' ');
 }
 
-function resolveAssetTitle(item: any): string {
-  const token = String(item?.title || item?.systemType || item?.category || '')
-    .trim()
-    .toLowerCase();
-
-  if (token.includes('hvac') || token.includes('furnace') || token.includes('ac')) return 'HVAC Furnace';
-  if (token.includes('water heater') || token.includes('heater')) return 'Water Heater Tank';
-  if (token.includes('refrigerator') || token.includes('fridge')) return 'Refrigerator';
-  if (token.includes('washer')) return 'Washer';
-  if (token.includes('oven') || token.includes('range') || token.includes('stove')) return 'Oven Range';
-  if (token.includes('smoke detector')) return 'Smoke Detector';
-  if (token.includes('roof')) return 'Roof';
-  if (token.includes('panel')) return 'Electrical Panel';
-
+export function resolveAssetTitle(item: any): string {
+  const canonicalSubject = item?.presentation?.subject?.label;
+  if (typeof canonicalSubject === 'string' && canonicalSubject.trim()) return canonicalSubject.trim();
   return toDisplayLabel(item?.systemType || item?.category || item?.title || item?.relatedChecklistItem?.title);
 }
 
-function resolveIssueHeadline(item: any, journey: JourneyType, assetTitle: string): string {
-  const token = String(item?.title || item?.systemType || item?.category || '').trim().toLowerCase();
-
-  if (journey === 'urgent-issue' || journey === 'repair-vs-replace') {
-    if (token.includes('hvac') || token.includes('furnace') || token.includes('ac unit')) {
-      return 'HVAC furnace has reached critical failure threshold';
-    }
-    if (token.includes('water heater') || (token.includes('heater') && !token.includes('space'))) {
-      return 'Water heater is 2 years past its replacement window';
-    }
-    if (token.includes('roof')) {
-      return 'Roof shows accelerated shingle degradation in south zone';
-    }
-    if (token.includes('panel') || token.includes('electrical') || token.includes('breaker')) {
-      return 'Electrical panel exceeding safe load capacity';
-    }
-    if (token.includes('foundation') || token.includes('basement')) {
-      return 'Moisture intrusion signal in east foundation wall';
-    }
-    if (token.includes('refrigerator') || token.includes('fridge')) {
-      return 'Refrigerator compressor efficiency is critically low';
-    }
-    if (token.includes('washer')) {
-      return 'Washer showing signs of bearing failure';
-    }
-    if (token.includes('oven') || token.includes('range') || token.includes('stove')) {
-      return 'Oven range gas line shows wear — inspection needed';
-    }
-    if (token.includes('smoke') || token.includes('detector')) {
-      return 'Smoke detector battery and sensor past service life';
-    }
-    if (assetTitle && assetTitle !== 'Home Asset') {
-      return `${assetTitle} has reached critical failure threshold`;
-    }
-    return 'Critical failure risk — action required this week';
-  }
-
-  if (journey === 'cost-savings') return 'High efficiency upgrade available';
-  if (journey === 'coverage') {
-    if (assetTitle && assetTitle !== 'Home Asset') {
-      return `${assetTitle} has a coverage gap — warranty may apply`;
-    }
-    return 'Coverage gap detected — warranty may apply';
-  }
-  if (journey === 'preventive') {
-    if (assetTitle && assetTitle !== 'Home Asset') {
-      return `${assetTitle} maintenance is due — stay ahead of failure`;
-    }
-    return 'Preventive task due soon — act now to avoid higher repair costs';
-  }
-  if (journey === 'provider-execution') return 'Service workflow in progress';
-  if (journey === 'completed') {
-    const candidate = [item?.title, item?.summary]
-      .map((value) => String(value ?? '').trim())
-      .find((value) => value && !isMachineToken(value));
-    return candidate ? toDisplayLabel(candidate) : 'Action completed';
-  }
-
+export function resolveIssueHeadline(item: any): string {
+  const canonicalHeadline = item?.presentation?.headline;
+  if (typeof canonicalHeadline === 'string' && canonicalHeadline.trim()) return canonicalHeadline.trim();
   const fallback = [item?.title, item?.summary]
     .map((value) => String(value ?? '').trim())
-    .find((value) => value && value.length <= 80 && toDisplayLabel(value) !== assetTitle && !isMachineToken(value));
+    .find((value) => value && !isMachineToken(value));
   if (fallback) return fallback;
-  if (assetTitle && assetTitle !== 'Home Asset') {
-    return `${assetTitle} requires attention`;
-  }
-  return 'Action required — review now';
+  return 'Review this home action';
 }
 
-function getCardSubhead(item: any, journey: JourneyType): string {
-  const severity = item?.severity || item?.riskLevel || '';
-  if (journey === 'urgent-issue' || journey === 'repair-vs-replace') {
-    if (severity === 'CRITICAL') return 'Repair or replace — act before cost increases';
-    if (severity === 'WARNING' || severity === 'HIGH') return 'Professional inspection recommended';
-  }
-  if (journey === 'preventive' || journey === 'cost-savings' || journey === 'coverage') {
-    if (severity === 'WARNING' || severity === 'HIGH') return 'Professional inspection recommended';
-  }
-  return 'Schedule maintenance';
+function getCardSubhead(item: any): string {
+  const eyebrow = item?.presentation?.eyebrow;
+  if (typeof eyebrow === 'string' && eyebrow.trim()) return eyebrow.trim();
+  return '';
 }
 
 const GENERIC_SUBHEAD_PHRASES = new Set(['schedule maintenance', 'schedule maintenance task', 'maintenance task']);
 
-function resolveIssueDescription(item: any, headline: string): string {
-  const candidate = [item?.description, item?.summary, item?.title]
+export function resolveIssueDescription(item: any, headline: string): string {
+  const candidate = [
+    item?.presentation?.whyNow,
+    item?.presentation?.summary,
+    item?.description,
+    item?.summary,
+    item?.whyItMatters,
+  ]
     .map((value) => String(value ?? '').trim())
     .find((value) => {
       if (!value || value === headline || isMachineToken(value)) return false;
@@ -388,11 +317,11 @@ function resolveIssueDescription(item: any, headline: string): string {
       return true;
     });
 
-  return candidate || 'Take action now to reduce avoidable cost and protect home performance.';
+  return candidate || 'Review the supporting home information before choosing the next step.';
 }
 
 function resolveApplianceIcon(item: any): React.ElementType {
-  const token = String(item?.title || item?.systemType || item?.category || '').trim().toLowerCase();
+  const token = String(item?.presentation?.subject?.label || item?.title || item?.systemType || item?.category || '').trim().toLowerCase();
   if (token.includes('hvac') || token.includes('furnace') || token.includes('heat')) return Thermometer;
   if (token.includes('water') || token.includes('plumbing') || token.includes('drain')) return Droplets;
   if (token.includes('roof')) return Home;
@@ -491,6 +420,8 @@ function hasKeyword(value: string | null | undefined, keywords: string[]): boole
 
 function isCoverageAction(action: any): boolean {
   return (
+    action?.source?.kind === 'COVERAGE' ||
+    action?.governance?.safetyTier === 'REGULATED_COVERAGE' ||
     action.coverage?.hasCoverage === false ||
     normalizeUpperText(action.actionKey).startsWith('COVERAGE_GAP::') ||
     hasKeyword(action.category, COVERAGE_CATEGORY_KEYWORDS) ||
@@ -510,7 +441,11 @@ function isCostSavingsAction(action: any): boolean {
 
 function isReplaceRepairAction(action: any): boolean {
   return Boolean(
-    action?.replaceRepairAnalysis ||
+    action?.id?.startsWith('repair-replace:') ||
+      action?.lineageId?.startsWith('appliance-repair-replace:') ||
+      action?.lineageId?.startsWith('hvac-repair-replace:') ||
+      action?.primaryCta?.href?.includes('/replace-repair') ||
+      action?.decisionLineage?.specialistProfile?.profileId?.includes('REPAIR_REPLACE') ||
       (action?.systemType &&
         action?.age &&
         action?.expectedLife &&
@@ -518,17 +453,15 @@ function isReplaceRepairAction(action: any): boolean {
   );
 }
 
-function isProviderExecutionAction(action: any): boolean {
-  return Boolean(
-    action.serviceCategory ||
-      hasKeyword(action.title, ['BOOK', 'PROVIDER', 'QUOTE', 'SCHEDULE']) ||
-      hasKeyword(action.description ?? null, ['BOOK', 'PROVIDER', 'QUOTE', 'SCHEDULE'])
-  );
+export function isProviderExecutionAction(action: any): boolean {
+  return action?.presentation?.variant === 'ACCEPTED_WORK';
 }
 
-function isUrgentAction(action: any): boolean {
+export function isUrgentAction(action: any): boolean {
   return (
-    HIGH_RISK_LEVELS.has(normalizeUpperText(action.riskLevel ?? null)) ||
+    action?.priority === 'NOW' ||
+    action?.governance?.safetyTier === 'SAFETY_EMERGENCY' ||
+    normalizeUpperText(action.riskLevel ?? null) === 'CRITICAL' ||
     action.overdue === true
   );
 }
@@ -541,19 +474,22 @@ function isUrgentIncident(item: IncidentDTO): boolean {
   return isActiveIncident(item) && (item.severity === 'CRITICAL' || item.severity === 'WARNING');
 }
 
-function toResolutionAction(action: RankedHomeActionDTO) {
-  const priorityRisk = action.priority === 'NOW' ? 'CRITICAL' : action.priority === 'SOON' ? 'HIGH' : action.priority === 'PLAN' ? 'MEDIUM' : 'LOW';
+export function toResolutionAction(action: RankedHomeActionDTO) {
+  const priorityRisk = action.priority === 'NOW' || action.governance.safetyTier === 'SAFETY_EMERGENCY'
+    ? 'CRITICAL'
+    : action.priority === 'SOON'
+      ? 'MEDIUM'
+      : 'LOW';
   const dueAt = action.timing?.dueAt ?? null;
   return {
     ...action,
     __kind: 'home-action' as const,
     actionKey: action.id,
     title: action.presentation?.headline ?? action.recommendedAction,
-    description: action.whyItMatters,
-    summary: action.whyItMatters,
+    description: action.presentation?.whyNow ?? action.presentation?.summary ?? action.whyItMatters,
+    summary: action.presentation?.summary ?? action.whyItMatters,
     category: action.source.kind,
     systemType: action.presentation?.subject?.label ?? action.source.kind,
-    serviceCategory: action.source.kind,
     riskLevel: priorityRisk,
     severity: priorityRisk,
     status: action.state,
@@ -605,17 +541,14 @@ function toCompletedIncidentItem(incident: IncidentDTO) {
   };
 }
 
-type ReplaceRepairResolution = {
-  id: string;
-  inventoryItemId: string;
-  verdict?: 'REPLACE_NOW' | 'REPLACE_SOON' | 'REPAIR_AND_MONITOR' | 'REPAIR_ONLY';
-  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
-  summary?: string | null;
-  computedAt?: string;
-  inventoryItem?: { id: string; name?: string | null } | null;
-};
-
 function resolveInventoryItemId(item: any): string | null {
+  if (
+    item?.presentation?.subject?.kind === 'INVENTORY_ITEM' &&
+    typeof item.presentation.subject.id === 'string' &&
+    item.presentation.subject.id.length > 0
+  ) {
+    return item.presentation.subject.id;
+  }
   if (typeof item?.inventoryItemId === 'string' && item.inventoryItemId.length > 0) {
     return item.inventoryItemId;
   }
@@ -623,21 +556,6 @@ function resolveInventoryItemId(item: any): string | null {
     return item.relatedEntity.id;
   }
   return null;
-}
-
-function verdictLabel(verdict?: ReplaceRepairResolution['verdict']): string {
-  switch (verdict) {
-    case 'REPLACE_NOW':
-      return 'Replace now';
-    case 'REPLACE_SOON':
-      return 'Plan replacement';
-    case 'REPAIR_AND_MONITOR':
-      return 'Repair and monitor';
-    case 'REPAIR_ONLY':
-      return 'Repair only';
-    default:
-      return 'Analysis ready';
-  }
 }
 
 const JOURNEY_META: Record<
@@ -813,6 +731,7 @@ function TriageActionCard({
   onViewProvider,
   onOpenHistoryItem,
   onSwitchToActive,
+  onOpenCanonicalAction,
 }: {
   item: any;
   groupId: string;
@@ -826,6 +745,7 @@ function TriageActionCard({
   onViewProvider: (item: any) => void;
   onOpenHistoryItem: (item: any) => void;
   onSwitchToActive: () => void;
+  onOpenCanonicalAction: (item: ResolutionHomeAction, secondary?: boolean) => void;
 }) {
   const journey = detectJourneyType(item, groupId);
   const meta = JOURNEY_META[journey];
@@ -840,8 +760,8 @@ function TriageActionCard({
   const confidenceScore =
     confidence.score ?? (confidence.level === 'high' ? 100 : confidence.level === 'medium' ? 80 : 55);
   const assetTitle = resolveAssetTitle(item);
-  const issueHeadline = resolveIssueHeadline(item, journey, assetTitle);
-  const cardSubhead = getCardSubhead(item, journey);
+  const issueHeadline = resolveIssueHeadline(item);
+  const cardSubhead = getCardSubhead(item);
   const issueDescription = resolveIssueDescription(item, issueHeadline);
   const locationSubtitle = toDisplayLabel(item?.location || item?.room || item?.area || item?.level || '');
   const subtitleDisplay = toDisplayLabel(subtitle);
@@ -869,6 +789,7 @@ function TriageActionCard({
     ...(Array.isArray(item.signalSources)
       ? item.signalSources.map((source: any) => source?.sourceSystem || source?.summary)
       : []),
+    ...(Array.isArray(item.evidence) ? item.evidence.map((evidence: any) => evidence?.source) : []),
     item.__kind === 'incident' ? item.sourceType : null,
   ]
     .map((value) => humanizeSourceLabel(value))
@@ -876,6 +797,7 @@ function TriageActionCard({
     .slice(0, 2);
 
   const handlePrimary = () => {
+    if (isCanonicalHomeAction(item)) return onOpenCanonicalAction(item);
     if (journey === 'repair-vs-replace') return onReplaceRepair(item);
     if (journey === 'coverage') return onAddCoverage();
     if (journey === 'cost-savings') return onOpenSavings();
@@ -884,19 +806,21 @@ function TriageActionCard({
     if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenIncident(item);
     if (journey === 'urgent-issue') return onOpenService();
     if (journey === 'preventive') return onOpenService();
-    if (!isCanonicalHomeAction(item)) return;
-    onComplete();
   };
 
   const handleSecondary = () => {
+    if (isCanonicalHomeAction(item)) {
+      if (item.secondaryCtas?.[0]) return onOpenCanonicalAction(item, true);
+      if (item.feedbackControls.includes('COMPLETE')) return onComplete();
+      return;
+    }
     if (journey === 'completed') return onSwitchToActive();
     if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenService();
     if (journey === 'provider-execution') return onViewProvider(item);
-    if (!isCanonicalHomeAction(item)) return;
-    onComplete();
   };
 
   const handleDetails = () => {
+    if (isCanonicalHomeAction(item)) return onOpenCanonicalAction(item);
     if (journey === 'completed') return onOpenHistoryItem(item);
     if (journey === 'provider-execution') return onOpenBooking(item);
     if (journey === 'repair-vs-replace') return onReplaceRepair(item);
@@ -938,6 +862,11 @@ function TriageActionCard({
 
   const ApplianceIcon = resolveApplianceIcon(item);
   const isUrgentJourney = journey === 'urgent-issue' || journey === 'repair-vs-replace';
+  const canonicalAction = isCanonicalHomeAction(item) ? item : null;
+  const primaryCtaLabel = canonicalAction?.primaryCta?.label || meta.primaryCta;
+  const secondaryCtaLabel = canonicalAction?.secondaryCtas?.[0]?.label ||
+    (canonicalAction?.feedbackControls.includes('COMPLETE') ? 'Mark complete' : null);
+  const detailLabel = canonicalAction?.presentation?.detailLabel || 'View details';
 
   return (
     <article
@@ -1003,7 +932,7 @@ function TriageActionCard({
             <h4 className="text-[18px] font-semibold leading-[1.3] tracking-normal text-slate-950">
               {issueHeadline}
             </h4>
-            <p className="mt-0.5 text-xs font-medium text-slate-500">{cardSubhead}</p>
+            {cardSubhead ? <p className="mt-0.5 text-xs font-medium text-slate-500">{cardSubhead}</p> : null}
             <p className="mt-2 max-w-xl text-[15px] leading-6 text-slate-600 font-normal">
               {issueDescription}
             </p>
@@ -1065,17 +994,6 @@ function TriageActionCard({
             />
           )}
 
-          {journey === 'repair-vs-replace' && item.replaceRepairAnalysis && (
-            <div className="rounded-xl border border-orange-200/70 bg-orange-50/60 p-3">
-              <p className="text-[11px] font-medium text-orange-700">Latest replace vs repair signal</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">{verdictLabel(item.replaceRepairAnalysis.verdict)}</p>
-              <p className="mt-1 text-xs text-slate-600">
-                {item.replaceRepairAnalysis.summary ||
-                  'Prior analysis exists for this asset. Open to view the full reasoning and recommended next step.'}
-              </p>
-            </div>
-          )}
-
           <div className="flex flex-wrap gap-2">
             {(sourceLabels.length > 0 ? sourceLabels : ['Home signals']).map((source) => (
               <SourceChip key={source} source={source} className="bg-slate-100/80 text-slate-500" />
@@ -1091,22 +1009,24 @@ function TriageActionCard({
               onClick={handlePrimary}
               className={cn('h-11 w-full rounded-[10px] text-base font-semibold text-white', meta.primaryButtonCls)}
             >
-              {meta.primaryCta}
+              {primaryCtaLabel}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
 
             {/* Tier 2: Secondary outlined button */}
-            <Button
-              variant="outline"
-              onClick={handleSecondary}
-              className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <span className="inline-flex items-center gap-2">
-                <User className="h-4 w-4 text-slate-500" />
-                {meta.secondaryCta}
-              </span>
-              <ChevronRight className="h-4 w-4 text-slate-400" />
-            </Button>
+            {(secondaryCtaLabel || !canonicalAction) ? (
+              <Button
+                variant="outline"
+                onClick={handleSecondary}
+                className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <User className="h-4 w-4 text-slate-500" />
+                  {secondaryCtaLabel || meta.secondaryCta}
+                </span>
+                <ChevronRight className="h-4 w-4 text-slate-400" />
+              </Button>
+            ) : null}
           </div>
 
           {/* Tier 3: Inline text links */}
@@ -1130,7 +1050,7 @@ function TriageActionCard({
               onClick={handleDetails}
               className="ml-auto text-xs text-gray-400 transition-colors hover:text-gray-600"
             >
-              View details →
+              {detailLabel} →
             </button>
           </div>
         </div>
@@ -1255,23 +1175,6 @@ export default function ResolutionCenterClient() {
   });
 
   const {
-    data: resolutionsData,
-    isLoading: resolutionsLoading,
-    isError: resolutionsError,
-    error: resolutionsErrorObj,
-    refetch: refetchResolutions,
-    dataUpdatedAt: resolutionsUpdatedAt,
-  } = useQuery({
-    queryKey: ['replace-repair-resolutions', selectedPropertyId],
-    queryFn: () =>
-      selectedPropertyId
-        ? api.getPropertyResolutions(selectedPropertyId)
-        : Promise.resolve({ success: true, data: [] } as any),
-    enabled: !!selectedPropertyId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const {
     data: bookingsData,
     isLoading: bookingsLoading,
     isError: bookingsError,
@@ -1289,7 +1192,7 @@ export default function ResolutionCenterClient() {
             sortOrder: 'desc',
           })
         : Promise.resolve({ success: true, data: { bookings: [], pagination: {} } } as any),
-    enabled: !!selectedPropertyId,
+    enabled: !!selectedPropertyId && shouldLoadCompletedIncidents,
     staleTime: 3 * 60 * 1000,
   });
 
@@ -1313,21 +1216,20 @@ export default function ResolutionCenterClient() {
   const isLoading =
     propertiesLoading ||
     homeActionsLoading ||
-    resolutionsLoading ||
-    bookingsLoading ||
+    (shouldLoadCompletedIncidents && bookingsLoading) ||
     (shouldLoadCompletedIncidents && completedIncidentsLoading);
 
   const hasLoadError =
     homeActionsError ||
-    resolutionsError ||
-    bookingsError ||
+    (shouldLoadCompletedIncidents && bookingsError) ||
     (shouldLoadCompletedIncidents && completedIncidentsError);
 
   const loadErrorMessage =
     (homeActionsErrorObj as Error | undefined)?.message ||
-    (resolutionsErrorObj as Error | undefined)?.message ||
-    (bookingsErrorObj as Error | undefined)?.message ||
-    (completedIncidentsErrorObj as Error | undefined)?.message ||
+    (shouldLoadCompletedIncidents ? (bookingsErrorObj as Error | undefined)?.message : undefined) ||
+    (shouldLoadCompletedIncidents
+      ? (completedIncidentsErrorObj as Error | undefined)?.message
+      : undefined) ||
     'Unable to load one or more Resolution Center data sources.';
 
   // Build triage groups, then apply URL filter
@@ -1342,43 +1244,7 @@ export default function ResolutionCenterClient() {
         ? bookingsData.data?.bookings ?? []
         : [];
     const completedIncidents: IncidentDTO[] = (completedIncidentsData as any)?.items || [];
-    const analyses: ReplaceRepairResolution[] = (resolutionsData as any)?.data || [];
-    const analysisByInventoryId = new Map<string, ReplaceRepairResolution>();
-    analyses.forEach((analysis) => {
-      if (analysis.inventoryItemId && !analysisByInventoryId.has(analysis.inventoryItemId)) {
-        analysisByInventoryId.set(analysis.inventoryItemId, analysis);
-      }
-    });
-
-    const enrichWithReplaceRepair = (action: any) => {
-      const inventoryItemId = resolveInventoryItemId(action);
-      const byInventory = inventoryItemId ? analysisByInventoryId.get(inventoryItemId) : null;
-      const byName = analyses.find((analysis) => {
-        const lhs = (analysis.inventoryItem?.name || '').trim().toLowerCase();
-        const rhs = (action.title || action.systemType || '').trim().toLowerCase();
-        return lhs.length > 0 && rhs.length > 0 && lhs === rhs;
-      });
-      return {
-        ...action,
-        replaceRepairAnalysis: byInventory || byName || null,
-      };
-    };
-
-    // Safety net: the server feed already collapses cross-producer duplicates,
-    // but if two actions still arrive stating the identical concern to the
-    // homeowner (same headline), show one — a differently-labelled system on
-    // each is exactly how the cross-producer duplicate reads. The list is
-    // already server-ranked, so the first occurrence is the keeper.
-    const seenConcernHeadlines = new Set<string>();
-    const activeActions = actions
-      .map(enrichWithReplaceRepair)
-      .filter((action) => {
-        const headline = String(action?.title ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-        if (headline.length <= 15) return true;
-        if (seenConcernHeadlines.has(headline)) return false;
-        seenConcernHeadlines.add(headline);
-        return true;
-      });
+    const activeActions = actions;
 
     const claimedActionKeys = new Set<string>();
     const takeActions = (predicate: (action: any) => boolean) => {
@@ -1440,9 +1306,6 @@ export default function ResolutionCenterClient() {
     }
 
     const providerExecutionItems = [
-      ...bookings
-        .filter((booking) => ACTIVE_BOOKING_STATUSES.has(booking.status))
-        .map(toProviderExecutionBookingItem),
       ...takeActions((action) => isProviderExecutionAction(action)),
     ];
     if (providerExecutionItems.length > 0) {
@@ -1492,7 +1355,6 @@ export default function ResolutionCenterClient() {
     homeActionData,
     completedIncidentsData,
     bookingsData,
-    resolutionsData,
     selectedPropertyId,
   ]);
 
@@ -1564,11 +1426,10 @@ export default function ResolutionCenterClient() {
     () =>
       Math.max(
         homeActionsUpdatedAt || 0,
-        resolutionsUpdatedAt || 0,
         bookingsUpdatedAt || 0,
         completedIncidentsUpdatedAt || 0
       ),
-    [homeActionsUpdatedAt, resolutionsUpdatedAt, bookingsUpdatedAt, completedIncidentsUpdatedAt]
+    [homeActionsUpdatedAt, bookingsUpdatedAt, completedIncidentsUpdatedAt]
   );
 
   const latestUpdateLabel = useMemo(
@@ -1580,9 +1441,8 @@ export default function ResolutionCenterClient() {
 
   const handleRunFullScan = () => {
     void refetchHomeActions();
-    void refetchResolutions();
-    void refetchBookings();
     if (shouldLoadCompletedIncidents) {
+      void refetchBookings();
       void refetchCompletedIncidents();
     }
     toast({ title: 'Scan started', description: 'Refreshing home signals now.' });
@@ -1599,6 +1459,17 @@ export default function ResolutionCenterClient() {
     setIsServiceSheetOpen(true);
   };
 
+  const handleOpenCanonicalAction = (item: ResolutionHomeAction, secondary = false) => {
+    const cta = secondary ? item.secondaryCtas?.[0] : item.primaryCta;
+    const href = cta?.href || item.primaryCta?.href;
+    if (!href) return;
+    if (/^https?:\/\//i.test(href)) {
+      window.location.assign(href);
+      return;
+    }
+    router.push(href);
+  };
+
   const handleOpenIncident = (item: any) => {
     if (!selectedPropertyId || !item?.id) return;
     router.push(`/dashboard/properties/${selectedPropertyId}/incidents/${encodeURIComponent(item.id)}`);
@@ -1606,10 +1477,7 @@ export default function ResolutionCenterClient() {
 
   const handleReplaceRepair = (item: any) => {
     if (!selectedPropertyId) return;
-    const inventoryItemId =
-      resolveInventoryItemId(item) ||
-      item?.replaceRepairAnalysis?.inventoryItemId ||
-      null;
+    const inventoryItemId = resolveInventoryItemId(item);
 
     if (inventoryItemId) {
       router.push(
@@ -1753,7 +1621,7 @@ export default function ResolutionCenterClient() {
       if (!response.success) throw new Error(response.message || 'Unable to complete this action.');
       track('task_completed', {
         priority: activeItem.riskLevel || 'MEDIUM',
-        category: String(activeItem.category || activeItem.systemType || activeItem.serviceCategory || 'GENERAL'),
+        category: String(activeItem.category || activeItem.systemType || activeItem.source?.kind || 'GENERAL'),
         propertyId: selectedPropertyId,
         journeyType: detectJourneyType(activeItem),
       });
@@ -1836,9 +1704,8 @@ export default function ResolutionCenterClient() {
                 className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
                 onClick={() => {
                   void refetchHomeActions();
-                  void refetchResolutions();
-                  void refetchBookings();
                   if (shouldLoadCompletedIncidents) {
+                    void refetchBookings();
                     void refetchCompletedIncidents();
                   }
                 }}
@@ -1865,6 +1732,7 @@ export default function ResolutionCenterClient() {
                   onViewProvider={handleViewProvider}
                   onOpenHistoryItem={handleOpenHistoryItem}
                   onSwitchToActive={handleSwitchToActiveFilter}
+                  onOpenCanonicalAction={handleOpenCanonicalAction}
                 />
               ))}
             </div>

@@ -377,6 +377,11 @@ export function homeActionCanonicalKey(action: HomeAction): string {
     const variant = action.presentation?.variant;
     const eligibleVariant = !variant || ASSET_SERVICE_KEY_ELIGIBLE_VARIANTS.has(variant);
     if (eligibleVariant) {
+      const inventorySubject = action.presentation?.subject?.kind === 'INVENTORY_ITEM'
+        ? action.presentation.subject.id.trim()
+        : null;
+      if (inventorySubject) return `asset-service-item:${inventorySubject}`;
+
       const assetLabel = resolveCanonicalAssetLabel(
         action.presentation?.subject?.label,
         action.evidence?.[0]?.label,

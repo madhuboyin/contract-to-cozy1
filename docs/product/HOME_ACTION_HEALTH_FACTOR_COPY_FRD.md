@@ -2,7 +2,7 @@
 
 Version: 1.6
 Date: 2026-08-31
-Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped (`1e651fd7`) · §13 cross-producer replacement duplication shipped (`b6414386`) · §14 seasonal aggregate double-count shipped (`feeeec22`) · §15 "Manage work item" drawer redesign shipped · §16 cross-producer duplication for non-inventory assets shipped · Phase 3 not scheduled
+Status: Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card verbiage shipped (`1e651fd7`) · §13 cross-producer replacement duplication shipped (`b6414386`) · §14 seasonal aggregate double-count shipped (`feeeec22`) · §15 "Manage work item" drawer redesign shipped · §16 cross-producer duplication for non-inventory assets shipped · §17 Resolution Center canonical projection correction implemented · Phase 3 not scheduled
 Owner: Product + Engineering
 Related: `HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md` (§8.1 Canonical Attention Authority, row "Property health insight"), commits `b9efddb2` / `25dd4c45` / `56bae882` (card-humanization pass)
 
@@ -643,7 +643,7 @@ map hit vs. `humanizeIdentifier`), so no text heuristic could see they were one 
 | **`resolveCanonicalAssetLabel(...candidates)`** — resolves any of a set of strings (a stored identifier, a raw enum, or an already-humanized label, any casing) to the one canonical display label when it names a first-class tracked asset (HVAC / roof / water heater / smoke & CO detectors). Matches both a known identifier key *and* a known display value, so "Safety Smoke CO Detectors" and "Smoke & CO Detector Check" both resolve. | `productFramework/homeAssetDisplay.ts` |
 | **`asset-service:{label}` canonical key.** After `coverage-item:` / `replacement-item:`, `homeActionCanonicalKey` derives a canonical asset label from the action's subject label / first evidence label / `source.entityId` / signal, and — for non-coverage, non-recall actions with a lifecycle/health/generic/fact-review variant — returns `asset-service:{slug}`. Two producer-agnostic service actions about the same known non-inventory asset collapse; the higher `homeActionScore` wins. | `homeActions.service.ts` |
 | **Earliest-window on merge.** `rankAndDeduplicateHomeActions` now tracks the soonest actionable timing (`dueAt ?? windowEnd ?? windowStart`) across every merged action and applies it to the surviving card — so the collapsed detector card shows "In 16 days", not the winner's "In 29 days". | `homeActions.service.ts` |
-| **Client safety net.** `ResolutionCenterClient` drops any action whose homeowner-facing headline (> 15 chars) exactly repeats one already shown — the list is server-ranked, so the first wins. Belt-and-suspenders for anything a producer variant keeps the server key from catching. | `dashboard/resolution-center/ResolutionCenterClient.tsx` |
+| **Canonical client projection.** `ResolutionCenterClient` renders the canonical presentation subject, headline, reason, evidence, and CTA. It does not deduplicate by title or author appliance diagnoses from keywords; duplicate identity remains a backend responsibility. | `dashboard/resolution-center/ResolutionCenterClient.tsx` |
 | Tests | `phase2HomeActions.test.js` (+2: cross-producer collapse + earliest window; and negative — different assets / a coverage action never merge). | — |
 
 ### 16.4 Future work (not in this change)
@@ -659,6 +659,38 @@ map hit vs. `humanizeIdentifier`), so no text heuristic could see they were one 
   A SAFETY asset with no recorded install/replacement date should prompt the homeowner to
   confirm it — not assert it is overdue. (Touches the risk engine + `RiskAssessment.service`
   + `homeStatusBoard` — its own scoped change.)
-- **`asset-service:` for more asset classes.** The key only fires for the ~5 assets in
-  `ASSET_DISPLAY_LABELS`; extending it needs the asset-label map to grow (or the
-  `entityRef` contract to become the source of truth).
+- **`asset-service:` for more asset classes.** The map now includes common appliances
+  (refrigerator, dishwasher, washer, dryer, oven/range) in addition to the original
+  systems. Unmapped asset classes still need either a registry entry or a durable
+  inventory-item subject; title-only identity is not an acceptable fallback.
+
+---
+
+## 17. Resolution Center canonical projection and identity integrity
+
+Status: implemented
+
+The Resolution Center previously rebuilt canonical Home Actions into a second keyword-driven
+view model. That layer could label a card from one field, author a failure diagnosis from
+another, join a raw `ReplaceRepairAnalysis` by name, classify every `SOON` action as urgent,
+and classify every remaining action as provider execution. It also applied exact-headline
+deduplication in the browser, which both missed semantic duplicates and risked hiding distinct
+obligations with common copy.
+
+The corrected contract is:
+
+- render `presentation.subject`, `presentation.headline`, `presentation.whyNow`/`summary`,
+  evidence sources, and canonical CTAs without keyword-authored diagnoses;
+- do not independently load or name-match replace/repair analyses; the canonical Home Action
+  owns that decision presentation and entity identity;
+- classify urgency from canonical `NOW`, safety-emergency governance, or an actual overdue
+  date rather than translating every `SOON` action into high risk;
+- classify provider execution from the canonical `ACCEPTED_WORK` variant, not from a truthy
+  source-kind alias;
+- deduplicate inventory-backed service actions by `presentation.subject.id`, and use the
+  expanded asset registry only when no inventory identity exists; and
+- when an orchestration action's named appliance conflicts with its typed system, surface a
+  neutral correction action and block provider scheduling until the Home Record is corrected.
+
+Focused regression coverage lives in `phase2HomeActions.test.js` and
+`ResolutionCenterProjection.test.ts`.

@@ -281,6 +281,50 @@ test('the asset-service canonical key never merges two different assets or a cov
   assert.equal(rankAndDeduplicateHomeActions([detector, detectorCoverage]).length, 2);
 });
 
+test('inventory subject identity collapses cross-producer appliance service actions without title matching', () => {
+  const applianceAction = (id, label, signal) => {
+    const action = actionFixture(id, {
+      source: { kind: 'SYSTEM', entityId: id, version: 'v1' },
+      signal,
+    });
+    action.presentation = {
+      variant: 'GENERIC_ACTION', eyebrow: null, headline: signal, summary: 'Supported by the Home Record.', whyNow: null,
+      keyFacts: [], factGroups: [], subject: { kind: 'INVENTORY_ITEM', id: 'washer-item-1', label }, detailLabel: 'Why this?', group: null,
+    };
+    return action;
+  };
+
+  const risk = applianceAction('risk:washer', 'Washer', 'Review washer condition');
+  const maintenance = applianceAction('maintenance:washing-machine', 'Washing Machine', 'Schedule laundry appliance service');
+  const result = rankAndDeduplicateHomeActions([risk, maintenance]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deduplication.canonicalKey, 'asset-service-item:washer-item-1');
+  assert.equal(result[0].deduplication.mergedActionIds.length, 1);
+});
+
+test('known appliance labels deduplicate without inventory identity while distinct appliances remain separate', () => {
+  const applianceAction = (id, label) => {
+    const action = actionFixture(id, {
+      source: { kind: 'SYSTEM', entityId: id, version: 'v1' },
+      signal: `Review ${label}`,
+    });
+    action.presentation = {
+      variant: 'GENERIC_ACTION', eyebrow: null, headline: `Review ${label}`, summary: 'Supported by the Home Record.', whyNow: null,
+      keyFacts: [], factGroups: [], subject: { kind: 'PROPERTY', id: 'property-1', label }, detailLabel: 'Why this?', group: null,
+    };
+    return action;
+  };
+
+  const washer = applianceAction('risk:washer', 'Washer');
+  const washingMachine = applianceAction('maintenance:washing-machine', 'Washing Machine');
+  const dishwasher = applianceAction('maintenance:dishwasher', 'Dishwasher');
+
+  const result = rankAndDeduplicateHomeActions([washer, washingMachine, dishwasher]);
+  assert.equal(result.length, 2);
+  assert.equal(result.find((action) => action.id !== dishwasher.id).deduplication.canonicalKey, 'asset-service:washer');
+});
+
 test('coverage reconciliation exposes exactly one current state per inventory item', () => {
   const correction = actionFixture('coverage-correction', {
     source: { kind: 'GUIDANCE', entityId: 'hvac-item', version: 'phase2-v1' },
@@ -447,6 +491,38 @@ test('service recommendations do not leak a conflicting coverage action', () => 
     'Routine furnace maintenance is recommended soon based on the information in your Home Record.',
   );
   assert.doesNotMatch(action.signal, /warranty/i);
+});
+
+test('conflicting appliance name and system type fail closed instead of mixing card identity and rationale', () => {
+  const action = adaptOrchestratedActionToHomeAction({
+    id: 'risk-conflicting-appliance',
+    actionKey: 'risk:conflicting-appliance',
+    source: 'RISK',
+    propertyId: 'property-1',
+    title: 'Washer',
+    description: null,
+    systemType: 'DISHWASHER',
+    category: 'APPLIANCE',
+    riskLevel: 'HIGH',
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    confidence: { score: 0.85, level: 'HIGH', explanation: [] },
+    priority: 80,
+    cta: { show: true, label: 'Schedule Service', reason: 'ACTION_REQUIRED' },
+    suppression: { suppressed: false, reasons: [] },
+    signalSources: [],
+    primarySignalSource: null,
+    overdue: false,
+    createdAt: new Date('2026-08-31T12:00:00.000Z'),
+  });
+
+  assert.equal(action.recommendedAction, 'Confirm asset details for Washer');
+  assert.match(action.whyItMatters, /names this item as Washer/);
+  assert.match(action.whyItMatters, /classifies its system as Dishwasher/);
+  assert.deepEqual(action.confidence.conflicted, [action.whyItMatters]);
+  assert.equal(action.primaryCta.kind, 'REVIEW');
+  assert.equal(action.primaryCta.label, 'Review asset details');
+  assert.equal(action.primaryCta.href, '/dashboard/properties/property-1/inventory');
+  assert.doesNotMatch(action.primaryCta.href, /providers/);
 });
 
 test('coverage recommendations preserve item context and open the item coverage review', () => {
