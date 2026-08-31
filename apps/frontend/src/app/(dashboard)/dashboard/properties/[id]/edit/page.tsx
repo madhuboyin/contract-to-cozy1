@@ -97,6 +97,9 @@ const MAJOR_APPLIANCE_OPTIONS = [
 ];
 const MAX_PROPERTY_PHOTO_SIZE_MB = 10;
 const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const SIDING_TYPE_OPTIONS = [
+  'Vinyl', 'Wood', 'Fiber cement', 'Brick', 'Stucco', 'Aluminum', 'Stone or masonry', 'Composite', 'Other',
+] as const;
 const RESPONSIBILITY_PRESETS = [
   { value: 'OWNER', label: 'I handle most maintenance', description: 'Use this for a home you primarily maintain yourself.', icon: HomeIcon },
   { value: 'ASSOCIATION', label: 'My association handles most', description: 'Common for condos, co-ops, and HOA-managed homes.', icon: Building2 },
@@ -342,7 +345,10 @@ const propertySchema = z.object({
   foundationType: z.union([z.nativeEnum(FoundationTypes), z.literal("")])
     .transform(val => val === "" ? null : val)
     .optional().nullable(),
-  
+  basementConfiguration: z.enum(["NONE", "UNFINISHED", "FINISHED", "UNKNOWN"]).optional(),
+  sidingType: z.string().max(100).optional().nullable(),
+  electricalPanelAge: z.coerce.number().int().min(0).optional().nullable(),
+
   hvacInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   waterHeaterInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   roofReplacementYear: z.coerce.number().int().min(1900).optional().nullable(),
@@ -366,6 +372,10 @@ const propertySchema = z.object({
   hasLawn: z.boolean().nullable().optional(),
   hasTreesOrShrubs: z.boolean().nullable().optional(),
   hasDriveway: z.boolean().nullable().optional(),
+  hasFence: z.boolean().nullable().optional(),
+  hasPoolOrSpa: z.boolean().nullable().optional(),
+  hasOutdoorFaucets: z.boolean().nullable().optional(),
+  lotSizeSqFt: z.coerce.number().positive().optional().nullable(),
   purchasePriceDollars: z.number().nonnegative().optional().nullable(),
   purchaseDate: z.string().optional().nullable(),
   lastAppraisedValueDollars: z.number().nonnegative().optional().nullable(),
@@ -437,7 +447,10 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         waterHeaterType: property.waterHeaterType || ("" as any),
         roofType: property.roofType || ("" as any),
         foundationType: property.foundationType || ("" as any),
-        
+        basementConfiguration: property.basementConfiguration ?? "UNKNOWN",
+        sidingType: property.sidingType ?? null,
+        electricalPanelAge: property.electricalPanelAge ?? null,
+
         hvacInstallYear: property.hvacInstallYear,
         waterHeaterInstallYear: property.waterHeaterInstallYear,
         roofReplacementYear: property.roofReplacementYear,
@@ -464,6 +477,10 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         hasLawn: property.exteriorProfile?.hasLawn ?? null,
         hasTreesOrShrubs: property.exteriorProfile?.hasTreesOrShrubs ?? null,
         hasDriveway: property.exteriorProfile?.hasDriveway ?? null,
+        hasFence: property.exteriorProfile?.hasFence ?? null,
+        hasPoolOrSpa: property.exteriorProfile?.hasPoolOrSpa ?? null,
+        hasOutdoorFaucets: property.exteriorProfile?.hasOutdoorFaucets ?? null,
+        lotSizeSqFt: property.exteriorProfile?.lotSizeSqFt ?? null,
         purchasePriceDollars:
           typeof property.purchasePriceCents === "number"
             ? property.purchasePriceCents / 100
@@ -754,12 +771,14 @@ export default function EditPropertyPage() {
       heatingType: "" as any, coolingType: "" as any, waterHeaterType: "" as any, 
       roofType: "" as any, hvacInstallYear: null, waterHeaterInstallYear: null,
       roofReplacementYear: null, foundationType: "" as any, hasDrainageIssues: null, hasSmokeDetectors: null,
+      basementConfiguration: "UNKNOWN", sidingType: null, electricalPanelAge: null,
       hasCoDetectors: null, hasSecuritySystem: null, hasFireExtinguisher: null,
       hasIrrigation: null,
       utilityProvider: null, gasProvider: null,
       inHistoricDistrict: null, historicRegistryStatus: null,
       inHurricaneZone: null, inFloodZone: null, inWildfireZone: null, isCoastal: null,
       hasPrivateOutdoorSpace: null, outdoorSpaceTypes: [], hasLawn: null, hasTreesOrShrubs: null, hasDriveway: null,
+      hasFence: null, hasPoolOrSpa: null, hasOutdoorFaucets: null, lotSizeSqFt: null,
       purchasePriceDollars: null,
       purchaseDate: null,
       lastAppraisedValueDollars: null,
@@ -831,8 +850,8 @@ export default function EditPropertyPage() {
         occupancyStatus: data.occupancyStatus,
         propertySize: data.propertySize ?? undefined,
         yearBuilt: data.yearBuilt ?? undefined,
-        bedrooms: data.bedrooms ?? undefined,
-        bathrooms: data.bathrooms ?? undefined,
+        bedrooms: data.bedrooms ?? null,
+        bathrooms: data.bathrooms ?? null,
         heatingType: data.heatingType ?? undefined,
         coolingType: data.coolingType ?? undefined,
         waterHeaterType: data.waterHeaterType ?? undefined,
@@ -841,7 +860,10 @@ export default function EditPropertyPage() {
         waterHeaterInstallYear: data.waterHeaterInstallYear ?? undefined,
         roofReplacementYear: data.roofReplacementYear ?? undefined,
         foundationType: data.foundationType ?? undefined,
-        
+        basementConfiguration: data.basementConfiguration ?? undefined,
+        sidingType: data.sidingType ?? undefined,
+        electricalPanelAge: data.electricalPanelAge ?? undefined,
+
         hasSmokeDetectors: data.hasSmokeDetectors ?? undefined,
         hasCoDetectors: data.hasCoDetectors ?? undefined,
         hasDrainageIssues: data.hasDrainageIssues ?? undefined,
@@ -859,9 +881,13 @@ export default function EditPropertyPage() {
         exteriorProfile: {
           hasPrivateOutdoorSpace: data.hasPrivateOutdoorSpace,
           outdoorSpaceTypes: normalizeOutdoorSpaceTypes(data.hasPrivateOutdoorSpace, data.outdoorSpaceTypes),
+          lotSizeSqFt: data.lotSizeSqFt ?? null,
           hasLawn: data.hasLawn,
           hasTreesOrShrubs: data.hasTreesOrShrubs,
           hasDriveway: data.hasDriveway,
+          hasFence: data.hasFence,
+          hasPoolOrSpa: data.hasPoolOrSpa,
+          hasOutdoorFaucets: data.hasOutdoorFaucets,
           hasIrrigation: data.hasIrrigation,
           hasDrainageIssues: data.hasDrainageIssues,
         },
@@ -2091,6 +2117,63 @@ export default function EditPropertyPage() {
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={form.control}
+                      name="basementConfiguration"
+                      render={({ field }) => (
+                        <FormItem className="w-full">
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Basement</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? "UNKNOWN"}>
+                            <FormControl>
+                              <SelectTrigger id="field-basementConfiguration" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="NONE">No basement</SelectItem>
+                              <SelectItem value="UNFINISHED">Unfinished basement</SelectItem>
+                              <SelectItem value="FINISHED">Finished basement</SelectItem>
+                              <SelectItem value="UNKNOWN">Not sure</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="sidingType"
+                      render={({ field }) => (
+                        <FormItem className="w-full">
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Siding / exterior</FormLabel>
+                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger id="field-sidingType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {SIDING_TYPE_OPTIONS.map((option) => (
+                                <SelectItem key={option} value={option}>{option}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="electricalPanelAge"
+                      render={({ field }) => (
+                        <FormItem className="w-full">
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Electrical panel age</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input id="field-electricalPanelAge" className="h-9 pr-12 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 15" type="number" min="0" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-slate-500">years</span>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                 </div>
 
@@ -2377,7 +2460,7 @@ export default function EditPropertyPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Bedrooms</FormLabel>
-                          <FormControl><Input id="field-bedrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                          <FormControl><Input id="field-bedrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="e.g., 3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2388,7 +2471,7 @@ export default function EditPropertyPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Bathrooms</FormLabel>
-                          <FormControl><Input id="field-bathrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                          <FormControl><Input id="field-bathrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2600,6 +2683,9 @@ export default function EditPropertyPage() {
                       ['hasLawn', 'Lawn', 'Any grass you help maintain'],
                       ['hasTreesOrShrubs', 'Trees or shrubs', 'On areas you use or maintain'],
                       ['hasDriveway', 'Driveway', 'Private or shared vehicle access'],
+                      ['hasFence', 'Fence', 'Any fencing you help maintain'],
+                      ['hasPoolOrSpa', 'Pool or spa', 'In-ground or above-ground'],
+                      ['hasOutdoorFaucets', 'Outdoor faucets', 'Hose bibs or spigots'],
                     ] as const).map(([name, fieldLabel, description]) => (
                       <FormField
                         key={name}
@@ -2645,6 +2731,22 @@ export default function EditPropertyPage() {
                       />
                     ))}
                   </div>
+                  <FormField
+                    control={form.control}
+                    name="lotSizeSqFt"
+                    render={({ field }) => (
+                      <FormItem className="mt-3 sm:max-w-xs">
+                        <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Lot size</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input id="field-lotSizeSqFt" className="h-9 pr-11 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 6000" type="number" min="0" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-slate-500">sq ft</span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </section>
 
                 {form.watch('hasPrivateOutdoorSpace') === true && (

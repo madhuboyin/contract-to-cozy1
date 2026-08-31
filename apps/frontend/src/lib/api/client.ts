@@ -1692,8 +1692,8 @@ class APIClient {
       yearBuilt?: number;
       
       // Layer 2 - Advanced Fields (Migrated and New)
-      bedrooms?: number;
-      bathrooms?: number;
+      bedrooms?: number | null;
+      bathrooms?: number | null;
       heatingType?: string;
       coolingType?: string;
       waterHeaterType?: string;
@@ -1703,8 +1703,8 @@ class APIClient {
       roofReplacementYear?: number;
       foundationType?: FoundationType;
       basementConfiguration?: BasementConfiguration;
-      sidingType?: string;
-      electricalPanelAge?: number;
+      sidingType?: string | null;
+      electricalPanelAge?: number | null;
       lotSize?: number;
       hasIrrigation?: boolean;
       hasDrainageIssues?: boolean;

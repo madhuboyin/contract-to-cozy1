@@ -232,8 +232,8 @@ export const createPropertySchema = z.object({
   yearBuilt: z.number().int().min(1700).optional(),
 
   // Layer 2 - Advanced Fields (Migrated and New)
-  bedrooms: z.number().int().positive().optional(),
-  bathrooms: z.number().positive().optional(),
+  bedrooms: z.number().int().min(0).nullable().optional(),
+  bathrooms: z.number().min(0).nullable().optional(),
   heatingType: HeatingTypeEnum.optional(),
   coolingType: CoolingTypeEnum.optional(),
   waterHeaterType: WaterHeaterTypeEnum.optional(),
@@ -243,8 +243,8 @@ export const createPropertySchema = z.object({
   roofReplacementYear: z.number().int().min(1700).optional(),
   foundationType: FoundationTypeEnum.optional(),
   basementConfiguration: BasementConfigurationEnum.optional(),
-  sidingType: z.string().max(100).optional(),
-  electricalPanelAge: z.number().int().positive().optional(),
+  sidingType: z.string().max(100).nullable().optional(),
+  electricalPanelAge: z.number().int().positive().nullable().optional(),
   lotSize: z.number().positive().optional(),
   hasIrrigation: z.boolean().optional(),
   hasDrainageIssues: z.boolean().optional(),
