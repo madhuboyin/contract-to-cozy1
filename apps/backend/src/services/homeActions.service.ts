@@ -62,7 +62,7 @@ import { recordReconciliationFailure } from '../modules/homeOperations/infrastru
 import { hasAcceptedWorkItemForProperty } from '../modules/homeOperations/application/hasAcceptedWorkItem.usecase';
 import { snoozeWorkItem } from '../modules/homeOperations/application/snoozeWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
-import { markWorkItemUnderstood, recordWorkEvent } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { markWorkItemUnderstood, normalizeStaleWorkItemTitles, recordWorkEvent } from '../modules/homeOperations/infrastructure/workItemRepository';
 import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState, Prisma } from '@prisma/client';
 import { SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER } from './intelligence/homeActionAdapterOwnership';
 import {
@@ -1080,6 +1080,14 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   // active task cannot notify or appear on Maintenance while disappearing
   // from Home, Fix, and Cozy's canonical action/work projection.
   await reconcileActiveMaintenanceTaskWork(propertyId);
+  // Backlog self-heal: rewrite any work-item title persisted before the write
+  // path was guarded (see workItemRepository.presentWorkItemTitle). One pass
+  // per property converges it; every reader — this feed and the separate
+  // /home-operations listWorkItems endpoint — then sees a homeowner-facing label.
+  await normalizeStaleWorkItemTitles(propertyId).catch((error) => {
+    logger.warn({ err: error, propertyId }, 'Work item title normalization failed closed');
+    return 0;
+  });
   const environmentReportPromise = getEnvironmentReportForProperty(propertyId, userId).catch((error) => {
     logger.warn({ err: error, propertyId, userId }, 'Unified Home environment insight evaluation failed closed');
     return null;

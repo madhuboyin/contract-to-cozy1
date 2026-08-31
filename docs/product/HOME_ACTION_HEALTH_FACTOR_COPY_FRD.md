@@ -469,6 +469,42 @@ on the dashboard card too.
 "Decisions to make" card at all (the Resolution Center already routes them to
 Home Operations via `isProviderExecutionAction`) — separate scope.
 
+### 12.6 Normalize the persisted work-item title at one boundary (shipped)
+
+**Problem.** §12.5 fixed the Home feed but `/home-operations` still showed the
+raw enums — it renders from a *different* endpoint (`listWorkItems`) reading
+`OperationalWorkItem.title` directly. Patching each read surface
+(`listWorkItems.usecase`, `getWorkItem.usecase`, the Manage drawer, notification
+copy…) is whack-a-mole: the bad string is in the **database**, written by ~15
+source adapters and read everywhere.
+
+**Root cause.** `OperationalWorkItem.title` is a denormalized display string with
+no normalization boundary. `proposeWorkItemFromHomeAction` wrote `action.signal`
+(a producer-internal string, never humanized — `ensureHomeActionPresentation`
+only touches `presentation.*`), and other adapters concatenate enums
+(`inspectionFinding.adapter`: `` `${finding.homeSystem}: …` ``). Every producer
+funnels through `workItemRepository`'s `createWorkItem` / `refreshWorkItemPresentation`,
+but neither normalized.
+
+**Fix — one write boundary + one backlog heal.**
+
+| Change | File |
+|---|---|
+| `presentWorkItemTitle()` runs `humanizeHomeActionLabel` on `title` inside **both** `createWorkItem` and `refreshWorkItemPresentation` — the single choke point every source adapter and direct caller passes through. New/refreshed rows are clean regardless of producer; no read site needs its own `humanize()`. | `homeOperations/infrastructure/workItemRepository.ts` |
+| `proposeWorkItemFromHomeAction` prefers `action.presentation?.headline` over raw `action.signal` for the title — so when producers author real task-phrased presentations (§12.4) the work item inherits them; the repository normalization is the last-resort net. | `homeOperations/adapters/homeActionWorkItem.adapter.ts` |
+| `normalizeStaleWorkItemTitles(propertyId)` — backlog self-heal: rewrites non-`CLOSED` rows whose stored title differs from its normalized form (a meaning-preserving relabel of the same obligation, so deliberately exempt from `canRefreshPresentationFromSource`). Idempotent; converges after one pass. Called from `getHomeActionFeed` beside `reconcileActiveMaintenanceTaskWork`, so every reader — this feed and the `listWorkItems` endpoint — sees healed rows. | `workItemRepository.ts`, `services/homeActions.service.ts` |
+| Tests: `workItemTitleNormalization.test.js` (new) — create/refresh normalize; heal is state-scoped and idempotent. | — |
+
+`CLOSED` rows are left as a historical record. The `getHomeActionFeed` heal
+means `/home-operations`'s `listWorkItems` call may lag by one refetch on the
+first visit after deploy, then is permanently clean — no per-screen patch.
+
+**Still open.** `homeownerReason` showing `"Add Home Warranty"` is a *different*
+bug — a CTA label (`riskCalculator.util.ts` `actionCta`) leaking into
+`whyItMatters` at the risk producer. `humanizeHomeActionLabel` (prose-safe) does
+not and should not touch it. Needs a source fix. Tracked with §12.4 (risk
+producers authoring real presentations).
+
 ---
 
 ## 13. Cross-producer replacement duplication ("What needs attention")

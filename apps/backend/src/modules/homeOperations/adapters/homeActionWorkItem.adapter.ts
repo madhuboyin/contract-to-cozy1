@@ -298,7 +298,14 @@ export function proposeWorkItemFromHomeAction(action: HomeAction, propertyId: st
     subject,
     obligationType,
     occurrence: { obligationSlug },
-    title: action.signal,
+    // The presentation headline is the curated homeowner string (it has already
+    // been through ensureHomeActionPresentation by the time linkWorkItemsAndReconcile
+    // calls this). `signal` is a producer-internal string that can still be a raw
+    // enum / risk-level prefix. Prefer the headline; the repository's
+    // presentWorkItemTitle normalizes whichever one lands here as a last resort.
+    // When producers author real task-phrased presentations (FRD S12.4) the work
+    // item inherits them for free.
+    title: action.presentation?.headline?.trim() || action.signal,
     homeownerReason: action.whyItMatters,
     expectedOutcome: action.expectedOutcome,
     priority: action.priority,

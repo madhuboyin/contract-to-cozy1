@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 import type { Prisma } from '@prisma/client';
+import { humanizeHomeActionLabel } from '../../../productFramework/homeAssetDisplay';
 
 /**
  * Home Intelligence Functional Completeness FRD HI-ATT-010: lets the
@@ -80,6 +81,24 @@ export interface RecordEventInput {
   occurredAt?: Date;
 }
 
+/**
+ * The single normalization boundary for the persisted homeowner-facing title.
+ *
+ * `OperationalWorkItem.title` is a denormalized display string written by ~15
+ * source adapters (via `resolveAndUpsertWorkItem` and a few direct callers) and
+ * read by every work-item surface — the Home feed, `/home-operations`, the
+ * Manage drawer, notifications. Several adapters pass a producer-internal string
+ * through unchanged (`proposeWorkItemFromHomeAction` used `action.signal`,
+ * `inspectionFinding.adapter` concatenates an enum), so a raw
+ * `"HIGH Risk: WATER_HEATER_TANK"` could reach the database and then every
+ * screen. Normalizing here — the one place every create/refresh funnels
+ * through — means the fix propagates to all readers and no read site needs its
+ * own `humanize()` call. `humanizeHomeActionLabel` is a no-op on prose.
+ */
+function presentWorkItemTitle(title: string): string {
+  return humanizeHomeActionLabel(title);
+}
+
 export function findWorkItemByWorkKey(propertyId: string, workKey: string, db: WorkItemDb = prisma) {
   return db.operationalWorkItem.findUnique({
     where: { propertyId_workKey: { propertyId, workKey } },
@@ -135,7 +154,7 @@ export async function createWorkItem(input: CreateWorkItemInput, db: WorkItemDb 
         obligationType: input.obligationType,
         priority: input.priority,
         safetyTier: input.safetyTier,
-        title: input.title,
+        title: presentWorkItemTitle(input.title),
         homeownerReason: input.homeownerReason,
         expectedOutcome: input.expectedOutcome,
         dueWindowStart: input.dueWindowStart ?? null,
@@ -177,7 +196,7 @@ export function refreshWorkItemPresentation(workItemId: string, input: RefreshWo
       priority: input.priority,
       safetyTier: input.safetyTier,
       materialApprovalRequired: input.safetyTier !== 'LOW_CONSEQUENCE',
-      title: input.title,
+      title: presentWorkItemTitle(input.title),
       homeownerReason: input.homeownerReason,
       expectedOutcome: input.expectedOutcome,
       confidence: input.confidence ?? null,
@@ -512,6 +531,35 @@ export function listWorkItemsForProperty(filter: ListWorkItemsFilter) {
     include: { executions: true, sources: true },
     orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
   });
+}
+
+/**
+ * Backlog self-heal for rows written before `presentWorkItemTitle` guarded the
+ * write path. Rewrites any non-closed work item whose stored title still
+ * normalizes to something different — a meaning-preserving relabel of the same
+ * obligation (`"HIGH Risk: WATER_HEATER_TANK"` -> `"Review the Water Heater
+ * risk"`), so it is deliberately exempt from `canRefreshPresentationFromSource`
+ * (which guards against source *recalculation* silently rewriting accepted
+ * work, not against making an unreadable label readable).
+ *
+ * Idempotent and converges after one pass per property: once every title
+ * equals its normalized form the JS filter yields nothing and no write runs.
+ * Called from the Home feed boundary (`getHomeActionFeed`) alongside
+ * `reconcileActiveMaintenanceTaskWork`, so every surface that reads work items
+ * — including the separate `listWorkItems` endpoint — sees healed rows.
+ */
+export async function normalizeStaleWorkItemTitles(propertyId: string): Promise<number> {
+  const rows = await prisma.operationalWorkItem.findMany({
+    where: { propertyId, state: { not: 'CLOSED' } },
+    select: { id: true, title: true },
+  });
+  const stale = rows.filter((row) => presentWorkItemTitle(row.title) !== row.title);
+  for (const row of stale) {
+    await prisma.operationalWorkItem
+      .update({ where: { id: row.id }, data: { title: presentWorkItemTitle(row.title) } })
+      .catch(() => null);
+  }
+  return stale.length;
 }
 
 export function getWorkItemGraph(workItemId: string) {
