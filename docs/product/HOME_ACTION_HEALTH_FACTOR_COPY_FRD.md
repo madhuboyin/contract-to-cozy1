@@ -439,7 +439,35 @@ On the Home "Decisions to make" card (`UnifiedHomeSurface.tsx`, card built from
   info"), not `signal` + one boilerplate sentence shared by every withheld decision.
 - **Stale-data cleanup.** Re-derive whichever entity holds `"HIGH Risk: HVAC_FURNACE"`
   through `getHomeAssetDisplayLabel` (risk-assessment recompute +
-  `reconcileActiveMaintenanceTaskWork`, or a one-off row fix).
+  `reconcileActiveMaintenanceTaskWork`, or a one-off row fix). Render-time
+  normalization now covers every read path (§12.5), so this is cosmetic-only.
+
+### 12.5 Accepted-work projection bypassed the §12.3 net (shipped)
+
+**Problem.** The enum labels came back on the dashboard "Decisions to make" card
+and in the Resolution Center after the §18 rewrite — `"HIGH Risk: WATER_HEATER_TANK"`,
+`"Safety Smoke CO Detectors"` — while sibling cards for the same assets rendered
+`"Water Heater"` / `"HVAC Furnace"` correctly.
+
+**Root cause.** `appendAcceptedOperationalWork` builds its own `presentation`
+(`variant: ACCEPTED_WORK`) directly from `OperationalWorkItem.title`, and it runs
+*after* the feed-wide `rawCandidates.map(ensureHomeActionPresentation)` pass in
+`getHomeActionFeed` — so a stale legacy title reached `presentation.headline`,
+`presentation.subject.label`, the `Task` key fact, and `signal` verbatim. The
+`decisions` filter (`job === 'DECIDE' || safetyTier ∈ {MATERIAL_FINANCIAL,
+REGULATED_COVERAGE}`) then surfaced those `MATERIAL_FINANCIAL` accepted-work rows
+on the dashboard card too.
+
+**Fix.**
+
+| Change | File |
+|---|---|
+| `appendAcceptedOperationalWork` computes `displayTitle = humanizeHomeActionLabel(item.title)` once and uses it for the headline (via `acceptedOperationalWorkHomeCopy`), `subject.label`, the `Task` key fact, and `signal`. Same normalize-on-read policy the function already applies to the legacy outcome string. | `services/homeActions.service.ts` |
+| Tests: `homeActionFeedWorkItemLinking.test.js` — a stale `"HIGH Risk: WATER_HEATER_TANK"` row projects as `"Review the Water Heater risk"` with no enum anywhere in the presentation. | — |
+
+**Not changed.** Whether `ACCEPTED_WORK` actions belong on the dashboard
+"Decisions to make" card at all (the Resolution Center already routes them to
+Home Operations via `isProviderExecutionAction`) — separate scope.
 
 ---
 

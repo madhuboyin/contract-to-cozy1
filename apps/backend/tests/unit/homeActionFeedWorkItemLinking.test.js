@@ -50,8 +50,11 @@ const workSources = new Map();
 const workEvents = new Map();
 let failNextResolve = false;
 
+const acceptedWorkRows = [];
+
 const prismaMock = {
   operationalWorkItem: {
+    findMany: async () => acceptedWorkRows.map((row) => ({ ...row, executions: row.executions ?? [] })),
     findUnique: async ({ where }) => {
       const { propertyId, workKey } = where.propertyId_workKey;
       return [...workItems.values()].find((w) => w.propertyId === propertyId && w.workKey === workKey) ?? null;
@@ -107,6 +110,7 @@ require.cache[prismaPath] = {
 
 const {
   acceptedOperationalWorkHomeCopy,
+  appendAcceptedOperationalWork,
   linkWorkItemsAndReconcile,
 } = require('../../src/services/homeActions.service.ts');
 
@@ -166,6 +170,46 @@ test('reported-complete operational work asks for verification instead of presen
     expectedOutcome: 'Completion was reported and is waiting for verification.',
     primaryCtaLabel: 'Review completion',
   });
+});
+
+test('the accepted-work projection humanizes a stale enum work-item title', async () => {
+  acceptedWorkRows.length = 0;
+  acceptedWorkRows.push({
+    id: 'wi-stale',
+    propertyId: 'property-1',
+    // Legacy rows persisted "<RISK> Risk: <SYSTEM_ENUM>" as the title.
+    title: 'HIGH Risk: WATER_HEATER_TANK',
+    homeownerReason: 'No active warranty or insurance is linked to this system.',
+    expectedOutcome: 'The task is completed and recorded.',
+    state: 'ACCEPTED',
+    acceptanceState: 'ACCEPTED',
+    disposition: null,
+    priority: 'SOON',
+    safetyTier: 'MATERIAL_FINANCIAL',
+    dueAt: null,
+    dueWindowStart: null,
+    dueWindowEnd: null,
+    snoozedUntil: null,
+    supersededByWorkItemId: null,
+    confidence: 0.6,
+    missingContext: [],
+    sourceVersion: 'v1',
+    workKey: 'work-key-stale',
+    createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+    executions: [],
+  });
+
+  const [projected] = await appendAcceptedOperationalWork('property-1', []);
+
+  assert.equal(projected.presentation.headline, 'Review the Water Heater risk');
+  assert.equal(projected.presentation.subject.label, 'Review the Water Heater risk');
+  assert.equal(
+    projected.presentation.keyFacts.find((fact) => fact.label === 'Task').value,
+    'Review the Water Heater risk',
+  );
+  assert.doesNotMatch(JSON.stringify(projected.presentation), /WATER_HEATER_TANK/);
+  acceptedWorkRows.length = 0;
 });
 
 test('an eligible action is annotated with a resolved work item', async () => {

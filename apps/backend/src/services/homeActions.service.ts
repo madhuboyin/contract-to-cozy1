@@ -22,7 +22,7 @@ import { NewHomeSetupService } from './newHomeSetup.service';
 import { reconcileActiveMaintenanceTaskWork } from './maintenanceTaskCanonicalReconciliation.service';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinancialContext.service';
-import { getHomeAssetDisplayLabel, resolveCanonicalAssetLabel } from '../productFramework/homeAssetDisplay';
+import { getHomeAssetDisplayLabel, humanizeHomeActionLabel, resolveCanonicalAssetLabel } from '../productFramework/homeAssetDisplay';
 import { materializeRecommendationsForProperty } from '../modules/personalization/application/materializeRecommendations.usecase';
 import { getAggregationPropertyContext } from './aggregationContext/context';
 import { getContextCompleteness } from '../modules/propertyContext/application/getContextCompleteness';
@@ -872,7 +872,7 @@ export function acceptedOperationalWorkHomeCopy(item: AcceptedOperationalWorkCop
 }
 
 /** @homeActionProducer Appends accepted-work Home Actions to the supplied feed array. */
-async function appendAcceptedOperationalWork(
+export async function appendAcceptedOperationalWork(
   propertyId: string,
   actions: RankedHomeAction[],
 ): Promise<RankedHomeAction[]> {
@@ -911,7 +911,17 @@ async function appendAcceptedOperationalWork(
         : 'MAINTENANCE';
     const href = `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${encodeURIComponent(item.id)}&openManage=1`;
     const material = item.safetyTier === 'MATERIAL_FINANCIAL' || item.safetyTier === 'REGULATED_COVERAGE';
-    const displayCopy = acceptedOperationalWorkHomeCopy(item);
+    // This projection builds its own presentation after the feed-wide
+    // ensureHomeActionPresentation pass, so a stale OperationalWorkItem.title
+    // ("HIGH Risk: WATER_HEATER_TANK", a raw enum) would otherwise reach the
+    // card headline/subject verbatim. Normalize on read — the same policy
+    // acceptedOperationalWorkHomeCopy already applies to the outcome text.
+    const displayTitle = humanizeHomeActionLabel(item.title);
+    const displayCopy = acceptedOperationalWorkHomeCopy({
+      title: displayTitle,
+      expectedOutcome: item.expectedOutcome,
+      state: item.state,
+    });
     const now = new Date().toISOString();
     const homeAction = adaptHomeActionSource(sourceKind, {
       id: `operational-work:${item.id}`,
@@ -921,7 +931,7 @@ async function appendAcceptedOperationalWork(
       sourceVersion: item.sourceVersion,
       state: item.state === 'DEFERRED' ? 'DEFERRED' : item.state === 'IN_PROGRESS' || item.state === 'IN_PROJECT' || item.state === 'IN_GUIDANCE' ? 'IN_PROGRESS' : 'OPEN',
       priority: item.priority,
-      signal: item.title,
+      signal: displayTitle,
       whyItMatters: item.homeownerReason,
       recommendedAction: displayCopy.recommendedAction,
       expectedOutcome: displayCopy.expectedOutcome,
@@ -932,7 +942,7 @@ async function appendAcceptedOperationalWork(
         summary: item.homeownerReason.slice(0, 320),
         whyNow: item.homeownerReason.slice(0, 500),
         keyFacts: [
-          { label: 'Task', value: item.title.slice(0, 240) },
+          { label: 'Task', value: displayTitle.slice(0, 240) },
           { label: 'Work state', value: String(item.state).toLowerCase().replace(/_/g, ' ') },
           {
             label: 'Due',
@@ -948,7 +958,7 @@ async function appendAcceptedOperationalWork(
           },
         ],
         factGroups: [],
-        subject: { kind: 'WORK_ITEM', id: item.id, label: item.title.slice(0, 180) },
+        subject: { kind: 'WORK_ITEM', id: item.id, label: displayTitle.slice(0, 180) },
         detailLabel: 'Why this work?',
         group: null,
       },
