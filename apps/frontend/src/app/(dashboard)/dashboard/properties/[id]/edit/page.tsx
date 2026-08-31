@@ -920,6 +920,9 @@ export default function EditPropertyPage() {
         }
         queryClient.invalidateQueries({ queryKey: ["property", propertyId] });
         queryClient.invalidateQueries({ queryKey: ["properties"] });
+        // The property overview (profile + "Completeness by category") reads from
+        // the bootstrap query, which is keyed separately.
+        queryClient.invalidateQueries({ queryKey: ["property-bootstrap", propertyId] });
         toast({
           title: "Saved.",
         });
