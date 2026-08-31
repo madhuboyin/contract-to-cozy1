@@ -22,7 +22,7 @@ import { NewHomeSetupService } from './newHomeSetup.service';
 import { reconcileActiveMaintenanceTaskWork } from './maintenanceTaskCanonicalReconciliation.service';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinancialContext.service';
-import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
+import { getHomeAssetDisplayLabel, resolveCanonicalAssetLabel } from '../productFramework/homeAssetDisplay';
 import { materializeRecommendationsForProperty } from '../modules/personalization/application/materializeRecommendations.usecase';
 import { getAggregationPropertyContext } from './aggregationContext/context';
 import { getContextCompleteness } from '../modules/propertyContext/application/getContextCompleteness';
@@ -86,6 +86,7 @@ import {
   type HomeActionDecisionLineage,
 } from './decisionPlatform/homeActionDecisionLineage';
 import { getSuppressedHomeActionIds } from './decisionPlatform/homeActionUsefulnessFeedback.service';
+import { REPAIR_REPLACE_PROFILES } from './agents/repairReplaceProfileCatalog';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -365,15 +366,48 @@ export function homeActionCanonicalKey(action: HomeAction): string {
   const replacementItemId = resolveReplacementDecisionItemId(action);
   if (replacementItemId) return `replacement-item:${replacementItemId}`;
 
+  // A tracked physical asset with no inventory-item id — the smoke & CO
+  // detectors, and any other first-class asset a producer names without an
+  // item row. A risk "past service life" card and a maintenance "check" card
+  // for the same detectors carry different signal text, so the signal
+  // heuristic below splits them into two. Collapse producer-agnostic
+  // service/lifecycle actions about the same known asset onto one key.
+  // See docs/product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md §16.
+  if (!ASSET_SERVICE_KEY_EXCLUDED_SOURCE_KINDS.has(action.source.kind)) {
+    const variant = action.presentation?.variant;
+    const eligibleVariant = !variant || ASSET_SERVICE_KEY_ELIGIBLE_VARIANTS.has(variant);
+    if (eligibleVariant) {
+      const assetLabel = resolveCanonicalAssetLabel(
+        action.presentation?.subject?.label,
+        action.evidence?.[0]?.label,
+        action.source.entityId,
+        action.signal,
+      );
+      if (assetLabel) return `asset-service:${normalizedSignal(assetLabel)}`;
+    }
+  }
+
   const signal = normalizedSignal(action.signal);
   if (signal) return `signal:${signal}`;
   if (action.lineageId) return `lineage:${action.lineageId}`;
   return `entity:${action.source.entityId}`;
 }
 
+// Coverage and recall each own their own dedup identity (coverage-item: above,
+// and a recall is deliberately its own homeowner concern). Seasonal aggregate
+// cards are counts, not per-asset. Everything else about a known asset is one
+// "service this asset" concern regardless of which producer raised it.
+const ASSET_SERVICE_KEY_EXCLUDED_SOURCE_KINDS = new Set<HomeAction['source']['kind']>(['COVERAGE', 'RECALL']);
+const ASSET_SERVICE_KEY_ELIGIBLE_VARIANTS = new Set<NonNullable<HomeAction['presentation']>['variant']>([
+  'ASSET_LIFECYCLE',
+  'HEALTH_FACTOR_REVIEW',
+  'HOME_FACT_REVIEW',
+  'GENERIC_ACTION',
+]);
+
 /** The inventory item a replacement/lifecycle decision is about, or null. */
 function resolveReplacementDecisionItemId(action: HomeAction): string | null {
-  for (const prefix of ['repair-replace:', 'appliance-repair-replace:']) {
+  for (const prefix of REPAIR_REPLACE_PROFILES.flatMap((profile) => profile.lineagePrefixes)) {
     if (action.lineageId?.startsWith(prefix)) {
       const id = action.lineageId.slice(prefix.length).trim();
       return id || null;
@@ -570,18 +604,41 @@ export function scoreHomeAction(action: HomeAction): { score: number; components
   return { score, components, explanation };
 }
 
+/** The date a timing becomes actionable — due date, else the end of its window. */
+function timingActionableAtMs(timing: HomeAction['timing']): number | null {
+  const candidate = timing.dueAt ?? timing.windowEnd ?? timing.windowStart;
+  if (!candidate) return null;
+  const ms = Date.parse(candidate);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/** Prefers the timing that is actionable sooner; a real date beats "no date". */
+function earlierTiming(a: HomeAction['timing'], b: HomeAction['timing']): HomeAction['timing'] {
+  const aMs = timingActionableAtMs(a);
+  const bMs = timingActionableAtMs(b);
+  if (aMs === null) return bMs === null ? a : b;
+  if (bMs === null) return a;
+  return aMs <= bMs ? a : b;
+}
+
 export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHomeAction[] {
-  const byCanonicalKey = new Map<string, { winner: HomeAction; score: ReturnType<typeof scoreHomeAction>; ids: string[] }>();
+  const byCanonicalKey = new Map<string, {
+    winner: HomeAction; score: ReturnType<typeof scoreHomeAction>; ids: string[]; timing: HomeAction['timing'];
+  }>();
 
   for (const action of actions) {
     const canonicalKey = homeActionCanonicalKey(action);
     const scored = scoreHomeAction(action);
     const current = byCanonicalKey.get(canonicalKey);
     if (!current) {
-      byCanonicalKey.set(canonicalKey, { winner: action, score: scored, ids: [action.id] });
+      byCanonicalKey.set(canonicalKey, { winner: action, score: scored, ids: [action.id], timing: action.timing });
       continue;
     }
     current.ids.push(action.id);
+    // A merged duplicate can carry a sooner window than the winner (two
+    // producers projecting the same concern off different clocks). The
+    // homeowner should see the earliest actionable date, not the winner's.
+    current.timing = earlierTiming(current.timing, action.timing);
     if (scored.score > current.score.score ||
       (scored.score === current.score.score && action.id.localeCompare(current.winner.id) < 0)) {
       current.winner = action;
@@ -596,6 +653,7 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
       a.winner.id.localeCompare(b.winner.id))
     .map(([canonicalKey, entry], index) => ({
       ...entry.winner,
+      timing: entry.timing,
       ranking: { rank: index + 1, ...entry.score },
       deduplication: {
         canonicalKey,

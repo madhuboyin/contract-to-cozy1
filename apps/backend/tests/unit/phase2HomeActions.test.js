@@ -230,6 +230,57 @@ test('a repair-vs-replace verdict and a capital replacement window for the same 
   assert.equal(result[0].deduplication.canonicalKey, 'replacement-item:fridge-1');
 });
 
+test('a risk service-life card and a maintenance check card for the same non-inventory asset collapse to one, keeping the earliest window', () => {
+  const detectorPresentation = (label) => ({
+    variant: label === 'Safety Smoke CO Detectors' ? 'HEALTH_FACTOR_REVIEW' : 'GENERIC_ACTION',
+    eyebrow: null,
+    headline: 'Smoke detector battery and sensor past service life',
+    summary: 'Professional inspection recommended.',
+    whyNow: null,
+    keyFacts: [],
+    factGroups: [],
+    subject: { kind: 'PROPERTY', id: 'property-1', label },
+    detailLabel: 'Why this?',
+    group: null,
+  });
+  const riskCard = actionFixture('health-insight:smoke', {
+    source: { kind: 'SYSTEM', entityId: 'property-1', version: 'v1' },
+    signal: 'Smoke Detector Age',
+    priority: 'SOON',
+  });
+  riskCard.presentation = detectorPresentation('Safety Smoke CO Detectors');
+  riskCard.timing = { dueAt: '2026-09-29T00:00:00.000Z', windowStart: null, windowEnd: '2026-09-29T00:00:00.000Z', rationale: 'Past its typical service life.' };
+  const maintenanceCard = actionFixture('orchestration:smoke-check', {
+    source: { kind: 'SYSTEM', entityId: 'checklist-item-9', version: 'v1' },
+    signal: 'Schedule an inspection for the smoke and CO detectors',
+    priority: 'SOON',
+  });
+  maintenanceCard.presentation = detectorPresentation('Smoke & CO Detector Check');
+  maintenanceCard.timing = { dueAt: '2026-09-16T00:00:00.000Z', windowStart: null, windowEnd: '2026-09-16T00:00:00.000Z', rationale: 'Sooner window from the maintenance schedule.' };
+
+  const result = rankAndDeduplicateHomeActions([riskCard, maintenanceCard]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deduplication.canonicalKey, 'asset-service:smoke-co-detector-check');
+  assert.equal(result[0].timing.dueAt, '2026-09-16T00:00:00.000Z');
+});
+
+test('the asset-service canonical key never merges two different assets or a coverage action', () => {
+  const mkAsset = (id, label, sourceKind = 'SYSTEM') => {
+    const action = actionFixture(id, { source: { kind: sourceKind, entityId: id, version: 'v1' }, signal: `signal ${id}` });
+    action.presentation = {
+      variant: 'GENERIC_ACTION', eyebrow: null, headline: `headline ${id}`, summary: 's', whyNow: null,
+      keyFacts: [], factGroups: [], subject: { kind: 'PROPERTY', id, label }, detailLabel: 'd', group: null,
+    };
+    return action;
+  };
+  const detector = mkAsset('a', 'Smoke & CO Detector Check');
+  const roof = mkAsset('b', 'Roof');
+  const detectorCoverage = mkAsset('c', 'Smoke & CO Detector Check', 'COVERAGE');
+
+  assert.equal(rankAndDeduplicateHomeActions([detector, roof]).length, 2);
+  assert.equal(rankAndDeduplicateHomeActions([detector, detectorCoverage]).length, 2);
+});
+
 test('coverage reconciliation exposes exactly one current state per inventory item', () => {
   const correction = actionFixture('coverage-correction', {
     source: { kind: 'GUIDANCE', entityId: 'hvac-item', version: 'phase2-v1' },

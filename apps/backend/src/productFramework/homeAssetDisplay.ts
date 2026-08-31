@@ -50,6 +50,32 @@ export function getHomeAssetDisplayLabel(input: {
   return humanizeIdentifier(fallback) || 'Home item';
 }
 
+const KNOWN_ASSET_DISPLAY_VALUES = new Set(Object.values(ASSET_DISPLAY_LABELS));
+
+/**
+ * Resolves any of the given strings (a stored identifier, a raw enum, or an
+ * already-humanized label — in any casing) to the single canonical asset display
+ * label when it names a first-class tracked asset (HVAC, roof, water heater,
+ * smoke/CO detectors, …). Returns null when nothing names a known asset.
+ *
+ * Used to give producer-agnostic Home Actions about the same physical asset one
+ * shared dedup key even when they carry no inventory-item id — e.g. a risk
+ * "past service life" card and a maintenance "check" card for the smoke & CO
+ * detectors, which otherwise split on their signal text.
+ */
+export function resolveCanonicalAssetLabel(
+  ...candidates: Array<string | null | undefined>
+): string | null {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (!trimmed) continue;
+    if (KNOWN_ASSET_DISPLAY_VALUES.has(trimmed)) return trimmed;
+    const mapped = ASSET_DISPLAY_LABELS[identifierKey(trimmed)];
+    if (mapped) return mapped;
+  }
+  return null;
+}
+
 const RISK_LEVEL_PREFIX = /^(?:LOW|MODERATE|MEDIUM|ELEVATED|HIGH|CRITICAL|URGENT)\s+RISK\s*[:\-–]\s*/i;
 const SCREAMING_SNAKE_TOKEN = /[A-Z0-9]+(?:_[A-Z0-9]+)+/g;
 const DECISION_FILLER_SUFFIX = /\s*[:\-–]\s*(?:continue the active decision|review project status|continue|review)\s*$/i;
