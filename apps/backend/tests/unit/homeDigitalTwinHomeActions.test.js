@@ -28,9 +28,13 @@ function baseSources(overrides = {}) {
 test('a conflicted home fact is promoted as a SOON-priority CORRECT_FACT action', async () => {
   const sources = baseSources({
     homeDigitalTwin: { findUnique: async () => ({ id: 'twin-1', updatedAt: NOW }) },
+    inventoryItem: { findMany: async () => [{ id: 'hvac-1', name: 'HVAC system', category: 'HVAC' }] },
     homeTwinComponent: {
       findMany: async () => [{
+        id: 'component-1', label: 'HVAC system', componentType: 'HVAC',
+        sourceType: 'INVENTORY', sourceReferenceId: 'hvac-1',
         projectedFacts: [{
+          id: 'fact-1', fieldName: 'conditionScore', valueNumeric: 0.4,
           factState: 'CONFLICTED',
           correctionDestination: '/dashboard/properties/property-1/edit#structure',
         }],
@@ -39,26 +43,32 @@ test('a conflicted home fact is promoted as a SOON-priority CORRECT_FACT action'
   });
 
   const result = await getPromotedHomeActions('property-1', sources);
-  const action = result.actions.find((a) => a.id === 'home-digital-twin-fact-review:property-1');
+  const action = result.actions.find((a) => a.id === 'home-digital-twin-fact-review:component-1');
 
   assert.ok(action, 'expected a fact-review action');
   assert.equal(action.priority, 'SOON');
   assert.equal(action.primaryCta.kind, 'CORRECT_FACT');
-  assert.equal(action.primaryCta.href, '/dashboard/properties/property-1/edit#structure');
+  assert.match(action.primaryCta.href, /^\/dashboard\/resolution-center\?/);
+  assert.match(action.primaryCta.href, /sourceEntityId=hvac-1/);
+  assert.deepEqual(action.propertyContextFeature.operationInput, { inventoryItemId: 'hvac-1' });
+  assert.deepEqual(action.presentation.subject, { kind: 'INVENTORY_ITEM', id: 'hvac-1', label: 'HVAC system' });
 });
 
 test('a non-conflicting default/unknown fact is promoted at CONSIDER priority', async () => {
   const sources = baseSources({
     homeDigitalTwin: { findUnique: async () => ({ id: 'twin-1', updatedAt: NOW }) },
+    inventoryItem: { findMany: async () => [{ id: 'washer-1', name: 'Washer Dryer', category: 'APPLIANCE' }] },
     homeTwinComponent: {
       findMany: async () => [{
-        projectedFacts: [{ factState: 'DEFAULT', correctionDestination: '/dashboard/properties/property-1/inventory' }],
+        id: 'component-2', label: 'Washer Dryer', componentType: 'WASHER_DRYER',
+        sourceType: 'INVENTORY', sourceReferenceId: 'washer-1',
+        projectedFacts: [{ id: 'fact-2', fieldName: 'installYear', valueNumeric: 2016, factState: 'DEFAULT' }],
       }],
     },
   });
 
   const result = await getPromotedHomeActions('property-1', sources);
-  const action = result.actions.find((a) => a.id === 'home-digital-twin-fact-review:property-1');
+  const action = result.actions.find((a) => a.id === 'home-digital-twin-fact-review:component-2');
 
   assert.ok(action);
   assert.equal(action.priority, 'CONSIDER');
@@ -73,6 +83,7 @@ test('no twin and no needs-attention facts produce no fact-review action', async
 
   const allClear = await getPromotedHomeActions('property-1', baseSources({
     homeDigitalTwin: { findUnique: async () => ({ id: 'twin-1', updatedAt: NOW }) },
+    inventoryItem: { findMany: async () => [] },
     // The real query's `where` already excludes REPORTED/VERIFIED/etc facts
     // (only CONFLICTED/DEFAULT/UNKNOWN are selected) — this stub reflects
     // what Prisma would actually return, not the unfiltered component.
@@ -81,6 +92,19 @@ test('no twin and no needs-attention facts produce no fact-review action', async
     },
   }));
   assert.equal(allClear.actions.some((a) => a.id.startsWith('home-digital-twin-fact-review')), false);
+
+  const noCanonicalItem = await getPromotedHomeActions('property-1', baseSources({
+    homeDigitalTwin: { findUnique: async () => ({ id: 'twin-1', updatedAt: NOW }) },
+    inventoryItem: { findMany: async () => [] },
+    homeTwinComponent: {
+      findMany: async () => [{
+        id: 'property-hvac', label: 'HVAC system', componentType: 'HVAC',
+        sourceType: 'PROPERTY', sourceReferenceId: 'property-1',
+        projectedFacts: [{ id: 'fact-3', fieldName: 'conditionScore', factState: 'UNKNOWN' }],
+      }],
+    },
+  }));
+  assert.equal(noCanonicalItem.actions.some((a) => a.id.startsWith('home-digital-twin-fact-review')), false);
 });
 
 test('a HIGH-priority capital item becomes a standalone evidence-backed lifecycle action', async () => {
@@ -127,6 +151,12 @@ test('a HIGH-priority capital item becomes a standalone evidence-backed lifecycl
   assert.equal(action.presentation.subject.id, 'roof-1');
   assert.equal(action.presentation.group, null);
   assert.equal(action.presentation.detailLabel, 'Why this estimate?');
+  assert.deepEqual(action.propertyContextFeature.operationInput, { inventoryItemId: 'roof-1' });
+  assert.deepEqual(
+    action.presentation.factGroups.flatMap((group) => group.facts).filter((fact) => fact.kind === 'MISSING'),
+    [],
+    'an empty service/repair/coverage history is a known absence, not another correction request',
+  );
   assert.match(action.expectedOutcome, /\$9,000.*\$14,000/);
 });
 

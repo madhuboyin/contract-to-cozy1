@@ -54,7 +54,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense' | 'decisionThread' | 'operationalWorkItem'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'inventoryItem' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense' | 'decisionThread' | 'operationalWorkItem'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -4231,7 +4231,7 @@ async function loadHomeDigitalTwinFactReviewActions(
   propertyId: string,
   db: HomeActionSourceDb,
 ): Promise<HomeAction[]> {
-  if (!db.homeDigitalTwin || !db.homeTwinComponent) return [];
+  if (!db.homeDigitalTwin || !db.homeTwinComponent || !db.inventoryItem) return [];
 
   const twin = await db.homeDigitalTwin.findUnique({
     where: { propertyId },
@@ -4245,6 +4245,8 @@ async function loadHomeDigitalTwinFactReviewActions(
       id: true,
       label: true,
       componentType: true,
+      sourceType: true,
+      sourceReferenceId: true,
       projectedFacts: {
         where: { factState: { in: ['INFERRED', 'CONFLICTED', 'DEFAULT', 'UNKNOWN'] } },
         select: {
@@ -4264,99 +4266,134 @@ async function loadHomeDigitalTwinFactReviewActions(
     },
   });
 
-  const needsAttention = components.flatMap((component) => component.projectedFacts.map((fact) => ({
-    ...fact,
-    componentId: component.id,
-    componentLabel: component.label ?? String(component.componentType).toLowerCase().replace(/_/g, ' '),
-  })));
-  if (needsAttention.length === 0) return [];
+  // A correction case must represent one physical asset and one canonical
+  // write target. The former property-wide action mixed HVAC, appliance and
+  // structure facts, then used the first fact's URL for every item.
+  const inventoryItems = await db.inventoryItem.findMany({
+    where: { propertyId },
+    select: { id: true, name: true, category: true },
+  });
+  const categoryForComponent: Record<string, string> = {
+    HVAC: 'HVAC', WATER_HEATER: 'PLUMBING', ROOF: 'ROOF_EXTERIOR',
+    REFRIGERATOR: 'APPLIANCE', DISHWASHER: 'APPLIANCE', WASHER_DRYER: 'APPLIANCE',
+    ELECTRICAL: 'ELECTRICAL', PLUMBING: 'PLUMBING', EXTERIOR: 'ROOF_EXTERIOR',
+    SAFETY: 'SAFETY', SOLAR: 'ELECTRICAL', OTHER: 'OTHER',
+  };
+  const normalizeAsset = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-  // Home only promotes facts that have a real field-level correction route.
-  // Facts without one remain visible inside the Digital Twin rather than
-  // sending the homeowner to a generic property page that cannot fix them.
-  const correctableFacts = needsAttention.filter((fact) => Boolean(fact.correctionDestination?.trim()));
-  if (correctableFacts.length === 0) return [];
+  return components.flatMap((component) => {
+    const lifecycleFacts = component.projectedFacts.filter((fact) =>
+      ['installYear', 'conditionScore'].includes(fact.fieldName));
+    if (!lifecycleFacts.length) return [];
 
-  const conflictCount = correctableFacts.filter((f) => f.factState === 'CONFLICTED').length;
-  const displayedFacts = correctableFacts.slice(0, 4);
-  const componentLabels = [...new Set(displayedFacts.map((fact) => homeownerComponentLabel(fact.componentLabel)))];
-  const factLabels = [...new Set(displayedFacts.map((fact) => homeownerFactLabel(fact.fieldName)))];
-  const headlineFacts = componentLabels.length === 1
-    ? `your ${componentLabels[0]}'s ${joinNatural(factLabels.slice(0, 2))}`
-    : joinNatural(displayedFacts.slice(0, 2).map((fact) => `${homeownerComponentLabel(fact.componentLabel)} ${homeownerFactLabel(fact.fieldName)}`));
-  const affectedDecisions = [...new Set(displayedFacts.map((fact) => affectedDecisionForFact(fact.fieldName)))];
-  const reason = conflictCount > 0
-    ? `Some Home Record details conflict. Confirming them will improve ${joinNatural(affectedDecisions)}.`
-    : `These Home Record estimates affect ${joinNatural(affectedDecisions)}. Confirm them when convenient for more accurate guidance.`;
-  const correctionHref = displayedFacts[0].correctionDestination!;
+    const directItem = component.sourceType === 'INVENTORY' && component.sourceReferenceId
+      ? inventoryItems.find((item) => item.id === component.sourceReferenceId)
+      : null;
+    const expectedCategory = categoryForComponent[String(component.componentType)] ?? 'OTHER';
+    const candidates = inventoryItems.filter((item) => item.category === expectedCategory);
+    const componentLabel = homeownerComponentLabel(
+      component.label ?? String(component.componentType).toLowerCase().replace(/_/g, ' '),
+    );
+    const exactItem = candidates.find((item) => {
+      const itemName = normalizeAsset(item.name);
+      const label = normalizeAsset(componentLabel);
+      return itemName === label || itemName.includes(label) || label.includes(itemName);
+    });
+    const inventoryItem = directItem ?? exactItem ?? (candidates.length === 1 ? candidates[0] : null);
 
-  return [adaptHomeActionSource('SYSTEM', {
-    id: `home-digital-twin-fact-review:${propertyId}`,
-    propertyId,
-    lineageId: `home-digital-twin-fact-review:${propertyId}`,
-    sourceEntityId: twin.id,
-    sourceVersion: twin.updatedAt.toISOString(),
-    job: 'STAY_AHEAD',
-    state: 'OPEN',
-    priority: conflictCount > 0 ? 'SOON' : 'CONSIDER',
-    signal: conflictCount > 0
-      ? `${conflictCount} home fact${conflictCount === 1 ? '' : 's'} have conflicting records on file.`
-      : `${correctableFacts.length} home fact${correctableFacts.length === 1 ? '' : 's'} should be added or verified at its source.`,
-    whyItMatters: reason,
-    recommendedAction: `Confirm ${headlineFacts}`,
-    expectedOutcome: `Recorded facts can replace inferred values and improve the ${affectedDecisions.join(' and ')}.`,
-    presentation: {
-      variant: 'HOME_FACT_REVIEW',
-      eyebrow: 'Home facts',
-      headline: `Confirm ${headlineFacts}`.slice(0, 180),
-      summary: reason.slice(0, 320),
-      whyNow: reason.slice(0, 500),
-      keyFacts: displayedFacts.map((fact) => ({
-        label: `${homeownerComponentLabel(fact.componentLabel)} · ${homeownerFactLabel(fact.fieldName)}`.slice(0, 80),
-        value: `${projectedFactValue(fact)}${['INFERRED', 'DEFAULT'].includes(fact.factState) ? ' · estimated' : ''}`.slice(0, 240),
+    // Do not publish a correction CTA unless it can write to a specific
+    // canonical item. Unsupported property-profile estimates stay visible in
+    // the Digital Twin instead of sending the homeowner to a dead editor.
+    if (!inventoryItem) return [];
+
+    const conflictCount = lifecycleFacts.filter((fact) => fact.factState === 'CONFLICTED').length;
+    const factLabels = [...new Set(lifecycleFacts.map((fact) => homeownerFactLabel(fact.fieldName)))];
+    const affectedDecisions = [...new Set(lifecycleFacts.map((fact) => affectedDecisionForFact(fact.fieldName)))];
+    const reason = conflictCount > 0
+      ? `${componentLabel} details conflict. Confirming them will improve ${joinNatural(affectedDecisions)} plans.`
+      : `Confirm ${componentLabel}'s age and condition so replacement plans and cost guidance use your Home Record instead of estimates.`;
+    const actionId = `home-digital-twin-fact-review:${component.id}`;
+    const missing = factLabels.map((label) => `${componentLabel} ${label}`);
+    const launchParams = new URLSearchParams({
+      launchSurface: 'unified_home',
+      propertyId,
+      sourceActionId: actionId,
+      sourceEntityType: 'INVENTORY_ITEM',
+      sourceEntityId: inventoryItem.id,
+      recommendationReason: 'HOME_FACT_REVIEW',
+      recommendationVersion: 'home-digital-twin-fact-review-v2',
+      contextVersion: twin.updatedAt.toISOString(),
+      returnTo: `/dashboard?propertyId=${propertyId}`,
+    });
+
+    return [adaptHomeActionSource('SYSTEM', {
+      id: actionId,
+      propertyId,
+      lineageId: actionId,
+      sourceEntityId: inventoryItem.id,
+      sourceVersion: twin.updatedAt.toISOString(),
+      job: 'STAY_AHEAD',
+      state: 'OPEN',
+      priority: conflictCount > 0 ? 'SOON' : 'CONSIDER',
+      signal: `${componentLabel} lifecycle details need confirmation.`,
+      whyItMatters: reason,
+      recommendedAction: `Confirm ${componentLabel}'s age and condition`,
+      expectedOutcome: `More accurate replacement timing, risk, and budget guidance for ${componentLabel}.`,
+      propertyContextFeature: {
+        featureKey: 'CAPITAL_TIMELINE',
+        operationKey: 'RUN_TIMELINE',
+        operationInput: { inventoryItemId: inventoryItem.id },
+      },
+      presentation: {
+        variant: 'HOME_FACT_REVIEW',
+        eyebrow: 'Home facts',
+        headline: `Confirm ${componentLabel}'s age and condition`.slice(0, 180),
+        summary: reason.slice(0, 320),
+        whyNow: reason.slice(0, 500),
+        keyFacts: lifecycleFacts.map((fact) => ({
+          label: homeownerFactLabel(fact.fieldName).slice(0, 80),
+          value: `${projectedFactValue(fact)}${['INFERRED', 'DEFAULT'].includes(fact.factState) ? ' · estimated' : ''}`.slice(0, 240),
+        })),
+        factGroups: [{
+          label: 'Details to confirm',
+          facts: lifecycleFacts.map((fact) => ({
+            key: fact.fieldName,
+            label: homeownerFactLabel(fact.fieldName),
+            value: projectedFactValue(fact),
+            kind: fact.factState === 'CONFLICTED' ? 'CONFLICTED' : 'MISSING',
+            source: homeownerFactSource(fact.sourceRecordType, fact.sourceType),
+            observedAt: fact.observedAt?.toISOString() ?? null,
+          })),
+        }],
+        subject: { kind: 'INVENTORY_ITEM', id: inventoryItem.id, label: inventoryItem.name.slice(0, 180) },
+        detailLabel: 'How this affects plans',
+        group: null,
+      },
+      timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Low urgency — review whenever convenient.' },
+      evidence: lifecycleFacts.map((fact, index) => ({
+        id: fact.id ?? `${component.id}:projected-fact:${index}`,
+        type: 'SYSTEM_DERIVATION',
+        label: `${componentLabel} ${homeownerFactLabel(fact.fieldName)}`,
+        source: homeownerFactSource(fact.sourceRecordType, fact.sourceType),
+        observedAt: fact.observedAt?.toISOString() ?? twin.updatedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence: normalizeHomeActionConfidenceScore(fact.confidenceScore),
       })),
-      factGroups: [],
-      subject: { kind: 'PROPERTY', id: propertyId, label: headlineFacts.slice(0, 180) },
-      detailLabel: 'How this affects plans',
-      group: correctableFacts.length > 1
-        ? { kind: 'RELATED_ACTIONS', itemCount: Math.min(correctableFacts.length, 50) }
-        : null,
-    },
-    timing: {
-      dueAt: null,
-      windowStart: null,
-      windowEnd: null,
-      rationale: 'Low urgency — review whenever convenient.',
-    },
-    evidence: displayedFacts.map((fact, index) => ({
-      id: fact.id ?? `${twin.id}:projected-fact:${index}`,
-      type: 'SYSTEM_DERIVATION',
-      label: `${homeownerComponentLabel(fact.componentLabel)} ${homeownerFactLabel(fact.fieldName)}`,
-      source: homeownerFactSource(fact.sourceRecordType, fact.sourceType),
-      observedAt: fact.observedAt?.toISOString() ?? twin.updatedAt.toISOString(),
-      freshness: 'CURRENT',
-      confidence: normalizeHomeActionConfidenceScore(fact.confidenceScore),
-    })),
-    assumptions: [],
-    options: [],
-    tradeoffs: [],
-    confidence: { score: 1, label: 'HIGH', missing: [] },
-    governance: lowConsequenceGovernance('home-digital-twin-fact-review-v1'),
-    primaryCta: {
-      kind: 'CORRECT_FACT',
-      label: 'Review home facts',
-      href: correctionHref,
-    },
-    secondaryCtas: displayedFacts.slice(1).map((fact) => ({
-      kind: 'CORRECT_FACT' as const,
-      label: `Review ${homeownerComponentLabel(fact.componentLabel)} ${homeownerFactLabel(fact.fieldName)}`.slice(0, 120),
-      href: fact.correctionDestination!,
-    })),
-    feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT', 'CORRECT_FACT'],
-    relatedJourneyId: null,
-    createdAt: twin.updatedAt.toISOString(),
-    lastEvaluatedAt: twin.updatedAt.toISOString(),
-  })];
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 1, label: 'HIGH', missing },
+      governance: lowConsequenceGovernance('home-digital-twin-fact-review-v2'),
+      primaryCta: {
+        kind: 'CORRECT_FACT',
+        label: `Confirm ${componentLabel} details`.slice(0, 120),
+        href: `/dashboard/resolution-center?${launchParams.toString()}`,
+      },
+      secondaryCtas: [],
+      feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT', 'CORRECT_FACT'],
+      relatedJourneyId: null,
+      createdAt: twin.updatedAt.toISOString(),
+      lastEvaluatedAt: twin.updatedAt.toISOString(),
+    })];
+  });
 }
 
 const CAPITAL_TIMELINE_CATEGORY_LABEL: Record<string, string> = {
@@ -4574,7 +4611,10 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       propertyContextFeature: {
         featureKey: 'CAPITAL_TIMELINE',
         operationKey: 'RUN_TIMELINE',
-        operationInput: {},
+        // Scope the shared capture contract to this exact asset. Without the
+        // item identity the evaluator treats lifecycle context as complete
+        // and the CTA falls through to the full Inventory page.
+        operationInput: item.inventoryItemId ? { inventoryItemId: item.inventoryItemId } : {},
       },
       presentation: {
         variant: 'ASSET_LIFECYCLE',
@@ -4599,12 +4639,12 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
               },
               {
                 key: 'last-service', label: 'Last service', value: lastServiceDate ? capitalFactDate(lastServiceDate) : 'Not recorded',
-                kind: lastServiceDate ? 'RECORDED' : 'MISSING', source: record?.lastServicedOn ? 'Home Record' : latestServiceEvent ? 'Home event' : 'Home Record',
+                kind: 'RECORDED', source: record?.lastServicedOn ? 'Home Record' : latestServiceEvent ? 'Home event' : 'Home Record',
                 observedAt: lastServiceDate?.toISOString() ?? null,
               },
               {
                 key: 'repairs', label: 'Recorded repairs', value: repairEvents.length > 0 ? `${repairEvents.length} recorded` : 'None recorded',
-                kind: repairEvents.length > 0 ? 'RECORDED' : 'MISSING', source: 'Home event history',
+                kind: 'RECORDED', source: 'Home event history',
                 observedAt: repairEvents[0]?.occurredAt.toISOString() ?? null,
               },
             ],
@@ -4615,13 +4655,13 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
               {
                 key: 'warranty', label: 'Warranty',
                 value: warrantyValue,
-                kind: warranty ? 'RECORDED' : 'MISSING', source: 'Home Record warranty',
+                kind: 'RECORDED', source: 'Home Record warranty',
                 observedAt: warranty?.updatedAt.toISOString() ?? null,
               },
               {
                 key: 'insurance', label: 'Insurance',
                 value: insuranceValue,
-                kind: policy ? 'RECORDED' : 'MISSING', source: 'Home Record insurance',
+                kind: 'RECORDED', source: 'Home Record insurance',
                 observedAt: policy?.lastVerifiedAt?.toISOString() ?? policy?.updatedAt.toISOString() ?? null,
               },
             ],
@@ -4635,7 +4675,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
               },
               {
                 key: 'budget', label: 'Estimated budget', value: costRange ?? 'Not estimated',
-                kind: costRange ? 'DERIVED' : 'MISSING', source: 'Home Capital Timeline', observedAt: analysis.computedAt.toISOString(),
+                kind: 'DERIVED', source: 'Home Capital Timeline', observedAt: analysis.computedAt.toISOString(),
               },
               ...(typicalLifespan ? [{
                 key: 'lifespan', label: 'Typical lifespan', value: `${typicalLifespan} years`,

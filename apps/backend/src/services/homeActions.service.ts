@@ -958,7 +958,9 @@ export async function appendAcceptedOperationalWork(
           },
         ],
         factGroups: [],
-        subject: { kind: 'WORK_ITEM', id: item.id, label: displayTitle.slice(0, 180) },
+        subject: item.subjectType === 'INVENTORY_ITEM'
+          ? { kind: 'INVENTORY_ITEM', id: item.subjectId, label: displayTitle.slice(0, 180) }
+          : { kind: 'WORK_ITEM', id: item.id, label: displayTitle.slice(0, 180) },
         detailLabel: 'Why this work?',
         group: null,
       },

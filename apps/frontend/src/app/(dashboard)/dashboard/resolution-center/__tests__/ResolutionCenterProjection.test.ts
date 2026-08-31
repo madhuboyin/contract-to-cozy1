@@ -1,10 +1,12 @@
 import {
+  canCaptureResolutionInline,
   composeResolutionCases,
   isDecisionAction,
   isExecutionExceptionAction,
   isMissingInformationAction,
   isProviderExecutionAction,
   isUrgentAction,
+  resolutionCaseCtas,
   resolutionCaseKind,
   resolveAssetTitle,
   resolveIssueDescription,
@@ -112,6 +114,49 @@ describe('Resolution Center canonical projection', () => {
     expect(resolutionCaseKind(information)).toBe('information');
     expect(isExecutionExceptionAction(exception)).toBe(true);
     expect(resolutionCaseKind(exception)).toBe('exceptions');
+  });
+
+  it('does not turn low-confidence accepted work into a dead review case', () => {
+    const accepted = toResolutionAction(canonicalAction({
+      presentation: { ...canonicalAction().presentation, variant: 'ACCEPTED_WORK' },
+      confidence: { score: 0.4, label: 'LOW', missing: ['Contractor assignment'] },
+      recommendationResponse: { status: 'LOW_CONFIDENCE', missingFacts: ['Contractor assignment'] },
+      workItem: { state: 'ACCEPTED' },
+    }));
+
+    expect(isMissingInformationAction(accepted)).toBe(false);
+    expect(resolutionCaseKind(accepted)).toBeNull();
+  });
+
+  it('opens canonical correction contracts inline', () => {
+    const correction = toResolutionAction(canonicalAction({
+      primaryCta: { kind: 'CORRECT_FACT', label: 'Update item details', href: '/inventory' },
+      propertyContextFeature: {
+        featureKey: 'CAPITAL_TIMELINE',
+        operationKey: 'RUN_TIMELINE',
+        operationInput: { inventoryItemId: 'washer-1' },
+      },
+    }));
+
+    expect(canCaptureResolutionInline(correction)).toBe(true);
+    expect(canCaptureResolutionInline(toResolutionAction(canonicalAction()))).toBe(false);
+  });
+
+  it('promotes an information card correction CTA over its planning CTA', () => {
+    const action = canonicalAction({
+      confidence: { score: 0.6, label: 'MEDIUM', missing: ['Installation year'] },
+      primaryCta: { kind: 'REVIEW', label: 'Plan replacement', href: '/capital-timeline' },
+      secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Update item details', href: '/inventory' }],
+      propertyContextFeature: {
+        featureKey: 'CAPITAL_TIMELINE', operationKey: 'RUN_TIMELINE', operationInput: { inventoryItemId: 'washer-1' },
+      },
+    });
+    const [item] = composeResolutionCases([action]);
+    const { primary, secondary } = resolutionCaseCtas(item);
+
+    expect(primary.kind).toBe('CORRECT_FACT');
+    expect(canCaptureResolutionInline(item.action, primary)).toBe(true);
+    expect(secondary?.kind).toBe('REVIEW');
   });
 
   it('includes real decisions without treating ordinary upkeep as a decision', () => {

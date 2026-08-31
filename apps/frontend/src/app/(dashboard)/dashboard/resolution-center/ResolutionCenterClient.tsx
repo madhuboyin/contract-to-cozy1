@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { SourceChip } from '@/components/trust';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -149,15 +151,41 @@ function factKinds(action: any): string[] {
 }
 
 export function isMissingInformationAction(action: any): boolean {
-  const responseStatus = normalizeUpper(action?.recommendationResponse?.status);
+  // Accepted work belongs in Home Operations. A low confidence score on the
+  // work-item projection is not, by itself, an actionable data-correction
+  // case and previously created the dead "Review" loop reported here.
+  if (isProviderExecutionAction(action)) return false;
+  const hasExplicitGap = Boolean(
+    (action?.confidence?.missing?.length ?? 0) > 0 ||
+      (action?.confidence?.conflicted?.length ?? 0) > 0 ||
+      (action?.recommendationResponse?.missingFacts?.length ?? 0) > 0 ||
+      factKinds(action).some((kind) => kind === 'MISSING' || kind === 'CONFLICTED'),
+  );
   return Boolean(
     normalizeUpper(action?.primaryCta?.kind) === 'CORRECT_FACT' ||
       INFORMATION_VARIANTS.has(normalizeUpper(action?.presentation?.variant)) ||
-      (action?.confidence?.missing?.length ?? 0) > 0 ||
-      (action?.confidence?.conflicted?.length ?? 0) > 0 ||
-      ['LOW_CONFIDENCE', 'DATA_UNAVAILABLE', 'UPSTREAM_FAILURE'].includes(responseStatus) ||
-      factKinds(action).some((kind) => kind === 'MISSING' || kind === 'CONFLICTED'),
+      hasExplicitGap,
   );
+}
+
+export function canCaptureResolutionInline(action: any, cta = action?.primaryCta): boolean {
+  return Boolean(
+    action?.propertyContextFeature?.featureKey &&
+      action?.propertyContextFeature?.operationKey &&
+      normalizeUpper(cta?.kind) === 'CORRECT_FACT',
+  );
+}
+
+export function resolutionCaseCtas(item: ResolutionCase) {
+  const ctas = [item.action.primaryCta, ...(item.action.secondaryCtas ?? [])];
+  const correction = item.kind === 'information'
+    ? ctas.find((cta) => normalizeUpper(cta.kind) === 'CORRECT_FACT')
+    : undefined;
+  const primary = correction ?? item.action.primaryCta;
+  return {
+    primary,
+    secondary: ctas.find((cta) => cta !== primary && normalizeUpper(cta.kind) !== 'CORRECT_FACT'),
+  };
 }
 
 export function isExecutionExceptionAction(action: any): boolean {
@@ -362,14 +390,13 @@ function sourceLabels(action: ResolutionHomeAction): string[] {
   ).slice(0, 3);
 }
 
-function ResolutionCaseCard({ item }: { item: ResolutionCase }) {
+function ResolutionCaseCard({ item, onCaptureInline }: { item: ResolutionCase; onCaptureInline: (item: ResolutionCase) => void }) {
   const meta = KIND_META[item.kind];
   const headline = resolveIssueHeadline(item.action);
   const subject = resolveAssetTitle(item.action);
   const why = resolveIssueDescription(item.action, headline);
   const needs = tidyNeeds(item.missingInformation, subject);
-  const primary = item.action.primaryCta;
-  const secondary = item.action.secondaryCtas?.[0];
+  const { primary, secondary } = resolutionCaseCtas(item);
   const sources = sourceLabels(item.action);
 
   const subjectKicker =
@@ -426,16 +453,29 @@ function ResolutionCaseCard({ item }: { item: ResolutionCase }) {
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <Button
-            asChild
-            size="sm"
-            className="h-9 whitespace-nowrap rounded-lg bg-teal-700 px-3.5 text-[13px] font-semibold text-white hover:bg-teal-800"
-          >
-            <Link href={primary.href} title={primary.label}>
+          {canCaptureResolutionInline(item.action, primary) ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 whitespace-nowrap rounded-lg bg-teal-700 px-3.5 text-[13px] font-semibold text-white hover:bg-teal-800"
+              title={primary.label}
+              onClick={() => onCaptureInline(item)}
+            >
               {shortCtaLabel(primary, item.kind)}
               <ChevronRight className="ml-0.5 h-4 w-4" />
-            </Link>
-          </Button>
+            </Button>
+          ) : (
+            <Button
+              asChild
+              size="sm"
+              className="h-9 whitespace-nowrap rounded-lg bg-teal-700 px-3.5 text-[13px] font-semibold text-white hover:bg-teal-800"
+            >
+              <Link href={primary.href} title={primary.label}>
+                {shortCtaLabel(primary, item.kind)}
+                <ChevronRight className="ml-0.5 h-4 w-4" />
+              </Link>
+            </Button>
+          )}
           {secondary ? (
             <Link
               href={secondary.href}
@@ -484,6 +524,7 @@ export default function ResolutionCenterClient() {
   const { selectedPropertyId: contextPropertyId, setSelectedPropertyId } = usePropertyContext();
   const requestedPropertyId = searchParams.get('propertyId');
   const filter = normalizeFilter(searchParams.get('filter'));
+  const [captureCase, setCaptureCase] = useState<ResolutionCase | null>(null);
 
   const { data: properties = [], isLoading: propertiesLoading } = useQuery({
     queryKey: ['dashboard-properties'],
@@ -585,7 +626,9 @@ export default function ResolutionCenterClient() {
           <Button variant="outline" className="mt-4 bg-white" onClick={() => refetch()}>Try again</Button>
         </div>
       ) : visibleCases.length > 0 ? (
-        <div className="space-y-3">{visibleCases.map((item) => <ResolutionCaseCard key={item.key} item={item} />)}</div>
+        <div className="space-y-3">{visibleCases.map((item) => (
+          <ResolutionCaseCard key={item.key} item={item} onCaptureInline={setCaptureCase} />
+        ))}</div>
       ) : (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/35 p-10 text-center">
           <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
@@ -596,6 +639,38 @@ export default function ResolutionCenterClient() {
           <Button asChild variant="outline" className="mt-5 bg-white"><Link href={operationsHref}>Open Home Operations</Link></Button>
         </div>
       )}
+
+      <Sheet open={Boolean(captureCase)} onOpenChange={(open) => { if (!open) setCaptureCase(null); }}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+          {captureCase && selectedPropertyId && captureCase.action.propertyContextFeature ? (
+            <>
+              <SheetHeader className="border-b border-slate-200 px-6 pb-5 pt-6 pr-16">
+                <SheetTitle>{resolveIssueHeadline(captureCase.action)}</SheetTitle>
+                <SheetDescription>
+                  Add only the details needed to improve this recommendation. Your answers update the Home Record and this case refreshes automatically.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="flex-1 p-5 sm:p-6">
+                <PropertyContextCapturePanel
+                  propertyId={selectedPropertyId}
+                  featureKey={captureCase.action.propertyContextFeature.featureKey}
+                  operationKey={captureCase.action.propertyContextFeature.operationKey}
+                  operationInput={captureCase.action.propertyContextFeature.operationInput}
+                  onReady={async () => {
+                    await refetch();
+                    setCaptureCase(null);
+                  }}
+                  onCaptured={async () => {
+                    await refetch();
+                    setCaptureCase(null);
+                  }}
+                  onDefer={() => setCaptureCase(null)}
+                />
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

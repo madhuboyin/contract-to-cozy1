@@ -832,3 +832,25 @@ holding one or two lines each, and a paragraph description that usually duplicat
 - **Subject kicker** shown only when it is not already contained in the headline.
 - **Hero** dropped the three `MetricTile`s (redundant with the filter-tab counts),
   `PageHero`, and `TrustMetaRow` for a compact header + pill filter row.
+
+### 18.2 Same-page correction and actionable-case integrity (implemented)
+
+Missing-information CTAs no longer use a navigation hop as the correction
+mechanism. When a canonical Home Action supplies a `propertyContextFeature`, the
+Resolution Center opens the shared Property Context capture panel in a focused
+right-side drawer. The panel asks only for the registered facts, writes to the
+canonical Inventory Item, refreshes the action feed after save, and supports
+deferring without leaving the page.
+
+Capital-timeline actions pass their exact `inventoryItemId` to the lifecycle
+capture contract, so condition and approximate install/purchase date resolve the
+same physical asset. Home Digital Twin fact review is projected per component,
+never as one property-wide mixture of HVAC and appliance facts. It is published
+only when the component can be matched to a specific Inventory Item; otherwise
+the estimate remains visible in the Digital Twin rather than linking to an editor
+that cannot correct it.
+
+Ordinary accepted work remains excluded even when its projection has low
+confidence or `missingContext`. Only blocked, reopened, follow-up-due, and
+reported-complete work is eligible as an exception. Inventory-backed work keeps
+its `INVENTORY_ITEM` subject identity so related signals converge on one case.

@@ -193,6 +193,8 @@ test('the accepted-work projection humanizes a stale enum work-item title', asyn
     supersededByWorkItemId: null,
     confidence: 0.6,
     missingContext: [],
+    subjectType: 'INVENTORY_ITEM',
+    subjectId: 'water-heater-1',
     sourceVersion: 'v1',
     workKey: 'work-key-stale',
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -204,6 +206,8 @@ test('the accepted-work projection humanizes a stale enum work-item title', asyn
 
   assert.equal(projected.presentation.headline, 'Review the Water Heater risk');
   assert.equal(projected.presentation.subject.label, 'Review the Water Heater risk');
+  assert.equal(projected.presentation.subject.kind, 'INVENTORY_ITEM');
+  assert.equal(projected.presentation.subject.id, 'water-heater-1');
   assert.equal(
     projected.presentation.keyFacts.find((fact) => fact.label === 'Task').value,
     'Review the Water Heater risk',
