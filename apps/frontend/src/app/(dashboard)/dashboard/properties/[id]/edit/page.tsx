@@ -100,6 +100,17 @@ const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', '
 const SIDING_TYPE_OPTIONS = [
   'Vinyl', 'Wood', 'Fiber cement', 'Brick', 'Stucco', 'Aluminum', 'Stone or masonry', 'Composite', 'Other',
 ] as const;
+// Attached / shared-building-envelope homes: the homeowner owns no private pool,
+// fence, hose bib, or lot — those are the association's common area. Keep in sync
+// with PRIVATE_EXTERIOR_STRUCTURE_NOT_APPLICABLE in factCatalog.ts.
+const SHARED_EXTERIOR_ENVELOPE_DWELLINGS = new Set([
+  'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT', 'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY',
+]);
+const SHARED_EXTERIOR_ENVELOPE_OWNERSHIP = new Set(['CONDOMINIUM', 'COOPERATIVE']);
+function isSharedExteriorEnvelope(dwellingType: unknown, ownershipForm: unknown): boolean {
+  return SHARED_EXTERIOR_ENVELOPE_DWELLINGS.has(String(dwellingType))
+    || SHARED_EXTERIOR_ENVELOPE_OWNERSHIP.has(String(ownershipForm));
+}
 const RESPONSIBILITY_PRESETS = [
   { value: 'OWNER', label: 'I handle most maintenance', description: 'Use this for a home you primarily maintain yourself.', icon: HomeIcon },
   { value: 'ASSOCIATION', label: 'My association handles most', description: 'Common for condos, co-ops, and HOA-managed homes.', icon: Building2 },
@@ -878,19 +889,24 @@ export default function EditPropertyPage() {
         inFloodZone: data.inFloodZone ?? undefined,
         inWildfireZone: data.inWildfireZone ?? undefined,
         isCoastal: data.isCoastal ?? undefined,
-        exteriorProfile: {
-          hasPrivateOutdoorSpace: data.hasPrivateOutdoorSpace,
-          outdoorSpaceTypes: normalizeOutdoorSpaceTypes(data.hasPrivateOutdoorSpace, data.outdoorSpaceTypes),
-          lotSizeSqFt: data.lotSizeSqFt ?? null,
-          hasLawn: data.hasLawn,
-          hasTreesOrShrubs: data.hasTreesOrShrubs,
-          hasDriveway: data.hasDriveway,
-          hasFence: data.hasFence,
-          hasPoolOrSpa: data.hasPoolOrSpa,
-          hasOutdoorFaucets: data.hasOutdoorFaucets,
-          hasIrrigation: data.hasIrrigation,
-          hasDrainageIssues: data.hasDrainageIssues,
-        },
+        exteriorProfile: (() => {
+          // Attached homes: the private-exterior-structure fields don't apply,
+          // so we don't collect them and clear any stale value.
+          const sharedEnvelope = isSharedExteriorEnvelope(data.dwellingType, data.ownershipForm);
+          return {
+            hasPrivateOutdoorSpace: data.hasPrivateOutdoorSpace,
+            outdoorSpaceTypes: normalizeOutdoorSpaceTypes(data.hasPrivateOutdoorSpace, data.outdoorSpaceTypes),
+            lotSizeSqFt: sharedEnvelope ? null : (data.lotSizeSqFt ?? null),
+            hasLawn: data.hasLawn,
+            hasTreesOrShrubs: data.hasTreesOrShrubs,
+            hasDriveway: data.hasDriveway,
+            hasFence: sharedEnvelope ? null : data.hasFence,
+            hasPoolOrSpa: sharedEnvelope ? null : data.hasPoolOrSpa,
+            hasOutdoorFaucets: sharedEnvelope ? null : data.hasOutdoorFaucets,
+            hasIrrigation: data.hasIrrigation,
+            hasDrainageIssues: data.hasDrainageIssues,
+          };
+        })(),
         responsibilities: mapResponsibilitiesToPayload(data.responsibilities),
         purchasePriceCents: dollarsToCents(data.purchasePriceDollars),
         purchaseDate: data.purchaseDate ?? null,
@@ -1033,6 +1049,7 @@ export default function EditPropertyPage() {
   const agingSystemsCount = [watchHvacInstallYear, watchWaterHeaterInstallYear, watchRoofReplacementYear]
     .map((year) => getInstallYearFeedback(year)?.color)
     .filter((color) => color === "amber" || color === "rose").length;
+  const hasSharedExteriorEnvelope = isSharedExteriorEnvelope(watchDwellingType, watchOwnershipForm);
   const [activeSectionId, setActiveSectionId] = React.useState<PropertySectionId | null>("basics");
   const [lockedStartFieldKey, setLockedStartFieldKey] = React.useState<string | null>(null);
 
@@ -2680,8 +2697,14 @@ export default function EditPropertyPage() {
                       <p className="text-xs text-muted-foreground">We’ll only suggest outdoor care that applies to your home.</p>
                     </div>
                   </div>
+                  {hasSharedExteriorEnvelope ? (
+                    <p className="-mt-1 mb-3 text-xs text-muted-foreground">
+                      For attached homes we skip private pool, fence, and lot questions — the association
+                      manages the building envelope and common areas.
+                    </p>
+                  ) : null}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {([
+                    {(([
                       ['hasPrivateOutdoorSpace', 'Private outdoor space', 'Yard, patio, balcony, deck, or garden'],
                       ['hasLawn', 'Lawn', 'Any grass you help maintain'],
                       ['hasTreesOrShrubs', 'Trees or shrubs', 'On areas you use or maintain'],
@@ -2689,7 +2712,9 @@ export default function EditPropertyPage() {
                       ['hasFence', 'Fence', 'Any fencing you help maintain'],
                       ['hasPoolOrSpa', 'Pool or spa', 'In-ground or above-ground'],
                       ['hasOutdoorFaucets', 'Outdoor faucets', 'Hose bibs or spigots'],
-                    ] as const).map(([name, fieldLabel, description]) => (
+                    ] as const).filter(([name]) =>
+                      !hasSharedExteriorEnvelope || !['hasFence', 'hasPoolOrSpa', 'hasOutdoorFaucets'].includes(name),
+                    )).map(([name, fieldLabel, description]) => (
                       <FormField
                         key={name}
                         control={form.control}
@@ -2734,22 +2759,24 @@ export default function EditPropertyPage() {
                       />
                     ))}
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="lotSizeSqFt"
-                    render={({ field }) => (
-                      <FormItem className="mt-3 sm:max-w-xs">
-                        <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Lot size</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input id="field-lotSizeSqFt" className="h-9 pr-11 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 6000" type="number" min="0" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-slate-500">sq ft</span>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {!hasSharedExteriorEnvelope ? (
+                    <FormField
+                      control={form.control}
+                      name="lotSizeSqFt"
+                      render={({ field }) => (
+                        <FormItem className="mt-3 sm:max-w-xs">
+                          <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Lot size</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input id="field-lotSizeSqFt" className="h-9 pr-11 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 6000" type="number" min="0" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-slate-500">sq ft</span>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : null}
                 </section>
 
                 {form.watch('hasPrivateOutdoorSpace') === true && (

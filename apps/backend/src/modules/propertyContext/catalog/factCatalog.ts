@@ -1,14 +1,40 @@
 import { PropertyContextScope } from '../domain/contracts';
 
+export type FactApplicabilityCondition =
+  | { factKey: string; operator: 'IN'; values: readonly unknown[] }
+  | { factKey: string; operator: 'EQUALS'; value: unknown };
+
 export interface PropertyFactDefinition {
   key: string;
   scope: PropertyContextScope;
   canonicalOwner: string;
   correctionPath: string | null;
   writable: boolean;
+  /**
+   * The fact is NOT applicable to a property when ANY of these conditions holds
+   * against that property's own facts. Non-applicable facts are excluded from
+   * completeness (numerator and denominator) and never surfaced as a gap to fill.
+   * A condition whose referenced fact is not yet known does not disqualify —
+   * we do not hide a fact until we are sure it does not apply.
+   */
+  notApplicableWhen?: readonly FactApplicabilityCondition[];
 }
 
 const propertyPath = (section: string) => `/dashboard/properties/:propertyId/edit#${section}`;
+
+// Attached / shared-building-envelope dwellings: the homeowner does not own or
+// maintain a private exterior structure. Any pool, fence, or hose bib belongs to
+// the association's common area, and there is no private lot to measure. Mirrors
+// the `sharedEnvelope` set in buyerInspectionModuleComposition.service.ts.
+const ATTACHED_DWELLING_TYPES = [
+  'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT', 'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY',
+] as const;
+const ASSOCIATION_OWNERSHIP_FORMS = ['CONDOMINIUM', 'COOPERATIVE'] as const;
+
+const PRIVATE_EXTERIOR_STRUCTURE_NOT_APPLICABLE: readonly FactApplicabilityCondition[] = [
+  { factKey: 'core.dwellingType', operator: 'IN', values: ATTACHED_DWELLING_TYPES },
+  { factKey: 'core.ownershipForm', operator: 'IN', values: ASSOCIATION_OWNERSHIP_FORMS },
+];
 
 export const PROPERTY_FACT_CATALOG = [
   { key: 'core.dwellingType', scope: 'CORE', canonicalOwner: 'Property.dwellingType', correctionPath: propertyPath('property-type'), writable: true },
@@ -41,14 +67,14 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'structure.electricalPanelAgeYears', scope: 'STRUCTURE', canonicalOwner: 'Property.electricalPanelAge', correctionPath: propertyPath('structure'), writable: true },
   { key: 'exterior.hasPrivateOutdoorSpace', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasPrivateOutdoorSpace', correctionPath: propertyPath('exterior'), writable: true },
   { key: 'exterior.outdoorSpaceTypes', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.outdoorSpaceTypes', correctionPath: propertyPath('exterior'), writable: true },
-  { key: 'exterior.lotSizeSqFt', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.lotSizeSqFt', correctionPath: propertyPath('exterior'), writable: true },
+  { key: 'exterior.lotSizeSqFt', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.lotSizeSqFt', correctionPath: propertyPath('exterior'), writable: true, notApplicableWhen: PRIVATE_EXTERIOR_STRUCTURE_NOT_APPLICABLE },
   { key: 'exterior.hasLawn', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasLawn', correctionPath: propertyPath('exterior'), writable: true },
   { key: 'exterior.hasTreesOrShrubs', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasTreesOrShrubs', correctionPath: propertyPath('exterior'), writable: true },
   { key: 'exterior.hasDriveway', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasDriveway', correctionPath: propertyPath('exterior'), writable: true },
-  { key: 'exterior.hasFence', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasFence', correctionPath: propertyPath('exterior'), writable: true },
-  { key: 'exterior.hasPoolOrSpa', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasPoolOrSpa', correctionPath: propertyPath('exterior'), writable: true },
+  { key: 'exterior.hasFence', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasFence', correctionPath: propertyPath('exterior'), writable: true, notApplicableWhen: PRIVATE_EXTERIOR_STRUCTURE_NOT_APPLICABLE },
+  { key: 'exterior.hasPoolOrSpa', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasPoolOrSpa', correctionPath: propertyPath('exterior'), writable: true, notApplicableWhen: PRIVATE_EXTERIOR_STRUCTURE_NOT_APPLICABLE },
   { key: 'exterior.hasIrrigation', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasIrrigation', correctionPath: propertyPath('exterior'), writable: true },
-  { key: 'exterior.hasOutdoorFaucets', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasOutdoorFaucets', correctionPath: propertyPath('exterior'), writable: true },
+  { key: 'exterior.hasOutdoorFaucets', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasOutdoorFaucets', correctionPath: propertyPath('exterior'), writable: true, notApplicableWhen: PRIVATE_EXTERIOR_STRUCTURE_NOT_APPLICABLE },
   { key: 'exterior.hasDrainageIssues', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasDrainageIssues', correctionPath: propertyPath('exterior'), writable: true },
   { key: 'responsibility.roof', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.ROOF', correctionPath: propertyPath('responsibility'), writable: true },
   { key: 'responsibility.buildingExterior', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.BUILDING_EXTERIOR', correctionPath: propertyPath('responsibility'), writable: true },
@@ -157,4 +183,23 @@ export function getFactDefinitionsForScope(scope: PropertyContextScope): Propert
 
 export function isAllowlistedFactKey(key: string): boolean {
   return catalogByKey.has(key);
+}
+
+/**
+ * Whether a fact applies to a property, given that property's own known facts.
+ * Non-applicable facts must be excluded from completeness and never asked.
+ */
+export function isFactApplicable(
+  definition: Pick<PropertyFactDefinition, 'notApplicableWhen'>,
+  facts: Record<string, { value: unknown } | undefined>,
+): boolean {
+  const rules = definition.notApplicableWhen;
+  if (!rules || rules.length === 0) return true;
+  for (const rule of rules) {
+    const value = facts[rule.factKey]?.value;
+    if (value === null || value === undefined) continue;
+    if (rule.operator === 'IN' && rule.values.includes(value)) return false;
+    if (rule.operator === 'EQUALS' && value === rule.value) return false;
+  }
+  return true;
 }

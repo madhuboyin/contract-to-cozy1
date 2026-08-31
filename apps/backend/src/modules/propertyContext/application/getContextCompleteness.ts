@@ -1,4 +1,4 @@
-import { getFactDefinitionsForScope } from '../catalog/factCatalog';
+import { getFactDefinitionsForScope, isFactApplicable } from '../catalog/factCatalog';
 import { PropertyContextScope, PropertyContextSnapshot } from '../domain/contracts';
 
 export interface PropertyContextScopeCompleteness {
@@ -20,7 +20,9 @@ export interface PropertyContextCompleteness {
 
 export function getContextCompleteness(snapshot: PropertyContextSnapshot): PropertyContextCompleteness {
   const scopes = snapshot.scopes.map((scope): PropertyContextScopeCompleteness => {
-    const factKeys = getFactDefinitionsForScope(scope).map((definition) => definition.key);
+    const factKeys = getFactDefinitionsForScope(scope)
+      .filter((definition) => isFactApplicable(definition, snapshot.facts))
+      .map((definition) => definition.key);
     const knownFactKeys = factKeys.filter((key) => snapshot.facts[key]?.state === 'KNOWN');
     const missingFactKeys = factKeys.filter((key) => !snapshot.facts[key] || snapshot.facts[key].state === 'UNKNOWN');
     const conflictedFactKeys = factKeys.filter((key) => snapshot.facts[key]?.state === 'CONFLICTED');

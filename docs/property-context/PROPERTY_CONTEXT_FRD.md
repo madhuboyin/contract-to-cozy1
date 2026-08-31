@@ -519,6 +519,19 @@ catalog.
 - drainage issues, grading, and known flood-entry points
 - shared versus private exterior designation
 
+**Fact applicability.** A catalog entry may carry `notApplicableWhen` — conditions
+against the property's own facts. A non-applicable fact is excluded from
+completeness (both numerator and denominator) and is never surfaced as a gap to
+fill or asked in a form; a condition whose referenced fact is not yet known does
+not disqualify. `exterior.lotSizeSqFt`, `exterior.hasFence`, `exterior.hasPoolOrSpa`,
+and `exterior.hasOutdoorFaucets` are not applicable when
+`core.dwellingType` ∈ {ATTACHED_SINGLE_FAMILY, TOWNHOUSE, CONDO_UNIT, APARTMENT_UNIT,
+DUPLEX, MULTI_FAMILY} or `core.ownershipForm` ∈ {CONDOMINIUM, COOPERATIVE} — the
+homeowner owns no private exterior structure; any pool or fence is the
+association's common area. This mirrors the `sharedEnvelope` set already used by
+`buyerInspectionModuleComposition`. (A first-class `NOT_APPLICABLE` fact state per
+G4 is not yet implemented; today applicability is enforced by exclusion.)
+
 ### 11.5 RESPONSIBILITY
 
 Responsibility is recorded independently for:

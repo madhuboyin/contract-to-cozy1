@@ -175,3 +175,48 @@ test('completeness counts only KNOWN facts as complete and reports actionable st
   assert.deepEqual(completeness.scopes[0].staleFactKeys, ['exterior.hasDrainageIssues']);
   assert.ok(completeness.completenessPercent < 100);
 });
+
+test('completeness excludes private-exterior-structure facts for attached dwellings', () => {
+  const base = {
+    propertyId: 'property-1',
+    contextVersion: 'v1',
+    generatedAt: NOW.toISOString(),
+    scopes: ['CORE', 'EXTERIOR'],
+    warnings: [],
+  };
+  const exteriorFacts = {
+    'exterior.lotSizeSqFt': createPropertyFact('exterior.lotSizeSqFt', null, undefined, NOW),
+    'exterior.hasFence': createPropertyFact('exterior.hasFence', null, undefined, NOW),
+    'exterior.hasPoolOrSpa': createPropertyFact('exterior.hasPoolOrSpa', null, undefined, NOW),
+    'exterior.hasOutdoorFaucets': createPropertyFact('exterior.hasOutdoorFaucets', null, undefined, NOW),
+    'exterior.hasLawn': createPropertyFact('exterior.hasLawn', null, undefined, NOW),
+  };
+
+  const detached = getContextCompleteness({
+    ...base,
+    facts: { 'core.dwellingType': createPropertyFact('core.dwellingType', 'DETACHED_SINGLE_FAMILY', undefined, NOW), ...exteriorFacts },
+  });
+  const detachedExterior = detached.scopes.find((s) => s.scope === 'EXTERIOR');
+  assert.ok(detachedExterior.missingFactKeys.includes('exterior.hasPoolOrSpa'));
+  assert.ok(detachedExterior.missingFactKeys.includes('exterior.lotSizeSqFt'));
+
+  const townhouse = getContextCompleteness({
+    ...base,
+    facts: { 'core.dwellingType': createPropertyFact('core.dwellingType', 'TOWNHOUSE', undefined, NOW), ...exteriorFacts },
+  });
+  const townhouseExterior = townhouse.scopes.find((s) => s.scope === 'EXTERIOR');
+  for (const key of ['exterior.hasPoolOrSpa', 'exterior.hasFence', 'exterior.hasOutdoorFaucets', 'exterior.lotSizeSqFt']) {
+    assert.ok(!townhouseExterior.missingFactKeys.includes(key), `${key} should not be a gap for a townhouse`);
+  }
+  // A generic yard fact stays in scope — only the private-structure cluster drops.
+  assert.ok(townhouseExterior.missingFactKeys.includes('exterior.hasLawn'));
+  assert.ok(townhouseExterior.totalFacts < detachedExterior.totalFacts);
+
+  // Ownership form alone also establishes the association context.
+  const condoByOwnership = getContextCompleteness({
+    ...base,
+    facts: { 'core.ownershipForm': createPropertyFact('core.ownershipForm', 'CONDOMINIUM', undefined, NOW), ...exteriorFacts },
+  });
+  const condoExterior = condoByOwnership.scopes.find((s) => s.scope === 'EXTERIOR');
+  assert.ok(!condoExterior.missingFactKeys.includes('exterior.hasPoolOrSpa'));
+});
