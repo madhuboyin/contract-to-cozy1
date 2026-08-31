@@ -325,6 +325,13 @@ test('converting a checklist-sourced recommendation reuses its existing CANDIDAT
   assert.equal(linked.responsibleParty, 'HOUSEHOLD');
 });
 
+test('maintenance recommendation work keys retain inventory identity when it is known', () => {
+  assert.equal(
+    resolveMaintenanceRecommendationWorkKey('property-1', 'checklist-1', 'washer-1'),
+    'property:property-1:inventory:washer-1:maintenance-checklist-1',
+  );
+});
+
 test('a later status transition on a reconciled task still resolves the same reconciled work item', async () => {
   reset();
   checklistItems.set('checklist-1', { id: 'checklist-1', propertyId: 'property-1', actionKey: 'ck-actionkey-1' });

@@ -464,14 +464,17 @@ export function WorkItemManageDrawer({
   const canQuickComplete = detail
     ? detail.executions.some((execution) => execution.executionType === 'MAINTENANCE_TASK')
     && (detail.safetyTier === 'LOW_CONSEQUENCE' || detail.safetyTier === 'MATERIAL_FINANCIAL')
-    && !['VERIFIED', 'CLOSED', 'FOLLOW_UP_DUE'].includes(detail.state)
+    && ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'REOPENED'].includes(detail.state)
     : false;
 
   const isTerminal = detail ? ['VERIFIED', 'CLOSED'].includes(detail.state) : true;
+  const awaitingConfirmation = detail?.state === 'REPORTED_COMPLETE';
   const canDismiss = Boolean(detail && !isTerminal && detail.legalNextStates.includes('CLOSED'));
   const showOwner = members.length > 1;
   const execution = detail ? executionHref(detail, propertyId) : null;
-  const needsConfirmation = Boolean(detail?.materialApprovalRequired && !detail?.materialApprovedAt);
+  const needsConfirmation = Boolean(
+    awaitingConfirmation && detail?.materialApprovalRequired && !detail?.materialApprovedAt,
+  );
 
   const dueLabel = useMemo(() => {
     if (!detail) return null;
@@ -550,6 +553,11 @@ export function WorkItemManageDrawer({
               {isTerminal ? (
                 <p className="text-sm text-slate-500">
                   This task is {FRIENDLY_STATE[detail.state].toLowerCase()} — nothing more to do here.
+                </p>
+              ) : awaitingConfirmation ? (
+                <p className="text-sm leading-6 text-slate-600">
+                  Completion has been recorded. Review the result below if confirmation is required;
+                  otherwise Home Operations will keep the outcome with this task.
                 </p>
               ) : (
                 <div className="space-y-3">

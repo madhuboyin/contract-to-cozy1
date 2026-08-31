@@ -846,7 +846,11 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       }
 
       if (recommendationSourceEntityId) {
-        const candidateKey = resolveMaintenanceRecommendationWorkKey(task.propertyId, recommendationSourceEntityId);
+        const candidateKey = resolveMaintenanceRecommendationWorkKey(
+          task.propertyId,
+          recommendationSourceEntityId,
+          task.inventoryItemId,
+        );
         const candidate = await findWorkItemByWorkKey(task.propertyId, candidateKey);
         if (candidate && (candidate.state === 'CANDIDATE' || candidate.state === 'ACCEPTED')) {
           // Home Operations Item #15: bookingId is the existing "hired a

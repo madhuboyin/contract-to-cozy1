@@ -83,6 +83,19 @@ test('a genuine coverage-gap-detector action (COVERAGE_GAP:: id prefix) gets an 
   assert.equal(proposed.occurrence.obligationSlug, 'coverage-gap');
 });
 
+test('an explicit canonical inventory subject is preserved for work identity', () => {
+  const action = actionFixture({
+    id: 'maintenance:recommendation-1',
+    source: { kind: 'MAINTENANCE', entityId: 'recommendation-1', version: 'v1' },
+    presentation: {
+      subject: { kind: 'INVENTORY_ITEM', id: 'washer-1', label: 'Washer' },
+    },
+  });
+  const proposed = proposeWorkItemFromHomeAction(action, 'property-1');
+
+  assert.deepEqual(proposed.subject, { type: 'INVENTORY_ITEM', id: 'washer-1' });
+});
+
 // loadCoverageActions' source.entityId is a CoverageReview.id, and
 // loadCoverageRenewalActions' is a Warranty/InsurancePolicy.id — neither is
 // an inventory item id (an InsurancePolicy in particular may not identify

@@ -54,13 +54,12 @@ function coverageActionHasInventoryItemSubject(action: HomeAction): boolean {
  * HomeAction carries only an overloaded source.entityId (sometimes a
  * journey id, sometimes a project id, sometimes already an inventory item
  * id) — not a clean typed subject for every source. Where the id is known
- * to already be a specific typed subject (PROJECT, and coverage-shaped
- * COVERAGE/GUIDANCE), use it directly. Everywhere else, fall back to a
- * PROPERTY subject and let obligationSlug (below) carry the entity-level
- * uniqueness instead — workKey omits the subject segment entirely for
- * PROPERTY subjects, so uniqueness must come from the slug in that case.
- * A later slice can tighten subject fidelity once loaders are extended to
- * carry a real subject id.
+ * to already be a specific typed subject (PROJECT, canonical INVENTORY_ITEM,
+ * and coverage-shaped COVERAGE/GUIDANCE), use it directly. Everywhere else,
+ * fall back to a PROPERTY subject and let obligationSlug (below) carry the
+ * entity-level uniqueness instead — workKey omits the subject segment
+ * entirely for PROPERTY subjects, so uniqueness must come from the slug in
+ * that case.
  */
 function resolveSubject(action: HomeAction, propertyId: string): WorkSubject {
   if (action.source.kind === 'PROJECT') {
@@ -77,6 +76,13 @@ function resolveSubject(action: HomeAction, propertyId: string): WorkSubject {
       return { type: 'PROPERTY', id: propertyId };
     }
     return { type: 'PROJECT', id: action.source.entityId };
+  }
+  // The canonical presentation subject is the strongest typed identity on a
+  // Home Action. Preserve it so recommendations from different producers can
+  // converge on the same physical asset instead of being flattened to a
+  // property-level work item whose identity depends on the source record.
+  if (action.presentation?.subject?.kind === 'INVENTORY_ITEM') {
+    return { type: 'INVENTORY_ITEM', id: action.presentation.subject.id };
   }
   if (isCoverageShaped(action)) {
     if (coverageActionHasInventoryItemSubject(action)) {
@@ -201,10 +207,16 @@ export function resolveGuidanceJourneyWorkKey(params: {
  * pre-conversion recommendation, instead of silently forking a second one
  * at the task-stage key.
  */
-export function resolveMaintenanceRecommendationWorkKey(propertyId: string, sourceEntityId: string): string {
+export function resolveMaintenanceRecommendationWorkKey(
+  propertyId: string,
+  sourceEntityId: string,
+  inventoryItemId?: string | null,
+): string {
   return resolveWorkKey({
     propertyId,
-    subject: { type: 'PROPERTY', id: propertyId },
+    subject: inventoryItemId
+      ? { type: 'INVENTORY_ITEM', id: inventoryItemId }
+      : { type: 'PROPERTY', id: propertyId },
     obligationType: 'MAINTENANCE_TASK',
     occurrence: { obligationSlug: `maintenance-${sourceEntityId}` },
   });

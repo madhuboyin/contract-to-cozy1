@@ -1,270 +1,55 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
-  ShieldAlert,
-  Wrench,
-  CalendarClock,
-  ChevronRight,
-  TrendingUp,
-  DollarSign,
   CheckCircle2,
-  Clock,
-  ArrowRight,
-  BarChart3,
-  ShieldCheck,
-  CircleDollarSign,
-  User,
-  X,
-  Thermometer,
-  Droplets,
-  Home,
-  Zap,
-  Building2,
-  Snowflake,
-  Waves,
-  Flame,
-  Bell,
+  ClipboardCheck,
 } from 'lucide-react';
-import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { api } from '@/lib/api/client';
-import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
-import { Booking, RankedHomeActionDTO } from '@/types';
-import type { Property } from '@/types';
-import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
 import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
+import { SourceChip } from '@/components/trust';
+import { api } from '@/lib/api/client';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import {
-  SourceChip,
-  WhyThisMattersCard,
-  EstimatedSavingsBadge,
-} from '@/components/trust';
-import { RichCompletionDialog, type RichCompletionValues } from '@/components/home/RichCompletionDialog';
-import { toast } from '@/components/ui/use-toast';
-import { track } from '@/lib/analytics/events';
-import { ServiceSelectionSheet } from './ServiceSelectionSheet';
-import { getProviderWorkCategory, resolveProviderSearchCategory } from '@/lib/config/serviceCategoryMapping';
+import type { Property, RankedHomeActionDTO } from '@/types';
 
-// ─── Journey system ───────────────────────────────────────────────────────────
+type ResolutionFilter = 'all' | 'decisions' | 'information' | 'exceptions';
+export type ResolutionCaseKind = Exclude<ResolutionFilter, 'all'>;
+type ResolutionHomeAction = ReturnType<typeof toResolutionAction>;
 
-type JourneyType =
-  | 'urgent-issue'
-  | 'repair-vs-replace'
-  | 'coverage'
-  | 'preventive'
-  | 'cost-savings'
-  | 'provider-execution'
-  | 'completed';
+export type ResolutionCase = {
+  key: string;
+  kind: ResolutionCaseKind;
+  action: ResolutionHomeAction;
+  relatedActions: ResolutionHomeAction[];
+  missingInformation: string[];
+};
 
-type ResolutionFilter =
-  | 'all'
-  | 'urgent'
-  | 'save-money'
-  | 'preventive'
-  | 'coverage'
-  | 'completed';
-
-const FILTER_OPTIONS: Array<{ key: ResolutionFilter; label: string }> = [
+const FILTERS: Array<{ key: ResolutionFilter; label: string }> = [
   { key: 'all', label: 'All' },
-  { key: 'urgent', label: 'Urgent' },
-  { key: 'save-money', label: 'Save Money' },
-  { key: 'preventive', label: 'Preventive' },
-  { key: 'coverage', label: 'Coverage' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'decisions', label: 'Decisions' },
+  { key: 'information', label: 'Missing information' },
+  { key: 'exceptions', label: 'Blocked or verify' },
 ];
 
-const FILTER_META: Record<
-  ResolutionFilter,
-  {
-    icon: React.ElementType;
-    tintCls: string;
-    activeCls: string;
-  }
-> = {
-  all: {
-    icon: Wrench,
-    tintCls: 'text-teal-600',
-    activeCls: 'border-teal-500 bg-white text-teal-700 shadow-[0_1px_0_rgba(15,23,42,0.04)]',
-  },
-  urgent: {
-    icon: ShieldAlert,
-    tintCls: 'text-red-500',
-    activeCls: 'border-rose-300 bg-rose-50 text-rose-700',
-  },
-  'save-money': {
-    icon: CircleDollarSign,
-    tintCls: 'text-emerald-600',
-    activeCls: 'border-emerald-300 bg-emerald-50 text-emerald-700',
-  },
-  preventive: {
-    icon: Wrench,
-    tintCls: 'text-amber-600',
-    activeCls: 'border-amber-300 bg-amber-50 text-amber-700',
-  },
-  coverage: {
-    icon: ShieldCheck,
-    tintCls: 'text-blue-600',
-    activeCls: 'border-blue-300 bg-blue-50 text-blue-700',
-  },
-  completed: {
-    icon: CheckCircle2,
-    tintCls: 'text-slate-500',
-    activeCls: 'border-slate-300 bg-slate-100 text-slate-700',
-  },
-};
+const EXCEPTION_STATES = new Set(['BLOCKED', 'REPORTED_COMPLETE', 'FOLLOW_UP_DUE', 'REOPENED']);
+const GENERIC_SUBJECT_LABELS = new Set(['property', 'home', 'home workflow', 'home asset']);
+const DECISION_CTA_KINDS = new Set(['COMPARE', 'PURCHASE', 'FINANCE']);
+const DECISION_SOURCE_KINDS = new Set(['INCIDENT', 'RECALL']);
+const DECISION_VARIANTS = new Set(['COVERAGE_REVIEW', 'FINANCIAL_EXPOSURE']);
+const INFORMATION_VARIANTS = new Set(['HOME_FACT_REVIEW', 'HEALTH_FACTOR_REVIEW']);
 
-const COMPLETED_BOOKING_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
-const COVERAGE_CATEGORY_KEYWORDS = ['COVERAGE', 'INSURANCE', 'WARRANTY', 'POLICY'];
-const SAVINGS_CATEGORY_KEYWORDS = [
-  'RISK_PREMIUM',
-  'DO_NOTHING',
-  'REFINANCE',
-  'MORTGAGE',
-  'TAX',
-  'ENERGY',
-  'BUDGET',
-  'FINANCE',
-  'HIDDEN_ASSET',
-];
-
-const SOURCE_LABEL_OVERRIDES: Record<string, string> = {
-  riskassessmentreport: 'Risk Assessment Report',
-  homesignaldata: 'Home Signal Data',
-  providerbookingworkflow: 'Provider Booking Workflow',
-  ctcintelligence: 'Home signals',
-};
-
-function normalizeUpperText(value: string | null | undefined): string {
+function normalizeUpper(value: unknown): string {
   return String(value ?? '').trim().toUpperCase();
 }
 
-function formatCompactUsd(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function formatRelativeDateLabel(dateLike: string | null | undefined): string | null {
-  if (!dateLike) return null;
-  const date = new Date(dateLike);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const now = new Date();
-  const diffMs = date.getTime() - now.getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
-  const dayDelta = Math.round(diffMs / dayMs);
-
-  if (Math.abs(dayDelta) <= 1) {
-    if (dayDelta === 0) return 'Today';
-    if (dayDelta > 0) return 'Tomorrow';
-    return 'Yesterday';
-  }
-  if (dayDelta > 1) return `In ${dayDelta} days`;
-  return `${Math.abs(dayDelta)} days ago`;
-}
-
-function formatLastUpdated(items: any[], fallbackTs?: number): string {
-  const minValidTs = Date.UTC(2020, 0, 1);
-  const maxValidTs = Date.now() + 24 * 60 * 60 * 1000;
-
-  const mostRecentTs = items.reduce((latest, item) => {
-    const candidate = Date.parse(String(item.updatedAt || item.nextDueDate || item.createdAt || 0));
-    if (!Number.isFinite(candidate)) return latest;
-    if (candidate < minValidTs || candidate > maxValidTs) return latest;
-    return candidate > latest ? candidate : latest;
-  }, 0);
-
-  const effectiveTs =
-    mostRecentTs || (typeof fallbackTs === 'number' && Number.isFinite(fallbackTs) ? fallbackTs : 0);
-  if (!effectiveTs) return 'Updated recently';
-
-  const minutes = Math.max(1, Math.round((Date.now() - effectiveTs) / 60000));
-  if (minutes < 60) return `Updated ${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `Updated ${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days > 365) return 'Updated recently';
-  return `Updated ${days}d ago`;
-}
-
-function humanizeSourceLabel(source: string | null | undefined): string {
-  const raw = String(source ?? '').trim();
-  if (!raw) return 'Home signals';
-  const normalizedKey = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (SOURCE_LABEL_OVERRIDES[normalizedKey]) return SOURCE_LABEL_OVERRIDES[normalizedKey];
-
-  const withSpaces = raw
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return withSpaces
-    .split(' ')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-}
-
-function normalizeConfidence(item: any): { level: 'high' | 'medium' | 'low'; score?: number } {
-  const levelRaw = normalizeUpperText(item?.confidence?.level ?? null);
-  const scoreRaw =
-    typeof item?.confidence?.score === 'number'
-      ? (item.confidence.score <= 1 ? item.confidence.score * 100 : item.confidence.score)
-      : typeof item?.confidence === 'number'
-      ? item.confidence * 100
-      : undefined;
-
-  if (levelRaw === 'HIGH') return { level: 'high', score: scoreRaw ? Math.round(scoreRaw) : undefined };
-  if (levelRaw === 'LOW') return { level: 'low', score: scoreRaw ? Math.round(scoreRaw) : undefined };
-  if (levelRaw === 'MEDIUM') return { level: 'medium', score: scoreRaw ? Math.round(scoreRaw) : undefined };
-
-  if (typeof scoreRaw === 'number') {
-    if (scoreRaw >= 80) return { level: 'high', score: Math.round(scoreRaw) };
-    if (scoreRaw < 55) return { level: 'low', score: Math.round(scoreRaw) };
-    return { level: 'medium', score: Math.round(scoreRaw) };
-  }
-
-  return { level: 'medium' };
-}
-
-function resolveItemSubtitle(item: any): string {
-  if (item?.__kind === 'booking') {
-    return item.status ? toDisplayLabel(String(item.status).replaceAll('_', ' ')) : 'Provider workflow';
-  }
-  if (item?.__kind === 'completed-booking') return 'Completed booking';
-  if (item?.__kind === 'incident') return toDisplayLabel(item.location || item.room || item.category || item.typeKey || 'Incident');
-  if (item?.__kind === 'completed-incident') {
-    return toDisplayLabel(item.location || item.room || item.category || item.typeKey || 'Resolved incident');
-  }
-  return toDisplayLabel(
-    item.location ||
-      item.room ||
-      item.serviceCategory ||
-      item.systemType ||
-      item.category ||
-      item.relatedChecklistItem?.title ||
-      'Home workflow',
-  );
-}
-
-function isMachineToken(value: string | null | undefined): boolean {
+function toDisplayLabel(value: unknown): string {
   const text = String(value ?? '').trim();
-  if (!text) return false;
-  if (text.includes('_')) return true;
-  return /^[A-Z0-9\s-]+$/.test(text) && text === text.toUpperCase();
-}
-
-function toDisplayLabel(value: string | null | undefined): string {
-  const text = String(value ?? '').trim();
-  if (!text) return 'Home Asset';
-
+  if (!text) return 'Home asset';
   return text
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -272,35 +57,34 @@ function toDisplayLabel(value: string | null | undefined): string {
     .split(' ')
     .map((word) => {
       const upper = word.toUpperCase();
-      if (upper.length <= 4 && upper === word.toUpperCase()) return upper;
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      return upper.length <= 4 && word === upper
+        ? upper
+        : `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`;
     })
     .join(' ');
 }
 
+function isMachineToken(value: unknown): boolean {
+  const text = String(value ?? '').trim();
+  return Boolean(text && (text.includes('_') || (/^[A-Z0-9\s-]+$/.test(text) && text === text.toUpperCase())));
+}
+
 export function resolveAssetTitle(item: any): string {
-  const canonicalSubject = item?.presentation?.subject?.label;
-  if (typeof canonicalSubject === 'string' && canonicalSubject.trim()) return canonicalSubject.trim();
-  return toDisplayLabel(item?.systemType || item?.category || item?.title || item?.relatedChecklistItem?.title);
+  const subject = item?.presentation?.subject?.label;
+  if (typeof subject === 'string' && subject.trim()) return subject.trim();
+  return toDisplayLabel(item?.systemType || item?.category || item?.title);
 }
 
 export function resolveIssueHeadline(item: any): string {
-  const canonicalHeadline = item?.presentation?.headline;
-  if (typeof canonicalHeadline === 'string' && canonicalHeadline.trim()) return canonicalHeadline.trim();
+  const headline = item?.presentation?.headline;
+  if (typeof headline === 'string' && headline.trim()) return headline.trim();
   const fallback = [item?.title, item?.summary]
     .map((value) => String(value ?? '').trim())
     .find((value) => value && !isMachineToken(value));
-  if (fallback) return fallback;
-  return 'Review this home action';
+  return fallback || 'Review this home action';
 }
 
-function getCardSubhead(item: any): string {
-  const eyebrow = item?.presentation?.eyebrow;
-  if (typeof eyebrow === 'string' && eyebrow.trim()) return eyebrow.trim();
-  return '';
-}
-
-const GENERIC_SUBHEAD_PHRASES = new Set(['schedule maintenance', 'schedule maintenance task', 'maintenance task']);
+const GENERIC_DESCRIPTIONS = new Set(['schedule maintenance', 'schedule maintenance task', 'maintenance task']);
 
 export function resolveIssueDescription(item: any, headline: string): string {
   const candidate = [
@@ -311,146 +95,15 @@ export function resolveIssueDescription(item: any, headline: string): string {
     item?.whyItMatters,
   ]
     .map((value) => String(value ?? '').trim())
-    .find((value) => {
-      if (!value || value === headline || isMachineToken(value)) return false;
-      if (GENERIC_SUBHEAD_PHRASES.has(value.toLowerCase())) return false;
-      return true;
-    });
-
+    .find((value) =>
+      Boolean(
+        value &&
+          value !== headline &&
+          !isMachineToken(value) &&
+          !GENERIC_DESCRIPTIONS.has(value.toLowerCase()),
+      ),
+    );
   return candidate || 'Review the supporting home information before choosing the next step.';
-}
-
-function resolveApplianceIcon(item: any): React.ElementType {
-  const token = String(item?.presentation?.subject?.label || item?.title || item?.systemType || item?.category || '').trim().toLowerCase();
-  if (token.includes('hvac') || token.includes('furnace') || token.includes('heat')) return Thermometer;
-  if (token.includes('water') || token.includes('plumbing') || token.includes('drain')) return Droplets;
-  if (token.includes('roof')) return Home;
-  if (token.includes('panel') || token.includes('electrical') || token.includes('electric')) return Zap;
-  if (token.includes('foundation') || token.includes('basement') || token.includes('structure')) return Building2;
-  if (token.includes('refrigerator') || token.includes('fridge')) return Snowflake;
-  if (token.includes('washer') || token.includes('laundry')) return Waves;
-  if (token.includes('oven') || token.includes('range') || token.includes('stove')) return Flame;
-  if (token.includes('smoke') || token.includes('detector') || token.includes('alarm')) return Bell;
-  return Wrench;
-}
-
-function resolveAssetImage(item: any): string | null {
-  const token = String(item?.title || item?.systemType || item?.category || '')
-    .trim()
-    .toLowerCase();
-
-  if (!token) return null;
-  if (token.includes('hvac') || token.includes('furnace') || token.includes('ac')) return '/images/HVAC.png';
-  if (token.includes('water heater') || token.includes('heater')) return '/images/Water-Heater.png';
-  if (token.includes('refrigerator') || token.includes('fridge')) return '/images/Refrigerator.png';
-  if (token.includes('washer')) return '/images/washer.png';
-  if (token.includes('smoke') || token.includes('co detector') || token.includes('carbon monoxide')) {
-    return '/images/Safety-Smoke-Detectors.png';
-  }
-  if (token.includes('roof')) return '/images/roof.png';
-  if (token.includes('panel')) return '/images/electric-panel.png';
-  return null;
-}
-
-function normalizeFilterParam(rawFilter: string | null): ResolutionFilter {
-  const normalized = String(rawFilter ?? '').trim().toLowerCase();
-  if (!normalized || normalized === 'all') return 'all';
-  if (normalized === 'urgent' || normalized === 'repair') return 'urgent';
-  if (normalized === 'save-money' || normalized === 'save' || normalized === 'savings') return 'save-money';
-  if (normalized === 'preventive') return 'preventive';
-  if (normalized === 'coverage') return 'coverage';
-  if (normalized === 'completed' || normalized === 'history') return 'completed';
-  return 'all';
-}
-
-function detectJourneyType(item: any, groupId?: string): JourneyType {
-  if (groupId === 'urgent') return 'urgent-issue';
-  if (groupId === 'cost-savings') return 'cost-savings';
-  if (groupId === 'coverage') return 'coverage';
-  if (groupId === 'replace-repair') return 'repair-vs-replace';
-  if (groupId === 'provider-execution') return 'provider-execution';
-  if (groupId === 'completed') return 'completed';
-  if (item?.resolutionJourney) return item.resolutionJourney as JourneyType;
-  if (item?.__kind === 'booking') return 'provider-execution';
-  if (item?.__kind === 'completed-booking' || item?.__kind === 'completed-incident') return 'completed';
-
-  if (
-    item.riskLevel === 'CRITICAL' ||
-    item.riskLevel === 'HIGH' ||
-    item.severity === 'CRITICAL' ||
-    item.severity === 'WARNING' ||
-    item.overdue
-  ) {
-    return 'urgent-issue';
-  }
-
-  if (
-    item.systemType &&
-    item.age &&
-    item.expectedLife &&
-    item.age / item.expectedLife >= 0.75
-  ) {
-    return 'repair-vs-replace';
-  }
-
-  if (
-    item.coverage &&
-    item.coverage.hasCoverage === false
-  ) {
-    return 'coverage';
-  }
-
-  if (isCostSavingsAction(item)) {
-    return 'cost-savings';
-  }
-
-  return 'preventive';
-}
-
-type ResolutionHomeAction = ReturnType<typeof toResolutionAction>;
-
-function isCanonicalHomeAction(item: any): item is ResolutionHomeAction {
-  return item?.__kind === 'home-action' && typeof item?.id === 'string';
-}
-
-function hasKeyword(value: string | null | undefined, keywords: string[]): boolean {
-  const upper = normalizeUpperText(value);
-  return keywords.some((keyword) => upper.includes(keyword));
-}
-
-function isCoverageAction(action: any): boolean {
-  return (
-    action?.source?.kind === 'COVERAGE' ||
-    action?.governance?.safetyTier === 'REGULATED_COVERAGE' ||
-    action.coverage?.hasCoverage === false ||
-    normalizeUpperText(action.actionKey).startsWith('COVERAGE_GAP::') ||
-    hasKeyword(action.category, COVERAGE_CATEGORY_KEYWORDS) ||
-    hasKeyword(action.title, ['COVERAGE', 'WARRANTY', 'INSURANCE', 'POLICY', 'GAP']) ||
-    hasKeyword(action.description ?? null, ['COVERAGE', 'WARRANTY', 'INSURANCE', 'POLICY', 'GAP'])
-  );
-}
-
-function isCostSavingsAction(action: any): boolean {
-  return (
-    hasKeyword(action.category, SAVINGS_CATEGORY_KEYWORDS) ||
-    hasKeyword(action.actionKey, ['RISK_PREMIUM', 'DO_NOTHING', 'REFINANCE', 'HIDDEN_ASSET']) ||
-    hasKeyword(action.title, ['SAVE', 'SAVINGS', 'LOWER', 'REDUCE', 'PREMIUM', 'REFINANCE', 'RATE', 'BUDGET', 'ENERGY', 'TAX']) ||
-    hasKeyword(action.description ?? null, ['SAVE', 'SAVINGS', 'LOWER', 'REDUCE', 'PREMIUM', 'REFINANCE', 'RATE', 'BUDGET', 'ENERGY', 'TAX'])
-  );
-}
-
-function isReplaceRepairAction(action: any): boolean {
-  return Boolean(
-    action?.id?.startsWith('repair-replace:') ||
-      action?.lineageId?.startsWith('appliance-repair-replace:') ||
-      action?.lineageId?.startsWith('hvac-repair-replace:') ||
-      action?.primaryCta?.href?.includes('/replace-repair') ||
-      action?.decisionLineage?.specialistProfile?.profileId?.includes('REPAIR_REPLACE') ||
-      (action?.systemType &&
-        action?.age &&
-        action?.expectedLife &&
-        action.age / action.expectedLife >= 0.75)
-  );
 }
 
 export function isProviderExecutionAction(action: any): boolean {
@@ -461,25 +114,18 @@ export function isUrgentAction(action: any): boolean {
   return (
     action?.priority === 'NOW' ||
     action?.governance?.safetyTier === 'SAFETY_EMERGENCY' ||
-    normalizeUpperText(action.riskLevel ?? null) === 'CRITICAL' ||
-    action.overdue === true
+    normalizeUpper(action?.riskLevel) === 'CRITICAL' ||
+    action?.overdue === true
   );
 }
 
-function isActiveIncident(item: IncidentDTO): boolean {
-  return item.status !== 'RESOLVED' && item.status !== 'SUPPRESSED' && item.status !== 'EXPIRED';
-}
-
-function isUrgentIncident(item: IncidentDTO): boolean {
-  return isActiveIncident(item) && (item.severity === 'CRITICAL' || item.severity === 'WARNING');
-}
-
 export function toResolutionAction(action: RankedHomeActionDTO) {
-  const priorityRisk = action.priority === 'NOW' || action.governance.safetyTier === 'SAFETY_EMERGENCY'
-    ? 'CRITICAL'
-    : action.priority === 'SOON'
-      ? 'MEDIUM'
-      : 'LOW';
+  const priorityRisk =
+    action.priority === 'NOW' || action.governance.safetyTier === 'SAFETY_EMERGENCY'
+      ? 'CRITICAL'
+      : action.priority === 'SOON'
+        ? 'MEDIUM'
+        : 'LOW';
   const dueAt = action.timing?.dueAt ?? null;
   return {
     ...action,
@@ -501,639 +147,252 @@ export function toResolutionAction(action: RankedHomeActionDTO) {
   };
 }
 
-function toProviderExecutionBookingItem(booking: Booking) {
-  return {
-    id: `booking:${booking.id}`,
-    bookingId: booking.id,
-    providerId: booking.provider?.id,
-    __kind: 'booking',
-    source: 'BOOKING',
-    title: `${booking.service?.name || booking.category} booking`,
-    description: `${booking.provider?.businessName || 'Provider'} · ${booking.status.replace('_', ' ')}`,
-    status: booking.status,
-    nextDueDate: booking.scheduledDate,
-    serviceCategory: booking.category,
-    confidence: { level: 'HIGH', score: 95 },
-    primarySignalSource: { sourceSystem: 'Provider booking workflow' },
-    exposure: Number.parseFloat(booking.estimatedPrice || '0') || 0,
-    createdAt: booking.createdAt,
-    updatedAt: booking.updatedAt,
-  };
-}
-
-function toCompletedBookingItem(booking: Booking) {
-  return {
-    ...toProviderExecutionBookingItem(booking),
-    __kind: 'completed-booking',
-    resolutionJourney: 'completed',
-    title: `${booking.service?.name || booking.category} completed`,
-    description: `${booking.provider?.businessName || 'Provider'} · Completed booking record`,
-    nextDueDate: booking.completedAt || booking.updatedAt,
-  };
-}
-
-function toCompletedIncidentItem(incident: IncidentDTO) {
-  return {
-    ...incident,
-    __kind: 'completed-incident',
-    resolutionJourney: 'completed',
-    nextDueDate: incident.updatedAt || incident.createdAt,
-  };
-}
-
-function resolveInventoryItemId(item: any): string | null {
-  if (
-    item?.presentation?.subject?.kind === 'INVENTORY_ITEM' &&
-    typeof item.presentation.subject.id === 'string' &&
-    item.presentation.subject.id.length > 0
-  ) {
-    return item.presentation.subject.id;
-  }
-  if (typeof item?.inventoryItemId === 'string' && item.inventoryItemId.length > 0) {
-    return item.inventoryItemId;
-  }
-  if (item?.relatedEntity?.type === 'INVENTORY_ITEM' && typeof item?.relatedEntity?.id === 'string') {
-    return item.relatedEntity.id;
-  }
-  return null;
-}
-
-const JOURNEY_META: Record<
-  JourneyType,
-  {
-    label: string;
-    badgeCls: string;
-    borderCls: string;
-    panelCls: string;
-    primaryButtonCls: string;
-    icon: React.ElementType;
-    primaryCta: string;
-    secondaryCta: string;
-  }
-> = {
-  'urgent-issue': {
-    label: 'Urgent',
-    badgeCls: 'border border-red-200 bg-red-50 text-red-600',
-    borderCls: 'border-rose-200/80 hover:border-rose-300',
-    panelCls: 'border-rose-100 bg-rose-50/40',
-    primaryButtonCls: 'bg-[#ef2b2d] hover:bg-[#dd1f24]',
-    icon: ShieldAlert,
-    primaryCta: 'Resolve now',
-    secondaryCta: 'Find local pros',
-  },
-  'repair-vs-replace': {
-    label: 'Urgent',
-    badgeCls: 'border border-orange-200 bg-orange-50 text-orange-700',
-    borderCls: 'border-orange-200/80 hover:border-orange-300',
-    panelCls: 'border-orange-100 bg-orange-50/50',
-    primaryButtonCls: 'bg-[#ef2b2d] hover:bg-[#dd1f24]',
-    icon: BarChart3,
-    primaryCta: 'Resolve now',
-    secondaryCta: 'Find local pros',
-  },
-  coverage: {
-    label: 'Coverage',
-    badgeCls: 'border border-blue-200 bg-blue-50 text-blue-700',
-    borderCls: 'border-blue-200/80 hover:border-blue-300',
-    panelCls: 'border-blue-100 bg-blue-50/50',
-    primaryButtonCls: 'bg-[#2f6fed] hover:bg-[#245fd4]',
-    icon: ShieldCheck,
-    primaryCta: 'Resolve now',
-    secondaryCta: 'Find local pros',
-  },
-  preventive: {
-    label: 'Preventive',
-    badgeCls: 'border border-amber-200 bg-amber-50 text-amber-700',
-    borderCls: 'border-amber-200/80 hover:border-amber-300',
-    panelCls: 'border-amber-100 bg-amber-50/50',
-    primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
-    icon: Wrench,
-    primaryCta: 'Resolve now',
-    secondaryCta: 'Find local pros',
-  },
-  'cost-savings': {
-    label: 'Save Money',
-    badgeCls: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
-    borderCls: 'border-emerald-200/80 hover:border-emerald-300',
-    panelCls: 'border-emerald-100 bg-emerald-50/50',
-    primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
-    icon: TrendingUp,
-    primaryCta: 'Resolve now',
-    secondaryCta: 'Find local pros',
-  },
-  'provider-execution': {
-    label: 'In Progress',
-    badgeCls: 'border border-sky-200 bg-sky-50 text-sky-700',
-    borderCls: 'border-sky-200/80 hover:border-sky-300',
-    panelCls: 'border-sky-100 bg-sky-50/50',
-    primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
-    icon: CalendarClock,
-    primaryCta: 'Resolve now',
-    secondaryCta: 'Find local pros',
-  },
-  completed: {
-    label: 'Completed',
-    badgeCls: 'border border-slate-200 bg-slate-100 text-slate-700',
-    borderCls: 'border-slate-200/80 hover:border-slate-300',
-    panelCls: 'border-slate-200 bg-slate-50',
-    primaryButtonCls: 'bg-slate-800 hover:bg-slate-900',
-    icon: CheckCircle2,
-    primaryCta: 'View Details',
-    secondaryCta: 'Back to Active',
-  },
-};
-
-// ─── Completion Celebration ───────────────────────────────────────────────────
-
-function CompletionCelebration({
-  item,
-  onClose,
-  onFindProviders,
-}: {
-  item: any;
-  onClose: () => void;
-  onFindProviders: () => void;
-}) {
-  const exposure = item?.exposure ? Math.round(item.exposure) : 0;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-t-3xl bg-white p-8 pb-[max(3rem,calc(env(safe-area-inset-bottom)+2rem))] shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
-        <button
-          onClick={onClose}
-          className="absolute right-5 top-5 rounded-full p-1 text-slate-400 hover:bg-slate-100"
-        >
-          <X className="h-4 w-4" />
-        </button>
-
-        <div className="text-center">
-          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
-            <CheckCircle2 className="h-10 w-10 text-emerald-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900">Proof of care logged</h2>
-          <p className="mt-1.5 text-slate-500 text-sm">
-            This action has been saved to your verified home record.
-          </p>
-        </div>
-
-        <div className="mt-6 rounded-2xl bg-slate-50 border border-slate-100 p-4 space-y-2">
-          <p className="text-[11px] font-bold tracking-normal text-slate-400">
-            What this means
-          </p>
-          <p className="text-sm text-slate-700 flex items-center gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-            Vault updated with completion record
-          </p>
-          <p className="text-sm text-slate-700 flex items-center gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-            Home health score will improve
-          </p>
-          {exposure > 0 && (
-            <p className="text-sm text-emerald-700 font-semibold flex items-center gap-2">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              ${exposure.toLocaleString()} financial risk addressed
-            </p>
-          )}
-        </div>
-
-        <div className="mt-6 space-y-3">
-          <Button
-            onClick={onFindProviders}
-            className="w-full h-12 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold"
-          >
-            Find Providers for Next Task
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={onClose}
-            className="w-full h-12 rounded-xl text-slate-500 font-medium"
-          >
-            Back to Resolution Center
-          </Button>
-        </div>
-      </div>
-    </div>
+function factKinds(action: any): string[] {
+  return (action?.presentation?.factGroups ?? []).flatMap((group: any) =>
+    (group?.facts ?? []).map((fact: any) => normalizeUpper(fact?.kind)),
   );
 }
 
-// ─── Triage action card ───────────────────────────────────────────────────────
+export function isMissingInformationAction(action: any): boolean {
+  const responseStatus = normalizeUpper(action?.recommendationResponse?.status);
+  return Boolean(
+    normalizeUpper(action?.primaryCta?.kind) === 'CORRECT_FACT' ||
+      INFORMATION_VARIANTS.has(normalizeUpper(action?.presentation?.variant)) ||
+      (action?.confidence?.missing?.length ?? 0) > 0 ||
+      (action?.confidence?.conflicted?.length ?? 0) > 0 ||
+      ['LOW_CONFIDENCE', 'DATA_UNAVAILABLE', 'UPSTREAM_FAILURE'].includes(responseStatus) ||
+      factKinds(action).some((kind) => kind === 'MISSING' || kind === 'CONFLICTED'),
+  );
+}
 
-function TriageActionCard({
-  item,
-  groupId,
-  onComplete,
-  onOpenService,
-  onOpenIncident,
-  onReplaceRepair,
-  onAddCoverage,
-  onOpenSavings,
-  onOpenBooking,
-  onViewProvider,
-  onOpenHistoryItem,
-  onSwitchToActive,
-  onOpenCanonicalAction,
-}: {
-  item: any;
-  groupId: string;
-  onComplete: () => void;
-  onOpenService: () => void;
-  onOpenIncident: (item: any) => void;
-  onReplaceRepair: (item: any) => void;
-  onAddCoverage: () => void;
-  onOpenSavings: () => void;
-  onOpenBooking: (item: any) => void;
-  onViewProvider: (item: any) => void;
-  onOpenHistoryItem: (item: any) => void;
-  onSwitchToActive: () => void;
-  onOpenCanonicalAction: (item: ResolutionHomeAction, secondary?: boolean) => void;
-}) {
-  const journey = detectJourneyType(item, groupId);
-  const meta = JOURNEY_META[journey];
-  const JourneyIcon = meta.icon;
+export function isExecutionExceptionAction(action: any): boolean {
+  return isProviderExecutionAction(action) && EXCEPTION_STATES.has(normalizeUpper(action?.workItem?.state));
+}
 
-  const exposure: number = item.exposure ?? 0;
-  const showRiskBadge = exposure > 200 && (journey === 'urgent-issue' || journey === 'repair-vs-replace');
-  const showSavingsBadge = journey === 'preventive' && exposure > 0;
-  const subtitle = resolveItemSubtitle(item);
-  const confidence = normalizeConfidence(item);
-  const dueLabel = formatRelativeDateLabel(item.nextDueDate);
-  const confidenceScore =
-    confidence.score ?? (confidence.level === 'high' ? 100 : confidence.level === 'medium' ? 80 : 55);
-  const assetTitle = resolveAssetTitle(item);
-  const issueHeadline = resolveIssueHeadline(item);
-  const cardSubhead = getCardSubhead(item);
-  const issueDescription = resolveIssueDescription(item, issueHeadline);
-  const locationSubtitle = toDisplayLabel(item?.location || item?.room || item?.area || item?.level || '');
-  const subtitleDisplay = toDisplayLabel(subtitle);
-  const normalizedAssetTitle = assetTitle.trim().toLowerCase();
-  const normalizedLocationSubtitle = locationSubtitle.trim().toLowerCase();
-  const normalizedSubtitleDisplay = subtitleDisplay.trim().toLowerCase();
-  const condensedAssetTitle = normalizedAssetTitle.replace(/[^a-z0-9]/g, '');
-  const condensedLocationSubtitle = normalizedLocationSubtitle.replace(/[^a-z0-9]/g, '');
-  const condensedSubtitleDisplay = normalizedSubtitleDisplay.replace(/[^a-z0-9]/g, '');
-  const displaySubtitle =
-    normalizedLocationSubtitle &&
-    normalizedLocationSubtitle !== 'home asset' &&
-    condensedLocationSubtitle !== condensedAssetTitle &&
-    !condensedLocationSubtitle.includes(condensedAssetTitle) &&
-    !condensedAssetTitle.includes(condensedLocationSubtitle)
-      ? locationSubtitle
-      : normalizedSubtitleDisplay &&
-        condensedSubtitleDisplay !== condensedAssetTitle &&
-        !condensedSubtitleDisplay.includes(condensedAssetTitle) &&
-        !condensedAssetTitle.includes(condensedSubtitleDisplay)
-      ? subtitleDisplay
-      : '';
-  const sourceLabels = [
-    item.primarySignalSource?.sourceSystem,
-    ...(Array.isArray(item.signalSources)
-      ? item.signalSources.map((source: any) => source?.sourceSystem || source?.summary)
-      : []),
-    ...(Array.isArray(item.evidence) ? item.evidence.map((evidence: any) => evidence?.source) : []),
-    item.__kind === 'incident' ? item.sourceType : null,
-  ]
-    .map((value) => humanizeSourceLabel(value))
-    .filter((value, index, arr) => value && arr.indexOf(value) === index)
-    .slice(0, 2);
+function isCoverageAction(action: any): boolean {
+  const text = [action?.title, action?.description, action?.category, action?.actionKey]
+    .map(normalizeUpper)
+    .join(' ');
+  return (
+    action?.source?.kind === 'COVERAGE' ||
+    action?.governance?.safetyTier === 'REGULATED_COVERAGE' ||
+    DECISION_VARIANTS.has(normalizeUpper(action?.presentation?.variant)) ||
+    /COVERAGE|WARRANTY|INSURANCE|POLICY/.test(text)
+  );
+}
 
-  const handlePrimary = () => {
-    if (isCanonicalHomeAction(item)) return onOpenCanonicalAction(item);
-    if (journey === 'repair-vs-replace') return onReplaceRepair(item);
-    if (journey === 'coverage') return onAddCoverage();
-    if (journey === 'cost-savings') return onOpenSavings();
-    if (journey === 'provider-execution') return onOpenBooking(item);
-    if (journey === 'completed') return onOpenHistoryItem(item);
-    if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenIncident(item);
-    if (journey === 'urgent-issue') return onOpenService();
-    if (journey === 'preventive') return onOpenService();
+function isRepairReplaceAction(action: any): boolean {
+  const identity = `${action?.id ?? ''} ${action?.lineageId ?? ''} ${action?.primaryCta?.href ?? ''}`.toLowerCase();
+  return identity.includes('repair-replace') || identity.includes('replace-repair');
+}
+
+export function isDecisionAction(action: any): boolean {
+  if (isProviderExecutionAction(action)) return false;
+  return Boolean(
+    action?.job === 'DECIDE' ||
+      isUrgentAction(action) ||
+      isCoverageAction(action) ||
+      isRepairReplaceAction(action) ||
+      DECISION_CTA_KINDS.has(normalizeUpper(action?.primaryCta?.kind)) ||
+      DECISION_SOURCE_KINDS.has(normalizeUpper(action?.source?.kind)),
+  );
+}
+
+export function resolutionCaseKind(action: any): ResolutionCaseKind | null {
+  if (isMissingInformationAction(action)) return 'information';
+  if (isExecutionExceptionAction(action)) return 'exceptions';
+  if (isDecisionAction(action)) return 'decisions';
+  return null;
+}
+
+export function resolutionCaseKey(action: any): string {
+  const subject = action?.presentation?.subject;
+  const subjectKind = normalizeUpper(subject?.kind);
+  const subjectId = String(subject?.id ?? '').trim();
+  const subjectLabel = String(subject?.label ?? '').trim();
+  if (subjectKind === 'INVENTORY_ITEM' && subjectId) return `inventory-item:${subjectId}`;
+  if (subjectKind && !['PROPERTY', 'WORK_ITEM'].includes(subjectKind) && subjectId) {
+    return `${subjectKind.toLowerCase()}:${subjectId}`;
+  }
+  if (subjectLabel && !GENERIC_SUBJECT_LABELS.has(subjectLabel.toLowerCase())) {
+    return `subject-label:${subjectLabel.toLowerCase()}`;
+  }
+  if (subjectKind === 'WORK_ITEM' && subjectId) return `work-item:${subjectId}`;
+  return `action:${action?.deduplication?.canonicalKey || action?.actionKey || action?.id}`;
+}
+
+function missingInformation(action: any): string[] {
+  const factLabels = (action?.presentation?.factGroups ?? []).flatMap((group: any) =>
+    (group?.facts ?? [])
+      .filter((fact: any) => ['MISSING', 'CONFLICTED'].includes(normalizeUpper(fact?.kind)))
+      .map((fact: any) => String(fact?.label ?? fact?.key ?? '').trim()),
+  );
+  return Array.from(
+    new Set(
+      [
+        ...(action?.confidence?.missing ?? []),
+        ...(action?.confidence?.conflicted ?? []),
+        ...(action?.recommendationResponse?.missingFacts ?? []),
+        ...factLabels,
+      ].filter(Boolean),
+    ),
+  );
+}
+
+const KIND_PRIORITY: Record<ResolutionCaseKind, number> = {
+  information: 0,
+  exceptions: 1,
+  decisions: 2,
+};
+
+export function composeResolutionCases(actions: RankedHomeActionDTO[]): ResolutionCase[] {
+  const groups = new Map<string, ResolutionHomeAction[]>();
+  for (const raw of actions) {
+    const action = toResolutionAction(raw);
+    if (!resolutionCaseKind(action)) continue;
+    const key = resolutionCaseKey(action);
+    groups.set(key, [...(groups.get(key) ?? []), action]);
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, grouped]) => {
+      const ordered = [...grouped].sort((left, right) => {
+        const leftKind = resolutionCaseKind(left)!;
+        const rightKind = resolutionCaseKind(right)!;
+        return KIND_PRIORITY[leftKind] - KIND_PRIORITY[rightKind] ||
+          (left.ranking?.rank ?? Number.MAX_SAFE_INTEGER) - (right.ranking?.rank ?? Number.MAX_SAFE_INTEGER);
+      });
+      const action = ordered[0];
+      return {
+        key,
+        kind: resolutionCaseKind(action)!,
+        action,
+        relatedActions: ordered.slice(1),
+        missingInformation: Array.from(new Set(ordered.flatMap(missingInformation))),
+      };
+    })
+    .sort((left, right) =>
+      KIND_PRIORITY[left.kind] - KIND_PRIORITY[right.kind] ||
+      (left.action.ranking?.rank ?? Number.MAX_SAFE_INTEGER) -
+        (right.action.ranking?.rank ?? Number.MAX_SAFE_INTEGER),
+    );
+}
+
+function normalizeFilter(value: string | null): ResolutionFilter {
+  return FILTERS.some((filter) => filter.key === value) ? (value as ResolutionFilter) : 'all';
+}
+
+function caseCopy(item: ResolutionCase) {
+  if (item.kind === 'information') {
+    return {
+      label: 'Information needed',
+      why: item.action.whyItMatters || 'The recommendation cannot be made reliably until this home record is corrected.',
+      value: item.action.expectedOutcome || 'More accurate timing, cost guidance, and future recommendations.',
+      tone: 'border-amber-200 bg-amber-50/25',
+      badge: 'border-amber-200 bg-amber-50 text-amber-800',
+    };
+  }
+  if (item.kind === 'exceptions') {
+    return {
+      label: normalizeUpper(item.action.workItem?.state) === 'REPORTED_COMPLETE' ? 'Verify completion' : 'Work needs attention',
+      why: item.action.whyItMatters || 'This accepted work cannot progress or close without your input.',
+      value: item.action.expectedOutcome || 'Clear the exception and keep the work record accurate.',
+      tone: 'border-rose-200 bg-rose-50/25',
+      badge: 'border-rose-200 bg-rose-50 text-rose-800',
+    };
+  }
+  return {
+    label: 'Decision needed',
+    why: item.action.whyItMatters || 'A choice is needed before the recommended next step can move forward.',
+    value: item.action.expectedOutcome || 'Make an informed choice using the evidence already on record.',
+    tone: 'border-teal-200 bg-teal-50/20',
+    badge: 'border-teal-200 bg-teal-50 text-teal-800',
   };
+}
 
-  const handleSecondary = () => {
-    if (isCanonicalHomeAction(item)) {
-      if (item.secondaryCtas?.[0]) return onOpenCanonicalAction(item, true);
-      if (item.feedbackControls.includes('COMPLETE')) return onComplete();
-      return;
-    }
-    if (journey === 'completed') return onSwitchToActive();
-    if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenService();
-    if (journey === 'provider-execution') return onViewProvider(item);
-  };
+function sourceLabels(action: ResolutionHomeAction): string[] {
+  return Array.from(
+    new Set(
+      (action.evidence ?? [])
+        .map((evidence) => String(evidence.source || evidence.label || '').trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 3);
+}
 
-  const handleDetails = () => {
-    if (isCanonicalHomeAction(item)) return onOpenCanonicalAction(item);
-    if (journey === 'completed') return onOpenHistoryItem(item);
-    if (journey === 'provider-execution') return onOpenBooking(item);
-    if (journey === 'repair-vs-replace') return onReplaceRepair(item);
-    if (journey === 'coverage') return onAddCoverage();
-    if (journey === 'cost-savings') return onOpenSavings();
-    if (item?.__kind === 'incident') return onOpenIncident(item);
-    return onOpenService();
-  };
-
-  const hasFinancialRow = exposure > 0 && (journey === 'urgent-issue' || journey === 'repair-vs-replace');
-  const delayAdds = hasFinancialRow ? Math.round(exposure * 0.4) : 0;
-
-  const insightPills = [
-    exposure > 0 && !hasFinancialRow
-      ? {
-          icon: DollarSign,
-          label: 'Cost now',
-          value: formatCompactUsd(Math.round(exposure)),
-          tone: 'text-amber-600',
-        }
-      : null,
-    exposure > 0 && !hasFinancialRow && journey !== 'completed'
-      ? {
-          icon: AlertTriangle,
-          label: 'If delayed',
-          value: formatCompactUsd(Math.round(exposure * 1.4)),
-          tone: 'text-red-600',
-        }
-      : null,
-    dueLabel
-      ? {
-          icon: Clock,
-          label: 'Best window',
-          value: dueLabel,
-          tone: item.overdue ? 'text-amber-600' : 'text-slate-700',
-        }
-      : null,
-  ].filter(Boolean) as Array<{ icon: React.ElementType; label: string; value: string; tone: string }>;
-
-  const ApplianceIcon = resolveApplianceIcon(item);
-  const isUrgentJourney = journey === 'urgent-issue' || journey === 'repair-vs-replace';
-  const canonicalAction = isCanonicalHomeAction(item) ? item : null;
-  const primaryCtaLabel = canonicalAction?.primaryCta?.label || meta.primaryCta;
-  const secondaryCtaLabel = canonicalAction?.secondaryCtas?.[0]?.label ||
-    (canonicalAction?.feedbackControls.includes('COMPLETE') ? 'Mark complete' : null);
-  const detailLabel = canonicalAction?.presentation?.detailLabel || 'View details';
+function ResolutionCaseCard({ item }: { item: ResolutionCase }) {
+  const copy = caseCopy(item);
+  const headline = resolveIssueHeadline(item.action);
+  const description = resolveIssueDescription(item.action, headline);
+  const secondary = item.action.secondaryCtas?.[0];
+  const sources = sourceLabels(item.action);
 
   return (
-    <article
-      className={cn(
-        'group relative overflow-hidden rounded-[24px] border bg-white/92 shadow-[var(--ctc-shadow-card)] transition-all duration-[240ms] ease-out hover:-translate-y-0.5 hover:shadow-[var(--ctc-shadow-hover)]',
-        isUrgentJourney
-          ? 'border-amber-200'
-          : journey === 'cost-savings'
-          ? 'border-emerald-300'
-          : 'border-slate-200',
-      )}
-    >
-      <div className="grid gap-0 xl:grid-cols-[250px_minmax(0,1fr)_270px]">
-        {/* Left panel */}
-        <div
-          className={cn(
-            'flex h-full flex-col border-r px-5 py-4',
-            isUrgentJourney
-              ? 'border-amber-100 bg-amber-50/30'
-              : journey === 'cost-savings'
-              ? 'border-emerald-100 bg-emerald-50/35'
-              : 'border-slate-100 bg-slate-50/45'
-          )}
-        >
-          <div className="mb-4 flex items-center justify-start">
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold',
-                meta.badgeCls,
-              )}
-            >
-              <JourneyIcon className="h-3 w-3" />
-              {meta.label}
-            </span>
+    <article className={cn('rounded-[24px] border p-5 shadow-sm md:p-6', copy.tone)}>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn('rounded-full border px-3 py-1 text-xs font-semibold', copy.badge)}>{copy.label}</span>
+            <span className="text-sm font-medium text-slate-600">{resolveAssetTitle(item.action)}</span>
+          </div>
+          <h2 className="mt-3 text-xl font-semibold text-slate-950">{headline}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
+
+          {item.missingInformation.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-white/75 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">What we need from you</p>
+              <ul className="mt-2 grid gap-1 text-sm text-slate-700 sm:grid-cols-2">
+                {item.missingInformation.map((fact) => <li key={fact}>• {fact}</li>)}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/90 bg-white/65 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</p>
+              <p className="mt-1 text-sm leading-5 text-slate-700">{copy.why}</p>
+            </div>
+            <div className="rounded-2xl border border-white/90 bg-white/65 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Value of resolving it</p>
+              <p className="mt-1 text-sm leading-5 text-slate-700">{copy.value}</p>
+            </div>
           </div>
 
-          {/* Appliance icon — semantic colored circle */}
-          <div className={cn(
-            'mx-auto flex h-10 w-10 items-center justify-center rounded-full',
-            isUrgentJourney ? 'bg-amber-50' : 'bg-gray-100',
-          )}>
-            <ApplianceIcon className={cn('h-5 w-5', isUrgentJourney ? 'text-amber-600' : 'text-gray-500')} />
-          </div>
-
-          <div className="mt-3 text-center">
-            <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-normal text-slate-950">
-              {assetTitle}
-            </h3>
-            {displaySubtitle ? <p className="mt-1 text-[15px] text-slate-600">{displaySubtitle}</p> : null}
-          </div>
-
-          <div className="mt-4 flex justify-center">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-[12px] font-semibold text-emerald-700">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              {confidenceScore}% Confidence
-            </span>
-          </div>
-        </div>
-
-        {/* Center panel */}
-        <div className="space-y-4 px-5 py-4">
-          <div>
-            <h4 className="text-[18px] font-semibold leading-[1.3] tracking-normal text-slate-950">
-              {issueHeadline}
-            </h4>
-            {cardSubhead ? <p className="mt-0.5 text-xs font-medium text-slate-500">{cardSubhead}</p> : null}
-            <p className="mt-2 max-w-xl text-[15px] leading-6 text-slate-600 font-normal">
-              {issueDescription}
+          {item.relatedActions.length > 0 ? (
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              This case also considers {item.relatedActions.map(resolveIssueHeadline).join('; ')}.
             </p>
-          </div>
-
-          {/* Financial row for urgent/repair items */}
-          {hasFinancialRow && (
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="space-y-0.5">
-                <p className="text-[11px] font-medium text-slate-500">Cost now</p>
-                <p className="text-[15px] font-semibold text-amber-600">{formatCompactUsd(Math.round(exposure))}</p>
-              </div>
-              <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
-              <div className="space-y-0.5">
-                <p className="text-[11px] font-medium text-slate-500">If delayed</p>
-                <p className="text-[15px] font-semibold text-red-600">{formatCompactUsd(Math.round(exposure * 1.4))}</p>
-              </div>
-              <div className="ml-auto shrink-0">
-                <span className="rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs px-2 py-0.5">
-                  Delay adds {formatCompactUsd(delayAdds)}
-                </span>
-              </div>
+          ) : null}
+          {sources.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {sources.map((source) => <SourceChip key={source} source={source} />)}
             </div>
-          )}
-
-          {/* Other insight pills (non-financial items) */}
-          {insightPills.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {insightPills.map((metric) => {
-                const MetricIcon = metric.icon;
-                return (
-                  <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 pt-0.5 pb-0">
-                    <div className={cn('flex items-center gap-1 whitespace-nowrap text-[11px] font-medium leading-none', metric.tone)}>
-                      <MetricIcon className="h-3.5 w-3.5" />
-                      {metric.label}
-                    </div>
-                    <p className="mt-0 text-[15px] font-semibold leading-[0.95] text-slate-900">{metric.value}</p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {showSavingsBadge && (
-            <EstimatedSavingsBadge
-              upside={{
-                amount: Math.round(exposure * 0.6),
-                period: 'one-time',
-                basis: 'proactive vs reactive repair cost difference',
-              }}
-            />
-          )}
-
-          {(item.riskLevel === 'CRITICAL' || item.severity === 'CRITICAL') && (
-            <WhyThisMattersCard
-              explanation="Immediate action is required to prevent property damage or high-cost emergency repairs. Delaying this item increases financial risk significantly."
-              className="border-amber-100 bg-amber-50/50"
-              defaultExpanded={true}
-            />
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            {(sourceLabels.length > 0 ? sourceLabels : ['Home signals']).map((source) => (
-              <SourceChip key={source} source={source} className="bg-slate-100/80 text-slate-500" />
-            ))}
-          </div>
+          ) : null}
         </div>
 
-        {/* Right panel — action hierarchy */}
-        <div className="flex flex-col border-l border-slate-100 px-5 py-4">
-          <div className="flex-1 space-y-2.5">
-            {/* Tier 1: Primary solid button */}
-            <Button
-              onClick={handlePrimary}
-              className={cn('h-11 w-full rounded-[10px] text-base font-semibold text-white', meta.primaryButtonCls)}
-            >
-              {primaryCtaLabel}
-              <ArrowRight className="ml-2 h-4 w-4" />
+        <div className="flex w-full shrink-0 flex-col gap-2 lg:w-56">
+          <Button asChild className="min-h-11 bg-teal-700 text-white hover:bg-teal-800">
+            <Link href={item.action.primaryCta.href}>{item.action.primaryCta.label}</Link>
+          </Button>
+          {secondary ? (
+            <Button asChild variant="outline" className="min-h-10 bg-white/80">
+              <Link href={secondary.href}>{secondary.label}</Link>
             </Button>
-
-            {/* Tier 2: Secondary outlined button */}
-            {(secondaryCtaLabel || !canonicalAction) ? (
-              <Button
-                variant="outline"
-                onClick={handleSecondary}
-                className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <User className="h-4 w-4 text-slate-500" />
-                  {secondaryCtaLabel || meta.secondaryCta}
-                </span>
-                <ChevronRight className="h-4 w-4 text-slate-400" />
-              </Button>
-            ) : null}
-          </div>
-
-          {/* Tier 3: Inline text links */}
-          <div className="mt-4 flex items-center gap-4 border-t border-gray-100 pt-2">
-            <button
-              type="button"
-              onClick={onOpenService}
-              className="text-xs text-gray-400 transition-colors hover:text-gray-600"
-            >
-              Compare quotes
-            </button>
-            <button
-              type="button"
-              onClick={onAddCoverage}
-              className="text-xs text-gray-400 transition-colors hover:text-gray-600"
-            >
-              Check warranty
-            </button>
-            <button
-              type="button"
-              onClick={handleDetails}
-              className="ml-auto text-xs text-gray-400 transition-colors hover:text-gray-600"
-            >
-              {detailLabel} →
-            </button>
-          </div>
+          ) : null}
         </div>
       </div>
     </article>
   );
 }
 
-function EmptyQueueState({ isCompletedFilter }: { isCompletedFilter: boolean }) {
-  return (
-    <div className="rounded-[24px] border border-dashed border-emerald-200 bg-emerald-50/40 p-10 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-200 bg-white">
-        <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-      </div>
-      <h3 className="text-xl font-semibold text-slate-900">
-        {isCompletedFilter ? 'No completed history yet' : 'No active items in this view'}
-      </h3>
-      <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
-        {isCompletedFilter
-          ? 'Completed actions and finished bookings will appear here once they are logged.'
-          : 'You are caught up for this filter. Continue monitoring your home signals for new recommendations.'}
-      </p>
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-        <Button asChild variant="outline" className="border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50">
-          <Link href="/dashboard/oracle">Run full scan</Link>
-        </Button>
-        <Button asChild variant="ghost" className="text-slate-600 hover:bg-white">
-          <Link href="/dashboard/resolution-center">Open Task List</Link>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function ResolutionLoadingState() {
-  return (
-    <div className="space-y-6 pb-20">
-      <div className="h-56 animate-pulse rounded-[28px] border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-50" />
-      <div className="h-16 animate-pulse rounded-2xl border border-slate-200 bg-slate-100/80" />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="space-y-4">
-          <div className="h-64 animate-pulse rounded-[24px] border border-slate-200 bg-slate-100/70" />
-          <div className="h-64 animate-pulse rounded-[24px] border border-slate-200 bg-slate-100/70" />
-        </div>
-        <div className="hidden space-y-4 xl:block">
-          <div className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-slate-100/70" />
-          <div className="h-64 animate-pulse rounded-2xl border border-slate-200 bg-slate-100/70" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
-
-interface TriageGroup {
-  id: string;
-  title: string;
-  subtitle: string;
-  items: any[];
-  tone: 'danger' | 'warning' | 'info' | 'success';
-}
-
 export default function ResolutionCenterClient() {
-  const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { selectedPropertyId: contextSelectedPropertyId, setSelectedPropertyId } = usePropertyContext();
-
-  const normalizedFilter = normalizeFilterParam(searchParams.get('filter'));
+  const { selectedPropertyId: contextPropertyId, setSelectedPropertyId } = usePropertyContext();
   const requestedPropertyId = searchParams.get('propertyId');
-  const shouldLoadCompletedIncidents = normalizedFilter === 'completed';
+  const filter = normalizeFilter(searchParams.get('filter'));
 
-  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
-  const [completionSubmitting, setCompletionSubmitting] = useState(false);
-  const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
-  const [activeItem, setActiveItem] = useState<any>(null);
-  const [celebratingItem, setCelebratingItem] = useState<any>(null);
-
-  const {
-    data: properties = [],
-    isLoading: propertiesLoading,
-  } = useQuery({
+  const { data: properties = [], isLoading: propertiesLoading } = useQuery({
     queryKey: ['dashboard-properties'],
     queryFn: async (): Promise<Property[]> => {
       const response = await api.getProperties();
@@ -1145,632 +404,100 @@ export default function ResolutionCenterClient() {
   const selectedPropertyId =
     requestedPropertyId && properties.some((property) => property.id === requestedPropertyId)
       ? requestedPropertyId
-      : contextSelectedPropertyId &&
-    (propertiesLoading ||
-      properties.length === 0 ||
-      properties.some((property) => property.id === contextSelectedPropertyId))
-      ? contextSelectedPropertyId
-      : properties[0]?.id;
+      : contextPropertyId && (propertiesLoading || properties.length === 0 || properties.some((property) => property.id === contextPropertyId))
+        ? contextPropertyId
+        : properties[0]?.id;
 
-  React.useEffect(() => {
-    if (selectedPropertyId && contextSelectedPropertyId !== selectedPropertyId) {
-      setSelectedPropertyId(selectedPropertyId);
-    }
-  }, [contextSelectedPropertyId, selectedPropertyId, setSelectedPropertyId]);
+  useEffect(() => {
+    if (selectedPropertyId && selectedPropertyId !== contextPropertyId) setSelectedPropertyId(selectedPropertyId);
+  }, [contextPropertyId, selectedPropertyId, setSelectedPropertyId]);
 
-  const {
-    data: homeActionData,
-    isLoading: homeActionsLoading,
-    isError: homeActionsError,
-    error: homeActionsErrorObj,
-    refetch: refetchHomeActions,
-    dataUpdatedAt: homeActionsUpdatedAt,
-  } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['home-actions', selectedPropertyId],
-    queryFn: () =>
-      selectedPropertyId
-        ? api.getHomeActions(selectedPropertyId)
-        : Promise.resolve(null as any),
-    enabled: !!selectedPropertyId,
+    queryFn: () => selectedPropertyId ? api.getHomeActions(selectedPropertyId) : Promise.resolve(null as any),
+    enabled: Boolean(selectedPropertyId),
   });
 
-  const {
-    data: bookingsData,
-    isLoading: bookingsLoading,
-    isError: bookingsError,
-    error: bookingsErrorObj,
-    refetch: refetchBookings,
-    dataUpdatedAt: bookingsUpdatedAt,
-  } = useQuery({
-    queryKey: ['resolution-bookings', selectedPropertyId],
-    queryFn: () =>
-      selectedPropertyId
-        ? api.listBookings({
-            propertyId: selectedPropertyId,
-            limit: 50,
-            sortBy: 'scheduledDate',
-            sortOrder: 'desc',
-          })
-        : Promise.resolve({ success: true, data: { bookings: [], pagination: {} } } as any),
-    enabled: !!selectedPropertyId && shouldLoadCompletedIncidents,
-    staleTime: 3 * 60 * 1000,
-  });
-
-  const {
-    data: completedIncidentsData,
-    isLoading: completedIncidentsLoading,
-    isError: completedIncidentsError,
-    error: completedIncidentsErrorObj,
-    refetch: refetchCompletedIncidents,
-    dataUpdatedAt: completedIncidentsUpdatedAt,
-  } = useQuery({
-    queryKey: ['completed-incidents', selectedPropertyId],
-    queryFn: () =>
-      selectedPropertyId
-        ? listIncidents({ propertyId: selectedPropertyId, status: 'RESOLVED', limit: 20 })
-        : Promise.resolve({ items: [] } as any),
-    enabled: !!selectedPropertyId && shouldLoadCompletedIncidents,
-    staleTime: 3 * 60 * 1000,
-  });
-
-  const isLoading =
-    propertiesLoading ||
-    homeActionsLoading ||
-    (shouldLoadCompletedIncidents && bookingsLoading) ||
-    (shouldLoadCompletedIncidents && completedIncidentsLoading);
-
-  const hasLoadError =
-    homeActionsError ||
-    (shouldLoadCompletedIncidents && bookingsError) ||
-    (shouldLoadCompletedIncidents && completedIncidentsError);
-
-  const loadErrorMessage =
-    (homeActionsErrorObj as Error | undefined)?.message ||
-    (shouldLoadCompletedIncidents ? (bookingsErrorObj as Error | undefined)?.message : undefined) ||
-    (shouldLoadCompletedIncidents
-      ? (completedIncidentsErrorObj as Error | undefined)?.message
-      : undefined) ||
-    'Unable to load one or more Resolution Center data sources.';
-
-  // Build triage groups, then apply URL filter
-  const triageGroups = useMemo((): TriageGroup[] => {
-    if (!selectedPropertyId) return [];
-
-    const actions: ResolutionHomeAction[] = (
-      ((homeActionData as any)?.actions || []) as RankedHomeActionDTO[]
-    ).map(toResolutionAction);
-    const bookings: Booking[] =
-      bookingsData && 'success' in bookingsData && bookingsData.success
-        ? bookingsData.data?.bookings ?? []
-        : [];
-    const completedIncidents: IncidentDTO[] = (completedIncidentsData as any)?.items || [];
-    const activeActions = actions;
-
-    const claimedActionKeys = new Set<string>();
-    const takeActions = (predicate: (action: any) => boolean) => {
-      const selected: any[] = [];
-      for (const action of activeActions) {
-        if (claimedActionKeys.has(action.actionKey)) continue;
-        if (!predicate(action)) continue;
-        claimedActionKeys.add(action.actionKey);
-        selected.push(action);
-      }
-      return selected;
-    };
-
-    const groups: TriageGroup[] = [];
-
-    const urgentItems = takeActions((action) => isUrgentAction(action));
-
-    if (urgentItems.length > 0) {
-      groups.push({
-        id: 'urgent',
-        title: 'Urgent Issues',
-        subtitle: 'Time-sensitive incidents and overdue work that need immediate attention.',
-        items: urgentItems,
-        tone: 'danger',
-      });
-    }
-
-    const savingsItems = takeActions((action) => isCostSavingsAction(action) && !isCoverageAction(action));
-    if (savingsItems.length > 0) {
-      groups.push({
-        id: 'cost-savings',
-        title: 'Save Money',
-        subtitle: 'High-confidence opportunities to reduce recurring and one-time costs.',
-        items: savingsItems,
-        tone: 'success',
-      });
-    }
-
-    const coverageItems = takeActions((action) => isCoverageAction(action));
-    if (coverageItems.length > 0) {
-      groups.push({
-        id: 'coverage',
-        title: 'Coverage',
-        subtitle: 'Protection and warranty gaps that can expose your home to avoidable loss.',
-        items: coverageItems,
-        tone: 'warning',
-      });
-    }
-
-    const replaceRepairItems = takeActions((action) => isReplaceRepairAction(action));
-    if (replaceRepairItems.length > 0) {
-      groups.push({
-        id: 'replace-repair',
-        title: 'Replace or Repair',
-        subtitle: 'Deterministic repair-vs-replace guidance for aging systems and major assets.',
-        items: replaceRepairItems,
-        tone: 'warning',
-      });
-    }
-
-    const providerExecutionItems = [
-      ...takeActions((action) => isProviderExecutionAction(action)),
-    ];
-    if (providerExecutionItems.length > 0) {
-      groups.push({
-        id: 'provider-execution',
-        title: 'Provider Execution',
-        subtitle: 'Book, track, and complete real-world service work with provider context.',
-        items: providerExecutionItems,
-        tone: 'info',
-      });
-    }
-
-    const preventiveItems = takeActions(() => true);
-    if (preventiveItems.length > 0) {
-      groups.push({
-        id: 'preventive',
-        title: 'Preventive Maintenance',
-        subtitle: 'Planned maintenance journeys that keep systems reliable and reduce emergency risk.',
-        items: preventiveItems,
-        tone: 'info',
-      });
-    }
-
-    const completedItems = [
-      ...bookings
-        .filter((booking) => COMPLETED_BOOKING_STATUSES.has(booking.status))
-        .map(toCompletedBookingItem),
-      ...completedIncidents.map(toCompletedIncidentItem),
-    ].sort((a: any, b: any) => {
-      const left = Date.parse(String(a.nextDueDate || a.updatedAt || a.createdAt || 0));
-      const right = Date.parse(String(b.nextDueDate || b.updatedAt || b.createdAt || 0));
-      return right - left;
-    });
-
-    if (completedItems.length > 0) {
-      groups.push({
-        id: 'completed',
-        title: 'Completed History',
-        subtitle: 'Verified outcomes and finished actions for your home record.',
-        items: completedItems,
-        tone: 'success',
-      });
-    }
-
-    return groups;
-  }, [
-    homeActionData,
-    completedIncidentsData,
-    bookingsData,
-    selectedPropertyId,
-  ]);
-
-  const visibleGroups = useMemo(() => {
-    if (normalizedFilter === 'all') {
-      return triageGroups.filter((group) => group.id !== 'completed');
-    }
-    if (normalizedFilter === 'urgent') {
-      return triageGroups.filter((group) => group.id === 'urgent');
-    }
-    if (normalizedFilter === 'save-money') {
-      return triageGroups.filter((group) => group.id === 'cost-savings');
-    }
-    if (normalizedFilter === 'preventive') {
-      return triageGroups.filter((group) => group.id === 'preventive');
-    }
-    if (normalizedFilter === 'coverage') {
-      return triageGroups.filter((group) => group.id === 'coverage');
-    }
-    return triageGroups.filter((group) => group.id === 'completed');
-  }, [triageGroups, normalizedFilter]);
-
-  const visibleItems = useMemo(
-    () =>
-      visibleGroups.flatMap((group) =>
-        group.items.map((item) => ({
-          item,
-          groupId: group.id,
-        })),
-      ),
-    [visibleGroups],
+  const cases = useMemo(
+    () => composeResolutionCases((((data as any)?.actions ?? []) as RankedHomeActionDTO[])),
+    [data],
   );
-
-  const filterCounts = useMemo(() => {
-    const byId = new Map(triageGroups.map((group) => [group.id, group.items.length]));
-    const allCount = triageGroups
-      .filter((group) => group.id !== 'completed')
-      .reduce((sum, group) => sum + group.items.length, 0);
-    return {
-      all: allCount,
-      urgent: byId.get('urgent') ?? 0,
-      'save-money': byId.get('cost-savings') ?? 0,
-      preventive: byId.get('preventive') ?? 0,
-      coverage: byId.get('coverage') ?? 0,
-      completed: byId.get('completed') ?? 0,
-    } as Record<ResolutionFilter, number>;
-  }, [triageGroups]);
-
-  const activeItems = useMemo(
-    () => triageGroups.filter((group) => group.id !== 'completed').flatMap((group) => group.items),
-    [triageGroups]
-  );
-
-  const totalAtRisk = useMemo(
-    () => activeItems.reduce((sum, item) => sum + (typeof item.exposure === 'number' ? item.exposure : 0), 0),
-    [activeItems]
-  );
-
-  const highConfidenceCount = useMemo(
-    () =>
-      activeItems.filter((item) => {
-        const confidence = normalizeConfidence(item);
-        return confidence.level === 'high';
-      }).length,
-    [activeItems]
-  );
-
-  const latestDataRefreshTs = useMemo(
-    () =>
-      Math.max(
-        homeActionsUpdatedAt || 0,
-        bookingsUpdatedAt || 0,
-        completedIncidentsUpdatedAt || 0
-      ),
-    [homeActionsUpdatedAt, bookingsUpdatedAt, completedIncidentsUpdatedAt]
-  );
-
-  const latestUpdateLabel = useMemo(
-    () => formatLastUpdated(activeItems, latestDataRefreshTs),
-    [activeItems, latestDataRefreshTs]
-  );
-  const homeHealthScore = 82;
-  const homeHealthStatus = homeHealthScore >= 75 ? 'Good' : homeHealthScore >= 55 ? 'Watch' : 'At risk';
-
-  const handleRunFullScan = () => {
-    void refetchHomeActions();
-    if (shouldLoadCompletedIncidents) {
-      void refetchBookings();
-      void refetchCompletedIncidents();
-    }
-    toast({ title: 'Scan started', description: 'Refreshing home signals now.' });
+  const visibleCases = filter === 'all' ? cases : cases.filter((item) => item.kind === filter);
+  const counts = {
+    decisions: cases.filter((item) => item.kind === 'decisions').length,
+    information: cases.filter((item) => item.kind === 'information').length,
+    exceptions: cases.filter((item) => item.kind === 'exceptions').length,
   };
+  const operationsHref = selectedPropertyId
+    ? `/dashboard/properties/${selectedPropertyId}/home-operations`
+    : '/dashboard';
 
-  const handleOpenComplete = (item: any) => {
-    if (!isCanonicalHomeAction(item) || !item.feedbackControls.includes('COMPLETE')) return;
-    setActiveItem(item);
-    setIsCompletionModalOpen(true);
-  };
-
-  const handleOpenService = (item: any) => {
-    setActiveItem(item);
-    setIsServiceSheetOpen(true);
-  };
-
-  const handleOpenCanonicalAction = (item: ResolutionHomeAction, secondary = false) => {
-    const cta = secondary ? item.secondaryCtas?.[0] : item.primaryCta;
-    const href = cta?.href || item.primaryCta?.href;
-    if (!href) return;
-    if (/^https?:\/\//i.test(href)) {
-      window.location.assign(href);
-      return;
-    }
-    router.push(href);
-  };
-
-  const handleOpenIncident = (item: any) => {
-    if (!selectedPropertyId || !item?.id) return;
-    router.push(`/dashboard/properties/${selectedPropertyId}/incidents/${encodeURIComponent(item.id)}`);
-  };
-
-  const handleReplaceRepair = (item: any) => {
-    if (!selectedPropertyId) return;
-    const inventoryItemId = resolveInventoryItemId(item);
-
-    if (inventoryItemId) {
-      router.push(
-        `/dashboard/properties/${selectedPropertyId}/inventory/items/${encodeURIComponent(
-          inventoryItemId
-        )}/replace-repair?from=resolution-center`
-      );
-      return;
-    }
-
-    router.push(`/dashboard/replace-repair?propertyId=${selectedPropertyId}&from=resolution-center`);
-  };
-
-  const handleAddCoverage = () => {
-    router.push('/dashboard/vault?tab=coverage');
-  };
-
-  const handleOpenSavings = () => {
-    router.push('/dashboard/save');
-  };
-
-  const handleOpenBooking = (item: any) => {
-    const bookingId = item?.bookingId || item?.id;
-    if (!bookingId) return;
-    router.push(`/dashboard/bookings/${encodeURIComponent(bookingId)}`);
-  };
-
-  const handleViewProvider = (item: any) => {
-    const providerId = item?.providerId;
-    if (!providerId) return;
-    const params = new URLSearchParams();
-    if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
-
-    const guidanceJourneyId = searchParams.get('guidanceJourneyId');
-    const guidanceStepKey = searchParams.get('guidanceStepKey');
-    const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
-    const itemId = searchParams.get('itemId');
-
-    if (guidanceJourneyId) params.set('guidanceJourneyId', guidanceJourneyId);
-    if (guidanceStepKey) params.set('guidanceStepKey', guidanceStepKey);
-    if (guidanceSignalIntentFamily) {
-      params.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
-    }
-    if (itemId) params.set('itemId', itemId);
-
-    const href = params.toString()
-      ? `/dashboard/providers/${encodeURIComponent(providerId)}?${params.toString()}`
-      : `/dashboard/providers/${encodeURIComponent(providerId)}`;
-    router.push(href);
-  };
-
-  const handleOpenHistoryItem = (item: any) => {
-    if (item?.bookingId) {
-      handleOpenBooking(item);
-      return;
-    }
-
-    if (item?.__kind === 'completed-incident' || item?.__kind === 'incident') {
-      handleOpenIncident(item);
-      return;
-    }
-
-    if (selectedPropertyId && item?.relatedEntity?.type === 'INVENTORY_ITEM' && item?.relatedEntity?.id) {
-      router.push(
-        `/dashboard/properties/${selectedPropertyId}/inventory/items/${encodeURIComponent(
-          item.relatedEntity.id
-        )}/replace-repair?from=resolution-center`
-      );
-      return;
-    }
-
+  const chooseFilter = (next: ResolutionFilter) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set('filter', 'completed');
-    router.replace(`/dashboard/resolution-center?${params.toString()}`);
+    if (next === 'all') params.delete('filter'); else params.set('filter', next);
+    router.replace(`/dashboard/resolution-center${params.size ? `?${params.toString()}` : ''}`);
   };
 
-  const handleSwitchToActiveFilter = () => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('filter');
-    const query = params.toString();
-    router.replace(query ? `/dashboard/resolution-center?${query}` : '/dashboard/resolution-center');
-  };
-
-  const handleFilterChange = (nextFilter: ResolutionFilter) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (nextFilter === 'all') {
-      params.delete('filter');
-    } else {
-      params.set('filter', nextFilter);
-    }
-    const query = params.toString();
-    router.replace(query ? `/dashboard/resolution-center?${query}` : '/dashboard/resolution-center');
-  };
-
-  const handleFindProviders = () => {
-    if (!selectedPropertyId) return;
-    const params = new URLSearchParams({
-      propertyId: selectedPropertyId,
-      from: 'resolution-center',
-      intent: 'next-task',
-      returnTo: '/dashboard/resolution-center',
-    });
-    const rawCategory = celebratingItem?.serviceCategory || celebratingItem?.category || celebratingItem?.systemType || celebratingItem?.title;
-    const maybeCategory = resolveProviderSearchCategory(rawCategory);
-    const workCategory = getProviderWorkCategory(rawCategory);
-    if (maybeCategory) {
-      params.set('category', maybeCategory);
-    }
-    if (workCategory) params.set('workCategory', workCategory);
-    if (celebratingItem?.title) {
-      params.set('serviceLabel', celebratingItem.title);
-    }
-    if (celebratingItem?.actionKey) {
-      params.set('actionKey', celebratingItem.actionKey);
-    }
-
-    setCelebratingItem(null);
-    router.push(`/dashboard/providers?${params.toString()}`);
-  };
-
-  const handleCompletionSubmit = async (data: RichCompletionValues) => {
-    if (!activeItem || !selectedPropertyId || !isCanonicalHomeAction(activeItem)) return;
-
-    setCompletionSubmitting(true);
-    try {
-      const response = await api.executeHomeActionCommand(
-        selectedPropertyId,
-        activeItem.id,
-        {
-          command: 'COMPLETE',
-          completionCostCents: data.costCents,
-          completionObservedResult: data.observedResult,
-          completionDate: data.completedAt,
-          completionFulfillmentMode: data.fulfillmentMode,
-          completionProviderName: data.providerName,
-          completionNotes: data.notes,
-          completionFollowUpNeeded: data.followUpNeeded,
-          completionPhotoDocumentIds: data.photoDocumentIds,
-        },
-      );
-      if (!response.success) throw new Error(response.message || 'Unable to complete this action.');
-      track('task_completed', {
-        priority: activeItem.riskLevel || 'MEDIUM',
-        category: String(activeItem.category || activeItem.systemType || activeItem.source?.kind || 'GENERAL'),
-        propertyId: selectedPropertyId,
-        journeyType: detectJourneyType(activeItem),
-      });
-      setIsCompletionModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['home-actions', selectedPropertyId] });
-      queryClient.invalidateQueries({ queryKey: ['home-operations-work-items', selectedPropertyId] });
-      setCelebratingItem(activeItem);
-      setActiveItem(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setCompletionSubmitting(false);
-    }
-  };
-
-  if (isLoading) {
-    return <ResolutionLoadingState />;
+  if (propertiesLoading || isLoading) {
+    return <div className="h-72 animate-pulse rounded-[28px] border border-slate-200 bg-slate-100" />;
   }
 
   return (
-    <>
-      <div className="pb-20">
-        <div className="space-y-6">
-          <PageHero
-            eyebrow="Fix"
-            icon={<Wrench className="h-5 w-5" />}
-            title="Resolution Center"
-            description="See the cost of waiting across urgent issues, provider work, preventive maintenance, coverage gaps, and completed outcomes in one ranked action queue."
-            action={<SmartCTA onClick={handleRunFullScan}>Run full scan</SmartCTA>}
-            meta={<TrustMetaRow items={[latestUpdateLabel, `${highConfidenceCount} high-confidence items`, 'Costs shown as potential exposure']} />}
-          >
-            <div className="grid gap-3 md:grid-cols-3">
-              <MetricTile label="Home health" value={`${homeHealthScore} · ${homeHealthStatus}`} hint="Current operating range" tone="success" />
-              <MetricTile label="Urgent" value={filterCounts.urgent} hint="Needs attention" tone={filterCounts.urgent ? 'urgent' : 'success'} />
-              <MetricTile label="Cost if delayed" value={formatCompactUsd(Math.round(totalAtRisk))} hint="Potential exposure" tone={totalAtRisk > 0 ? 'warning' : 'success'} />
-            </div>
-          </PageHero>
-
-          <section className="rounded-[24px] border border-slate-200/80 bg-white/88 px-4 py-3 shadow-[var(--ctc-shadow-card)]">
-            <div className="flex flex-wrap gap-2.5" role="tablist" aria-label="Resolution filters">
-              {FILTER_OPTIONS.map((filterOption) => {
-                const active = normalizedFilter === filterOption.key;
-                const filterMeta = FILTER_META[filterOption.key];
-                const FilterIcon = filterMeta.icon;
-                const count = filterCounts[filterOption.key];
-                const isEmpty = count === 0 && filterOption.key !== 'all';
-                return (
-                  <button
-                    key={filterOption.key}
-                    onClick={() => !isEmpty && handleFilterChange(filterOption.key)}
-                    className={cn(
-                      'inline-flex min-h-[42px] items-center gap-2 rounded-xl border px-4 py-2 text-[15px] font-semibold transition-colors',
-                      active
-                        ? filterMeta.activeCls
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50',
-                      isEmpty && 'opacity-40 cursor-not-allowed pointer-events-none',
-                    )}
-                    aria-pressed={active}
-                    aria-disabled={isEmpty}
-                  >
-                    <FilterIcon className={cn('h-4 w-4', active ? 'text-current' : filterMeta.tintCls)} />
-                    <span>{filterOption.label}</span>
-                    {count > 0 && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          {hasLoadError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm text-rose-800">
-              <p className="font-semibold">Some data sources are temporarily unavailable.</p>
-              <p className="mt-1 text-rose-700/90">{loadErrorMessage}</p>
-              <Button
-                variant="outline"
-                className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
-                onClick={() => {
-                  void refetchHomeActions();
-                  if (shouldLoadCompletedIncidents) {
-                    void refetchBookings();
-                    void refetchCompletedIncidents();
-                  }
-                }}
-              >
-                Retry loading
-              </Button>
-            </div>
-          )}
-
-          {visibleItems.length > 0 ? (
-            <div className="space-y-4">
-              {visibleItems.map(({ item, groupId }) => (
-                <TriageActionCard
-                  key={`${groupId}:${item.id || item.actionKey}`}
-                  item={item}
-                  groupId={groupId}
-                  onComplete={() => handleOpenComplete(item)}
-                  onOpenService={() => handleOpenService(item)}
-                  onOpenIncident={handleOpenIncident}
-                  onReplaceRepair={handleReplaceRepair}
-                  onAddCoverage={handleAddCoverage}
-                  onOpenSavings={handleOpenSavings}
-                  onOpenBooking={handleOpenBooking}
-                  onViewProvider={handleViewProvider}
-                  onOpenHistoryItem={handleOpenHistoryItem}
-                  onSwitchToActive={handleSwitchToActiveFilter}
-                  onOpenCanonicalAction={handleOpenCanonicalAction}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyQueueState isCompletedFilter={normalizedFilter === 'completed'} />
-          )}
+    <div className="space-y-6 pb-20">
+      <PageHero
+        eyebrow="Resolution Center"
+        title="Decisions & Exceptions"
+        description="Review choices, supply missing home information, and clear work that is blocked or waiting for verification. Accepted work and routine upkeep stay in Home Operations."
+        icon={<ClipboardCheck className="h-5 w-5" />}
+        action={<SmartCTA asChild><Link href={operationsHref}>View all work</Link></SmartCTA>}
+        meta={<TrustMetaRow items={[`${cases.length} cases need your input`, 'One case per home asset']} />}
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <MetricTile label="Decisions" value={counts.decisions} hint="Choose the next step" tone="brand" />
+          <MetricTile label="Missing information" value={counts.information} hint="Improve recommendation accuracy" tone="warning" />
+          <MetricTile label="Blocked or verify" value={counts.exceptions} hint="Unblock or close accepted work" tone="urgent" />
         </div>
+      </PageHero>
 
-        {selectedPropertyId && activeItem && (
-          <>
-            <RichCompletionDialog
-              open={isCompletionModalOpen}
-              onOpenChange={setIsCompletionModalOpen}
-              submitting={completionSubmitting}
-              costRequired={false}
-              safetyTier={activeItem.governance?.safetyTier ?? null}
-              obligationType={activeItem.workItem?.obligationType ?? null}
-              description={`Record how “${activeItem.title}” was completed.`}
-              onSubmit={handleCompletionSubmit}
-              propertyId={selectedPropertyId}
-            />
-            <ServiceSelectionSheet
-              item={activeItem}
-              propertyId={selectedPropertyId}
-              isOpen={isServiceSheetOpen}
-              onOpenChange={setIsServiceSheetOpen}
-            />
-          </>
-        )}
-      </div>
+      <nav className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white/75 p-2" aria-label="Resolution case filters">
+        {FILTERS.map((option) => {
+          const count = option.key === 'all' ? cases.length : counts[option.key];
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => chooseFilter(option.key)}
+              className={cn(
+                'rounded-xl border px-4 py-2 text-sm font-medium transition-colors',
+                filter === option.key
+                  ? 'border-teal-300 bg-teal-50 text-teal-800'
+                  : 'border-transparent text-slate-600 hover:bg-slate-50',
+              )}
+            >
+              {option.label} <span className="ml-1 text-xs opacity-70">{count}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-      {celebratingItem && (
-        <CompletionCelebration
-          item={celebratingItem}
-          onClose={() => setCelebratingItem(null)}
-          onFindProviders={handleFindProviders}
-        />
+      {isError ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
+          <AlertTriangle className="mx-auto h-6 w-6 text-rose-600" />
+          <p className="mt-2 font-semibold text-slate-900">We could not load your resolution cases.</p>
+          <Button variant="outline" className="mt-4 bg-white" onClick={() => refetch()}>Try again</Button>
+        </div>
+      ) : visibleCases.length > 0 ? (
+        <div className="space-y-4">{visibleCases.map((item) => <ResolutionCaseCard key={item.key} item={item} />)}</div>
+      ) : (
+        <div className="rounded-[24px] border border-emerald-200 bg-emerald-50/35 p-10 text-center">
+          <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
+          <h2 className="mt-3 text-xl font-semibold text-slate-950">Nothing needs your input here</h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">
+            Decisions, missing information, and work exceptions will appear here. Continue routine and accepted work in Home Operations.
+          </p>
+          <Button asChild variant="outline" className="mt-5 bg-white"><Link href={operationsHref}>Open Home Operations</Link></Button>
+        </div>
       )}
-    </>
+    </div>
   );
 }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardList, RefreshCw, Wrench } from 'lucide-react';
+import { ArrowLeft, ClipboardList, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -119,6 +119,7 @@ export default function HomeOperationsPage() {
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const focusActionId = searchParams.get('focusActionId');
   const focusWorkItemId = searchParams.get('focusWorkItemId') ?? searchParams.get('workItemId');
+  const autoOpenFocusedWorkItem = searchParams.get('openManage') === '1';
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['home-action-plan', propertyId],
@@ -247,9 +248,6 @@ export default function HomeOperationsPage() {
         <Button asChild variant="ghost" className="rounded-full">
           <Link href="/dashboard"><ArrowLeft className="mr-2 h-4 w-4" />Back to Home</Link>
         </Button>
-        <Button asChild variant="outline" className="rounded-full">
-          <Link href={`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`}><Wrench className="mr-2 h-4 w-4" />Open Resolution Center</Link>
-        </Button>
       </div>
 
       <header className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white to-teal-50/50 p-6 shadow-sm md:p-8">
@@ -316,7 +314,14 @@ export default function HomeOperationsPage() {
 
       <section aria-live="polite">
         <div className="space-y-3">
-          <CanonicalWorkPortfolio items={workItems} tab={activeTab} propertyId={propertyId} onChanged={refreshPlan} />
+          <CanonicalWorkPortfolio
+            items={workItems}
+            tab={activeTab}
+            propertyId={propertyId}
+            onChanged={refreshPlan}
+            focusWorkItemId={focusWorkItemId}
+            autoOpenFocusedWorkItem={autoOpenFocusedWorkItem}
+          />
           {(advisoryByTab[activeTab].length > 0 || canonicalByTab[activeTab].length === 0) ? (
             <HomeOperationsTabPanel
               tab={activeTab}

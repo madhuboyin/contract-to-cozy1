@@ -209,10 +209,11 @@ describe('WorkItemManageDrawer', () => {
     expect(screen.getByText('property:property-1:maintenance-item-1')).toBeInTheDocument();
   });
 
-  it('reframes material approval as "Confirm the result"', async () => {
+  it('only asks for material confirmation after work is reported complete', async () => {
     mockGetWorkItem.mockResolvedValue({
       success: true,
       data: baseDetail({
+        state: 'REPORTED_COMPLETE',
         materialApprovalRequired: true,
         safetyTier: 'MATERIAL_FINANCIAL',
         evidence: [{ id: 'ev-1', evidenceType: 'DOCUMENT', evidenceEntityId: 'doc-1', verificationStatus: 'PENDING', observedAt: '2026-08-24T00:00:00.000Z' }],
@@ -222,6 +223,22 @@ describe('WorkItemManageDrawer', () => {
 
     expect(await screen.findByText('Confirm the result')).toBeInTheDocument();
     expect(screen.queryByText(/manager approval required/i)).not.toBeInTheDocument();
+  });
+
+  it('does not ask for result confirmation while material work is merely accepted', async () => {
+    mockGetWorkItem.mockResolvedValue({
+      success: true,
+      data: baseDetail({
+        state: 'ACCEPTED',
+        materialApprovalRequired: true,
+        safetyTier: 'MATERIAL_FINANCIAL',
+      }),
+    });
+    renderDrawer();
+
+    await screen.findByText('Replace HVAC filter');
+    expect(screen.queryByText('Confirm the result')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark done' })).toBeInTheDocument();
   });
 
   it('for a closed item, shows a "nothing more to do" line instead of action buttons', async () => {

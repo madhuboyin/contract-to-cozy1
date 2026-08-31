@@ -909,7 +909,7 @@ async function appendAcceptedOperationalWork(
       : primaryExecution?.executionType === 'GUIDANCE'
         ? 'GUIDANCE'
         : 'MAINTENANCE';
-    const href = `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${encodeURIComponent(item.id)}`;
+    const href = `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${encodeURIComponent(item.id)}&openManage=1`;
     const material = item.safetyTier === 'MATERIAL_FINANCIAL' || item.safetyTier === 'REGULATED_COVERAGE';
     const displayCopy = acceptedOperationalWorkHomeCopy(item);
     const now = new Date().toISOString();

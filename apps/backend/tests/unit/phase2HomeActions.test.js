@@ -650,6 +650,43 @@ test('degraded material actions use one CTA-aligned homeowner instruction', () =
   assert.doesNotMatch(action.recommendedAction, /qualified professional|\bor\b/i);
 });
 
+test('degraded inventory recommendations fall back to the exact item editor', () => {
+  const fixture = actionFixture('degraded-inventory-guidance');
+  const { source, job, recommendationResponse: _response, ...base } = fixture;
+  const action = adaptHomeActionSource('GUIDANCE', {
+    ...base,
+    propertyId: 'property-1',
+    presentation: {
+      variant: 'GENERIC_ACTION',
+      eyebrow: null,
+      headline: 'Review washer replacement',
+      summary: 'The washer record needs more information before replacement guidance is available.',
+      whyNow: null,
+      keyFacts: [],
+      factGroups: [],
+      subject: { kind: 'INVENTORY_ITEM', id: 'washer-1', label: 'Washer' },
+      detailLabel: 'Review details',
+      group: null,
+    },
+    sourceEntityId: source.entityId,
+    sourceVersion: source.version,
+    job,
+    primaryCta: { kind: 'PURCHASE', label: 'Purchase washer', href: '/purchase' },
+    secondaryCtas: [],
+    recommendationResponse: buildRecommendationResponseContract({
+      status: 'DATA_UNAVAILABLE',
+      safetyTier: base.governance.safetyTier,
+      missingFacts: ['Installation year'],
+    }),
+  });
+
+  assert.equal(action.primaryCta.label, 'Review Washer details');
+  assert.equal(
+    action.primaryCta.href,
+    '/dashboard/properties/property-1/inventory?openItemId=washer-1',
+  );
+});
+
 test('journey keys are converted to homeowner-facing titles', () => {
   assert.equal(getGuidanceJourneyDisplayTitle('coverage_gap_resolution'), 'Resolve a coverage gap');
   assert.equal(getGuidanceJourneyDisplayTitle('unknown_home_journey'), 'Unknown home');

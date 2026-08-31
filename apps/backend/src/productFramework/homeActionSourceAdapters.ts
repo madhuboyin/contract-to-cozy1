@@ -99,6 +99,15 @@ function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
         [contractAction.primaryCta, ...contractAction.secondaryCtas].some((cta) => materialKinds.has(cta.kind))
       );
       const correction = contractAction.secondaryCtas.find((cta) => cta.kind === 'CORRECT_FACT');
+      const subject = contractAction.presentation?.subject;
+      const fallbackCorrectionHref = subject?.kind === 'INVENTORY_ITEM'
+        ? `/dashboard/properties/${contractAction.propertyId}/inventory?openItemId=${encodeURIComponent(subject.id)}`
+        : subject?.kind === 'PROPERTY'
+          ? `/dashboard/properties/${contractAction.propertyId}/edit`
+          : contractAction.primaryCta.href;
+      const fallbackCorrectionLabel = subject?.label
+        ? `Review ${subject.label} details`
+        : 'Review missing information';
       const normalizedAction = mustWithhold ? {
         ...contractAction,
         recommendedAction: correction
@@ -106,8 +115,8 @@ function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
           : recommendationResponse.safeNextAction,
         primaryCta: correction ?? {
           kind: 'REVIEW' as const,
-          label: 'Review missing information',
-          href: contractAction.primaryCta.href,
+          label: fallbackCorrectionLabel,
+          href: fallbackCorrectionHref,
         },
         secondaryCtas: contractAction.secondaryCtas.filter((cta) => cta !== correction && !materialKinds.has(cta.kind)),
       } : contractAction;

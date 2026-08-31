@@ -57,7 +57,7 @@ Implemented:
 Implemented July 20, 2026:
 
 - Added a property-scoped Prioritized Action Plan at `/dashboard/properties/:propertyId/action-plan` so the Home summary links to the complete ranked list and its supporting timing, consequence, confidence, evidence, and next-action details.
-- Kept the Prioritized Action Plan broader than the Resolution Center. The plan includes every eligible canonical Home Action; the Resolution Center remains the execution surface for repair, incident, provider, and related resolution cases.
+- Kept the Prioritized Action Plan broader than the Resolution Center. The plan includes every eligible canonical Home Action; the Resolution Center is the decisions-and-exceptions surface for choices, exact missing information, and blocked or verification-pending accepted work. Home Operations owns the complete execution portfolio.
 - Removed internal contract/version labels from homeowner-facing Home presentation.
 - Deduplicated equivalent low-confidence context actions and replaced raw enum/system identifiers with homeowner-readable names.
 - Added context-specific service titles and CTAs, including the affected home system or item.

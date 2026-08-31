@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, CalendarClock, CheckCircle2, UserRound, Wrench } from 'lucide-react';
 import type { WorkItemListEntryDTO } from '@/types';
@@ -81,14 +81,23 @@ export function CanonicalWorkPortfolio({
   tab,
   propertyId,
   onChanged,
+  focusWorkItemId = null,
+  autoOpenFocusedWorkItem = false,
 }: {
   items: WorkItemListEntryDTO[];
   tab: HomeOperationsTabKey;
   propertyId: string;
   onChanged: () => Promise<unknown>;
+  focusWorkItemId?: string | null;
+  autoOpenFocusedWorkItem?: boolean;
 }) {
   const [managedId, setManagedId] = useState<string | null>(null);
   const visible = useMemo(() => items.filter((item) => classifyCanonicalWorkItem(item) === tab), [items, tab]);
+
+  useEffect(() => {
+    if (!autoOpenFocusedWorkItem || !focusWorkItemId) return;
+    if (visible.some((item) => item.id === focusWorkItemId)) setManagedId(focusWorkItemId);
+  }, [autoOpenFocusedWorkItem, focusWorkItemId, visible]);
 
   if (visible.length === 0) return null;
   return (

@@ -694,3 +694,31 @@ The corrected contract is:
 
 Focused regression coverage lives in `phase2HomeActions.test.js` and
 `ResolutionCenterProjection.test.ts`.
+
+---
+
+## 18. Resolution Center decisions-and-exceptions simplification
+
+Status: implemented
+
+The Resolution Center is no longer a second task list. Home Operations is the single portfolio
+for accepted work, routine care, provider execution, and completed history. The Resolution
+Center contains only cases that require homeowner judgment or input:
+
+- a material or urgent decision that has not become accepted work;
+- named missing or conflicted Home Record information; or
+- accepted work that is blocked, reopened, due for follow-up, or waiting for completion
+  verification.
+
+Cases compose by typed canonical subject, preferring `INVENTORY_ITEM` identity and retaining
+related signals as supporting context. One asset therefore produces one case even when several
+engines contribute evidence. Each case states what needs attention, why it matters, the value of
+resolving it, the exact missing facts where applicable, and only the canonical destination CTAs.
+Generic quote, warranty, and detail links are not manufactured by the Resolution Center.
+
+Accepted-work CTAs deep-link to Home Operations with the matching work item focused and its
+management drawer open. The drawer offers result confirmation only after the work reaches
+`REPORTED_COMPLETE`; an accepted material task still offers its real completion action. When a
+material recommendation must be withheld and no producer-supplied correction CTA exists, an
+inventory subject falls back to that exact item in the Home Record instead of reopening the
+blocked action destination.
