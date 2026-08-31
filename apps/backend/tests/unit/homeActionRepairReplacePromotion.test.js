@@ -71,9 +71,9 @@ function analysis(overrides = {}) {
     verdict: 'REPLACE_NOW',
     confidence: 'HIGH',
     impactLevel: 'HIGH',
-    summary: 'This water heater is past its expected lifespan.',
+    summary: 'This refrigerator is past its expected lifespan.',
     computedAt: NOW,
-    inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'APPLIANCE' },
+    inventoryItem: { id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE' },
     ...overrides,
   };
 }
@@ -102,7 +102,7 @@ test('the repair-replace action carries an authored presentation (not the generi
   assert.equal(action.presentation.eyebrow, 'Repair or replace');
   assert.equal(action.presentation.subject.kind, 'INVENTORY_ITEM');
   assert.equal(action.presentation.subject.id, 'item-1');
-  assert.equal(action.presentation.subject.label, 'Water Heater');
+  assert.equal(action.presentation.subject.label, 'Refrigerator');
   assert.match(action.presentation.headline, /replac/i);
   const rec = action.presentation.keyFacts.find((f) => f.label === 'Recommendation');
   assert.equal(rec.value, 'Replace');
@@ -334,7 +334,7 @@ test('multiple analyses for the same item are deduped, preferring the CURRENT ma
 // category-aware decision-family routing. `id` is category-independent;
 // only `lineageId` picks the family.
 test('an APPLIANCE analysis routes to the appliance family; HVAC keeps its family', async () => {
-  const applianceDb = stubSources({ analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Water Heater', category: 'APPLIANCE' } })] });
+  const applianceDb = stubSources({ analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Dishwasher', category: 'APPLIANCE' } })] });
   const { actions: applianceActions } = await getPromotedHomeActions('property-1', applianceDb, { evaluatedAt: NOW, includePersonalization: false });
   assert.equal(applianceActions[0].id, 'repair-replace:analysis-1');
   assert.equal(applianceActions[0].lineageId, 'appliance-repair-replace:item-1');
@@ -346,6 +346,12 @@ test('an APPLIANCE analysis routes to the appliance family; HVAC keeps its famil
   const { actions: hvacActions } = await getPromotedHomeActions('property-1', hvacDb, { evaluatedAt: NOW, includePersonalization: false });
   assert.equal(hvacActions[0].id, 'repair-replace:analysis-1');
   assert.equal(hvacActions[0].lineageId, 'repair-replace:item-1');
+});
+
+test('a legacy APPLIANCE-labelled water heater is rejected by the IPD-006 safety backstop', async () => {
+  const db = stubSources({ analyses: [analysis({ inventoryItem: { id: 'item-1', name: 'Tankless Water Heater', category: 'APPLIANCE' } })] });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+  assert.equal(actions.length, 0);
 });
 
 test('higher-risk non-HVAC categories abstain at ingress instead of falling back to APPLIANCE', async () => {

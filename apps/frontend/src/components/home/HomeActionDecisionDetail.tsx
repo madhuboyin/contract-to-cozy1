@@ -183,12 +183,16 @@ export function HomeActionDecisionDetail({
   // action. Uses the same DecisionThread the card already shows.
   const specialist = (action.decisionLineage?.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
     || action.decisionLineage?.decisionDefinitionId === 'APPLIANCE_REPAIR_REPLACE')
+    && (action.decisionLineage.status === 'NOT_STARTED' || action.decisionLineage.status === 'LINKED')
     && action.decisionLineage.primaryEntityId
     ? {
       inventoryItemId: action.decisionLineage.primaryEntityId,
       profileLabel: action.decisionLineage.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
         ? 'HVAC Repair-or-Replace Specialist'
         : 'Appliance Repair-or-Replace Specialist',
+      profileId: action.decisionLineage.decisionDefinitionId === 'HVAC_REPAIR_REPLACE'
+        ? 'HVAC' as const
+        : 'GENERIC_APPLIANCE' as const,
       homeActionOrigin: {
         homeActionId: action.id,
         lineageId: action.lineageId,
@@ -231,6 +235,7 @@ export function HomeActionDecisionDetail({
           inventoryItemId={specialist.inventoryItemId}
           homeActionOrigin={specialist.homeActionOrigin}
           profileLabel={specialist.profileLabel}
+          profileId={specialist.profileId}
         />
       )}
 

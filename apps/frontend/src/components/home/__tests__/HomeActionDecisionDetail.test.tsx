@@ -90,3 +90,18 @@ test('renders the shared Specialist entry point for APPLIANCE_REPAIR_REPLACE', (
   render(<HomeActionDecisionDetail action={action} propertyId="property-1" />);
   expect(screen.getByText('Appliance Repair-or-Replace Specialist')).toBeInTheDocument();
 });
+
+test('does not offer Specialist start when appliance lineage is blocked', () => {
+  const action = actionWithChange();
+  action.decisionLineage = {
+    status: 'NOT_APPLICABLE',
+    decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+    primaryEntityId: 'water-heater-1',
+  };
+  Object.assign(action, {
+    id: 'action-1', lineageId: 'appliance-repair-replace:water-heater-1',
+    source: { entityId: 'analysis-1', version: 'v1' },
+  });
+  render(<HomeActionDecisionDetail action={action} propertyId="property-1" />);
+  expect(screen.queryByText('Appliance Repair-or-Replace Specialist')).not.toBeInTheDocument();
+});

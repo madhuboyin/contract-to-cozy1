@@ -25,6 +25,7 @@ export function useHvacSpecialistStatus(
     queryFn: () => getHvacSpecialistStatus(propertyId, inventoryItemId as string),
     enabled: Boolean(inventoryItemId) && (options.enabled ?? true),
     staleTime: 10_000,
+    refetchInterval: (query) => query.state.data?.status.phase === 'WORKING' ? 2_000 : false,
   });
 }
 
@@ -36,6 +37,9 @@ export function useStartHvacSpecialist(
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => startHvacSpecialist(propertyId, inventoryItemId, homeActionOrigin),
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: key(propertyId, inventoryItemId) });
+    },
     onSuccess: (result: SpecialistResult) => {
       qc.setQueryData(key(propertyId, inventoryItemId), result);
     },

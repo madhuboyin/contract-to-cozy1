@@ -5,6 +5,7 @@ import {
   type HomeAction,
 } from '../productFramework';
 import { prisma } from '../lib/prisma';
+import { isGenericApplianceRepairReplaceEligible } from './repairReplaceEligibility';
 import { RecommendationGovernanceSchema } from '../productFramework/recommendationGovernance.contract';
 import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
@@ -2484,7 +2485,12 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   const now = evaluatedAt ?? new Date();
   const [analyses, journeys] = await Promise.all([
     db.replaceRepairAnalysis.findMany({
-      where: { propertyId, status: 'READY' },
+      where: {
+        propertyId,
+        status: 'READY',
+        currentMarker: 'CURRENT',
+        inventoryItem: { category: { in: ['HVAC', 'APPLIANCE'] } },
+      },
       include: { inventoryItem: { select: { id: true, name: true, category: true } } },
       orderBy: { computedAt: 'desc' },
       take: 10,
@@ -2510,7 +2516,8 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
   // IPD-006 admits only canonical APPLIANCE items alongside HVAC. Higher-risk
   // non-HVAC categories abstain at ingress and receive no fallback family.
   const deduped = dedupeReplaceRepairAnalysesForPromotion(analyses)
-    .filter((analysis) => analysis.inventoryItem?.category === 'HVAC' || analysis.inventoryItem?.category === 'APPLIANCE');
+    .filter((analysis) => analysis.inventoryItem?.category === 'HVAC'
+      || isGenericApplianceRepairReplaceEligible(analysis.inventoryItem ?? { category: null, name: null }));
   const inventoryItemIds = deduped.map((analysis) => analysis.inventoryItemId);
   const [recurringFailureEventsByItem, currentHvacPublishedVerdicts] = await Promise.all([
     findRecentRepairEventsByInventoryItem(db, inventoryItemIds, now),

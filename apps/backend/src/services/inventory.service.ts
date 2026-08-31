@@ -20,6 +20,7 @@ import { buildInventoryCoveragePresentation } from './inventoryCoverageState.ser
 import JobQueueService from './JobQueue.service';
 import { markThreadStaleOnFactCorrection } from './decisionPlatform/decisionThreadService';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
+import { isWaterHeaterInventoryName } from './repairReplaceEligibility';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -340,6 +341,9 @@ export class InventoryService {
   }
 
   async createItem(propertyId: string, data: any, userId: string | null) {
+    if (String(data.category) === 'APPLIANCE' && isWaterHeaterInventoryName(data.name)) {
+      throw new APIError('Water heaters are plumbing systems. Choose the PLUMBING category.', 400, 'WATER_HEATER_CATEGORY_MISMATCH');
+    }
     if (ROOM_REQUIRED_CATEGORIES.has(String(data.category)) && !data.roomId) {
       throw new APIError(
         'Choose a room for appliances and belongings. Whole-home systems do not require a room.',
@@ -532,6 +536,9 @@ export class InventoryService {
     const nextName = ('name' in patch) ? patch.name : existing.name;
     const nextCategory = ('category' in patch) ? patch.category : existing.category;
     const nextRoomId = ('roomId' in patch) ? patch.roomId : existing.roomId;
+    if (String(nextCategory) === 'APPLIANCE' && isWaterHeaterInventoryName(nextName)) {
+      throw new APIError('Water heaters are plumbing systems. Choose the PLUMBING category.', 400, 'WATER_HEATER_CATEGORY_MISMATCH');
+    }
     if (ROOM_REQUIRED_CATEGORIES.has(String(nextCategory)) && !nextRoomId) {
       throw new APIError(
         'Choose a room for appliances and belongings. Whole-home systems do not require a room.',

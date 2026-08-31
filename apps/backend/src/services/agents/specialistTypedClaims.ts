@@ -3,8 +3,8 @@
 // §7.3.9: explanation is LLM-OPTIONAL and the deterministic result is
 // authoritative. This is the closed registry the deterministic EXPLAIN tool
 // selects from — and the only set a future governed LLM narration step is
-// permitted to choose among. Every claim is keyed to an exact HVAC engine
-// reason/limitation code; a code with no registered claim contributes nothing
+// permitted to choose among. Every claim is keyed to an exact engine/source
+// reason or limitation code; a code with no registered claim contributes nothing
 // (the agent never invents explanatory text or quantitative facts).
 
 import type { AgentContextRequestItem, AgentTypedClaim } from './agentRuntime.contract';
@@ -20,6 +20,17 @@ const REASON_CLAIMS: Readonly<Record<string, string>> = {
   APPROACH_MINIMIZE_UPFRONT_COST: 'Your saved preference favors minimizing upfront cost.',
   NO_ACTIVE_WARRANTY: 'No active warranty currently covers this system.',
   ACTIVE_WARRANTY_REDUCES_REPAIR_RISK: 'An active warranty reduces the financial risk of continuing to repair.',
+  SOURCE_VERDICT_REPLACE_NOW: 'The current appliance analysis recommends replacing this appliance now.',
+  SOURCE_VERDICT_REPLACE_SOON: 'The current appliance analysis recommends planning to replace this appliance soon.',
+  SOURCE_VERDICT_REPAIR_AND_MONITOR: 'The current appliance analysis supports repairing this appliance and monitoring future issues and costs.',
+  SOURCE_VERDICT_REPAIR_ONLY: 'The current appliance analysis supports repair rather than replacement.',
+  CONFIDENCE_HIGH: 'The appliance analysis has high confidence based on the information currently recorded.',
+  CONFIDENCE_MEDIUM: 'The appliance analysis has medium confidence based on the information currently recorded.',
+  CONFIDENCE_LOW: 'The appliance analysis has low confidence because the recorded information is limited.',
+  IMPACT_HIGH: 'The appliance analysis classifies the decision impact as high.',
+  IMPACT_MEDIUM: 'The appliance analysis classifies the decision impact as medium.',
+  IMPACT_LOW: 'The appliance analysis classifies the decision impact as low.',
+  IMPACT_UNKNOWN: 'The appliance analysis does not have a recorded impact level.',
 };
 
 interface OutstandingSpec {
@@ -76,7 +87,10 @@ export function selectTypedClaims(
     const text = REASON_CLAIMS[code];
     if (!text) continue;
     seen.add(code);
-    claims.push({ claimId: `hvac.reason.${code}`, text, sourceCode: code });
+    const family = code.startsWith('SOURCE_VERDICT_') || code.startsWith('CONFIDENCE_') || code.startsWith('IMPACT_')
+      ? 'appliance'
+      : 'hvac';
+    claims.push({ claimId: `${family}.reason.${code}`, text, sourceCode: code });
   }
   if (professionalBoundary?.trim()) {
     claims.push({
@@ -124,5 +138,27 @@ export const ACCEPTED_INTAKE_KEYS: ReadonlySet<string> = new Set(
 
 /** Closed set of canonical inputs a homeowner may dispute through the API. */
 export const DISPUTABLE_INPUT_KEYS: ReadonlySet<string> = new Set(
-  Object.values(LIMITATION_OUTSTANDING).map((spec) => spec.key),
+  [
+    ...Object.values(LIMITATION_OUTSTANDING).map((spec) => spec.key),
+    'appliance.condition',
+    'appliance.installDate',
+    'appliance.replacementCost',
+    'appliance.analysis',
+  ],
 );
+
+export const DISPUTABLE_INPUT_KEYS_BY_PROFILE: Readonly<Record<'HVAC' | 'GENERIC_APPLIANCE', ReadonlySet<string>>> = Object.freeze({
+  HVAC: new Set(Object.values(LIMITATION_OUTSTANDING).map((spec) => spec.key)),
+  GENERIC_APPLIANCE: new Set([
+    'appliance.condition',
+    'appliance.installDate',
+    'appliance.replacementCost',
+    'appliance.analysis',
+  ]),
+});
+
+export function isDisputableInputKey(profileId: string, key: string): boolean {
+  return profileId === 'HVAC' || profileId === 'GENERIC_APPLIANCE'
+    ? DISPUTABLE_INPUT_KEYS_BY_PROFILE[profileId].has(key)
+    : false;
+}

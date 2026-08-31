@@ -159,18 +159,33 @@ export function createSnapshotDecisionFamilyAdapter(
         lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] },
       },
       orderBy: { createdAt: 'asc' },
+      include: {
+        currentRecommendationSnapshot: { select: { inputDigest: true } },
+      },
     });
     const selection = classifyThreadSelection(candidates);
     if (selection.kind === 'UNIQUE') {
+      // Read-time freshness is authoritative too. A source-backed family may
+      // receive a new canonical source row before anyone explicitly resumes
+      // the thread. Project that digest mismatch as STALE so Home, runtime
+      // status, and commitment guards cannot treat the old snapshot as current.
+      const source = await config.loadSourceState(propertyId, primaryEntityId);
+      const selected = selection.thread as typeof selection.thread & {
+        currentRecommendationSnapshot?: { inputDigest: string } | null;
+      };
+      const effectiveThread = selected.currentRecommendationSnapshotId
+        && (!source || selected.currentRecommendationSnapshot?.inputDigest !== source.inputDigest)
+        ? { ...selection.thread, contextStatus: 'STALE' as const }
+        : selection.thread;
       // Phase 3 review finding 4: read-only, but not always null anymore —
       // diffs two already-persisted snapshots when the homeowner hasn't
       // acknowledged the current one yet. No recompute, no write.
       if (dependencies.loadRecommendationChange) {
         const change = await dependencies.loadRecommendationChange(selection.thread);
-        return { kind: 'UNIQUE', thread: toLineage(selection.thread, change) };
+        return { kind: 'UNIQUE', thread: toLineage(effectiveThread, change) };
       }
       const change = await loadUnacknowledgedRecommendationChange(selection.thread);
-      return { kind: 'UNIQUE', thread: toLineage(selection.thread, change) };
+      return { kind: 'UNIQUE', thread: toLineage(effectiveThread, change) };
     }
     if (selection.kind === 'AMBIGUOUS') return { kind: 'AMBIGUOUS', candidates: selection.candidates.map((c) => toLineage(c, null)) };
     return { kind: 'NONE' };

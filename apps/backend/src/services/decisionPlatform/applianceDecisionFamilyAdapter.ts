@@ -24,6 +24,7 @@
 import type { ReplaceRepairVerdict } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import type { InventoryItemCategory } from '../../productFramework/intelligence/entityRef.contract';
+import { isGenericApplianceRepairReplaceEligible } from '../repairReplaceEligibility';
 import {
   createSnapshotDecisionFamilyAdapter,
   hashSourceState,
@@ -63,17 +64,18 @@ export async function loadApplianceRepairReplaceSourceState(
       propertyId,
       inventoryItemId: primaryEntityId,
       status: 'READY',
+      currentMarker: 'CURRENT',
       inventoryItem: { category: { in: [...APPLIANCE_REPAIR_REPLACE_ELIGIBLE_CATEGORIES] } },
     },
-    orderBy: { computedAt: 'desc' },
+    orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
     select: {
       id: true, verdict: true, confidence: true, impactLevel: true, summary: true,
       ageYears: true, remainingYears: true, estimatedNextRepairCostCents: true,
       estimatedReplacementCostCents: true, breakEvenMonths: true, updatedAt: true,
-      inventoryItem: { select: { name: true } },
+      inventoryItem: { select: { name: true, category: true } },
     },
   });
-  if (!analysis) return null;
+  if (!analysis || !isGenericApplianceRepairReplaceEligible(analysis.inventoryItem)) return null;
 
   const verdictCode = mapApplianceVerdictToDecisionVerdict(analysis.verdict);
   const itemName = analysis.inventoryItem?.name?.trim() || 'this appliance';

@@ -106,6 +106,27 @@ test('assertHomeActionDecisionLineageSatisfiedForCommitment rejects LINKED linea
   );
 });
 
+test('assertHomeActionDecisionLineageSatisfiedForCommitment rejects a stale snapshot even when its id is present', () => {
+  assert.throws(
+    () => assertHomeActionDecisionLineageSatisfiedForCommitment({
+      decisionLineage: {
+        status: 'LINKED',
+        decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+        primaryEntityId: 'item-1',
+        thread: {
+          decisionThreadId: 'thread-1', lifecycleStatus: 'RECOMMENDATION_AVAILABLE', contextStatus: 'STALE',
+          currentRecommendationSnapshotId: 'snapshot-old', recommendationChange: null, limitationCodes: [],
+        },
+      },
+    }),
+    (error) => {
+      assert.ok(error instanceof DecisionLineageRequiredForAcceptanceError);
+      assert.match(error.message, /decision lineage status: CONTEXT_STALE/);
+      return true;
+    },
+  );
+});
+
 for (const status of ['NOT_STARTED', 'AMBIGUOUS', 'NOT_APPLICABLE', 'UNAVAILABLE']) {
   test(`assertHomeActionDecisionLineageSatisfiedForCommitment throws DecisionLineageRequiredForAcceptanceError for ${status}`, () => {
     assert.throws(

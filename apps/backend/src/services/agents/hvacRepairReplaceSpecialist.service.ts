@@ -58,6 +58,11 @@ export interface SpecialistThreadPort {
   }): Promise<SpecialistThreadState>;
 }
 
+export interface CanonicalSpecialistThreadState {
+  decisionDefinitionId: DecisionDefinitionId;
+  state: SpecialistThreadState;
+}
+
 function parseConfidenceLabel(value: unknown): 'HIGH' | 'MEDIUM' | 'LOW' | null {
   if (value && typeof value === 'object') {
     const label = (value as { label?: unknown }).label;
@@ -67,6 +72,67 @@ function parseConfidenceLabel(value: unknown): 'HIGH' | 'MEDIUM' | 'LOW' | null 
 }
 
 const SUPPORTED_VERDICTS = new Set(['REPAIR', 'REPLACE', 'MONITOR']);
+
+async function loadThreadStateFromLineage(lineage: {
+  decisionThreadId: string;
+  currentRecommendationSnapshotId: string | null;
+  contextStatus: SpecialistThreadState['contextStatus'];
+  limitationCodes: string[];
+}): Promise<SpecialistThreadState> {
+  const snapshot = lineage.currentRecommendationSnapshotId
+    ? await prisma.recommendationSnapshot.findUnique({
+      where: { id: lineage.currentRecommendationSnapshotId },
+      select: { verdictCode: true, reasonCodes: true, limitationCodes: true, confidenceBreakdown: true },
+    })
+    : null;
+  const verdict = snapshot && SUPPORTED_VERDICTS.has(snapshot.verdictCode)
+    ? (snapshot.verdictCode as 'REPAIR' | 'REPLACE' | 'MONITOR')
+    : null;
+  return {
+    ambiguous: false,
+    decisionThreadId: lineage.decisionThreadId,
+    currentRecommendationSnapshotId: lineage.currentRecommendationSnapshotId,
+    contextStatus: lineage.contextStatus,
+    verdict,
+    confidenceLabel: parseConfidenceLabel(snapshot?.confidenceBreakdown),
+    reasonCodes: snapshot?.reasonCodes ?? [],
+    limitationCodes: [...new Set([...(snapshot?.limitationCodes ?? []), ...lineage.limitationCodes])],
+  };
+}
+
+/** Read-only canonical projection used by GET_STATUS; never trusts cached AgentRun output. */
+export async function readCurrentSpecialistThreadState(input: {
+  propertyId: string;
+  inventoryItemId: string;
+  decisionThreadId: string;
+}): Promise<CanonicalSpecialistThreadState | null> {
+  const identity = await prisma.decisionThread.findFirst({
+    where: {
+      id: input.decisionThreadId,
+      propertyId: input.propertyId,
+      primaryEntityType: 'InventoryItem',
+      primaryEntityId: input.inventoryItemId,
+    },
+    select: { decisionDefinitionId: true },
+  });
+  if (!identity) return null;
+  const decisionDefinitionId = identity.decisionDefinitionId as DecisionDefinitionId;
+  const adapter = getDecisionFamilyAdapter(decisionDefinitionId);
+  if (!adapter) return null;
+  const selection = await adapter.selectThread(input.propertyId, input.inventoryItemId);
+  if (selection.kind === 'NONE') return null;
+  if (selection.kind === 'AMBIGUOUS') {
+    return {
+      decisionDefinitionId,
+      state: {
+        ambiguous: true, decisionThreadId: null, currentRecommendationSnapshotId: null,
+        contextStatus: null, verdict: null, confidenceLabel: null, reasonCodes: [], limitationCodes: [],
+      },
+    };
+  }
+  if (selection.thread.decisionThreadId !== input.decisionThreadId) return null;
+  return { decisionDefinitionId, state: await loadThreadStateFromLineage(selection.thread) };
+}
 
 /** Shared port: profile selection chooses the canonical decision-family adapter. */
 export function createSpecialistThreadPort(decisionDefinitionId: DecisionDefinitionId): SpecialistThreadPort {
@@ -99,27 +165,7 @@ export function createSpecialistThreadPort(decisionDefinitionId: DecisionDefinit
       throw error;
     }
 
-    const snapshot = lineage.currentRecommendationSnapshotId
-      ? await prisma.recommendationSnapshot.findUnique({
-        where: { id: lineage.currentRecommendationSnapshotId },
-        select: { verdictCode: true, reasonCodes: true, limitationCodes: true, confidenceBreakdown: true },
-      })
-      : null;
-
-    const verdict = snapshot && SUPPORTED_VERDICTS.has(snapshot.verdictCode)
-      ? (snapshot.verdictCode as 'REPAIR' | 'REPLACE' | 'MONITOR')
-      : null;
-
-    return {
-      ambiguous: false,
-      decisionThreadId: lineage.decisionThreadId,
-      currentRecommendationSnapshotId: lineage.currentRecommendationSnapshotId,
-      contextStatus: lineage.contextStatus,
-      verdict,
-      confidenceLabel: parseConfidenceLabel(snapshot?.confidenceBreakdown),
-      reasonCodes: snapshot?.reasonCodes ?? [],
-      limitationCodes: [...new Set([...(snapshot?.limitationCodes ?? []), ...lineage.limitationCodes])],
-    };
+    return loadThreadStateFromLineage(lineage);
   },
   };
 }

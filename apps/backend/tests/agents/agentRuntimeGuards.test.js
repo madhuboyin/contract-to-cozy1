@@ -27,7 +27,12 @@ const BASE = {
 const ENABLED_ENV = { AGENT_HVAC_REPAIR_REPLACE_ENABLED: 'true' };
 
 function runtimeDeps(overrides = {}) {
-  return { env: ENABLED_ENV, resolveLatestRun: async () => null, ...overrides };
+  return {
+    env: ENABLED_ENV,
+    resolveLatestRun: async () => null,
+    resolveCurrentThreadState: async () => undefined,
+    ...overrides,
+  };
 }
 
 function pausedRun(overrides = {}) {
@@ -135,6 +140,50 @@ test('GET_STATUS restores the latest terminal bounded status instead of returnin
   assert.equal(result.status.verdict, 'REPLACE');
 });
 
+test('GET_STATUS rebuilds a terminal result from the current thread instead of cached AgentRun status', async () => {
+  const result = await invokeAgentRuntime({ ...BASE, operation: 'GET_STATUS' }, runtimeDeps({
+    authorize: async () => true,
+    resolvePausedRun: async () => null,
+    resolveLatestRun: async () => ({
+      id: 'run-done', agentVersion: '1.0.0', outcome: 'COMPLETED', decisionThreadId: 'thr-1',
+      statusJson: { phase: 'RECOMMENDATION_READY', verdict: 'REPAIR', currentRecommendationSnapshotId: 'snap-old' },
+    }),
+    resolveCurrentThreadState: async () => ({
+      decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+      state: {
+        ambiguous: false, decisionThreadId: 'thr-1', currentRecommendationSnapshotId: 'snap-current',
+        contextStatus: 'CURRENT', verdict: 'REPLACE', confidenceLabel: 'HIGH',
+        reasonCodes: ['SOURCE_VERDICT_REPLACE_NOW', 'CONFIDENCE_HIGH'], limitationCodes: [],
+      },
+    }),
+  }));
+  assert.equal(result.status.currentRecommendationSnapshotId, 'snap-current');
+  assert.equal(result.status.verdict, 'REPLACE');
+  assert.ok(result.status.explanation.some((claim) => claim.sourceCode === 'SOURCE_VERDICT_REPLACE_NOW'));
+  assert.ok(result.status.explanation.some((claim) => claim.sourceCode === 'PROFILE_PROFESSIONAL_BOUNDARY'));
+});
+
+test('GET_STATUS fails closed when the canonical thread is stale', async () => {
+  const result = await invokeAgentRuntime({ ...BASE, operation: 'GET_STATUS' }, runtimeDeps({
+    authorize: async () => true,
+    resolvePausedRun: async () => null,
+    resolveLatestRun: async () => ({
+      id: 'run-done', agentVersion: '1.0.0', outcome: 'COMPLETED', decisionThreadId: 'thr-1', statusJson: {},
+    }),
+    resolveCurrentThreadState: async () => ({
+      decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+      state: {
+        ambiguous: false, decisionThreadId: 'thr-1', currentRecommendationSnapshotId: 'snap-old',
+        contextStatus: 'STALE', verdict: 'REPAIR', confidenceLabel: 'HIGH', reasonCodes: [], limitationCodes: [],
+      },
+    }),
+  }));
+  assert.equal(result.status.phase, 'ABSTAINED');
+  assert.equal(result.status.abstentionReason, 'CONTEXT_UNRESOLVED');
+  assert.equal(result.status.currentRecommendationSnapshotId, null);
+  assert.equal(result.status.verdict, null);
+});
+
 test('an expired RESUME_IN_PROGRESS claim restores the paused session instead of stranding it', async () => {
   const now = new Date('2026-08-30T12:00:00.000Z');
   const status = {
@@ -165,6 +214,7 @@ test('an expired RESUME_IN_PROGRESS claim restores the paused session instead of
 test('DISPUTE_INPUT accepts only canonical keys and preserves the bounded note for hashing', async () => {
   const terminal = {
     id: 'run-done', correlationId: 'corr-done', agentVersion: '1.0.0', outcome: 'COMPLETED',
+    decisionThreadId: 'thr-1',
     statusJson: {
       agentId: 'hvac-repair-replace-specialist', agentVersion: '1.0.0', phase: 'RECOMMENDATION_READY',
       decisionThreadId: 'thr-1', currentRecommendationSnapshotId: 'snap-1', verdict: 'REPLACE',
@@ -185,6 +235,32 @@ test('DISPUTE_INPUT accepts only canonical keys and preserves the bounded note f
     invokeAgentRuntime({ ...BASE, operation: 'DISPUTE_INPUT', dispute: { key: 'arbitrary.secret' } }, deps),
     /supported Specialist input key/,
   );
+});
+
+test('DISPUTE_INPUT enforces the current Specialist profile key set', async () => {
+  const terminal = {
+    id: 'run-appliance', correlationId: 'corr-appliance', agentVersion: '1.0.0', outcome: 'COMPLETED',
+    decisionThreadId: 'thr-appliance', statusJson: {},
+  };
+  const deps = runtimeDeps({
+    authorize: async () => true,
+    resolvePausedRun: async () => null,
+    resolveLatestRun: async () => terminal,
+    resolveCurrentThreadState: async () => ({
+      decisionDefinitionId: 'APPLIANCE_REPAIR_REPLACE',
+      state: {
+        ambiguous: false, decisionThreadId: 'thr-appliance', currentRecommendationSnapshotId: 'snap-appliance',
+        contextStatus: 'CURRENT', verdict: 'REPAIR', confidenceLabel: 'MEDIUM', reasonCodes: [], limitationCodes: [],
+      },
+    }),
+    recordDispute: async () => {},
+  });
+  await assert.doesNotReject(invokeAgentRuntime({
+    ...BASE, operation: 'DISPUTE_INPUT', dispute: { key: 'appliance.condition' },
+  }, deps));
+  await assert.rejects(invokeAgentRuntime({
+    ...BASE, operation: 'DISPUTE_INPUT', dispute: { key: 'hvac.technicianAssessment' },
+  }, deps), /supported Specialist input key/);
 });
 
 test('deployment provenance fails closed when no concrete revision is present', () => {

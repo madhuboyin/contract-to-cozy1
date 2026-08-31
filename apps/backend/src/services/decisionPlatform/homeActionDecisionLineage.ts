@@ -24,6 +24,7 @@ import type { DecisionDefinitionId } from './decisionDefinitionRegistry';
 import type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
 import { OPERATIONAL_WORK_ID_PREFIX, OWNERSHIP_COST_CHANGE_ID_PREFIX } from '../intelligence/homeActionProducerOwnership';
 import { prisma } from '../../lib/prisma';
+import { isGenericApplianceRepairReplaceEligible } from '../repairReplaceEligibility';
 
 export type { HomeActionOriginRef } from './decisionFamilyAdapter';
 export type { DecisionLineagePolicy } from '../intelligence/homeActionProducerOwnership.contract';
@@ -251,7 +252,7 @@ export async function resolveWorkItemDecisionFamilyRefs(
     if (source.sourceType === 'GUIDANCE') {
       const analysis = await db.replaceRepairAnalysis.findFirst({
         where: { id: source.sourceEntityId, propertyId },
-        select: { inventoryItemId: true, inventoryItem: { select: { category: true } } },
+        select: { inventoryItemId: true, inventoryItem: { select: { category: true, name: true } } },
       });
       if (analysis) {
         // Phase 4A (architecture §12.7): the same category-aware split
@@ -261,7 +262,7 @@ export async function resolveWorkItemDecisionFamilyRefs(
         // categories abstain instead of falling through to the appliance
         // family.
         const category = analysis.inventoryItem?.category;
-        if (category === 'HVAC' || category === 'APPLIANCE') {
+        if (category === 'HVAC' || isGenericApplianceRepairReplaceEligible(analysis.inventoryItem)) {
           refs.push({
             decisionDefinitionId: category === 'HVAC'
               ? 'HVAC_REPAIR_REPLACE'
@@ -316,8 +317,12 @@ export async function assertDecisionLineageSatisfiedForAcceptance(
   const refs = await resolveWorkItemDecisionFamilyRefs(propertyId, workItemId, db);
   for (const ref of refs) {
     const lineage = await resolveHomeActionDecisionLineage(propertyId, ref);
-    if (lineage.status !== 'LINKED' || !lineage.thread.currentRecommendationSnapshotId) {
-      const status = lineage.status === 'LINKED' ? 'MISSING_CURRENT_SNAPSHOT' : lineage.status;
+    if (lineage.status !== 'LINKED'
+      || lineage.thread.contextStatus !== 'CURRENT'
+      || !lineage.thread.currentRecommendationSnapshotId) {
+      const status = lineage.status === 'LINKED'
+        ? lineage.thread.contextStatus !== 'CURRENT' ? `CONTEXT_${lineage.thread.contextStatus}` : 'MISSING_CURRENT_SNAPSHOT'
+        : lineage.status;
       throw new DecisionLineageRequiredForAcceptanceError(
         `This ${ref.sourceLabel} decision needs a current recommendation before the work can be accepted (decision lineage status: ${status}).`,
       );
@@ -334,7 +339,9 @@ export async function resolveWorkItemRecommendationSnapshotId(
   const refs = await resolveWorkItemDecisionFamilyRefs(propertyId, workItemId, db);
   for (const ref of refs) {
     const lineage = await resolveHomeActionDecisionLineage(propertyId, ref);
-    if (lineage.status === 'LINKED' && lineage.thread.currentRecommendationSnapshotId) {
+    if (lineage.status === 'LINKED'
+      && lineage.thread.contextStatus === 'CURRENT'
+      && lineage.thread.currentRecommendationSnapshotId) {
       return lineage.thread.currentRecommendationSnapshotId;
     }
   }
@@ -368,10 +375,13 @@ export function assertHomeActionDecisionLineageSatisfiedForCommitment(
   if (!action.decisionLineage) return;
   if (
     action.decisionLineage.status !== 'LINKED'
+    || action.decisionLineage.thread.contextStatus !== 'CURRENT'
     || !action.decisionLineage.thread.currentRecommendationSnapshotId
   ) {
     const status = action.decisionLineage.status === 'LINKED'
-      ? 'MISSING_CURRENT_SNAPSHOT'
+      ? action.decisionLineage.thread.contextStatus !== 'CURRENT'
+        ? `CONTEXT_${action.decisionLineage.thread.contextStatus}`
+        : 'MISSING_CURRENT_SNAPSHOT'
       : action.decisionLineage.status;
     throw new DecisionLineageRequiredForAcceptanceError(
       `This recommendation needs a current, tracked decision before it can be completed (decision lineage status: ${status}).`,

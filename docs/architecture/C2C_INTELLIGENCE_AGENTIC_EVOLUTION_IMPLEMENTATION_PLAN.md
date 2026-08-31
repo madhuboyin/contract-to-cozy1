@@ -441,6 +441,8 @@ Treat Phase 4 as two scopes. Phase 4A is concrete; Phase 4B remains an admission
 
 **Implementation status (2026-08-29): Phase 4A complete (uncommitted).** IPD-006 is resolved. `APPLIANCE_REPAIR_REPLACE` is APPLIANCE-only, with water heaters and all higher-risk categories excluded at ingress and adapter eligibility. The approved exhaustive verdict table, immutable source provenance, create/resume/supersession behavior, admitted `GENERIC_APPLIANCE` profile, shared profile-selected Specialist runtime/API/UI, and versioned 10-case deterministic evaluation suite are implemented. No schema change.
 
+**Functional audit remediation (2026-08-30): complete.** Phase 4A now selects only the canonical `CURRENT` `ReplaceRepairAnalysis` before limiting Home Action candidates; a shared IPD-006 eligibility guard rejects legacy APPLIANCE-labelled water heaters at inventory write, promotion, work-item lineage, and adapter boundaries. Snapshot-family reads compare the current source digest with the published snapshot and project drift or a missing source as `STALE` without writing. Work acceptance, Home Action completion, and snapshot attribution require both a snapshot id and `contextStatus=CURRENT`. Specialist `GET_STATUS` rebuilds terminal output from the current DecisionThread/snapshot, appliance reason codes have deterministic typed claims, dispute keys are enforced per profile, and the Home panel serializes START before status polling with explicit retry/error states. No schema change.
+
 **Existing files to change**
 
 - `apps/backend/src/services/decisionPlatform/decisionDefinitionRegistry.ts`

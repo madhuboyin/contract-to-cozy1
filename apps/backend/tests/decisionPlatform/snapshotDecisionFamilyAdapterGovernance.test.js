@@ -124,7 +124,8 @@ test('recordHomeActionOriginLink is called from createThread (including its P200
 // acknowledge it.
 test('selectThread computes an unacknowledged-change diff instead of a hardcoded null for its UNIQUE branch', () => {
   assert.match(factorySource, /const change = await loadUnacknowledgedRecommendationChange\(selection\.thread\);/);
-  assert.match(factorySource, /return \{ kind: 'UNIQUE', thread: toLineage\(selection\.thread, change\) \};/);
+  assert.match(factorySource, /return \{ kind: 'UNIQUE', thread: toLineage\(effectiveThread, change\) \};/);
+  assert.match(factorySource, /selected\.currentRecommendationSnapshot\?\.inputDigest !== source\.inputDigest/);
 });
 
 test('the shared adapter leaves snapshot acknowledgment to the presentation surface', () => {

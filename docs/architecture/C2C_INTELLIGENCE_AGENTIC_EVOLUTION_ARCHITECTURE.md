@@ -1520,6 +1520,8 @@ The first concrete instance of §12.6's extension pattern, not pattern-only pros
 
 **Implementation status (2026-08-29): Phase 4A complete.** IPD-006 is approved: `APPLIANCE_REPAIR_REPLACE` admits only canonical `APPLIANCE` items; water heaters remain `PLUMBING`, and higher-risk categories do not fall back. The exhaustive verdict map is approved. The snapshot adapter preserves `ReplaceRepairAnalysis.id` provenance and supports create/resume/supersession. `GENERIC_APPLIANCE` is registered and admitted with a versioned 10-case evaluation suite; the shared Specialist runtime selects the Decision Platform adapter from the profile, and the backend/UI expose the same conversation for HVAC and APPLIANCE. No schema change.
 
+**Functional audit closure (2026-08-30):** canonical-source selection and commitment safety are now explicit runtime invariants, not assumptions. Only the `CURRENT` analysis is eligible; adapter reads compare its digest with the current snapshot and expose any drift as stale before commitment. A legacy APPLIANCE-labelled water heater fails the shared IPD-006 safety guard. Specialist status and explanations are reconstructed from the live DecisionThread/snapshot, correction controls and accepted dispute keys follow the selected profile, and the shared panel waits for START to settle before beginning bounded WORKING polling.
+
 | | |
 |---|---|
 | **Objective** | Stand up `APPLIANCE_REPAIR_REPLACE` as a real Decision Platform family (§12.7) and add the `GENERIC_APPLIANCE` profile to `RepairReplaceProfileRegistry` |

@@ -104,3 +104,42 @@ test('uploads document evidence with the paused CAS so the mutation can attach a
   fireEvent.change(screen.getByLabelText('Upload assessment or estimate'), { target: { files: [file] } });
   expect(upload).toHaveBeenCalledWith({ file, expectedCasVersion: 7 });
 });
+
+test('shows appliance-specific dispute inputs and the canonical inventory correction path', () => {
+  const dispute = jest.fn();
+  const ready = {
+    ...status,
+    phase: 'RECOMMENDATION_READY' as const,
+    verdict: 'REPLACE' as const,
+    outstanding: [],
+    paused: false,
+    casVersion: null,
+    expectedOperation: null,
+  };
+  (useHvacSpecialistStatus as jest.Mock).mockReturnValue({ data: { status: ready }, isLoading: false, isError: false });
+  (useStartHvacSpecialist as jest.Mock).mockReturnValue({ data: { status: ready }, mutate: jest.fn(), isPending: false, isSuccess: true, isError: false });
+  (useSubmitHvacSpecialistContext as jest.Mock).mockReturnValue({ mutate: jest.fn(), isPending: false, isError: false });
+  (useUploadHvacSpecialistDocument as jest.Mock).mockReturnValue({ mutate: jest.fn(), isPending: false, isError: false });
+  (useDisputeHvacSpecialistInput as jest.Mock).mockReturnValue({ mutate: dispute, isPending: false, isError: false });
+
+  render(
+    <HomeActionSpecialistPanel
+      propertyId="property-1"
+      inventoryItemId="dishwasher-1"
+      profileId="GENERIC_APPLIANCE"
+      homeActionOrigin={{
+        homeActionId: 'action-1', lineageId: 'appliance-repair-replace:dishwasher-1', sourceEntityId: 'analysis-1',
+        sourceVersion: 'v1', contextVersion: null,
+      }}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Get help deciding' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Dispute an input' }));
+  expect(screen.getByRole('option', { name: 'Appliance condition' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Technician assessment' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Correct this appliance’s inventory record' })).toHaveAttribute(
+    'href', '/dashboard/properties/property-1/inventory/items/dishwasher-1',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Record dispute' }));
+  expect(dispute).toHaveBeenCalledWith({ key: 'appliance.condition', note: undefined, expectedCasVersion: undefined });
+});

@@ -24,6 +24,7 @@ const { DECISION_DEFINITIONS } = require('../../src/services/decisionPlatform/de
 const { DECISION_CONTEXT_CONTRACTS } = require('../../src/services/decisionPlatform/decisionContextContracts.ts');
 const { ENVELOPE_MAPPINGS } = require('../../src/services/intelligenceEnvelope/envelopeMappingRegistry.ts');
 const { evaluateQualifiedClaimVerdicts } = require('../../src/services/intelligenceEnvelope/qualifiedClaimCompatibilityRegistry.ts');
+const { isGenericApplianceRepairReplaceEligible } = require('../../src/services/repairReplaceEligibility.ts');
 
 test('all four ReplaceRepairVerdict values map explicitly to a Decision Platform verdict code', () => {
   assert.deepEqual(APPLIANCE_VERDICT_TO_DECISION_VERDICT, {
@@ -43,6 +44,12 @@ test('the approved eligibility boundary is APPLIANCE only', () => {
   }
 });
 
+test('generic-appliance eligibility rejects a legacy APPLIANCE-labelled water heater', () => {
+  assert.equal(isGenericApplianceRepairReplaceEligible({ category: 'APPLIANCE', name: 'Dishwasher' }), true);
+  assert.equal(isGenericApplianceRepairReplaceEligible({ category: 'APPLIANCE', name: 'Tankless Water Heater' }), false);
+  assert.equal(isGenericApplianceRepairReplaceEligible({ category: 'PLUMBING', name: 'Water Heater' }), false);
+});
+
 test('source projection requires a READY APPLIANCE analysis and preserves provenance', async () => {
   let capturedWhere;
   const projected = await loadApplianceRepairReplaceSourceState('property-1', 'item-1', {
@@ -53,12 +60,13 @@ test('source projection requires a READY APPLIANCE analysis and preserves proven
           id: 'analysis-1', verdict: 'REPLACE_SOON', confidence: 'MEDIUM', impactLevel: 'HIGH', summary: 'Replace soon',
           ageYears: 12, remainingYears: 1, estimatedNextRepairCostCents: 50000,
           estimatedReplacementCostCents: 120000, breakEvenMonths: 8,
-          updatedAt: new Date('2026-08-29T12:00:00.000Z'), inventoryItem: { name: 'Dishwasher' },
+          updatedAt: new Date('2026-08-29T12:00:00.000Z'), inventoryItem: { name: 'Dishwasher', category: 'APPLIANCE' },
         };
       },
     },
   });
   assert.deepEqual(capturedWhere.inventoryItem.category.in, ['APPLIANCE']);
+  assert.equal(capturedWhere.currentMarker, 'CURRENT');
   assert.equal(projected.verdictCode, 'REPLACE');
   assert.deepEqual(projected.canonicalFactReferences, [
     { entityType: 'REPLACE_REPAIR_ANALYSIS', entityId: 'analysis-1' },
@@ -83,7 +91,10 @@ function behavioralHarness() {
     decisionThread: {
       findMany: async ({ where }) => threads.filter((row) => row.propertyId === where.propertyId
         && row.decisionDefinitionId === where.decisionDefinitionId && row.primaryEntityId === where.primaryEntityId
-        && where.lifecycleStatus.in.includes(row.lifecycleStatus)),
+        && where.lifecycleStatus.in.includes(row.lifecycleStatus)).map((row) => ({
+          ...row,
+          currentRecommendationSnapshot: snapshots.find((snapshot) => snapshot.id === row.currentRecommendationSnapshotId) ?? null,
+        })),
     },
     $transaction: async (work) => work({
       decisionThread: {
@@ -147,6 +158,20 @@ test('adapter creates once, resumes idempotently, preserves origin provenance, a
   assert.equal(harness.snapshots[1].verdictCode, 'REPLACE');
   assert.equal(harness.origins.length, 3, 'creation and every resume retain durable origin attribution');
   assert.equal(harness.emissions.length, 2, 'first snapshot and superseding snapshot emit changes');
+});
+
+test('read-only thread selection projects a superseded source digest as STALE before resume', async () => {
+  const harness = behavioralHarness();
+  await harness.adapter.createOrResumeThread({ propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1' });
+  harness.setSource({
+    title: 'Repair or replace Dishwasher', goalCode: 'APPLIANCE_REPAIR_REPLACE_DECISION', verdictCode: 'REPLACE',
+    reasonCodes: ['SOURCE_VERDICT_REPLACE_SOON'], confidenceBreakdown: { label: 'MEDIUM' }, inputDigest: 'digest-new',
+  });
+  const selection = await harness.adapter.selectThread('property-1', 'item-1');
+  assert.equal(selection.kind, 'UNIQUE');
+  assert.equal(selection.thread.contextStatus, 'STALE');
+  assert.equal(selection.thread.currentRecommendationSnapshotId, harness.snapshots[0].id);
+  assert.equal(harness.snapshots.length, 1, 'freshness detection must remain read-only');
 });
 
 test('APPLIANCE_REPAIR_REPLACE is a fully registered Decision Platform family', () => {

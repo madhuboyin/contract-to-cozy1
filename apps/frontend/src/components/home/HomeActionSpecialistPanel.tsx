@@ -105,16 +105,31 @@ function StatusBody({
   status,
   propertyId,
   inventoryItemId,
+  profileId,
 }: {
   status: SpecialistStatus;
   propertyId: string;
   inventoryItemId: string;
+  profileId: 'HVAC' | 'GENERIC_APPLIANCE';
 }) {
   const submit = useSubmitHvacSpecialistContext(propertyId, inventoryItemId);
   const upload = useUploadHvacSpecialistDocument(propertyId, inventoryItemId);
   const dispute = useDisputeHvacSpecialistInput(propertyId, inventoryItemId);
   const [disputeOpen, setDisputeOpen] = useState(false);
-  const [disputeKey, setDisputeKey] = useState('hvac.condition');
+  const disputeOptions = profileId === 'HVAC'
+    ? [
+      ['hvac.condition', 'System condition'],
+      ['hvac.installDate', 'Install date'],
+      ['hvac.replacementCost', 'Replacement estimate'],
+      ['hvac.technicianAssessment', 'Technician assessment'],
+    ] as const
+    : [
+      ['appliance.condition', 'Appliance condition'],
+      ['appliance.installDate', 'Install date'],
+      ['appliance.replacementCost', 'Replacement estimate'],
+      ['appliance.analysis', 'Repair-or-replace analysis'],
+    ] as const;
+  const [disputeKey, setDisputeKey] = useState<string>(disputeOptions[0][0]);
   const [disputeNote, setDisputeNote] = useState('');
 
   const disputeControl = (
@@ -128,10 +143,7 @@ function StatusBody({
             onChange={(event) => setDisputeKey(event.target.value)}
             className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
           >
-            <option value="hvac.condition">System condition</option>
-            <option value="hvac.installDate">Install date</option>
-            <option value="hvac.replacementCost">Replacement estimate</option>
-            <option value="hvac.technicianAssessment">Technician assessment</option>
+            {disputeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
           <Input value={disputeNote} onChange={(event) => setDisputeNote(event.target.value)} maxLength={500} placeholder="What looks wrong? (optional)" />
           <Button
@@ -146,6 +158,11 @@ function StatusBody({
             Record dispute
           </Button>
           {dispute.isError && <p className="text-xs text-rose-600">Couldn’t record the dispute. Reload and try again.</p>}
+          {profileId === 'GENERIC_APPLIANCE' && (
+            <Link className="block text-xs text-blue-700 underline" href={`/dashboard/properties/${propertyId}/inventory/items/${inventoryItemId}`}>
+              Correct this appliance’s inventory record
+            </Link>
+          )}
         </div>
       )}
     </div>
@@ -243,22 +260,27 @@ export function HomeActionSpecialistPanel({
   inventoryItemId,
   homeActionOrigin,
   profileLabel = 'HVAC Repair-or-Replace Specialist',
+  profileId = 'HVAC',
 }: {
   propertyId: string;
   inventoryItemId: string;
   homeActionOrigin: Omit<HvacSpecialistHomeActionOrigin, 'engagementNonce'>;
   profileLabel?: string;
+  profileId?: 'HVAC' | 'GENERIC_APPLIANCE';
 }) {
   const [opened, setOpened] = useState(false);
   const engagementNonce = useRef(
     globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   const origin = useMemo(() => ({ ...homeActionOrigin, engagementNonce: engagementNonce.current }), [homeActionOrigin]);
-  const statusQuery = useHvacSpecialistStatus(propertyId, inventoryItemId, { enabled: opened });
   const start = useStartHvacSpecialist(propertyId, inventoryItemId, origin);
+  // START owns the cache until it settles. Only then may GET_STATUS read the
+  // canonical thread; this prevents a pre-start status response overwriting
+  // the START result. WORKING responses are polled by the query hook.
+  const statusQuery = useHvacSpecialistStatus(propertyId, inventoryItemId, { enabled: opened && start.isSuccess });
   // Every mutation writes the canonical query cache. Reading only that cache
   // prevents an old START response from masking a successful continuation.
-  const status = statusQuery.data?.status ?? null;
+  const status = statusQuery.data?.status ?? start.data?.status ?? null;
 
   const heading = useMemo(() => (
     <div className="flex items-center gap-2">
@@ -293,8 +315,15 @@ export function HomeActionSpecialistPanel({
           <p className="flex items-center gap-2 text-sm text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin" /> Starting the Specialist…
           </p>
+        ) : start.isError ? (
+          <div className="space-y-2">
+            <p className="text-sm text-rose-600">The Specialist couldn’t start. Try again.</p>
+            <Button size="sm" variant="outline" onClick={() => start.mutate()}>Retry</Button>
+          </div>
+        ) : statusQuery.isError && !status ? (
+          <p className="text-sm text-rose-600">The Specialist status couldn’t be loaded. Try again shortly.</p>
         ) : status ? (
-          <StatusBody status={status} propertyId={propertyId} inventoryItemId={inventoryItemId} />
+          <StatusBody status={status} propertyId={propertyId} inventoryItemId={inventoryItemId} profileId={profileId} />
         ) : (
           <p className="text-sm text-rose-600">The Specialist is unavailable right now.</p>
         )}

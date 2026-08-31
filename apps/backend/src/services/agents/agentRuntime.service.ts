@@ -34,10 +34,16 @@ import { recordToolInvocation } from './agentInvocationAudit.service';
 import type { NarrationProvider } from './agentLlmPurpose.contract';
 import type { AgentPropertyContextReader } from './agentPropertyContext.service';
 import { recordAgentOperation, recordAgentRunOutcome } from './agentMetrics.service';
-import { createSpecialistThreadPort, runHvacSpecialist, type SpecialistThreadPort } from './hvacRepairReplaceSpecialist.service';
+import {
+  createSpecialistThreadPort,
+  readCurrentSpecialistThreadState,
+  runHvacSpecialist,
+  type CanonicalSpecialistThreadState,
+  type SpecialistThreadPort,
+} from './hvacRepairReplaceSpecialist.service';
 import { applyHvacSpecialistContextIntake } from './hvacSpecialistContextIntake';
 import { REPAIR_REPLACE_PROFILES, type RepairReplaceProfile } from './repairReplaceProfileRegistry';
-import { ACCEPTED_INTAKE_KEYS, DISPUTABLE_INPUT_KEYS } from './specialistTypedClaims';
+import { ACCEPTED_INTAKE_KEYS, DISPUTABLE_INPUT_KEYS, isDisputableInputKey, selectTypedClaims } from './specialistTypedClaims';
 import type {
   AgentRunStatusProjection,
   AgentRuntimeInvocation,
@@ -155,6 +161,10 @@ export interface AgentRuntimeDependencies {
   resolveLatestRun?: typeof getLatestAgentRunForSubject;
   resolveRunById?: typeof getAgentRunById;
   resolveStateByRun?: typeof loadAgentStateByRun;
+  /** Test seam; undefined means the injected environment has no canonical projection. */
+  resolveCurrentThreadState?: (input: {
+    propertyId: string; inventoryItemId: string; decisionThreadId: string;
+  }) => Promise<CanonicalSpecialistThreadState | null | undefined>;
   resolveReservation?: typeof getAgentRunReservationById;
   recoverPausedState?: typeof compareAndSwapAgentState;
   recordDispute?: typeof recordToolInvocation;
@@ -215,6 +225,10 @@ function profileForInvocation(invocation: AgentRuntimeInvocation): RepairReplace
   return invocation.homeActionOrigin
     ? resolveSpecialistProfileForLineage(invocation.homeActionOrigin.lineageId)
     : REPAIR_REPLACE_PROFILES.find((candidate) => candidate.profileId === 'HVAC')!;
+}
+
+function profileForDecisionDefinition(decisionDefinitionId: RepairReplaceProfile['decisionDefinitionId']): RepairReplaceProfile | null {
+  return REPAIR_REPLACE_PROFILES.find((candidate) => candidate.decisionDefinitionId === decisionDefinitionId) ?? null;
 }
 
 // PR 11: SUBMIT_CONTEXT's fact writes go through the existing
@@ -356,6 +370,43 @@ async function readStatus(
   );
   if (latest) {
     const snapshot = latest.statusJson as unknown as Partial<AgentRunStatusProjection>;
+    if (latest.decisionThreadId) {
+      const canonical = await (deps.resolveCurrentThreadState ?? readCurrentSpecialistThreadState)({
+        propertyId: invocation.propertyId,
+        inventoryItemId: invocation.inventoryItemId,
+        decisionThreadId: latest.decisionThreadId,
+      });
+      // `undefined` is reserved for injected tests/consumers that cannot
+      // provide canonical persistence. Production returns an object or null.
+      if (canonical !== undefined) {
+        const profile = canonical ? profileForDecisionDefinition(canonical.decisionDefinitionId) : null;
+        const state = canonical?.state ?? null;
+        const abstentionReason = state?.ambiguous
+          ? 'AMBIGUOUS_DECISION_THREAD'
+          : !state || state.contextStatus !== 'CURRENT' || !state.currentRecommendationSnapshotId
+            ? 'CONTEXT_UNRESOLVED'
+            : !state.verdict
+              ? 'UNSUPPORTED_VERDICT'
+              : null;
+        return {
+          mutated: false,
+          status: projectionFor({
+            agentId: snapshot.agentId ?? SPECIALIST_AGENT_ID,
+            agentVersion: snapshot.agentVersion ?? latest.agentVersion,
+            phase: abstentionReason ? 'ABSTAINED' : 'RECOMMENDATION_READY',
+            decisionThreadId: state?.decisionThreadId ?? latest.decisionThreadId,
+            currentRecommendationSnapshotId: abstentionReason ? null : state?.currentRecommendationSnapshotId ?? null,
+            verdict: abstentionReason ? null : state?.verdict ?? null,
+            confidenceLabel: abstentionReason ? null : state?.confidenceLabel ?? null,
+            outstanding: [],
+            explanation: abstentionReason
+              ? []
+              : selectTypedClaims(state?.reasonCodes ?? [], profile?.professionalBoundary),
+            abstentionReason,
+          }, latest.id, false),
+        };
+      }
+    }
     return {
       mutated: false,
       status: projectionFor({
@@ -408,7 +459,31 @@ async function disputeInput(
       invocation.inventoryItemId,
     );
   if (!targetRun) throw new AgentRuntimeStateError('No Specialist run exists to dispute.');
-  if (!invocation.dispute || !DISPUTABLE_INPUT_KEYS.has(invocation.dispute.key)) {
+  let disputeProfileId: string | null = paused ? 'HVAC' : null;
+  let canonicalProfileUnavailable = false;
+  if (!paused && targetRun.decisionThreadId) {
+    const canonical = await (deps.resolveCurrentThreadState ?? readCurrentSpecialistThreadState)({
+      propertyId: invocation.propertyId,
+      inventoryItemId: invocation.inventoryItemId,
+      decisionThreadId: targetRun.decisionThreadId,
+    });
+    if (canonical === undefined) {
+      // An injected environment may intentionally omit canonical persistence.
+      // Production never takes this compatibility branch.
+      disputeProfileId = null;
+    } else if (canonical) {
+      disputeProfileId = profileForDecisionDefinition(canonical.decisionDefinitionId)?.profileId ?? null;
+      canonicalProfileUnavailable = !disputeProfileId;
+    } else {
+      canonicalProfileUnavailable = true;
+    }
+  } else if (!paused) {
+    canonicalProfileUnavailable = true;
+  }
+  const supportedDispute = !canonicalProfileUnavailable && invocation.dispute && (disputeProfileId
+    ? isDisputableInputKey(disputeProfileId, invocation.dispute.key)
+    : DISPUTABLE_INPUT_KEYS.has(invocation.dispute.key));
+  if (!supportedDispute || !invocation.dispute) {
     throw new AgentRuntimeStateError('A supported Specialist input key is required to record a dispute.');
   }
   {
