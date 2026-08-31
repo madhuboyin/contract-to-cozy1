@@ -13,7 +13,7 @@ import {
 } from '@prisma/client';
 
 import { prisma } from '../lib/prisma'; 
-import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../utils/riskCalculator.util';
+import { calculateAssetRisk, calculateTotalRiskScore, describeAssetRisk, filterRelevantAssets, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
 import JobQueueService, { getPropertyIntelligenceQueue } from './JobQueue.service';
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types';
@@ -360,7 +360,10 @@ class RiskAssessmentService {
               systemType: c.systemType,
               category: c.category,
               title: assetLabel,
-              description: c.actionCta || `Maintenance required for ${assetLabel}`,
+              // `c.actionCta` is a button label, not a rationale — it became the
+              // auto-created task's description and then its work item's
+              // homeownerReason. Build a real sentence from the risk numbers.
+              description: describeAssetRisk(c, assetLabel),
               priority: (c.riskLevel === 'CRITICAL' ? 'URGENT' : 'HIGH') as 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW',
               riskLevel: c.riskLevel as 'CRITICAL' | 'HIGH' | 'ELEVATED' | 'MODERATE' | 'LOW',
               estimatedCost: Number(c.outOfPocketCost ?? c.replacementCost ?? 0),

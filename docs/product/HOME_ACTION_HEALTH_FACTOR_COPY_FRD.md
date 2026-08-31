@@ -492,18 +492,38 @@ but neither normalized.
 |---|---|
 | `presentWorkItemTitle()` runs `humanizeHomeActionLabel` on `title` inside **both** `createWorkItem` and `refreshWorkItemPresentation` — the single choke point every source adapter and direct caller passes through. New/refreshed rows are clean regardless of producer; no read site needs its own `humanize()`. | `homeOperations/infrastructure/workItemRepository.ts` |
 | `proposeWorkItemFromHomeAction` prefers `action.presentation?.headline` over raw `action.signal` for the title — so when producers author real task-phrased presentations (§12.4) the work item inherits them; the repository normalization is the last-resort net. | `homeOperations/adapters/homeActionWorkItem.adapter.ts` |
-| `normalizeStaleWorkItemTitles(propertyId)` — backlog self-heal: rewrites non-`CLOSED` rows whose stored title differs from its normalized form (a meaning-preserving relabel of the same obligation, so deliberately exempt from `canRefreshPresentationFromSource`). Idempotent; converges after one pass. Called from `getHomeActionFeed` beside `reconcileActiveMaintenanceTaskWork`, so every reader — this feed and the `listWorkItems` endpoint — sees healed rows. | `workItemRepository.ts`, `services/homeActions.service.ts` |
-| Tests: `workItemTitleNormalization.test.js` (new) — create/refresh normalize; heal is state-scoped and idempotent. | — |
+| `normalizeStaleWorkItemPresentation(propertyId)` — backlog self-heal: rewrites non-`CLOSED` rows whose stored title *or homeowner reason* differs from its normalized form (meaning-preserving, so deliberately exempt from `canRefreshPresentationFromSource`). Idempotent; converges after one pass. Called from `getHomeActionFeed` beside `reconcileActiveMaintenanceTaskWork`, so every reader — this feed and the `listWorkItems` endpoint — sees healed rows. | `workItemRepository.ts`, `services/homeActions.service.ts` |
+| Tests: `workItemPresentationNormalization.test.js`, `describeAssetRisk.test.js` (new). | — |
 
 `CLOSED` rows are left as a historical record. The `getHomeActionFeed` heal
 means `/home-operations`'s `listWorkItems` call may lag by one refetch on the
 first visit after deploy, then is permanently clean — no per-screen patch.
 
-**Still open.** `homeownerReason` showing `"Add Home Warranty"` is a *different*
-bug — a CTA label (`riskCalculator.util.ts` `actionCta`) leaking into
-`whyItMatters` at the risk producer. `humanizeHomeActionLabel` (prose-safe) does
-not and should not touch it. Needs a source fix. Tracked with §12.4 (risk
-producers authoring real presentations).
+### 12.7 `homeownerReason` = "Add Home Warranty" — CTA label used as rationale (shipped)
+
+**Problem.** The three risk cards showed `"Add Home Warranty"` as the body on the
+dashboard, Resolution Center, and `/home-operations`. `AssetRiskDetail` carries
+only `actionCta` — a button label — and no rationale field, so consumers piped
+`actionCta` into the description/`whyItMatters` slot, which then became the work
+item's `homeownerReason` and the card `presentation.summary`.
+
+**Leak points (both fixed at source):**
+
+| Change | File |
+|---|---|
+| `describeAssetRisk(detail, assetLabel)` — builds a homeowner "why" sentence from the numbers the risk engine already has (age vs. expected life, uncovered out-of-pocket exposure). Degrades to a risk-level sentence when those are absent. | `utils/riskCalculator.util.ts` |
+| `mapRiskDetailToAction` — `description` is `d.recommendedAction` when real, else `describeAssetRisk(d, …)`; **never `d.actionCta`**. Fixes the orchestrated RISK action → HomeAction → work item + card summary. | `services/orchestration.service.ts` |
+| Auto-created maintenance task from a HIGH/CRITICAL risk — `description: describeAssetRisk(c, assetLabel)` instead of `c.actionCta \|\| …`. Fixes `PropertyMaintenanceTask.description` → work item `homeownerReason`. | `services/RiskAssessment.service.ts` |
+
+**Boundary guard + self-heal (for existing rows):** unlike a title, a bad reason
+can't be transformed back into a sentence at the persistence boundary — but an
+*exact match* against the known leaked CTA labels (`presentWorkItemReason`,
+`LEAKED_CTA_REASONS`) is swapped for a safe generic prompt in `createWorkItem` /
+`refreshWorkItemPresentation` and in `normalizeStaleWorkItemPresentation`. A real
+homeowner reason is always a full sentence, so this never fires on genuine copy.
+
+`actionCta` itself is unchanged — it is still the button label where a button
+label belongs.
 
 ---
 

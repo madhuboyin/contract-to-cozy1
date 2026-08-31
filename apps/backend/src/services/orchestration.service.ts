@@ -44,6 +44,7 @@ import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsModule, emitHomeActionsSurfaced } from './analytics';
 import { getAggregationContextEnvelope } from './aggregationContext/context';
 import { aggregationLifecycleIdentity } from './aggregationContext/lifecycle';
+import { describeAssetRisk } from '../utils/riskCalculator.util';
 import {
   adaptHomeActionSource,
   getHomeAssetDisplayLabel,
@@ -1888,7 +1889,13 @@ async function mapRiskDetailToAction(params: {
     propertyId,
 
     title: d.assetName || systemType,
-    description: d.recommendedAction || d.actionCta || null,
+    // `d.actionCta` is a button label ("Add Home Warranty"), never a rationale —
+    // using it as the description leaked it into homeownerReason and card
+    // summaries downstream. Prefer a real recommendedAction when the source has
+    // one, else build a homeowner sentence from the risk numbers.
+    description: (typeof d.recommendedAction === 'string' && d.recommendedAction.trim())
+      ? d.recommendedAction.trim()
+      : describeAssetRisk(d, getHomeAssetDisplayLabel({ name: d.assetName, assetType: systemType, category })),
 
     systemType,
     category,

@@ -290,6 +290,54 @@ export const calculateAssetRisk = (
 };
 
 /**
+ * A homeowner-facing "why this matters" sentence for an asset risk, built from
+ * the numbers the risk engine already computed (age vs. expected life, uncovered
+ * out-of-pocket exposure). `AssetRiskDetail` only carries `actionCta` — a button
+ * label ("Add Home Warranty") — and several consumers were using that as the
+ * rationale text, so it leaked into work-item `homeownerReason` and card
+ * summaries. Use this instead. Degrades gracefully when age/exposure are absent.
+ */
+export function describeAssetRisk(
+  detail: {
+    age?: number | null;
+    expectedLife?: number | null;
+    outOfPocketCost?: number | null;
+    replacementCost?: number | null;
+    riskLevel?: string | null;
+    coverageFactor?: number | null;
+    actionCta?: string | null;
+  },
+  assetLabel: string,
+): string {
+  const age = typeof detail.age === 'number' && detail.age > 0 ? Math.round(detail.age) : null;
+  const life = typeof detail.expectedLife === 'number' && detail.expectedLife > 0 ? Math.round(detail.expectedLife) : null;
+  const exposure = [detail.outOfPocketCost, detail.replacementCost]
+    .map((value) => (typeof value === 'number' && value > 0 ? Math.round(value) : 0))
+    .find((value) => value > 0) ?? 0;
+  const uncovered = typeof detail.coverageFactor === 'number'
+    ? detail.coverageFactor < 0.5
+    : /warranty|insurance|coverage/i.test(detail.actionCta ?? '');
+  const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  const clauses: string[] = [];
+  if (age && life) {
+    clauses.push(age >= life
+      ? `Your ${assetLabel} is about ${age} years old and past its ~${life}-year expected service life`
+      : `Your ${assetLabel} is about ${age} years into a ~${life}-year expected service life`);
+  } else {
+    clauses.push(`The risk assessment flags your ${assetLabel} as ${(detail.riskLevel ?? 'elevated').toLowerCase()} risk`);
+  }
+  if (exposure > 0) {
+    clauses.push(uncovered
+      ? `with no warranty or insurance on file, an unplanned failure could cost about ${amount.format(exposure)} out of pocket`
+      : `its estimated replacement exposure is about ${amount.format(exposure)}`);
+  } else if (uncovered) {
+    clauses.push('and no warranty or insurance is linked to it');
+  }
+  return `${clauses.join(', ')}.`;
+}
+
+/**
  * Main function to aggregate risks and calculate the final normalized score.
  * @returns RiskAssessmentReport structure data.
  */

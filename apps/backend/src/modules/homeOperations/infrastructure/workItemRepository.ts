@@ -99,6 +99,31 @@ function presentWorkItemTitle(title: string): string {
   return humanizeHomeActionLabel(title);
 }
 
+/**
+ * Companion guard for `homeownerReason`. The risk producers historically used
+ * an `actionCta` button label ("Add Home Warranty") where a rationale sentence
+ * belongs (fixed at source in orchestration.service / RiskAssessment.service),
+ * and those bare labels reached `homeownerReason` and card summaries. Unlike a
+ * title there is no context here to rebuild a real sentence, so an exact match
+ * against the known leaked CTA labels is swapped for a safe generic prompt.
+ * A genuine homeowner reason is always a full sentence, so this never fires on
+ * real copy.
+ */
+const LEAKED_CTA_REASONS = new Set([
+  'add home warranty',
+  'schedule maintenance',
+  'schedule service',
+  'schedule inspection',
+  'schedule inspection/replacement',
+  'schedule inspection / replacement',
+]);
+const SAFE_GENERIC_REASON =
+  "Review this item's age, coverage, and estimated replacement cost, then decide whether to schedule work or add protection.";
+
+function presentWorkItemReason(reason: string): string {
+  return LEAKED_CTA_REASONS.has(reason.trim().toLowerCase()) ? SAFE_GENERIC_REASON : reason;
+}
+
 export function findWorkItemByWorkKey(propertyId: string, workKey: string, db: WorkItemDb = prisma) {
   return db.operationalWorkItem.findUnique({
     where: { propertyId_workKey: { propertyId, workKey } },
@@ -155,7 +180,7 @@ export async function createWorkItem(input: CreateWorkItemInput, db: WorkItemDb 
         priority: input.priority,
         safetyTier: input.safetyTier,
         title: presentWorkItemTitle(input.title),
-        homeownerReason: input.homeownerReason,
+        homeownerReason: presentWorkItemReason(input.homeownerReason),
         expectedOutcome: input.expectedOutcome,
         dueWindowStart: input.dueWindowStart ?? null,
         dueAt: input.dueAt ?? null,
@@ -197,7 +222,7 @@ export function refreshWorkItemPresentation(workItemId: string, input: RefreshWo
       safetyTier: input.safetyTier,
       materialApprovalRequired: input.safetyTier !== 'LOW_CONSEQUENCE',
       title: presentWorkItemTitle(input.title),
-      homeownerReason: input.homeownerReason,
+      homeownerReason: presentWorkItemReason(input.homeownerReason),
       expectedOutcome: input.expectedOutcome,
       confidence: input.confidence ?? null,
       missingContext: input.missingContext ?? [],
@@ -534,32 +559,38 @@ export function listWorkItemsForProperty(filter: ListWorkItemsFilter) {
 }
 
 /**
- * Backlog self-heal for rows written before `presentWorkItemTitle` guarded the
- * write path. Rewrites any non-closed work item whose stored title still
- * normalizes to something different — a meaning-preserving relabel of the same
- * obligation (`"HIGH Risk: WATER_HEATER_TANK"` -> `"Review the Water Heater
- * risk"`), so it is deliberately exempt from `canRefreshPresentationFromSource`
- * (which guards against source *recalculation* silently rewriting accepted
- * work, not against making an unreadable label readable).
+ * Backlog self-heal for rows written before `presentWorkItemTitle` /
+ * `presentWorkItemReason` guarded the write path. Rewrites any non-closed work
+ * item whose stored title or homeowner reason still normalizes to something
+ * different — a meaning-preserving cleanup of the same obligation
+ * (`"HIGH Risk: WATER_HEATER_TANK"` -> `"Review the Water Heater risk"`, a bare
+ * `"Add Home Warranty"` CTA label -> a real prompt) — so it is deliberately
+ * exempt from `canRefreshPresentationFromSource` (which guards against source
+ * *recalculation* silently rewriting accepted work, not against making
+ * unreadable copy readable).
  *
- * Idempotent and converges after one pass per property: once every title
- * equals its normalized form the JS filter yields nothing and no write runs.
- * Called from the Home feed boundary (`getHomeActionFeed`) alongside
- * `reconcileActiveMaintenanceTaskWork`, so every surface that reads work items
- * — including the separate `listWorkItems` endpoint — sees healed rows.
+ * Idempotent and converges after one pass per property: once every field equals
+ * its normalized form the JS filter yields nothing and no write runs. Called
+ * from the Home feed boundary (`getHomeActionFeed`) alongside
+ * `reconcileActiveMaintenanceTaskWork`, so every surface that reads work items —
+ * including the separate `listWorkItems` endpoint — sees healed rows.
  */
-export async function normalizeStaleWorkItemTitles(propertyId: string): Promise<number> {
+export async function normalizeStaleWorkItemPresentation(propertyId: string): Promise<number> {
   const rows = await prisma.operationalWorkItem.findMany({
     where: { propertyId, state: { not: 'CLOSED' } },
-    select: { id: true, title: true },
+    select: { id: true, title: true, homeownerReason: true },
   });
-  const stale = rows.filter((row) => presentWorkItemTitle(row.title) !== row.title);
-  for (const row of stale) {
+  let healed = 0;
+  for (const row of rows) {
+    const title = presentWorkItemTitle(row.title);
+    const homeownerReason = presentWorkItemReason(row.homeownerReason);
+    if (title === row.title && homeownerReason === row.homeownerReason) continue;
     await prisma.operationalWorkItem
-      .update({ where: { id: row.id }, data: { title: presentWorkItemTitle(row.title) } })
+      .update({ where: { id: row.id }, data: { title, homeownerReason } })
       .catch(() => null);
+    healed += 1;
   }
-  return stale.length;
+  return healed;
 }
 
 export function getWorkItemGraph(workItemId: string) {

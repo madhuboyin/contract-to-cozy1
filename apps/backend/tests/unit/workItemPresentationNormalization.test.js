@@ -34,7 +34,7 @@ const prismaMock = {
     findMany: async ({ where, select }) => {
       let out = [...rows.values()].filter((row) => row.propertyId === where.propertyId);
       if (where.state && where.state.not) out = out.filter((row) => row.state !== where.state.not);
-      if (select) out = out.map((row) => ({ id: row.id, title: row.title }));
+      if (select) out = out.map((row) => ({ id: row.id, title: row.title, homeownerReason: row.homeownerReason }));
       return out;
     },
   },
@@ -55,7 +55,7 @@ require.cache[prismaPath] = {
 const {
   createWorkItem,
   refreshWorkItemPresentation,
-  normalizeStaleWorkItemTitles,
+  normalizeStaleWorkItemPresentation,
 } = require('../../src/modules/homeOperations/infrastructure/workItemRepository.ts');
 
 function baseCreateInput(overrides = {}) {
@@ -99,30 +99,43 @@ test('refreshWorkItemPresentation normalizes the title on the CANDIDATE refresh 
   assert.equal(refreshed.title, 'Smoke & CO Detector Check');
 });
 
-test('normalizeStaleWorkItemTitles heals existing rows and is idempotent', async () => {
+test('createWorkItem swaps a leaked CTA label out of homeownerReason', async () => {
   rows.clear();
-  // Simulate legacy rows written before the write-path guard existed.
-  for (const [title, state] of [
-    ['HIGH Risk: HVAC_FURNACE', 'ACCEPTED'],
-    ['Safety Smoke CO Detectors', 'ACCEPTED'],
-    ['Replace AC filters monthly', 'CANDIDATE'],
-    ['HIGH Risk: WATER_HEATER_TANK', 'CLOSED'],
+  const item = await createWorkItem(baseCreateInput({ homeownerReason: 'Add Home Warranty' }));
+  assert.notEqual(item.homeownerReason, 'Add Home Warranty');
+  assert.match(item.homeownerReason, /review this item's age/i);
+});
+
+test('createWorkItem leaves a real homeowner reason untouched', async () => {
+  rows.clear();
+  const reason = 'Your water heater is about 14 years into a ~12-year expected service life.';
+  const item = await createWorkItem(baseCreateInput({ homeownerReason: reason }));
+  assert.equal(item.homeownerReason, reason);
+});
+
+test('normalizeStaleWorkItemPresentation heals title + reason on existing rows and is idempotent', async () => {
+  rows.clear();
+  // Simulate legacy rows written before the write-path guards existed.
+  for (const [title, homeownerReason, state] of [
+    ['HIGH Risk: HVAC_FURNACE', 'Add Home Warranty', 'ACCEPTED'],
+    ['Safety Smoke CO Detectors', 'Detectors are past their service life.', 'ACCEPTED'],
+    ['Replace AC filters monthly', 'A clean filter keeps airflow efficient.', 'CANDIDATE'],
+    ['HIGH Risk: WATER_HEATER_TANK', 'Add Home Warranty', 'CLOSED'],
   ]) {
     const id = crypto.randomUUID();
-    rows.set(id, { id, propertyId: 'property-1', title, state });
+    rows.set(id, { id, propertyId: 'property-1', title, homeownerReason, state });
   }
 
-  const healed = await normalizeStaleWorkItemTitles('property-1');
-  assert.equal(healed, 2); // the two non-closed raw-enum rows
+  const healed = await normalizeStaleWorkItemPresentation('property-1');
+  assert.equal(healed, 2); // the two non-closed rows with stale copy
 
-  const titles = [...rows.values()].map((row) => row.title).sort();
-  assert.deepEqual(titles, [
-    'HIGH Risk: WATER_HEATER_TANK', // CLOSED row left as historical record
-    'Replace AC filters monthly',
-    'Review the HVAC Furnace risk',
-    'Smoke & CO Detector Check',
-  ]);
+  const byTitle = Object.fromEntries([...rows.values()].map((row) => [row.title, row.homeownerReason]));
+  assert.ok(byTitle['Review the HVAC Furnace risk']);
+  assert.match(byTitle['Review the HVAC Furnace risk'], /review this item's age/i);
+  assert.equal(byTitle['Smoke & CO Detector Check'], 'Detectors are past their service life.');
+  assert.equal(byTitle['Replace AC filters monthly'], 'A clean filter keeps airflow efficient.');
+  // CLOSED row left as a historical record.
+  assert.equal(byTitle['HIGH Risk: WATER_HEATER_TANK'], 'Add Home Warranty');
 
-  // Second pass is a no-op.
-  assert.equal(await normalizeStaleWorkItemTitles('property-1'), 0);
+  assert.equal(await normalizeStaleWorkItemPresentation('property-1'), 0);
 });
