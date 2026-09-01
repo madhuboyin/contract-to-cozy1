@@ -840,7 +840,9 @@ mechanism. When a canonical Home Action supplies a `propertyContextFeature`, the
 Resolution Center opens the shared Property Context capture panel in a focused
 right-side drawer. The panel asks only for the registered facts, writes to the
 canonical Inventory Item, refreshes the action feed after save, and supports
-deferring without leaving the page.
+deferring without leaving the page. A nonblocking `READY_WITH_LIMITATIONS`
+evaluation does not dismiss the drawer; it remains open until the homeowner
+saves, defers, closes it, or the requirement is genuinely resolved.
 
 Capital-timeline actions pass their exact `inventoryItemId` to the lifecycle
 capture contract, so condition and approximate install/purchase date resolve the
@@ -849,6 +851,10 @@ never as one property-wide mixture of HVAC and appliance facts. It is published
 only when the component can be matched to a specific Inventory Item; otherwise
 the estimate remains visible in the Digital Twin rather than linking to an editor
 that cannot correct it.
+
+Health-factor review links use canonical route slugs with punctuation-generated
+leading and trailing separators removed. The factor-detail route also normalizes
+incoming slugs so links generated before this correction continue to resolve.
 
 Ordinary accepted work remains excluded even when its projection has low
 confidence or `missingContext`. Only blocked, reopened, follow-up-due, and

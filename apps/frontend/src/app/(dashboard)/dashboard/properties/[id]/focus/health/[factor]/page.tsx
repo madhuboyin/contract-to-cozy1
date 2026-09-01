@@ -1258,11 +1258,14 @@ export default function HealthInsightFocusPage() {
   const prop = property as PropertyWithHealth;
   const raw = prop?.healthScore?.insights ?? [];
   const allInsights = raw.map(normalizeInsight).filter((i): i is HealthInsight => i !== null);
+  // Normalize the route too so links generated before canonical slugging was
+  // introduced (for example, `property-age-year-built-`) remain resolvable.
+  const normalizedFactorSlug = toSlug(factorSlug);
 
   const insight = allInsights.find(
     (i) =>
-      toSlug(getDisplayFactorName(i.factor)) === factorSlug ||
-      toSlug(i.factor ?? "") === factorSlug,
+      toSlug(getDisplayFactorName(i.factor)) === normalizedFactorSlug ||
+      toSlug(i.factor ?? "") === normalizedFactorSlug,
   );
 
   const propertyName = prop?.name || "this property";

@@ -656,10 +656,6 @@ export default function ResolutionCenterClient() {
                   featureKey={captureCase.action.propertyContextFeature.featureKey}
                   operationKey={captureCase.action.propertyContextFeature.operationKey}
                   operationInput={captureCase.action.propertyContextFeature.operationInput}
-                  onReady={async () => {
-                    await refetch();
-                    setCaptureCase(null);
-                  }}
                   onCaptured={async () => {
                     await refetch();
                     setCaptureCase(null);

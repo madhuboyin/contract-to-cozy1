@@ -51,6 +51,14 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
   'ACKNOWLEDGE', 'DEFER', 'SNOOZE', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT',
 ];
 
+function toRouteSlug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
@@ -2144,7 +2152,7 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
     });
 
   insightsByFactor.forEach(({ factor, status }) => {
-    const factorSlug = factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const factorSlug = toRouteSlug(factor);
     const baseCtx: HealthFactorCopyContext = { propertyId, observedAt: now.toISOString() };
 
     if (isAggregateApplianceFactor(factor)) {

@@ -65,3 +65,13 @@ test('shared frontend panel uses returned schemas and re-evaluates without a pag
   assert.match(plantAdvisor, /GENERATE_OUTDOOR_RECOMMENDATIONS/);
   assert.doesNotMatch(`${panel}\n${hook}\n${status}`, /window\.location\.reload/);
 });
+
+test('Resolution Center keeps optional context capture open until the homeowner acts', () => {
+  const client = read('../../../frontend/src/app/(dashboard)/dashboard/resolution-center/ResolutionCenterClient.tsx');
+  const panelStart = client.indexOf('<PropertyContextCapturePanel');
+  const panelUsage = client.slice(panelStart, client.indexOf('/>', panelStart));
+
+  assert.doesNotMatch(panelUsage, /onReady=/, 'READY_WITH_LIMITATIONS must not dismiss the drawer');
+  assert.match(panelUsage, /onCaptured=/);
+  assert.match(panelUsage, /onDefer=/);
+});

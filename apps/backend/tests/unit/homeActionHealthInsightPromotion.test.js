@@ -143,6 +143,20 @@ test('an old HVAC install year produces an unmatched, factor-page-linked Home Ac
   assert.equal(hvacAction.primaryCta.href, '/dashboard/properties/property-1/focus/health/hvac-age');
 });
 
+test('factor-page links use canonical slugs without punctuation-generated edge hyphens', async () => {
+  const property = baseProperty({ yearBuilt: null });
+  const db = stubSources({ property });
+  const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
+
+  const propertyAgeAction = actions.find((action) => action.signal === 'Property Age (Year Built)');
+  assert.ok(propertyAgeAction, `expected a property-age action among: ${actions.map((action) => action.signal).join(', ')}`);
+  assert.equal(
+    propertyAgeAction.primaryCta.href,
+    '/dashboard/properties/property-1/focus/health/property-age-year-built',
+  );
+  assert.doesNotMatch(propertyAgeAction.id, /-$/);
+});
+
 test('a named factor tied to a specific appliance links to the matched inventory item', async () => {
   const property = baseProperty({
     inventoryItems: [
