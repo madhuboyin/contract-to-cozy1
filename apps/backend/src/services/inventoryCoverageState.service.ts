@@ -16,7 +16,6 @@ type CoverageItem = Pick<InventoryItem,
   | 'condition'
   | 'coverageEvidenceStatus'
   | 'coverageNotRequired'
-  | 'installedOn'
   | 'purchasedOn'
   | 'isVerified'
   | 'verificationSource'
@@ -149,13 +148,13 @@ export function buildInventoryCoveragePresentation(
   const activeInsurance = isActive(item.insurancePolicy, now);
   const hasCoverageRecord = Boolean(item.warranty || item.insurancePolicy);
   const hasActiveCoverage = activeWarranty || activeInsurance;
-  const hasLifecycleDate = Boolean(item.installedOn || item.purchasedOn);
+  const hasLifecycleDate = Boolean(item.purchasedOn);
   const hasCondition = item.condition !== 'UNKNOWN';
   const missingContext: string[] = [];
 
   if (inferred && !item.isVerified) missingContext.push('ITEM_CONFIRMATION');
   if (responsibilityScope && (!responsibleParty || responsibleParty === 'UNKNOWN')) missingContext.push('RESPONSIBILITY');
-  if (!hasCoverageRecord && !hasLifecycleDate) missingContext.push('INSTALLATION_YEAR');
+  if (!hasCoverageRecord && !hasLifecycleDate) missingContext.push('PURCHASE_DATE');
   if (!hasCoverageRecord && !hasCondition) missingContext.push('CONDITION');
   if (!hasCoverageRecord && effectiveReplacementCostCents == null) missingContext.push('REPLACEMENT_VALUE');
   if (!hasCoverageRecord && item.coverageEvidenceStatus !== 'NONE') missingContext.push('COVERAGE_EVIDENCE');
@@ -215,8 +214,8 @@ export function buildInventoryCoveragePresentation(
     coverageStateLabel: 'Coverage status incomplete',
     coverageStateDetail: item.coverageEvidenceStatus === 'NOT_SURE'
       ? 'You previously said you were not sure whether this item is covered. Confirm the current coverage information when you can.'
-      : missingContext.includes('INSTALLATION_YEAR')
-      ? 'No warranty or insurance is linked yet. Add the approximate installation year to understand whether coverage may be useful.'
+      : missingContext.includes('PURCHASE_DATE')
+      ? 'No warranty or insurance is linked yet. Add the approximate purchase date to understand whether coverage may be useful.'
       : missingContext.includes('RESPONSIBILITY')
         ? 'No warranty or insurance is linked yet. Confirm who is responsible before reviewing homeowner coverage.'
         : missingContext.includes('REPLACEMENT_VALUE')

@@ -344,7 +344,7 @@ export default function InventoryClient() {
       if (activeSmartFilter === 'no-value' && hasReplacementValue(item)) return false;
       if (activeSmartFilter === 'recalls' && !hasRecall) return false;
       if (activeSmartFilter === 'not-required' && !item.coverageNotRequired) return false;
-      if (activeSmartFilter === 'missing-age' && item.installedOn) return false;
+      if (activeSmartFilter === 'missing-age' && item.purchasedOn) return false;
       if (activeSmartFilter === 'missing-date' && (item.recordGroup === 'SYSTEMS_STRUCTURE' || item.purchasedOn)) return false;
       if (activeSmartFilter === 'missing-warranty' && (!isActionableCoverageGap(item) || item.warrantyId)) return false;
 
@@ -371,7 +371,7 @@ export default function InventoryClient() {
     return items.filter((item) => hasOpenRecall(item.id)).length;
   }, [items, recallCountByItem]);
 
-  const missingAgeCount = useMemo(() => items.filter((item) => !item.installedOn).length, [items]);
+  const missingAgeCount = useMemo(() => items.filter((item) => !item.purchasedOn).length, [items]);
   const missingDateCount = useMemo(() => items.filter((item) => item.recordGroup !== 'SYSTEMS_STRUCTURE' && !item.purchasedOn).length, [items]);
   const missingWarrantyCount = useMemo(() => items.filter((item) => isActionableCoverageGap(item) && !item.warrantyId).length, [items]);
 

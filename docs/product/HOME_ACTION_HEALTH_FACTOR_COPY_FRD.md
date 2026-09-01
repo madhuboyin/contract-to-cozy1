@@ -109,7 +109,7 @@ Consequences observed:
   "Water Heater Age".
 - **The reason describes the situation, not the workflow.** "Your water heater is near the
   end of its typical service life" — never "Status: Needs Review. Requires resolution."
-- **Key facts are about the home.** Install year, typical lifespan, rough cost range,
+- **Key facts are about the home.** Purchase date, typical lifespan, rough cost range,
   "No deadline — plan ahead" — not "medium confidence".
 - **One source of truth.** A new copy string is added in exactly one file.
 - **Fail safe, not silent.** An unmapped `factor × status` resolves to a conservative
@@ -845,7 +845,7 @@ evaluation does not dismiss the drawer; it remains open until the homeowner
 saves, defers, closes it, or the requirement is genuinely resolved.
 
 Capital-timeline actions pass their exact `inventoryItemId` to the lifecycle
-capture contract, so condition and approximate install/purchase date resolve the
+capture contract, so condition and approximate purchase date resolve the
 same physical asset. Home Digital Twin fact review is projected per component,
 never as one property-wide mixture of HVAC and appliance facts. It is published
 only when the component can be matched to a specific Inventory Item; otherwise
@@ -855,6 +855,13 @@ that cannot correct it.
 Health-factor review links use canonical route slugs with punctuation-generated
 leading and trailing separators removed. The factor-detail route also normalizes
 incoming slugs so links generated before this correction continue to resolve.
+
+Purchase date is the single homeowner-facing lifecycle date for inventory items.
+It drives age, lifespan, repair-risk, replacement, warranty, and completeness
+guidance. A missing purchase date remains an actionable information gap even when
+legacy `installedOn` history exists. Installation history may be retained as
+internal provenance, but correction drawers do not request it and lifecycle
+calculations do not use it as a fallback.
 
 Ordinary accepted work remains excluded even when its projection has low
 confidence or `missingContext`. Only blocked, reopened, follow-up-due, and

@@ -322,7 +322,7 @@ async function loadSystemContext(propertyId: string, linkedEntityId: string, rel
       id: true,
       name: true,
       assetType: true,
-      installedOn: true,
+      purchasedOn: true,
       modelNumber: true,
       serialNumber: true,
       efficiencyRating: true,
@@ -338,7 +338,7 @@ async function loadSystemContext(propertyId: string, linkedEntityId: string, rel
       label: asset.assetType ?? asset.name,
       summary: [textOrNull(asset.modelNumber), textOrNull(asset.efficiencyRating)].filter(Boolean).join(' • ') || null,
       facts: {
-        installedYear: asset.installedOn?.getUTCFullYear() ?? null,
+        installedYear: asset.purchasedOn?.getUTCFullYear() ?? null,
         modelNumber: textOrNull(asset.modelNumber),
         serialNumber: textOrNull(asset.serialNumber),
         efficiencyRating: textOrNull(asset.efficiencyRating),
@@ -360,7 +360,6 @@ async function loadSystemContext(propertyId: string, linkedEntityId: string, rel
       brand: true,
       model: true,
       manufacturer: true,
-      installedOn: true,
       purchasedOn: true,
       isVerified: true,
     },
@@ -370,12 +369,7 @@ async function loadSystemContext(propertyId: string, linkedEntityId: string, rel
     throw new APIError('Linked system was not found for this property.', 400, 'INVALID_LINKED_ENTITY');
   }
 
-  const installedYear =
-    item.installedOn instanceof Date
-      ? item.installedOn.getUTCFullYear()
-      : item.purchasedOn instanceof Date
-        ? item.purchasedOn.getUTCFullYear()
-        : null;
+  const installedYear = item.purchasedOn instanceof Date ? item.purchasedOn.getUTCFullYear() : null;
 
   return {
     linkedEntityType: 'SYSTEM',
@@ -410,7 +404,6 @@ async function loadApplianceContext(propertyId: string, linkedEntityId: string, 
           name: true,
         },
       },
-      installedOn: true,
       purchasedOn: true,
       isVerified: true,
     },
@@ -420,12 +413,7 @@ async function loadApplianceContext(propertyId: string, linkedEntityId: string, 
     throw new APIError('Linked appliance was not found for this property.', 400, 'INVALID_LINKED_ENTITY');
   }
 
-  const installedYear =
-    item.installedOn instanceof Date
-      ? item.installedOn.getUTCFullYear()
-      : item.purchasedOn instanceof Date
-        ? item.purchasedOn.getUTCFullYear()
-        : null;
+  const installedYear = item.purchasedOn instanceof Date ? item.purchasedOn.getUTCFullYear() : null;
 
   return {
     linkedEntityType: 'APPLIANCE',

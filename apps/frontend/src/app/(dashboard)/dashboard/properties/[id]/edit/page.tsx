@@ -569,7 +569,7 @@ const ApplianceBentoGrid = () => {
                 name={`appliances.${index}.installYear`}
                 render={({ field: yearField }) => (
                   <FormItem className="w-full">
-                    <FormLabel className="text-xs font-medium text-muted-foreground md:sr-only">Install year</FormLabel>
+                    <FormLabel className="text-xs font-medium text-muted-foreground md:sr-only">Purchase year</FormLabel>
                     <FormControl>
                       <Input
                         placeholder={

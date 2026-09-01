@@ -656,6 +656,14 @@ export default function ResolutionCenterClient() {
                   featureKey={captureCase.action.propertyContextFeature.featureKey}
                   operationKey={captureCase.action.propertyContextFeature.operationKey}
                   operationInput={captureCase.action.propertyContextFeature.operationInput}
+                  onReady={async (evaluation) => {
+                    // READY_WITH_LIMITATIONS still has an optional improvement
+                    // requirement. Only a genuinely complete evaluation should
+                    // clear a stale Resolution Center correction case.
+                    if (evaluation.readiness !== 'READY') return;
+                    await refetch();
+                    setCaptureCase(null);
+                  }}
                   onCaptured={async () => {
                     await refetch();
                     setCaptureCase(null);

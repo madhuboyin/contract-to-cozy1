@@ -65,16 +65,16 @@ test('HVAC install year inferred from yearBuilt is ESTIMATED/INFERRED, not KNOWN
   assert.equal(installFact.sourceType, 'SYSTEM_DERIVED');
 });
 
-test('HVAC install year reported on the property profile is KNOWN/REPORTED', () => {
+test('legacy property install year remains an estimate until purchase date is recorded', () => {
   const property = baseProperty({ yearBuilt: 2000, hvacInstallYear: 2018 });
   const specs = builder.deriveSpecs(property, [], null, 'property-1');
   const hvac = specFor(specs, 'HVAC:PRIMARY');
 
-  assert.equal(hvac.status, 'KNOWN');
+  assert.equal(hvac.status, 'ESTIMATED');
   assert.equal(hvac.installYear, 2018);
   const installFact = hvac.facts.find((f) => f.fieldName === 'installYear');
-  assert.equal(installFact.factState, 'REPORTED');
-  assert.equal(installFact.sourceType, 'PROPERTY_PROFILE');
+  assert.equal(installFact.factState, 'INFERRED');
+  assert.equal(installFact.sourceType, 'SYSTEM_DERIVED');
 });
 
 test('with no signal at all, install year fact is DEFAULT, not silently INFERRED', () => {
@@ -113,8 +113,8 @@ test('age and service-life depletion never produce a failure probability', () =>
 test('multiple HVAC inventory items become distinct components with stable identityKeys', () => {
   const property = baseProperty({ yearBuilt: 2000, hvacInstallYear: 2018 });
   const items = [
-    inventoryItem({ id: 'hvac-a', name: 'Upstairs Unit', installedOn: new Date('2015-01-01') }),
-    inventoryItem({ id: 'hvac-b', name: 'Downstairs Unit', installedOn: new Date('2020-01-01') }),
+    inventoryItem({ id: 'hvac-a', name: 'Upstairs Unit', purchasedOn: new Date('2015-01-01') }),
+    inventoryItem({ id: 'hvac-b', name: 'Downstairs Unit', purchasedOn: new Date('2020-01-01') }),
   ];
   const specs = builder.deriveSpecs(property, items, null, 'property-1');
   const hvacSpecs = specs.filter((s) => s.componentType === 'HVAC');
@@ -190,16 +190,16 @@ test('every modeled output has versioned field-level lineage', () => {
   }
 });
 
-test('disagreeing property-profile and inventory install years are CONFLICTED, not silently resolved', () => {
+test('purchase date is canonical and legacy property install year does not create a conflict', () => {
   const property = baseProperty({ hvacInstallYear: 2010 });
-  const items = [inventoryItem({ id: 'hvac-a', installedOn: new Date('2019-01-01') })];
+  const items = [inventoryItem({ id: 'hvac-a', purchasedOn: new Date('2019-01-01') })];
   const specs = builder.deriveSpecs(property, items, null, 'property-1');
   const hvac = specFor(specs, 'HVAC:hvac-a');
 
-  assert.equal(hvac.status, 'NEEDS_REVIEW');
+  assert.equal(hvac.status, 'KNOWN');
   const installFact = hvac.facts.find((f) => f.fieldName === 'installYear');
-  assert.equal(installFact.factState, 'CONFLICTED');
-  assert.ok(installFact.conflictGroupId);
+  assert.equal(installFact.factState, 'REPORTED');
+  assert.equal(installFact.sourceField, 'purchasedOn');
 });
 
 test('replacement cost fact reflects real inventory cost as REPORTED, category default as DEFAULT', () => {
@@ -225,7 +225,7 @@ test('replacement cost fact reflects real inventory cost as REPORTED, category d
 // fabricated one.
 test('correction destinations point at real existing surfaces', () => {
   const property = baseProperty({ yearBuilt: 2000, electricalPanelAge: 5 });
-  const items = [inventoryItem({ id: 'hvac-a', installedOn: new Date('2015-01-01') })];
+  const items = [inventoryItem({ id: 'hvac-a', purchasedOn: new Date('2015-01-01') })];
   const specs = builder.deriveSpecs(property, items, null, 'property-77');
 
   const hvac = specFor(specs, 'HVAC:hvac-a');

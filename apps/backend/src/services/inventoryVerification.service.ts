@@ -33,8 +33,8 @@ const CRITICAL_VERIFICATION_CATEGORIES = ['HVAC', 'ROOF_EXTERIOR'];
 type VerificationSource = 'OCR_LABEL' | 'MANUAL' | 'AI_ORACLE';
 
 export function calculateExpectedExpiry(
-  item: { name: string; category: string; purchasedOn?: Date | null; installedOn?: Date | null },
-  homeItemInstalledAt?: Date | null
+  item: { name: string; category: string; purchasedOn?: Date | null },
+  _homeItemInstalledAt?: Date | null
 ): Date | null {
   // Look up lifespan by item name first, then by category
   const nameKey = Object.keys(APPLIANCE_LIFESPAN_DATA).find(
@@ -48,8 +48,7 @@ export function calculateExpectedExpiry(
   const lifespanEntry = APPLIANCE_LIFESPAN_DATA[nameKey || ''] || APPLIANCE_LIFESPAN_DATA[categoryKey || ''];
   if (!lifespanEntry) return null;
 
-  // Use purchasedOn, then homeItem installedAt, then item installedOn as base date
-  const baseDate = item.purchasedOn || homeItemInstalledAt || (item as any).installedOn;
+  const baseDate = item.purchasedOn;
   if (!baseDate) return null;
 
   const expiry = new Date(baseDate);

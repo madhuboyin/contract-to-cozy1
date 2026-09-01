@@ -3359,7 +3359,7 @@ function inventoryMissingFacts(item: Awaited<ReturnType<InventoryService['listIt
     item.brand || item.manufacturer ? null : 'Brand or manufacturer',
     item.model || item.modelNumber ? null : 'Model',
     item.serialNo || item.serialNumber ? null : 'Serial number',
-    item.installedOn || item.purchasedOn ? null : 'Install or purchase date',
+    item.purchasedOn ? null : 'Purchase date',
     item.documents.length ? null : 'Documents',
     item.warrantyId || item.insurancePolicyId || item.coverageEvidenceStatus !== 'UNKNOWN' ? null : 'Coverage evidence',
   ].filter((value): value is string => Boolean(value));
@@ -3515,14 +3515,14 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
       items: shown.map((item) => {
         const missingFacts = inventoryMissingFacts(item);
         const identity = [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ');
-        const lifecycleDate = item.installedOn ?? item.purchasedOn;
+        const lifecycleDate = item.purchasedOn;
         return {
           id: item.id, title: item.name,
           description: incompleteFocus && missingFacts.length ? `Missing: ${missingFacts.join(', ')}` : item.notes,
           meta: [
             item.room?.name ?? item.category.toLowerCase().replace(/_/g, ' '),
             identity || 'Brand/model not recorded',
-            lifecycleDate ? `${item.installedOn ? 'Installed' : 'Purchased'} ${humanDate(lifecycleDate)}` : 'Install/purchase date not recorded',
+            lifecycleDate ? `Purchased ${humanDate(lifecycleDate)}` : 'Purchase date not recorded',
             item.expectedExpiryDate ? `Expected lifecycle date ${humanDate(item.expectedExpiryDate)}` : null,
             `${item.documents.length} document${item.documents.length === 1 ? '' : 's'}`,
             item.isVerified ? 'Verified record' : 'Not verified',

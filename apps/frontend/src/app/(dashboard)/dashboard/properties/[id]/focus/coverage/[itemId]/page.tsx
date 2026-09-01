@@ -171,7 +171,6 @@ export default function CoverageFocusPage() {
             });
             if (item.brand)        details.push({ label: "Brand",     value: item.brand });
             if (item.model)        details.push({ label: "Model",     value: item.model });
-            if (item.installedOn)  details.push({ label: "Installed", value: formatDate(item.installedOn) });
             if (item.purchasedOn)  details.push({ label: "Purchased", value: formatDate(item.purchasedOn) });
             if (!details.length) return null;
             return (

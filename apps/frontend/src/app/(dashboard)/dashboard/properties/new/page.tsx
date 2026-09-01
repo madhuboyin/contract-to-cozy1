@@ -37,7 +37,7 @@ const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 interface ApplianceInput {
   id: number; // Unique ID for keying/deletion
   type: string; // Appliance type from MAJOR_APPLIANCE_OPTIONS
-  installYear: string; // The year it was installed (YYYY)
+  installYear: string; // Legacy form key; homeowner enters purchase year (YYYY)
 }
 
 interface PropertyFormData {
@@ -725,7 +725,7 @@ export default function NewPropertyPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="block text-xs font-medium tracking-normal text-slate-500">Install Year</label>
+                        <label className="block text-xs font-medium tracking-normal text-slate-500">Purchase Year</label>
                         <input
                             type="text"
                             value={app.installYear}

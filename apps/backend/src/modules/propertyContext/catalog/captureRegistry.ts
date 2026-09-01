@@ -304,12 +304,12 @@ const relationalDefinitions: ContextCaptureDefinition[] = [
     factKeys: ['inventory.items'],
     mode: 'RELATIONAL',
     title: 'Add lifecycle details',
-    question: 'About when was this installed, and what condition is it in?',
-    helpText: 'An approximate date is enough. These details determine whether missing coverage is actionable.',
+    question: 'About when was this purchased, and what condition is it in?',
+    helpText: 'An approximate purchase date is enough. These details determine whether missing coverage is actionable.',
     inputSchema: {
       type: 'RELATIONAL_UPDATE', entityType: 'INVENTORY_ITEM', entityId: '', updateLabel: 'Save and continue', currentValues: {},
       fields: [
-        { key: 'installedOn', label: 'Approximate installation date', helpText: 'An exact day, month, year, or date range is enough.', required: true, inputSchema: { type: 'APPROXIMATE_DATE' } },
+        { key: 'purchasedOn', label: 'Purchase date', helpText: 'Approximate is fine—an exact day, month, year, or date range is enough.', required: true, inputSchema: { type: 'APPROXIMATE_DATE' } },
         { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR']) },
       ],
     },
@@ -378,7 +378,7 @@ const relationalDefinitions: ContextCaptureDefinition[] = [
     factKeys: ['inventory.items'],
     mode: 'RELATIONAL',
     title: 'Improve this item’s lifecycle estimate',
-    question: 'Confirm the condition and approximate install or purchase date for this item.',
+    question: 'Confirm the condition and approximate purchase date for this item.',
     helpText: 'These details improve age, failure-risk, and confidence estimates without changing your scenario overrides.',
     inputSchema: {
       type: 'RELATIONAL_UPDATE',
@@ -388,8 +388,7 @@ const relationalDefinitions: ContextCaptureDefinition[] = [
       currentValues: {},
       fields: [
         { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN']) },
-        { key: 'installedOn', label: 'Installed date', helpText: 'Optional. An exact day, month, year, or date range is enough.', required: false, inputSchema: { type: 'APPROXIMATE_DATE' } },
-        { key: 'purchasedOn', label: 'Purchase date', helpText: 'Optional. An exact day, month, year, or date range is enough.', required: false, inputSchema: { type: 'APPROXIMATE_DATE' } },
+        { key: 'purchasedOn', label: 'Purchase date', helpText: 'Approximate is fine—an exact day, month, year, or date range is enough.', required: false, inputSchema: { type: 'APPROXIMATE_DATE' } },
       ],
     },
     allowNotSure: true,

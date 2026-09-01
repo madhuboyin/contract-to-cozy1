@@ -95,7 +95,7 @@ function normalizeOverrides(overrides: ItemCoverageAnalysisOverrides): ItemCover
 }
 
 function inferAgeYears(item: InventoryItem): number | null {
-  const source = item.installedOn ?? item.purchasedOn;
+  const source = item.purchasedOn;
   if (!source) return null;
   const dt = new Date(source);
   if (Number.isNaN(dt.getTime())) return null;

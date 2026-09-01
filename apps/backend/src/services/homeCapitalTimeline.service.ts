@@ -174,7 +174,7 @@ function computeMissingFactors(inv: {
 } | null): string[] {
   if (!inv) return [];
   const missing: string[] = [];
-  if (!inv.installedOn && !inv.purchasedOn) missing.push('INSTALL_DATE');
+  if (!inv.purchasedOn) missing.push('INSTALL_DATE');
   if (inv.condition === 'UNKNOWN') missing.push('CONDITION');
   if (inv.replacementCostCents == null) missing.push('REPLACEMENT_COST');
   return missing;
@@ -385,14 +385,7 @@ export class HomeCapitalTimelineService {
 
       // Home Digital Twin evidence for this inventory item, if any.
       const twinEvidence = twinEvidenceByItem.get(item.id);
-      const twinInstallDate =
-        !item.installedOn && !item.purchasedOn && twinEvidence?.isReported && twinEvidence.installYear
-          ? new Date(`${twinEvidence.installYear}-01-01`)
-          : null;
-
-      // Age calculation — falls back to the Home Digital Twin's resolved
-      // install year (evidence-bounded) before the flat 5-year guess.
-      const age = ageInYears(item.installedOn || item.purchasedOn || twinInstallDate, 5);
+      const age = ageInYears(item.purchasedOn, 5);
 
       // Adjusted lifespan (Phase-3: apply climate/seasonal wear factor)
       const climateFactor = getClimateWearFactor(propertyState, timelineCat);
@@ -464,7 +457,7 @@ export class HomeCapitalTimelineService {
       costMax = Math.round(projectValueAtYear(costMax, capitalCostGrowthRate, yearsUntilEvent));
 
       // Confidence & priority
-      const hasInstallDate = !!(item.installedOn || item.purchasedOn || twinInstallDate);
+      const hasInstallDate = !!item.purchasedOn;
       const hasCondition = item.condition !== 'UNKNOWN';
       const hasReplacementCost = !!(item.replacementCostCents || costOverride);
       let confidence = scoreConfidence(hasInstallDate, hasCondition, hasReplacementCost);
@@ -480,9 +473,6 @@ export class HomeCapitalTimelineService {
       const whyParts: string[] = [];
       const itemLabel = item.name || timelineCat;
       whyParts.push(`${itemLabel} is estimated at ~${age.toFixed(1)} years old.`);
-      if (twinInstallDate) {
-        whyParts.push(`Install year filled in from your Home Record (property profile), not this inventory entry.`);
-      }
       whyParts.push(`Typical ${timelineCat.toLowerCase()} lifespan is ${defaults.lifespanYears} years.`);
       if (item.condition !== 'UNKNOWN') {
         whyParts.push(`Condition is ${item.condition.toLowerCase()}, adjusting expected lifespan.`);

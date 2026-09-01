@@ -102,7 +102,7 @@ export function calculateHealthScore(
         .map((item) => ({
           assetType: item.assetType,
           name: item.assetType || 'Appliance',
-          installedOn: item.installationYear
+          purchasedOn: item.installationYear
             ? new Date(Date.UTC(item.installationYear, 0, 1))
             : null,
         }))
@@ -349,21 +349,21 @@ export function calculateHealthScore(
 
   if (assetCount > 0) {
     const maxScore = EXTRA_WEIGHTS.APPLIANCES;
-    const appliancesWithInstallDate = relatedAppliances.filter((a) => a.installedOn !== null);
-    const missingInstallDateCount = assetCount - appliancesWithInstallDate.length;
+    const appliancesWithPurchaseDate = relatedAppliances.filter((a) => a.purchasedOn !== null);
+    const missingPurchaseDateCount = assetCount - appliancesWithPurchaseDate.length;
     // Score the completeness of appliances the homeowner actually has. Do not
     // assume every home must contain an arbitrary minimum number of appliances.
-    const lifecycleCompleteness = appliancesWithInstallDate.length / assetCount;
+    const lifecycleCompleteness = appliancesWithPurchaseDate.length / assetCount;
     const appScore = maxScore * (0.5 + lifecycleCompleteness * 0.5);
     
     // Determine Age Risk: Flag if any primary asset is over 15 years old.
     const criticallyAging = relatedAppliances.some(
-        (a) => a.installedOn !== null && currentYear - a.installedOn.getUTCFullYear() > 15
+        (a) => a.purchasedOn !== null && currentYear - a.purchasedOn.getUTCFullYear() > 15
     );
     
     // Count appliances needing warranty
     const appliancesNeedingWarranty = relatedAppliances.filter((a) => {
-        const age = a.installedOn ? currentYear - a.installedOn.getUTCFullYear() : 0;
+        const age = a.purchasedOn ? currentYear - a.purchasedOn.getUTCFullYear() : 0;
         return age > 15; // Critically aging appliance
     });
     
@@ -385,7 +385,7 @@ export function calculateHealthScore(
                 });
             });
         }
-    } else if (missingInstallDateCount > 0) {
+    } else if (missingPurchaseDateCount > 0) {
         insights.push({ factor: 'Appliances', status: 'Partial', score: appScore });
     } else {
         insights.push({ factor: 'Appliances', status: 'Complete', score: appScore });

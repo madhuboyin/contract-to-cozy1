@@ -173,7 +173,7 @@ const LINK_ACTION_BUTTON_CLASS =
   "h-8 px-2.5 text-xs border-teal-200 text-teal-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-50 hover:text-teal-800 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.7)] dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40";
 
 const INSTALL_DATE_MISSING_TOOLTIP =
-  "Install date is empty. Add install date for accurate prediction.";
+  "Purchase date is empty. Add purchase date for accurate prediction.";
 
 /** Normalize canonical inventory display names that arrive as ALL_CAPS. */
 const ASSET_NAME_MAP: Record<string, string> = {
@@ -487,7 +487,7 @@ export default function StatusBoardClient() {
 
   function getReasonDisplayText(item: StatusBoardItemDTO, reason: { code: string; detail: string }) {
     if (reason.code === "MISSING_INSTALL_DATE") {
-      return "Install date is empty. Add install date for accurate prediction.";
+      return "Purchase date is empty. Add purchase date for accurate prediction.";
     }
 
     if (reason.code === "PAST_EOL") {
@@ -878,10 +878,10 @@ export default function StatusBoardClient() {
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Clock className="h-3 w-3" />
-                          Installed
+                          Purchased
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent>Installation date used for age prediction.</TooltipContent>
+                      <TooltipContent>Purchase date used for age prediction.</TooltipContent>
                     </Tooltip>
                     <p className="mt-1 font-medium">{item.installDate ? new Date(item.installDate).toLocaleDateString() : "—"}</p>
                   </div>

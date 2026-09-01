@@ -516,8 +516,7 @@ export class ApplianceOracleService {
       }
 
       // Determine base date from the canonical inventory item.
-      const baseDate = item.purchasedOn
-        || item.installedOn;
+      const baseDate = item.purchasedOn;
 
       if (!baseDate) {
         logger.info(`[LIFESPAN] No base date for item ${itemId} — cannot compute expiry`);

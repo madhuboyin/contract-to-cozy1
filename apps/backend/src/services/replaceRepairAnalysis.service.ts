@@ -361,7 +361,7 @@ export class ReplaceRepairService {
     const usageIntensity: UsageIntensity = overrides?.usageIntensity ?? 'MEDIUM';
 
     const defaults = inferDefaults(item.category, item.name);
-    const ageYearsRaw = ageYearsFromDate(item.installedOn ?? item.purchasedOn);
+    const ageYearsRaw = ageYearsFromDate(item.purchasedOn);
     const ageYears = ageYearsRaw !== undefined ? Math.max(0, Math.round(ageYearsRaw)) : undefined;
 
     const inferredRemainingYears = ageYears !== undefined ? Math.max(0, defaults.lifespanYears - ageYears) : Math.round(defaults.lifespanYears * 0.5);
@@ -642,7 +642,7 @@ export class ReplaceRepairService {
 
     if (ageYears === undefined) {
       nextSteps.push({
-        title: 'Add install or purchase date',
+        title: 'Add purchase date',
         detail: 'Age is one of the strongest signals for replace/repair confidence.',
         priority: 'MEDIUM',
       });

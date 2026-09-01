@@ -462,7 +462,7 @@ class RiskAssessmentService {
   }
   
   private getItemAgeYears(item: InventoryItem, currentYear: number): number | null {
-    const d = item.installedOn ?? item.purchasedOn ?? null;
+    const d = item.purchasedOn ?? null;
     if (!d) return null;
   
     const dt = new Date(d as any);

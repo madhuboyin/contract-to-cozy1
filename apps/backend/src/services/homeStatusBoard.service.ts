@@ -541,7 +541,7 @@ export async function computeStatuses(propertyId: string): Promise<void> {
 
   // Home Digital Twin evidence, keyed by the inventory item it was derived
   // from. Status Board owns "what needs attention now" — this only feeds it
-  // evidence the twin already resolved (a reported install date; a
+  // evidence the twin already resolved (a reported purchase date; a
   // conflict between two sources), it never recomputes condition itself.
   const twinByInventoryItemId = await loadTwinInstallEvidence(propertyId);
 
@@ -559,7 +559,7 @@ export async function computeStatuses(propertyId: string): Promise<void> {
     let maintenanceTasks: { id: string; priority: string | null; nextDueDate: Date | null }[] = [];
 
     if (item.inventoryItem) {
-      installDate = item.inventoryItem.installedOn ?? item.inventoryItem.purchasedOn ?? null;
+      installDate = item.inventoryItem.purchasedOn ?? null;
       inventoryCategory = item.inventoryItem.category;
       // Collect warranties
       if (item.inventoryItem.warranty) allWarranties.push(item.inventoryItem.warranty);
@@ -571,14 +571,9 @@ export async function computeStatuses(propertyId: string): Promise<void> {
     // Use override dates if present
     if (item.status.overrideInstalledAt) installDate = item.status.overrideInstalledAt;
 
-    // Home Digital Twin evidence for this inventory item, if any.
+    // Home Digital Twin evidence may explain conflicts, but it must not supply
+    // lifecycle age when the canonical purchase date is missing.
     const twinEvidence = twinByInventoryItemId.get(item.inventoryItemId);
-    let installDateFromTwin = false;
-    if (!installDate && twinEvidence?.isReported && twinEvidence.installYear) {
-      installDate = new Date(`${twinEvidence.installYear}-01-01`);
-      installDateFromTwin = true;
-    }
-
     const expectedLife = getExpectedLife(assetType, inventoryCategory);
     const hasInstallDate = Boolean(installDate);
     const ageYears = installDate
@@ -598,19 +593,14 @@ export async function computeStatuses(propertyId: string): Promise<void> {
     let condition: HomeItemCondition = 'GOOD';
 
     if (!hasInstallDate) {
-      reasons.push({ code: 'MISSING_INSTALL_DATE', detail: 'Install date is empty' });
-    } else if (installDateFromTwin) {
-      reasons.push({
-        code: 'INSTALL_DATE_FROM_HOME_RECORD',
-        detail: 'Install year filled in from your Home Record (property profile), not this inventory entry',
-      });
+      reasons.push({ code: 'MISSING_INSTALL_DATE', detail: 'Purchase date is empty' });
     }
 
     if (twinEvidence?.hasConflict) {
       condition = condition === 'GOOD' ? 'MONITOR' : condition;
       reasons.push({
         code: 'HOME_RECORD_CONFLICT',
-        detail: `Your Home Record has two different install dates on file for ${twinEvidence.componentLabel} — confirm which is right`,
+        detail: `Your Home Record has two different purchase dates on file for ${twinEvidence.componentLabel} — confirm which is right`,
       });
     }
 
@@ -840,7 +830,7 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
     // Age
     let installDate: Date | null = s?.overrideInstalledAt ?? null;
     if (!installDate && item.inventoryItem) {
-      installDate = item.inventoryItem.installedOn ?? item.inventoryItem.purchasedOn ?? null;
+      installDate = item.inventoryItem.purchasedOn ?? null;
     }
 
     const ageYears = installDate

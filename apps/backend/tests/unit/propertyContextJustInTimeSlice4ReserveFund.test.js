@@ -40,7 +40,7 @@ test('Reserve Fund lifecycle prompts use explicit canonical item identity', () =
   const client = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/reserve-fund/ReserveFundClient.tsx');
   assert.match(client, /contextInventoryItemId = activeLineItems\.find/);
   assert.match(client, /item\.condition === 'UNKNOWN'/);
-  assert.match(client, /!item\.installedOn && !item\.purchasedOn/);
+  assert.match(client, /!item\.purchasedOn/);
   const service = read('../../src/services/homeReserveFund.service.ts');
   for (const field of ['condition', 'installedOn', 'purchasedOn']) assert.match(service, new RegExp(`${field}: true`));
 });

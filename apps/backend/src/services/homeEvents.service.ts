@@ -418,7 +418,7 @@ export class HomeEventsService {
         purchasedOn: true,
         createdAt: true,
       },
-      orderBy: [{ installedOn: 'desc' }, { purchasedOn: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ purchasedOn: 'desc' }, { createdAt: 'desc' }],
     });
 
     const syntheticEvents = canonicalAppliances
@@ -426,7 +426,7 @@ export class HomeEventsService {
         const applianceType = majorApplianceTypeFromSourceHash(appliance.sourceHash);
         if (!applianceType || existingTypes.has(applianceType)) return null;
 
-        const referenceDate = appliance.installedOn ?? appliance.purchasedOn;
+        const referenceDate = appliance.purchasedOn;
         if (!referenceDate) return null;
 
         return {

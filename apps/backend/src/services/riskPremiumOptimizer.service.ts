@@ -184,7 +184,7 @@ function reduceSeverity(severity: Severity): Severity {
 }
 
 function inferItemAgeYears(item: { installedOn: Date | null; purchasedOn: Date | null }): number | null {
-  const source = item.installedOn ?? item.purchasedOn;
+  const source = item.purchasedOn;
   if (!source) return null;
   const years = (Date.now() - source.getTime()) / (1000 * 60 * 60 * 24 * 365);
   if (!Number.isFinite(years) || years < 0) return null;

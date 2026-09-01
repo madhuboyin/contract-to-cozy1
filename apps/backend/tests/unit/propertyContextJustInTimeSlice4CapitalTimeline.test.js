@@ -34,7 +34,7 @@ test('Capital Timeline replaces its notice with progressive in-place capture', (
   assert.match(client, /featureKey="CAPITAL_TIMELINE"/);
   assert.match(client, /operationKey="RUN_TIMELINE"/);
   assert.match(client, /operationInput=\{propertyContextOperationInput\}/);
-  assert.match(client, /contextInventoryItemId = items\.find/);
+  assert.match(client, /const contextInventoryItemId = [\s\S]*items\.find/);
   assert.match(client, /onCaptured=\{\(\) => doRun\(horizonYears, activeAssumptionSetId\)\}/);
   assert.doesNotMatch(client, /PropertyContextNotice/);
   assert.doesNotMatch(client, /window\.location\.reload/);
@@ -47,7 +47,7 @@ test('timeline overrides and inventory details remain canonical correction paths
   }
   const service = read('../../src/services/homeCapitalTimeline.service.ts');
   assert.match(service, /prisma\.homeCapitalTimelineOverride\.findMany/);
-  assert.match(service, /item\.installedOn \|\| item\.purchasedOn/);
+  assert.match(service, /ageInYears\(item\.purchasedOn, 5\)/);
   assert.match(service, /item\.replacementCostCents \|\| costOverride/);
 });
 

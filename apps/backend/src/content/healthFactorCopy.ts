@@ -398,10 +398,10 @@ export const HEALTH_FACTOR_COPY = {
     },
     'Partial': {
       mode: 'DATA_GAP',
-      headline: 'Fill in missing appliance install years',
-      summary: 'Some appliances are missing an install year, which limits lifecycle guidance.',
+      headline: 'Fill in missing appliance purchase dates',
+      summary: 'Some appliances are missing a purchase date, which limits lifecycle and warranty guidance.',
       whyItMatters:
-        'An approximate installation year is enough for us to track each appliance against its typical service life and warn you before it reaches end of life.',
+        'An approximate purchase date is enough for us to estimate age, track warranty timing, and warn you before an appliance reaches end of life.',
       ctaLabel: 'Complete appliance details',
       statusLabel: 'Partly recorded',
       extraFacts: () => [{ label: 'Effort', value: '~30 seconds each' }],
@@ -605,8 +605,8 @@ function stateExplanation(factor: string, status: string, ctx: HealthFactorCopyC
     if (count > 0) {
       return incomplete > 0
         ? {
-            summary: `${count} appliance${count === 1 ? '' : 's'} tracked — ${incomplete} missing an install year.`,
-            explanation: `${count} appliance${count === 1 ? ' is' : 's are'} tracked. Add an approximate installation year for ${incomplete} appliance${incomplete === 1 ? '' : 's'} to improve lifecycle guidance.`,
+            summary: `${count} appliance${count === 1 ? '' : 's'} tracked — ${incomplete} missing a purchase date.`,
+            explanation: `${count} appliance${count === 1 ? ' is' : 's are'} tracked. Add an approximate purchase date for ${incomplete} appliance${incomplete === 1 ? '' : 's'} to improve lifecycle and warranty guidance.`,
           }
         : {
             summary: `${count} appliance${count === 1 ? '' : 's'} tracked with full lifecycle details.`,

@@ -224,8 +224,8 @@ function statusFromResolution(resolved: { isKnownSource: boolean; fact: Projecte
 }
 
 /**
- * The single place that decides whether an install year is REPORTED
- * (homeowner self-report or a dated inventory record) or INFERRED /
+ * The single place that resolves the year used for lifecycle age. A Purchase
+ * Date is REPORTED; legacy property install years are only INFERRED /
  * DEFAULT (a system assumption). Every component type that derives age
  * from an install year must route through this so the KNOWN-vs-ESTIMATED
  * distinction (and the underlying fact state) can never drift out of sync
@@ -234,7 +234,7 @@ function statusFromResolution(resolved: { isKnownSource: boolean; fact: Projecte
 function resolveInstallYear(params: {
   reportedYear: number | null;
   reportedSourceField: string;
-  inventoryItem: { id: string; installedOn: Date | null; purchasedOn: Date | null } | undefined;
+  inventoryItem: { id: string; purchasedOn: Date | null } | undefined;
   inferredYear: number | null;
   inferredMethod: string;
   inferredNote: string;
@@ -247,57 +247,9 @@ function resolveInstallYear(params: {
   dataSourceNote: string;
   fact: ProjectedFactSpec;
 } {
-  const invDate = params.inventoryItem?.installedOn ?? params.inventoryItem?.purchasedOn ?? null;
+  const invDate = params.inventoryItem?.purchasedOn ?? null;
   const invAge = ageFromDate(invDate);
   const inventoryYear = invAge != null ? params.yr - Math.floor(invAge) : null;
-
-  // Two independent signals for the same real-world date that disagree by
-  // more than a year is a conflict, not a priority order to silently
-  // resolve — the homeowner needs to reconcile it at the source, not have
-  // one value quietly win.
-  if (params.reportedYear && inventoryYear != null && Math.abs(params.reportedYear - inventoryYear) > 1) {
-    const conflictGroupId = `${params.reportedSourceField}:installYear`;
-    return {
-      installYear: params.reportedYear,
-      sourceType: 'PROPERTY_PROFILE',
-      sourceReferenceId: params.inventoryItem!.id,
-      isKnownSource: false,
-      dataSourceNote:
-        `Property profile (${params.reportedYear}) and inventory record (${inventoryYear}) disagree on install year`,
-      fact: {
-        fieldName: 'installYear',
-        valueNumeric: params.reportedYear,
-        factState: 'CONFLICTED',
-        sourceType: 'PROPERTY_PROFILE',
-        sourceRecordType: 'Property',
-        sourceRecordId: params.inventoryItem!.id,
-        sourceField: params.reportedSourceField,
-        derivationMethod: 'conflict_property_vs_inventory',
-        confidenceScore: 0.2,
-        conflictGroupId,
-      },
-    };
-  }
-
-  if (params.reportedYear) {
-    return {
-      installYear: params.reportedYear,
-      sourceType: 'PROPERTY_PROFILE',
-      sourceReferenceId: null,
-      isKnownSource: true,
-      dataSourceNote: 'Install year from property profile',
-      fact: {
-        fieldName: 'installYear',
-        valueNumeric: params.reportedYear,
-        factState: 'REPORTED',
-        sourceType: 'PROPERTY_PROFILE',
-        sourceRecordType: 'Property',
-        sourceField: params.reportedSourceField,
-        derivationMethod: 'direct',
-        confidenceScore: 0.7,
-      },
-    };
-  }
 
   if (params.inventoryItem && invDate) {
     return {
@@ -305,7 +257,7 @@ function resolveInstallYear(params: {
       sourceType: 'INVENTORY',
       sourceReferenceId: params.inventoryItem.id,
       isKnownSource: inventoryYear != null,
-      dataSourceNote: 'Age derived from inventory item date',
+      dataSourceNote: 'Age derived from inventory item purchase date',
       fact: {
         fieldName: 'installYear',
         valueNumeric: inventoryYear,
@@ -313,10 +265,34 @@ function resolveInstallYear(params: {
         sourceType: 'INVENTORY',
         sourceRecordType: 'InventoryItem',
         sourceRecordId: params.inventoryItem.id,
-        sourceField: params.inventoryItem.installedOn ? 'installedOn' : 'purchasedOn',
+        sourceField: 'purchasedOn',
         observedAt: invDate,
-        derivationMethod: 'inventory_item_date',
+        derivationMethod: 'inventory_item_purchase_date',
         confidenceScore: 0.65,
+      },
+    };
+  }
+
+  // Legacy property-level install years may still provide a bounded estimate,
+  // but they are no longer canonical lifecycle evidence. Purchase Date is the
+  // only homeowner-maintained source that can make this fact reported/known.
+  if (params.reportedYear) {
+    return {
+      installYear: params.reportedYear,
+      sourceType: 'SYSTEM_DERIVED',
+      sourceReferenceId: params.inventoryItem?.id ?? null,
+      isKnownSource: false,
+      dataSourceNote: 'Age estimated from a legacy property install year; purchase date not recorded',
+      fact: {
+        fieldName: 'installYear',
+        valueNumeric: params.reportedYear,
+        factState: 'INFERRED',
+        sourceType: 'SYSTEM_DERIVED',
+        sourceRecordType: 'Property',
+        sourceRecordId: params.inventoryItem?.id ?? null,
+        sourceField: params.reportedSourceField,
+        derivationMethod: 'legacy_property_install_year_estimate',
+        confidenceScore: 0.3,
       },
     };
   }
@@ -603,7 +579,6 @@ type InventoryItemRow = {
   name: string;
   category: string;
   condition: string;
-  installedOn: Date | null;
   purchasedOn: Date | null;
   replacementCostCents: number | null;
   brand: string | null;
@@ -660,7 +635,6 @@ export class HomeDigitalTwinBuilderService {
           name: true,
           category: true,
           condition: true,
-          installedOn: true,
           purchasedOn: true,
           replacementCostCents: true,
           brand: true,
@@ -1264,7 +1238,7 @@ export class HomeDigitalTwinBuilderService {
       ): ComponentSpec => {
         const resolved = resolveInstallYear({
           reportedYear: null,
-          reportedSourceField: 'installedOn',
+          reportedSourceField: 'purchasedOn',
           inventoryItem: item,
           inferredYear: property.yearBuilt ?? null,
           inferredMethod: 'year_built_direct',

@@ -38,7 +38,7 @@ const INVENTORY_ITEM_UPDATE_COPY: Partial<Record<RelationalAdapterKey, (itemName
   }),
   INVENTORY_ITEM_COVERAGE_LIFECYCLE: (itemName) => ({
     title: `Add lifecycle details for ${itemName}`,
-    question: `About when was ${itemName} installed, and what condition is it in?`,
+    question: `About when was ${itemName} purchased, and what condition is it in?`,
   }),
   INVENTORY_ITEM_VALUE: (itemName) => ({
     title: `Confirm replacement value for ${itemName}`,
@@ -50,7 +50,7 @@ const INVENTORY_ITEM_UPDATE_COPY: Partial<Record<RelationalAdapterKey, (itemName
   }),
   INVENTORY_ITEM_LIFECYCLE: (itemName) => ({
     title: `Improve ${itemName}’s lifecycle estimate`,
-    question: `Confirm the condition and approximate install or purchase date for ${itemName}.`,
+    question: `Confirm the condition and approximate purchase date for ${itemName}.`,
   }),
 };
 
@@ -231,7 +231,6 @@ export async function resolveRelationalCaptureSchema(
         fields,
         currentValues: {
           condition: item.condition,
-          installedOn: approximateDateCurrentValue(item.installedOn, item.installedOnPrecision, item.installedOnRangeEnd),
           purchasedOn: approximateDateCurrentValue(item.purchasedOn, item.purchasedOnPrecision, item.purchasedOnRangeEnd),
           replacementValueUsd: item.replacementCostCents ? item.replacementCostCents / 100 : undefined,
           coverageChoice,
@@ -316,15 +315,11 @@ async function updateInventoryItemLifecycle(
   }
   const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
   if (!item) throw new Error('The selected inventory item does not belong to this property.');
-  const installed = parseApproximateDate(values, 'installedOn');
   const purchased = parseApproximateDate(values, 'purchasedOn');
   await tx.inventoryItem.update({
     where: { id: item.id },
     data: {
       condition: condition as InventoryItemCondition,
-      installedOn: installed.date,
-      installedOnPrecision: installed.precision,
-      installedOnRangeEnd: installed.rangeEnd,
       purchasedOn: purchased.date,
       purchasedOnPrecision: purchased.precision,
       purchasedOnRangeEnd: purchased.rangeEnd,
@@ -377,14 +372,14 @@ async function updateInventoryItemCoverageLifecycle(
   }
   const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
   if (!item) throw new Error('The selected inventory item does not belong to this property.');
-  const installed = parseApproximateDate(values, 'installedOn', true);
+  const purchased = parseApproximateDate(values, 'purchasedOn', true);
   await tx.inventoryItem.update({
     where: { id: item.id },
     data: {
       condition: condition as InventoryItemCondition,
-      installedOn: installed.date,
-      installedOnPrecision: installed.precision,
-      installedOnRangeEnd: installed.rangeEnd,
+      purchasedOn: purchased.date,
+      purchasedOnPrecision: purchased.precision,
+      purchasedOnRangeEnd: purchased.rangeEnd,
     },
   });
   return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };

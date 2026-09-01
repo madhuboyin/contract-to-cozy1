@@ -93,7 +93,6 @@ export function GuidanceInventoryDrawer({ item, isOpen, onClose, onStartGuidance
   const timelineItems: { label: string; date: string }[] = item
     ? ([
         item.purchasedOn    && { label: 'Purchased',     date: item.purchasedOn },
-        item.installedOn    && { label: 'Installed',     date: item.installedOn },
         item.lastServicedOn && { label: 'Last serviced', date: item.lastServicedOn },
       ]
         .filter(Boolean)

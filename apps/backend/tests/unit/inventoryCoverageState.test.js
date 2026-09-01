@@ -51,7 +51,7 @@ test('inferred systems remain incomplete until applicability and evidence are co
   assert.match(result.coverageStateLabel, /incomplete/i);
   assert.ok(result.missingContext.includes('ITEM_CONFIRMATION'));
   assert.ok(result.missingContext.includes('RESPONSIBILITY'));
-  assert.ok(result.missingContext.includes('INSTALLATION_YEAR'));
+  assert.ok(result.missingContext.includes('PURCHASE_DATE'));
 });
 
 test('association-managed systems stay in the record without homeowner gap actions', () => {
@@ -97,7 +97,7 @@ test('explicit no-coverage evidence becomes actionable only with sufficient owne
   const result = buildInventoryCoveragePresentation(system({
     isVerified: true,
     verificationSource: 'USER_CONFIRMED',
-    installedOn: new Date('2014-01-01T00:00:00.000Z'),
+    purchasedOn: new Date('2014-01-01T00:00:00.000Z'),
     condition: 'FAIR',
     coverageEvidenceStatus: 'NONE',
   }), [{ scope: 'ROOF', party: 'OWNER' }]);
@@ -110,7 +110,7 @@ test('an explicit not-sure answer remains incomplete without becoming a coverage
   const result = buildInventoryCoveragePresentation(system({
     isVerified: true,
     verificationSource: 'USER_CONFIRMED',
-    installedOn: new Date('2018-01-01T00:00:00.000Z'),
+    purchasedOn: new Date('2018-01-01T00:00:00.000Z'),
     condition: 'GOOD',
     coverageEvidenceStatus: 'NOT_SURE',
   }), [{ scope: 'ROOF', party: 'OWNER' }]);

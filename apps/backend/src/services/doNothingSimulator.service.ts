@@ -783,7 +783,7 @@ export class DoNothingSimulatorService {
 
     const inventoryWithAges = inventoryItems.map((item) => {
       const lifespanYears = CATEGORY_LIFESPAN_YEARS[item.category] ?? CATEGORY_LIFESPAN_YEARS.OTHER;
-      const ageYears = ageYearsFromDate(item.installedOn ?? item.purchasedOn);
+      const ageYears = ageYearsFromDate(item.purchasedOn);
       const agePct = ageYears !== null ? ageYears / lifespanYears : null;
 
       return {

@@ -2038,9 +2038,9 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
   if (!property) return [];
 
   const healthScore = calculateHealthScore(property as any, documentCount, activeBookings as any);
-  const inventoryItems = (property as any).inventoryItems as Array<{ id: string; name: string; assetType: string | null; category: string; installedOn: Date | null }> ?? [];
+  const inventoryItems = (property as any).inventoryItems as Array<{ id: string; name: string; assetType: string | null; category: string; purchasedOn: Date | null }> ?? [];
   const applianceRecords = inventoryItems.filter((item) => item.category === 'APPLIANCE');
-  const appliancesMissingInstallYear = applianceRecords.filter((item) => !item.installedOn);
+  const appliancesMissingPurchaseDate = applianceRecords.filter((item) => !item.purchasedOn);
   const warranties = (property as any).warranties as Array<{ id: string; expiryDate: Date | string | null }> ?? [];
 
   // Deterministic sourceVersion (HI-ATT-007 stable-version requirement) —
@@ -2056,7 +2056,7 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
   // insightFactor, not just booking id (propertyScore.util.ts's
   // isInsightBeingAddressed — an existing booking's insightFactor can change
   // without the booking id set changing); and per-item name/assetType, not
-  // just category/installedOn (feeds the "${assetName} aging" insight factor
+  // just category/purchasedOn (feeds the "${assetName} aging" insight factor
   // name directly, which becomes the generated action's title/id) — each
   // folded into the hash explicitly so a real change to any of them changes
   // the version too.
@@ -2065,7 +2065,7 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
     documentCount,
     activeBookings: activeBookings.map((b: any) => `${b.id}:${b.insightFactor ?? ''}`).sort(),
     warranties: warranties.map((w) => `${w.id}:${w.expiryDate ? new Date(w.expiryDate).toISOString() : ''}`).sort(),
-    items: inventoryItems.map((item) => `${item.id}:${item.category}:${item.installedOn?.toISOString() ?? ''}:${item.name}:${item.assetType ?? ''}`).sort(),
+    items: inventoryItems.map((item) => `${item.id}:${item.category}:${item.purchasedOn?.toISOString() ?? ''}:${item.name}:${item.assetType ?? ''}`).sort(),
   })).digest('hex');
 
   // Install year to surface as a key fact, by factor.
@@ -2143,7 +2143,7 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
   healthScore.insights
     .filter((insight) => {
       if (isAggregateApplianceFactor(insight.factor)) {
-        return applianceRecords.length === 0 || appliancesMissingInstallYear.length > 0;
+        return applianceRecords.length === 0 || appliancesMissingPurchaseDate.length > 0;
       }
       return HEALTH_INSIGHT_STATUSES.includes(normalizeHealthStatus(insight.status));
     })
@@ -2156,16 +2156,16 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
     const baseCtx: HealthFactorCopyContext = { propertyId, observedAt: now.toISOString() };
 
     if (isAggregateApplianceFactor(factor)) {
-      const missingNames = appliancesMissingInstallYear.map((item) => item.name);
+      const missingNames = appliancesMissingPurchaseDate.map((item) => item.name);
       const hasRecordedAppliances = applianceRecords.length > 0;
       const applianceCopy: HealthFactorCopy = hasRecordedAppliances
         ? {
             mode: 'DATA_GAP',
             headline: missingNames.length === 1
-              ? `Add the installation year for your ${missingNames[0]}`
-              : `Add installation years for ${missingNames.length} appliances`,
-            summary: `An install year is missing for ${missingNames.join(', ')} — add an approximate year to unlock lifecycle and recall guidance.`,
-            whyItMatters: 'An approximate installation year is enough for us to track each appliance against its typical service life, match it to recalls, and warn you before it reaches end of life.',
+              ? `Add the purchase date for your ${missingNames[0]}`
+              : `Add purchase dates for ${missingNames.length} appliances`,
+            summary: `A purchase date is missing for ${missingNames.join(', ')} — add an approximate date to unlock lifecycle and warranty guidance.`,
+            whyItMatters: 'An approximate purchase date is enough for us to estimate age, track warranty timing, and warn you before an appliance reaches the end of its typical service life.',
             ctaLabel: 'Complete appliance details',
             statusLabel: 'Partly recorded',
             extraFacts: () => [{ label: 'Effort', value: '~30 seconds each' }],
@@ -4167,6 +4167,7 @@ function humanizeFactKey(value: unknown): string {
 }
 
 function homeownerFactLabel(fieldName: string): string {
+  if (/install.?year/i.test(fieldName)) return 'purchase date';
   if (/useful.?life|lifespan/i.test(fieldName)) return 'expected lifespan';
   if (/condition.?score/i.test(fieldName)) return 'condition';
   if (/annual.?operating.?cost/i.test(fieldName)) return 'estimated annual operating cost';
@@ -4279,7 +4280,7 @@ async function loadHomeDigitalTwinFactReviewActions(
   // structure facts, then used the first fact's URL for every item.
   const inventoryItems = await db.inventoryItem.findMany({
     where: { propertyId },
-    select: { id: true, name: true, category: true },
+    select: { id: true, name: true, category: true, condition: true, purchasedOn: true },
   });
   const categoryForComponent: Record<string, string> = {
     HVAC: 'HVAC', WATER_HEATER: 'PLUMBING', ROOF: 'ROOF_EXTERIOR',
@@ -4314,9 +4315,21 @@ async function loadHomeDigitalTwinFactReviewActions(
     // the Digital Twin instead of sending the homeowner to a dead editor.
     if (!inventoryItem) return [];
 
-    const conflictCount = lifecycleFacts.filter((fact) => fact.factState === 'CONFLICTED').length;
-    const factLabels = [...new Set(lifecycleFacts.map((fact) => homeownerFactLabel(fact.fieldName)))];
-    const affectedDecisions = [...new Set(lifecycleFacts.map((fact) => affectedDecisionForFact(fact.fieldName)))];
+    // Projected Twin facts can lag the canonical inventory record. Publish a
+    // correction only when the same Purchase Date/condition contract can
+    // actually collect something; otherwise the CTA opens with no fields.
+    const actionableFacts = lifecycleFacts.filter((fact) =>
+      fact.fieldName === 'installYear'
+        ? !inventoryItem.purchasedOn
+        : fact.fieldName === 'conditionScore'
+          ? !inventoryItem.condition || inventoryItem.condition === 'UNKNOWN'
+          : false,
+    );
+    if (!actionableFacts.length) return [];
+
+    const conflictCount = actionableFacts.filter((fact) => fact.factState === 'CONFLICTED').length;
+    const factLabels = [...new Set(actionableFacts.map((fact) => homeownerFactLabel(fact.fieldName)))];
+    const affectedDecisions = [...new Set(actionableFacts.map((fact) => affectedDecisionForFact(fact.fieldName)))];
     const reason = conflictCount > 0
       ? `${componentLabel} details conflict. Confirming them will improve ${joinNatural(affectedDecisions)} plans.`
       : `Confirm ${componentLabel}'s age and condition so replacement plans and cost guidance use your Home Record instead of estimates.`;
@@ -4358,13 +4371,13 @@ async function loadHomeDigitalTwinFactReviewActions(
         headline: `Confirm ${componentLabel}'s age and condition`.slice(0, 180),
         summary: reason.slice(0, 320),
         whyNow: reason.slice(0, 500),
-        keyFacts: lifecycleFacts.map((fact) => ({
+        keyFacts: actionableFacts.map((fact) => ({
           label: homeownerFactLabel(fact.fieldName).slice(0, 80),
           value: `${projectedFactValue(fact)}${['INFERRED', 'DEFAULT'].includes(fact.factState) ? ' · estimated' : ''}`.slice(0, 240),
         })),
         factGroups: [{
           label: 'Details to confirm',
-          facts: lifecycleFacts.map((fact) => ({
+          facts: actionableFacts.map((fact) => ({
             key: fact.fieldName,
             label: homeownerFactLabel(fact.fieldName),
             value: projectedFactValue(fact),
@@ -4548,7 +4561,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
     const confidenceScore = CAPITAL_TIMELINE_CONFIDENCE_SCORE[item.confidence] ?? 0.5;
     const confidenceLabel = confidenceScore >= 0.8 ? 'HIGH' : confidenceScore >= 0.5 ? 'MEDIUM' : 'LOW';
     const condition = homeownerConditionLabel(record?.condition);
-    const knownSince = record?.installedOn ?? record?.purchasedOn ?? null;
+    const knownSince = record?.purchasedOn ?? null;
     const ageYears = knownSince ? capitalFactAge(knownSince, analysis.computedAt) : null;
     const typicalLifespan = CAPITAL_TIMELINE_TYPICAL_LIFESPAN_YEARS[item.category];
     const latestServiceEvent = record?.homeEvents?.find((event) => event.type === 'MAINTENANCE');
@@ -4570,7 +4583,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
     const priority: HomeAction['priority'] = windowOpen || monthsUntilWindow <= 12 ? 'SOON' : 'PLAN';
     const ageText = ageYears != null ? `${ageYears} years old` : null;
     const ageValue = ageText && knownSince
-      ? `${ageText} · ${record?.installedOn ? 'installed' : 'purchased'} ${capitalFactDate(knownSince)}`
+      ? `${ageText} · purchased ${capitalFactDate(knownSince)}`
       : 'Not recorded';
     const knownFacts = ageText && condition
       ? `${ageText} and recorded in ${condition.toLowerCase()} condition`
@@ -4579,7 +4592,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       ? `${label} is ${knownFacts ?? 'in its estimated lifecycle window'}; its planning window is open now.`
       : `${label} is ${knownFacts ?? 'approaching its estimated lifecycle window'}; its projected replacement window is ${windowLabel}.`;
     const missingFacts = [
-      ...(!knownSince ? [`${label} install or purchase date`] : []),
+      ...(!knownSince ? [`${label} purchase date`] : []),
       ...(!condition ? [`${label} condition`] : []),
     ];
     const governance = materialFinancialGovernance('home-capital-timeline-window-v2');

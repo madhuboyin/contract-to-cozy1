@@ -348,7 +348,7 @@ async function findAgingInventoryItems(propertyId: string): Promise<AgingInvento
   const now = Date.now();
   const results: AgingInventoryItem[] = [];
   for (const item of items) {
-    const baseDate = item.installedOn ?? item.purchasedOn;
+    const baseDate = item.purchasedOn;
     if (!baseDate) continue;
     const expectedLifespanYears = resolveExpectedLifespanYears(item.category, item.name);
     if (!expectedLifespanYears) continue;

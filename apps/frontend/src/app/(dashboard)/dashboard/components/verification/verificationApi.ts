@@ -96,7 +96,7 @@ export function getMissingFields(item: VerificationNudgeItem): string[] {
   if (!item.manufacturer) missing.push('Manufacturer');
   if (!item.modelNumber) missing.push('Model number');
   if (!item.serialNumber) missing.push('Serial number');
-  if (!item.purchasedOn && !item.installedOn) missing.push('Purchase / install date');
+  if (!item.purchasedOn) missing.push('Purchase date');
   return missing;
 }
 

@@ -25,7 +25,7 @@ const NEEDS_ATTENTION_STATES = new Set<HomeTwinFactState>([
 ]);
 
 const FIELD_LABELS: Record<string, string> = {
-  installYear: 'install year',
+  installYear: 'purchase date',
   usefulLifeYears: 'typical lifespan',
   replacementCostEstimate: 'replacement cost',
 };

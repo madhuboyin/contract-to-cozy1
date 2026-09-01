@@ -449,8 +449,7 @@ type HomeScoreTimelineSourceEvent = {
 
 type HomeScoreCanonicalApplianceInput = {
   sourceHash: string | null;
-  installedOn: Date | null;
-  createdAt: Date;
+  purchasedOn: Date | null;
 };
 
 export type HomeScoreCorrectionInput = {
@@ -1743,9 +1742,9 @@ export class HomeScoreReportService {
     const synthetic: HomeScoreTimelineEventDTO[] = [];
     canonicalAppliances.forEach((appliance) => {
       const applianceType = majorApplianceTypeFromSourceHash(appliance.sourceHash);
-      if (!applianceType || existingTypes.has(applianceType)) return;
+      if (!applianceType || existingTypes.has(applianceType) || !appliance.purchasedOn) return;
 
-      const referenceDate = appliance.installedOn ?? appliance.createdAt;
+      const referenceDate = appliance.purchasedOn;
       synthetic.push({
         id: `inventory-appliance-${applianceType.toLowerCase()}`,
         title: `Recorded appliance: ${formatMajorApplianceType(applianceType)}`,
@@ -2533,8 +2532,7 @@ export class HomeScoreReportService {
         },
         select: {
           sourceHash: true,
-          installedOn: true,
-          createdAt: true,
+          purchasedOn: true,
         },
       }),
       prisma.doNothingSimulationRun.findMany({

@@ -932,8 +932,8 @@ export default function WarrantiesPage() {
             id: item.id,
             propertyId: item.propertyId,
             assetType: inferAssetTypeFromItem(item),
-            installationYear: item.installedOn 
-              ? new Date(item.installedOn).getUTCFullYear() 
+            installationYear: item.purchasedOn
+              ? new Date(item.purchasedOn).getUTCFullYear()
               : null,
             modelNumber: item.modelNumber || item.model || null,
             serialNumber: item.serialNumber || item.serialNo || null,

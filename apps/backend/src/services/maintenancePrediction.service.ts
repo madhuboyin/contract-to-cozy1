@@ -155,7 +155,7 @@ function getAssetAgeYears(
   item: Pick<InventoryItem, 'installedOn' | 'purchasedOn'>,
   now: Date
 ): number | null {
-  const baseDate = item.installedOn ?? item.purchasedOn;
+  const baseDate = item.purchasedOn;
   if (!baseDate) return null;
 
   const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
@@ -407,7 +407,7 @@ async function generateForecastInternal(propertyId: string): Promise<ForecastGen
     const rules = MAINTENANCE_RULES[group];
     const confidenceScore = getConfidenceScore(item);
     const assetAgeYears = getAssetAgeYears(item, now);
-    const baseDate = item.lastServicedOn ?? item.installedOn ?? item.purchasedOn ?? null;
+    const baseDate = item.lastServicedOn ?? item.purchasedOn ?? null;
 
     for (const rule of rules) {
       const scheduleDates = buildRuleDates(now, windowEnd, baseDate, rule, climateRegion);

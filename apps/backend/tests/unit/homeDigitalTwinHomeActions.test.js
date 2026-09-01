@@ -125,7 +125,7 @@ test('a HIGH-priority capital item becomes a standalone evidence-backed lifecycl
           why: 'Roof is estimated at ~24.0 years old.',
           inventoryItemId: 'roof-1',
           inventoryItem: {
-            name: 'Roof', condition: 'GOOD', installedOn: new Date('2002-06-01'), purchasedOn: null,
+            name: 'Roof', condition: 'GOOD', installedOn: null, purchasedOn: new Date('2002-06-01'),
             lastServicedOn: null, isVerified: true, updatedAt: NOW,
             warranty: null, linkedWarranties: [], insurancePolicy: null, homeEvents: [],
           },
@@ -175,7 +175,7 @@ test('keeps nearby capital items standalone and presents every known item fact',
             confidence: 'HIGH', why: 'Refrigerator age and condition projection.',
             inventoryItemId: 'fridge-1',
             inventoryItem: {
-              name: 'Refrigerator', condition: 'GOOD', installedOn: new Date('2018-01-01'), purchasedOn: null,
+              name: 'Refrigerator', condition: 'GOOD', installedOn: null, purchasedOn: new Date('2018-01-01'),
               lastServicedOn: null, isVerified: false, updatedAt: NOW,
               warranty: null, linkedWarranties: [], insurancePolicy: null, homeEvents: [],
             },
@@ -187,7 +187,7 @@ test('keeps nearby capital items standalone and presents every known item fact',
             confidence: 'MEDIUM', why: 'Dishwasher age and fair condition projection.',
             inventoryItemId: 'dishwasher-1',
             inventoryItem: {
-              name: 'Dishwasher', condition: 'FAIR', installedOn: new Date('2016-03-01'), purchasedOn: null,
+              name: 'Dishwasher', condition: 'FAIR', installedOn: null, purchasedOn: new Date('2016-03-01'),
               lastServicedOn: new Date('2025-11-15'), isVerified: true, updatedAt: NOW,
               warranty: { id: 'warranty-1', providerName: 'Acme', expiryDate: new Date('2027-03-01'), updatedAt: NOW },
               linkedWarranties: [],
@@ -209,7 +209,7 @@ test('keeps nearby capital items standalone and presents every known item fact',
   const dishwasher = actions.find((action) => action.presentation.subject.id === 'dishwasher-1');
   assert.ok(dishwasher);
   const facts = Object.fromEntries(dishwasher.presentation.factGroups.flatMap((group) => group.facts.map((fact) => [fact.key, fact])));
-  assert.equal(facts.age.value, '10 years old · installed Mar 2016');
+  assert.equal(facts.age.value, '10 years old · purchased Mar 2016');
   assert.equal(facts.condition.value, 'Fair');
   assert.equal(facts['last-service'].value, 'Nov 2025');
   assert.equal(facts.repairs.value, '1 recorded');

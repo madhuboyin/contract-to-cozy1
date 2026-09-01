@@ -67,7 +67,7 @@ const BADGE_CATALOGUE: Record<string, { label: string; description: string; icon
 // ─────────────────────────────────────────────────────────────────────────────
 
 function assetAge(asset: VaultAsset): string | null {
-  const base = asset.installedOn || asset.purchasedOn;
+  const base = asset.purchasedOn;
   if (!base) return null;
   const years = differenceInYears(new Date(), parseISO(base));
   if (years === 0) return 'Installed this year';

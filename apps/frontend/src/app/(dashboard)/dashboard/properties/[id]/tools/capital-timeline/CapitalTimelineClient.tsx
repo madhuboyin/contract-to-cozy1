@@ -893,7 +893,7 @@ function ItemEditPanel({
                   Years until replacement
                 </p>
                 <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                  Correct the AI&apos;s age estimate if it got the install year wrong.
+                  Correct the age estimate by updating the purchase date.
                 </p>
                 <div className="flex items-center gap-2">
                   <Input

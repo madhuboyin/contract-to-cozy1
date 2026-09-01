@@ -148,7 +148,7 @@ const COMPONENT_STATUS_LABEL: Record<string, string> = {
 };
 
 const FACT_FIELD_LABEL: Record<string, string> = {
-  installYear: 'Install year',
+  installYear: 'Purchase year',
   usefulLifeYears: 'Typical lifespan',
   replacementCostEstimate: 'Replacement cost',
 };
@@ -693,7 +693,7 @@ function ComponentDetailSheet({
               )}
               {component.installYear != null && (
                 <p>
-                  <span className="text-[hsl(var(--mobile-text-secondary))]">Install year: </span>
+                  <span className="text-[hsl(var(--mobile-text-secondary))]">Purchase year: </span>
                   {component.installYear}
                 </p>
               )}

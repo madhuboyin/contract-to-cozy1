@@ -320,7 +320,7 @@ export async function composeHvacDecisionContext(
       propertyId,
       inventoryItemId: item.id,
       itemName: item.name,
-      ageYears: ageYearsFromDate(item.installedOn ?? item.purchasedOn),
+      ageYears: ageYearsFromDate(item.purchasedOn),
       condition: item.condition,
       repairSpendCentsLast30Months,
       repairEventCountLast30Months: repairEvents.length,

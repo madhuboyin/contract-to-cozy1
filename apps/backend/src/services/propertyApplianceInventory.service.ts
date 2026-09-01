@@ -89,7 +89,9 @@ export async function syncPropertyApplianceInventoryItems(
     const roomType = APPLIANCE_ROOM_MAP[a.type] ?? 'KITCHEN';
     const roomId = await ensureRoomId(propertyId, roomType);
     const sourceHash = `${SOURCE_HASH_PREFIX}${a.type}`;
-    const installedOn = installYearToDate(a.installYear);
+    // The legacy property form still calls this value installYear internally,
+    // but it is the homeowner's purchase year and feeds purchasedOn only.
+    const purchasedOn = installYearToDate(a.installYear);
     const name = prettyApplianceName(a.type);
 
     const existingItem = await prisma.inventoryItem.findFirst({
@@ -109,7 +111,7 @@ export async function syncPropertyApplianceInventoryItems(
           data: {
             category: InventoryItemCategory.APPLIANCE,
             name,
-            installedOn,
+            purchasedOn,
             roomId,
             tags: nextTags,
             // A homeowner directly entered this via the property/Seller
@@ -132,7 +134,7 @@ export async function syncPropertyApplianceInventoryItems(
             propertyId,
             category: InventoryItemCategory.APPLIANCE,
             name,
-            installedOn,
+            purchasedOn,
             roomId,
             sourceHash,
             tags: nextTags,
@@ -177,7 +179,7 @@ export async function listPropertyApplianceInventory(propertyId: string): Promis
       id: true,
       propertyId: true,
       sourceHash: true,
-      installedOn: true,
+      purchasedOn: true,
       name: true,
       tags: true,
       createdAt: true,
@@ -236,7 +238,9 @@ export async function listPropertyApplianceInventory(propertyId: string): Promis
     const t = inferMajorType({ sourceHash: it.sourceHash, name: it.name, tags: it.tags || [] });
     if (!t) continue;
 
-    const installationYear = it.installedOn ? it.installedOn.getUTCFullYear() : null;
+    // Keep the DTO field name for API compatibility while its value follows the
+    // canonical purchase-date product rule.
+    const installationYear = it.purchasedOn ? it.purchasedOn.getUTCFullYear() : null;
 
     const dto: PropertyApplianceDTO = {
       id: it.id,

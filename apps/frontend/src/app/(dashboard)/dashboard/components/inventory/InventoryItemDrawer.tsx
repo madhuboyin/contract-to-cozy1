@@ -35,10 +35,8 @@ import {
   inferApplianceTypeFromName as inferApplianceType,
   formatApplianceTypeLabel as formatApplianceType,
   inferInventoryCategoryFromLookup as inferCategoryFromLookup,
-  INSTALL_YEAR_CATEGORIES,
   INVENTORY_ITEM_CATEGORIES,
   isMajorApplianceName,
-  PURCHASE_DATE_CATEGORIES,
   ROOM_REQUIRED_CATEGORIES,
 } from '@/lib/config/inventoryConfig';
 
@@ -69,8 +67,6 @@ import { resolveInventoryItemRoomId } from '@/lib/inventory/resolveInventoryItem
 
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
-const CURRENT_YEAR = new Date().getFullYear();
-
 /**
  * Check if an item is managed from Property Details page
  */
@@ -79,25 +75,6 @@ function isPropertyManagedAppliance(item: InventoryItem | null): boolean {
   return item.sourceHash?.startsWith('property_appliance::') ?? false;
 }
 
-
-/**
- * Convert DateTime to year number for display
- */
-function dateToYear(date: Date | string | null | undefined): string {
-  if (!date) return '';
-  const d = typeof date === 'string' ? new Date(date) : date;
-  if (isNaN(d.getTime())) return '';
-  return String(d.getUTCFullYear());
-}
-
-/**
- * Convert year number to DateTime (Jan 1 UTC)
- */
-function yearToDate(year: string | number): Date | null {
-  const y = Number(year);
-  if (!Number.isFinite(y) || y < 1900 || y > CURRENT_YEAR + 1) return null;
-  return new Date(Date.UTC(y, 0, 1));
-}
 
 /**
  * Format date string for date input (YYYY-MM-DD)
@@ -249,7 +226,6 @@ export default function InventoryItemDrawer(props: {
   const [warrantyId, setWarrantyId] = useState<string | ''>('');
   const [insurancePolicyId, setInsurancePolicyId] = useState<string | ''>('');
   const [suggestions, setSuggestions] = useState<any | null>(null);
-  const [installYear, setInstallYear] = useState<string>('');
   const [purchaseDate, setPurchaseDate] = useState<string>('');
   const [lastServicedDate, setLastServicedDate] = useState<string>('');
   
@@ -321,13 +297,6 @@ useEffect(() => {
     if (props.initialItem) {
       // ... existing field initialization ...
       
-      // Initialize category-specific date fields
-      if (props.initialItem.installedOn) {
-        setInstallYear(dateToYear(props.initialItem.installedOn));
-      } else {
-        setInstallYear('');
-      }
-      
       if (props.initialItem.purchasedOn) {
         setPurchaseDate(formatDateForInput(props.initialItem.purchasedOn));
       } else {
@@ -336,7 +305,6 @@ useEffect(() => {
       setLastServicedDate(formatDateForInput(props.initialItem.lastServicedOn));
     } else {
       // Reset for new item
-      setInstallYear('');
       setPurchaseDate('');
       setLastServicedDate('');
     }
@@ -781,14 +749,6 @@ useEffect(() => {
       setSaveError('Choose a room for appliances and belongings. Whole-home systems do not require a room.');
       return;
     }
-    if (category === 'APPLIANCE') {
-      const year = Number(installYear);
-      if (!installYear || !Number.isFinite(year) || year < 1900 || year > CURRENT_YEAR + 1) {
-        setSaveError('Install year is required for appliances.');
-        return;
-      }
-    }
-
     if (duplicateError) {
       return;
     }
@@ -802,18 +762,7 @@ useEffect(() => {
       let savedItemId = props.initialItem?.id ?? '';
       let created = false;
 
-      // Determine which date field to send based on category
-      let installedOnValue: string | null = null;
-      let purchasedOnValue: string | null = null;
-      
-      if (INSTALL_YEAR_CATEGORIES.includes(category)) {
-        // APPLIANCE: use install year
-        const yearDate = yearToDate(installYear);
-        installedOnValue = yearDate ? yearDate.toISOString() : null;
-      } else {
-        // ELECTRONICS, FURNITURE, OTHER: use purchase date
-        purchasedOnValue = purchaseDate ? new Date(purchaseDate).toISOString() : null;
-      }
+      const purchasedOnValue = purchaseDate ? new Date(`${purchaseDate}T00:00:00.000Z`).toISOString() : null;
   
       const payload = {
         name: name.trim(),
@@ -835,8 +784,8 @@ useEffect(() => {
   
         notes: notes || null,
         
-        // Category-specific date fields
-        installedOn: installedOnValue,
+        // Purchase date is the single homeowner-facing lifecycle date. Existing
+        // installation history is intentionally preserved as internal metadata.
         purchasedOn: purchasedOnValue,
         lastServicedOn: lastServicedDate ? new Date(`${lastServicedDate}T00:00:00.000Z`).toISOString() : null,
   
@@ -1369,49 +1318,20 @@ useEffect(() => {
             </section>
 
             <section className="space-y-4 rounded-xl border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-800">
-                {INSTALL_YEAR_CATEGORIES.includes(category) ? 'Installation' : 'Purchase Information'}
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-800">Purchase Information</h3>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {INSTALL_YEAR_CATEGORIES.includes(category) ? (
-                  <div className="min-w-0">
-                    <div className="mb-1 text-xs text-gray-500">
-                      Install Year {category === 'APPLIANCE' ? <span className="text-red-500">*</span> : null}
-                    </div>
-                    <input
-                      type="number"
-                      min="1900"
-                      max={CURRENT_YEAR + 1}
-                      step="1"
-                      placeholder="e.g. 2019"
-                      inputMode="numeric"
-                      value={installYear}
-                      onChange={(e) => setInstallYear(e.target.value)}
-                      required={category === 'APPLIANCE'}
-                      className={[
-                        'w-full rounded-xl border px-3 py-2 text-base md:text-sm',
-                        category === 'APPLIANCE' && !installYear ? 'border-red-300' : 'border-gray-200',
-                      ].join(' ')}
-                    />
-                    {category === 'APPLIANCE' && !installYear ? (
-                      <div className="mt-1 text-xs text-red-500">Required for appliances</div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {PURCHASE_DATE_CATEGORIES.includes(category) ? (
-                  <div className="min-w-0">
-                    <div className="mb-1 text-xs text-gray-500">Purchase Date</div>
-                    <input
-                      type="date"
-                      value={purchaseDate}
-                      onChange={(e) => setPurchaseDate(e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-                    />
-                  </div>
-                ) : null}
+                <div className="min-w-0">
+                  <div className="mb-1 text-xs text-gray-500">Purchase Date</div>
+                  <input
+                    type="date"
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Used for warranty, age, risk, and replacement guidance.</p>
+                </div>
 
                 <div className="min-w-0">
                   <div className="mb-1 text-xs text-gray-500">Last serviced or checked</div>

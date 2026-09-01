@@ -469,7 +469,7 @@ export default function ReserveFundClient() {
   const contextInventoryItemId = activeLineItems.find(({ timelineItem }) => {
     const item = timelineItem.inventoryItem;
     return timelineItem.inventoryItemId && item && (
-      item.condition === 'UNKNOWN' || (!item.installedOn && !item.purchasedOn)
+      item.condition === 'UNKNOWN' || !item.purchasedOn
     );
   })?.timelineItem.inventoryItemId ?? null;
   const propertyContextOperationInput = React.useMemo(

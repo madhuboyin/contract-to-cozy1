@@ -121,10 +121,10 @@ function requirementState(
     const itemId = operationInput?.inventoryItemId;
     if (typeof itemId !== 'string' || !itemId.trim()) return 'KNOWN';
     const item = collectionValue.find((candidate) => candidate && typeof candidate === 'object'
-      && (candidate as { id?: unknown }).id === itemId) as { condition?: unknown; installedOn?: unknown; purchasedOn?: unknown } | undefined;
+      && (candidate as { id?: unknown }).id === itemId) as { condition?: unknown; purchasedOn?: unknown } | undefined;
     if (!item) return 'UNKNOWN';
     const hasCondition = typeof item.condition === 'string' && item.condition !== 'UNKNOWN';
-    const hasLifecycleDate = typeof item.installedOn === 'string' || typeof item.purchasedOn === 'string';
+    const hasLifecycleDate = typeof item.purchasedOn === 'string';
     return hasCondition && hasLifecycleDate ? 'KNOWN' : 'UNKNOWN';
   }
   if (requirement.collectionPredicate?.startsWith('SELECTED_ITEM_')) {
@@ -143,7 +143,7 @@ function requirementState(
     if (requirement.collectionPredicate === 'SELECTED_ITEM_COVERAGE_LIFECYCLE_INCOMPLETE') {
       if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
       const hasCondition = typeof item.condition === 'string' && item.condition !== 'UNKNOWN';
-      const hasLifecycleDate = typeof item.installedOn === 'string' || typeof item.purchasedOn === 'string';
+      const hasLifecycleDate = typeof item.purchasedOn === 'string';
       return hasCondition && hasLifecycleDate ? 'KNOWN' : 'UNKNOWN';
     }
     if (requirement.collectionPredicate === 'SELECTED_ITEM_VALUE_INCOMPLETE') {

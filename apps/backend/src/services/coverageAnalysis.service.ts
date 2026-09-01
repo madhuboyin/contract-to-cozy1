@@ -807,7 +807,7 @@ export class CoverageIntelligenceService {
           ? item.replacementCostCents / 100
           : DEFAULT_CATEGORY_COST_USD[item.category] ?? DEFAULT_CATEGORY_COST_USD.OTHER;
       const conditionWeight = CONDITION_WEIGHT[item.condition as InventoryItemCondition] ?? CONDITION_WEIGHT.UNKNOWN;
-      const ageFactor = ageFactorFromDate(item.purchasedOn ?? item.installedOn);
+      const ageFactor = ageFactorFromDate(item.purchasedOn);
       const categoryFactor =
         item.category === 'HVAC' || item.category === 'ROOF_EXTERIOR'
           ? 1.12
@@ -1174,7 +1174,7 @@ export class CoverageIntelligenceService {
     const riskTolerance: RiskTolerance = overrides?.riskTolerance ?? 'MEDIUM';
     const riskToleranceMultiplierValue = riskToleranceMultiplier(riskTolerance);
 
-    const ageYears = ageYearsFromDate(item.installedOn ?? item.purchasedOn ?? null);
+    const ageYears = ageYearsFromDate(item.purchasedOn ?? null);
     const inferredRemainingYears =
       ageYears !== undefined ? Math.max(0, defaults.lifespanYears - ageYears) : Math.round(defaults.lifespanYears * 0.55 * 10) / 10;
     const expectedRemainingYears = Math.max(
@@ -1464,7 +1464,7 @@ export class CoverageIntelligenceService {
     }
     if (ageYears === undefined) {
       nextSteps.push({
-        title: 'Add install or purchase date',
+        title: 'Add purchase date',
         detail: 'Known age improves confidence and break-even accuracy.',
         priority: 'MEDIUM',
         action: {
