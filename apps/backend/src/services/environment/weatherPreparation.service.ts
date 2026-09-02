@@ -94,6 +94,8 @@ export async function startWeatherPreparation(
           effectiveFrom: insight.effectiveFrom,
           effectiveTo: insight.effectiveTo,
           source: insight.source,
+          insightSummary: insight.summary,
+          homeImplication: insight.homeImplication,
           relatedIncidentId: insight.relatedIncident?.id ?? null,
         },
         actions: {

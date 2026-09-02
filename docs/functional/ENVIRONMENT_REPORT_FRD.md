@@ -631,6 +631,17 @@ PATCH /api/environment/report/:propertyId/preparations/:preparationId/items/:ite
 
 Starting a checklist accepts the current `insightId`. The server re-computes the report, verifies that the insight is still active, and snapshots its property-aware recommended actions. A repeated start for the same property and forecast insight resumes the existing checklist.
 
+The Environment insight and its preparation checklist are two lifecycle stages
+of one homeowner case, not separate decisions. Their canonical identity is the
+property plus `insightId` (which already identifies the forecast window). Before
+a checklist exists, Resolution Center shows one **Start preparation** action.
+After creation, the durable `WEATHER_PREPARATION` Incident replaces the computed
+insight: it shows **Start checklist** until the first step is addressed and
+**Continue preparation** while work is in progress. The Environment Report
+remains a secondary context link. A `MITIGATED` preparation is no longer an
+active Resolution Center case. Display-title or destination equality must not
+be used as the identity because separate forecast windows must remain separate.
+
 Checklist items use `IncidentAction` with `type=CHECKLIST_ITEM`. They may be completed, restored, or marked not applicable. Once every item is addressed, the containing `WEATHER_PREPARATION` Incident becomes `MITIGATED`. These event-specific actions do not create recurring `PropertyMaintenanceTask` records.
 
 Responsibility is applied before checklist creation. Owner work is replaced by a coordination step when roof, exterior, plumbing, snow/ice, or shared-system responsibility belongs to an association, landlord, or shared party.
@@ -847,6 +858,11 @@ Analytics listed here are future requirements unless already emitted by the unde
   than the generic Maintenance page.
 - [ ] Starting the same insight twice resumes one checklist without duplicate
   IncidentAction rows.
+- [ ] Resolution Center shows one case per property/insight forecast window;
+  the durable preparation Incident replaces its computed insight projection.
+- [ ] Preparation CTA copy follows lifecycle state: Start preparation before
+  creation, Start checklist at zero progress, and Continue preparation after
+  any step is addressed.
 - [ ] Server-generated checklist text comes from the current property-aware
   insight; the client cannot submit arbitrary checklist items.
 - [ ] Association-, landlord-, and shared-managed areas produce coordination

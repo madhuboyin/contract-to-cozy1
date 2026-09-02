@@ -350,6 +350,16 @@ function normalizedSignal(value: string): string {
 }
 
 export function homeActionCanonicalKey(action: HomeAction): string {
+  // A computed environment insight owns the decision only until the homeowner
+  // starts its durable preparation checklist. Both projections carry the same
+  // insight id as their CHECKLIST subject, so they must share one canonical
+  // case even when a legacy incident fingerprint or display title differs.
+  if (action.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
+    action.presentation.subject?.kind === 'CHECKLIST' &&
+    action.presentation.subject.id.trim()) {
+    return `weather-preparation:${action.propertyId}:${action.presentation.subject.id.trim()}`;
+  }
+
   const inventoryCoverageAction = action.source.kind === 'COVERAGE' || (
     action.source.kind === 'GUIDANCE' &&
     action.governance.safetyTier === 'REGULATED_COVERAGE'
@@ -644,8 +654,14 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
     // producers projecting the same concern off different clocks). The
     // homeowner should see the earliest actionable date, not the winner's.
     current.timing = earlierTiming(current.timing, action.timing);
-    if (scored.score > current.score.score ||
-      (scored.score === current.score.score && action.id.localeCompare(current.winner.id) < 0)) {
+    const durablePreparationWins = action.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
+      action.source.kind === 'INCIDENT' && current.winner.source.kind !== 'INCIDENT';
+    const currentIsDurablePreparation = current.winner.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
+      current.winner.source.kind === 'INCIDENT' && action.source.kind !== 'INCIDENT';
+    if (durablePreparationWins || (!currentIsDurablePreparation && (
+      scored.score > current.score.score ||
+      (scored.score === current.score.score && action.id.localeCompare(current.winner.id) < 0)
+    ))) {
       current.winner = action;
       current.score = scored;
     }

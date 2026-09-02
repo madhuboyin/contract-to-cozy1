@@ -203,4 +203,31 @@ describe('Resolution Center canonical projection', () => {
 
     expect(composeResolutionCases([washer, refrigerator])).toHaveLength(2);
   });
+
+  it('shows one decision for an environment insight and its durable preparation checklist', () => {
+    const insight = canonicalAction({
+      id: 'environment:heat-window',
+      job: 'DECIDE',
+      presentation: {
+        ...canonicalAction().presentation,
+        variant: 'ENVIRONMENT_PREPARATION',
+        headline: 'Unseasonable multi-day heat risk ahead',
+        subject: { kind: 'CHECKLIST', id: 'heat-window', label: 'Heat risk' },
+      },
+      deduplication: { canonicalKey: 'weather-preparation:property-1:heat-window', mergedActionIds: [] },
+    });
+    const preparation = canonicalAction({
+      id: 'incident:preparation-1',
+      job: 'DECIDE',
+      presentation: {
+        ...canonicalAction().presentation,
+        variant: 'ENVIRONMENT_PREPARATION',
+        headline: 'Unseasonable multi-day heat risk ahead preparation',
+        subject: { kind: 'CHECKLIST', id: 'heat-window', label: 'Heat preparation checklist' },
+      },
+      deduplication: { canonicalKey: 'weather-preparation:property-1:heat-window', mergedActionIds: ['environment:heat-window'] },
+    });
+
+    expect(composeResolutionCases([insight, preparation])).toHaveLength(1);
+  });
 });

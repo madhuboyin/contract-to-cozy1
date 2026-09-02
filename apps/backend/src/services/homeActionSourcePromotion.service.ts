@@ -499,6 +499,27 @@ function environmentInsightExpiry(insight: EnvironmentInsight): Date | null {
   return boundary;
 }
 
+const WEATHER_PREPARATION_LINEAGE_PREFIX = 'weather-preparation:';
+
+function weatherPreparationInsightId(action: Pick<HomeAction, 'lineageId' | 'presentation' | 'primaryCta'>): string | null {
+  const subjectId = action.presentation?.variant === 'ENVIRONMENT_PREPARATION'
+    ? action.presentation.subject?.id?.trim()
+    : null;
+  if (subjectId) return subjectId;
+
+  const hrefMatch = action.primaryCta?.href?.match(/[?&]insightId=([^&#]+)/);
+  if (hrefMatch?.[1]) {
+    try {
+      return decodeURIComponent(hrefMatch[1]).trim() || null;
+    } catch {
+      return hrefMatch[1].trim() || null;
+    }
+  }
+
+  const lineageMatch = action.lineageId.match(/(?:^|:)weather-preparation:[^:]+:(.+)$/);
+  return lineageMatch?.[1]?.trim() || null;
+}
+
 /** @homeActionProducer Produces environment Home Actions while consulting incident actions for deduplication. */
 export function adaptEnvironmentInsightsToHomeActions(
   propertyId: string,
@@ -512,10 +533,11 @@ export function adaptEnvironmentInsightsToHomeActions(
       .filter((action) => action.source.kind === 'INCIDENT')
       .map((action) => action.source.entityId),
   );
-  const activePreparationLineages = new Set(
+  const activePreparationInsightIds = new Set(
     incidentActions
       .filter((action) => action.source.kind === 'INCIDENT')
-      .map((action) => action.lineageId),
+      .map(weatherPreparationInsightId)
+      .filter((insightId): insightId is string => Boolean(insightId)),
   );
   const evaluatedAtIso = evaluatedAt.toISOString();
   const today = evaluatedAtIso.slice(0, 10);
@@ -527,9 +549,7 @@ export function adaptEnvironmentInsightsToHomeActions(
       return !expiresAt || expiresAt.getTime() >= evaluatedAt.getTime();
     })
     .filter((insight) => !insight.relatedIncident || !activeIncidentIds.has(insight.relatedIncident.id))
-    .filter((insight) => !activePreparationLineages.has(
-      `incident:weather-preparation:${propertyId}:${insight.id}`,
-    ))
+    .filter((insight) => !activePreparationInsightIds.has(insight.id))
     .slice(0, 2)
     .map((insight) => {
       const windowStart = environmentBoundary(insight.effectiveFrom);
@@ -544,7 +564,7 @@ export function adaptEnvironmentInsightsToHomeActions(
       return adaptHomeActionSource('MAINTENANCE', {
         id: `environment:${insight.id}`,
         propertyId,
-        lineageId: `environment:${propertyId}:${insight.category}:${insight.effectiveFrom}`,
+        lineageId: `${WEATHER_PREPARATION_LINEAGE_PREFIX}${propertyId}:${insight.id}`,
         sourceEntityId: insight.id,
         sourceVersion: 'environment-v1',
         state: 'OPEN',
@@ -604,7 +624,7 @@ export function adaptEnvironmentInsightsToHomeActions(
         governance: lowConsequenceGovernance('environment-v1'),
         primaryCta: {
           kind: primaryKind,
-          label: primaryKind === 'START' ? 'Open preparation checklist' : primary?.label ?? 'Review environment report',
+          label: primaryKind === 'START' ? 'Start preparation' : primary?.label ?? 'Review environment report',
           href: primaryHref,
         },
         secondaryCtas: primaryHref === reportHref ? [] : [{
@@ -924,7 +944,18 @@ async function loadIncidentActions(
     // Weather preparation incidents own a small ordered checklist. Keep the
     // bounded set so contextual Ask can answer with the actual steps instead
     // of collapsing the plan to the first IncidentAction.
-    include: { actions: { where: { status: { in: ['PROPOSED', 'CREATED', 'IN_PROGRESS'] } }, orderBy: { createdAt: 'asc' }, take: 12 } },
+    include: {
+      actions: {
+        where: {
+          OR: [
+            { type: 'CHECKLIST_ITEM' },
+            { status: { in: ['PROPOSED', 'CREATED', 'IN_PROGRESS'] } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 12,
+      },
+    },
   });
 
   return incidents.flatMap((incident) => {
@@ -942,7 +973,7 @@ async function loadIncidentActions(
           const sortOrder = typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
             ? payload.sortOrder
             : Number.MAX_SAFE_INTEGER;
-          return label ? [{ id: action.id, label: label.slice(0, 240), sortOrder }] : [];
+          return label ? [{ id: action.id, label: label.slice(0, 240), sortOrder, status: action.status }] : [];
         })
         .sort((a, b) => a.sortOrder - b.sortOrder)
       : [];
@@ -979,7 +1010,21 @@ async function loadIncidentActions(
     const preparationHref = isWeatherPreparation && typeof details.insightId === 'string' && details.insightId.trim()
       ? `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=${encodeURIComponent(details.insightId.trim())}`
       : null;
+    const preparationInsightId = isWeatherPreparation && typeof details.insightId === 'string'
+      ? details.insightId.trim() || null
+      : null;
+    const addressedPreparationSteps = preparationSteps.filter((step) =>
+      step.status === 'COMPLETED' || step.status === 'CANCELED').length;
+    const nextPreparationStep = preparationSteps.find((step) =>
+      step.status !== 'COMPLETED' && step.status !== 'CANCELED');
+    const preparationCtaLabel = addressedPreparationSteps > 0 ? 'Continue preparation' : 'Start checklist';
     const href = preparationHref ?? proposed?.ctaUrl ?? `/dashboard/properties/${propertyId}/incidents/${incident.id}`;
+    const preparationContext = isWeatherPreparation
+      ? [details.insightSummary, details.homeImplication]
+        .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+        .map((value) => value.trim())
+        .join(' ')
+      : '';
     const governance = lowConsequenceGovernance();
     if (critical) {
       governance.safetyTier = 'SAFETY_EMERGENCY';
@@ -990,15 +1035,17 @@ async function loadIncidentActions(
     return [adaptHomeActionSource('INCIDENT', {
       id: `incident:${incident.id}`,
       propertyId,
-      lineageId: `incident:${incident.fingerprint}`,
+      lineageId: preparationInsightId
+        ? `${WEATHER_PREPARATION_LINEAGE_PREFIX}${propertyId}:${preparationInsightId}`
+        : `incident:${incident.fingerprint}`,
       sourceEntityId: incident.id,
       sourceVersion: 'phase2-v1',
-      state: proposed?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
+      state: addressedPreparationSteps > 0 || proposed?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority: critical ? 'NOW' : incident.severity === 'WARNING' ? 'SOON' : 'PLAN',
       signal: incident.title,
-      whyItMatters: incident.summary ?? 'An active property incident may affect safety, damage exposure, or timely response.',
+      whyItMatters: (preparationContext || incident.summary) ?? 'An active property incident may affect safety, damage exposure, or timely response.',
       recommendedAction: isWeatherPreparation
-        ? preparationSteps[0]?.label ?? `Prepare this home for ${incident.title.replace(/\s+preparation$/i, '')}`
+        ? nextPreparationStep?.label ?? `Prepare this home for ${incident.title.replace(/\s+preparation$/i, '')}`
         : isOfficialWeatherAlert
         ? `Review ${incident.title} safety guidance`
         : isWeather
@@ -1014,7 +1061,7 @@ async function loadIncidentActions(
           variant: isWeatherPreparation ? 'ENVIRONMENT_PREPARATION' as const : 'WEATHER_ALERT' as const,
           eyebrow: isOfficialWeatherAlert ? 'Official weather alert' : 'Local forecast',
           headline: incident.title.slice(0, 180),
-          summary: (incident.summary ?? (isOfficialWeatherAlert ? 'An official weather alert is active for this property.' : 'A current weather forecast may affect this property.')).slice(0, 320),
+          summary: ((preparationContext || incident.summary) ?? (isOfficialWeatherAlert ? 'An official weather alert is active for this property.' : 'A current weather forecast may affect this property.')).slice(0, 320),
           whyNow: (weatherExpiry
             ? `${isOfficialWeatherAlert ? 'This alert' : 'This preparation window'} runs through ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}.`
             : isOfficialWeatherAlert ? 'This alert remains active until the official source clears it.' : 'Use the current forecast window to prepare this home.').slice(0, 500),
@@ -1037,7 +1084,11 @@ async function loadIncidentActions(
               observedAt: incident.updatedAt.toISOString(),
             })),
           }] : [],
-          subject: { kind: isWeatherPreparation ? 'CHECKLIST' as const : 'EVENT' as const, id: incident.id, label: `${incident.title} at ${propertyLabel}`.slice(0, 180) },
+          subject: {
+            kind: isWeatherPreparation ? 'CHECKLIST' as const : 'EVENT' as const,
+            id: preparationInsightId ?? incident.id,
+            label: `${incident.title} at ${propertyLabel}`.slice(0, 180),
+          },
           detailLabel: isWeatherPreparation ? 'Preparation steps' : 'Official guidance',
           group: null,
         },
@@ -1065,11 +1116,15 @@ async function loadIncidentActions(
       confidence: { score: confidence, label: confidenceLabel(confidence), missing: confidence == null ? ['Incident confidence'] : [] },
       governance,
       primaryCta: {
-        kind: critical ? 'ESCALATE' : 'REVIEW',
-        label: isWeatherPreparation ? 'Open preparation checklist' : isOfficialWeatherAlert ? 'View official alert' : isWeather ? 'View forecast details' : proposed?.ctaLabel ?? 'Review incident',
+        kind: critical ? 'ESCALATE' : isWeatherPreparation && addressedPreparationSteps === 0 ? 'START' : 'REVIEW',
+        label: isWeatherPreparation ? preparationCtaLabel : isOfficialWeatherAlert ? 'View official alert' : isWeather ? 'View forecast details' : proposed?.ctaLabel ?? 'Review incident',
         href,
       },
-      secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct incident context', href: `/dashboard/properties/${propertyId}/incidents/${incident.id}` }],
+      secondaryCtas: isWeatherPreparation ? [{
+        kind: 'REVIEW',
+        label: 'View environment report',
+        href: `/dashboard/properties/${propertyId}/environment-report`,
+      }] : [{ kind: 'CORRECT_FACT', label: 'Correct incident context', href: `/dashboard/properties/${propertyId}/incidents/${incident.id}` }],
       feedbackControls: critical ? ['ACKNOWLEDGE', 'CORRECT_FACT'] : RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
       createdAt: incident.createdAt.toISOString(),

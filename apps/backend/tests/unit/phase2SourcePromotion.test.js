@@ -46,7 +46,7 @@ test('promotes only current action-severity environment insights and caps the Ho
   assert.equal(actions[0].source.kind, 'MAINTENANCE');
   assert.equal(actions[0].priority, 'SOON');
   assert.equal(actions[0].primaryCta.kind, 'START');
-  assert.equal(actions[0].primaryCta.label, 'Open preparation checklist');
+  assert.equal(actions[0].primaryCta.label, 'Start preparation');
   assert.deepEqual(actions[0].presentation.factGroups[0].facts.map((fact) => fact.value), [
     'Inspect the HVAC filter before the heat arrives.',
   ]);
@@ -312,7 +312,7 @@ test('preserves forecast preparation provenance and every bounded checklist step
     sourceType: 'WEATHER', status: 'ACTIONED', openedAt: NOW, expiredAt: null,
     createdAt: NOW, updatedAt: NOW, lastEvaluatedAt: NOW,
     details: {
-      insightId: 'heat-2026-08-20', effectiveFrom: '2026-08-20', effectiveTo: '2026-08-21',
+      insightId: 'heat-2099-08-20', effectiveFrom: '2099-08-20', effectiveTo: '2099-08-21',
       source: 'Open-Meteo forecast and property profile',
     },
     actions: [
@@ -329,15 +329,46 @@ test('preserves forecast preparation provenance and every bounded checklist step
   assert.equal(action.presentation.variant, 'ENVIRONMENT_PREPARATION');
   assert.equal(action.presentation.eyebrow, 'Local forecast');
   assert.equal(action.evidence[0].source, 'Open-Meteo forecast and property profile');
-  assert.equal(action.primaryCta.label, 'Open preparation checklist');
-  assert.match(action.primaryCta.href, /environment-report\/preparation\?insightId=heat-2026-08-20/);
-  assert.equal(action.timing.dueAt, '2026-08-20T00:00:00.000Z');
-  assert.equal(action.timing.windowEnd, '2026-08-21T23:59:59.999Z');
+  assert.equal(action.primaryCta.kind, 'START');
+  assert.equal(action.primaryCta.label, 'Start checklist');
+  assert.match(action.primaryCta.href, /environment-report\/preparation\?insightId=heat-2099-08-20/);
+  assert.equal(action.lineageId, 'weather-preparation:property-1:heat-2099-08-20');
+  assert.equal(action.presentation.subject.id, 'heat-2099-08-20');
+  assert.equal(action.timing.dueAt, '2099-08-20T00:00:00.000Z');
+  assert.equal(action.timing.windowEnd, '2099-08-21T23:59:59.999Z');
   assert.deepEqual(
     action.presentation.factGroups[0].facts.map((fact) => fact.value),
     ['Inspect the HVAC filter.', 'Clear the outdoor condenser.', 'Close shades during peak heat.'],
   );
   assert.doesNotMatch(JSON.stringify(action), /official weather alert|National Weather Service/i);
+});
+
+test('uses a continue CTA after weather preparation progress has been recorded', async () => {
+  const db = stubSources();
+  db.incident.findMany = async () => [{
+    id: 'preparation-progress', propertyId: 'property-1', fingerprint: 'legacy-weather-preparation-key',
+    typeKey: 'WEATHER_PREPARATION', severity: 'WARNING', confidence: 100,
+    title: 'Multi-day heat risk ahead preparation', summary: 'A property-aware preparation checklist.',
+    sourceType: 'WEATHER', status: 'ACTIONED', openedAt: NOW, expiredAt: null,
+    createdAt: NOW, updatedAt: NOW, lastEvaluatedAt: NOW,
+    details: {
+      insightId: 'heat-2099-08-20', effectiveFrom: '2099-08-20', effectiveTo: '2099-08-21',
+      source: 'Open-Meteo forecast and property profile',
+    },
+    actions: [
+      { id: 'step-1', type: 'CHECKLIST_ITEM', status: 'COMPLETED', ctaLabel: 'Inspect the HVAC filter.', ctaUrl: null, payload: { label: 'Inspect the HVAC filter.', sortOrder: 0 } },
+      { id: 'step-2', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Clear the outdoor condenser.', ctaUrl: null, payload: { label: 'Clear the outdoor condenser.', sortOrder: 1 } },
+    ],
+  }];
+
+  const result = await getPromotedHomeActions('property-1', db);
+  const action = result.actions.find((candidate) => candidate.id === 'incident:preparation-progress');
+
+  assert.ok(action);
+  assert.equal(action.state, 'IN_PROGRESS');
+  assert.equal(action.primaryCta.kind, 'REVIEW');
+  assert.equal(action.primaryCta.label, 'Continue preparation');
+  assert.equal(action.recommendedAction, 'Clear the outdoor condenser.');
 });
 
 function groundedWeatherJourney(overrides = {}) {

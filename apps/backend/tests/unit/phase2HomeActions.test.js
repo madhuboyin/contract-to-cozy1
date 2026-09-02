@@ -188,6 +188,34 @@ test('canonical feed surfaces one winner for duplicate cross-source signals and 
   assert.deepEqual(result.map((item) => item.ranking.rank), [1, 2]);
 });
 
+test('a durable weather preparation checklist replaces its computed environment insight', () => {
+  const insight = actionFixture('environment:heat-window', {
+    source: { kind: 'MAINTENANCE', entityId: 'heat-window', version: 'environment-v1' },
+    signal: 'Unseasonable multi-day heat risk ahead',
+  });
+  insight.presentation = {
+    variant: 'ENVIRONMENT_PREPARATION',
+    subject: { kind: 'CHECKLIST', id: 'heat-window', label: 'Heat preparation' },
+  };
+
+  const preparation = actionFixture('incident:preparation-1', {
+    source: { kind: 'INCIDENT', entityId: 'preparation-1', version: 'phase2-v1' },
+    signal: 'Unseasonable multi-day heat risk ahead preparation',
+    priority: 'PLAN',
+  });
+  preparation.presentation = {
+    variant: 'ENVIRONMENT_PREPARATION',
+    subject: { kind: 'CHECKLIST', id: 'heat-window', label: 'Heat preparation checklist' },
+  };
+
+  const result = rankAndDeduplicateHomeActions([insight, preparation]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'incident:preparation-1');
+  assert.equal(result[0].deduplication.canonicalKey, `weather-preparation:${preparation.propertyId}:heat-window`);
+  assert.deepEqual(result[0].deduplication.mergedActionIds, ['environment:heat-window']);
+});
+
 test('coverage actions use inventory identity for canonical deduplication', () => {
   const correction = actionFixture('coverage-correction', {
     source: { kind: 'GUIDANCE', entityId: 'hvac-item', version: 'phase2-v1' },
