@@ -14,6 +14,7 @@ export function PropertyContextCapturePanel({
   onCaptured,
   onDefer,
   deferLabel = 'Remind me later',
+  surface = 'default',
 }: {
   propertyId: string;
   featureKey: string;
@@ -23,6 +24,7 @@ export function PropertyContextCapturePanel({
   onCaptured?: (result: FeatureContextCaptureResult) => void | Promise<void>;
   onDefer?: () => void | Promise<void>;
   deferLabel?: string;
+  surface?: 'default' | 'drawer';
 }) {
   const { evaluation, loading, slow, saving, error, capture, reevaluate, suppressedRequirementId } = useFeatureContextCapture({
     propertyId,
@@ -101,6 +103,7 @@ export function PropertyContextCapturePanel({
     : undefined;
   const stale = requirement.state === 'STALE';
   const conflicted = requirement.state === 'CONFLICTED';
+  const drawer = surface === 'drawer';
 
   const fieldIsActive = (field: { when?: { fieldKey: string; operator: 'EQUALS' | 'NOT_EQUALS'; value: string | number | boolean } }) => {
     if (!field.when) return true;
@@ -133,36 +136,36 @@ export function PropertyContextCapturePanel({
     : null;
 
   return (
-    <section className={`rounded-2xl border p-4 [&_button]:min-h-[44px] [&_input]:min-h-[44px] ${enhancement ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} aria-live="polite" aria-busy={saving} aria-labelledby={headingId}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{conflicted ? 'Resolve conflicting details' : stale ? 'Confirm current details' : enhancement ? 'Improve this result' : requirement.capture.captureKey === 'INVENTORY_ITEM_COVERAGE_EVIDENCE' ? 'Coverage information needed' : 'Required property detail'}</p>
-      <h3 id={headingId} className="mt-1 font-semibold text-slate-950">{requirement.capture.title}</h3>
-      <p className="mt-1 text-sm text-slate-800">{requirement.capture.question}</p>
-      {requirement.capture.helpText ? <p className="mt-1 text-xs text-slate-600">{requirement.capture.helpText}</p> : null}
+    <section className={`${drawer ? 'border-0 bg-transparent p-0' : `rounded-2xl border p-4 ${enhancement ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} [&_button]:min-h-[44px] [&_input]:min-h-[44px]`} aria-live="polite" aria-busy={saving} aria-labelledby={headingId}>
+      <p className="text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-slate-500">{conflicted ? 'Resolve conflicting details' : stale ? 'Confirm current details' : enhancement ? 'Improve this result' : requirement.capture.captureKey === 'INVENTORY_ITEM_COVERAGE_EVIDENCE' ? 'Coverage information needed' : 'Required property detail'}</p>
+      <h3 id={headingId} className="mt-2 text-xl font-semibold leading-7 tracking-tight text-slate-950">{requirement.capture.title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-700">{requirement.capture.question}</p>
+      {requirement.capture.helpText ? <p className="mt-2 text-[13px] leading-5 text-slate-500">{requirement.capture.helpText}</p> : null}
       {stale ? <p className="mt-2 text-xs text-slate-700">Previously recorded answers are prefilled. Confirm them or update anything that changed.</p> : null}
       {conflicted ? <p className="mt-2 text-xs text-slate-700">Available records disagree. Your confirmation becomes the preferred evidence while the earlier evidence remains in the audit trail.</p> : null}
       {blocked ? <p className="mt-3 text-sm text-slate-700">An authorized property editor needs to complete this detail.</p> : (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-wrap gap-3">
           {schema.type === 'BOOLEAN' ? <>
-            <button type="button" aria-pressed={scalarCurrentValue === true} disabled={saving} onClick={() => void capture(true)} className={`rounded-lg border px-3 py-2 text-sm font-medium ${scalarCurrentValue === true ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{schema.trueLabel}</button>
-            <button type="button" aria-pressed={scalarCurrentValue === false} disabled={saving} onClick={() => void capture(false)} className={`rounded-lg border px-3 py-2 text-sm font-medium ${scalarCurrentValue === false ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{schema.falseLabel}</button>
+            <button type="button" aria-pressed={scalarCurrentValue === true} disabled={saving} onClick={() => void capture(true)} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${scalarCurrentValue === true ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{schema.trueLabel}</button>
+            <button type="button" aria-pressed={scalarCurrentValue === false} disabled={saving} onClick={() => void capture(false)} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${scalarCurrentValue === false ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{schema.falseLabel}</button>
           </> : null}
           {schema.type === 'SINGLE_SELECT' ? schema.options.map((option) => (
-            <button key={option.value} type="button" aria-pressed={scalarCurrentValue === option.value} disabled={saving} onClick={() => void capture(option.value)} className={`rounded-lg border px-3 py-2 text-sm font-medium ${scalarCurrentValue === option.value ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{option.label}</button>
+            <button key={option.value} type="button" aria-pressed={scalarCurrentValue === option.value} disabled={saving} onClick={() => void capture(option.value)} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${scalarCurrentValue === option.value ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{option.label}</button>
           )) : null}
           {schema.type === 'MULTI_SELECT' ? <div className="w-full space-y-2">
-            <div className="flex flex-wrap gap-2">{schema.options.map((option) => {
+            <div className="flex flex-wrap gap-2.5">{schema.options.map((option) => {
               const active = selected.includes(option.value);
-              return <button key={option.value} type="button" aria-pressed={active} disabled={saving} onClick={() => setSelected((current) => active ? current.filter((value) => value !== option.value) : [...current, option.value].slice(0, schema.maxItems))} className={`rounded-lg border px-3 py-2 text-sm font-medium ${active ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{option.label}</button>;
+              return <button key={option.value} type="button" aria-pressed={active} disabled={saving} onClick={() => setSelected((current) => active ? current.filter((value) => value !== option.value) : [...current, option.value].slice(0, schema.maxItems))} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${active ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{option.label}</button>;
             })}</div>
-            <button type="button" disabled={saving} onClick={() => void capture(selected)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Save and continue</button>
+            <button type="button" disabled={saving} onClick={() => void capture(selected)} className="w-full rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800">Save and continue</button>
           </div> : null}
           {schema.type === 'INTEGER' || schema.type === 'DECIMAL' ? <form onSubmit={(event) => { event.preventDefault(); if (numericValue !== null && Number.isFinite(numericValue)) void capture(numericValue); }} className="flex flex-wrap items-end gap-2">
-            <label className="text-sm font-medium">Answer{schema.unit ? ` (${schema.unit})` : ''}<input value={draft} onChange={(event) => setDraft(event.target.value)} type="number" step={schema.type === 'INTEGER' ? 1 : 'any'} min={schema.min} max={schema.max} className="mt-1 block rounded-lg border bg-white px-3 py-2" /></label>
-            <button type="submit" disabled={saving || numericValue === null || !Number.isFinite(numericValue)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Save and continue</button>
+            <label className="w-full text-sm font-semibold text-slate-900">Answer{schema.unit ? ` (${schema.unit})` : ''}<input value={draft} onChange={(event) => setDraft(event.target.value)} type="number" step={schema.type === 'INTEGER' ? 1 : 'any'} min={schema.min} max={schema.max} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm" /></label>
+            <button type="submit" disabled={saving || numericValue === null || !Number.isFinite(numericValue)} className="w-full rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800">Save and continue</button>
           </form> : null}
           {schema.type === 'SHORT_TEXT' ? <form onSubmit={(event) => { event.preventDefault(); if (draft.trim()) void capture(draft.trim()); }} className="flex flex-wrap items-end gap-2">
-            <label className="text-sm font-medium">Answer<input value={draft} maxLength={schema.maxLength} onChange={(event) => setDraft(event.target.value)} className="mt-1 block rounded-lg border bg-white px-3 py-2" /></label>
-            <button type="submit" disabled={saving || !draft.trim()} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Save and continue</button>
+            <label className="w-full text-sm font-semibold text-slate-900">Answer<input value={draft} maxLength={schema.maxLength} onChange={(event) => setDraft(event.target.value)} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm" /></label>
+            <button type="submit" disabled={saving || !draft.trim()} className="w-full rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800">Save and continue</button>
           </form> : null}
           {schema.type === 'GROUP' ? <form className="w-full space-y-4" onSubmit={(event) => { event.preventDefault(); void capture(groupDraft); }}>
             {schema.fields.filter(fieldIsActive).map((field) => <CaptureFieldControl
@@ -173,23 +176,25 @@ export function PropertyContextCapturePanel({
               allowNotSure={requirement.capture.allowNotSure}
               onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))}
             />)}
-            <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{stale || conflicted ? 'Confirm and continue' : 'Save and continue'}</button>
+            <div className={drawer ? 'sticky bottom-0 z-10 -mx-1 border-t border-slate-200 bg-white/95 px-1 pb-1 pt-4 backdrop-blur' : ''}>
+              <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="w-full rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800">{stale || conflicted ? 'Confirm and continue' : 'Save and continue'}</button>
+            </div>
           </form> : null}
           {schema.type === 'RELATIONAL_SELECT_CREATE' ? <div className="w-full space-y-4">
             {schema.options.length ? <div className="flex gap-2" role="tablist" aria-label="Choose or add a record">
-              <button type="button" role="tab" aria-selected={relationalMode === 'SELECT'} onClick={() => setRelationalMode('SELECT')} className={`rounded-lg border px-3 py-2 text-sm font-medium ${relationalMode === 'SELECT' ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{schema.selectLabel}</button>
-              <button type="button" role="tab" aria-selected={relationalMode === 'CREATE'} onClick={() => setRelationalMode('CREATE')} className={`rounded-lg border px-3 py-2 text-sm font-medium ${relationalMode === 'CREATE' ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{schema.createLabel}</button>
+              <button type="button" role="tab" aria-selected={relationalMode === 'SELECT'} onClick={() => setRelationalMode('SELECT')} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${relationalMode === 'SELECT' ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{schema.selectLabel}</button>
+              <button type="button" role="tab" aria-selected={relationalMode === 'CREATE'} onClick={() => setRelationalMode('CREATE')} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${relationalMode === 'CREATE' ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{schema.createLabel}</button>
             </div> : null}
             {relationalMode === 'SELECT' && schema.options.length ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (selectedEntityId) void capture({ mode: 'SELECT', entityId: selectedEntityId }); }}>
-              <div className="grid gap-2">{schema.options.map((option) => <button key={option.id} type="button" aria-pressed={selectedEntityId === option.id} onClick={() => setSelectedEntityId(option.id)} className={`rounded-xl border p-3 text-left ${selectedEntityId === option.id ? 'border-slate-900 bg-white ring-1 ring-slate-900' : 'border-slate-200 bg-white/80'}`}>
-                <span className="block text-sm font-medium text-slate-900">{option.label}</span>
-                {option.description ? <span className="block text-xs text-slate-600">{option.description}</span> : null}
+              <div className="grid gap-2">{schema.options.map((option) => <button key={option.id} type="button" aria-pressed={selectedEntityId === option.id} onClick={() => setSelectedEntityId(option.id)} className={`rounded-xl border p-3 text-left transition-colors ${selectedEntityId === option.id ? 'border-teal-700 bg-teal-50 ring-1 ring-teal-700' : 'border-slate-200 bg-white hover:border-teal-300'}`}>
+                <span className="block text-sm font-semibold text-slate-900">{option.label}</span>
+                {option.description ? <span className="mt-0.5 block text-[13px] leading-5 text-slate-500">{option.description}</span> : null}
               </button>)}</div>
-              <button type="submit" disabled={saving || !selectedEntityId} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Use selected record</button>
+              <button type="submit" disabled={saving || !selectedEntityId} className="w-full rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800">Use selected record</button>
             </form> : null}
             {relationalMode === 'CREATE' ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void capture({ mode: 'CREATE', values: groupDraft }); }}>
               {schema.createFields.map((field) => <CaptureFieldControl key={field.key} field={field} value={groupDraft[field.key]} disabled={saving} allowNotSure={requirement.capture.allowNotSure} onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))} />)}
-              <button type="submit" disabled={saving || schema.createFields.some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Add and continue</button>
+              <button type="submit" disabled={saving || schema.createFields.some(fieldIsMissing)} className="w-full rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800">Add and continue</button>
             </form> : null}
           </div> : null}
           {schema.type === 'RELATIONAL_UPDATE' ? <form className="w-full space-y-4" onSubmit={(event) => {
@@ -204,11 +209,13 @@ export function PropertyContextCapturePanel({
               allowNotSure={requirement.capture.allowNotSure}
               onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))}
             />)}
-            <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{schema.updateLabel}</button>
+            <div className={drawer ? 'sticky bottom-0 z-10 -mx-1 border-t border-slate-200 bg-white/95 px-1 pb-1 pt-4 backdrop-blur' : ''}>
+              <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="w-full rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800">{schema.updateLabel}</button>
+            </div>
           </form> : null}
-          {requirement.capture.allowNotSure && schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' ? <button type="button" disabled={saving} onClick={() => void capture(schema.type === 'GROUP' ? notSureGroupAnswer() : null)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Not sure</button> : null}
-          {enhancement ? <button type="button" disabled={saving} onClick={() => setDismissedVersion(evaluation.contextVersion)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Skip for now</button> : null}
-          {onDefer ? <button type="button" disabled={saving || deferring} onClick={() => void defer()} className="rounded-lg px-3 py-2 text-sm font-medium underline">
+          {requirement.capture.allowNotSure && schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' ? <button type="button" disabled={saving} onClick={() => void capture(schema.type === 'GROUP' ? notSureGroupAnswer() : null)} className="rounded-xl px-3 py-2 text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-4 hover:text-slate-900">Not sure</button> : null}
+          {enhancement ? <button type="button" disabled={saving} onClick={() => setDismissedVersion(evaluation.contextVersion)} className="rounded-xl px-3 py-2 text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-4 hover:text-slate-900">Skip for now</button> : null}
+          {onDefer ? <button type="button" disabled={saving || deferring} onClick={() => void defer()} className="rounded-xl px-3 py-2 text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-4 hover:text-slate-900">
             {deferring ? 'Setting reminder…' : deferLabel}
           </button> : null}
         </div>

@@ -49,7 +49,7 @@ const INVENTORY_ITEM_UPDATE_COPY: Partial<Record<RelationalAdapterKey, (itemName
     question: `Do you have warranty or insurance coverage for ${itemName}?`,
   }),
   INVENTORY_ITEM_LIFECYCLE: (itemName) => ({
-    title: `Improve ${itemName}’s lifecycle estimate`,
+    title: `Improve ${itemName} lifecycle estimate`,
     question: `Confirm the condition and approximate purchase date for ${itemName}.`,
   }),
 };

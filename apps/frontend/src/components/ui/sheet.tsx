@@ -51,12 +51,14 @@ const sheetVariants = cva(
 
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+    VariantProps<typeof sheetVariants> {
+  closeClassName?: string
+}
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => {
+>(({ side = "right", className, closeClassName, children, ...props }, ref) => {
   const closeRef = React.useRef<HTMLButtonElement>(null);
   const dragStartY = React.useRef<number | null>(null);
   const [dragOffset, setDragOffset] = React.useState(0);
@@ -106,7 +108,10 @@ const SheetContent = React.forwardRef<
         )}
         <SheetPrimitive.Close
           ref={closeRef}
-          className="absolute right-3 top-3 h-11 w-11 inline-flex items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary touch-manipulation"
+          className={cn(
+            "absolute right-3 top-3 h-11 w-11 inline-flex touch-manipulation items-center justify-center rounded-lg opacity-70 ring-offset-background transition-colors hover:bg-slate-100 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary",
+            closeClassName
+          )}
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>

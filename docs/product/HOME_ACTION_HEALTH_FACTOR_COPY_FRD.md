@@ -844,6 +844,14 @@ deferring without leaving the page. A nonblocking `READY_WITH_LIMITATIONS`
 evaluation does not dismiss the drawer; it remains open until the homeowner
 saves, defers, closes it, or the requirement is genuinely resolved.
 
+The drawer uses one primary heading rather than repeating the case title and
+capture title at competing sizes. The case title is compact context in the
+header; the capture title is the 20px task heading. Supporting copy is 14px,
+field help is 13px, and labels and controls are 14px. Mobile text inputs remain
+at least 16px to prevent browser zoom. The focused drawer uses a neutral form
+surface, teal selected states, 44px minimum targets, a full-width primary save
+action with sticky treatment for grouped updates, and quiet secondary actions.
+
 Capital-timeline actions pass their exact `inventoryItemId` to the lifecycle
 capture contract, so condition and approximate purchase date resolve the
 same physical asset. Home Digital Twin fact review is projected per component,
