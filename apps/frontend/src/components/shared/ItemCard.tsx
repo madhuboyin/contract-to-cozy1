@@ -119,14 +119,6 @@ export default function ItemCard({
     categoryConfig.icon,
   );
 
-  const coverageStyle = {
-    missing: 'border-l-4 border-l-red-400',
-    incomplete: 'border-l-4 border-l-sky-400',
-    confirmed: 'border-l-4 border-l-emerald-400',
-    managed: 'border-l-4 border-l-violet-400',
-    'not-required': 'border-l-4 border-l-slate-300',
-  }[coverageStatus];
-
   function handleOpenCoverage(event: React.MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
     if (onGetCoverage) {
@@ -159,9 +151,8 @@ export default function ItemCard({
     <div
       id={`item-${item.id}`}
       className={[
-        'relative flex h-full cursor-pointer flex-col rounded-xl border border-gray-200 bg-white',
-        'transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md',
-        coverageStyle,
+        'relative flex h-full cursor-pointer flex-col rounded-2xl border border-gray-200/80 bg-white shadow-sm',
+        'transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-lg',
       ].join(' ')}
       onClick={() => onClick?.(item)}
       role="button"
@@ -173,16 +164,15 @@ export default function ItemCard({
         }
       }}
     >
-      <div className={`flex flex-1 flex-col gap-3 ${isCompact ? 'p-4' : 'p-5'}`}>
+      <div className={`flex flex-1 flex-col gap-3.5 ${isCompact ? 'p-4' : 'p-5'}`}>
         <div className="flex items-start gap-2.5">
           <div
             className={[
-              'flex-shrink-0 rounded-lg',
-              isCompact ? 'p-1.5' : 'p-2',
+              'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl',
               categoryConfig.iconBg,
             ].join(' ')}
           >
-            <ItemIcon className={`${isCompact ? 'h-4 w-4' : 'h-5 w-5'} ${categoryConfig.iconColor}`} />
+            <ItemIcon className={`h-5 w-5 ${categoryConfig.iconColor}`} />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -220,7 +210,7 @@ export default function ItemCard({
               {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
             </p>
 
-            <div className="mt-2 flex items-center">
+            <div className="mt-2 flex items-center" title={item.coverageStateDetail || undefined}>
               {coverageStatus === 'missing' ? (
                 <span className="whitespace-nowrap rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
                   Coverage missing
@@ -247,32 +237,32 @@ export default function ItemCard({
           </div>
         </div>
 
-        {item.coverageStateDetail && coverageStatus !== 'confirmed' ? (
-          <p className="text-xs leading-relaxed text-gray-500">{item.coverageStateDetail}</p>
-        ) : null}
+        <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-gray-100 bg-gray-50/80">
+          <div className="min-w-0 border-r border-gray-100 px-3 py-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Replacement</span>
+            {hasReplacementValue ? (
+              <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5">
+                <span className="truncate text-base font-bold text-gray-900">{formatCurrency(replacementValue)}</span>
+                {item.replacementValueSource === 'ESTIMATED' ? (
+                  <span className="flex-shrink-0 text-[10px] font-medium text-gray-400">Est.</span>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-1">
+                <InlineValueEditor
+                  itemId={item.id}
+                  onSave={async (value) => {
+                    if (onAddValue) {
+                      await onAddValue(item.id, value);
+                    }
+                  }}
+                />
+              </div>
+            )}
+          </div>
 
-        <div className="flex min-h-[26px] items-center justify-between">
-          <span className="text-[11px] font-semibold tracking-normal text-gray-400">Replacement</span>
-          {hasReplacementValue ? (
-            <span className="text-right text-sm font-bold text-gray-800">
-              {formatCurrency(replacementValue)}
-              {item.replacementValueSource === 'ESTIMATED' ? <span className="block text-[10px] font-medium text-gray-400">Estimated</span> : null}
-            </span>
-          ) : (
-            <InlineValueEditor
-              itemId={item.id}
-              onSave={async (value) => {
-                if (onAddValue) {
-                  await onAddValue(item.id, value);
-                }
-              }}
-            />
-          )}
-        </div>
-
-        <div>
-          <div className="mb-1 flex items-center justify-between text-[11px]">
-            <span className="flex items-center gap-1 text-gray-400">
+          <div className="min-w-0 px-3 py-2.5">
+            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
               Covered
               <TooltipProvider>
                 <Tooltip>
@@ -293,37 +283,35 @@ export default function ItemCard({
               </TooltipProvider>
             </span>
 
-            {hasReplacementValue && hasAssessableCoverage ? (
-              <span
-                className={`font-semibold ${
-                  coveragePercent === 100
-                      ? 'text-emerald-600'
-                      : coveragePercent >= 50
-                        ? 'text-amber-500'
-                        : 'text-red-500'
-                }`}
-              >
-                {coveragePercent}%
-              </span>
-            ) : (
-              <span className="text-gray-300">—</span>
-            )}
-          </div>
+            <span
+              className={`mt-0.5 block text-base font-bold ${
+                hasReplacementValue && hasAssessableCoverage
+                  ? coveragePercent === 100
+                    ? 'text-emerald-600'
+                    : coveragePercent >= 50
+                      ? 'text-amber-500'
+                      : 'text-red-500'
+                  : 'text-gray-300'
+              }`}
+            >
+              {hasReplacementValue && hasAssessableCoverage ? `${coveragePercent}%` : '—'}
+            </span>
 
-          {hasReplacementValue && hasAssessableCoverage ? (
-            <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  coveragePercent === 100
+            {hasReplacementValue && hasAssessableCoverage ? (
+              <div className="mt-1 h-1 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    coveragePercent === 100
                       ? 'bg-emerald-500'
                       : coveragePercent >= 50
                         ? 'bg-amber-400'
                         : 'bg-red-400'
-                }`}
-                style={{ width: `${coveragePercent}%` }}
-              />
-            </div>
-          ) : null}
+                  }`}
+                  style={{ width: `${coveragePercent}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex items-center justify-between">
@@ -345,7 +333,7 @@ export default function ItemCard({
           )}
         </div>
 
-        <div className="mt-auto flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2">
           {coverageStatus === 'missing' ? (
             <>
               <button
