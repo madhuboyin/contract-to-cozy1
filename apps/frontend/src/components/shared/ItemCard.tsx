@@ -174,69 +174,76 @@ export default function ItemCard({
       }}
     >
       <div className={`flex flex-1 flex-col gap-3 ${isCompact ? 'p-4' : 'p-5'}`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div
-              className={[
-                'flex-shrink-0 rounded-lg',
-                isCompact ? 'p-1.5' : 'p-2',
-                categoryConfig.iconBg,
-              ].join(' ')}
-            >
-              <ItemIcon className={`${isCompact ? 'h-4 w-4' : 'h-5 w-5'} ${categoryConfig.iconColor}`} />
-            </div>
-
-            <div className="min-w-0">
-              <p className={`truncate font-semibold leading-tight text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}>
-                {item.displayName || item.name || 'Untitled'}
-              </p>
-              <p className="mt-0.5 text-[11px] text-gray-400">
-                {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
-              </p>
-            </div>
+        <div className="flex items-start gap-2.5">
+          <div
+            className={[
+              'flex-shrink-0 rounded-lg',
+              isCompact ? 'p-1.5' : 'p-2',
+              categoryConfig.iconBg,
+            ].join(' ')}
+          >
+            <ItemIcon className={`${isCompact ? 'h-4 w-4' : 'h-5 w-5'} ${categoryConfig.iconColor}`} />
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-1">
-            {item.provenanceLabel ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={(event) => event.stopPropagation()}
-                      className={item.provenanceLabel.startsWith('Confirmed') ? 'text-emerald-500 hover:text-emerald-600' : 'text-sky-400 hover:text-sky-600'}
-                      aria-label={item.provenanceLabel}
-                    >
-                      <Info className="h-3.5 w-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>{item.provenanceLabel}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : null}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-1.5">
+              <p
+                className={`line-clamp-2 min-w-0 flex-1 font-semibold leading-tight text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}
+                title={item.displayName || item.name || 'Untitled'}
+              >
+                {item.displayName || item.name || 'Untitled'}
+              </p>
 
-            {coverageStatus === 'missing' ? (
-              <span className="whitespace-nowrap rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                Coverage missing
-              </span>
-            ) : coverageStatus === 'incomplete' ? (
-              <span className="whitespace-nowrap rounded-full border border-sky-200 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                Coverage status incomplete
-              </span>
-            ) : coverageStatus === 'managed' ? (
-              <span className="whitespace-nowrap rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                {item.coverageStateLabel || 'Managed elsewhere'}
-              </span>
-            ) : coverageStatus === 'not-required' ? (
-              <span className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-                Coverage not required
-              </span>
-            ) : (
-              <span className="flex flex-shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                <CheckCircle className="h-2.5 w-2.5" />
-                Coverage confirmed
-              </span>
-            )}
+              {item.provenanceLabel ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(event) => event.stopPropagation()}
+                        className={`flex-shrink-0 ${item.provenanceLabel.startsWith('Confirmed') ? 'text-emerald-500 hover:text-emerald-600' : 'text-sky-400 hover:text-sky-600'}`}
+                        aria-label={item.provenanceLabel}
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{item.provenanceLabel}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
+            </div>
+
+            <p
+              className="mt-0.5 truncate whitespace-nowrap text-[11px] text-gray-400"
+              title={`${titleCaseCategory(String(item.category || 'OTHER'))} · ${getRoomLabel(item)}`}
+            >
+              {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
+            </p>
+
+            <div className="mt-2 flex items-center">
+              {coverageStatus === 'missing' ? (
+                <span className="whitespace-nowrap rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                  Coverage missing
+                </span>
+              ) : coverageStatus === 'incomplete' ? (
+                <span className="whitespace-nowrap rounded-full border border-sky-200 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                  Coverage information incomplete
+                </span>
+              ) : coverageStatus === 'managed' ? (
+                <span className="whitespace-nowrap rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                  {item.coverageStateLabel || 'Managed elsewhere'}
+                </span>
+              ) : coverageStatus === 'not-required' ? (
+                <span className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                  Coverage not required
+                </span>
+              ) : (
+                <span className="flex flex-shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                  <CheckCircle className="h-2.5 w-2.5" />
+                  Coverage confirmed
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
