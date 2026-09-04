@@ -408,6 +408,93 @@ export function homeActionCanonicalKey(action: HomeAction): string {
   return `entity:${action.source.entityId}`;
 }
 
+function weatherPreparationFamily(action: HomeAction): string {
+  const subjectId = action.presentation?.variant === 'ENVIRONMENT_PREPARATION'
+    ? action.presentation.subject?.id.trim().toLowerCase() ?? ''
+    : '';
+  const insightFamily = subjectId.match(/^([a-z][a-z_-]*?)-\d{4}-\d{2}-\d{2}(?:$|[-:])/i)?.[1];
+  if (insightFamily) return insightFamily;
+  return normalizedSignal(
+    action.presentation?.headline?.replace(/\s+preparation$/i, '')
+      ?? action.signal.replace(/\s+preparation$/i, ''),
+  );
+}
+
+function weatherPreparationWindow(action: HomeAction): { start: number; end: number } | null {
+  if (action.presentation?.variant !== 'ENVIRONMENT_PREPARATION') return null;
+  const start = Date.parse(action.timing.windowStart ?? action.timing.dueAt ?? '');
+  const end = Date.parse(action.timing.windowEnd ?? action.timing.dueAt ?? '');
+  return Number.isNaN(start) || Number.isNaN(end) ? null : { start, end };
+}
+
+function weatherPreparationActionsOverlap(left: HomeAction, right: HomeAction): boolean {
+  if (left.propertyId !== right.propertyId || weatherPreparationFamily(left) !== weatherPreparationFamily(right)) return false;
+  const leftWindow = weatherPreparationWindow(left);
+  const rightWindow = weatherPreparationWindow(right);
+  return Boolean(leftWindow && rightWindow && leftWindow.start <= rightWindow.end && rightWindow.start <= leftWindow.end);
+}
+
+function laterWeatherPreparationTiming(
+  left: HomeAction['timing'],
+  right: HomeAction['timing'],
+): HomeAction['timing'] {
+  const leftEnd = Date.parse(left.windowEnd ?? left.dueAt ?? '');
+  const rightEnd = Date.parse(right.windowEnd ?? right.dueAt ?? '');
+  if (Number.isNaN(leftEnd)) return right;
+  if (Number.isNaN(rightEnd)) return left;
+  return rightEnd > leftEnd ? right : left;
+}
+
+function withConciseWeatherPreparationCta(action: HomeAction): HomeAction {
+  if (action.presentation?.variant !== 'ENVIRONMENT_PREPARATION') return action;
+  const currentLabel = action.primaryCta.label.trim();
+  const label = action.state === 'IN_PROGRESS' || /\bcontinue\b/i.test(currentLabel)
+    ? 'Continue preparation'
+    : /^start\b/i.test(currentLabel)
+      ? action.source.kind === 'INCIDENT' ? 'Start checklist' : 'Start preparation'
+      : 'Review checklist';
+  return label === currentLabel ? action : {
+    ...action,
+    primaryCta: { ...action.primaryCta, label },
+  };
+}
+
+/**
+ * Assigns one current insight identity to overlapping revisions before the
+ * generic canonical-key pass. This catches legacy orchestration projections
+ * merged into Dashboard in addition to promoted incidents used by Resolution
+ * Center. Separate, non-overlapping events intentionally keep separate keys.
+ */
+export function weatherPreparationRevisionCanonicalIds(actions: readonly HomeAction[]): Map<string, string> {
+  const preparations = actions.filter((action) => action.presentation?.variant === 'ENVIRONMENT_PREPARATION');
+  const consumed = new Set<string>();
+  const canonicalIds = new Map<string, string>();
+
+  for (const action of preparations) {
+    if (consumed.has(action.id)) continue;
+    const cluster = [action];
+    consumed.add(action.id);
+    for (let index = 0; index < cluster.length; index += 1) {
+      for (const candidate of preparations) {
+        if (consumed.has(candidate.id) || !weatherPreparationActionsOverlap(cluster[index], candidate)) continue;
+        consumed.add(candidate.id);
+        cluster.push(candidate);
+      }
+    }
+
+    const current = cluster.reduce((best, candidate) => {
+      const bestEnd = weatherPreparationWindow(best)?.end ?? Number.NEGATIVE_INFINITY;
+      const candidateEnd = weatherPreparationWindow(candidate)?.end ?? Number.NEGATIVE_INFINITY;
+      if (candidateEnd !== bestEnd) return candidateEnd > bestEnd ? candidate : best;
+      return Date.parse(candidate.lastEvaluatedAt) > Date.parse(best.lastEvaluatedAt) ? candidate : best;
+    });
+    const canonicalInsightId = current.presentation?.subject?.id.trim() || current.id;
+    for (const revision of cluster) canonicalIds.set(revision.id, canonicalInsightId);
+  }
+
+  return canonicalIds;
+}
+
 // Coverage and recall each own their own dedup identity (coverage-item: above,
 // and a recall is deliberately its own homeowner concern). Seasonal aggregate
 // cards are counts, not per-asset. Everything else about a known asset is one
@@ -637,12 +724,16 @@ function earlierTiming(a: HomeAction['timing'], b: HomeAction['timing']): HomeAc
 }
 
 export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHomeAction[] {
+  const weatherRevisionCanonicalIds = weatherPreparationRevisionCanonicalIds(actions);
   const byCanonicalKey = new Map<string, {
     winner: HomeAction; score: ReturnType<typeof scoreHomeAction>; ids: string[]; timing: HomeAction['timing'];
   }>();
 
   for (const action of actions) {
-    const canonicalKey = homeActionCanonicalKey(action);
+    const weatherRevisionCanonicalId = weatherRevisionCanonicalIds.get(action.id);
+    const canonicalKey = weatherRevisionCanonicalId
+      ? `weather-preparation:${action.propertyId}:${weatherRevisionCanonicalId}`
+      : homeActionCanonicalKey(action);
     const scored = scoreHomeAction(action);
     const current = byCanonicalKey.get(canonicalKey);
     if (!current) {
@@ -653,7 +744,10 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
     // A merged duplicate can carry a sooner window than the winner (two
     // producers projecting the same concern off different clocks). The
     // homeowner should see the earliest actionable date, not the winner's.
-    current.timing = earlierTiming(current.timing, action.timing);
+    const isWeatherPreparationRevision = canonicalKey.startsWith('weather-preparation:');
+    current.timing = isWeatherPreparationRevision
+      ? laterWeatherPreparationTiming(current.timing, action.timing)
+      : earlierTiming(current.timing, action.timing);
     const durablePreparationWins = action.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
       action.source.kind === 'INCIDENT' && current.winner.source.kind !== 'INCIDENT';
     const currentIsDurablePreparation = current.winner.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
@@ -672,18 +766,21 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
       HOME_ACTION_PRIORITY_ORDER[a.winner.priority] - HOME_ACTION_PRIORITY_ORDER[b.winner.priority] ||
       b.score.score - a.score.score ||
       a.winner.id.localeCompare(b.winner.id))
-    .map(([canonicalKey, entry], index) => ({
-      ...entry.winner,
-      timing: entry.timing,
-      ranking: { rank: index + 1, ...entry.score },
-      deduplication: {
-        canonicalKey,
-        mergedActionIds: [...new Set(entry.ids)].filter((id) => id !== entry.winner.id),
-      },
-      workItem: null,
-      decisionLineage: null,
-      fatigueSuppressed: false,
-    }));
+    .map(([canonicalKey, entry], index) => {
+      const winner = withConciseWeatherPreparationCta(entry.winner);
+      return {
+        ...winner,
+        timing: entry.timing,
+        ranking: { rank: index + 1, ...entry.score },
+        deduplication: {
+          canonicalKey,
+          mergedActionIds: [...new Set(entry.ids)].filter((id) => id !== winner.id),
+        },
+        workItem: null,
+        decisionLineage: null,
+        fatigueSuppressed: false,
+      };
+    });
 }
 
 /**

@@ -4,6 +4,7 @@ require('ts-node/register');
 
 const {
   adaptEnvironmentInsightsToHomeActions,
+  collapseWeatherPreparationRevisions,
   getPromotedHomeActions,
 } = require('../../src/services/homeActionSourcePromotion.service.ts');
 
@@ -369,6 +370,74 @@ test('uses a continue CTA after weather preparation progress has been recorded',
   assert.equal(action.primaryCta.kind, 'REVIEW');
   assert.equal(action.primaryCta.label, 'Continue preparation');
   assert.equal(action.recommendedAction, 'Clear the outdoor condenser.');
+});
+
+test('collapses overlapping weather preparation revisions while preserving checklist progress', async () => {
+  const earlier = {
+    id: 'preparation-earlier', propertyId: 'property-1', fingerprint: 'weather-preparation:property-1:heat-2099-09-01',
+    typeKey: 'WEATHER_PREPARATION', category: 'heat', severity: 'WARNING', confidence: 90,
+    title: 'Unseasonable multi-day heat risk ahead preparation', summary: 'Preparation through Sep 5.',
+    sourceType: 'WEATHER', status: 'ACTIONED', openedAt: NOW, expiredAt: null,
+    createdAt: NOW, updatedAt: new Date('2099-08-30T12:00:00.000Z'), lastEvaluatedAt: NOW,
+    details: {
+      insightId: 'heat-2099-09-01', effectiveFrom: '2099-09-01', effectiveTo: '2099-09-05',
+      timeframe: 'Sep 1 - Sep 5', source: 'Open-Meteo forecast',
+    },
+    actions: [
+      { id: 'earlier-step-1', type: 'CHECKLIST_ITEM', status: 'COMPLETED', ctaLabel: 'Inspect the HVAC filter.', ctaUrl: null, payload: { label: 'Inspect the HVAC filter.', sortOrder: 0 } },
+      { id: 'earlier-step-2', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Clear the condenser.', ctaUrl: null, payload: { label: 'Clear the condenser.', sortOrder: 1 } },
+    ],
+  };
+  const extended = {
+    ...earlier,
+    id: 'preparation-extended',
+    fingerprint: 'weather-preparation:property-1:heat-2099-09-02',
+    severity: null,
+    summary: 'Revised preparation through Sep 10.',
+    updatedAt: new Date('2099-09-01T12:00:00.000Z'),
+    details: {
+      insightId: 'heat-2099-09-02', effectiveFrom: '2099-09-02', effectiveTo: '2099-09-10',
+      timeframe: 'Sep 2 - Sep 10', source: 'Open-Meteo revised forecast',
+    },
+    actions: [
+      { id: 'extended-step-1', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Inspect the HVAC filter.', ctaUrl: null, payload: { label: 'Inspect the HVAC filter.', sortOrder: 0 } },
+      { id: 'extended-step-2', type: 'CHECKLIST_ITEM', status: 'CREATED', ctaLabel: 'Clear the condenser.', ctaUrl: null, payload: { label: 'Clear the condenser.', sortOrder: 1 } },
+    ],
+  };
+  const separate = {
+    ...extended,
+    id: 'preparation-separate',
+    fingerprint: 'weather-preparation:property-1:heat-2099-10-01',
+    details: { ...extended.details, insightId: 'heat-2099-10-01', effectiveFrom: '2099-10-01', effectiveTo: '2099-10-03' },
+  };
+
+  const collapsed = collapseWeatherPreparationRevisions([extended, earlier, separate]);
+  assert.equal(collapsed.length, 2);
+  assert.equal(collapsed[0].id, 'preparation-earlier');
+  assert.equal(collapsed[0].details.insightId, 'heat-2099-09-02');
+  assert.equal(collapsed[0].details.resumeInsightId, 'heat-2099-09-01');
+  assert.equal(collapsed[0].details.effectiveTo, '2099-09-10');
+  assert.equal(collapsed[0].actions[0].status, 'COMPLETED');
+  assert.equal(collapsed[1].id, 'preparation-separate');
+
+  const db = stubSources();
+  db.incident.findMany = async () => [extended, earlier];
+  const result = await getPromotedHomeActions('property-1', db, {
+    environmentInsights: [environmentInsight({
+      id: 'heat-2099-09-02',
+      effectiveFrom: '2099-09-02',
+      effectiveTo: '2099-09-10',
+    })],
+    evaluatedAt: new Date('2099-09-02T12:00:00.000Z'),
+  });
+  const preparations = result.actions.filter((action) => action.presentation?.variant === 'ENVIRONMENT_PREPARATION');
+  assert.equal(preparations.length, 1);
+  assert.equal(preparations[0].id, 'incident:preparation-earlier');
+  assert.equal(preparations[0].primaryCta.label, 'Continue preparation');
+  assert.match(preparations[0].primaryCta.href, /insightId=heat-2099-09-01/);
+  assert.equal(preparations[0].presentation.subject.id, 'heat-2099-09-02');
+  assert.equal(preparations[0].timing.windowEnd, '2099-09-10T23:59:59.999Z');
+  assert.equal(preparations[0].presentation.keyFacts.find((fact) => fact.label === 'Severity').value, 'Advisory');
 });
 
 function groundedWeatherJourney(overrides = {}) {

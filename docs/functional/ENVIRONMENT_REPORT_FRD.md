@@ -632,15 +632,29 @@ PATCH /api/environment/report/:propertyId/preparations/:preparationId/items/:ite
 Starting a checklist accepts the current `insightId`. The server re-computes the report, verifies that the insight is still active, and snapshots its property-aware recommended actions. A repeated start for the same property and forecast insight resumes the existing checklist.
 
 The Environment insight and its preparation checklist are two lifecycle stages
-of one homeowner case, not separate decisions. Their canonical identity is the
-property plus `insightId` (which already identifies the forecast window). Before
-a checklist exists, Resolution Center shows one **Start preparation** action.
+of one homeowner case, not separate decisions. The exact creation key is the
+property plus `insightId`. For display and continuation, forecast revisions for
+the same hazard whose effective windows overlap are one homeowner case. The
+newest/longest forecast supplies the displayed window and context, while the
+durable checklist with the most recorded progress remains the continuation
+target. This includes transitively overlapping extensions. Same-hazard windows
+that do not overlap remain separate events. This identity rule applies at the
+shared canonical Home Action boundary so Home and Resolution Center show the
+same single case. Before a checklist exists, Resolution Center shows one
+**Start preparation** action.
 After creation, the durable `WEATHER_PREPARATION` Incident replaces the computed
 insight: it shows **Start checklist** until the first step is addressed and
 **Continue preparation** while work is in progress. The Environment Report
 remains a secondary context link. A `MITIGATED` preparation is no longer an
 active Resolution Center case. Display-title or destination equality must not
-be used as the identity because separate forecast windows must remain separate.
+be used as identity: overlapping hazard windows establish revision continuity,
+while non-overlapping forecast windows remain separate.
+
+Preparation CTAs use concise lifecycle copy only: **Start preparation** before
+creation, **Start checklist** for a saved checklist with no progress,
+**Continue preparation** after progress, and **Review checklist** for a legacy
+or review-only projection. A CTA must not repeat the event title, property name,
+or explanatory text already shown on the card.
 
 Checklist items use `IncidentAction` with `type=CHECKLIST_ITEM`. They may be completed, restored, or marked not applicable. Once every item is addressed, the containing `WEATHER_PREPARATION` Incident becomes `MITIGATED`. These event-specific actions do not create recurring `PropertyMaintenanceTask` records.
 

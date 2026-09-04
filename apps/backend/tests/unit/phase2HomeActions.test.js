@@ -216,6 +216,75 @@ test('a durable weather preparation checklist replaces its computed environment 
   assert.deepEqual(result[0].deduplication.mergedActionIds, ['environment:heat-window']);
 });
 
+test('dashboard canonicalization collapses overlapping forecast revisions but keeps separate events', () => {
+  const olderProjection = actionFixture('orchestration:heat-2099-09-01', {
+    propertyId: 'property-1',
+    source: { kind: 'SYSTEM', entityId: 'heat-2099-09-01', version: 'phase1-v1' },
+    signal: 'Unseasonable multi-day heat risk ahead preparation',
+    timing: {
+      dueAt: '2099-09-01T00:00:00.000Z',
+      windowStart: '2099-09-01T00:00:00.000Z',
+      windowEnd: '2099-09-05T23:59:59.999Z',
+      rationale: 'Earlier forecast window.',
+    },
+    lastEvaluatedAt: '2099-08-31T12:00:00.000Z',
+  });
+  olderProjection.presentation = {
+    variant: 'ENVIRONMENT_PREPARATION',
+    subject: { kind: 'CHECKLIST', id: 'heat-2099-09-01', label: 'Heat preparation' },
+  };
+  olderProjection.primaryCta.label = 'Review Unseasonable multi-day heat risk ahead preparation at Rental details';
+
+  const currentChecklist = actionFixture('incident:preparation-current', {
+    propertyId: 'property-1',
+    source: { kind: 'INCIDENT', entityId: 'preparation-current', version: 'phase2-v1' },
+    signal: 'Unseasonable multi-day heat risk ahead preparation',
+    timing: {
+      dueAt: '2099-09-02T00:00:00.000Z',
+      windowStart: '2099-09-02T00:00:00.000Z',
+      windowEnd: '2099-09-10T23:59:59.999Z',
+      rationale: 'Extended forecast window.',
+    },
+    lastEvaluatedAt: '2099-09-02T12:00:00.000Z',
+  });
+  currentChecklist.presentation = {
+    variant: 'ENVIRONMENT_PREPARATION',
+    subject: { kind: 'CHECKLIST', id: 'heat-2099-09-02', label: 'Heat preparation checklist' },
+  };
+  currentChecklist.primaryCta.label = 'Start checklist';
+
+  const separateEvent = actionFixture('incident:preparation-october', {
+    propertyId: 'property-1',
+    source: { kind: 'INCIDENT', entityId: 'preparation-october', version: 'phase2-v1' },
+    signal: 'Unseasonable multi-day heat risk ahead preparation',
+    timing: {
+      dueAt: '2099-10-01T00:00:00.000Z',
+      windowStart: '2099-10-01T00:00:00.000Z',
+      windowEnd: '2099-10-03T23:59:59.999Z',
+      rationale: 'A separate October event.',
+    },
+    lastEvaluatedAt: '2099-09-29T12:00:00.000Z',
+  });
+  separateEvent.presentation = {
+    variant: 'ENVIRONMENT_PREPARATION',
+    subject: { kind: 'CHECKLIST', id: 'heat-2099-10-01', label: 'October heat preparation checklist' },
+  };
+  separateEvent.primaryCta.label = 'Review Unseasonable multi-day heat risk ahead preparation at Rental details';
+
+  const result = rankAndDeduplicateHomeActions([olderProjection, currentChecklist, separateEvent]);
+
+  assert.equal(result.length, 2);
+  const september = result.find((action) => action.id === 'incident:preparation-current');
+  assert.ok(september);
+  assert.equal(september.deduplication.canonicalKey, 'weather-preparation:property-1:heat-2099-09-02');
+  assert.deepEqual(september.deduplication.mergedActionIds, ['orchestration:heat-2099-09-01']);
+  assert.equal(september.timing.windowEnd, '2099-09-10T23:59:59.999Z');
+  assert.equal(september.primaryCta.label, 'Start checklist');
+  const october = result.find((action) => action.id === 'incident:preparation-october');
+  assert.ok(october);
+  assert.equal(october.primaryCta.label, 'Review checklist');
+});
+
 test('coverage actions use inventory identity for canonical deduplication', () => {
   const correction = actionFixture('coverage-correction', {
     source: { kind: 'GUIDANCE', entityId: 'hvac-item', version: 'phase2-v1' },

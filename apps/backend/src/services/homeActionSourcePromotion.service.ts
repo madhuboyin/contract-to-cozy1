@@ -927,6 +927,119 @@ export async function loadGuidanceActions(
   }).filter((action): action is HomeAction => action !== null);
 }
 
+type PromotableIncident = {
+  id: string;
+  typeKey: string;
+  category: string | null;
+  title: string;
+  summary: string | null;
+  details: unknown;
+  severity: unknown;
+  confidence: number | null;
+  updatedAt: Date;
+  lastEvaluatedAt: Date | null;
+  actions: Array<{ status: unknown }>;
+};
+
+function preparationRevisionDetails(incident: Pick<PromotableIncident, 'details'>): Record<string, unknown> {
+  return incident.details && typeof incident.details === 'object' && !Array.isArray(incident.details)
+    ? incident.details as Record<string, unknown>
+    : {};
+}
+
+function preparationRevisionFamily(incident: Pick<PromotableIncident, 'category' | 'title'>): string {
+  const category = incident.category?.trim().toLowerCase();
+  if (category) return category;
+  return incident.title.trim().toLowerCase().replace(/\s+preparation$/i, '').replace(/[^a-z0-9]+/g, '-');
+}
+
+function preparationRevisionBoundary(value: unknown, endOfDay = false): number | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  return environmentBoundary(value.trim(), endOfDay)?.getTime() ?? null;
+}
+
+function preparationRevisionWindowsOverlap(left: PromotableIncident, right: PromotableIncident): boolean {
+  if (preparationRevisionFamily(left) !== preparationRevisionFamily(right)) return false;
+  const leftDetails = preparationRevisionDetails(left);
+  const rightDetails = preparationRevisionDetails(right);
+  const leftStart = preparationRevisionBoundary(leftDetails.effectiveFrom);
+  const leftEnd = preparationRevisionBoundary(leftDetails.effectiveTo, true);
+  const rightStart = preparationRevisionBoundary(rightDetails.effectiveFrom);
+  const rightEnd = preparationRevisionBoundary(rightDetails.effectiveTo, true);
+  return leftStart !== null && leftEnd !== null && rightStart !== null && rightEnd !== null
+    && leftStart <= rightEnd && rightStart <= leftEnd;
+}
+
+function preparationRevisionProgress(incident: PromotableIncident): number {
+  return incident.actions.filter((action) => action.status === 'COMPLETED' || action.status === 'CANCELED').length;
+}
+
+function preparationRevisionContextScore(incident: PromotableIncident): number {
+  const details = preparationRevisionDetails(incident);
+  return preparationRevisionBoundary(details.effectiveTo, true) ?? incident.updatedAt.getTime();
+}
+
+export function collapseWeatherPreparationRevisions<T extends PromotableIncident>(incidents: readonly T[]): T[] {
+  const consumed = new Set<string>();
+  const result: T[] = [];
+
+  for (const incident of incidents) {
+    if (consumed.has(incident.id)) continue;
+    if (incident.typeKey !== 'WEATHER_PREPARATION') {
+      consumed.add(incident.id);
+      result.push(incident);
+      continue;
+    }
+
+    // Build a connected overlap cluster so incremental extensions (A overlaps
+    // B, B overlaps C) remain one event even if A no longer overlaps C.
+    const cluster: T[] = [incident];
+    consumed.add(incident.id);
+    for (let index = 0; index < cluster.length; index += 1) {
+      for (const candidate of incidents) {
+        if (consumed.has(candidate.id) || candidate.typeKey !== 'WEATHER_PREPARATION') continue;
+        if (!preparationRevisionWindowsOverlap(cluster[index], candidate)) continue;
+        consumed.add(candidate.id);
+        cluster.push(candidate);
+      }
+    }
+
+    if (cluster.length === 1) {
+      result.push(incident);
+      continue;
+    }
+
+    const context = cluster.reduce((best, candidate) =>
+      preparationRevisionContextScore(candidate) > preparationRevisionContextScore(best) ? candidate : best);
+    const owner = cluster.reduce((best, candidate) => {
+      const progressDifference = preparationRevisionProgress(candidate) - preparationRevisionProgress(best);
+      if (progressDifference !== 0) return progressDifference > 0 ? candidate : best;
+      return preparationRevisionContextScore(candidate) > preparationRevisionContextScore(best) ? candidate : best;
+    });
+    const ownerDetails = preparationRevisionDetails(owner);
+    const contextDetails = preparationRevisionDetails(context);
+    const resumeInsightId = typeof ownerDetails.insightId === 'string' ? ownerDetails.insightId : contextDetails.insightId;
+
+    result.push({
+      ...owner,
+      category: context.category,
+      title: context.title,
+      summary: context.summary,
+      severity: context.severity,
+      confidence: context.confidence,
+      updatedAt: context.updatedAt,
+      lastEvaluatedAt: context.lastEvaluatedAt,
+      details: {
+        ...ownerDetails,
+        ...contextDetails,
+        resumeInsightId,
+      },
+    } as T);
+  }
+
+  return result;
+}
+
 async function loadIncidentActions(
   propertyId: string,
   db: HomeActionSourceDb,
@@ -958,7 +1071,17 @@ async function loadIncidentActions(
     },
   });
 
-  return incidents.flatMap((incident) => {
+  // Forecast providers revise the same weather event as the outlook changes.
+  // Environment insight IDs include the first qualifying date, so an extended
+  // window can leave two durable preparations (for example Sep 1-5 and Sep
+  // 2-10) even though they represent one homeowner decision. Collapse only
+  // same-hazard preparations whose recorded windows overlap. Keep the
+  // checklist with the most homeowner progress, but present the newest/longest
+  // forecast context and identity so the current computed insight is also
+  // suppressed. Non-overlapping events remain independent cases.
+  const promotionIncidents = collapseWeatherPreparationRevisions(incidents);
+
+  return promotionIncidents.flatMap((incident) => {
     const isWeatherPreparation = incident.typeKey === 'WEATHER_PREPARATION';
     const isOfficialWeatherAlert = incident.typeKey === 'SEVERE_WEATHER_ALERT';
     const preparationSteps = isWeatherPreparation
@@ -1008,7 +1131,11 @@ async function loadIncidentActions(
         : isOfficialWeatherAlert ? 'National Weather Service' : 'Current weather forecast');
     const confidence = incident.confidence == null ? null : Math.max(0, Math.min(1, incident.confidence / 100));
     const preparationHref = isWeatherPreparation && typeof details.insightId === 'string' && details.insightId.trim()
-      ? `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=${encodeURIComponent(details.insightId.trim())}`
+      ? `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=${encodeURIComponent(
+        typeof details.resumeInsightId === 'string' && details.resumeInsightId.trim()
+          ? details.resumeInsightId.trim()
+          : details.insightId.trim(),
+      )}`
       : null;
     const preparationInsightId = isWeatherPreparation && typeof details.insightId === 'string'
       ? details.insightId.trim() || null
@@ -1069,7 +1196,10 @@ async function loadIncidentActions(
             { label: 'Hazard', value: incident.title.slice(0, 240) },
             { label: 'Location', value: propertyLabel.slice(0, 240) },
             { label: 'Forecast window', value: weatherExpiry ? `Through ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}` : isOfficialWeatherAlert ? 'Until the alert is cleared' : 'Current forecast window' },
-            { label: 'Severity', value: String(incident.severity).toLowerCase() },
+            {
+              label: 'Severity',
+              value: humanizeFactKey(String(incident.severity ?? 'advisory')).replace(/^./, (value) => value.toUpperCase()),
+            },
             { label: 'Source freshness', value: `Observed ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(incident.openedAt)}` },
             { label: 'Preparation', value: (preparationSteps[0]?.label ?? weatherInstruction ?? `Review ${incident.title} guidance`).slice(0, 240) },
           ],
