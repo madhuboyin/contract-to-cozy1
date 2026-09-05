@@ -16,7 +16,7 @@ type QuickWinsProps = {
 
 export default function QuickWins({ quickWins, onAddItem, onOpenChecklist }: QuickWinsProps) {
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5">
+    <section className="h-full rounded-2xl border border-black/10 bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Quick wins</h2>

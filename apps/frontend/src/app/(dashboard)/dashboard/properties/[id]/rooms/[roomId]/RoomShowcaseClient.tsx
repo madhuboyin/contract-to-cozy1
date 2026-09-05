@@ -16,7 +16,6 @@ import {
 import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 import QuickWins from '@/components/rooms/QuickWins';
-import RoomAtAGlance from '@/components/rooms/RoomAtAGlance';
 import RoomIntelligenceCard from '@/components/rooms/RoomIntelligenceCard';
 import RoomPageHeader from '@/components/rooms/RoomPageHeader';
 import ItemCard from '@/components/shared/ItemCard';
@@ -87,6 +86,14 @@ function tipCtaLabel(title: string): string {
   return 'Take action';
 }
 
+function improvementPriority(title: string): number {
+  const normalized = title.toLowerCase();
+  if (normalized.includes('coverage gap') || normalized.includes('fix coverage gaps')) return 1;
+  if (normalized.includes('attach at least one document') || normalized.includes('document')) return 2;
+  if (normalized.includes('add a few more items') || normalized.includes('add items')) return 3;
+  return 4;
+}
+
 const sectionVariants = {
   hidden: { opacity: 0, y: 16 },
   visible: (index: number) => ({
@@ -95,6 +102,66 @@ const sectionVariants = {
     transition: { duration: 0.35, delay: index * 0.07, ease: 'easeOut' },
   }),
 };
+
+function PlantAdvisorSummary({
+  recommendations,
+  savedCount,
+  activeCount,
+  previewList,
+  onOpen,
+}: {
+  recommendations: RoomPlantRecommendationDTO[];
+  savedCount: number;
+  activeCount: number;
+  previewList: RoomPlantRecommendationDTO[];
+  onOpen: () => void;
+}) {
+  return (
+    <section className="h-full rounded-2xl border border-black/10 bg-white p-5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+            <Leaf className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Plant Advisor</h2>
+            <p className="mt-0.5 text-xs text-gray-500">Room-specific plant guidance</p>
+          </div>
+        </div>
+        <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+          {recommendations.length}
+        </span>
+      </div>
+
+      <p className="mt-4 text-sm text-gray-600">
+        {savedCount > 0
+          ? `${savedCount} saved plant plan${savedCount === 1 ? '' : 's'}`
+          : activeCount > 0
+            ? `${activeCount} recommendation${activeCount === 1 ? '' : 's'} ready to review`
+            : 'No recommendations yet'}
+      </p>
+
+      {previewList.length > 0 ? (
+        <div className="mt-3 space-y-1.5">
+          {previewList.map((recommendation) => (
+            <div key={recommendation.id} className="flex items-center justify-between rounded-lg bg-black/[0.02] px-3 py-2">
+              <p className="mb-0 truncate text-xs font-medium text-gray-800">{recommendation.plantName}</p>
+              <span className="text-[10px] text-gray-500">{recommendation.status}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-4 inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-teal-200 bg-teal-50 px-3 text-sm font-semibold text-teal-700 transition-colors hover:bg-teal-100"
+      >
+        {recommendations.length > 0 ? 'Open Plant Advisor' : 'Explore plant options'}
+      </button>
+    </section>
+  );
+}
 
 export default function RoomShowcaseClient() {
   const params = useParams<{ id: string; roomId: string }>();
@@ -224,6 +291,26 @@ export default function RoomShowcaseClient() {
       })
       .filter(Boolean) as Array<{ id: string; title: string; description?: string; ctaLabel: string }>;
   }, [healthScore?.improvements]);
+
+  const prioritizedImprovements = useMemo(
+    () => [...improvements].sort((a, b) => improvementPriority(a.title) - improvementPriority(b.title)),
+    [improvements],
+  );
+
+  const displayedQuickWins = useMemo(() => {
+    const candidates = [
+      ...prioritizedImprovements.slice(1).map((tip) => ({ title: tip.title, detail: tip.description })),
+      ...quickWins,
+    ];
+    const seen = new Set<string>();
+
+    return candidates.filter((win) => {
+      const key = String(win.title || '').trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 3);
+  }, [prioritizedImprovements, quickWins]);
 
   const scoreHistory = useMemo(() => {
     const history = scanSessions
@@ -384,13 +471,6 @@ export default function RoomShowcaseClient() {
           <RoomPageHeader
             roomName={room?.name || insights?.room?.name || 'Room'}
             roomType={template}
-            healthScore={score}
-            itemCount={itemCount}
-            gapCount={gapCount}
-            docCount={docCount}
-            backLabel={fromStatusBoard ? 'Back to Status Board' : 'Back'}
-            onBack={() => router.push(backHref)}
-            onItems={() => router.push(itemsHref)}
             onEdit={() => router.push(editHref)}
             onScan={() => setScanOpen(true)}
           />
@@ -418,8 +498,7 @@ export default function RoomShowcaseClient() {
           />
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <div className="w-full space-y-4 xl:col-span-8">
+        <div className="space-y-4">
             <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={1} className="w-full">
               <RoomIntelligenceCard
                 healthScore={score}
@@ -427,8 +506,9 @@ export default function RoomShowcaseClient() {
                 itemCount={itemCount}
                 docCount={docCount}
                 gapCount={gapCount}
+                valueCount={valueCount}
                 scoreHistory={scoreHistory}
-                tips={improvements}
+                tips={prioritizedImprovements}
                 onTipAction={handleTipAction}
                 onScrollToItems={scrollToItems}
                 onOpenAddDocument={() => router.push(itemsHref)}
@@ -443,13 +523,13 @@ export default function RoomShowcaseClient() {
               initial="hidden"
               animate="visible"
               custom={2}
-              className="rounded-2xl border border-gray-200 bg-white/80 p-4 shadow-xl shadow-slate-900/5 backdrop-blur-md"
+              className="rounded-2xl border border-black/10 bg-white p-4"
               ref={itemsSectionRef}
             >
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Items in this room</h2>
-                  <p className="text-sm text-gray-500">Source of truth powering room insights</p>
+                  <p className="text-sm text-gray-500">{itemCount} tracked item{itemCount === 1 ? '' : 's'}</p>
                 </div>
                 <button
                   type="button"
@@ -461,7 +541,7 @@ export default function RoomShowcaseClient() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {items.length === 0 ? (
                   <button
                     type="button"
@@ -485,13 +565,34 @@ export default function RoomShowcaseClient() {
               </div>
             </motion.section>
 
-            <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={3}>
-              <QuickWins
-                quickWins={quickWins}
-                onAddItem={openNewItem}
-                onOpenChecklist={() => router.push(checklistHref)}
-              />
-            </motion.div>
+            <section className="space-y-3" aria-labelledby="room-recommendations-heading">
+              <div>
+                <h2 id="room-recommendations-heading" className="text-lg font-semibold text-gray-900">
+                  Recommendations and room tools
+                </h2>
+                <p className="mt-0.5 text-sm text-gray-500">Optional ways to improve and maintain this room.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={3}>
+                  <QuickWins
+                    quickWins={displayedQuickWins}
+                    onAddItem={openNewItem}
+                    onOpenChecklist={() => router.push(checklistHref)}
+                  />
+                </motion.div>
+
+                <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={3}>
+                  <PlantAdvisorSummary
+                    recommendations={plantAdvisorRecommendations}
+                    savedCount={savedPlantRecommendations.length}
+                    activeCount={activePlantRecommendations.length}
+                    previewList={plantPreviewList}
+                    onOpen={() => router.push(plantAdvisorHref)}
+                  />
+                </motion.div>
+              </div>
+            </section>
 
             <motion.section variants={sectionVariants} initial="hidden" animate="visible" custom={4} className="mt-6">
               <Collapsible open={scanHistoryOpen} onOpenChange={setScanHistoryOpen}>
@@ -596,77 +697,7 @@ export default function RoomShowcaseClient() {
             </motion.section>
           </div>
 
-          <motion.div
-            variants={sectionVariants}
-            initial="hidden"
-            animate="visible"
-            custom={2}
-            className="xl:col-span-4"
-          >
-            <div className="xl:sticky xl:top-6">
-              <RoomAtAGlance
-                itemCount={itemCount}
-                gapCount={gapCount}
-                docCount={docCount}
-                valueCount={valueCount}
-                onEditProfile={() => router.push(editHref)}
-                onAddItem={openNewItem}
-              />
-
-              <div className="mt-3 rounded-2xl border border-gray-200 bg-white/80 p-3.5 shadow-xl shadow-slate-900/5 backdrop-blur-md">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-700">
-                      <Leaf className="h-3.5 w-3.5" />
-                    </span>
-                    <p className="mb-0 text-sm font-semibold text-gray-900">Plant Advisor</p>
-                  </div>
-                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                    {plantAdvisorRecommendations.length} cards
-                  </span>
-                </div>
-
-                <p className="mt-2 text-xs text-gray-600">
-                  {savedPlantRecommendations.length > 0
-                    ? `${savedPlantRecommendations.length} saved plant plan${savedPlantRecommendations.length === 1 ? '' : 's'} for this room.`
-                    : activePlantRecommendations.length > 0
-                    ? `${activePlantRecommendations.length} active recommendation${activePlantRecommendations.length === 1 ? '' : 's'} ready to review.`
-                    : 'No plant recommendations yet for this room.'}
-                </p>
-
-                {plantPreviewList.length > 0 ? (
-                  <div className="mt-2 space-y-1">
-                    {plantPreviewList.map((recommendation) => (
-                      <div
-                        key={recommendation.id}
-                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2.5 py-1.5"
-                      >
-                        <p className="mb-0 truncate text-xs font-medium text-gray-800">
-                          {recommendation.plantName}
-                        </p>
-                        <span className="text-[11px] tracking-normal text-gray-500">
-                          {recommendation.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                <button
-                  type="button"
-                  onClick={() => router.push(plantAdvisorHref)}
-                  className="mt-3 inline-flex min-h-[38px] w-full items-center justify-center rounded-lg border border-teal-600 bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
-                >
-                  {plantAdvisorRecommendations.length > 0
-                    ? 'Open Plant Advisor'
-                    : 'Get plants for this room'}
-                </button>
-              </div>
-
-              {loading ? <p className="mt-2 text-xs text-gray-500">Updating room data...</p> : null}
-            </div>
-          </motion.div>
-        </div>
+        {loading ? <p className="text-xs text-gray-500">Updating room data...</p> : null}
 
         <InventoryItemDrawer
           open={drawerOpen}

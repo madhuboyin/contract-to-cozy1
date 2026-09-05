@@ -1,20 +1,13 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeft, Package, Settings, Sparkles } from 'lucide-react';
+import { Settings, Sparkles } from 'lucide-react';
 
-import { getHealthOverlay, getRoomConfig } from './roomVisuals';
+import { getRoomConfig } from './roomVisuals';
 
 type RoomPageHeaderProps = {
   roomName: string;
   roomType?: string | null;
-  healthScore: number | null;
-  itemCount: number;
-  gapCount: number;
-  docCount: number;
-  backLabel?: string;
-  onBack: () => void;
-  onItems: () => void;
   onEdit: () => void;
   onScan: () => void;
 };
@@ -22,13 +15,6 @@ type RoomPageHeaderProps = {
 export default function RoomPageHeader({
   roomName,
   roomType,
-  healthScore,
-  itemCount,
-  gapCount,
-  docCount,
-  backLabel = 'Back',
-  onBack,
-  onItems,
   onEdit,
   onScan,
 }: RoomPageHeaderProps) {
@@ -36,19 +22,8 @@ export default function RoomPageHeader({
   const RoomIcon = roomConfig.icon;
 
   return (
-    <header
-      className={[
-        'relative overflow-hidden rounded-2xl border',
-        `bg-gradient-to-br ${roomConfig.gradient}`,
-        roomConfig.borderColor,
-        'px-4 py-4 sm:px-6 sm:py-5',
-      ].join(' ')}
-    >
-      {healthScore !== null ? (
-        <div className={`pointer-events-none absolute inset-0 ${getHealthOverlay(healthScore)}`} />
-      ) : null}
-
-      <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <header className="rounded-2xl border border-black/10 bg-white px-4 py-4 shadow-sm sm:px-6 sm:py-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-4">
           <div
             className={[
@@ -61,33 +36,15 @@ export default function RoomPageHeader({
 
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-display font-bold leading-tight text-gray-900">{roomName}</h1>
-            <p className="mt-0.5 text-sm text-gray-500">
-              {itemCount} items tracked - {itemCount === 0 ? 'coverage not evaluated' : `${gapCount} gaps`} - {docCount} documents
-            </p>
+            <p className="mt-0.5 text-sm text-gray-500">Room inventory and care</p>
           </div>
         </div>
 
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
           <button
             type="button"
-            onClick={onBack}
-            className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-gray-200 bg-white/70 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
-          >
-            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-            {backLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onItems}
-            className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-gray-200 bg-white/70 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
-          >
-            <Package className="mr-1.5 h-3.5 w-3.5" />
-            Items
-          </button>
-          <button
-            type="button"
             onClick={onEdit}
-            className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-gray-200 bg-white/70 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
+            className="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
           >
             <Settings className="mr-1.5 h-3.5 w-3.5" />
             Edit
@@ -96,7 +53,7 @@ export default function RoomPageHeader({
           <button
             type="button"
             onClick={onScan}
-            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg border border-teal-500 bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 transition-colors hover:bg-teal-700"
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700"
           >
             <Sparkles className="h-4 w-4" />
             AI Scan
