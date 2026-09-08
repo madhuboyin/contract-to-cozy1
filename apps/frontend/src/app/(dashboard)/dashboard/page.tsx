@@ -16,7 +16,7 @@ import {
   ArrowRight,
   CheckCircle2,
 } from 'lucide-react';
-import { Booking, BuyerClosingHomeOverview, BuyerDashboardPresentationMode, BuyerRecentOwnerTransition, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem } from '@/types';
+import { Booking, BuyerClosingHomeOverview, BuyerDashboardPresentationMode, BuyerRecentOwnerTransition, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem, RiskAssessmentReport } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'date-fns'; 
 
@@ -700,7 +700,8 @@ export default function DashboardPage() {
     queryFn: async () => {
       if (!effectiveSelectedPropertyId) return null;
       const report = await api.getRiskReportSummary(effectiveSelectedPropertyId);
-      return typeof report === 'string' ? null : report;
+      if (typeof report === 'string') return null;
+      return report;
     },
     enabled: Boolean(effectiveSelectedPropertyId) && ownerCapabilityMode,
     staleTime: 5 * 60 * 1000,
@@ -896,7 +897,10 @@ export default function DashboardPage() {
     (incident) => incident.propertyId === effectiveSelectedPropertyId
   );
 
-  const riskExposureGap = Math.max(0, Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0));
+  const riskData = riskSummaryQuery.data;
+  const isRiskIncomplete = Boolean(riskData && 'status' in riskData && riskData.status === 'MISSING_DATA');
+  const calculatedRiskReport = riskData && !('status' in riskData) ? riskData as RiskAssessmentReport : null;
+  const riskExposureGap = Math.max(0, Math.round(calculatedRiskReport?.financialExposureTotal ?? 0));
   const overdueMaintenanceCount = scopedUrgentActions.filter(a => a.type === 'MAINTENANCE_OVERDUE').length;
   const healthScore = typeof selectedProperty?.healthScore?.totalScore === 'number'
     ? selectedProperty.healthScore.totalScore
@@ -905,6 +909,7 @@ export default function DashboardPage() {
     applianceStatusBoardQuery.data?.items?.[0] ?? null;
   const hasCompletionState =
     Boolean(selectedProperty) &&
+    !isRiskIncomplete &&
     scopedUrgentActions.length === 0 &&
     scopedActiveIncidents.length === 0 &&
     overdueMaintenanceCount === 0;
@@ -1264,9 +1269,9 @@ export default function DashboardPage() {
           <Link href={buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/risk-radar')} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
               label="Risk exposure"
-              value={riskExposureGap > 0 ? formatUsd(riskExposureGap) : 'None found'}
-              hint="Unhedged financial exposure"
-              tone={riskExposureGap > 0 ? 'urgent' : 'success'}
+              value={isRiskIncomplete ? 'Details needed' : riskExposureGap > 0 ? formatUsd(riskExposureGap) : 'None found'}
+              hint={isRiskIncomplete ? 'Add year built and home size' : 'Unhedged financial exposure'}
+              tone={isRiskIncomplete ? 'neutral' : riskExposureGap > 0 ? 'urgent' : 'success'}
               className="h-full cursor-pointer"
             />
           </Link>

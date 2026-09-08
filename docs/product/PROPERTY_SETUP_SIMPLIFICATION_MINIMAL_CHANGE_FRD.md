@@ -1,6 +1,6 @@
 # Property Setup Simplification — Minimal-Change FRD
 
-**Status:** Proposed
+**Status:** In implementation
 **Date:** 2026-09-06
 **Product area:** Property setup and Property Details
 **Delivery scope:** Phase A — minimal change, no external property-data provider
@@ -527,3 +527,23 @@ Phase A must leave this future work possible, but it must not simulate provider 
 | Missing inputs can become high risk | FR-RISK-01 through FR-RISK-07 |
 | Post-commit work can make create appear to fail | FR-CREATE-01 through FR-CREATE-07 |
 | Place ID and provider provenance are not durable today | PD-7, Sections 4.2, 9.4, and 17 |
+
+## 19. Implementation Progress
+
+Implementation started on 2026-09-08.
+
+Completed in the initial slice:
+
+- ordinary Add Property is address-first with autocomplete, manual entry, address review, optional primary selection, and committed-create recovery;
+- established-owner onboarding no longer requires a home type and omits untouched optional facts;
+- first-primary selection is enforced in a serializable, retryable service transaction;
+- auxiliary work after the core Property commit is non-fatal and observable;
+- Property Details accepts sparse system facts and submits only dirty or explicitly confirmed fields;
+- missing risk prerequisites return `MISSING_DATA` rather than a synthetic high-risk report;
+- the risk page, dashboard risk card, dashboard exposure tile, orchestration, Property Context, score snapshots, and Home Digital Twin consumers treat legacy incomplete-report sentinels as unavailable rather than actionable; and
+- focused backend, frontend, and worker tests cover the new policy boundaries.
+
+Remaining verification:
+
+- environment-backed create transaction and route-level integration coverage when such infrastructure is available; and
+- full worker TypeScript validation after the repository's generated worker Prisma client is aligned with the current backend schema.

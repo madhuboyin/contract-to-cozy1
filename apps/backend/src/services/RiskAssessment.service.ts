@@ -26,6 +26,7 @@ import type { FeatureDecision, PropertyContextSnapshot } from '../modules/proper
 import { hasConfirmedBasement } from './riskAssetApplicability';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { isAssetOwnerActionable } from './inventoryCoverageState.service';
+import { hasInsufficientRiskDetails } from './riskReportSemantics';
 
 interface PropertyWithRelations extends Property {
   warranties: Warranty[];
@@ -77,7 +78,8 @@ class RiskAssessmentService {
 
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-    if (property.riskReport && property.riskReport.lastCalculatedAt.getTime() > thirtyMinutesAgo.getTime()) {
+    const legacyIncompleteReport = hasInsufficientRiskDetails(property.riskReport?.details);
+    if (property.riskReport && !legacyIncompleteReport && property.riskReport.lastCalculatedAt.getTime() > thirtyMinutesAgo.getTime()) {
       return property.riskReport;
     }
 
@@ -87,7 +89,7 @@ class RiskAssessmentService {
     };
     await (this.jobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, payload); 
     
-    return property.riskReport || 'QUEUED'; 
+    return property.riskReport && !legacyIncompleteReport ? property.riskReport : 'QUEUED';
   }
 
   async getPrimaryPropertyRiskSummary(userId: string): Promise<RiskSummaryDto | null> {
@@ -101,6 +103,8 @@ class RiskAssessmentService {
       select: {
         id: true,
         name: true,
+        yearBuilt: true,
+        propertySize: true,
         riskReport: {
           select: {
             riskScore: true,
@@ -134,6 +138,16 @@ class RiskAssessmentService {
       propertyId,
       propertyName,
     };
+
+    if (!primaryProperty.yearBuilt || !primaryProperty.propertySize) {
+      return {
+        ...baseResult,
+        riskScore: 0,
+        financialExposureTotal: new Prisma.Decimal(0),
+        lastCalculatedAt: new Date(0),
+        status: 'MISSING_DATA',
+      };
+    }
 
     if (!report) {
       await this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
@@ -193,8 +207,6 @@ class RiskAssessmentService {
     
     let fetchedProperty: PropertyWithRelations | null | undefined = property; 
     let reportData: any; 
-    let finalError: any = null; 
-    let isBasicDataMissing: boolean = false;
 
     try {
         // --- STEP 0: FETCH AND VALIDATE PROPERTY ---
@@ -207,59 +219,48 @@ class RiskAssessmentService {
         property = fetchedProperty;
 
         // --- STEP 1: CONDITIONAL CALCULATION START ---
-        isBasicDataMissing = !property.propertySize || !property.yearBuilt; 
+        const isBasicDataMissing = !property.propertySize || !property.yearBuilt;
 
         if (isBasicDataMissing) {
-             logger.warn(`[RISK-CALC] Skipping full calculation for ${propertyId}: Basic property data missing.`);
-             
-             reportData = {
-                riskScore: 0,
-                financialExposureTotal: new Prisma.Decimal(0),
-                details: [{ 
-                    assetName: 'Data Missing', 
-                    systemType: 'System', 
-                    category: 'SAFETY' as any, 
-                    age: 0, 
-                    expectedLife: 0, 
-                    replacementCost: 0, 
-                    probability: 1,       
-                    coverageFactor: 0,    
-                    outOfPocketCost: 0,   
-                    riskDollar: 0,        
-                    riskLevel: 'HIGH',
-                    actionCta: 'CRITICAL: Complete property details to run full assessment.',
-                }],
-                lastCalculatedAt: new Date(),
-            };
+          const missingFactKeys = [
+            ...(!property.propertySize ? ['core.propertySizeSqFt'] : []),
+            ...(!property.yearBuilt ? ['core.yearBuilt'] : []),
+          ];
+          logger.warn({ propertyId, missingFactKeys }, '[RISK-CALC] Calculation deferred: baseline facts are incomplete');
+          throw new RiskAssessmentContextError({
+            status: 'UNKNOWN',
+            reasonCodes: ['RISK_BASELINE_FACTS_UNKNOWN'],
+            usedFactKeys: [],
+            missingFactKeys,
+            conflictedFactKeys: [],
+            validUntil: null,
+            correctionPaths: [`/dashboard/properties/${propertyId}/edit`],
+          });
         } 
         const currentYear = new Date().getFullYear();
         const assetRisks: AssetRiskDetail[] = [];
         
-        if (isBasicDataMissing) {
-          logger.warn(`[RISK-CALC] Basic property data missing for ${propertyId}. Running inventory-only assessment.`);
-        } else {
-          logger.info(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
-          const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG)
-            .filter((config) => isAssetOwnerActionable(
-              config.systemType,
-              String(config.category),
-              (property as PropertyWithRelations).responsibilities,
-            ));
-          logger.info(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
-        
-          for (const config of relevantConfigs) {
-            const inventoryItemId = this.resolveInventoryItemIdForSystemType(property as PropertyWithRelations, config.systemType);
-            const assetRisk = calculateAssetRisk(
-              config.systemType,
-              config,
-              property as PropertyWithRelations,
-              currentYear,
-              {
-                inventoryItemId,
-              }
-            );
-            if (assetRisk) assetRisks.push(assetRisk);
-          }
+        logger.info(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
+        const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG)
+          .filter((config) => isAssetOwnerActionable(
+            config.systemType,
+            String(config.category),
+            (property as PropertyWithRelations).responsibilities,
+          ));
+        logger.info(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
+
+        for (const config of relevantConfigs) {
+          const inventoryItemId = this.resolveInventoryItemIdForSystemType(property as PropertyWithRelations, config.systemType);
+          const assetRisk = calculateAssetRisk(
+            config.systemType,
+            config,
+            property as PropertyWithRelations,
+            currentYear,
+            {
+              inventoryItemId,
+            }
+          );
+          if (assetRisk) assetRisks.push(assetRisk);
         }
         
         // ✅ Always include inventory major appliances (single source of truth)
@@ -293,27 +294,7 @@ class RiskAssessmentService {
 
     } catch (error: any) {
         logger.error({ err: error }, `RISK CALCULATION FAILED for property ${propertyId}`);
-        finalError = error;
-        
-        reportData = {
-            riskScore: 0,
-            financialExposureTotal: new Prisma.Decimal(0),
-            details: [{ 
-                assetName: 'Fatal Error', 
-                systemType: 'System', 
-                category: 'SAFETY' as any, 
-                age: 0, 
-                expectedLife: 0, 
-                replacementCost: 0, 
-                probability: 1,       
-                coverageFactor: 0,    
-                outOfPocketCost: 0,   
-                riskDollar: 0,        
-                riskLevel: 'HIGH',
-                actionCta: `CRITICAL: Calculation failed. Error: ${error.message || 'Unknown'}.`,
-            }],
-            lastCalculatedAt: new Date(),
-        };
+        throw error;
     }
     
     // --- STEP 3: PERSIST REPORT ---
@@ -344,7 +325,7 @@ class RiskAssessmentService {
         },
       });
 
-      if (propertyWithProfile && !isBasicDataMissing && !finalError) {
+      if (propertyWithProfile) {
         // Extract HIGH/CRITICAL risk recommendations
         const recommendations = (reportData.details as AssetRiskDetail[])
           .filter((c: AssetRiskDetail) => c.riskLevel === 'HIGH' || c.riskLevel === 'CRITICAL')

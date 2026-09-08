@@ -11,6 +11,7 @@ import {
   HomeTwinComponentStatus,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { hasInsufficientRiskDetails } from './riskReportSemantics';
 
 // ============================================================================
 // DIMENSION WEIGHTS
@@ -234,7 +235,7 @@ export class HomeDigitalTwinQualityService {
       }),
       prisma.riskAssessmentReport.findUnique({
         where: { propertyId },
-        select: { id: true },
+        select: { id: true, details: true },
       }),
     ]);
 
@@ -263,7 +264,7 @@ export class HomeDigitalTwinQualityService {
       evaluateDocumentation(documentCount),
       evaluateCostBasis(propertyWithFinance, componentsWithCost, components.length),
       evaluateEnergyBasis(propertyWithFinance, hasSolarItems),
-      evaluateRiskBasis(riskReport != null),
+      evaluateRiskBasis(riskReport != null && !hasInsufficientRiskDetails(riskReport.details)),
     ];
 
     // Upsert each dimension row

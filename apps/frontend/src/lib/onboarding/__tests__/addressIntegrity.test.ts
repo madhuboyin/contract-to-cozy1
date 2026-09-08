@@ -1,6 +1,7 @@
 import {
   addressOnlyPropertyData,
   onboardingAddressError,
+  sameOnboardingAddress,
   reconcilePropertyLookup,
 } from '../addressIntegrity';
 
@@ -53,5 +54,12 @@ describe('onboarding address integrity', () => {
       estimatedValue: null,
       lastSalePrice: null,
     });
+  });
+
+  it('matches committed properties using normalized address identity', () => {
+    expect(sameOnboardingAddress(
+      { address: ' 1 Main St ', city: 'Princeton', state: 'nj', zipCode: '08536' },
+      { address: '1 main st', city: 'princeton', state: 'NJ', zipCode: '08536' },
+    )).toBe(true);
   });
 });

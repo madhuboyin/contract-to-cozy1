@@ -342,17 +342,13 @@ const propertySchema = z.object({
   bathrooms: z.coerce.number().min(0).optional().nullable(),
 
   heatingType: z.union([z.nativeEnum(HeatingTypes), z.literal("")])
-    .transform(val => val === "" ? null : val)
-    .refine(val => val !== null, { message: "Heating Type is required." }),
+    .transform(val => val === "" ? null : val),
   coolingType: z.union([z.nativeEnum(CoolingTypes), z.literal("")])
-    .transform(val => val === "" ? null : val)
-    .refine(val => val !== null, { message: "Cooling Type is required." }),
+    .transform(val => val === "" ? null : val),
   waterHeaterType: z.union([z.nativeEnum(WaterHeaterTypes), z.literal("")])
-    .transform(val => val === "" ? null : val)
-    .refine(val => val !== null, { message: "Water Heater Type is required." }),
+    .transform(val => val === "" ? null : val),
   roofType: z.union([z.nativeEnum(RoofTypes), z.literal("")])
-    .transform(val => val === "" ? null : val)
-    .refine(val => val !== null, { message: "Roof Type is required." }),
+    .transform(val => val === "" ? null : val),
   foundationType: z.union([z.nativeEnum(FoundationTypes), z.literal("")])
     .transform(val => val === "" ? null : val)
     .optional().nullable(),
@@ -922,8 +918,48 @@ export default function EditPropertyPage() {
         ...(coverPhotoDocumentId !== undefined ? { coverPhotoDocumentId } : {}),
       };
 
-      // Send the payload with the correct key and structure
-      return api.updateProperty(propertyId, payload);
+      const dirtyFields = form.formState.dirtyFields;
+      const sparsePayload: Record<string, unknown> = {};
+      const directFieldNames = [
+        'name', 'address', 'city', 'state', 'zipCode', 'timezone', 'isPrimary',
+        'dwellingType', 'ownershipForm', 'propertyUse', 'occupancyStatus',
+        'propertySize', 'yearBuilt', 'bedrooms', 'bathrooms',
+        'heatingType', 'coolingType', 'waterHeaterType', 'roofType',
+        'hvacInstallYear', 'waterHeaterInstallYear', 'roofReplacementYear',
+        'foundationType', 'basementConfiguration', 'sidingType', 'electricalPanelAge',
+        'hasSmokeDetectors', 'hasCoDetectors', 'hasDrainageIssues',
+        'hasSecuritySystem', 'hasFireExtinguisher', 'hasIrrigation',
+        'utilityProvider', 'gasProvider', 'inHistoricDistrict', 'historicRegistryStatus',
+        'inHurricaneZone', 'inFloodZone', 'inWildfireZone', 'isCoastal',
+      ] as const;
+      for (const fieldName of directFieldNames) {
+        if (dirtyFields[fieldName]) sparsePayload[fieldName] = payload[fieldName];
+      }
+
+      const exteriorFieldNames = [
+        'hasPrivateOutdoorSpace', 'outdoorSpaceTypes', 'lotSizeSqFt', 'hasLawn',
+        'hasTreesOrShrubs', 'hasDriveway', 'hasFence', 'hasPoolOrSpa',
+        'hasOutdoorFaucets', 'hasIrrigation', 'hasDrainageIssues',
+      ] as const;
+      if (
+        dirtyFields.dwellingType
+        || dirtyFields.ownershipForm
+        || exteriorFieldNames.some((fieldName) => Boolean(dirtyFields[fieldName]))
+      ) {
+        sparsePayload.exteriorProfile = payload.exteriorProfile;
+      }
+      if (dirtyFields.responsibilities) sparsePayload.responsibilities = payload.responsibilities;
+      if (dirtyFields.purchasePriceDollars) sparsePayload.purchasePriceCents = payload.purchasePriceCents;
+      if (dirtyFields.purchaseDate) sparsePayload.purchaseDate = payload.purchaseDate;
+      if (dirtyFields.lastAppraisedValueDollars) sparsePayload.lastAppraisedValue = payload.lastAppraisedValue;
+      if (dirtyFields.lastAppraisalDate) sparsePayload.lastAppraisalDate = payload.lastAppraisalDate;
+      if (dirtyFields.appliances) sparsePayload.majorAppliances = payload.majorAppliances;
+      if (coverPhotoDocumentId !== undefined) sparsePayload.coverPhotoDocumentId = coverPhotoDocumentId;
+
+      return api.updateProperty(
+        propertyId,
+        sparsePayload as Parameters<typeof api.updateProperty>[1],
+      );
     },
     onSuccess: (response) => {
       if (response.success) {

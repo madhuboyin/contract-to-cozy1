@@ -45,6 +45,7 @@ import { analyticsEmitter, AnalyticsModule, emitHomeActionsSurfaced } from './an
 import { getAggregationContextEnvelope } from './aggregationContext/context';
 import { aggregationLifecycleIdentity } from './aggregationContext/lifecycle';
 import { describeAssetRisk } from '../utils/riskCalculator.util';
+import { isInsufficientRiskDetail } from './riskReportSemantics';
 import {
   adaptHomeActionSource,
   getHomeAssetDisplayLabel,
@@ -2174,7 +2175,9 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
 
   // 4) Build candidate actions
   const applicableRiskDetails = Array.isArray(riskDetails)
-    ? riskDetails.filter((detail: any) => isRiskDetailOwnerActionable(detail, responsibilities))
+    ? riskDetails
+        .filter((detail: any) => !isInsufficientRiskDetail(detail))
+        .filter((detail: any) => isRiskDetailOwnerActionable(detail, responsibilities))
     : [];
   const candidateRiskActions: OrchestratedAction[] = Array.isArray(applicableRiskDetails)
   ? (await Promise.all(

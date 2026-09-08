@@ -39,6 +39,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { getDisabledComponentTypes } from '../config/homeDigitalTwinOperationalControls';
+import { hasInsufficientRiskDetails } from './riskReportSemantics';
 
 type TxClient = Prisma.TransactionClient | PrismaClient;
 
@@ -648,7 +649,8 @@ export class HomeDigitalTwinBuilderService {
       }),
     ]);
 
-    const allSpecs = this.deriveSpecs(property, inventoryItems, riskReport, propertyId);
+    const usableRiskReport = riskReport && !hasInsufficientRiskDetails(riskReport.details) ? riskReport : null;
+    const allSpecs = this.deriveSpecs(property, inventoryItems, usableRiskReport, propertyId);
     const disabledTypes = new Set(getDisabledComponentTypes());
     const specs = disabledTypes.size > 0
       ? allSpecs.filter((s) => !disabledTypes.has(s.componentType))
@@ -657,7 +659,7 @@ export class HomeDigitalTwinBuilderService {
     // a disabled category doesn't change whether the underlying data moved,
     // so re-enabling it later still triggers a correct rebuild rather than
     // being masked by a fingerprint that never changed while it was off.
-    const dependencyFingerprint = this.computeDependencyFingerprint(property, inventoryItems, riskReport);
+    const dependencyFingerprint = this.computeDependencyFingerprint(property, inventoryItems, usableRiskReport);
 
     await prisma.$transaction(async (tx) => {
       const upsertedIds = new Set<string>();

@@ -953,6 +953,14 @@ export interface RiskAssessmentReport {
     updatedAt: string;
 }
 
+export interface RiskAssessmentMissingData {
+    status: 'MISSING_DATA';
+    propertyId: string;
+    message: string;
+    missingFactKeys: string[];
+    correctionPaths: string[];
+}
+
 // [NEW TYPE] Lightweight Risk Summary for Dashboard (Epic A)
 export type RiskSummaryStatus = 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
 

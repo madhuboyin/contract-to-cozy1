@@ -32,6 +32,7 @@ import {
   type RadarPropertyReconciliationReason,
 } from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 import { requestPropertySavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
+import { shouldCreatePropertyAsPrimary } from './propertySetupPolicy';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -53,6 +54,38 @@ async function reconcileCurrentSeasonalChecklist(propertyId: string, userId: str
       '[PROPERTY] Current seasonal checklist reconciliation deferred',
     );
   }
+}
+
+async function runPostCreateStep(
+  propertyId: string,
+  operation: string,
+  step: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await step();
+  } catch (error) {
+    logger.error(
+      { err: error, propertyId, operation },
+      '[PROPERTY_CREATE] Auxiliary operation deferred after core Property commit',
+    );
+  }
+}
+
+async function runSerializablePropertyCreate<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      const retryableConflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      if (!retryableConflict || attempt === 3) throw error;
+      logger.warn({ attempt }, '[PROPERTY_CREATE] Retrying serializable transaction conflict');
+    }
+  }
+  throw new Error('Property create transaction exhausted its retry budget');
 }
 
 interface PropertyApplianceInput {
@@ -554,35 +587,38 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
  */
 export async function createProperty(userId: string, data: CreatePropertyData): Promise<ScoredProperty> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
-
-  const duplicate = await prisma.property.findFirst({
-    where: {
-      homeownerProfileId,
-      address: { equals: data.address.trim(), mode: 'insensitive' },
-      city: { equals: data.city.trim(), mode: 'insensitive' },
-      state: { equals: data.state.trim(), mode: 'insensitive' },
-      zipCode: data.zipCode.trim(),
-    },
-  });
-
-  if (duplicate) {
-    throw new Error('A property with this address already exists');
-  }
-
-  // If this is set as primary, unset other primary properties
-  if (data.isPrimary) {
-    await prisma.property.updateMany({
-      where: { 
-        homeownerProfileId,
-        isPrimary: true,
-      },
-      data: { isPrimary: false },
-    });
-  }
-
   const capturedAt = new Date();
-  const property = await prisma.property.create({
-    data: {
+  const property = await runSerializablePropertyCreate(async (tx) => {
+    const [duplicate, existingPropertyCount] = await Promise.all([
+      tx.property.findFirst({
+        where: {
+          homeownerProfileId,
+          address: { equals: data.address.trim(), mode: 'insensitive' },
+          city: { equals: data.city.trim(), mode: 'insensitive' },
+          state: { equals: data.state.trim(), mode: 'insensitive' },
+          zipCode: normalizeUsZip(data.zipCode),
+        },
+      }),
+      tx.property.count({ where: { homeownerProfileId } }),
+    ]);
+
+    if (duplicate) {
+      throw new Error('A property with this address already exists');
+    }
+
+    const shouldBePrimary = shouldCreatePropertyAsPrimary(existingPropertyCount, data.isPrimary);
+    const assertedFactKeys = capturedFactKeys(data).filter(
+      (factKey) => factKey !== 'core.isPrimary' || existingPropertyCount > 0,
+    );
+    if (shouldBePrimary && existingPropertyCount > 0) {
+      await tx.property.updateMany({
+        where: { homeownerProfileId, isPrimary: true },
+        data: { isPrimary: false },
+      });
+    }
+
+    return tx.property.create({
+      data: {
       homeownerProfileId,
       name: data.name || null,
       address: data.address,
@@ -591,7 +627,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       zipCode: normalizeUsZip(data.zipCode),
       normalizedZipCode: normalizeUsZip(data.zipCode),
       geocodingStatus: 'PENDING',
-      isPrimary: data.isPrimary || false,
+      isPrimary: shouldBePrimary,
       
       // PHASE 2 ADDITIONS - FIX: Ensure all optional fields are explicitly null if undefined/missing
       dwellingType: data.dwellingType ?? 'UNKNOWN',
@@ -643,7 +679,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
         create: data.responsibilities.map((entry) => ({ scope: entry.scope, party: entry.party, notes: entry.notes ?? null })),
       } : undefined,
       propertyFactEvidence: {
-        create: capturedFactKeys(data).map((factKey) => ({
+        create: assertedFactKeys.map((factKey) => ({
           factKey,
           sourceType: 'USER_REPORTED',
           sourceEntityType: 'PROPERTY_PROFILE',
@@ -664,50 +700,58 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
         },
       },
       // END PHASE 2 ADDITIONS
-    },
+      },
+    });
   });
 
   if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
-    await prisma.propertyFinancingProfile.upsert({
-      where: { propertyId: property.id },
-      create: {
-        propertyId: property.id,
-        purchasePriceCents: data.purchasePriceCents ?? null,
-        purchaseDate: data.purchaseDate ?? null,
-      },
-      update: {
-        ...(data.purchasePriceCents !== undefined ? { purchasePriceCents: data.purchasePriceCents } : {}),
-        ...(data.purchaseDate !== undefined ? { purchaseDate: data.purchaseDate } : {}),
-      },
-    });
+    await runPostCreateStep(property.id, 'financing-profile', () =>
+      prisma.propertyFinancingProfile.upsert({
+        where: { propertyId: property.id },
+        create: {
+          propertyId: property.id,
+          purchasePriceCents: data.purchasePriceCents ?? null,
+          purchaseDate: data.purchaseDate ?? null,
+        },
+        update: {
+          ...(data.purchasePriceCents !== undefined ? { purchasePriceCents: data.purchasePriceCents } : {}),
+          ...(data.purchaseDate !== undefined ? { purchaseDate: data.purchaseDate } : {}),
+        },
+      }),
+    );
   }
 
-  const resolvedCoverPhotoDocumentId = await resolveCoverPhotoDocumentIdForProperty({
-    homeownerProfileId,
-    propertyId: property.id,
-    coverPhotoDocumentId: data.coverPhotoDocumentId,
+  await runPostCreateStep(property.id, 'cover-photo', async () => {
+    const resolvedCoverPhotoDocumentId = await resolveCoverPhotoDocumentIdForProperty({
+      homeownerProfileId,
+      propertyId: property.id,
+      coverPhotoDocumentId: data.coverPhotoDocumentId,
+    });
+    if (resolvedCoverPhotoDocumentId !== undefined && resolvedCoverPhotoDocumentId !== null) {
+      await prisma.property.update({
+        where: { id: property.id },
+        data: { coverPhotoDocumentId: resolvedCoverPhotoDocumentId },
+      });
+    }
   });
-
-  if (resolvedCoverPhotoDocumentId !== undefined && resolvedCoverPhotoDocumentId !== null) {
-    await prisma.property.update({
-      where: { id: property.id },
-      data: { coverPhotoDocumentId: resolvedCoverPhotoDocumentId },
-    });
-  }
 
   // Analytics: property created
-  analyticsEmitter.track({
-    eventType: AnalyticsEvent.PROPERTY_CREATED,
-    userId,
-    propertyId: property.id,
-    moduleKey: AnalyticsModule.PROPERTY,
-    featureKey: AnalyticsFeature.PROPERTY_PROFILE,
-    metadataJson: {
-      dwellingType: data.dwellingType ?? 'UNKNOWN',
-      state: data.state.toUpperCase(),
-      yearBuilt: data.yearBuilt ?? null,
-    },
-  });
+  try {
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.PROPERTY_CREATED,
+      userId,
+      propertyId: property.id,
+      moduleKey: AnalyticsModule.PROPERTY,
+      featureKey: AnalyticsFeature.PROPERTY_PROFILE,
+      metadataJson: {
+        dwellingType: data.dwellingType ?? 'UNKNOWN',
+        state: data.state.toUpperCase(),
+        yearBuilt: data.yearBuilt ?? null,
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error, propertyId: property.id, operation: 'analytics' }, '[PROPERTY_CREATE] Analytics emission failed');
+  }
 
   // Fire-and-forget: seed initial habits for the new property
   getPropertyContext(property.id, { userId }, {
@@ -718,40 +762,52 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
 
   // NEW STEP: Handle assets AFTER property creation
   if (data.majorAppliances !== undefined) {
-    await syncPropertyApplianceInventoryItems(property.id, data.majorAppliances || []);
+    await runPostCreateStep(property.id, 'major-appliances', () =>
+      syncPropertyApplianceInventoryItems(property.id, data.majorAppliances || []),
+    );
   }
 
   // Cold-start convergence: evaluate the current season before the newly
   // created Home is returned, rather than waiting for the overnight worker.
   await reconcileCurrentSeasonalChecklist(property.id, userId);
 
-  await requestRadarPropertyReconciliation({
-    propertyId: property.id,
-    reasons: ['property_created'],
-    changeToken: property.updatedAt.toISOString(),
-    correlationId: `property-create:${property.id}`,
-  });
+  await runPostCreateStep(property.id, 'radar-reconciliation', () =>
+    requestRadarPropertyReconciliation({
+      propertyId: property.id,
+      reasons: ['property_created'],
+      changeToken: property.updatedAt.toISOString(),
+      correlationId: `property-create:${property.id}`,
+    }),
+  );
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   // This triggers both Risk and FES calculations
-  await JobQueueService.enqueuePropertyIntelligenceJobs(property.id);
+  await runPostCreateStep(property.id, 'property-intelligence-enqueue', () =>
+    JobQueueService.enqueuePropertyIntelligenceJobs(property.id),
+  );
 
   // Fetch the full property and then attach its canonical appliance projection.
-  const fullProperty = await prisma.property.findUnique({
+  try {
+    const fullProperty = await prisma.property.findUnique({
       where: { id: property.id },
-      include: { 
-          // FIX 4: Include warranties
-          warranties: true,
-          coverPhoto: true,
-          financingProfile: true,
-          exteriorProfile: true,
-          responsibilities: true,
-      }
-  });
-
-  // ATTACH SCORE: Calculate and attach score before returning
-  // Ensure fullProperty is not null (shouldn't be right after creation)
-  const hydrated = await hydrateMajorAppliancesFromInventory(fullProperty as any);
-  return attachHealthScore(hydrated as PropertyWithAssets);
+      include: {
+        warranties: true,
+        coverPhoto: true,
+        financingProfile: true,
+        exteriorProfile: true,
+        responsibilities: true,
+      },
+    });
+    if (!fullProperty) throw new Error('Committed Property could not be reloaded');
+    const hydrated = await hydrateMajorAppliancesFromInventory(fullProperty);
+    return await attachHealthScore(hydrated as PropertyWithAssets);
+  } catch (error) {
+    logger.error(
+      { err: error, propertyId: property.id, operation: 'response-projection' },
+      '[PROPERTY_CREATE] Returning committed Property without auxiliary projection',
+    );
+    const fallback = { ...property, warranties: [], majorAppliances: [] } as PropertyWithAssets;
+    return { ...fallback, healthScore: calculateHealthScore(fallback, 0, []) };
+  }
 }
 
 /**

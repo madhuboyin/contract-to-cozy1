@@ -4,6 +4,7 @@ import { getFactDefinitionsForScope } from '../catalog/factCatalog';
 import { PropertyContextActor, PropertyContextScope, PropertyFact, PropertyFactConflict } from '../domain/contracts';
 import { createPropertyFact, FactEvidenceMetadata } from '../domain/facts';
 import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from '../../../services/coverageConflict.service';
+import { hasInsufficientRiskDetails } from '../../../services/riskReportSemantics';
 
 export interface PropertyContextAssembler {
   readonly scope: PropertyContextScope;
@@ -663,17 +664,18 @@ export const riskAssembler: PropertyContextAssembler = {
         orderBy: [{ severityScore: 'desc' }, { updatedAt: 'desc' }],
       }),
     ]);
-    const serializedReport = report ? {
-      ...report,
-      financialExposureTotal: report.financialExposureTotal.toNumber(),
-      lastCalculatedAt: report.lastCalculatedAt.toISOString(),
+    const usableReport = report && !hasInsufficientRiskDetails(report.details) ? report : null;
+    const serializedReport = usableReport ? {
+      ...usableReport,
+      financialExposureTotal: usableReport.financialExposureTotal.toNumber(),
+      lastCalculatedAt: usableReport.lastCalculatedAt.toISOString(),
     } : null;
-    const reportEvidence = report ? {
+    const reportEvidence = usableReport ? {
       source: 'SYSTEM_DERIVED' as const,
       verified: false,
       confidence: null,
-      observedAt: report.lastCalculatedAt,
-      validUntil: new Date(report.lastCalculatedAt.getTime() + 30 * 60 * 1000),
+      observedAt: usableReport.lastCalculatedAt,
+      validUntil: new Date(usableReport.lastCalculatedAt.getTime() + 30 * 60 * 1000),
     } : undefined;
     return [
       withPropertyId(createPropertyFact('risk.report', serializedReport, reportEvidence, now), propertyId),

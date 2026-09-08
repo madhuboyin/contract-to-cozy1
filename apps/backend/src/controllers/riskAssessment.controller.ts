@@ -2,7 +2,7 @@
 
 import { Response, NextFunction } from 'express';
 // Note: RiskSummaryDto is still used as the final response DTO structure
-import RiskAssessmentService, { RiskSummaryDto } from '../services/RiskAssessment.service';
+import RiskAssessmentService, { RiskAssessmentContextError, RiskSummaryDto } from '../services/RiskAssessment.service';
 import { Property, Prisma, RiskAssessmentReport } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { CustomRequest } from '../types';
@@ -42,6 +42,15 @@ class RiskAssessmentController {
 
       return res.status(200).json(report);
     } catch (error) {
+      if (error instanceof RiskAssessmentContextError) {
+        return res.status(200).json({
+          status: 'MISSING_DATA',
+          propertyId: req.params.propertyId,
+          message: error.message,
+          missingFactKeys: error.applicability.missingFactKeys,
+          correctionPaths: error.applicability.correctionPaths ?? [],
+        });
+      }
       next(error);
     }
   }
@@ -108,6 +117,19 @@ class RiskAssessmentController {
       res.status(200).json({ success: true, data: responseDto });
 
     } catch (error) {
+      if (error instanceof RiskAssessmentContextError) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            status: 'MISSING_DATA',
+            propertyId: req.query.propertyId,
+            riskScore: 0,
+            financialExposureTotal: 0,
+            lastCalculatedAt: null,
+            message: error.message,
+          },
+        });
+      }
       next(error);
     }
   }

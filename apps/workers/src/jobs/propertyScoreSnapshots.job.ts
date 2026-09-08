@@ -12,6 +12,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger, AppLogger } from '../lib/logger';
 import { calculateHealthScore } from '../utils/propertyScore.util';
+import { hasInsufficientRiskDetails } from '@worker-shared/services/riskReportSemantics';
 
 type ScoreType = 'HEALTH' | 'RISK';
 
@@ -210,20 +211,22 @@ export async function capturePropertyScoreSnapshots(
 
   if (riskReport) {
     const details = Array.isArray(riskReport.details) ? (riskReport.details as Array<Record<string, unknown>>) : [];
-    const highRiskCount = details.filter((detail) => String(detail.riskLevel || '').toUpperCase() === 'HIGH').length;
-    await upsertPropertyScoreSnapshot({
-      propertyId,
-      homeownerProfileId,
-      scoreType: 'RISK',
-      score: Math.round(asNumber(riskReport.riskScore) * 10) / 10,
-      scoreMax: 100,
-      scoreBand: getBandForScore('RISK', asNumber(riskReport.riskScore)),
-      computedAt: riskReport.lastCalculatedAt ? new Date(riskReport.lastCalculatedAt) : new Date(),
-      snapshotJson: {
-        financialExposureTotal: asNumber(riskReport.financialExposureTotal),
-        highRiskAssets: highRiskCount,
-      },
-    }, deps);
+    if (!hasInsufficientRiskDetails(details)) {
+      const highRiskCount = details.filter((detail) => String(detail.riskLevel || '').toUpperCase() === 'HIGH').length;
+      await upsertPropertyScoreSnapshot({
+        propertyId,
+        homeownerProfileId,
+        scoreType: 'RISK',
+        score: Math.round(asNumber(riskReport.riskScore) * 10) / 10,
+        scoreMax: 100,
+        scoreBand: getBandForScore('RISK', asNumber(riskReport.riskScore)),
+        computedAt: riskReport.lastCalculatedAt ? new Date(riskReport.lastCalculatedAt) : new Date(),
+        snapshotJson: {
+          financialExposureTotal: asNumber(riskReport.financialExposureTotal),
+          highRiskAssets: highRiskCount,
+        },
+      }, deps);
+    }
   }
 
   if (propertyCore) {

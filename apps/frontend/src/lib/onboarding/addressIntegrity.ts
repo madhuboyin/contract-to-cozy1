@@ -24,6 +24,15 @@ export function onboardingAddressError(value: OnboardingAddress): string | null 
   return null;
 }
 
+export function sameOnboardingAddress(left: OnboardingAddress, right: OnboardingAddress): boolean {
+  const a = normalizeOnboardingAddress(left);
+  const b = normalizeOnboardingAddress(right);
+  return a.address.toLocaleLowerCase() === b.address.toLocaleLowerCase()
+    && a.city.toLocaleLowerCase() === b.city.toLocaleLowerCase()
+    && a.state === b.state
+    && a.zipCode === b.zipCode;
+}
+
 export function addressOnlyPropertyData(value: OnboardingAddress) {
   return {
     ...normalizeOnboardingAddress(value),

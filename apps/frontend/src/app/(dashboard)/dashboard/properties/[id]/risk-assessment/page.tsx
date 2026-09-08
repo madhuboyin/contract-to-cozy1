@@ -4,7 +4,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, PropertyScoreSeries } from "@/types"; 
+import { Property, RiskAssessmentReport, RiskAssessmentMissingData, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, PropertyScoreSeries } from "@/types";
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
@@ -48,7 +48,11 @@ import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
 // The API returns either the raw report object (RiskReportFull) or the string 'QUEUED'
-type RiskQueryData = RiskAssessmentReport | 'QUEUED'; 
+type RiskQueryData = RiskAssessmentReport | RiskAssessmentMissingData | 'QUEUED';
+
+function isMissingDataResponse(value: RiskQueryData | undefined): value is RiskAssessmentMissingData {
+    return typeof value === 'object' && value !== null && 'status' in value && value.status === 'MISSING_DATA';
+}
 
 // --- Helper Functions ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
@@ -1457,12 +1461,16 @@ export default function RiskAssessmentPage() {
     const riskQueryPayload = riskQuery.data; 
 
     // Determine the status and safely extract the report object
-    let currentStatus: 'QUEUED' | 'CALCULATED' | undefined = undefined;
+    let currentStatus: 'QUEUED' | 'CALCULATED' | 'MISSING_DATA' | undefined = undefined;
     let report: RiskAssessmentReport | undefined;
+    let missingData: RiskAssessmentMissingData | undefined;
 
     // Handle the two possible return values: 'QUEUED' or RiskAssessmentReport object
     if (riskQueryPayload === 'QUEUED') {
         currentStatus = 'QUEUED';
+    } else if (isMissingDataResponse(riskQueryPayload)) {
+        missingData = riskQueryPayload;
+        currentStatus = 'MISSING_DATA';
     } else if (typeof riskQueryPayload === 'object' && riskQueryPayload !== null) {
         // This is the RiskAssessmentReport object
         report = riskQueryPayload;
@@ -1551,6 +1559,30 @@ export default function RiskAssessmentPage() {
                         <Button onClick={() => riskQuery.refetch()} disabled={riskQuery.isFetching}>
                             {riskQuery.isFetching && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             Try Again
+                        </Button>
+                    </CardContent>
+                </Card>
+            </DashboardShell>
+        );
+    }
+
+    if (currentStatus === 'MISSING_DATA' && missingData) {
+        const correctionPath = missingData.correctionPaths[0] || `/dashboard/properties/${propertyId}/edit`;
+        return (
+            <DashboardShell>
+                <Card className="border-slate-200 bg-white">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-slate-900">
+                            <Home className="h-5 w-5 text-teal-700" aria-hidden="true" />
+                            Add a few home details to calculate risk
+                        </CardTitle>
+                        <CardDescription>
+                            We need the home’s year built and size before we can produce a responsible risk assessment. No hazard has been inferred from the missing information.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button asChild className="bg-teal-700 text-white hover:bg-teal-800">
+                            <Link href={correctionPath}>Complete property details</Link>
                         </Button>
                     </CardContent>
                 </Card>

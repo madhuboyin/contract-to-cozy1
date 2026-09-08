@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Loader2, Shield } from "lucide-react";
 import { api } from "@/lib/api/client";
-import { AssetRiskDetail, PrimaryRiskSummary, RiskSummaryStatus } from "@/types";
+import { AssetRiskDetail, PrimaryRiskSummary, RiskAssessmentReport, RiskSummaryStatus } from "@/types";
 import { cn } from "@/lib/utils";
 import { ScoreRing } from "@/components/dashboard/ScoreRing";
 import { BadgeStatus, StatusBadge } from "@/components/ui/StatusBadge";
@@ -111,17 +111,25 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
           status: reportOrStatus as RiskSummaryStatus,
         };
       }
+      if ('status' in reportOrStatus && reportOrStatus.status === "MISSING_DATA") {
+        return {
+          ...FALLBACK_SUMMARY,
+          propertyId,
+          status: "MISSING_DATA" as RiskSummaryStatus,
+        };
+      }
+      const report = reportOrStatus as RiskAssessmentReport;
       return {
-        propertyId: reportOrStatus.propertyId,
+        propertyId: report.propertyId,
         propertyName: null,
-        riskScore: reportOrStatus.riskScore,
+        riskScore: report.riskScore,
         financialExposureTotal:
-          typeof reportOrStatus.financialExposureTotal === "number"
-            ? reportOrStatus.financialExposureTotal
-            : Number(reportOrStatus.financialExposureTotal || 0),
-        lastCalculatedAt: reportOrStatus.lastCalculatedAt,
+          typeof report.financialExposureTotal === "number"
+            ? report.financialExposureTotal
+            : Number(report.financialExposureTotal || 0),
+        lastCalculatedAt: report.lastCalculatedAt,
         status: "CALCULATED" as RiskSummaryStatus,
-        details: Array.isArray(reportOrStatus.details) ? reportOrStatus.details : [],
+        details: Array.isArray(report.details) ? report.details : [],
       };
     },
     enabled: !!propertyId,
@@ -171,6 +179,22 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
           Loading risk...
         </div>
       </div>
+    );
+  }
+
+  if (summary.status === "MISSING_DATA") {
+    return (
+      <Link href={`/dashboard/properties/${propertyId}/edit`} className={cn(CARD_BASE, "border-border hover:border-teal-300")}>
+        <div className="flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Shield className={HEADER_ICON} />
+            <span className={TITLE_CLASS}>Risk Score</span>
+          </div>
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        </div>
+        <div className="text-sm font-semibold text-foreground">More home details needed</div>
+        <p className={DESCRIPTION_CLASS}>Add year built and home size before calculating risk. No hazard has been inferred.</p>
+      </Link>
     );
   }
 

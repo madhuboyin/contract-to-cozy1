@@ -188,6 +188,22 @@ test('captures a RISK snapshot when a risk report exists', async () => {
   assert.equal(riskCreate.data.snapshotJson.highRiskAssets, 1);
 });
 
+test('does not create a risk snapshot from a legacy missing-data control row', async () => {
+  const { deps, calls } = fakeDeps({
+    riskReport: {
+      riskScore: 0,
+      financialExposureTotal: 0,
+      details: [{ assetName: 'Data Missing', systemType: 'System', riskLevel: 'HIGH' }],
+      lastCalculatedAt: new Date(),
+    },
+  });
+
+  await capturePropertyScoreSnapshots('property-1', 'homeowner-1', deps);
+
+  const riskCreate = calls.creates.find((c) => c.data.scoreType === 'RISK');
+  assert.equal(riskCreate, undefined);
+});
+
 test('captures a HEALTH snapshot when the property core record exists', async () => {
   const { deps, calls } = fakeDeps({
     propertyCore: { id: 'property-1', propertySize: 2000, yearBuilt: 2000 },

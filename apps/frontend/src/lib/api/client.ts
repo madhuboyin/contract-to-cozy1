@@ -48,6 +48,7 @@ import {
   UpdateChecklistItemInput, 
   // NEW RISK ASSESSMENT TYPES
   RiskAssessmentReport,
+  RiskAssessmentMissingData,
   AssetRiskDetail,
   PrimaryRiskSummary, // [NEW IMPORT]
   PropertyScoreSnapshotSummary,
@@ -173,6 +174,10 @@ class APIError extends Error {
     super(message);
     this.name = 'APIError';
   }
+}
+
+export function isAmbiguousNetworkError(error: unknown): boolean {
+  return error instanceof APIError && error.status === 'NETWORK';
 }
 
 function parseRetryAfterSeconds(value: string | null): number | undefined {
@@ -1433,7 +1438,8 @@ class APIClient {
   // ==========================================================================
   // PROPERTY ENDPOINTS
   // ==========================================================================
-  async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
+  async getProperties(options?: { force?: boolean }): Promise<APIResponse<{ properties: Property[] }>> {
+    if (options?.force) this.resetPropertiesCache();
     const now = Date.now();
     if (this.propertiesCache && this.propertiesCache.expiresAt > now) {
       return this.propertiesCache.data;
@@ -2225,7 +2231,7 @@ class APIClient {
    * * NOTE: This endpoint bypasses this.request() because the backend returns
    * the raw data directly, not wrapped in {success: true, data: ...}
    */
-  async getRiskReportSummary(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
+  async getRiskReportSummary(propertyId: string): Promise<RiskAssessmentReport | RiskAssessmentMissingData | 'QUEUED'> {
     // Direct fetch to bypass the request() wrapper
     const response = await fetch(`${this.baseURL}/api/risk/report/${propertyId}`, {
       method: 'GET',
@@ -2245,6 +2251,10 @@ class APIClient {
     // Check if backend returned 'QUEUED' string
     if (typeof data === 'string' && data === 'QUEUED') {
       return 'QUEUED';
+    }
+
+    if (data?.status === 'MISSING_DATA') {
+      return data as RiskAssessmentMissingData;
     }
 
     // Backend returns raw RiskAssessmentReport object

@@ -13,11 +13,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/api/client';
+import { api, isAmbiguousNetworkError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
-import { addressOnlyPropertyData, onboardingAddressError } from '@/lib/onboarding/addressIntegrity';
+import { addressOnlyPropertyData, onboardingAddressError, sameOnboardingAddress } from '@/lib/onboarding/addressIntegrity';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
 import type { BasementConfiguration, DwellingType } from '@/types';
 
@@ -155,6 +155,7 @@ export default function ConfirmOnboardingPage() {
     }
 
     setSubmitting(true);
+    let createdPropertyId: string | null = null;
     try {
       // Create the real property from the lookup data
       const response = await api.createProperty({
@@ -164,13 +165,13 @@ export default function ConfirmOnboardingPage() {
         zipCode: data.zipCode,
         yearBuilt,
         propertySize: typeof data.propertySize === 'number' ? data.propertySize : undefined,
-        dwellingType: homeProfile.dwellingType,
+        ...(homeProfile.dwellingType === 'UNKNOWN' ? {} : { dwellingType: homeProfile.dwellingType }),
         bedrooms,
         bathrooms,
-        basementConfiguration: homeProfile.basementConfiguration,
-        exteriorProfile: {
-          hasPoolOrSpa: homeProfile.hasPoolOrSpa === 'UNKNOWN' ? null : homeProfile.hasPoolOrSpa === 'YES',
-        },
+        ...(homeProfile.basementConfiguration === 'UNKNOWN' ? {} : { basementConfiguration: homeProfile.basementConfiguration }),
+        ...(homeProfile.hasPoolOrSpa === 'UNKNOWN'
+          ? {}
+          : { exteriorProfile: { hasPoolOrSpa: homeProfile.hasPoolOrSpa === 'YES' } }),
         isPrimary: true,
         // Pre-populate other fields found during lookup
         purchasePriceCents: data.lastSalePrice,
@@ -182,6 +183,7 @@ export default function ConfirmOnboardingPage() {
         if (!propertyId || !data.activationContext) {
           throw new Error('Trigger-first activation context is missing.');
         }
+        createdPropertyId = propertyId;
         const contextResponse = await api.captureEntryContext(propertyId, data.activationContext);
         if (!contextResponse.success) {
           throw new Error(contextResponse.message || 'Unable to save activation context.');
@@ -220,6 +222,30 @@ export default function ConfirmOnboardingPage() {
       }
     } catch (error: any) {
       console.error('Confirm error:', error);
+      if (createdPropertyId || isAmbiguousNetworkError(error)) {
+        try {
+          const propertiesResponse = createdPropertyId
+            ? null
+            : await api.getProperties({ force: true });
+          const committedPropertyId = createdPropertyId ?? (
+            propertiesResponse?.success
+              ? propertiesResponse.data?.properties?.find((property) => sameOnboardingAddress(property, data))?.id ?? null
+              : null
+          );
+          if (committedPropertyId && data.activationContext) {
+            const contextResponse = await api.captureEntryContext(committedPropertyId, data.activationContext);
+            if (contextResponse.success) {
+              setSuccess(true);
+              await fetch('/api/onboarding-lookup-session', { method: 'DELETE' });
+              toast({ title: 'Home added', description: 'We found the saved home and continued without creating a duplicate.' });
+              setTimeout(() => router.push(`/onboarding/first-value?propertyId=${encodeURIComponent(committedPropertyId)}`), 1200);
+              return;
+            }
+          }
+        } catch (recoveryError) {
+          console.error('Committed property recovery failed:', recoveryError);
+        }
+      }
       track('api_error_encountered', {
         endpoint: '/api/properties',
         statusCode: 500,
@@ -227,7 +253,7 @@ export default function ConfirmOnboardingPage() {
       });
       toast({
         title: "Error",
-        description: "An unexpected error occurred.",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
         variant: "destructive"
       });
     } finally {
