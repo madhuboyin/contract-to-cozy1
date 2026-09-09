@@ -1,6 +1,12 @@
 // apps/frontend/src/lib/pwa.ts
 
 /**
+ * Dispatched on `window` when a newly installed service worker is waiting to
+ * take over. ServiceWorkerUpdatePrompt listens for it and shows a toast.
+ */
+export const SW_UPDATE_READY_EVENT = 'ctc:sw-update-ready';
+
+/**
  * Register the service worker for PWA functionality.
  * Returns a cleanup function that clears the update interval.
  */
@@ -62,16 +68,17 @@ export function registerServiceWorker(): (() => void) | undefined {
         swRegistration!.update();
       }, 60 * 60 * 1000);
 
-      // Handle updates — store reference so it can be removed on cleanup
+      // Handle updates — when a new worker finishes installing while an old one
+      // still controls the page, announce it with a non-blocking event. A React
+      // listener (ServiceWorkerUpdatePrompt) turns that into a dismissible
+      // "Reload to update" toast instead of a blocking window.confirm().
       updateFoundHandler = () => {
         const newWorker = swRegistration!.installing;
         if (!newWorker) return;
 
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            if (window.confirm('A new version is available. Reload to update?')) {
-              window.location.reload();
-            }
+            window.dispatchEvent(new CustomEvent(SW_UPDATE_READY_EVENT));
           }
         });
       };
