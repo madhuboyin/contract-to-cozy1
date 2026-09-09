@@ -21,8 +21,8 @@ persistence, install experience, push, and the manifest.
     the "part" of F6 that unblocks native push. **Requires `prisma db push`** (new
     `push_devices` table + `PushDevicePlatform` enum) + `apps/workers` prisma client
     resync.
-- Track C — **in progress**: C1 done (SW registration reliability +
-  `updateViaCache: 'none'`, closes F8, partial F11). C2–C6 open.
+- Track C — **in progress**: C1 + C2 done (SW registration reliability, `updateViaCache:
+  'none'`, and `/sw.js` `no-cache` header — closes F8 and F11). C3–C6 open.
 
 ---
 
@@ -59,7 +59,7 @@ is that the desktop flow must render and behave exactly as it does today.
 | F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both | ✅ fixed (C1) |
 | F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ⬜ |
 | F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No | ⬜ |
-| F11 | No `updateViaCache` control and no cache header for `/sw.js` | Low | No | 🟡 `updateViaCache: 'none'` set (C1); cache header is C2 |
+| F11 | No `updateViaCache` control and no cache header for `/sw.js` | Low | No | ✅ fixed (C1 + C2) |
 | F12 | No automated PWA verification in CI | Low | No | ⬜ |
 | F13 | `web-share=()` blocks the Web Share API for report sharing | Low | Fixes both | ✅ fixed (B2) |
 | F14 | Housekeeping: unscheduled cache pruning, unused exports, split dismissal keys | Low | No | ✅ fixed (A2) |
@@ -317,8 +317,9 @@ surprises.
 
 **Desktop-safe** — affects only how the worker script itself is revalidated.
 
-**Partial resolution — C1:** `register()` now passes `updateViaCache: 'none'`. The
-`Cache-Control: no-cache` header for `/sw.js` (C2) is still open.
+**Resolution — C1 + C2:** `register()` passes `updateViaCache: 'none'` (C1) and
+`next.config.js` now serves `/sw.js` with `Cache-Control: no-cache, no-store,
+must-revalidate` (C2).
 
 #### F12 — No automated PWA verification
 
@@ -449,7 +450,7 @@ Small fixes that make the existing PWA behave the way it already claims to.
 | ID | Action | Closes | Effort | Desktop impact | Status |
 |----|--------|--------|--------|----------------|--------|
 | C1 | In `registerServiceWorker`, run registration immediately when `document.readyState === 'complete'`, otherwise on `load`. Pass `{ updateViaCache: 'none' }`. | F8, F11 (part) | S | None — makes desktop registration reliable too | ✅ |
-| C2 | Add `Cache-Control: no-cache` for `/sw.js` in `next.config.js` headers. | F11 | S | None — one asset's revalidation policy | ⬜ |
+| C2 | Add `Cache-Control: no-cache` for `/sw.js` in `next.config.js` headers. | F11 | S | None — one asset's revalidation policy | ✅ |
 | C3 | Replace the `window.confirm` update flow with a non-blocking "Update ready — reload" toast. Keep dismiss behaviour identical. | F9 (update half) | S | Shared component — additive toast; review once on desktop | ⬜ |
 | C4 | Gate the iOS "Add to Home Screen" card to Safari only, suppress it in in-app web views, and show it only after authentication. | F9 (iOS half) | S | None — desktop uses the `beforeinstallprompt` branch, unchanged | ⬜ |
 | C5 | Add manifest `id`, `display_override: ["standalone", "minimal-ui"]`, `launch_handler`, and a `start_url` attribution parameter. | F10 | S | None — manifest is inert in a desktop tab | ⬜ |
@@ -460,8 +461,12 @@ Small fixes that make the existing PWA behave the way it already claims to.
 - **C1** — `apps/frontend/src/lib/pwa.ts`: `registerServiceWorker()` registers immediately
   when `document.readyState === 'complete'` (client-nav / bfcache restore) and only defers
   to `load` otherwise; the returned cleanup only removes a `load` listener it actually
-  attached. `register()` now passes `updateViaCache: 'none'` (partial F11). New test
+  attached. `register()` now passes `updateViaCache: 'none'`. New test
   `apps/frontend/src/lib/__tests__/pwa.test.ts` (3 cases). Frontend typecheck + lint clean.
+- **C2** — `apps/frontend/next.config.js`: a `/sw.js` entry in `headers()` serves the
+  worker script with `Cache-Control: no-cache, no-store, must-revalidate`. Together with
+  C1's `updateViaCache: 'none'` this closes F11. Config-only; verified the resolved
+  `headers()` output.
 
 ### Track D — Verification
 

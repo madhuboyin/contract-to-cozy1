@@ -75,6 +75,17 @@ const nextConfig = {
           ...STATIC_SECURITY_HEADERS,
         ],
       },
+      {
+        // The service worker script must always be revalidated against the
+        // network so a deploy is picked up promptly. Browsers cap SW-script
+        // caching at 24h regardless, but an explicit no-cache removes the
+        // "stale worker after deploy" class of bug. Pairs with the
+        // updateViaCache: 'none' registration option (see src/lib/pwa.ts).
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+        ],
+      },
     ];
   },
 };
