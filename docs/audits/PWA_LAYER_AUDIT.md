@@ -9,9 +9,13 @@ persistence, install experience, push, and the manifest.
 
 **Progress:**
 - Track A (A1–A3) — **done**, commit `ae0cc251`. Closes F1, F2, F3, F14.
-- Track B — **in progress**: B2 (camera / web-share Permissions-Policy) done; B1 (icons)
-  done for real icons + maskable + apple-touch-icon, with Apple splash screens and manifest
-  screenshots deferred (both need real device captures). Closes F4, F13; F5 largely closed.
+- Track B — **in progress**:
+  - B2 (camera / web-share Permissions-Policy) — done, commit `2de53ea8`. Closes F4, F13.
+  - B1 (icons) — real icons + maskable + apple-touch-icon done, commit `2de53ea8`; Apple
+    splash screens and manifest screenshots deferred (need real device captures). F5
+    largely closed.
+  - B3 (`GET /api/mobile/home` aggregation endpoint) — done. Closes F7.
+  - B4 (APNs prerequisite) — not started; only needed if native iOS is pursued.
 
 ---
 
@@ -44,7 +48,7 @@ is that the desktop flow must render and behave exactly as it does today.
 | F4 | `Permissions-Policy: camera=()` disables in-app camera capture | High | Fixes both | ✅ fixed (B2) |
 | F5 | App icon set is placeholder art; no maskable icon, screenshots, or splash | High | No | 🟡 icons fixed (B1); splash + screenshots deferred |
 | F6 | Push notifications wired to one tool only; no general opt-in | Medium | No | ⬜ |
-| F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No | ⬜ |
+| F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No | ✅ fixed (B3) |
 | F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both | ⬜ |
 | F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ⬜ |
 | F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No | ⬜ |
@@ -228,6 +232,15 @@ composed view in one call is shared infrastructure for whatever comes next.
 **Desktop-safe** — a brand-new route. The existing desktop dashboard keeps its current
 calls; migrating it later is a separate, optional task and out of scope here.
 
+**Resolution — B3:** `GET /api/mobile/home` added
+(`apps/backend/src/services/mobileHome.service.ts` + controller + `routes/mobile.routes.ts`,
+mounted at `/api/mobile`). One authenticated call returns the property picker, the selected
+property's scored data, onboarding, narrative run, a server-consolidated urgent-actions list
+(with resolved deep-link `href`s), and headline counts. `consolidateUrgentActions` and
+`resolveUrgentActionHref` are ported from the frontend `urgentActions.ts` — a comment in
+each file flags that they must stay in sync. 5 unit tests; backend build clean; no frontend
+changes.
+
 #### F8 — Service-worker registration can silently no-op on fast loads
 
 `registerServiceWorker()` attaches its work to
@@ -357,7 +370,7 @@ Reused verbatim by a wrapped PWA or a native shell. Worth doing before either.
 |----|--------|--------|--------|----------------|--------|
 | B1 | Produce a real icon set: 72–512 `any` icons, a dedicated 512 `maskable` with correct safe zone, a 180 apple-touch-icon, apple-touch-startup images, and 2–3 manifest `screenshots`. | F5 | M | None — install surfaces only; tab favicon unchanged | 🟡 icons done; splash + screenshots deferred |
 | B2 | In `security-headers.js`, change `camera=()` → `camera=(self)` and `web-share=()` → `web-share=(self)`. | F4, F13 | S | None — strictly widens an allowlist; fixes desktop too | ✅ |
-| B3 | Add `GET /api/mobile/home` returning the composed dashboard plus a server-side consolidated urgent-actions list. Move `consolidateUrgentActions` logic into a shared server util. | F7 | M | None — new route; desktop keeps its current calls | ⬜ |
+| B3 | Add `GET /api/mobile/home` returning the composed dashboard plus a server-side consolidated urgent-actions list. Move `consolidateUrgentActions` logic into a shared server util. | F7 | M | None — new route; desktop keeps its current calls | ✅ |
 | B4 | Native-push prerequisite (only if native iOS is pursued): APNs credentials, a `POST /api/push/devices` token-registration endpoint, and a delivery-pipeline branch for device tokens alongside Web Push. | F6 (part) | L | None — additive backend | ⬜ |
 
 **What shipped so far in Track B**
@@ -378,6 +391,17 @@ Reused verbatim by a wrapped PWA or a native shell. Worth doing before either.
 - **Deferred, needs a running app / real devices:** `apple-touch-startup-image` splash
   screens (many device-specific sizes, low payoff) and manifest `screenshots` (must be
   genuine captures — a marketing render in the install dialog would be worse than none).
+- **B3** — new `GET /api/mobile/home` (`apps/backend/src/services/mobileHome.service.ts`,
+  `controllers/mobileHome.controller.ts`, `routes/mobile.routes.ts`, mounted at
+  `/api/mobile`). One authenticated call returns: the property picker list, the selected
+  property's scored data, onboarding status, narrative run, a **server-consolidated**
+  urgent-actions list (INCIDENT / HEALTH_INSIGHT / MAINTENANCE_OVERDUE / RENEWAL_* /
+  COVERAGE_GAP, each with a resolved deep-link `href`), and headline counts. It is a
+  faithful port of `apps/frontend/src/lib/dashboard/urgentActions.ts`
+  (`consolidateUrgentActions` + `resolveUrgentActionHref`); the two should be kept in sync,
+  and the web dashboard can migrate onto this endpoint later as a separate task. Covered by
+  `apps/backend/tests/unit/mobileHomeService.test.js` (5 tests). Backend `tsc` build clean;
+  no frontend changes.
 
 ### Track C — PWA correctness
 
@@ -408,8 +432,8 @@ So this layer stops being invisible to the test suite.
    reliable.
 2. **Install quality** — B1, C5, C3, C4. Real artwork, complete manifest, a civilised
    update prompt, a scoped install hint.
-3. **Shared platform work** — B3, C6, D1, D2. The `/api/mobile/home` endpoint, unified
-   push, and CI coverage for the whole layer.
+3. **Shared platform work** — ~~B3~~ (done), C6, D1, D2. The `/api/mobile/home` endpoint
+   is in; remaining: unified push and CI coverage for the whole layer.
 4. **Only if going native** — B4. APNs and device-token registration. Skip entirely if
    a wrapped PWA is the chosen shell.
 
