@@ -221,6 +221,30 @@ Before public launch, strongly consider these follow-up tasks:
 5. Add a small smoke-test checklist for each archive.
 6. Add UI tests for sign-in and dashboard load.
 7. Validate cookie/session behavior against production infrastructure.
+8. Wire push notifications (see below).
+
+## 13a. Push Notifications (APNs)
+
+The server side is ready. `apps/workers` already delivers push notifications to
+APNs alongside browser Web Push — it is inert until `APNS_*` is configured (see
+`.env.local.example`). To turn it on:
+
+1. In the Apple Developer portal, create a Key with the **Apple Push
+   Notifications service (APNs)** capability and download the `.p8` file.
+2. Set the workers environment:
+   - `APNS_DELIVERY_ENABLED=true`
+   - `APNS_KEY_ID`, `APNS_TEAM_ID`
+   - `APNS_BUNDLE_ID` = the app's production bundle id (`com.contracttocozy.app`)
+   - `APNS_PRIVATE_KEY` = the `.p8` contents (PEM; literal or `\n`-escaped)
+   - `APNS_PRODUCTION=true` for App Store builds, `false` for development / TestFlight
+3. In the iOS app:
+   - Add the **Push Notifications** capability to the target.
+   - Register for remote notifications and, on receiving the APNs device token,
+     `POST /api/push/devices` with `{ token, platform: "IOS", bundleId, appVersion }`.
+   - On sign-out, `DELETE /api/push/devices` with `{ token, platform: "IOS" }`.
+
+The backend endpoints (`/api/push/devices`, GET/POST/DELETE) require the normal
+authenticated session; no APNs credentials are needed client-side.
 
 ## 14. Suggested Release Checklist
 

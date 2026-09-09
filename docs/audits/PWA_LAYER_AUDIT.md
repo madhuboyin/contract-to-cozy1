@@ -9,13 +9,18 @@ persistence, install experience, push, and the manifest.
 
 **Progress:**
 - Track A (A1–A3) — **done**, commit `ae0cc251`. Closes F1, F2, F3, F14.
-- Track B — **in progress**:
+- Track B — **B1–B4 done** (B1 has two deferred sub-items needing real devices):
   - B2 (camera / web-share Permissions-Policy) — done, commit `2de53ea8`. Closes F4, F13.
   - B1 (icons) — real icons + maskable + apple-touch-icon done, commit `2de53ea8`; Apple
     splash screens and manifest screenshots deferred (need real device captures). F5
     largely closed.
   - B3 (`GET /api/mobile/home` aggregation endpoint) — done. Closes F7.
-  - B4 (APNs prerequisite) — not started; only needed if native iOS is pursued.
+  - B4 (APNs prerequisite) — done. New `PushDevice` model, `POST/DELETE/GET
+    /api/push/devices`, and a dependency-free APNs client in `apps/workers` wired into
+    the existing push-delivery job (inert until `APNS_*` is set). Native-iOS-only; it is
+    the "part" of F6 that unblocks native push. **Requires `prisma db push`** (new
+    `push_devices` table + `PushDevicePlatform` enum) + `apps/workers` prisma client
+    resync.
 
 ---
 
@@ -47,7 +52,7 @@ is that the desktop flow must render and behave exactly as it does today.
 | F3 | `/offline` route is unreachable while offline | High | No | ✅ fixed (A3) |
 | F4 | `Permissions-Policy: camera=()` disables in-app camera capture | High | Fixes both | ✅ fixed (B2) |
 | F5 | App icon set is placeholder art; no maskable icon, screenshots, or splash | High | No | 🟡 icons fixed (B1); splash + screenshots deferred |
-| F6 | Push notifications wired to one tool only; no general opt-in | Medium | No | ⬜ |
+| F6 | Push notifications wired to one tool only; no general opt-in | Medium | No | 🟡 native push infra done (B4); general opt-in is C6 |
 | F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No | ✅ fixed (B3) |
 | F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both | ⬜ |
 | F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ⬜ |
@@ -212,6 +217,13 @@ here.
 **Desktop-safe** — a shared subscription helper and a notifications setting are
 additive. Web Push also works in desktop Chrome, so this is upside, not risk.
 
+**Partial resolution — B4:** the native-push *infrastructure* is now in place — a
+`PushDevice` model, `POST/DELETE/GET /api/push/devices`, and an APNs delivery branch in
+the workers push job (inert until `APNS_*` is configured). This is the piece a native
+iOS app needs. The remaining half of F6 — one general "turn on notifications" setting and
+a shared browser subscription helper replacing the tool-local implementation — is **C6**,
+still open.
+
 #### F7 — No aggregation endpoints; the dashboard composes its data in the browser
 
 The homeowner dashboard fires five requests in parallel (`listBookings`,
@@ -371,7 +383,7 @@ Reused verbatim by a wrapped PWA or a native shell. Worth doing before either.
 | B1 | Produce a real icon set: 72–512 `any` icons, a dedicated 512 `maskable` with correct safe zone, a 180 apple-touch-icon, apple-touch-startup images, and 2–3 manifest `screenshots`. | F5 | M | None — install surfaces only; tab favicon unchanged | 🟡 icons done; splash + screenshots deferred |
 | B2 | In `security-headers.js`, change `camera=()` → `camera=(self)` and `web-share=()` → `web-share=(self)`. | F4, F13 | S | None — strictly widens an allowlist; fixes desktop too | ✅ |
 | B3 | Add `GET /api/mobile/home` returning the composed dashboard plus a server-side consolidated urgent-actions list. Move `consolidateUrgentActions` logic into a shared server util. | F7 | M | None — new route; desktop keeps its current calls | ✅ |
-| B4 | Native-push prerequisite (only if native iOS is pursued): APNs credentials, a `POST /api/push/devices` token-registration endpoint, and a delivery-pipeline branch for device tokens alongside Web Push. | F6 (part) | L | None — additive backend | ⬜ |
+| B4 | Native-push prerequisite (only if native iOS is pursued): APNs credentials, a `POST /api/push/devices` token-registration endpoint, and a delivery-pipeline branch for device tokens alongside Web Push. | F6 (part) | L | None — additive backend | ✅ |
 
 **What shipped so far in Track B**
 
@@ -391,6 +403,23 @@ Reused verbatim by a wrapped PWA or a native shell. Worth doing before either.
 - **Deferred, needs a running app / real devices:** `apple-touch-startup-image` splash
   screens (many device-specific sizes, low payoff) and manifest `screenshots` (must be
   genuine captures — a marketing render in the install dialog would be worse than none).
+- **B4** — native push prerequisite, all additive and inert until configured:
+  - `prisma/schema.prisma` — new `PushDevice` model (`push_devices`) + `PushDevicePlatform`
+    enum, plus a `User.pushDevices` relation. **User must run `npx prisma db push` and
+    resync the `apps/workers` prisma client.**
+  - `apps/backend` — `POST /api/push/devices` (register/refresh), `DELETE /api/push/devices`
+    (soft-disable on sign-out), `GET /api/push/devices` (list); service + validators +
+    route mounted at `/api/push`.
+  - `apps/workers/src/lib/apnsClient.ts` — dependency-free APNs client (Node `http2` +
+    `crypto` ES256 provider JWT). `isApnsDeliveryEnabled()` gates on `APNS_DELIVERY_ENABLED`
+    + complete `APNS_*` config, exactly like the Web Push VAPID gate.
+  - `apps/workers/src/jobs/sendPushNotification.job.ts` — now delivers to registered iOS
+    device tokens via APNs **alongside** Web Push. When APNs is unconfigured (the default)
+    the job behaves byte-for-byte as before. Terminal APNs reasons (410 / `Unregistered` /
+    `BadDeviceToken` / …) soft-disable the device row.
+  - `.env.local.example` and `apps/ios/DEPLOYMENT.md` §13a document enablement.
+  - Tests: `apps/workers/tests/unit/apnsClient.test.js` (3), new APNs cases in
+    `sendPushSmsNotificationJob.test.js` (4), `apps/backend/tests/unit/pushDeviceService.test.js` (3).
 - **B3** — new `GET /api/mobile/home` (`apps/backend/src/services/mobileHome.service.ts`,
   `controllers/mobileHome.controller.ts`, `routes/mobile.routes.ts`, mounted at
   `/api/mobile`). One authenticated call returns: the property picker list, the selected
@@ -434,8 +463,8 @@ So this layer stops being invisible to the test suite.
    update prompt, a scoped install hint.
 3. **Shared platform work** — ~~B3~~ (done), C6, D1, D2. The `/api/mobile/home` endpoint
    is in; remaining: unified push and CI coverage for the whole layer.
-4. **Only if going native** — B4. APNs and device-token registration. Skip entirely if
-   a wrapped PWA is the chosen shell.
+4. **Only if going native** — ~~B4~~ (done). APNs delivery + `/api/push/devices` are in
+   and inert until `APNS_*` is set; a wrapped-PWA shell simply never configures them.
 
 ---
 

@@ -25,11 +25,14 @@ function fakeDeps({
   delivery,
   aggregationAllows = true,
   deliveryEnabled = false,
+  apnsEnabled = false,
   subscriptions = [],
+  devices = [],
   send = async () => ({ statusCode: 201, headers: {}, body: '' }),
+  sendApns = async () => ({ ok: true }),
   refinanceRolloutAllowed = true,
 }) {
-  const calls = { updates: [], subscriptionUpdates: [], sends: [] };
+  const calls = { updates: [], subscriptionUpdates: [], deviceUpdates: [], sends: [], apnsSends: [] };
   const deps = {
     prisma: {
       notificationDelivery: {
@@ -46,13 +49,25 @@ function fakeDeps({
           return null;
         },
       },
+      pushDevice: {
+        findMany: async () => devices,
+        update: async (args) => {
+          calls.deviceUpdates.push(args);
+          return null;
+        },
+      },
     },
     logger: noopLogger,
     filterDeliveriesByAggregationPolicy: async (deliveries) => (aggregationAllows ? deliveries : []),
     deliveryEnabled: () => deliveryEnabled,
+    apnsEnabled: () => apnsEnabled,
     send: async (...args) => {
       calls.sends.push(args);
       return send(...args);
+    },
+    sendApns: async (...args) => {
+      calls.apnsSends.push(args);
+      return sendApns(...args);
     },
     decideRefinanceAlertRollout: () => ({
       allowed: refinanceRolloutAllowed,
@@ -146,6 +161,89 @@ test('push: skips a refinance notification outside the rollout cohort', async ()
     calls.updates.at(-1).data.failureReason,
     'REFINANCE_ALERT_RECIPIENT_NOT_IN_COHORT',
   );
+});
+
+// --- B4: APNs (native iOS) delivery branch ---------------------------------
+
+test('push: delivers to a registered iOS device via APNs when Web Push has no subscription', async () => {
+  const { deps, calls } = fakeDeps({
+    delivery: pendingDelivery({
+      notification: {
+        id: 'notification-1',
+        userId: 'user-1',
+        title: 'Roof leak detected',
+        message: 'Water sensor tripped in the attic.',
+        actionUrl: '/dashboard/resolution-center',
+      },
+    }),
+    deliveryEnabled: false,
+    apnsEnabled: true,
+    subscriptions: [],
+    devices: [{ id: 'device-1', token: 'apns-token-1' }],
+  });
+
+  await sendPushNotificationJob('delivery-1', deps);
+
+  assert.equal(calls.sends.length, 0);
+  assert.equal(calls.apnsSends.length, 1);
+  assert.equal(calls.apnsSends[0][0], 'apns-token-1');
+  assert.deepEqual(calls.apnsSends[0][1], {
+    title: 'Roof leak detected',
+    body: 'Water sensor tripped in the attic.',
+    url: '/dashboard/resolution-center',
+  });
+  assert.equal(calls.updates.at(-1).data.status, 'SENT');
+});
+
+test('push: disables an iOS device token APNs reports as unregistered', async () => {
+  const { deps, calls } = fakeDeps({
+    delivery: pendingDelivery({
+      notification: { id: 'notification-1', userId: 'user-1', title: 'x', message: 'y', actionUrl: '/' },
+    }),
+    apnsEnabled: true,
+    devices: [{ id: 'device-1', token: 'stale-token' }],
+    sendApns: async () => ({ ok: false, status: 410, reason: 'Unregistered', unregister: true }),
+  });
+
+  await assert.rejects(() => sendPushNotificationJob('delivery-1', deps), /PUSH_DELIVERY_FAILED/);
+
+  assert.equal(calls.deviceUpdates.length, 1);
+  assert.equal(calls.deviceUpdates[0].where.id, 'device-1');
+  assert.ok(calls.deviceUpdates[0].data.disabledAt instanceof Date);
+  assert.equal(calls.updates.at(-1).data.status, 'FAILED');
+});
+
+test('push: counts a delivery SENT when Web Push succeeds even if the APNs device fails', async () => {
+  const { deps, calls } = fakeDeps({
+    delivery: pendingDelivery({
+      notification: { id: 'notification-1', userId: 'user-1', title: 'x', message: 'y', actionUrl: '/' },
+    }),
+    deliveryEnabled: true,
+    apnsEnabled: true,
+    subscriptions: [{ id: 'sub-1', endpoint: 'https://push.example.test/d', p256dh: 'k', auth: 'a' }],
+    devices: [{ id: 'device-1', token: 't' }],
+    sendApns: async () => ({ ok: false, status: 429, reason: 'TooManyRequests', unregister: false }),
+  });
+
+  await sendPushNotificationJob('delivery-1', deps);
+
+  assert.equal(calls.deviceUpdates.length, 0); // not a terminal reason -> keep the token
+  assert.equal(calls.updates.at(-1).data.status, 'SENT');
+});
+
+test('push: skips when APNs is enabled but the user has no registered device and no subscription', async () => {
+  const { deps, calls } = fakeDeps({
+    delivery: pendingDelivery({
+      notification: { id: 'notification-1', userId: 'user-1', title: 'x', message: 'y', actionUrl: '/' },
+    }),
+    apnsEnabled: true,
+    devices: [],
+  });
+
+  await sendPushNotificationJob('delivery-1', deps);
+
+  assert.equal(calls.apnsSends.length, 0);
+  assert.equal(calls.updates.at(-1).data.status, 'SKIPPED');
 });
 
 function pendingDelivery(overrides = {}) {

@@ -5,6 +5,13 @@ import { logger, AppLogger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 import { areWorkerOutboundNotificationsEnabled } from '@worker-shared/config/workerExecutionPolicy';
 import {
+  type ApnsAlertPayload,
+  type ApnsSendResult,
+  isApnsDeliveryEnabled,
+  readApnsConfig,
+  sendApnsNotification,
+} from '../lib/apnsClient';
+import {
   decideRefinanceAlertRollout,
   isRefinanceNotification,
   REFINANCE_ALERT_ROLLOUT_SUPPRESSION_REASON,
@@ -17,15 +24,21 @@ type StoredPushSubscription = {
   auth: string;
 };
 
+type StoredPushDevice = { id: string; token: string };
+
 export interface SendPushNotificationDeps {
-  prisma: Pick<typeof prisma, 'notificationDelivery' | 'pushSubscription'>;
+  prisma: Pick<typeof prisma, 'notificationDelivery' | 'pushSubscription' | 'pushDevice'>;
   logger: AppLogger;
   filterDeliveriesByAggregationPolicy: typeof filterDeliveriesByAggregationPolicy;
+  // Web Push (browser / installed PWA) enablement — VAPID config present.
   deliveryEnabled(): boolean;
+  // APNs (native iOS) enablement — APNS_* config present. Defaults off.
+  apnsEnabled(): boolean;
   send(
     subscription: webPush.PushSubscription,
     payload: string,
   ): Promise<webPush.SendResult>;
+  sendApns(token: string, payload: ApnsAlertPayload): Promise<ApnsSendResult>;
   decideRefinanceAlertRollout: typeof decideRefinanceAlertRollout;
 }
 
@@ -58,12 +71,25 @@ async function send(
   });
 }
 
+async function sendApns(
+  token: string,
+  payload: ApnsAlertPayload,
+): Promise<ApnsSendResult> {
+  const config = readApnsConfig();
+  if (!config) {
+    return { ok: false, status: 0, reason: 'apns_not_configured', unregister: false };
+  }
+  return sendApnsNotification(token, payload, config);
+}
+
 const defaultDeps: SendPushNotificationDeps = {
   prisma,
   logger,
   filterDeliveriesByAggregationPolicy,
   deliveryEnabled: isWebPushDeliveryEnabled,
+  apnsEnabled: isApnsDeliveryEnabled,
   send,
+  sendApns,
   decideRefinanceAlertRollout,
 };
 
@@ -87,8 +113,11 @@ export async function sendPushNotificationJob(
   if (!(await deps.filterDeliveriesByAggregationPolicy([delivery])).length) {
     return;
   }
-  if (!deps.deliveryEnabled()) {
-    const reason = 'Web Push delivery is disabled or VAPID configuration is incomplete.';
+  const webPushOn = deps.deliveryEnabled();
+  const apnsOn = deps.apnsEnabled();
+  if (!webPushOn && !apnsOn) {
+    const reason =
+      'Push delivery is disabled: neither Web Push (VAPID) nor APNs is configured.';
     await deps.prisma.notificationDelivery.update({
       where: { id: notificationDeliveryId },
       data: { status: DeliveryStatus.SKIPPED, failureReason: reason },
@@ -112,20 +141,27 @@ export async function sendPushNotificationJob(
     return;
   }
 
-  const subscriptions = await deps.prisma.pushSubscription.findMany({
-    where: {
-      userId: delivery.notification.userId,
-      revokedAt: null,
-    },
-    select: {
-      id: true,
-      endpoint: true,
-      p256dh: true,
-      auth: true,
-    },
-  });
-  if (subscriptions.length === 0) {
-    const reason = 'No active browser push subscription exists for this user.';
+  const [subscriptions, devices] = await Promise.all([
+    webPushOn
+      ? deps.prisma.pushSubscription.findMany({
+          where: { userId: delivery.notification.userId, revokedAt: null },
+          select: { id: true, endpoint: true, p256dh: true, auth: true },
+        })
+      : Promise.resolve([]),
+    apnsOn
+      ? deps.prisma.pushDevice.findMany({
+          where: {
+            userId: delivery.notification.userId,
+            platform: 'IOS',
+            disabledAt: null,
+          },
+          select: { id: true, token: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  if (subscriptions.length === 0 && devices.length === 0) {
+    const reason = 'No active browser push subscription or registered device for this user.';
     await deps.prisma.notificationDelivery.update({
       where: { id: notificationDeliveryId },
       data: { status: DeliveryStatus.SKIPPED, failureReason: reason },
@@ -134,13 +170,15 @@ export async function sendPushNotificationJob(
     return;
   }
 
-  const payload = JSON.stringify({
+  const payloadObject = {
     title: delivery.notification.title,
     body: delivery.notification.message,
     url: delivery.notification.actionUrl ?? '/',
-  });
+  };
+  const payload = JSON.stringify(payloadObject);
   let sentCount = 0;
   const failures: string[] = [];
+
   for (const subscription of subscriptions as StoredPushSubscription[]) {
     try {
       await deps.send(
@@ -172,6 +210,25 @@ export async function sendPushNotificationJob(
     }
   }
 
+  for (const device of devices as StoredPushDevice[]) {
+    const result = await deps.sendApns(device.token, payloadObject);
+    if (result.ok) {
+      sentCount += 1;
+      continue;
+    }
+    if (result.unregister) {
+      await deps.prisma.pushDevice.update({
+        where: { id: device.id },
+        data: { disabledAt: new Date(), disabledReason: `apns_${result.reason}` },
+      });
+    }
+    failures.push(
+      result.status > 0
+        ? `apns status ${result.status} (${result.reason})`
+        : `apns ${result.reason}`,
+    );
+  }
+
   if (sentCount > 0) {
     await deps.prisma.notificationDelivery.update({
       where: { id: notificationDeliveryId },
@@ -186,7 +243,7 @@ export async function sendPushNotificationJob(
     return;
   }
 
-  const reason = failures.join('; ') || 'Web Push provider rejected delivery.';
+  const reason = failures.join('; ') || 'Push provider rejected delivery.';
   await deps.prisma.notificationDelivery.update({
     where: { id: notificationDeliveryId },
     data: { status: DeliveryStatus.FAILED, failureReason: reason },

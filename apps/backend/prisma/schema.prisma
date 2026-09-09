@@ -2390,6 +2390,7 @@ model User {
   notifications                    Notification[]
   canonicalNotificationPreferences NotificationPreference[]
   pushSubscriptions                PushSubscription[]
+  pushDevices                      PushDevice[]
   notificationOutcomes             NotificationOutcome[]
   notificationChannelConsents      NotificationChannelConsent[]
   favorites                        Favorite[]
@@ -7801,6 +7802,34 @@ model PushSubscription {
 
   @@index([userId, revokedAt])
   @@map("push_subscriptions")
+}
+
+// Native mobile push registration (APNs / FCM device tokens). Kept separate
+// from PushSubscription, which stores browser Web Push endpoints.
+model PushDevice {
+  id             String             @id @default(uuid())
+  userId         String
+  platform       PushDevicePlatform
+  token          String
+  bundleId       String?
+  appVersion     String?
+  deviceName     String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  lastSeenAt     DateTime           @default(now())
+  disabledAt     DateTime?
+  disabledReason String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([platform, token])
+  @@index([userId, disabledAt])
+  @@map("push_devices")
+}
+
+enum PushDevicePlatform {
+  IOS
+  ANDROID
 }
 
 model NotificationOutcome {
