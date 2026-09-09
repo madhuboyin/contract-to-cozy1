@@ -1,7 +1,12 @@
 # ============================================================================
 # Stage 1: Builder - Install deps (including dev), generate Prisma, compile TS
 # ============================================================================
-FROM node:20-bullseye-slim AS builder
+# Keep the worker and backend artifacts on the same supported Node/Debian base.
+# Bullseye reached EOL on 2026-08-31 and its expired security metadata now makes
+# apt-get update fail. Pinning the multi-arch Bookworm manifest also prevents a
+# floating base from changing the Prisma/Chromium runtime underneath this build.
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 ENV npm_config_fetch_retries=5 \
     npm_config_fetch_retry_mintimeout=20000 \
@@ -78,7 +83,7 @@ RUN npm prune --omit=dev
 # ============================================================================
 # Stage 2: Runtime - Small image with system Chromium + prod deps + dist
 # ============================================================================
-FROM node:20-bullseye-slim AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app/apps/workers
 
 # Install runtime libs + Chromium

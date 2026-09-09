@@ -333,18 +333,11 @@ The admin dashboard will automatically display the new job after the worker rest
 
 ## Docker Build (Workers)
 
-The workers Docker image uses a two-stage build. Since `worker.ts` imports `workerJobRegistry.ts` from the backend, the Dockerfile handles this explicitly:
+The workers Docker image uses a two-stage build on the same pinned, multi-architecture Node 22 + Debian 12 Bookworm base as the backend image. Debian 11 Bullseye is not a supported build base: its LTS lifecycle ended on August 31, 2026, after which expired security-repository metadata began breaking `apt-get update`.
 
-```dockerfile
-# Stage 1: Builder
-# Copy registry into workers shared tree
-COPY apps/backend/src/config/workerJobRegistry.ts src/shared/backend/config/
+The builder installs backend and worker dependencies, generates the backend Prisma client, compiles the complete backend artifact, applies the worker-safe overrides, and compiles worker imports through the `@worker-shared/*` alias. The runner installs Chromium and its runtime libraries, then links `@worker-shared` to the compiled backend artifact copied from the builder.
 
-# Rewrite import path in worker.ts
-RUN sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts
-```
-
-This pattern is consistent with how all other backend files shared with workers are handled (analytics, incident services, etc.).
+`apps/workers/tests/unit/checkWorkerImportBoundary.test.js` verifies both the compiled-backend import boundary and that the worker base remains synchronized with the backend base.
 
 ---
 

@@ -88,6 +88,19 @@ test('real Docker build uses the complete compiled backend artifact', () => {
   );
 });
 
+test('worker and backend images share the pinned supported Node/Debian base', () => {
+  const workerDockerfile = fs.readFileSync(DOCKERFILE_PATH, 'utf8');
+  const backendDockerfile = fs.readFileSync(
+    DOCKERFILE_PATH.replace('/workers/', '/backend/'),
+    'utf8',
+  );
+  const nodeImage = /^ARG NODE_IMAGE=(.+)$/m;
+
+  assert.equal(workerDockerfile.match(nodeImage)?.[1], backendDockerfile.match(nodeImage)?.[1]);
+  assert.match(workerDockerfile, /node:22-bookworm-slim@sha256:/);
+  assert.doesNotMatch(workerDockerfile, /^FROM .*bullseye/m);
+});
+
 test('findImportViolationsFromSources flags an @worker-shared import with no matching COPY destination', () => {
   const entries = [
     { relFile: 'src/jobs/new.job.ts', source: `import { foo } from '@worker-shared/services/foo';` },
