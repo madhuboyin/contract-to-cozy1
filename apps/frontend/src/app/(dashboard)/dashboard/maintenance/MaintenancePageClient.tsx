@@ -104,9 +104,13 @@ export default function MaintenancePage() {
   const replaceParams = useCallback(
     (mutate: (params: URLSearchParams) => void) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
+      params.delete('propertyId');
       mutate(params);
-      router.replace(`/dashboard/maintenance?${params.toString()}`, { scroll: false });
+      const query = params.toString();
+      const pathname = selectedPropertyId
+        ? `/dashboard/properties/${encodeURIComponent(selectedPropertyId)}/maintenance`
+        : '/dashboard/maintenance';
+      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     },
     [router, searchParams, selectedPropertyId]
   );
@@ -539,7 +543,9 @@ export default function MaintenancePage() {
                 className="underline"
                 onClick={() =>
                   router.replace(
-                    `/dashboard/maintenance${effectivePropertyId ? `?propertyId=${effectivePropertyId}` : ''}`
+                    effectivePropertyId
+                      ? `/dashboard/properties/${encodeURIComponent(effectivePropertyId)}/maintenance`
+                      : '/dashboard/maintenance'
                   )
                 }
               >

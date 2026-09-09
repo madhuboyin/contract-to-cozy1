@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
@@ -37,6 +37,7 @@ export default function JobHubRedirectPage({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  const attemptedRedirectsRef = useRef(new Set<string>());
 
   const serializedSearchParams = searchParams.toString();
   const propertyIdFromQuery = searchParams.get('propertyId') || undefined;
@@ -56,6 +57,8 @@ export default function JobHubRedirectPage({
           setSelectedPropertyId(propertyIdFromQuery);
         }
         const canonicalRoute = buildHubHref(directPropertyId, jobKey, forwardQuery);
+        if (attemptedRedirectsRef.current.has(canonicalRoute)) return;
+        attemptedRedirectsRef.current.add(canonicalRoute);
         void api
           .trackRouteRedirectEvent(directPropertyId, {
             oldRoute: pathname,
@@ -84,6 +87,8 @@ export default function JobHubRedirectPage({
           const fallbackPropertyId = properties[0].id;
           setSelectedPropertyId(fallbackPropertyId);
           const canonicalRoute = buildHubHref(fallbackPropertyId, jobKey, forwardQuery);
+          if (attemptedRedirectsRef.current.has(canonicalRoute)) return;
+          attemptedRedirectsRef.current.add(canonicalRoute);
           void api
             .trackRouteRedirectEvent(fallbackPropertyId, {
               oldRoute: pathname,

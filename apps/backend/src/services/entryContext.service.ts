@@ -451,7 +451,8 @@ type TriggerGuidanceCopy = {
 function triggerGuidanceCopy(type: EntryContextCaptureInput['activeTrigger']['type']): TriggerGuidanceCopy {
   const guidancePath = (propertyId: string) => `/dashboard/properties/${propertyId}/tools/guidance-overview`;
   const repairPath = (propertyId: string) => `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`;
-  const maintenancePath = (propertyId: string) => `/dashboard/maintenance?propertyId=${propertyId}`;
+  const maintenancePath = (propertyId: string) =>
+    `/dashboard/properties/${encodeURIComponent(propertyId)}/maintenance`;
   const quotePath = (propertyId: string) => `/dashboard/quote-comparison?propertyId=${propertyId}`;
   const capitalPath = (propertyId: string) => `/dashboard/properties/${propertyId}/tools/capital-timeline`;
   const inspectionPath = (propertyId: string) => `/dashboard/properties/${propertyId}/inspection-hub`;

@@ -225,11 +225,15 @@ test('first-value triggers link only to existing specialized route families', ()
   );
   assert.doesNotMatch(service, /`\/dashboard\/properties\/\$\{propertyId\}\/guidance`/);
   for (const route of [
-    '/tools/guidance-overview', '/fix', '/dashboard/maintenance', '/dashboard/quote-comparison',
+    '/tools/guidance-overview', '/dashboard/resolution-center', '/dashboard/quote-comparison',
     '/tools/capital-timeline', '/inspection-hub', '/claims', '/seller-prep', '/projects', '/protect',
   ]) {
     assert.ok(service.includes(route), `Expected specialized Phase 1 route ${route}`);
   }
+  assert.match(
+    service,
+    /`\/dashboard\/properties\/\$\{encodeURIComponent\(propertyId\)\}\/maintenance`/,
+  );
 });
 
 test('Phase 1 pilot reporting declares eligibility, targets, and the 30-day window', () => {
