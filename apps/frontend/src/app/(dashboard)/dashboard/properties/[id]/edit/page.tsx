@@ -47,7 +47,7 @@ import {
   mapResponsibilitiesToPayload,
   normalizeOutdoorSpaceTypes,
 } from "@/lib/property/propertyContextForm";
-import { api } from "@/lib/api/client";
+import { api, type PropertyEnrichmentStatus } from "@/lib/api/client";
 import { track } from "@/lib/analytics/events";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -88,6 +88,32 @@ import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigati
 import { buildSparsePropertyUpdatePayload } from '@/lib/property/propertyUpdatePayload';
 // --- Appliance Constants and Schemas ---
 const CURRENT_YEAR = new Date().getFullYear();
+
+function PropertyFactSource({
+  factKey,
+  enrichment,
+}: {
+  factKey: string;
+  enrichment?: PropertyEnrichmentStatus;
+}) {
+  if (
+    enrichment?.status !== 'MATCHED'
+    || !enrichment.lastSuccessfulAt
+    || !enrichment.acceptedFactKeys.includes(factKey)
+  ) return null;
+  const retrievedAt = new Date(enrichment.lastSuccessfulAt);
+  if (Number.isNaN(retrievedAt.getTime())) return null;
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(retrievedAt);
+  return (
+    <p className="mt-1.5 text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+      Public record · RentCast · Retrieved {date}
+    </p>
+  );
+}
 const MAJOR_APPLIANCE_OPTIONS = [
     'DISHWASHER',
     'REFRIGERATOR',
@@ -703,6 +729,18 @@ export default function EditPropertyPage() {
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   });
+  const { data: enrichmentStatus } = useQuery({
+    queryKey: ["property-enrichment-status", propertyId],
+    queryFn: async () => {
+      const response = await api.getPropertyEnrichmentStatus(propertyId);
+      if (response.success && response.data) return response.data;
+      throw new Error(response.message || 'Failed to fetch enrichment status.');
+    },
+    enabled: !!propertyId,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
   const existingCoverPhotoUrl = !removeCoverPhoto ? property?.coverPhoto?.fileUrl || null : null;
   const activeCoverPhotoUrl = propertyPhotoPreviewUrl || existingCoverPhotoUrl;
 
@@ -943,6 +981,7 @@ export default function EditPropertyPage() {
           });
         }
         queryClient.invalidateQueries({ queryKey: ["property", propertyId] });
+        queryClient.invalidateQueries({ queryKey: ["property-enrichment-status", propertyId] });
         queryClient.invalidateQueries({ queryKey: ["properties"] });
         // The property overview (profile + "Completeness by category") reads from
         // the bootstrap query, which is keyed separately.
@@ -2089,6 +2128,7 @@ export default function EditPropertyPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <PropertyFactSource factKey="core.dwellingType" enrichment={enrichmentStatus} />
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2108,6 +2148,7 @@ export default function EditPropertyPage() {
                               <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-slate-500">sq ft</span>
                             </div>
                           </FormControl>
+                          <PropertyFactSource factKey="core.propertySizeSqFt" enrichment={enrichmentStatus} />
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2124,6 +2165,7 @@ export default function EditPropertyPage() {
                           <FormControl>
                             <Input id="field-yearBuilt" className="h-9 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                           </FormControl>
+                          <PropertyFactSource factKey="core.yearBuilt" enrichment={enrichmentStatus} />
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2500,6 +2542,7 @@ export default function EditPropertyPage() {
                         <FormItem>
                           <FormLabel>Bedrooms</FormLabel>
                           <FormControl><Input id="field-bedrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="e.g., 3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                          <PropertyFactSource factKey="core.bedrooms" enrichment={enrichmentStatus} />
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2511,6 +2554,7 @@ export default function EditPropertyPage() {
                         <FormItem>
                           <FormLabel>Bathrooms</FormLabel>
                           <FormControl><Input id="field-bathrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                          <PropertyFactSource factKey="core.bathrooms" enrichment={enrichmentStatus} />
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2791,6 +2835,7 @@ export default function EditPropertyPage() {
                               <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-slate-500">sq ft</span>
                             </div>
                           </FormControl>
+                          <PropertyFactSource factKey="exterior.lotSizeSqFt" enrichment={enrichmentStatus} />
                           <FormMessage />
                         </FormItem>
                       )}

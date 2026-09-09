@@ -60,7 +60,7 @@ function optionalNumber(value: string): number | undefined {
 
 /**
  * ConfirmOnboardingPage handles the final conversion.
- * It takes the lookup data and creates the real property record 
+ * It takes the confirmed address and explicit user inputs and creates the Property
  * in the user's account.
  */
 export default function ConfirmOnboardingPage() {
@@ -146,7 +146,7 @@ export default function ConfirmOnboardingPage() {
       setData(correctedData);
       setHomeProfile(EMPTY_HOME_PROFILE);
       setEditingAddress(false);
-      toast({ title: 'Address updated', description: 'Public property facts were cleared so they cannot be applied to the wrong home.' });
+      toast({ title: 'Address updated', description: 'Review any optional home details before continuing.' });
     } catch {
       toast({ title: 'Unable to update address', description: 'Please try again.', variant: 'destructive' });
     } finally {
@@ -363,9 +363,7 @@ export default function ConfirmOnboardingPage() {
                   <p className="font-bold text-slate-900">{data.address}</p>
                   {data.unit && <p className="text-sm text-slate-600">{data.unit}</p>}
                   <p className="text-sm text-slate-600">{data.city}, {data.state} {data.zipCode}</p>
-                  {data.addressSource !== 'LOOKUP' && (
-                    <p className="mt-2 text-xs font-medium text-brand-700">Address confirmed · public property facts remain unknown</p>
-                  )}
+                  <p className="mt-2 text-xs font-medium text-brand-700">Address confirmed · add only the home details you know</p>
                 </>
               )}
             </div>

@@ -6,7 +6,7 @@ export type OnboardingAddress = {
   zipCode: string;
 };
 
-export type OnboardingAddressSource = 'LOOKUP' | 'AUTOCOMPLETE' | 'MANUAL';
+export type OnboardingAddressSource = 'AUTOCOMPLETE' | 'MANUAL';
 
 export function normalizeOnboardingAddress(value: OnboardingAddress): OnboardingAddress {
   const unit = value.unit?.trim().replace(/\s+/g, ' ') ?? '';
@@ -38,29 +38,5 @@ export function sameOnboardingAddress(left: OnboardingAddress, right: Onboarding
 }
 
 export function addressOnlyPropertyData(value: OnboardingAddress) {
-  return {
-    ...normalizeOnboardingAddress(value),
-    yearBuilt: null,
-    propertySize: null,
-    estimatedValue: null,
-    dwellingType: null,
-    lastSalePrice: null,
-    lastSaleDate: null,
-  };
-}
-
-/**
- * Public-record enrichment is optional and untrusted. Location fields entered or
- * selected by the user remain authoritative, and enrichment is accepted only
- * when its state and ZIP identify the same location.
- */
-export function reconcilePropertyLookup(
-  submitted: OnboardingAddress,
-  lookup: Record<string, unknown>,
-): Record<string, unknown> | null {
-  const normalized = normalizeOnboardingAddress(submitted);
-  const lookupState = typeof lookup.state === 'string' ? lookup.state.trim().toUpperCase() : '';
-  const lookupZip = typeof lookup.zipCode === 'string' ? lookup.zipCode.trim() : '';
-  if (lookupState !== normalized.state || lookupZip !== normalized.zipCode) return null;
-  return { ...lookup, ...normalized };
+  return normalizeOnboardingAddress(value);
 }

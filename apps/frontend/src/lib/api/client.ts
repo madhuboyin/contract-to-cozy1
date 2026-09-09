@@ -268,6 +268,15 @@ export interface AdminSourceHealthReport {
   summary: { total: number; healthyCount: number; degradedCount: number; unknownCount: number };
 }
 
+export interface PropertyEnrichmentStatus {
+  provider: 'RENTCAST';
+  status: 'PENDING' | 'MATCHED' | 'NO_MATCH' | 'AMBIGUOUS' | 'FAILED' | 'STALE' | 'NOT_CONFIGURED' | null;
+  lastAttemptedAt: string | null;
+  lastSuccessfulAt: string | null;
+  nextRefreshAt: string | null;
+  acceptedFactKeys: string[];
+}
+
 /**
  * API Client for ContractToCozy Backend
  * Uses a class structure for token refresh logic and state management.
@@ -1480,16 +1489,6 @@ class APIClient {
     return this.propertiesRequest;
   }
 
-  /**
-   * Lookup property data by address (Public record lookup)
-   */
-  async lookupProperty(address: string, zipCode?: string): Promise<APIResponse<any>> {
-    const params = new URLSearchParams({ address });
-    if (zipCode) params.append('zipCode', zipCode);
-    const res = await this.get<any>(`/api/properties/lookup?${params.toString()}`);
-    return { success: true, data: res.data };
-  }
-
   async suggestAddresses(input: string, sessionToken: string): Promise<APIResponse<Array<{ placeId: string; label: string }>>> {
     const params = new URLSearchParams({ input, sessionToken });
     const res = await this.get<Array<{ placeId: string; label: string }>>(`/api/properties/address-suggestions?${params}`);
@@ -1516,6 +1515,12 @@ class APIClient {
    */
   async getProperty(id: string): Promise<APIResponse<Property>> {
     return this.request(`/api/properties/${id}`);
+  }
+
+  async getPropertyEnrichmentStatus(
+    propertyId: string,
+  ): Promise<APIResponse<PropertyEnrichmentStatus>> {
+    return this.request(`/api/properties/${propertyId}/enrichment-status`);
   }
 
   /**

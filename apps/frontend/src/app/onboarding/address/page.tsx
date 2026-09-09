@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Home, Sparkles, ArrowRight, Zap, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/api/client';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
@@ -15,7 +14,6 @@ import {
   addressOnlyPropertyData,
   normalizeOnboardingAddress,
   onboardingAddressError,
-  reconcilePropertyLookup,
   type OnboardingAddressSource,
 } from '@/lib/onboarding/addressIntegrity';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
@@ -42,7 +40,7 @@ const TRIGGER_OPTIONS: Array<{ type: TriggerType; label: string }> = [
 /**
  * AddressOnboardingPage is the first "Wow" moment.
  * It eliminates the data entry wall by allowing users to simply
- * lookup their address to see what we already know about their home.
+ * enter or select a complete address and continue without provider latency.
  */
 export default function AddressOnboardingPage() {
   const router = useRouter();
@@ -137,40 +135,13 @@ export default function AddressOnboardingPage() {
 
     setLoading(true);
     track('address_lookup_started', { source: 'onboarding_page' });
+    if (!addressResolved) track('address_entered_manually', { source: 'onboarding_page' });
 
-    let propertyData: Record<string, unknown> = addressOnlyPropertyData(submittedAddress);
-    let addressSource: OnboardingAddressSource = addressResolved ? 'AUTOCOMPLETE' : 'MANUAL';
-    try {
-      const response = await api.lookupProperty(submittedAddress.address, submittedAddress.zipCode);
-      if (!response.success || !response.data) throw new Error('No usable public record');
-      const reconciled = reconcilePropertyLookup(submittedAddress, response.data as unknown as Record<string, unknown>);
-      if (!reconciled) {
-        track('api_error_encountered', {
-          endpoint: '/api/properties/lookup',
-          statusCode: 422,
-          message: 'Property lookup location did not match submitted state and ZIP',
-        });
-        toast({
-          title: 'Public record did not match',
-          description: 'We kept the address you entered and discarded the conflicting property result.',
-        });
-      } else {
-        propertyData = reconciled;
-        addressSource = 'LOOKUP';
-      }
-    } catch (error) {
-      console.error('Lookup error:', error);
-      if (!addressResolved) track('address_entered_manually', { source: 'onboarding_page' });
-      toast({
-        title: 'Public record unavailable',
-        description: 'Your address is saved. Unknown property facts will stay unknown.',
-      });
-    }
-
-    propertyData = situation === 'own'
+    const addressSource: OnboardingAddressSource = addressResolved ? 'AUTOCOMPLETE' : 'MANUAL';
+    const propertyData: Record<string, unknown> = situation === 'own'
       ? addressOnlyPropertyData(submittedAddress)
       : {
-          ...propertyData,
+          ...addressOnlyPropertyData(submittedAddress),
           ...(dwellingType ? { dwellingType } : {}),
           ...(parsedYearBuilt === undefined ? {} : { yearBuilt: parsedYearBuilt }),
           ...(parsedBedrooms === undefined ? {} : { bedrooms: parsedBedrooms }),
@@ -198,7 +169,7 @@ export default function AddressOnboardingPage() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Onboarding Temporarily Unavailable</h1>
           <p className="text-slate-500 mt-2 max-w-sm mx-auto">
-            We&apos;re experiencing a high volume of home lookups. Please refresh the page or try again in a few minutes.
+            We couldn&apos;t prepare home setup. Please refresh the page or try again in a few minutes.
           </p>
           <Button className="mt-8 rounded-xl h-12 px-8" onClick={() => window.location.reload()}>
             Refresh Page

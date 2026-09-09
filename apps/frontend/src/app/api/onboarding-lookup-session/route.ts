@@ -8,20 +8,16 @@ const MAX_AGE_SECONDS = 15 * 60;
 type OnboardingLookupPayload = {
   address: string;
   unit?: string;
-  addressSource?: 'LOOKUP' | 'AUTOCOMPLETE' | 'MANUAL';
+  addressSource?: 'AUTOCOMPLETE' | 'MANUAL';
   city?: string;
   state?: string;
   zipCode?: string;
   yearBuilt?: number | null;
-  propertySize?: number | null;
-  estimatedValue?: number | null;
   dwellingType?: string | null;
   bedrooms?: number | null;
   bathrooms?: number | null;
   basementConfiguration?: 'NONE' | 'UNFINISHED' | 'FINISHED' | 'UNKNOWN';
   hasPoolOrSpa?: boolean | null;
-  lastSalePrice?: number | null;
-  lastSaleDate?: string | null;
   activationContext?: ActivationEntryContextInput;
   committedPropertyId?: string;
 };
@@ -112,9 +108,7 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
   if (!address) return null;
   const addressSource = source.addressSource === 'MANUAL'
     ? 'MANUAL'
-    : source.addressSource === 'AUTOCOMPLETE'
-      ? 'AUTOCOMPLETE'
-      : 'LOOKUP';
+    : 'AUTOCOMPLETE';
   const city = normalizeString(source.city);
   const state = normalizeString(source.state)?.toUpperCase();
   const zipCode = normalizeString(source.zipCode);
@@ -130,8 +124,6 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
     state,
     zipCode,
     yearBuilt: normalizeNumber(source.yearBuilt),
-    propertySize: normalizeNumber(source.propertySize),
-    estimatedValue: normalizeNumber(source.estimatedValue),
     dwellingType: normalizeString(source.dwellingType) ?? null,
     bedrooms: normalizeNumber(source.bedrooms),
     bathrooms: normalizeNumber(source.bathrooms),
@@ -139,8 +131,6 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
       ? source.basementConfiguration as OnboardingLookupPayload['basementConfiguration']
       : 'UNKNOWN',
     hasPoolOrSpa: normalizeBoolean(source.hasPoolOrSpa),
-    lastSalePrice: normalizeNumber(source.lastSalePrice),
-    lastSaleDate: normalizeString(source.lastSaleDate) ?? null,
     activationContext: sanitizeActivationContext(source.activationContext),
     committedPropertyId: normalizeCommittedPropertyId(source.committedPropertyId),
   };

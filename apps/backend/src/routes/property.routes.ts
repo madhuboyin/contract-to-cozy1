@@ -125,6 +125,36 @@ router.get('/:id/context', authenticate, getPropertyContextSnapshot);
 
 /**
  * @swagger
+ * /api/properties/{propertyId}/enrichment-status:
+ *   get:
+ *     summary: Get compact public-record enrichment status
+ *     tags: [Properties]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: propertyId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Safe provider status and active accepted fact keys
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Property not found or access denied
+ */
+router.get(
+  '/:propertyId/enrichment-status',
+  authenticate,
+  propertyAuthMiddleware,
+  propertyController.getPropertyEnrichmentStatus,
+);
+
+/**
+ * @swagger
  * /api/properties:
  *   post:
  *     summary: Create a new property

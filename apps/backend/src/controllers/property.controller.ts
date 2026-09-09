@@ -16,6 +16,7 @@ import {
   resolveAddress,
   suggestAddresses,
 } from '../services/addressAutocomplete.service';
+import { getPropertyEnrichmentStatus as readPropertyEnrichmentStatus } from '../services/propertyEnrichmentStatus.service';
 
 const neighborhoodService = new NeighborhoodIntelligenceService();
 
@@ -143,6 +144,26 @@ export const getProperty = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve property',
+    });
+  }
+};
+
+/**
+ * Compact, property-scoped enrichment state. Route middleware has already
+ * resolved household access; provider identity and failure details stay private.
+ */
+export const getPropertyEnrichmentStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await readPropertyEnrichmentStatus(req.params.propertyId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    logger.error(
+      { err: error, propertyId: req.params.propertyId },
+      'Error getting property enrichment status',
+    );
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve property enrichment status',
     });
   }
 };

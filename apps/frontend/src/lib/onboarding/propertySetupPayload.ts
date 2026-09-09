@@ -13,10 +13,6 @@ type ConfirmedHomeProfile = {
   hasPoolOrSpa: 'YES' | 'NO' | 'UNKNOWN';
 };
 
-type PropertySetupFacts = OnboardingAddress & {
-  propertySize?: unknown;
-};
-
 export function buildAddressPropertyCreatePayload(
   address: OnboardingAddress,
   hasExistingProperty: boolean,
@@ -29,19 +25,14 @@ export function buildAddressPropertyCreatePayload(
 }
 
 export function buildConfirmedPropertyCreatePayload(
-  data: PropertySetupFacts,
+  data: OnboardingAddress,
   profile: ConfirmedHomeProfile,
   options: { includeOptionalFacts?: boolean } = {},
 ) {
   const includeOptionalFacts = options.includeOptionalFacts !== false;
-  const propertySize = typeof data.propertySize === 'number' && Number.isFinite(data.propertySize)
-    ? data.propertySize
-    : undefined;
-
   return {
     ...normalizeOnboardingAddress(data),
     ...(!includeOptionalFacts || profile.yearBuilt === undefined ? {} : { yearBuilt: profile.yearBuilt }),
-    ...(!includeOptionalFacts || propertySize === undefined ? {} : { propertySize }),
     ...(!includeOptionalFacts || profile.dwellingType === 'UNKNOWN' ? {} : { dwellingType: profile.dwellingType }),
     ...(!includeOptionalFacts || profile.bedrooms === undefined ? {} : { bedrooms: profile.bedrooms }),
     ...(!includeOptionalFacts || profile.bathrooms === undefined ? {} : { bathrooms: profile.bathrooms }),

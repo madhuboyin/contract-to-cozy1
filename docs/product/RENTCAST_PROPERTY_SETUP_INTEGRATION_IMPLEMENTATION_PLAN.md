@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
 **Version:** 1.0
-**Status:** In progress — RC-0 through RC-4 implemented
+**Status:** In progress — RC-0 through RC-5 implemented
 **Date:** 2026-09-09
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)

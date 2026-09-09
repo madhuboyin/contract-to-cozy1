@@ -3,7 +3,6 @@ import {
   normalizeOnboardingAddress,
   onboardingAddressError,
   sameOnboardingAddress,
-  reconcilePropertyLookup,
 } from '../addressIntegrity';
 
 const newJerseyAddress = {
@@ -21,39 +20,12 @@ describe('onboarding address integrity', () => {
     expect(onboardingAddressError(newJerseyAddress)).toBeNull();
   });
 
-  it('rejects a lookup result whose location conflicts with the submitted ZIP and state', () => {
-    expect(reconcilePropertyLookup(newJerseyAddress, {
-      address: '94 ASHFOR DR',
-      city: 'Austin',
-      state: 'TX',
-      zipCode: '08536',
-      yearBuilt: 2015,
-    })).toBeNull();
-  });
-
-  it('keeps submitted address fields authoritative for matching enrichment', () => {
-    expect(reconcilePropertyLookup(newJerseyAddress, {
-      address: 'A normalized provider address',
-      city: 'Provider city label',
-      state: 'NJ',
-      zipCode: '08536',
-      yearBuilt: 2001,
-    })).toMatchObject({
+  it('keeps address-only setup free of provider-shaped property facts', () => {
+    expect(addressOnlyPropertyData(newJerseyAddress)).toEqual({
       address: '94 Ashford Dr',
       city: 'Plainsboro',
       state: 'NJ',
       zipCode: '08536',
-      yearBuilt: 2001,
-    });
-  });
-
-  it('clears property facts when only an address is confirmed', () => {
-    expect(addressOnlyPropertyData(newJerseyAddress)).toMatchObject({
-      state: 'NJ',
-      zipCode: '08536',
-      yearBuilt: null,
-      estimatedValue: null,
-      lastSalePrice: null,
     });
   });
 

@@ -56,16 +56,8 @@ describe('property setup create payloads', () => {
     });
   });
 
-  it('preserves explicitly supplied home facts, including an explicit No', () => {
-    const setupData = {
-      ...address,
-      propertySize: 1850,
-      // A legacy/provider-shaped session may still contain these values. They
-      // must never become homeowner-reported financing facts.
-      lastSalePrice: 350_000_00,
-      lastSaleDate: '2024-04-20',
-    };
-    const result = buildConfirmedPropertyCreatePayload(setupData, {
+  it('preserves explicitly supplied homeowner facts, including an explicit No', () => {
+    const result = buildConfirmedPropertyCreatePayload(address, {
       dwellingType: 'DETACHED_SINGLE_FAMILY',
       yearBuilt: 1998,
       bedrooms: 3,
@@ -77,7 +69,6 @@ describe('property setup create payloads', () => {
     expect(result).toMatchObject({
       dwellingType: 'DETACHED_SINGLE_FAMILY',
       yearBuilt: 1998,
-      propertySize: 1850,
       bedrooms: 3,
       bathrooms: 2.5,
       basementConfiguration: 'NONE',
@@ -87,14 +78,8 @@ describe('property setup create payloads', () => {
     expect(result).not.toHaveProperty('purchaseDate');
   });
 
-  it('keeps established-owner creation address-only even when lookup facts are available', () => {
-    const legacyLookupData = {
-      ...address,
-      propertySize: 1850,
-      lastSalePrice: 350_000_00,
-      lastSaleDate: '2024-04-20',
-    };
-    const result = buildConfirmedPropertyCreatePayload(legacyLookupData, {
+  it('keeps established-owner creation address-only even when optional profile values exist', () => {
+    const result = buildConfirmedPropertyCreatePayload(address, {
       dwellingType: 'DETACHED_SINGLE_FAMILY',
       yearBuilt: 1998,
       bedrooms: 3,
