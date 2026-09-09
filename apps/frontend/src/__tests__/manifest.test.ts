@@ -12,14 +12,24 @@ const manifest = JSON.parse(
 ) as Record<string, unknown>;
 
 describe('public/manifest.json', () => {
-  it('declares a stable id independent of start_url', () => {
+  it('declares a stable bare id independent of start_url (F19)', () => {
     expect(typeof manifest.id).toBe('string');
-    expect(manifest.id).toBe('/?source=pwa');
+    // A bare identity — no query string. Attribution lives on start_url, not id;
+    // folding it into id would re-register the app on any later tweak.
+    expect(manifest.id).toBe('/');
   });
 
   it('launches the dashboard with a PWA attribution parameter', () => {
     expect(manifest.start_url).toBe('/dashboard?source=pwa');
     expect(manifest.scope).toBe('/');
+  });
+
+  it('carries the attribution parameter through to app shortcuts (F19)', () => {
+    const shortcuts = manifest.shortcuts as Array<{ url: string }>;
+    expect(shortcuts.length).toBeGreaterThan(0);
+    for (const shortcut of shortcuts) {
+      expect(shortcut.url).toContain('source=pwa');
+    }
   });
 
   it('offers a browser-controls display fallback', () => {

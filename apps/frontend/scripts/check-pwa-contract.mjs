@@ -51,7 +51,10 @@ export function runPwaContractChecks() {
   check('manifest.start_url', typeof manifest.start_url === 'string' && manifest.start_url.startsWith('/'));
   check('manifest.scope', manifest.scope === '/');
   check('manifest.display standalone', manifest.display === 'standalone');
-  check('manifest.id present (stable identity)', typeof manifest.id === 'string' && manifest.id.length > 0);
+  check(
+    'manifest.id present, bare (stable identity, no query string — F19)',
+    typeof manifest.id === 'string' && manifest.id.length > 0 && !manifest.id.includes('?'),
+  );
   check(
     'manifest.display_override',
     Array.isArray(manifest.display_override) && manifest.display_override.includes('standalone'),
@@ -131,6 +134,13 @@ export function runPwaContractChecks() {
   // ── offline route ───────────────────────────────────────────────────────
   check('offline route exists', exists('src/app/offline/page.tsx'));
   check("middleware treats /offline as public", /['"]\/offline['"]/.test(read('middleware.ts')));
+  // F20: the shell is served offline where its JS chunks may be uncached — it
+  // must work as static HTML (server component, <a> links, no client hooks).
+  if (exists('src/app/offline/page.tsx')) {
+    const offline = read('src/app/offline/page.tsx');
+    check('offline shell is a server component (no "use client")', !/['"]use client['"]/.test(offline));
+    check('offline shell uses plain <a> navigation', /<a\s+href=/.test(offline));
+  }
 
   // ── registration ────────────────────────────────────────────────────────
   const pwaLib = read('src/lib/pwa.ts');
@@ -150,6 +160,16 @@ export function runPwaContractChecks() {
     'ServiceWorkerUpdatePrompt calls applyServiceWorkerUpdate',
     /applyServiceWorkerUpdate/.test(read('src/components/system/ServiceWorkerUpdatePrompt.tsx')),
   );
+  // F21: a late register() resolution must not install an un-cleanable interval.
+  check('registration guards against unmount-before-resolve', /\bcancelled\b/.test(pwaLib));
+  // F18: push helpers must not await serviceWorker.ready unbounded.
+  if (exists('src/lib/pushNotifications.ts')) {
+    const push = read('src/lib/pushNotifications.ts');
+    check(
+      'pushNotifications: serviceWorker.ready is bounded by a timeout',
+      /serviceWorkerReady/.test(push) && /setTimeout/.test(push),
+    );
+  }
 
   // ── config ──────────────────────────────────────────────────────────────
   const nextConfig = read('next.config.js');

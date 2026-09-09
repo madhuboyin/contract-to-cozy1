@@ -57,6 +57,10 @@ export function registerServiceWorker(): (() => void) | undefined {
   let swRegistration: ServiceWorkerRegistration | undefined;
   let updateFoundHandler: (() => void) | undefined;
   let loadListenerAttached = false;
+  // register() is async; if the caller unmounts before it resolves, the cleanup
+  // has already run with nothing to clean. This flag lets the late resolution
+  // skip installing the interval + listener it can no longer tear down. (F21)
+  let cancelled = false;
 
   // Reload once the accepted update actually takes control. Guarded so a
   // first-ever activation (no prior controller) never triggers a reload.
@@ -82,6 +86,11 @@ export function registerServiceWorker(): (() => void) | undefined {
       });
 
       console.log('Service Worker registered:', swRegistration.scope);
+
+      // The component unmounted while register() was in flight — the SW is
+      // registered (fine), but don't wire up anything the cleanup already gave
+      // up on.
+      if (cancelled) return;
 
       // Check for updates every hour
       intervalId = setInterval(() => {
@@ -125,6 +134,7 @@ export function registerServiceWorker(): (() => void) | undefined {
   }
 
   return () => {
+    cancelled = true;
     if (intervalId !== undefined) clearInterval(intervalId);
     if (swRegistration && updateFoundHandler) {
       swRegistration.removeEventListener('updatefound', updateFoundHandler);

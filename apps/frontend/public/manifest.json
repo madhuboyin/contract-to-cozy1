@@ -1,5 +1,5 @@
 {
-    "id": "/?source=pwa",
+    "id": "/",
     "name": "Contract to Cozy",
     "short_name": "C2C",
     "description": "Your complete property management companion",
@@ -30,21 +30,21 @@
         "name": "Dashboard",
         "short_name": "Home",
         "description": "View your property dashboard",
-        "url": "/dashboard",
+        "url": "/dashboard?source=pwa",
         "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
       },
       {
         "name": "Maintenance",
         "short_name": "Tasks",
         "description": "View maintenance tasks",
-        "url": "/dashboard/maintenance",
+        "url": "/dashboard/maintenance?source=pwa",
         "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
       },
       {
         "name": "Bookings",
         "short_name": "Bookings",
         "description": "Manage service bookings",
-        "url": "/dashboard/bookings",
+        "url": "/dashboard/bookings?source=pwa",
         "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
       }
     ]

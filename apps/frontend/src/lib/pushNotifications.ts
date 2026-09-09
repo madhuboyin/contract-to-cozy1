@@ -23,6 +23,7 @@ export type EnablePushResult =
         | 'not_configured'
         | 'permission_denied'
         | 'incomplete_subscription'
+        | 'sw_unavailable'
         | 'error';
     };
 
@@ -46,6 +47,28 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
 async function currentSubscription(): Promise<PushSubscription | null> {
   const registration = await navigator.serviceWorker.getRegistration();
   return (await registration?.pushManager.getSubscription()) ?? null;
+}
+
+/**
+ * `navigator.serviceWorker.ready` never resolves when registration was skipped
+ * (e.g. the Trusted Types branch in registerServiceWorker() returns early), so
+ * awaiting it bare can hang a caller forever. Race it against a timeout and
+ * take an already-active registration as a fast path. (PWA audit F18)
+ */
+async function serviceWorkerReady(timeoutMs = 5000): Promise<ServiceWorkerRegistration | null> {
+  try {
+    const existing = await navigator.serviceWorker.getRegistration();
+    if (existing?.active) return existing;
+  } catch {
+    return null;
+  }
+
+  return Promise.race([
+    navigator.serviceWorker.ready.catch(() => null),
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), timeoutMs);
+    }),
+  ]);
 }
 
 async function fetchVapidPublicKey(): Promise<string | null> {
@@ -91,8 +114,11 @@ export async function enablePush(): Promise<EnablePushResult> {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return { ok: false, reason: 'permission_denied' };
 
-    // The service worker is registered globally by registerServiceWorker().
-    const registration = await navigator.serviceWorker.ready;
+    // The service worker is registered globally by registerServiceWorker() —
+    // but that can silently no-op, so don't await `.ready` unbounded.
+    const registration = await serviceWorkerReady();
+    if (!registration) return { ok: false, reason: 'sw_unavailable' };
+
     const subscription =
       (await registration.pushManager.getSubscription()) ??
       (await registration.pushManager.subscribe({

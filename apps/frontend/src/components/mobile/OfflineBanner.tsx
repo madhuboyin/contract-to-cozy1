@@ -8,7 +8,6 @@ import { useEffect, useState } from 'react';
 
 export function OfflineBanner() {
   const isOnline = useOnline();
-  const isSlowConnection = useSlowConnection();
   const [showBanner, setShowBanner] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
 

@@ -20,6 +20,8 @@ const ENABLE_FAILURE_COPY: Record<string, string> = {
   not_configured: 'Push notifications are not available right now.',
   unsupported: 'This browser cannot receive push notifications.',
   incomplete_subscription: 'The browser returned an incomplete subscription. Try again.',
+  sw_unavailable:
+    "The background service isn't ready yet. Reload the page and try again in a moment.",
   error: 'Something went wrong turning on notifications. Try again.',
 };
 

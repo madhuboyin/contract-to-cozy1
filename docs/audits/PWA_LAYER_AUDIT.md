@@ -343,8 +343,9 @@ so installed-app launches are invisible to analytics.
 
 **Desktop-safe** — the manifest is ignored by a normal desktop browser tab.
 
-**Resolution — C5:** `public/manifest.json` now sets `id: "/?source=pwa"` (stable,
-independent of `start_url`), `display_override: ["standalone", "minimal-ui"]`,
+**Resolution — C5:** `public/manifest.json` now sets `id` (stable, independent of
+`start_url` — later corrected to a bare `"/"` in round 2, see F19),
+`display_override: ["standalone", "minimal-ui"]`,
 `launch_handler: { client_mode: "navigate-existing" }`, and `start_url:
 "/dashboard?source=pwa"`. The tool-discovery e2e manifest assertion was updated to match.
 Locked in by `apps/frontend/src/__tests__/manifest.test.ts` (5). `screenshots` stays
@@ -535,7 +536,7 @@ Small fixes that make the existing PWA behave the way it already claims to.
   Home Screen" card on `isIOSSafari() && useAuth().isAuthenticated`; the Android
   `beforeinstallprompt` path is untouched. Tests: `pwa.test.ts` UA cases (4) +
   `InstallPrompt.test.tsx` (3). **Closes F9** together with C3.
-- **C5** — `public/manifest.json`: `id: "/?source=pwa"`, `display_override: ["standalone",
+- **C5** — `public/manifest.json`: `id` (→ `"/"` after round 2 F19), `display_override: ["standalone",
   "minimal-ui"]`, `launch_handler: { client_mode: "navigate-existing" }`, `start_url:
   "/dashboard?source=pwa"`. The tool-discovery e2e assertion was updated to the new
   `start_url`. New test `apps/frontend/src/__tests__/manifest.test.ts` (5). **Closes F10**
@@ -611,17 +612,20 @@ All file references are relative to the repository root.*
 **Method:** Fresh static read of the PWA surface *after* Tracks A–D landed — not a
 re-check of F1–F14 (those hold). Looks for issues the remediation introduced or left.
 **Findings:** 2 medium · 6 low. None re-open F1–F14.
+**Status:** F15, F17–F21 fixed; F16 partial (marked experimental, reconciliation needs
+a product decision); F22 dead code removed, the static-check limitation stands. The
+`check-pwa-contract.mjs` suite grew 47 → 57 assertions across the two commits.
 
 | ID | Finding | Severity | Status |
 |----|---------|----------|--------|
 | F15 | SW now intercepts every navigation via `respondWith(fetch())` — the exact path F3's original code avoided for auth correctness; no navigation preload | Medium | ✅ fixed — nav preload + preloadResponse |
 | F16 | `GET /api/mobile/home` (B3) has zero callers and has already drifted from the frontend source of truth | Medium | 🟡 marked experimental; reconciliation needs product input |
 | F17 | `install` calls `self.skipWaiting()` unconditionally, making the new "Update available — Reload" toast hollow | Low/Med | ✅ fixed — opt-in `SKIP_WAITING` message |
-| F18 | `enablePush()` / `getPushStatus()` hang forever if SW registration was skipped (`serviceWorker.ready` never resolves) | Low | ⬜ open |
-| F19 | Manifest `id` carries a query string; `shortcuts` lack `?source=pwa` attribution | Low | ⬜ open |
-| F20 | `/offline` is a client component — controls dead without hydration, no still-offline feedback | Low | ⬜ open |
-| F21 | `registerServiceWorker` leaks interval + `updatefound` listener if unmounted before the async `register()` resolves | Low | ⬜ open |
-| F22 | Residual dead code (`OfflineBanner` unused `useSlowConnection`); the D1 contract check is source-regex only, not behavioural | Low | ⬜ open |
+| F18 | `enablePush()` hangs forever if SW registration was skipped (`serviceWorker.ready` never resolves) | Low | ✅ fixed — `serviceWorkerReady()` timeout + `sw_unavailable` result |
+| F19 | Manifest `id` carries a query string; `shortcuts` lack `?source=pwa` attribution | Low | ✅ fixed — `id: "/"`, shortcuts carry `?source=pwa` |
+| F20 | `/offline` is a client component — controls dead without hydration | Low | ✅ fixed — server component, `<a>` links, no client JS |
+| F21 | `registerServiceWorker` leaks interval + `updatefound` listener if unmounted before the async `register()` resolves | Low | ✅ fixed — `cancelled` guard |
+| F22 | Residual dead code (`OfflineBanner` unused `useSlowConnection`); the D1 contract check is source-regex only, not behavioural | Low | 🟡 dead code removed; the check stays static (Lighthouse/Playwright E2E is the standing follow-up) |
 
 ### F15 — SW re-routes every navigation through `respondWith(fetch(...))`
 
@@ -678,38 +682,47 @@ nothing controls the page).
 
 ### F18 — Push helpers can hang when the SW never registered
 
-`enablePush()` and `getPushStatus()` both await `navigator.serviceWorker.ready`, which
-never resolves if registration was skipped — and `pwa.ts` has a real skip path (the
-Trusted Types `TrustedScriptURL` branch returns without registering). The
-`/dashboard/notifications` toggle would spin with no timeout. `isPushSupported()` checks
-`'serviceWorker' in navigator` but not that a registration exists. **Fix:** race
-`.ready` against a timeout, or check `getRegistration()` first.
+`enablePush()` awaited `navigator.serviceWorker.ready`, which never resolves if
+registration was skipped — and `pwa.ts` has a real skip path (the Trusted Types
+`TrustedScriptURL` branch returns without registering). The `/dashboard/notifications`
+toggle would spin with no timeout.
+
+**Fix (shipped):** `pushNotifications.ts` gains `serviceWorkerReady()` — takes an
+already-`active` registration as a fast path, otherwise races `.ready` against a 5s
+timeout. `enablePush()` returns a new `sw_unavailable` result when it comes back empty,
+and `PushNotificationSetting` shows a "reload and try again" message.
+(`getPushStatus()` never used `.ready` — it reads `getRegistration()`, which resolves.)
 
 ### F19 — Manifest identity / attribution nits
 
-`id: "/?source=pwa"` should be a stable bare identity (`"/"`) — attribution already
-comes from `start_url`, and folding it into `id` means any later tweak to that query
-re-registers the app as a new PWA. `shortcuts` still use bare `/dashboard`,
-`/dashboard/maintenance`, `/dashboard/bookings` with no `?source=pwa`.
+**Fix (shipped):** `id` is now `"/"` — a bare, stable identity; attribution stays on
+`start_url`. All three `shortcuts` carry `?source=pwa`. Locked in by
+`manifest.test.ts` and a "no query string in `id`" contract assertion.
 
 ### F20 — `/offline` is a client component
 
-`app/offline/page.tsx` is `'use client'` with `useRouter`. Served as the offline
-fallback, its JS chunks may not be cached (cache-first only caches what's been
-visited), so "Try Again" / "Go to Dashboard" are dead until hydration, and `handleRetry`
-silently no-ops when still offline. **Fix:** make it a server component with plain
-`<a href>` links so it works with zero JS.
+`app/offline/page.tsx` was `'use client'` with `useRouter`; served as the offline
+fallback, its JS chunks may not be cached, so the buttons were dead until hydration and
+`handleRetry` silently no-op'd when still offline.
+
+**Fix (shipped):** now a server component — no `'use client'`, no hooks, plain `<a href>`
+links (via `Button asChild`). Works as static HTML. Contract check asserts no
+`'use client'` and `<a href>` navigation.
 
 ### F21 — `registerServiceWorker` unmount leak
 
-`cleanup` runs synchronously while `registerAndWatch()` is still pending;
-`swRegistration` / `intervalId` are still undefined, so a later resolve installs a
-1-hour `setInterval` and an `updatefound` listener nothing can clear. Latent only
-because `<Providers>` never unmounts — but C1 touched this code and left it.
+`cleanup` ran synchronously while `registerAndWatch()` was still pending, so a later
+resolve installed a 1-hour `setInterval` + an `updatefound` listener nothing could
+clear. Latent only because `<Providers>` never unmounts — but C1 touched this code.
+
+**Fix (shipped):** a `cancelled` flag, set by the cleanup; the async resolution returns
+early (leaving the SW registered, which is fine) instead of wiring up the interval and
+listener.
 
 ### F22 — Residual dead code + shallow CI check
 
-`OfflineBanner.tsx` still calls `useSlowConnection()` into an unused binding (leftover
-from the A1 copy rewrite). `check-pwa-contract.mjs` is pure source-text regex — it
-guards against deletion, not behavioural regression, and cannot catch an F15-class
-problem. The audit's own Lighthouse/Playwright follow-up remains the real gap.
+**Fixed:** `OfflineBanner.tsx` no longer calls `useSlowConnection()` into an unused
+binding. **Not fixed (by design):** `check-pwa-contract.mjs` is still source-text regex —
+it guards against deletion, not behavioural regression, and cannot catch an F15-class
+problem. The Lighthouse/Playwright E2E (needs a running-app CI job) remains the standing
+follow-up from F12.
