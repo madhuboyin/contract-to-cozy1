@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: production-property-enrichment-alert-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: contract-to-cozy-property-enrichment
+      rules:
+        - alert: RentCastAuthenticationFailuresSustained
+          expr: >-
+            sum(increase(rentcast_requests_total{classification=~"http_401|http_403"}[15m])) >= 3
+          for: 15m
+          labels: { severity: warning, team: platform, capability: property-enrichment }
+          annotations:
+            summary: RentCast authentication failures are sustained
+            description: At least three RentCast authentication or authorization failures occurred in a rolling fifteen-minute window. Property creation remains available; verify the worker-only credential and provider restrictions.
+
+        - alert: RentCastRateLimitRatioHigh
+          expr: >-
+            sum(increase(rentcast_requests_total{classification="http_429"}[15m]))
+            / clamp_min(sum(increase(rentcast_requests_total[15m])), 1) > 0.10
+            and sum(increase(rentcast_requests_total[15m])) >= 10
+          for: 15m
+          labels: { severity: warning, team: platform, capability: property-enrichment }
+          annotations:
+            summary: RentCast rate limiting is elevated
+            description: More than ten percent of RentCast requests were rate limited during a material sample. Property creation remains available; inspect concurrency and account capacity.
+
+        - alert: RentCastProviderFailureRatioHigh
+          expr: >-
+            sum(increase(rentcast_requests_total{classification=~"timeout|network|http_500|http_504|http_5xx"}[15m]))
+            / clamp_min(sum(increase(rentcast_requests_total[15m])), 1) > 0.20
+            and sum(increase(rentcast_requests_total[15m])) >= 10
+          for: 15m
+          labels: { severity: warning, team: platform, capability: property-enrichment }
+          annotations:
+            summary: RentCast provider failures are elevated
+            description: More than twenty percent of RentCast requests failed during a material sample. Treat this as degraded enrichment, not a Property creation outage.

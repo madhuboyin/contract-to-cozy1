@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
 **Version:** 1.0
-**Status:** In progress — RC-0 through RC-5 implemented
+**Status:** Implemented — RC-0 through RC-6 complete
 **Date:** 2026-09-09
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)
@@ -515,23 +515,23 @@ Do not claim live provider, database, queue, or browser execution unless it was 
 
 ## 10. Implementation Completion Checklist
 
-- [ ] FRD requirements have traceable tests or inspection evidence.
-- [ ] Provider terms and current API contract were rechecked immediately before coding.
-- [ ] Schema supports unit, address version, external identity, status, freshness, and uniqueness.
-- [ ] Prisma Client was regenerated; no migration file was committed.
-- [ ] RentCast client is worker-only, fixed-origin, timed out, runtime-validated, and redacted.
-- [ ] Exact address/unit matching is deterministic and rejects ambiguity.
-- [ ] Mapper includes only the approved property-record allowlist.
-- [ ] Provider facts use unverified `PUBLIC_RECORD` evidence.
-- [ ] Homeowner/document/inspection facts cannot be overwritten.
-- [ ] Last sale and AVM cannot enter financing or Property setup payloads.
-- [ ] Property create/update success is independent of enqueue/provider success.
-- [ ] Cache, idempotency, retry, and stale-job behavior are covered.
-- [ ] Both Property creation routes share the backend enqueue boundary.
-- [ ] Property Details exposes source/freshness and the existing correction path.
-- [ ] Worker-only secret wiring and bounded metrics are present.
-- [ ] Relevant documentation is updated.
-- [ ] Lightweight validation and final Graphify update are complete.
+- [x] FRD requirements have traceable tests or inspection evidence.
+- [x] Provider terms and current API contract were rechecked immediately before coding.
+- [x] Schema supports unit, address version, external identity, status, freshness, and uniqueness.
+- [x] Prisma Client was regenerated; no migration file was committed.
+- [x] RentCast client is worker-only, fixed-origin, timed out, runtime-validated, and redacted.
+- [x] Exact address/unit matching is deterministic and rejects ambiguity.
+- [x] Mapper includes only the approved property-record allowlist.
+- [x] Provider facts use unverified `PUBLIC_RECORD` evidence.
+- [x] Homeowner/document/inspection facts cannot be overwritten.
+- [x] Last sale and AVM cannot enter financing or Property setup payloads.
+- [x] Property create/update success is independent of enqueue/provider success.
+- [x] Cache, idempotency, retry, and stale-job behavior are covered.
+- [x] Both Property creation routes share the backend enqueue boundary.
+- [x] Property Details exposes source/freshness and the existing correction path.
+- [x] Worker-only secret wiring and bounded metrics are present.
+- [x] Relevant documentation is updated.
+- [x] Lightweight validation and final Graphify update are complete.
 
 ## 11. Recommended Delivery Order
 

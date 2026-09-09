@@ -6,7 +6,7 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPageLayout title="Privacy Policy" lastUpdated="July 9, 2026" noticeVariant="template">
+    <LegalPageLayout title="Privacy Policy" lastUpdated="September 9, 2026" noticeVariant="template">
       <p>
         This Privacy Policy explains how [ContractToCozy Legal Entity Name]
         (&quot;ContractToCozy,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;)
@@ -25,6 +25,12 @@ export default function PrivacyPage() {
           <strong>Property information:</strong> address, purchase price, appraised value,
           mortgage details, inventory items, photos, and documents you upload or connect for
           maintenance, risk, and financial-planning features.
+        </li>
+        <li>
+          <strong>Public-record enrichment:</strong> after you add or change a property address,
+          we may send that residential address, including a unit when provided, to RentCast to
+          locate public property records. We use only selected structural and location facts; we
+          do not import RentCast owner, sale, valuation, rent, tax, or listing data in this feature.
         </li>
         <li>
           <strong>Financial-planning inputs:</strong> reserve fund contributions, coverage and
@@ -79,6 +85,10 @@ export default function PrivacyPage() {
           <strong>With service providers we use to operate the Service</strong> (e.g. cloud
           hosting, email delivery, error monitoring, AI processing), under contractual
           confidentiality obligations;
+        </li>
+        <li>
+          <strong>With RentCast,</strong> by transmitting a residential address solely to retrieve
+          public property-record facts used to complete your property profile;
         </li>
         <li>
           <strong>For legal reasons,</strong> if required by law, subpoena, or to protect the

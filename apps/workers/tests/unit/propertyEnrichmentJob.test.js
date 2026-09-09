@@ -33,7 +33,9 @@ test('processor passes BullMQ attempt context and returns terminal outcomes', as
     service: {
       async enrich(payload, execution) {
         calls.push({ payload, execution });
-        return { kind: 'COMPLETED', status: 'MATCHED', changedFactKeys: [], protectedFactKeys: [] };
+        return {
+          kind: 'COMPLETED', status: 'MATCHED', acceptedFactKeys: [], changedFactKeys: [], protectedFactKeys: [],
+        };
       },
     },
     recordResult: (outcome) => recorded.push(outcome),

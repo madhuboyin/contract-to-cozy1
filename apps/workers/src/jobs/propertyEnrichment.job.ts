@@ -3,7 +3,10 @@ import { prisma } from '../lib/prisma';
 import {
   propertyEnrichmentFactsTotal,
   propertyEnrichmentJobsTotal,
+  propertyEnrichmentCacheSuppressionsTotal,
+  propertyEnrichmentMatchOutcomesTotal,
   propertyEnrichmentRetriesTotal,
+  rentCastEstimatedBillableRequestsTotal,
   rentCastRequestDurationSeconds,
   rentCastRequestsTotal,
   rentCastResultCountTotal,
@@ -52,11 +55,17 @@ function recordDefaultResult(result: PropertyEnrichmentResult): void {
   if (result.kind === 'RETRYABLE') {
     propertyEnrichmentRetriesTotal.inc({ error_class: result.code.toLowerCase() });
   }
+  if (result.kind === 'CACHE_HIT') {
+    propertyEnrichmentCacheSuppressionsTotal.inc({
+      match_status: result.status.toLowerCase(),
+    });
+  }
   if (result.kind === 'COMPLETED') {
-    if (result.changedFactKeys.length > 0) {
+    propertyEnrichmentMatchOutcomesTotal.inc({ outcome: result.status.toLowerCase() });
+    if (result.acceptedFactKeys.length > 0) {
       propertyEnrichmentFactsTotal.inc(
-        { disposition: 'canonical_changed' },
-        result.changedFactKeys.length,
+        { disposition: 'accepted' },
+        result.acceptedFactKeys.length,
       );
     }
     if (result.protectedFactKeys.length > 0) {
@@ -85,6 +94,9 @@ const defaultClient = new RentCastClient({
     );
     if (observation.resultCount !== null) {
       rentCastResultCountTotal.inc({ band: resultCountBand(observation.resultCount) });
+    }
+    if (observation.classification === 'success') {
+      rentCastEstimatedBillableRequestsTotal.inc();
     }
   },
 });

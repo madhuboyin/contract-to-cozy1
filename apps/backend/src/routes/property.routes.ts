@@ -61,33 +61,6 @@ const router = Router();
  */
 router.get('/', authenticate, restrictToHomeowner, propertyController.listProperties);
 
-/**
- * @swagger
- * /api/properties/lookup:
- *   get:
- *     deprecated: true
- *     summary: Deprecated pre-create property lookup
- *     description: Do not use for new integrations. Property enrichment is moving to a property-scoped post-commit workflow.
- *     tags: [Properties]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: address
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: zipCode
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Property data found
- *       404:
- *         description: Property not found
- */
-router.get('/lookup', authenticate, propertyController.lookupProperty);
 router.get('/address-suggestions', authenticate, apiRateLimiter, propertyController.autocompleteAddresses);
 router.get('/address-details', authenticate, apiRateLimiter, propertyController.getAddressDetails);
 

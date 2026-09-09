@@ -118,6 +118,7 @@ export type PropertyEnrichmentResult =
   | {
       kind: 'COMPLETED';
       status: PropertyExternalMatchStatus;
+      acceptedFactKeys: string[];
       changedFactKeys: string[];
       protectedFactKeys: string[];
     };
@@ -448,6 +449,7 @@ export class PropertyEnrichmentService {
       return {
         kind: 'COMPLETED',
         status,
+        acceptedFactKeys: [],
         changedFactKeys: [],
         protectedFactKeys: [],
       } as const;
@@ -502,6 +504,7 @@ export class PropertyEnrichmentService {
       return {
         kind: 'COMPLETED',
         status,
+        acceptedFactKeys: [],
         changedFactKeys: [],
         protectedFactKeys: [],
       } as const;
@@ -703,6 +706,7 @@ export class PropertyEnrichmentService {
       return {
         kind: 'COMPLETED',
         status: PropertyExternalMatchStatus.MATCHED,
+        acceptedFactKeys,
         changedFactKeys,
         protectedFactKeys,
       } as const;

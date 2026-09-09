@@ -252,7 +252,7 @@ test('persists no-match and ambiguity with the seven-day negative cache', async 
     clientOutcome: { kind: 'NO_RESULT', requestCompletedAt: completedAt },
   });
   assert.deepEqual(await noMatch.service.enrich(payload), {
-    kind: 'COMPLETED', status: 'NO_MATCH', changedFactKeys: [], protectedFactKeys: [],
+    kind: 'COMPLETED', status: 'NO_MATCH', acceptedFactKeys: [], changedFactKeys: [], protectedFactKeys: [],
   });
   const noMatchState = operations(noMatch.calls, 'identity.upsert')[0].args.update;
   assert.equal(noMatchState.matchStatus, 'NO_MATCH');
@@ -297,6 +297,7 @@ test('atomically fills sparse canonical facts, evidence, identity, geocode, and 
   assert.equal(result.kind, 'COMPLETED');
   assert.equal(result.status, 'MATCHED');
   assert.equal(result.changedFactKeys.length, 9);
+  assert.equal(result.acceptedFactKeys.length, 9);
   assert.deepEqual(result.protectedFactKeys, []);
   assert.equal(operations(state.calls, 'property.update').length, 1);
   const propertyUpdate = operations(state.calls, 'property.update')[0].args.data;
@@ -351,6 +352,7 @@ test('retains homeowner/document/inspection facts and canonical values without r
   const result = await state.service.enrich(payload);
   assert.equal(result.status, 'MATCHED');
   assert.equal(result.changedFactKeys.length, 0);
+  assert.equal(result.acceptedFactKeys.length, 0);
   assert.equal(result.protectedFactKeys.length, 9);
   assert.equal(operations(state.calls, 'property.update').length, 0);
   assert.equal(operations(state.calls, 'exterior.upsert').length, 0);
@@ -388,6 +390,7 @@ test('refreshes same-record evidence without duplicate active rows or needless r
 
   const result = await state.service.enrich(payload);
   assert.deepEqual(result.changedFactKeys, []);
+  assert.equal(result.acceptedFactKeys.length, 9);
   assert.deepEqual(result.protectedFactKeys, []);
   assert.equal(operations(state.calls, 'evidence.supersede').length, 9);
   assert.equal(operations(state.calls, 'evidence.create').length, 9);
@@ -423,6 +426,7 @@ test('updates a changed same-record fact and supersedes its provider evidence ex
 
   const result = await state.service.enrich(payload);
   assert.deepEqual(result.changedFactKeys, ['core.yearBuilt']);
+  assert.deepEqual(result.acceptedFactKeys, ['core.yearBuilt']);
   assert.equal(result.protectedFactKeys.length, 8);
   assert.equal(operations(state.calls, 'property.update')[0].args.data.yearBuilt, 1973);
   assert.equal(operations(state.calls, 'evidence.supersede').length, 1);

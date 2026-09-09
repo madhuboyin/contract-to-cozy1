@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Functional Requirements Document
 
 **Version:** 1.0
-**Status:** Proposed
+**Status:** Implemented
 **Date:** 2026-09-09
 **Product area:** Property setup, Property Details, and Property Context
 **Delivery scope:** Phase B — post-create public-record enrichment

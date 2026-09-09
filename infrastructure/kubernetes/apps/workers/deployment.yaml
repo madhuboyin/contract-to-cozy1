@@ -328,6 +328,17 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: TICKETMASTER_API_KEY
+            - name: RENTCAST_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: RENTCAST_API_KEY
+                  optional: true
+            - name: RENTCAST_WORKER_CONCURRENCY
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RENTCAST_WORKER_CONCURRENCY
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

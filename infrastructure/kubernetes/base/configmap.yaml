@@ -12,6 +12,8 @@ data:
   HOME_RISK_REPLAY_REVIEWED_COVERAGE_ENABLED: "true"
   NEIGHBORHOOD_REVIEWED_COVERAGE_ENABLED: "true"
   LOG_LEVEL: "info"
+  # RentCast worker accepts integers 1..10 and otherwise falls back to 4.
+  RENTCAST_WORKER_CONCURRENCY: "4"
   
   # API Configuration
   API_PORT: "8080"

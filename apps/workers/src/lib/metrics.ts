@@ -56,6 +56,20 @@ export const propertyEnrichmentFactsTotal = new Counter({
   registers: [register],
 });
 
+export const propertyEnrichmentMatchOutcomesTotal = new Counter({
+  name: 'property_enrichment_match_outcomes_total',
+  help: 'Persisted Property enrichment match outcomes',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
+export const propertyEnrichmentCacheSuppressionsTotal = new Counter({
+  name: 'property_enrichment_cache_suppressions_total',
+  help: 'Provider requests suppressed by a current enrichment cache entry',
+  labelNames: ['match_status'] as const,
+  registers: [register],
+});
+
 export const rentCastRequestsTotal = new Counter({
   name: 'rentcast_requests_total',
   help: 'RentCast adapter calls by bounded transport or HTTP classification',
@@ -75,6 +89,12 @@ export const rentCastResultCountTotal = new Counter({
   name: 'rentcast_result_count_total',
   help: 'Successful RentCast responses by bounded result-count band',
   labelNames: ['band'] as const,
+  registers: [register],
+});
+
+export const rentCastEstimatedBillableRequestsTotal = new Counter({
+  name: 'rentcast_estimated_billable_requests_total',
+  help: 'Estimated billable successful RentCast HTTP requests',
   registers: [register],
 });
 
