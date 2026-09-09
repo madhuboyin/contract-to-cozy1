@@ -166,15 +166,17 @@ export default function AddressOnboardingPage() {
       });
     }
 
-    propertyData = {
-      ...propertyData,
-      ...(dwellingType ? { dwellingType } : {}),
-      ...(parsedYearBuilt === undefined ? {} : { yearBuilt: parsedYearBuilt }),
-      ...(parsedBedrooms === undefined ? {} : { bedrooms: parsedBedrooms }),
-      ...(parsedBathrooms === undefined ? {} : { bathrooms: parsedBathrooms }),
-      ...(basementConfiguration === 'UNKNOWN' ? {} : { basementConfiguration }),
-      ...(hasPoolOrSpa === 'UNKNOWN' ? {} : { hasPoolOrSpa: hasPoolOrSpa === 'YES' }),
-    };
+    propertyData = situation === 'own'
+      ? addressOnlyPropertyData(submittedAddress)
+      : {
+          ...propertyData,
+          ...(dwellingType ? { dwellingType } : {}),
+          ...(parsedYearBuilt === undefined ? {} : { yearBuilt: parsedYearBuilt }),
+          ...(parsedBedrooms === undefined ? {} : { bedrooms: parsedBedrooms }),
+          ...(parsedBathrooms === undefined ? {} : { bathrooms: parsedBathrooms }),
+          ...(basementConfiguration === 'UNKNOWN' ? {} : { basementConfiguration }),
+          ...(hasPoolOrSpa === 'UNKNOWN' ? {} : { hasPoolOrSpa: hasPoolOrSpa === 'YES' }),
+        };
 
     try {
       await prepareConfirmation(propertyData, addressSource);
@@ -397,22 +399,21 @@ export default function AddressOnboardingPage() {
                   />
                 </label>
               </div>
-              <div className="border-t border-slate-100 pt-4">
+              {situation !== 'own' && (
+                <div className="border-t border-slate-100 pt-4">
                 <div className="mb-3">
                   <p className="text-sm font-bold text-slate-900">Help us tailor your first checklist</p>
                   <p className="mt-1 text-xs text-slate-500">A few basics help us surface age- and home-specific inspection guidance.</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                    Home type {situation === 'own'
-                      ? <span className="font-normal text-slate-400">(optional)</span>
-                      : <span className="text-red-500">*</span>}
+                    Home type <span className="text-red-500">*</span>
                     <select
                       value={dwellingType}
                       onChange={(event) => setDwellingType(event.target.value as DwellingType)}
                       className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     >
-                      <option value="">{situation === 'own' ? 'I’m not sure' : 'Select a home type'}</option>
+                      <option value="">Select a home type</option>
                       {DWELLING_TYPE_OPTIONS.map((type) => (
                         <option key={type} value={type}>{DWELLING_TYPE_LABELS[type]}</option>
                       ))}
@@ -457,7 +458,8 @@ export default function AddressOnboardingPage() {
                   </label>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">You can leave optional details unanswered and add them later.</p>
-              </div>
+                </div>
+              )}
               <Button 
                 type="submit"
                 disabled={loading || !address.trim() || !city.trim() || !state.trim() || !zipCode.trim() || !situation || (situation !== 'own' && !dwellingType) || (situation !== 'buying' && !triggerType)}

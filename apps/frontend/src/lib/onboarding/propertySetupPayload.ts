@@ -33,7 +33,9 @@ export function buildAddressPropertyCreatePayload(
 export function buildConfirmedPropertyCreatePayload(
   data: LookupPropertyFacts,
   profile: ConfirmedHomeProfile,
+  options: { includeOptionalFacts?: boolean } = {},
 ) {
+  const includeOptionalFacts = options.includeOptionalFacts !== false;
   const propertySize = typeof data.propertySize === 'number' && Number.isFinite(data.propertySize)
     ? data.propertySize
     : undefined;
@@ -47,19 +49,19 @@ export function buildConfirmedPropertyCreatePayload(
 
   return {
     ...normalizeOnboardingAddress(data),
-    ...(profile.yearBuilt === undefined ? {} : { yearBuilt: profile.yearBuilt }),
-    ...(propertySize === undefined ? {} : { propertySize }),
-    ...(profile.dwellingType === 'UNKNOWN' ? {} : { dwellingType: profile.dwellingType }),
-    ...(profile.bedrooms === undefined ? {} : { bedrooms: profile.bedrooms }),
-    ...(profile.bathrooms === undefined ? {} : { bathrooms: profile.bathrooms }),
-    ...(profile.basementConfiguration === 'UNKNOWN'
+    ...(!includeOptionalFacts || profile.yearBuilt === undefined ? {} : { yearBuilt: profile.yearBuilt }),
+    ...(!includeOptionalFacts || propertySize === undefined ? {} : { propertySize }),
+    ...(!includeOptionalFacts || profile.dwellingType === 'UNKNOWN' ? {} : { dwellingType: profile.dwellingType }),
+    ...(!includeOptionalFacts || profile.bedrooms === undefined ? {} : { bedrooms: profile.bedrooms }),
+    ...(!includeOptionalFacts || profile.bathrooms === undefined ? {} : { bathrooms: profile.bathrooms }),
+    ...(!includeOptionalFacts || profile.basementConfiguration === 'UNKNOWN'
       ? {}
       : { basementConfiguration: profile.basementConfiguration }),
-    ...(profile.hasPoolOrSpa === 'UNKNOWN'
+    ...(!includeOptionalFacts || profile.hasPoolOrSpa === 'UNKNOWN'
       ? {}
       : { exteriorProfile: { hasPoolOrSpa: profile.hasPoolOrSpa === 'YES' } }),
     isPrimary: true,
-    ...(purchasePriceCents === undefined ? {} : { purchasePriceCents }),
-    ...(purchaseDate === undefined ? {} : { purchaseDate }),
+    ...(!includeOptionalFacts || purchasePriceCents === undefined ? {} : { purchasePriceCents }),
+    ...(!includeOptionalFacts || purchaseDate === undefined ? {} : { purchaseDate }),
   };
 }

@@ -96,8 +96,8 @@ Quantitative conversion targets are intentionally deferred until the affected su
 2. The user continues to `/onboarding/address`.
 3. The user identifies the established-owner situation and an active trigger.
 4. The user enters or selects an address.
-5. Optional home-profile facts may be entered, but they do not block continuation or creation.
-6. `/onboarding/confirm` creates the Property, records the activation context, and continues to first value.
+5. The established-owner setup does not ask for optional home-profile facts; they remain available later in Property Details.
+6. `/onboarding/confirm` reviews the address, creates the Property, records the activation context, and continues to first value.
 7. The created Property is primary.
 
 The active trigger remains required because it is journey context used to produce first value; it is not a Property creation prerequisite.
@@ -542,6 +542,13 @@ Completed in the initial slice:
 - missing risk prerequisites return `MISSING_DATA` rather than a synthetic high-risk report;
 - the risk page, dashboard risk card, dashboard exposure tile, orchestration, Property Context, score snapshots, and Home Digital Twin consumers treat legacy incomplete-report sentinels as unavailable rather than actionable; and
 - focused backend, frontend, and worker tests cover the new policy boundaries.
+
+Retry and effort corrections completed on 2026-09-09:
+
+- a committed Property ID is retained in the short-lived onboarding session before activation so retries and refreshes continue against the same Property;
+- activation context is validated before Property creation, and ambiguous create responses still recover by matching the committed address;
+- successful activation schedules first-value navigation before best-effort session cleanup, so cleanup failure cannot strand the success screen; and
+- established owners now provide only their address and trigger during setup, while buyer and new-home branches retain the compact home-profile questions.
 
 Verification hardening completed on 2026-09-08:
 

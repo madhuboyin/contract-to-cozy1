@@ -73,4 +73,28 @@ describe('property setup create payloads', () => {
       purchaseDate: '2024-04-20',
     });
   });
+
+  it('keeps established-owner creation address-only even when lookup facts are available', () => {
+    const result = buildConfirmedPropertyCreatePayload({
+      ...address,
+      propertySize: 1850,
+      lastSalePrice: 350_000_00,
+      lastSaleDate: '2024-04-20',
+    }, {
+      dwellingType: 'DETACHED_SINGLE_FAMILY',
+      yearBuilt: 1998,
+      bedrooms: 3,
+      bathrooms: 2.5,
+      basementConfiguration: 'FINISHED',
+      hasPoolOrSpa: 'YES',
+    }, { includeOptionalFacts: false });
+
+    expect(result).toEqual({
+      address: '123 Main St',
+      city: 'Knoxville',
+      state: 'TN',
+      zipCode: '37902',
+      isPrimary: true,
+    });
+  });
 });

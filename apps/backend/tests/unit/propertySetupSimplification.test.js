@@ -67,16 +67,31 @@ test('ordinary Add Property submits identity facts only and keeps manual fallbac
   assert.match(page, /isAmbiguousNetworkError\(caught\)/);
 });
 
-test('onboarding recovery cannot reinterpret a duplicate-address response as a successful create', () => {
+test('onboarding retries activation against the durably committed Property', () => {
   const page = source('apps/frontend/src/app/onboarding/confirm/page.tsx');
-  assert.match(page, /createdPropertyId \|\| isAmbiguousNetworkError\(error\)/);
+  const sessionRoute = source('apps/frontend/src/app/api/onboarding-lookup-session/route.ts');
+  assert.match(page, /let propertyId = committedPropertyId/);
+  assert.match(page, /if \(!propertyId\) \{/);
+  assert.match(page, /persistCommittedOnboardingProperty\(data, propertyId\)/);
+  assert.match(page, /captureEntryContext\(propertyId, activationContext\)/);
+  assert.ok(page.indexOf('if (!activationContext)') < page.indexOf('api.createProperty('));
+  assert.match(sessionRoute, /committedPropertyId: normalizeCommittedPropertyId/);
   assert.match(page, /description: error instanceof Error \? error\.message/);
+});
+
+test('successful activation navigation cannot be blocked by session cleanup', () => {
+  const page = source('apps/frontend/src/app/onboarding/confirm/page.tsx');
+  const helper = source('apps/frontend/src/lib/onboarding/onboardingSessionClient.ts');
+  assert.ok(page.indexOf('setTimeout(() => router.push') < page.indexOf('void clearOnboardingLookupSession()'));
+  assert.match(helper, /export async function clearOnboardingLookupSession/);
+  assert.match(helper, /catch \(error\)/);
 });
 
 test('established-owner onboarding no longer requires home type', () => {
   const page = source('apps/frontend/src/app/onboarding/address/page.tsx');
   assert.match(page, /situation !== 'own' && !dwellingType/);
-  assert.match(page, /dwellingType \? \{ dwellingType \} : \{\}/);
+  assert.match(page, /situation !== 'own' && \(/);
+  assert.match(page, /propertyData = situation === 'own'/);
 });
 
 test('Property Details has no UI-only required system-type validators', () => {

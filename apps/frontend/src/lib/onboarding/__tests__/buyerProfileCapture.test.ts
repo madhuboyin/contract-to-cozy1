@@ -27,6 +27,15 @@ describe('buyer onboarding home profile capture', () => {
     }
     expect(addressPage).toContain('Help us tailor your first checklist');
     expect(confirmPage).toContain('A few details for better guidance');
+    expect(addressPage).toContain("situation !== 'own' && (");
+    expect(confirmPage).toContain('!isEstablishedOwnerJourney && (');
+  });
+
+  it('keeps the established-owner path address-and-trigger only', () => {
+    expect(addressPage).toContain("propertyData = situation === 'own'");
+    expect(addressPage).toContain('addressOnlyPropertyData(submittedAddress)');
+    expect(confirmPage).toContain("activationContext.entryPath === 'EXISTING_OWNER_TRIGGER'");
+    expect(confirmPage).toContain('{ includeOptionalFacts: !isEstablishedOwnerJourney }');
   });
 
   it('carries address-page profile facts into the review session', () => {

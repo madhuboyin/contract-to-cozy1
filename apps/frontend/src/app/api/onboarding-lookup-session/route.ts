@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { ActivationEntryContextInput } from '@/types';
+import { normalizeCommittedPropertyId } from '@/lib/onboarding/onboardingSession';
 
 const LOOKUP_COOKIE = 'ctc_onboarding_lookup';
 const MAX_AGE_SECONDS = 15 * 60;
@@ -21,6 +22,7 @@ type OnboardingLookupPayload = {
   lastSalePrice?: number | null;
   lastSaleDate?: string | null;
   activationContext?: ActivationEntryContextInput;
+  committedPropertyId?: string;
 };
 
 const ENTRY_PATHS = new Set(['EXISTING_OWNER_TRIGGER', 'EXISTING_HOME_PURCHASE', 'NEW_HOME_SETUP', 'MAJOR_MOMENT', 'EXPLORATION']);
@@ -138,6 +140,7 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
     lastSalePrice: normalizeNumber(source.lastSalePrice),
     lastSaleDate: normalizeString(source.lastSaleDate) ?? null,
     activationContext: sanitizeActivationContext(source.activationContext),
+    committedPropertyId: normalizeCommittedPropertyId(source.committedPropertyId),
   };
 }
 

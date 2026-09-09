@@ -19,6 +19,10 @@ import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
 import { addressOnlyPropertyData, onboardingAddressError, sameOnboardingAddress } from '@/lib/onboarding/addressIntegrity';
 import { buildConfirmedPropertyCreatePayload } from '@/lib/onboarding/propertySetupPayload';
+import {
+  clearOnboardingLookupSession,
+  persistCommittedOnboardingProperty,
+} from '@/lib/onboarding/onboardingSessionClient';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
 import type { BasementConfiguration, DwellingType } from '@/types';
 
@@ -69,6 +73,7 @@ export default function ConfirmOnboardingPage() {
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressDraft, setAddressDraft] = useState({ address: '', city: '', state: '', zipCode: '' });
   const [homeProfile, setHomeProfile] = useState<HomeProfileDraft>(EMPTY_HOME_PROFILE);
+  const [committedPropertyId, setCommittedPropertyId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -83,6 +88,7 @@ export default function ConfirmOnboardingPage() {
         }
         const payload = await res.json();
         setData(payload.data);
+        setCommittedPropertyId(payload.data.committedPropertyId ?? null);
         setAddressDraft({
           address: payload.data.address ?? '',
           city: payload.data.city ?? '',
@@ -106,6 +112,15 @@ export default function ConfirmOnboardingPage() {
   }, [router]);
 
   const saveAddressCorrection = async () => {
+    if (committedPropertyId) {
+      toast({
+        title: 'Home already saved',
+        description: 'Finish setup, then edit the address from Property Details.',
+        variant: 'destructive',
+      });
+      setEditingAddress(false);
+      return;
+    }
     const validationError = onboardingAddressError(addressDraft);
     if (validationError) {
       toast({ title: 'Complete the address', description: validationError, variant: 'destructive' });
@@ -138,9 +153,21 @@ export default function ConfirmOnboardingPage() {
   const handleConfirm = async () => {
     if (!data) return;
 
-    const yearBuilt = optionalNumber(homeProfile.yearBuilt);
-    const bedrooms = optionalNumber(homeProfile.bedrooms);
-    const bathrooms = optionalNumber(homeProfile.bathrooms);
+    const activationContext = data.activationContext;
+    if (!activationContext) {
+      toast({
+        title: 'Setup context is missing',
+        description: 'Return to the previous step and choose what brought you here before adding the home.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const isEstablishedOwnerJourney = activationContext.entryPath === 'EXISTING_OWNER_TRIGGER';
+
+    const yearBuilt = isEstablishedOwnerJourney ? undefined : optionalNumber(homeProfile.yearBuilt);
+    const bedrooms = isEstablishedOwnerJourney ? undefined : optionalNumber(homeProfile.bedrooms);
+    const bathrooms = isEstablishedOwnerJourney ? undefined : optionalNumber(homeProfile.bathrooms);
     const currentYear = new Date().getFullYear();
     if (yearBuilt !== undefined && (!Number.isInteger(yearBuilt) || yearBuilt < 1700 || yearBuilt > currentYear + 1)) {
       toast({ title: 'Check the year built', description: `Enter a year from 1700 to ${currentYear + 1}, or leave it blank.`, variant: 'destructive' });
@@ -155,87 +182,78 @@ export default function ConfirmOnboardingPage() {
       return;
     }
 
+    let propertyWasCommitted = Boolean(committedPropertyId);
     setSubmitting(true);
-    let createdPropertyId: string | null = null;
     try {
-      // Create the real property from the lookup data
-      const response = await api.createProperty(buildConfirmedPropertyCreatePayload(data, {
-        ...homeProfile,
-        yearBuilt,
-        bedrooms,
-        bathrooms,
-      }));
+      let propertyId = committedPropertyId;
+      let recoveredCommittedCreate = false;
 
-      if (response.success) {
-        const propertyId = response.data?.id;
-        if (!propertyId || !data.activationContext) {
-          throw new Error('Trigger-first activation context is missing.');
+      if (!propertyId) {
+        try {
+          const response = await api.createProperty(buildConfirmedPropertyCreatePayload(data, {
+            ...homeProfile,
+            yearBuilt,
+            bedrooms,
+            bathrooms,
+          }, { includeOptionalFacts: !isEstablishedOwnerJourney }));
+          if (!response.success || !response.data?.id) {
+            throw new Error(response.message || "We couldn't claim your home. Please try again.");
+          }
+          propertyId = response.data.id;
+        } catch (createError) {
+          if (!isAmbiguousNetworkError(createError)) throw createError;
+          const propertiesResponse = await api.getProperties({ force: true });
+          propertyId = propertiesResponse.success
+            ? propertiesResponse.data?.properties?.find((property) => sameOnboardingAddress(property, data))?.id ?? null
+            : null;
+          if (!propertyId) throw createError;
+          recoveredCommittedCreate = true;
         }
-        createdPropertyId = propertyId;
-        const contextResponse = await api.captureEntryContext(propertyId, data.activationContext);
-        if (!contextResponse.success) {
-          throw new Error(contextResponse.message || 'Unable to save activation context.');
-        }
-        setSuccess(true);
-        await fetch('/api/onboarding-lookup-session', { method: 'DELETE' });
-        const buyerJourney = data.activationContext.entryPath === 'EXISTING_HOME_PURCHASE';
-        toast({
-          title: buyerJourney ? 'Buyer plan created' : 'Home added',
-          description: buyerJourney ? 'Your closing journey is ready.' : 'Your first action is ready.',
-        });
 
-        track('property_claimed', {
-          zipCode: data.zipCode,
-          yearBuilt: yearBuilt || 0,
-          source: data.addressSource === 'MANUAL' ? 'MANUAL' : 'API'
-        });
-
-        const startedAt = Number(sessionStorage.getItem('onboarding_started_at'));
-        if (propertyId) {
-          track('property_onboarded', {
-            propertyId,
-            durationSeconds: startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0,
-          });
-        }
-        sessionStorage.removeItem('onboarding_started_at');
-
-        // Brief celebration delay before redirecting to dashboard
-        setTimeout(() => router.push(`/onboarding/first-value?propertyId=${encodeURIComponent(propertyId)}`), 1200);
-      } else {
-        toast({
-          title: "Setup failed",
-          description: response.message || "We couldn't claim your home. Please try again.",
-          variant: "destructive"
-        });
+        setCommittedPropertyId(propertyId);
+        propertyWasCommitted = true;
+        setData((current: Record<string, unknown> | null) => current
+          ? { ...current, committedPropertyId: propertyId }
+          : current);
       }
+
+      // Retry this write on every confirmation attempt so a transient session failure can heal.
+      await persistCommittedOnboardingProperty(data, propertyId);
+
+      const contextResponse = await api.captureEntryContext(propertyId, activationContext);
+      if (!contextResponse.success) {
+        throw new Error(contextResponse.message || 'Unable to save activation context.');
+      }
+
+      setSuccess(true);
+      const buyerJourney = activationContext.entryPath === 'EXISTING_HOME_PURCHASE';
+      toast({
+        title: buyerJourney ? 'Buyer plan created' : 'Home added',
+        description: recoveredCommittedCreate
+          ? 'We found the saved home and continued without creating a duplicate.'
+          : buyerJourney ? 'Your closing journey is ready.' : 'Your first action is ready.',
+      });
+
+      track('property_claimed', {
+        zipCode: data.zipCode,
+        yearBuilt: yearBuilt || 0,
+        source: data.addressSource === 'MANUAL' ? 'MANUAL' : 'API'
+      });
+
+      const startedAt = Number(sessionStorage.getItem('onboarding_started_at'));
+      track('property_onboarded', {
+        propertyId,
+        durationSeconds: startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0,
+      });
+      sessionStorage.removeItem('onboarding_started_at');
+
+      // Navigation is the success path. Cookie cleanup is best-effort and cannot block it.
+      setTimeout(() => router.push(`/onboarding/first-value?propertyId=${encodeURIComponent(propertyId)}`), 1200);
+      void clearOnboardingLookupSession();
     } catch (error: any) {
       console.error('Confirm error:', error);
-      if (createdPropertyId || isAmbiguousNetworkError(error)) {
-        try {
-          const propertiesResponse = createdPropertyId
-            ? null
-            : await api.getProperties({ force: true });
-          const committedPropertyId = createdPropertyId ?? (
-            propertiesResponse?.success
-              ? propertiesResponse.data?.properties?.find((property) => sameOnboardingAddress(property, data))?.id ?? null
-              : null
-          );
-          if (committedPropertyId && data.activationContext) {
-            const contextResponse = await api.captureEntryContext(committedPropertyId, data.activationContext);
-            if (contextResponse.success) {
-              setSuccess(true);
-              await fetch('/api/onboarding-lookup-session', { method: 'DELETE' });
-              toast({ title: 'Home added', description: 'We found the saved home and continued without creating a duplicate.' });
-              setTimeout(() => router.push(`/onboarding/first-value?propertyId=${encodeURIComponent(committedPropertyId)}`), 1200);
-              return;
-            }
-          }
-        } catch (recoveryError) {
-          console.error('Committed property recovery failed:', recoveryError);
-        }
-      }
       track('api_error_encountered', {
-        endpoint: '/api/properties',
+        endpoint: propertyWasCommitted ? '/api/properties/:propertyId/onboarding/entry-context' : '/api/properties',
         statusCode: 500,
         message: error.message || 'Property creation failed'
       });
@@ -251,6 +269,7 @@ export default function ConfirmOnboardingPage() {
 
   if (!data) return null;
   const isBuyerJourney = data.activationContext?.entryPath === 'EXISTING_HOME_PURCHASE';
+  const isEstablishedOwnerJourney = data.activationContext?.entryPath === 'EXISTING_OWNER_TRIGGER';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -291,7 +310,7 @@ export default function ConfirmOnboardingPage() {
             <div className="bg-slate-50 rounded-2xl p-4 text-left border border-slate-100">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-xs font-bold text-slate-500 tracking-normal">Property Address</p>
-                {!editingAddress && (
+                {!editingAddress && !committedPropertyId && (
                   <button
                     type="button"
                     onClick={() => setEditingAddress(true)}
@@ -342,7 +361,8 @@ export default function ConfirmOnboardingPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm">
+            {!isEstablishedOwnerJourney && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm">
               <div className="mb-4">
                 <p className="font-bold text-slate-900">A few details for better guidance</p>
                 <p className="mt-1 text-sm text-slate-500">
@@ -426,7 +446,8 @@ export default function ConfirmOnboardingPage() {
                 </label>
               </div>
               <p className="mt-3 text-xs text-slate-500">Not sure? Choose “I’m not sure” for home type and leave the other fields blank.</p>
-            </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="flex items-center gap-3 text-left">
