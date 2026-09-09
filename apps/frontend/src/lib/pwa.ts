@@ -44,11 +44,15 @@ export function registerServiceWorker(): (() => void) | undefined {
   let intervalId: ReturnType<typeof setInterval> | undefined;
   let swRegistration: ServiceWorkerRegistration | undefined;
   let updateFoundHandler: (() => void) | undefined;
+  let loadListenerAttached = false;
 
-  const onLoad = async () => {
+  const registerAndWatch = async () => {
     try {
       swRegistration = await navigator.serviceWorker.register(buildServiceWorkerUrl() as string, {
-        scope: '/'
+        scope: '/',
+        // Always revalidate sw.js itself against the network so a deploy is
+        // picked up promptly instead of served from the HTTP cache.
+        updateViaCache: 'none',
       });
 
       console.log('Service Worker registered:', swRegistration.scope);
@@ -82,14 +86,25 @@ export function registerServiceWorker(): (() => void) | undefined {
     }
   };
 
-  window.addEventListener('load', onLoad, { once: true });
+  // If the page has already finished loading by the time this runs — common
+  // after client-side navigation or a bfcache restore — the 'load' event will
+  // never fire again, so register immediately. Otherwise wait for 'load' to
+  // keep the SW off the critical path of the first paint.
+  if (document.readyState === 'complete') {
+    void registerAndWatch();
+  } else {
+    window.addEventListener('load', registerAndWatch, { once: true });
+    loadListenerAttached = true;
+  }
 
   return () => {
     if (intervalId !== undefined) clearInterval(intervalId);
     if (swRegistration && updateFoundHandler) {
       swRegistration.removeEventListener('updatefound', updateFoundHandler);
     }
-    window.removeEventListener('load', onLoad);
+    if (loadListenerAttached) {
+      window.removeEventListener('load', registerAndWatch);
+    }
   };
 }
 
