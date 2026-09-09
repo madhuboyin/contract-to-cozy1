@@ -103,9 +103,9 @@ export function InstallPrompt() {
             Install ContractToCozy
           </h3>
           <p className="text-sm text-gray-600 mb-4">
-            {isIOSDevice 
-              ? 'Add to your home screen for quick access and a better experience'
-              : 'Install our app for quick access, offline support, and push notifications'}
+            {isIOSDevice
+              ? 'Add ContractToCozy to your home screen for quick, full-screen access'
+              : 'Install ContractToCozy for quick, full-screen access from your home screen'}
           </p>
           
           {isIOSDevice ? (
@@ -132,79 +132,6 @@ export function InstallPrompt() {
             className="w-full text-center text-sm text-gray-500 hover:text-gray-700 mt-3 transition-colors"
           >
             Not now
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Compact version for in-app placement
-export function InstallBanner() {
-  const [show, setShow] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-
-  useEffect(() => {
-    if (isPWA()) return;
-
-    const wasDismissed = localStorage.getItem('install-banner-dismissed');
-    if (wasDismissed) return;
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setShow(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const handleInstall = async () => {
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setShow(false);
-      localStorage.setItem('install-banner-dismissed', 'true');
-    }
-    
-    setDeferredPrompt(null);
-  };
-
-  const handleDismiss = () => {
-    setShow(false);
-    localStorage.setItem('install-banner-dismissed', 'true');
-  };
-
-  if (!show) return null;
-
-  return (
-    <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg mb-4 shadow-lg">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-1">
-          <Download className="h-5 w-5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm">Get the app</p>
-            <p className="text-xs text-blue-100 truncate">Install for a better experience</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleInstall}
-            variant="secondary"
-            size="sm"
-            className="bg-white text-blue-600 hover:bg-blue-50"
-          >
-            Install
-          </Button>
-          <button
-            onClick={handleDismiss}
-            className="text-blue-100 hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
           </button>
         </div>
       </div>

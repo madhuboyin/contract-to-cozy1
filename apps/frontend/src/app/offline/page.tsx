@@ -36,19 +36,15 @@ export default function OfflinePage() {
             </p>
           </div>
 
-          {/* Features available offline */}
+          {/* What to expect while offline */}
           <div className="bg-blue-50 rounded-lg p-4 text-left">
             <p className="font-semibold text-blue-900 mb-2 text-sm">
-              Still available offline:
+              While you&apos;re offline
             </p>
-            <ul className="space-y-1 text-sm text-blue-800">
-              <li>• View cached property details</li>
-              <li>• Complete maintenance tasks</li>
-              <li>• Take photos and add notes</li>
-              <li>• Browse saved documents</li>
-            </ul>
-            <p className="text-xs text-blue-700 mt-3">
-              Your changes will sync automatically when you&apos;re back online.
+            <p className="text-sm text-blue-800">
+              ContractToCozy needs a connection for most things. Pages you&apos;ve
+              already opened may still be visible, but new information won&apos;t
+              load and changes can&apos;t be saved until you&apos;re back online.
             </p>
           </div>
 

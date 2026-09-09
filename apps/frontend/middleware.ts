@@ -223,6 +223,11 @@ export function middleware(request: NextRequest) {
     '/privacy',
     '/cookies',
     '/renovation-closeout/share',
+    // Static "you're offline" fallback shell. Must not force an auth redirect:
+    // the service worker precaches it and serves it on navigation failure,
+    // when there is no way to complete a login round-trip anyway. Carries no
+    // user data.
+    '/offline',
   ];
 
   const isPublicRoute =

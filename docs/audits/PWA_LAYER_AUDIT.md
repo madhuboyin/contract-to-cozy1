@@ -7,6 +7,8 @@ persistence, install experience, push, and the manifest.
 **Findings:** 5 high · 4 medium · 5 low.
 **Companion artifact:** https://claude.ai/code/artifact/82e63600-49ce-445d-9b40-0060f1e8caa1
 
+**Progress:** Track A (A1–A3) done — see [Track A](#track-a--make-the-offline-story-honest). Closes F1, F2, F3, F14.
+
 ---
 
 ## Bottom line
@@ -315,11 +317,33 @@ a schedule.
 
 Highest trust impact, lowest effort. Do this first.
 
-| ID | Action | Closes | Effort | Desktop impact |
-|----|--------|--------|--------|----------------|
-| A1 | Rewrite the offline page and `OfflineBanner` copy to describe only what is real — cached reads, retry when back online. Drop all claims of offline task completion, note capture and automatic sync. | F2 | S | None — copy only; not on any desktop path |
-| A2 | Decide offline scope. Recommended: delete `lib/storage/db.ts`, its unused helpers and the IndexedDB bootstrap now; revisit a real minimal cache (dashboard read + queued status toggle) as a deliberate feature later. | F1, F14 | S | None — module has no importers |
-| A3 | Add a service-worker navigation fallback: on a failed `mode: 'navigate'` fetch, serve a precached `/offline` shell. Precache that shell on `install`. | F3 | S | None — only runs when a navigation fetch rejects |
+**Status: done.** Implemented — commit follows this doc update.
+
+| ID | Action | Closes | Effort | Desktop impact | Status |
+|----|--------|--------|--------|----------------|--------|
+| A1 | Rewrite the offline page and `OfflineBanner` copy to describe only what is real — cached reads, retry when back online. Drop all claims of offline task completion, note capture and automatic sync. | F2 | S | None — copy only; not on any desktop path | ✅ |
+| A2 | Decide offline scope. Recommended: delete `lib/storage/db.ts`, its unused helpers and the IndexedDB bootstrap now; revisit a real minimal cache (dashboard read + queued status toggle) as a deliberate feature later. | F1, F14 | S | None — module has no importers | ✅ deleted |
+| A3 | Add a service-worker navigation fallback: on a failed `mode: 'navigate'` fetch, serve a precached `/offline` shell. Precache that shell on `install`. | F3 | S | None — only runs when a navigation fetch rejects | ✅ |
+
+**What shipped in Track A**
+
+- `src/app/offline/page.tsx` — the "Still available offline" list (offline task
+  completion, photo capture, document browsing, automatic sync) is replaced with an
+  honest one-paragraph statement that the app needs a connection for most things.
+- `src/components/mobile/OfflineBanner.tsx` — "Changes will sync when reconnected" →
+  "Some features won't work until you reconnect"; "Back online! Syncing your changes…"
+  → "Back online."
+- `src/components/mobile/InstallPrompt.tsx` — install copy no longer claims "offline
+  support" or "push notifications"; the unused `InstallBanner` export (with its
+  divergent `install-banner-dismissed` key, part of F14) is removed.
+- `src/lib/storage/db.ts` — deleted in full; `idb` removed from `package.json` and the
+  lockfile. It had zero importers.
+- `public/sw.js` — `CACHE_NAME` bumped to `c2c-v1.3.0`; `install` now best-effort
+  precaches `/offline`; navigations are network-first with the cached offline shell as
+  the fallback on a network-layer failure only. The online path is unchanged — server
+  redirects still pass through as opaque redirects.
+- `middleware.ts` — `/offline` added to `publicRoutes` so the fallback shell is
+  reachable and precacheable without forcing an auth redirect. It carries no user data.
 
 ### Track B — Shared foundation
 

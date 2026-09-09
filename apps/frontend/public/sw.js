@@ -1,6 +1,11 @@
-const CACHE_NAME = 'c2c-v1.2.0';
+const CACHE_NAME = 'c2c-v1.3.0';
 
-// Only cache immutable Next.js static chunks — never HTML, RSC, or API responses.
+// The only HTML document this worker caches: a static "you're offline" shell
+// served when a navigation cannot reach the network. It carries no user data.
+const OFFLINE_URL = '/offline';
+
+// Only cache immutable Next.js static chunks and the offline shell — never
+// dynamic HTML, RSC payloads, or API responses.
 function isImmutableAsset(url) {
   const path = new URL(url).pathname;
   return path.startsWith('/_next/static/');
@@ -15,9 +20,22 @@ async function trimCache(cacheName, maxEntries) {
   }
 }
 
-// Install — nothing to precache, just activate immediately.
+// Install — precache the offline fallback shell, then activate immediately.
+// The precache is best-effort: if it fails (e.g. installed while offline),
+// installation still succeeds and the fetch handler simply has no fallback
+// until the next successful update.
 self.addEventListener('install', (event) => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    (async () => {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+      } catch (err) {
+        // best-effort — ignore
+      }
+      await self.skipWaiting();
+    })()
+  );
 });
 
 // Activate — clear all old caches and take control.
@@ -39,12 +57,29 @@ self.addEventListener('fetch', (event) => {
   // Let the browser handle cross-origin requests normally.
   if (!url.startsWith(self.location.origin)) return;
 
-  // Never intercept: navigations, RSC requests, API calls, or monitoring.
-  // Letting these fall through to the network ensures auth redirects and
-  // fresh server state always work correctly.
   const { pathname, search } = new URL(url);
+
+  // Navigations: go straight to the network, exactly as before — the online
+  // path is unchanged and server redirects (auth, etc.) are still followed by
+  // the browser because fetch() of a navigation yields an opaque redirect that
+  // respondWith passes through untouched. The ONLY added behaviour is that a
+  // network failure now falls back to the cached offline shell instead of the
+  // browser's default error page. .catch() fires only on a network-layer
+  // failure; HTTP error responses (4xx/5xx) still resolve and pass through.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        caches.match(OFFLINE_URL, { ignoreSearch: true }).then(
+          (cached) => cached || Response.error()
+        )
+      )
+    );
+    return;
+  }
+
+  // Never intercept: RSC requests, API calls, or monitoring. Letting these
+  // fall through to the network ensures fresh server state always works.
   if (
-    event.request.mode === 'navigate' ||
     search.includes('_rsc=') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/monitoring')
