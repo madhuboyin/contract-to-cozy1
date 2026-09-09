@@ -6,7 +6,7 @@
  * complete, and always pass `updateViaCache: 'none'`.
  */
 
-import { registerServiceWorker } from '@/lib/pwa';
+import { registerServiceWorker, isIOSSafari } from '@/lib/pwa';
 
 type ReadyState = DocumentReadyState;
 
@@ -80,5 +80,45 @@ describe('registerServiceWorker', () => {
 
     expect(removeSpy).toHaveBeenCalledWith('load', expect.any(Function));
     expect(register).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * C4 (F9): the "Add to Home Screen" instruction card must only appear in genuine
+ * Safari on iOS — not other iOS browsers or in-app web views.
+ */
+describe('isIOSSafari', () => {
+  const setUA = (ua: string) =>
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => ua });
+
+  const IPHONE_SAFARI =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+  const IPHONE_CHROME =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0 Mobile/15E148 Safari/604.1';
+  const IPHONE_FB_IAB =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/470.0]';
+  const ANDROID_CHROME =
+    'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36';
+
+  afterEach(() => setUA(IPHONE_SAFARI));
+
+  it('is true for Safari on iPhone', () => {
+    setUA(IPHONE_SAFARI);
+    expect(isIOSSafari()).toBe(true);
+  });
+
+  it('is false for Chrome on iOS', () => {
+    setUA(IPHONE_CHROME);
+    expect(isIOSSafari()).toBe(false);
+  });
+
+  it('is false inside the Facebook in-app browser', () => {
+    setUA(IPHONE_FB_IAB);
+    expect(isIOSSafari()).toBe(false);
+  });
+
+  it('is false on Android', () => {
+    setUA(ANDROID_CHROME);
+    expect(isIOSSafari()).toBe(false);
   });
 });

@@ -5,7 +5,8 @@
 import { useState, useEffect } from 'react';
 import { X, Download, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { isPWA, isIOS, isAndroid } from '@/lib/pwa';
+import { isPWA, isIOSSafari } from '@/lib/pwa';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -13,6 +14,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function InstallPrompt() {
+  const { isAuthenticated } = useAuth();
   const [showPrompt, setShowPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOSDevice, setIsIOSDevice] = useState(false);
@@ -31,12 +33,14 @@ export function InstallPrompt() {
       return;
     }
 
-    // Check if iOS
-    setIsIOSDevice(isIOS());
+    // The manual "Add to Home Screen" instructions only make sense in genuine
+    // Safari on iOS — not other iOS browsers or in-app web views.
+    const iosSafari = isIOSSafari();
+    setIsIOSDevice(iosSafari);
 
     const timeoutIds: ReturnType<typeof setTimeout>[] = [];
 
-    // For Android/Chrome
+    // For Android/Chrome — unchanged.
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -49,8 +53,9 @@ export function InstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handler);
 
-    // For iOS, show prompt after 1 minute if not dismissed
-    if (isIOS() && !wasDismissed) {
+    // For iOS Safari, show the instruction card after a minute — but only once
+    // the visitor is signed in, so a logged-out marketing visitor never sees it.
+    if (iosSafari && isAuthenticated) {
       timeoutIds.push(setTimeout(() => {
         setShowPrompt(true);
       }, 60000));
@@ -60,7 +65,7 @@ export function InstallPrompt() {
       window.removeEventListener('beforeinstallprompt', handler);
       timeoutIds.forEach(clearTimeout);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;

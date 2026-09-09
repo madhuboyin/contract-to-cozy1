@@ -223,6 +223,31 @@ export function isIOS(): boolean {
  */
 export function isAndroid(): boolean {
   if (typeof window === 'undefined') return false;
-  
+
   return /android/i.test(navigator.userAgent);
+}
+
+/**
+ * True only for genuine Safari on iOS — the one context where the
+ * "Share → Add to Home Screen" instructions actually apply. Excludes other
+ * iOS browsers (Chrome/Firefox/Edge, which cannot add PWAs from that menu)
+ * and in-app web views (Facebook, Instagram, etc., which have no such option).
+ */
+export function isIOSSafari(): boolean {
+  if (!isIOS()) return false;
+
+  const ua = navigator.userAgent;
+
+  // Other iOS browsers inject their own token.
+  if (/CriOS|FxiOS|EdgiOS|OPiOS|mercury|GSA\//.test(ua)) return false;
+
+  // Real Safari always carries a "Safari" token; most in-app web views drop it.
+  if (!/Safari/.test(ua)) return false;
+
+  // Known in-app browser signatures.
+  if (/FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|LinkedInApp|Snapchat|Pinterest|MicroMessenger/.test(ua)) {
+    return false;
+  }
+
+  return true;
 }

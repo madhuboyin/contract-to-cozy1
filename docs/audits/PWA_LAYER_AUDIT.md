@@ -22,8 +22,9 @@ persistence, install experience, push, and the manifest.
     `push_devices` table + `PushDevicePlatform` enum) + `apps/workers` prisma client
     resync.
 - Track C — **in progress**: C1 + C2 done (SW registration reliability, `updateViaCache:
-  'none'`, `/sw.js` `no-cache` header — closes F8, F11). C3 done (SW-update toast replaces
-  `window.confirm`, partial F9). C4–C6 open.
+  'none'`, `/sw.js` `no-cache` header — closes F8, F11). C3 + C4 done (SW-update toast
+  replaces `window.confirm`; iOS install hint gated to Safari + signed-in — closes F9).
+  C5–C6 open.
 
 ---
 
@@ -58,7 +59,7 @@ is that the desktop flow must render and behave exactly as it does today.
 | F6 | Push notifications wired to one tool only; no general opt-in | Medium | No | 🟡 native push infra done (B4); general opt-in is C6 |
 | F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No | ✅ fixed (B3) |
 | F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both | ✅ fixed (C1) |
-| F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | 🟡 update prompt is now a toast (C3); iOS hint scoping is C4 |
+| F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ✅ fixed (C3 + C4) |
 | F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No | ⬜ |
 | F11 | No `updateViaCache` control and no cache header for `/sw.js` | Low | No | ✅ fixed (C1 + C2) |
 | F12 | No automated PWA verification in CI | Low | No | ⬜ |
@@ -298,12 +299,18 @@ where those steps do not apply — and regardless of whether the user is signed 
 Implement it as a non-blocking toast with identical dismiss behaviour and review it
 once on desktop. The iOS-hint change is mobile-only. Low risk.
 
-**Partial resolution — C3 (update prompt):** `registerServiceWorker()` no longer calls
-`window.confirm`; it dispatches `SW_UPDATE_READY_EVENT` on `window`. The new
-`ServiceWorkerUpdatePrompt` component (mounted in `providers.tsx`) turns that into a
-dismissible toast with a **Reload** action. Uses the app's existing Radix toast system;
-purely additive. Tests: `apps/frontend/src/components/system/__tests__/ServiceWorkerUpdatePrompt.test.tsx`
-(3). **C4 (the iOS-hint scoping) is still open.**
+**Resolution — C3 + C4:**
+
+- **C3 (update prompt):** `registerServiceWorker()` no longer calls `window.confirm`; it
+  dispatches `SW_UPDATE_READY_EVENT` on `window`. The new `ServiceWorkerUpdatePrompt`
+  component (mounted in `providers.tsx`) turns that into a dismissible toast with a
+  **Reload** action, on the app's existing Radix toast system. Tests (3).
+- **C4 (iOS hint):** new `isIOSSafari()` in `pwa.ts` returns true only for genuine Safari
+  on iOS — not other iOS browsers (`CriOS`/`FxiOS`/…) or in-app web views
+  (`FBAN`/`Instagram`/…). `InstallPrompt.tsx` shows the "Add to Home Screen" card only when
+  `isIOSSafari()` **and** `useAuth().isAuthenticated`. The Android `beforeinstallprompt`
+  branch is unchanged. Tests: `isIOSSafari` UA cases in `pwa.test.ts` (4) +
+  `InstallPrompt.test.tsx` (3).
 
 ### Low severity
 
@@ -460,7 +467,7 @@ Small fixes that make the existing PWA behave the way it already claims to.
 | C1 | In `registerServiceWorker`, run registration immediately when `document.readyState === 'complete'`, otherwise on `load`. Pass `{ updateViaCache: 'none' }`. | F8, F11 (part) | S | None — makes desktop registration reliable too | ✅ |
 | C2 | Add `Cache-Control: no-cache` for `/sw.js` in `next.config.js` headers. | F11 | S | None — one asset's revalidation policy | ✅ |
 | C3 | Replace the `window.confirm` update flow with a non-blocking "Update ready — reload" toast. Keep dismiss behaviour identical. | F9 (update half) | S | Shared component — additive toast; review once on desktop | ✅ |
-| C4 | Gate the iOS "Add to Home Screen" card to Safari only, suppress it in in-app web views, and show it only after authentication. | F9 (iOS half) | S | None — desktop uses the `beforeinstallprompt` branch, unchanged | ⬜ |
+| C4 | Gate the iOS "Add to Home Screen" card to Safari only, suppress it in in-app web views, and show it only after authentication. | F9 (iOS half) | S | None — desktop uses the `beforeinstallprompt` branch, unchanged | ✅ |
 | C5 | Add manifest `id`, `display_override: ["standalone", "minimal-ui"]`, `launch_handler`, and a `start_url` attribution parameter. | F10 | S | None — manifest is inert in a desktop tab | ⬜ |
 | C6 | Generalise push: one notifications setting plus a shared subscription helper that every feature calls, replacing the tool-local implementation. | F6 | M | None — new setting; existing flows untouched | ⬜ |
 
@@ -479,7 +486,12 @@ Small fixes that make the existing PWA behave the way it already claims to.
   `registerServiceWorker()` dispatches `SW_UPDATE_READY_EVENT`; the new
   `src/components/system/ServiceWorkerUpdatePrompt.tsx` (mounted in `providers.tsx`) shows a
   dismissible toast with a **Reload** action. Additive, on the app's existing toast system.
-  Tests (3). Partial F9 — C4 (iOS-hint scoping) remains.
+  Tests (3).
+- **C4** — `isIOSSafari()` added to `pwa.ts` (genuine Safari on iOS only — rejects other
+  iOS browsers and in-app web views by UA token). `InstallPrompt.tsx` gates the iOS "Add to
+  Home Screen" card on `isIOSSafari() && useAuth().isAuthenticated`; the Android
+  `beforeinstallprompt` path is untouched. Tests: `pwa.test.ts` UA cases (4) +
+  `InstallPrompt.test.tsx` (3). **Closes F9** together with C3.
 
 ### Track D — Verification
 
