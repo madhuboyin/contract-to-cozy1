@@ -7,7 +7,11 @@ persistence, install experience, push, and the manifest.
 **Findings:** 5 high · 4 medium · 5 low.
 **Companion artifact:** https://claude.ai/code/artifact/82e63600-49ce-445d-9b40-0060f1e8caa1
 
-**Progress:** Track A (A1–A3) done — see [Track A](#track-a--make-the-offline-story-honest). Closes F1, F2, F3, F14.
+**Progress:**
+- Track A (A1–A3) — **done**, commit `ae0cc251`. Closes F1, F2, F3, F14.
+- Track B — **in progress**: B2 (camera / web-share Permissions-Policy) done; B1 (icons)
+  done for real icons + maskable + apple-touch-icon, with Apple splash screens and manifest
+  screenshots deferred (both need real device captures). Closes F4, F13; F5 largely closed.
 
 ---
 
@@ -32,22 +36,22 @@ is that the desktop flow must render and behave exactly as it does today.
 
 ## Findings at a glance
 
-| ID | Finding | Severity | Touches desktop? |
-|----|---------|----------|------------------|
-| F1 | Offline persistence layer (`storage/db.ts`) is unreferenced dead code | High | No |
-| F2 | Offline page and banners promise capabilities that do not exist | High | No |
-| F3 | `/offline` route is unreachable while offline | High | No |
-| F4 | `Permissions-Policy: camera=()` disables in-app camera capture | High | Fixes both |
-| F5 | App icon set is placeholder art; no maskable icon, screenshots, or splash | High | No |
-| F6 | Push notifications wired to one tool only; no general opt-in | Medium | No |
-| F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No |
-| F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both |
-| F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component |
-| F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No |
-| F11 | No `updateViaCache` control and no cache header for `/sw.js` | Low | No |
-| F12 | No automated PWA verification in CI | Low | No |
-| F13 | `web-share=()` blocks the Web Share API for report sharing | Low | Fixes both |
-| F14 | Housekeeping: unscheduled cache pruning, unused exports, split dismissal keys | Low | No |
+| ID | Finding | Severity | Touches desktop? | Status |
+|----|---------|----------|------------------|--------|
+| F1 | Offline persistence layer (`storage/db.ts`) is unreferenced dead code | High | No | ✅ fixed (A2) |
+| F2 | Offline page and banners promise capabilities that do not exist | High | No | ✅ fixed (A1) |
+| F3 | `/offline` route is unreachable while offline | High | No | ✅ fixed (A3) |
+| F4 | `Permissions-Policy: camera=()` disables in-app camera capture | High | Fixes both | ✅ fixed (B2) |
+| F5 | App icon set is placeholder art; no maskable icon, screenshots, or splash | High | No | 🟡 icons fixed (B1); splash + screenshots deferred |
+| F6 | Push notifications wired to one tool only; no general opt-in | Medium | No | ⬜ |
+| F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No | ⬜ |
+| F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both | ⬜ |
+| F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ⬜ |
+| F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No | ⬜ |
+| F11 | No `updateViaCache` control and no cache header for `/sw.js` | Low | No | ⬜ |
+| F12 | No automated PWA verification in CI | Low | No | ⬜ |
+| F13 | `web-share=()` blocks the Web Share API for report sharing | Low | Fixes both | ✅ fixed (B2) |
+| F14 | Housekeeping: unscheduled cache pruning, unused exports, split dismissal keys | Low | No | ✅ fixed (A2) |
 
 ---
 
@@ -349,12 +353,31 @@ Highest trust impact, lowest effort. Do this first.
 
 Reused verbatim by a wrapped PWA or a native shell. Worth doing before either.
 
-| ID | Action | Closes | Effort | Desktop impact |
-|----|--------|--------|--------|----------------|
-| B1 | Produce a real icon set: 72–512 `any` icons, a dedicated 512 `maskable` with correct safe zone, a 180 apple-touch-icon, apple-touch-startup images, and 2–3 manifest `screenshots`. | F5 | M | None — install surfaces only; tab favicon unchanged |
-| B2 | In `security-headers.js`, change `camera=()` → `camera=(self)` and `web-share=()` → `web-share=(self)`. | F4, F13 | S | None — strictly widens an allowlist; fixes desktop too |
-| B3 | Add `GET /api/mobile/home` returning the composed dashboard plus a server-side consolidated urgent-actions list. Move `consolidateUrgentActions` logic into a shared server util. | F7 | M | None — new route; desktop keeps its current calls |
-| B4 | Native-push prerequisite (only if native iOS is pursued): APNs credentials, a `POST /api/push/devices` token-registration endpoint, and a delivery-pipeline branch for device tokens alongside Web Push. | F6 (part) | L | None — additive backend |
+| ID | Action | Closes | Effort | Desktop impact | Status |
+|----|--------|--------|--------|----------------|--------|
+| B1 | Produce a real icon set: 72–512 `any` icons, a dedicated 512 `maskable` with correct safe zone, a 180 apple-touch-icon, apple-touch-startup images, and 2–3 manifest `screenshots`. | F5 | M | None — install surfaces only; tab favicon unchanged | 🟡 icons done; splash + screenshots deferred |
+| B2 | In `security-headers.js`, change `camera=()` → `camera=(self)` and `web-share=()` → `web-share=(self)`. | F4, F13 | S | None — strictly widens an allowlist; fixes desktop too | ✅ |
+| B3 | Add `GET /api/mobile/home` returning the composed dashboard plus a server-side consolidated urgent-actions list. Move `consolidateUrgentActions` logic into a shared server util. | F7 | M | None — new route; desktop keeps its current calls | ⬜ |
+| B4 | Native-push prerequisite (only if native iOS is pursued): APNs credentials, a `POST /api/push/devices` token-registration endpoint, and a delivery-pipeline branch for device tokens alongside Web Push. | F6 (part) | L | None — additive backend | ⬜ |
+
+**What shipped so far in Track B**
+
+- **B2** — `security-headers.js`: `camera=()` → `camera=(self)`, `web-share=()` →
+  `web-share=(self)`. `microphone` stays fully disabled (no feature captures audio). This
+  unblocks the live-camera barcode / QR / label-OCR scanners on desktop and mobile alike.
+- **B1 (icons)** — every icon is now generated from the real brand mark
+  (`public/ctc_logo.png`), not the 200-byte placeholders:
+  - `public/icons/icon-{72..512}.png` — 8 `any` sizes, 4.6–56 KB, mark at ~82% of the tile.
+  - `public/icons/icon-maskable-{192,512}.png` — new; mark held within the inner ~62% so
+    it survives any OS mask. `manifest.json` no longer reuses the `any` icons for
+    `maskable`.
+  - `public/apple-touch-icon.png` — new, 180×180; `layout.tsx` `icons.apple` points to it,
+    and `icons.icon` now also lists the 192/512 PNGs alongside `favicon.svg`.
+  - Generation was a one-off Pillow script (sharp's arm64 binary is not installed here); it
+    is not committed.
+- **Deferred, needs a running app / real devices:** `apple-touch-startup-image` splash
+  screens (many device-specific sizes, low payoff) and manifest `screenshots` (must be
+  genuine captures — a marketing render in the install dialog would be worse than none).
 
 ### Track C — PWA correctness
 

@@ -64,7 +64,11 @@ const STATIC_SECURITY_HEADERS = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   {
     key: 'Permissions-Policy',
-    value: 'accelerometer=(), autoplay=(), bluetooth=(), browsing-topics=(), camera=(), display-capture=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), publickey-credentials-get=(self), screen-wake-lock=(), usb=(), web-share=()',
+    // camera=(self): the inventory barcode / QR / label-OCR scanners open a live
+    // getUserMedia video stream from this origin. web-share=(self): report and
+    // home-score screens offer native share-sheet hand-off. microphone stays
+    // fully disabled — no feature captures audio.
+    value: 'accelerometer=(), autoplay=(), bluetooth=(), browsing-topics=(), camera=(self), display-capture=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), publickey-credentials-get=(self), screen-wake-lock=(), usb=(), web-share=(self)',
   },
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
   { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
