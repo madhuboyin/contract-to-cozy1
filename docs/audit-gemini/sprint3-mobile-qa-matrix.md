@@ -1,6 +1,6 @@
 # Sprint 3 Mobile QA Matrix
 
-Date: 2026-04-20
+Date: 2026-09-09
 Owner: QA Mobile + FE
 Devices: iOS Safari, Android Chrome
 
@@ -19,6 +19,10 @@ Devices: iOS Safari, Android Chrome
 | M-3 | Protect and vault safety surfaces | /dashboard/protect -> /dashboard/properties/[id]/vault | Coverage, incidents, and trust metadata render correctly in mobile layout. | PENDING | PENDING | Pending capture | |
 | M-4 | Provider portal auth and queue | /providers/login -> /providers/dashboard -> /providers/bookings -> /providers/bookings/[id] | Provider can access queue and execute booking lifecycle actions. | PENDING | PENDING | Pending capture | |
 | M-5 | Provider operations screens | /providers/services + /providers/calendar + /providers/portfolio + /providers/profile | Core provider sections open from nav and preserve responsive usability. | PENDING | PENDING | Pending capture | |
+
+## Automated PWA contract
+
+`PASS` — 47 checks (manifest, icons, offline fallback, registration, headers).
 
 ## Sign-off
 

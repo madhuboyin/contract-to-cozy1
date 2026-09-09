@@ -1,7 +1,14 @@
 #!/usr/bin/env node
+//
+// Generates the manual mobile QA matrix AND runs the automated PWA contract
+// check (PWA audit D2 / F12). The device-by-device journey table below is still
+// filled in by hand, but the PWA layer — manifest, icons, offline fallback,
+// registration, headers — is now verified here and this script exits non-zero
+// if that contract is broken.
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { runPwaContractChecks } from '../check-pwa-contract.mjs';
 
 const rootDir = process.cwd();
 const outputPath = path.resolve(rootDir, '..', '..', 'docs', 'audit-gemini', 'sprint3-mobile-qa-matrix.md');
@@ -60,6 +67,20 @@ for (const testCase of cases) {
   lines.push(`| ${testCase.id} | ${testCase.journey} | ${testCase.path} | ${testCase.expected} | PENDING | PENDING | Pending capture | |`);
 }
 lines.push('');
+// ── Automated PWA contract (D1) ─────────────────────────────────────────────
+const { passed, failures } = runPwaContractChecks();
+
+lines.push('## Automated PWA contract');
+lines.push('');
+lines.push(
+  failures.length === 0
+    ? `\`PASS\` — ${passed.length} checks (manifest, icons, offline fallback, registration, headers).`
+    : `\`FAIL\` — ${failures.length} of ${passed.length + failures.length} checks failed:`,
+);
+lines.push('');
+for (const name of failures) lines.push(`- \`FAIL\` ${name}`);
+if (failures.length > 0) lines.push('');
+
 lines.push('## Sign-off');
 lines.push('');
 lines.push('| Role | Name | Date | Status |');
@@ -72,3 +93,10 @@ fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${lines.join('\n')}\n`);
 
 console.log(`[sprint3-mobile-matrix] Wrote ${outputPath}`);
+
+if (failures.length > 0) {
+  console.error(`[sprint3-mobile-matrix] PWA contract FAILED (${failures.length}):`);
+  for (const name of failures) console.error(`  - ${name}`);
+  process.exit(1);
+}
+console.log(`[sprint3-mobile-matrix] PWA contract passed (${passed.length} checks)`);

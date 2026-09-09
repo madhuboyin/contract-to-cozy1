@@ -27,7 +27,15 @@ persistence, install experience, push, and the manifest.
   `id` / `display_override` / `launch_handler` / `start_url` attribution — closes F10 bar
   deferred `screenshots`); C6 (feature-agnostic push subscription service + endpoints + a
   per-device notifications toggle — closes F6 with B4).
-- Track D (F12 — CI coverage for the PWA layer) — not started.
+- Track D (F12 — CI coverage for the PWA layer) — **done**: browser-free
+  `check-pwa-contract.mjs` (47 assertions) wired into `qa:gates` + `npm test`, and
+  `generate-mobile-qa-matrix.mjs` now gates on it. Full Lighthouse/Playwright E2E left as a
+  follow-up (needs a running-app CI job).
+
+**13 of 14 findings resolved.** F5 is the only partial — its icons are done, but Apple
+splash screens + manifest `screenshots` need real device captures. F12's ideal
+Lighthouse/Playwright E2E is noted as a follow-up (needs running-app CI). Plus the manual
+`npx prisma db push` for B4's `push_devices` table.
 
 ---
 
@@ -65,7 +73,7 @@ is that the desktop flow must render and behave exactly as it does today.
 | F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ✅ fixed (C3 + C4) |
 | F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No | ✅ fixed (C5) — `screenshots` still deferred with B1 |
 | F11 | No `updateViaCache` control and no cache header for `/sw.js` | Low | No | ✅ fixed (C1 + C2) |
-| F12 | No automated PWA verification in CI | Low | No | ⬜ |
+| F12 | No automated PWA verification in CI | Low | No | ✅ fixed (D1 + D2) — full Lighthouse/Playwright E2E noted as a follow-up needing a running-app CI job |
 | F13 | `web-share=()` blocks the Web Share API for report sharing | Low | Fixes both | ✅ fixed (B2) |
 | F14 | Housekeeping: unscheduled cache pruning, unused exports, split dismissal keys | Low | No | ✅ fixed (A2) |
 
@@ -363,6 +371,22 @@ offline-navigation behaviour, so regressions in this layer are invisible.
 
 **Desktop-safe** — CI-only additions.
 
+**Resolution — D1 + D2:**
+
+- **D1:** new browser-free checker `apps/frontend/scripts/check-pwa-contract.mjs` (47
+  assertions) — manifest installability fields, every referenced icon's real PNG
+  dimensions **and** a placeholder-size floor (the 166 B–1.9 KB regression), the SW offline
+  precache + navigation fallback + the "never intercept API/RSC" guards, the
+  `updateViaCache: 'none'` + `readyState` registration options, the `/sw.js` no-cache
+  header, and `camera=(self)`. Wired in as `npm run qa:pwa` inside `qa:gates`, and as a
+  jest test (`src/__tests__/pwa-contract.test.ts`) so it also runs in `npm test`.
+- **D2:** `generate-mobile-qa-matrix.mjs` now runs those checks, embeds a PASS/FAIL section
+  in the generated matrix, and **exits non-zero on failure** — so `qa:sprint3` is a real
+  gate, not just a doc generator. The device-by-device journey table stays manual.
+- **Follow-up (not done):** a full Lighthouse installability score + a Playwright
+  offline-navigation E2E both need a running-app CI job; the static contract check covers
+  the regression-prone parts without that infrastructure.
+
 #### F13 — `web-share=()` blocks the Web Share API
 
 The same `Permissions-Policy` as F4 disables `web-share` entirely. Sharing a report or
@@ -527,17 +551,26 @@ Small fixes that make the existing PWA behave the way it already claims to.
 
 So this layer stops being invisible to the test suite.
 
-| ID | Action | Closes | Effort | Desktop impact |
-|----|--------|--------|--------|----------------|
-| D1 | Add a Lighthouse installability / best-practices assertion and a Playwright offline-navigation test to `qa:gates`. | F12 | M | None — CI only |
-| D2 | Make `generate-mobile-qa-matrix.mjs` drive an actual headless run instead of only emitting a checklist. | F12 | M | None — CI only |
+| ID | Action | Closes | Effort | Desktop impact | Status |
+|----|--------|--------|--------|----------------|--------|
+| D1 | Add a Lighthouse installability / best-practices assertion and a Playwright offline-navigation test to `qa:gates`. | F12 | M | None — CI only | ✅ browser-free PWA contract check (47 assertions) in `qa:gates` + `npm test`; full Lighthouse/Playwright E2E noted as follow-up |
+| D2 | Make `generate-mobile-qa-matrix.mjs` drive an actual headless run instead of only emitting a checklist. | F12 | M | None — CI only | ✅ runs the contract check, embeds the result, exits non-zero on failure |
+
+**What shipped in Track D**
+
+- `apps/frontend/scripts/check-pwa-contract.mjs` — 47 browser-free assertions over the
+  manifest, real icon assets (PNG dims + placeholder-size floor), the SW offline
+  fallback + scope guards, registration options, and headers. `npm run qa:pwa`; added to
+  the `qa:gates` chain and to `npm test` via `src/__tests__/pwa-contract.test.ts`.
+- `generate-mobile-qa-matrix.mjs` now runs the check, embeds a PASS/FAIL section, and
+  exits non-zero on failure — `qa:sprint3` is a gate now.
 
 ### Suggested order
 
 1. **Truth and quick correctness** — ~~A1, A2, A3, B2, C1, C2~~ **done.**
 2. **Install quality** — ~~C5, C3, C4~~ **done**; B1 icons done, B1 splash screens +
    manifest `screenshots` still pending (need real device captures).
-3. **Shared platform work** — ~~B3, C6~~ done; remaining: **D1 / D2** (CI coverage for the
+3. **Shared platform work** — ~~B3, C6, D1, D2~~ **done** (CI coverage for the
    whole layer — F12).
 4. **Only if going native** — ~~B4~~ (done). APNs delivery + `/api/push/devices` are in
    and inert until `APNS_*` is set; a wrapped-PWA shell simply never configures them.
