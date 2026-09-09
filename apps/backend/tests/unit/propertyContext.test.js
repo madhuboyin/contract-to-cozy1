@@ -50,6 +50,64 @@ test('keeps equally authoritative disagreeing candidates conflicted', () => {
   assert.equal(fact.state, 'CONFLICTED');
 });
 
+test('homeowner evidence outranks newer public-record evidence', () => {
+  const fact = resolvePropertyFactCandidates('exterior.hasDrainageIssues', [
+    {
+      value: true,
+      evidence: {
+        source: 'PUBLIC_RECORD',
+        verified: false,
+        confidence: null,
+        observedAt: new Date('2026-07-15T00:00:00.000Z'),
+        validUntil: null,
+      },
+    },
+    {
+      value: false,
+      evidence: {
+        source: 'USER_REPORTED',
+        verified: false,
+        confidence: 0.9,
+        observedAt: new Date('2026-07-01T00:00:00.000Z'),
+        validUntil: null,
+      },
+    },
+  ], NOW);
+
+  assert.equal(fact.value, false);
+  assert.equal(fact.source, 'USER_REPORTED');
+});
+
+test('document and inspection evidence each outrank newer public-record evidence', () => {
+  for (const source of ['DOCUMENT', 'INSPECTION']) {
+    const fact = resolvePropertyFactCandidates('exterior.hasDrainageIssues', [
+      {
+        value: true,
+        evidence: {
+          source: 'PUBLIC_RECORD',
+          verified: false,
+          confidence: null,
+          observedAt: new Date('2026-07-15T00:00:00.000Z'),
+          validUntil: null,
+        },
+      },
+      {
+        value: false,
+        evidence: {
+          source,
+          verified: false,
+          confidence: 0.8,
+          observedAt: new Date('2026-07-01T00:00:00.000Z'),
+          validUntil: null,
+        },
+      },
+    ], NOW);
+
+    assert.equal(fact.value, false);
+    assert.equal(fact.source, source);
+  }
+});
+
 test('rejects contradictory exterior profile input but preserves unknown separately', () => {
   assert.doesNotThrow(() => validateExteriorProfile({ hasPrivateOutdoorSpace: null, outdoorSpaceTypes: [] }));
   assert.throws(

@@ -20,6 +20,9 @@ export interface ExternalPropertyData {
 }
 
 /**
+ * @deprecated This synchronous pre-create seam will be removed after the
+ * property-scoped background enrichment workflow replaces its remaining caller.
+ *
  * ExternalPropertyDataService abstracts the fetching of property-specific data
  * from public record providers like RentCast or ATTOM.
  */

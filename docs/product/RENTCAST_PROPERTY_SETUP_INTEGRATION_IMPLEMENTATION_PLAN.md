@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
 **Version:** 1.0
-**Status:** Proposed
+**Status:** In progress — RC-0 contract guardrails implemented
 **Date:** 2026-09-09
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)

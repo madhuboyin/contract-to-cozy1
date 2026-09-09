@@ -65,7 +65,9 @@ router.get('/', authenticate, restrictToHomeowner, propertyController.listProper
  * @swagger
  * /api/properties/lookup:
  *   get:
- *     summary: Lookup property data by address
+ *     deprecated: true
+ *     summary: Deprecated pre-create property lookup
+ *     description: Do not use for new integrations. Property enrichment is moving to a property-scoped post-commit workflow.
  *     tags: [Properties]
  *     security:
  *       - bearerAuth: []

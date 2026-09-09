@@ -274,7 +274,9 @@ export const deleteProperty = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * Lookup property data by address using external providers
+ * @deprecated Arbitrary-address, pre-create provider lookup is retained only
+ * for compatibility while onboarding migrates to post-commit enrichment.
+ * New callers must use property-scoped enrichment after Property creation.
  */
 export const lookupProperty = async (req: Request, res: Response) => {
   try {

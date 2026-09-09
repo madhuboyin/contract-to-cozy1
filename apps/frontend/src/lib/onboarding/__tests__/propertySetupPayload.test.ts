@@ -46,13 +46,16 @@ describe('property setup create payloads', () => {
     });
   });
 
-  it('preserves explicitly supplied facts, including an explicit No', () => {
-    const result = buildConfirmedPropertyCreatePayload({
+  it('preserves explicitly supplied home facts, including an explicit No', () => {
+    const setupData = {
       ...address,
       propertySize: 1850,
+      // A legacy/provider-shaped session may still contain these values. They
+      // must never become homeowner-reported financing facts.
       lastSalePrice: 350_000_00,
       lastSaleDate: '2024-04-20',
-    }, {
+    };
+    const result = buildConfirmedPropertyCreatePayload(setupData, {
       dwellingType: 'DETACHED_SINGLE_FAMILY',
       yearBuilt: 1998,
       bedrooms: 3,
@@ -69,18 +72,19 @@ describe('property setup create payloads', () => {
       bathrooms: 2.5,
       basementConfiguration: 'NONE',
       exteriorProfile: { hasPoolOrSpa: false },
-      purchasePriceCents: 350_000_00,
-      purchaseDate: '2024-04-20',
     });
+    expect(result).not.toHaveProperty('purchasePriceCents');
+    expect(result).not.toHaveProperty('purchaseDate');
   });
 
   it('keeps established-owner creation address-only even when lookup facts are available', () => {
-    const result = buildConfirmedPropertyCreatePayload({
+    const legacyLookupData = {
       ...address,
       propertySize: 1850,
       lastSalePrice: 350_000_00,
       lastSaleDate: '2024-04-20',
-    }, {
+    };
+    const result = buildConfirmedPropertyCreatePayload(legacyLookupData, {
       dwellingType: 'DETACHED_SINGLE_FAMILY',
       yearBuilt: 1998,
       bedrooms: 3,
