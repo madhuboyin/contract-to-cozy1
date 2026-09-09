@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
 **Version:** 1.0
-**Status:** In progress — RC-0 and RC-1 implemented
+**Status:** In progress — RC-0 through RC-2 implemented
 **Date:** 2026-09-09
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)
@@ -265,6 +265,8 @@ interface MappedPublicRecordFact {
 ```
 
 The mapper shall implement the FRD allowlist and explicit dwelling mapping. Tests must prove that extra RentCast response properties do not appear in the mapped output.
+
+RentCast exposes a two-digit `stateFips` and a three-digit `countyFips`. The mapper shall concatenate them only when both components are valid, producing the canonical five-digit county FIPS; an inconsistent or malformed component is omitted independently.
 
 ### 6.5 Protected-fact merge
 

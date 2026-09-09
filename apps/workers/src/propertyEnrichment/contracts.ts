@@ -44,7 +44,8 @@ export interface RentCastPropertyRecord {
   countyFips?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  propertyType?: RentCastPropertyType | null;
+  /** Kept open so newly introduced provider values can be safely ignored. */
+  propertyType?: string | null;
   bedrooms?: number | null;
   bathrooms?: number | null;
   squareFootage?: number | null;
@@ -56,8 +57,17 @@ export interface RentCastPropertyRecord {
 export type RentCastFetchOutcome =
   | { kind: 'SUCCESS'; records: RentCastPropertyRecord[]; requestCompletedAt: Date }
   | { kind: 'NO_RESULT'; requestCompletedAt: Date }
-  | { kind: 'RETRYABLE'; code: 'TIMEOUT' | 'RATE_LIMIT' | 'PROVIDER_500' | 'PROVIDER_504' }
+  | { kind: 'NOT_CONFIGURED' }
+  | { kind: 'RETRYABLE'; code: 'TIMEOUT' | 'NETWORK' | 'RATE_LIMIT' | 'PROVIDER_500' | 'PROVIDER_504' }
   | { kind: 'TERMINAL'; code: 'INVALID_REQUEST' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'INVALID_RESPONSE' };
+
+export interface PropertyAddressIdentity {
+  address: string;
+  unit?: string | null;
+  city: string;
+  state: string;
+  zipCode: string;
+}
 
 export type RentCastMatchOutcome =
   | { kind: 'MATCHED'; record: RentCastPropertyRecord }
