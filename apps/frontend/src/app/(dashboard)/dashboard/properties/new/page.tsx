@@ -14,6 +14,7 @@ import {
   sameOnboardingAddress,
   type OnboardingAddress,
 } from '@/lib/onboarding/addressIntegrity';
+import { buildAddressPropertyCreatePayload } from '@/lib/onboarding/propertySetupPayload';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 const EMPTY_ADDRESS: OnboardingAddress = { address: '', city: '', state: '', zipCode: '' };
@@ -72,10 +73,9 @@ export default function NewPropertyPage() {
     setError('');
     setSubmitting(true);
     try {
-      const response = await api.createProperty({
-        ...normalized,
-        ...(hasExistingProperty ? { isPrimary: makePrimary } : {}),
-      });
+      const response = await api.createProperty(
+        buildAddressPropertyCreatePayload(normalized, hasExistingProperty, makePrimary),
+      );
       if (!response.success || !response.data?.id) {
         setError(response.message || 'Unable to add this home.');
         return;

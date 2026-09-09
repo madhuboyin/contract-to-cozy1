@@ -32,7 +32,11 @@ import {
   type RadarPropertyReconciliationReason,
 } from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 import { requestPropertySavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
-import { shouldCreatePropertyAsPrimary } from './propertySetupPolicy';
+import {
+  runNonFatalPostCreateStep,
+  shouldClearExistingPrimary,
+  shouldCreatePropertyAsPrimary,
+} from './propertySetupPolicy';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -61,14 +65,12 @@ async function runPostCreateStep(
   operation: string,
   step: () => Promise<unknown>,
 ): Promise<void> {
-  try {
-    await step();
-  } catch (error) {
+  await runNonFatalPostCreateStep(step, (error) => {
     logger.error(
       { err: error, propertyId, operation },
       '[PROPERTY_CREATE] Auxiliary operation deferred after core Property commit',
     );
-  }
+  });
 }
 
 async function runSerializablePropertyCreate<T>(
@@ -610,7 +612,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     const assertedFactKeys = capturedFactKeys(data).filter(
       (factKey) => factKey !== 'core.isPrimary' || existingPropertyCount > 0,
     );
-    if (shouldBePrimary && existingPropertyCount > 0) {
+    if (shouldClearExistingPrimary(existingPropertyCount, data.isPrimary)) {
       await tx.property.updateMany({
         where: { homeownerProfileId, isPrimary: true },
         data: { isPrimary: false },

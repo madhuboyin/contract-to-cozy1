@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
 import { addressOnlyPropertyData, onboardingAddressError, sameOnboardingAddress } from '@/lib/onboarding/addressIntegrity';
+import { buildConfirmedPropertyCreatePayload } from '@/lib/onboarding/propertySetupPayload';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
 import type { BasementConfiguration, DwellingType } from '@/types';
 
@@ -158,25 +159,12 @@ export default function ConfirmOnboardingPage() {
     let createdPropertyId: string | null = null;
     try {
       // Create the real property from the lookup data
-      const response = await api.createProperty({
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        zipCode: data.zipCode,
+      const response = await api.createProperty(buildConfirmedPropertyCreatePayload(data, {
+        ...homeProfile,
         yearBuilt,
-        propertySize: typeof data.propertySize === 'number' ? data.propertySize : undefined,
-        ...(homeProfile.dwellingType === 'UNKNOWN' ? {} : { dwellingType: homeProfile.dwellingType }),
         bedrooms,
         bathrooms,
-        ...(homeProfile.basementConfiguration === 'UNKNOWN' ? {} : { basementConfiguration: homeProfile.basementConfiguration }),
-        ...(homeProfile.hasPoolOrSpa === 'UNKNOWN'
-          ? {}
-          : { exteriorProfile: { hasPoolOrSpa: homeProfile.hasPoolOrSpa === 'YES' } }),
-        isPrimary: true,
-        // Pre-populate other fields found during lookup
-        purchasePriceCents: data.lastSalePrice,
-        purchaseDate: data.lastSaleDate,
-      });
+      }));
 
       if (response.success) {
         const propertyId = response.data?.id;

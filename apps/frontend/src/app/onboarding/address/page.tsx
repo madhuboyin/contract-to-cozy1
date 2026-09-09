@@ -10,7 +10,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
-import type { ActivationEntryContextInput } from '@/types';
 import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
 import {
   addressOnlyPropertyData,
@@ -21,11 +20,13 @@ import {
 } from '@/lib/onboarding/addressIntegrity';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
 import type { BasementConfiguration, DwellingType } from '@/types';
-
-type Situation = 'own' | 'buying' | 'new-build' | 'exploring';
-type TriggerType = ActivationEntryContextInput['activeTrigger']['type'];
-type BuyerPurchaseStage = NonNullable<ActivationEntryContextInput['buyer']>['purchaseStage'];
-type BuyerInspectionStatus = NonNullable<ActivationEntryContextInput['buyer']>['inspectionStatus'];
+import {
+  buildOnboardingActivationContext,
+  type BuyerInspectionStatus,
+  type BuyerPurchaseStage,
+  type OnboardingSituation as Situation,
+  type OnboardingTriggerType as TriggerType,
+} from '@/lib/onboarding/onboardingEntryContext';
 
 const TRIGGER_OPTIONS: Array<{ type: TriggerType; label: string }> = [
   { type: 'REPAIR', label: 'Something needs repair' },
@@ -37,10 +38,6 @@ const TRIGGER_OPTIONS: Array<{ type: TriggerType; label: string }> = [
   { type: 'ANTICIPATED_COST', label: 'Prepare for a future cost' },
   { type: 'NONE_EXPLORING', label: 'Just understand my home' },
 ];
-
-function isoFromDateInput(value: string): string | null {
-  return value ? new Date(`${value}T12:00:00.000Z`).toISOString() : null;
-}
 
 /**
  * AddressOnboardingPage is the first "Wow" moment.
@@ -81,66 +78,20 @@ export default function AddressOnboardingPage() {
     }
   }, []);
 
-  const buildActivationContext = (): ActivationEntryContextInput => {
+  const buildActivationContext = () => {
     if (!situation) throw new Error('Choose where you are in the home journey.');
     const selectedTrigger = TRIGGER_OPTIONS.find((option) => option.type === triggerType);
-    if (situation === 'buying') {
-      const buyerLabel = buyerConcern.trim()
-        || (buyerPurchaseStage === 'EXPLORING'
-          ? 'Compare this home before making an offer'
-          : buyerPurchaseStage === 'OFFER_MADE'
-            ? 'Prepare for a possible contract'
-            : 'Prepare for closing');
-      return {
-        entryPath: 'EXISTING_HOME_PURCHASE',
-        ownershipState: buyerPurchaseStage === 'UNDER_CONTRACT' ? 'UNDER_CONTRACT' : 'SHOPPING',
-        propertyOrigin: 'EXISTING_HOME',
-        activeTrigger: {
-          type: ['REPORT_AVAILABLE', 'REVIEWED'].includes(buyerInspectionStatus) ? 'INSPECTION_FINDING' : 'OTHER',
-          label: buyerLabel,
-          detail: buyerConcern.trim() || null,
-          entityType: 'PROPERTY',
-          entityId: null,
-          source: 'USER_SELECTED',
-        },
-        buyer: {
-          purchaseStage: buyerPurchaseStage,
-          targetCloseDate: isoFromDateInput(targetCloseDate),
-          inspectionStatus: buyerInspectionStatus,
-          moveInDate: isoFromDateInput(moveInDate),
-          immediateConcern: buyerConcern.trim() || null,
-        },
-        consentContext: 'User submitted buyer journey context to prepare a property-scoped closing plan.',
-        sourceMetadata: { onboardingSurface: 'address', experienceMode: 'BUYER_CLOSING' },
-      };
-    }
-    return {
-          entryPath: situation === 'new-build'
-              ? 'NEW_HOME_SETUP'
-              : situation === 'exploring'
-                ? 'EXPLORATION'
-                : 'EXISTING_OWNER_TRIGGER',
-          ownershipState: situation === 'new-build'
-            ? 'UNDER_CONTRACT'
-            : situation === 'exploring'
-              ? 'SHOPPING'
-              : 'ESTABLISHED_OWNER',
-          propertyOrigin: situation === 'new-build'
-            ? 'NEW_CONSTRUCTION'
-            : situation === 'exploring'
-              ? 'UNKNOWN'
-              : 'EXISTING_HOME',
-          activeTrigger: {
-            type: triggerType!,
-            label: selectedTrigger?.label ?? 'Home planning question',
-            detail: triggerDetail.trim() || null,
-            entityType: 'PROPERTY',
-            entityId: null,
-            source: 'USER_SELECTED',
-          },
-          consentContext: 'User submitted this trigger to receive property-specific onboarding guidance.',
-          sourceMetadata: { onboardingSurface: 'address' },
-    };
+    return buildOnboardingActivationContext({
+      situation,
+      triggerType,
+      triggerLabel: selectedTrigger?.label,
+      triggerDetail,
+      buyerPurchaseStage,
+      buyerInspectionStatus,
+      targetCloseDate,
+      moveInDate,
+      buyerConcern,
+    });
   };
 
   const prepareConfirmation = async (propertyData: Record<string, unknown>, source: OnboardingAddressSource) => {

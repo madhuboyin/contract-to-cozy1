@@ -85,6 +85,7 @@ import {
 
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buildSparsePropertyUpdatePayload } from '@/lib/property/propertyUpdatePayload';
 // --- Appliance Constants and Schemas ---
 const CURRENT_YEAR = new Date().getFullYear();
 const MAJOR_APPLIANCE_OPTIONS = [
@@ -918,43 +919,11 @@ export default function EditPropertyPage() {
         ...(coverPhotoDocumentId !== undefined ? { coverPhotoDocumentId } : {}),
       };
 
-      const dirtyFields = form.formState.dirtyFields;
-      const sparsePayload: Record<string, unknown> = {};
-      const directFieldNames = [
-        'name', 'address', 'city', 'state', 'zipCode', 'timezone', 'isPrimary',
-        'dwellingType', 'ownershipForm', 'propertyUse', 'occupancyStatus',
-        'propertySize', 'yearBuilt', 'bedrooms', 'bathrooms',
-        'heatingType', 'coolingType', 'waterHeaterType', 'roofType',
-        'hvacInstallYear', 'waterHeaterInstallYear', 'roofReplacementYear',
-        'foundationType', 'basementConfiguration', 'sidingType', 'electricalPanelAge',
-        'hasSmokeDetectors', 'hasCoDetectors', 'hasDrainageIssues',
-        'hasSecuritySystem', 'hasFireExtinguisher', 'hasIrrigation',
-        'utilityProvider', 'gasProvider', 'inHistoricDistrict', 'historicRegistryStatus',
-        'inHurricaneZone', 'inFloodZone', 'inWildfireZone', 'isCoastal',
-      ] as const;
-      for (const fieldName of directFieldNames) {
-        if (dirtyFields[fieldName]) sparsePayload[fieldName] = payload[fieldName];
-      }
-
-      const exteriorFieldNames = [
-        'hasPrivateOutdoorSpace', 'outdoorSpaceTypes', 'lotSizeSqFt', 'hasLawn',
-        'hasTreesOrShrubs', 'hasDriveway', 'hasFence', 'hasPoolOrSpa',
-        'hasOutdoorFaucets', 'hasIrrigation', 'hasDrainageIssues',
-      ] as const;
-      if (
-        dirtyFields.dwellingType
-        || dirtyFields.ownershipForm
-        || exteriorFieldNames.some((fieldName) => Boolean(dirtyFields[fieldName]))
-      ) {
-        sparsePayload.exteriorProfile = payload.exteriorProfile;
-      }
-      if (dirtyFields.responsibilities) sparsePayload.responsibilities = payload.responsibilities;
-      if (dirtyFields.purchasePriceDollars) sparsePayload.purchasePriceCents = payload.purchasePriceCents;
-      if (dirtyFields.purchaseDate) sparsePayload.purchaseDate = payload.purchaseDate;
-      if (dirtyFields.lastAppraisedValueDollars) sparsePayload.lastAppraisedValue = payload.lastAppraisedValue;
-      if (dirtyFields.lastAppraisalDate) sparsePayload.lastAppraisalDate = payload.lastAppraisalDate;
-      if (dirtyFields.appliances) sparsePayload.majorAppliances = payload.majorAppliances;
-      if (coverPhotoDocumentId !== undefined) sparsePayload.coverPhotoDocumentId = coverPhotoDocumentId;
+      const sparsePayload = buildSparsePropertyUpdatePayload(
+        payload,
+        form.formState.dirtyFields,
+        { coverPhotoDocumentId },
+      );
 
       return api.updateProperty(
         propertyId,

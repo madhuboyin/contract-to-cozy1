@@ -35,20 +35,15 @@ describe('buyer onboarding home profile capture', () => {
     expect(addressPage).toContain('{ bedrooms: parsedBedrooms }');
     expect(addressPage).toContain('{ bathrooms: parsedBathrooms }');
     expect(addressPage).toContain('basementConfiguration,');
-    expect(addressPage).toContain("hasPoolOrSpa: hasPoolOrSpa === 'UNKNOWN' ? null : hasPoolOrSpa === 'YES'");
+    expect(addressPage).toContain("...(hasPoolOrSpa === 'UNKNOWN' ? {} : { hasPoolOrSpa: hasPoolOrSpa === 'YES' })");
   });
 
   it('writes confirmed profile facts through canonical property creation', () => {
-    const createPayload = (confirmPage.split('api.createProperty({')[1] ?? '')
-      .split('});')[0];
-
-    expect(createPayload).toContain('dwellingType: homeProfile.dwellingType');
-    expect(createPayload).toContain('yearBuilt');
-    expect(createPayload).toContain('bedrooms');
-    expect(createPayload).toContain('bathrooms');
-    expect(createPayload).toContain('basementConfiguration: homeProfile.basementConfiguration');
-    expect(createPayload).toContain('exteriorProfile:');
-    expect(createPayload).toContain('hasPoolOrSpa:');
+    expect(confirmPage).toContain('buildConfirmedPropertyCreatePayload(data, {');
+    expect(confirmPage).toContain('...homeProfile,');
+    expect(confirmPage).toContain('yearBuilt,');
+    expect(confirmPage).toContain('bedrooms,');
+    expect(confirmPage).toContain('bathrooms,');
   });
 
   it('shows an immediate explanation of how the captured facts change guidance', () => {

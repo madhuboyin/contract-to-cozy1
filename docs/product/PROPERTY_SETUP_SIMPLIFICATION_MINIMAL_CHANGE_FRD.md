@@ -543,6 +543,13 @@ Completed in the initial slice:
 - the risk page, dashboard risk card, dashboard exposure tile, orchestration, Property Context, score snapshots, and Home Digital Twin consumers treat legacy incomplete-report sentinels as unavailable rather than actionable; and
 - focused backend, frontend, and worker tests cover the new policy boundaries.
 
+Verification hardening completed on 2026-09-08:
+
+- create-payload construction is centralized in pure mappers with behavioral coverage for address normalization, first-versus-later primary intent, omitted established-owner facts, explicit negative answers, and supplied lookup facts;
+- Property Details sparse-update construction is centralized in a pure mapper with behavioral coverage for unrelated edits, unknown versus explicit-false booleans, exterior envelopes, financial fields, appliances, and cover-photo changes;
+- activation-context construction is centralized and behaviorally verifies that established-owner, buyer, new-home, and exploration entry-path semantics remain unchanged; and
+- service-policy tests now exercise the minimum API create contract, explicit-false preservation, later-primary switching intent, and non-fatal auxiliary failures rather than relying only on source inspection.
+
 Remaining verification:
 
 - environment-backed create transaction and route-level integration coverage when such infrastructure is available; and
