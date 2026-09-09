@@ -795,6 +795,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   await runPostCreateStep(property.id, 'property-intelligence-enqueue', () =>
     JobQueueService.enqueuePropertyIntelligenceJobs(property.id),
   );
+  await runPostCreateStep(property.id, 'property-enrichment-enqueue', () =>
+    JobQueueService.enqueuePropertyEnrichment(property.id, property.addressIdentityVersion),
+  );
 
   // Fetch the full property and then attach its canonical appliance projection.
   try {
@@ -1232,6 +1235,20 @@ export async function updateProperty(
 
     return updated;
   });
+
+  if (addressIdentityChanged) {
+    try {
+      await JobQueueService.enqueuePropertyEnrichment(
+        property.id,
+        property.addressIdentityVersion,
+      );
+    } catch (error) {
+      logger.error(
+        { err: error, propertyId, operation: 'property-enrichment-enqueue' },
+        '[PROPERTY_UPDATE] Auxiliary operation deferred after core Property commit',
+      );
+    }
+  }
 
   if ((data.responsibilities?.length ?? 0) > 0) {
     await reconcileCoverageGuidanceJourneyApplicability(propertyId);

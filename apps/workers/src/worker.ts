@@ -96,6 +96,14 @@ import {
   PropertyIntelligenceJobType,
   PropertyIntelligenceJobPayload,
 } from './jobs/propertyIntelligence.job';
+import {
+  PROPERTY_ENRICHMENT_JOB_NAME,
+  PROPERTY_ENRICHMENT_MAX_ATTEMPTS,
+  PROPERTY_ENRICHMENT_QUEUE_NAME,
+  processPropertyEnrichmentJob,
+  propertyEnrichmentConcurrency,
+} from './jobs/propertyEnrichment.job';
+import type { PropertyEnrichmentJobPayload } from './propertyEnrichment/contracts';
 import { processMaintenanceReminders } from '@worker-shared/services/maintenanceReminder.service';
 import {
   canonicalWorkerJobKey,
@@ -925,6 +933,97 @@ function startWorker() {
       '[RADAR-MATCH] Durable matching disabled by RADAR_MATCH_ENABLED=false',
     );
   }
+  const enrichmentConcurrency = propertyEnrichmentConcurrency();
+  const propertyEnrichmentWorker = new Worker<PropertyEnrichmentJobPayload>(
+    PROPERTY_ENRICHMENT_QUEUE_NAME,
+    async (job) => {
+      if (job.name !== PROPERTY_ENRICHMENT_JOB_NAME) {
+        throw new Error(`[PROPERTY-ENRICHMENT] Unknown job name: ${job.name}`);
+      }
+      return processPropertyEnrichmentJob(job);
+    },
+    {
+      connection: redisConnection,
+      concurrency: enrichmentConcurrency,
+    },
+  );
+  propertyEnrichmentWorker.on('ready', () => {
+    logger.info(
+      { queue: PROPERTY_ENRICHMENT_QUEUE_NAME, concurrency: enrichmentConcurrency },
+      '[PROPERTY-ENRICHMENT] Consumer ready',
+    );
+  });
+  propertyEnrichmentWorker.on('active', (job) => {
+    jobsActiveGauge.inc({ queue: PROPERTY_ENRICHMENT_QUEUE_NAME });
+    (job as unknown as Record<string, unknown>).__metricStart = process.hrtime();
+  });
+  propertyEnrichmentWorker.on('completed', (job, result) => {
+    const start = (job as unknown as Record<string, unknown>).__metricStart as
+      [number, number] | undefined;
+    if (start) {
+      const [seconds, nanoseconds] = process.hrtime(start);
+      jobDurationSeconds.observe(
+        { queue: PROPERTY_ENRICHMENT_QUEUE_NAME, job_name: PROPERTY_ENRICHMENT_JOB_NAME },
+        seconds + nanoseconds / 1e9,
+      );
+    }
+    jobsActiveGauge.dec({ queue: PROPERTY_ENRICHMENT_QUEUE_NAME });
+    jobsProcessedTotal.inc({
+      queue: PROPERTY_ENRICHMENT_QUEUE_NAME,
+      job_name: PROPERTY_ENRICHMENT_JOB_NAME,
+      status: 'completed',
+    });
+    logger.info(
+      {
+        propertyId: job.data.propertyId,
+        provider: job.data.provider,
+        jobId: job.id,
+        addressVersion: job.data.addressVersion,
+        outcome: result.kind,
+        status: result.kind === 'COMPLETED' ? result.status : undefined,
+      },
+      '[PROPERTY-ENRICHMENT] Job completed',
+    );
+  });
+  propertyEnrichmentWorker.on('failed', (job, error) => {
+    jobsActiveGauge.dec({ queue: PROPERTY_ENRICHMENT_QUEUE_NAME });
+    jobsProcessedTotal.inc({
+      queue: PROPERTY_ENRICHMENT_QUEUE_NAME,
+      job_name: PROPERTY_ENRICHMENT_JOB_NAME,
+      status: 'failed',
+    });
+    const maxAttempts = Math.min(
+      PROPERTY_ENRICHMENT_MAX_ATTEMPTS,
+      Number(job?.opts.attempts ?? PROPERTY_ENRICHMENT_MAX_ATTEMPTS),
+    );
+    const finalAttempt = (job?.attemptsMade ?? 0) >= maxAttempts;
+    logger.error(
+      {
+        err: error,
+        propertyId: job?.data.propertyId,
+        provider: job?.data.provider,
+        jobId: job?.id,
+        addressVersion: job?.data.addressVersion,
+        attemptsMade: job?.attemptsMade,
+        maxAttempts,
+        finalAttempt,
+      },
+      finalAttempt
+        ? '[PROPERTY-ENRICHMENT] Job exhausted bounded attempts'
+        : '[PROPERTY-ENRICHMENT] Retry scheduled',
+    );
+    if (finalAttempt) {
+      void alertOnJobFailure(PROPERTY_ENRICHMENT_QUEUE_NAME, job, error);
+    }
+  });
+  propertyEnrichmentWorker.on('error', (error) => {
+    logger.error({ err: error }, '[PROPERTY-ENRICHMENT] Consumer error');
+  });
+  registerShutdownHandler(
+    'propertyEnrichmentWorker',
+    () => propertyEnrichmentWorker.close(),
+  );
+
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
@@ -1655,6 +1754,7 @@ registerShutdownHandler('cronTriggerWorker', () => cronTriggerWorker.close());
 // the registry" gets caught, see validateRegistryQueueWiring() below.
 const KNOWN_QUEUE_NAMES = new Set<string>([
   QUEUE_NAME,
+  PROPERTY_ENRICHMENT_QUEUE_NAME,
   'email-notification-queue',
   'push-notification-queue',
   'sms-notification-queue',

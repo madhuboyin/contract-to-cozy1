@@ -124,6 +124,29 @@ test('does not request the provider when configuration or the address is invalid
   assert.equal(calls, 0);
 });
 
+test('emits only bounded operational observations, including missing configuration', async () => {
+  const observations = [];
+  const unconfigured = new RentCastClient({
+    apiKey: '',
+    observe: (entry) => observations.push(entry),
+    fetchImpl: async () => { throw new Error('must not be called'); },
+  });
+  await unconfigured.fetchPropertyRecords(address);
+
+  const configured = new RentCastClient({
+    apiKey: 'key',
+    observe: (entry) => observations.push(entry),
+    fetchImpl: async () => response(200, [validRecord(), validRecord({ id: 'second' })]),
+  });
+  await configured.fetchPropertyRecords(address);
+
+  assert.equal(observations[0].classification, 'not_configured');
+  assert.equal(observations[0].resultCount, null);
+  assert.equal(observations[1].classification, 'success');
+  assert.equal(observations[1].resultCount, 2);
+  assert.doesNotMatch(JSON.stringify(observations), /5500 Grand Lake|secret-key|rentcast-property-1/);
+});
+
 test('classifies documented HTTP outcomes without reading provider error bodies', async () => {
   const cases = [
     [400, { kind: 'TERMINAL', code: 'INVALID_REQUEST' }],

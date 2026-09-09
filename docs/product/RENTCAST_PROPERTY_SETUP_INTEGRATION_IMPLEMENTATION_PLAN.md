@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
 **Version:** 1.0
-**Status:** In progress — RC-0 through RC-3 implemented
+**Status:** In progress — RC-0 through RC-4 implemented
 **Date:** 2026-09-09
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)
@@ -373,7 +373,7 @@ Exit criteria:
 Tasks:
 
 - Add `property-enrichment-queue` and a versioned payload with no address/key.
-- Add stable BullMQ job ID: `rentcast:<propertyId>:<addressVersion>:v1`.
+- Add a stable BullMQ job identity for provider, Property, address version, and contract version. The repository's BullMQ 5.65 runtime rejects the originally proposed four-segment colon form, so the implemented ID is `rentcast-<propertyId>-<addressVersion>-v1`.
 - Add at most three attempts with exponential backoff for retryable outcomes.
 - Register a worker with default concurrency four, metrics, failure handling, and graceful shutdown.
 - Add a post-commit non-fatal enqueue in the shared Property create service.

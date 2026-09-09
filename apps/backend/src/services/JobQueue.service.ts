@@ -15,6 +15,7 @@ import { createLazyQueue } from '../lib/queuePort';
 import { JOB_REGISTRY } from '../config/workerJobRegistry';
 import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 import { prisma } from '../lib/prisma';
+import { propertyEnrichmentEnqueuesTotal } from '../lib/metrics';
 
 // -----------------------------------------------------------------------------
 // Shared Redis Connection Configuration
@@ -161,10 +162,86 @@ export const getRenovationEvaluationQueue = createLazyQueue<RenovationEvaluation
     }),
 );
 
+export const PROPERTY_ENRICHMENT_QUEUE_NAME = 'property-enrichment-queue';
+export const PROPERTY_ENRICHMENT_JOB_NAME = 'rentcast-property-enrichment-v1';
+export const PROPERTY_ENRICHMENT_CONTRACT_VERSION = 1 as const;
+
+export interface PropertyEnrichmentJobPayload {
+  propertyId: string;
+  provider: 'RENTCAST';
+  addressVersion: number;
+  contractVersion: typeof PROPERTY_ENRICHMENT_CONTRACT_VERSION;
+}
+
+export const getPropertyEnrichmentQueue = createLazyQueue<PropertyEnrichmentJobPayload>(
+  () =>
+    new Queue<PropertyEnrichmentJobPayload>(PROPERTY_ENRICHMENT_QUEUE_NAME, {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
+);
+
+/**
+ * BullMQ 5.65 rejects the four-segment colon form from the product plan.
+ * This filesystem/Redis-safe representation preserves the same stable tuple:
+ * provider + Property + address identity version + contract version.
+ */
+export function propertyEnrichmentJobId(propertyId: string, addressVersion: number): string {
+  return `rentcast-${propertyId}-${addressVersion}-v${PROPERTY_ENRICHMENT_CONTRACT_VERSION}`;
+}
+
 // -----------------------------------------------------------------------------
 // Job Queue Service
 // -----------------------------------------------------------------------------
 export class JobQueueService {
+  /**
+   * Queue one address-version-scoped enrichment job. The payload intentionally
+   * contains no address or provider credential; the worker reloads both sides
+   * of that boundary at execution time.
+   */
+  public async enqueuePropertyEnrichment(
+    propertyId: string,
+    addressVersion: number,
+  ): Promise<'ENQUEUED' | 'DEDUPLICATED'> {
+    const queue = getPropertyEnrichmentQueue();
+    const jobId = propertyEnrichmentJobId(propertyId, addressVersion);
+    try {
+      const existing = await queue.getJob(jobId);
+      if (existing) {
+        propertyEnrichmentEnqueuesTotal.inc({ outcome: 'deduplicated' });
+        logger.info(
+          { propertyId, provider: 'RENTCAST', jobId, addressVersion },
+          '[PROPERTY-ENRICHMENT] Duplicate enqueue coalesced',
+        );
+        return 'DEDUPLICATED';
+      }
+
+      await queue.add(
+        PROPERTY_ENRICHMENT_JOB_NAME,
+        {
+          propertyId,
+          provider: 'RENTCAST',
+          addressVersion,
+          contractVersion: PROPERTY_ENRICHMENT_CONTRACT_VERSION,
+        },
+        {
+          jobId,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5_000 },
+        },
+      );
+      propertyEnrichmentEnqueuesTotal.inc({ outcome: 'enqueued' });
+      logger.info(
+        { propertyId, provider: 'RENTCAST', jobId, addressVersion },
+        '[PROPERTY-ENRICHMENT] Enrichment job enqueued',
+      );
+      return 'ENQUEUED';
+    } catch (error) {
+      propertyEnrichmentEnqueuesTotal.inc({ outcome: 'failed' });
+      throw error;
+    }
+  }
+
   /**
    * Queue the reviewed-program scan for one property as an automatic domain
    * event. This is intentionally separate from the broad scheduled sweep:

@@ -31,6 +31,53 @@ export const jobsActiveGauge = new Gauge({
   registers: [register],
 });
 
+// ─── Property enrichment metrics ────────────────────────────────────────────
+// All labels are bounded classifications. Never attach Property IDs, job IDs,
+// addresses, response bodies, or provider credentials.
+
+export const propertyEnrichmentJobsTotal = new Counter({
+  name: 'property_enrichment_jobs_total',
+  help: 'Property enrichment job executions by bounded outcome',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
+export const propertyEnrichmentRetriesTotal = new Counter({
+  name: 'property_enrichment_retries_total',
+  help: 'Property enrichment executions returned to BullMQ for bounded retry',
+  labelNames: ['error_class'] as const,
+  registers: [register],
+});
+
+export const propertyEnrichmentFactsTotal = new Counter({
+  name: 'property_enrichment_facts_total',
+  help: 'Mapped Property facts by canonical merge disposition',
+  labelNames: ['disposition'] as const,
+  registers: [register],
+});
+
+export const rentCastRequestsTotal = new Counter({
+  name: 'rentcast_requests_total',
+  help: 'RentCast adapter calls by bounded transport or HTTP classification',
+  labelNames: ['classification'] as const,
+  registers: [register],
+});
+
+export const rentCastRequestDurationSeconds = new Histogram({
+  name: 'rentcast_request_duration_seconds',
+  help: 'RentCast adapter call duration in seconds',
+  labelNames: ['classification'] as const,
+  buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  registers: [register],
+});
+
+export const rentCastResultCountTotal = new Counter({
+  name: 'rentcast_result_count_total',
+  help: 'Successful RentCast responses by bounded result-count band',
+  labelNames: ['band'] as const,
+  registers: [register],
+});
+
 // ─── node-cron job metrics ───────────────────────────────────────────────────
 // Registry-driven cron jobs (scheduleCronJobs() in worker.ts) don't run
 // through BullMQ, so they get none of the metrics above. These cover every

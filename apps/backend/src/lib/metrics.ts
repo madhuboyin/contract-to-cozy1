@@ -29,6 +29,17 @@ export const apiRateLimitRejectionsTotal = new Counter({
   registers: [register],
 });
 
+// ─── Property enrichment queue metrics ─────────────────────────────────────
+// Outcome is a bounded lifecycle value. Property IDs, addresses, and job IDs
+// belong in structured logs and must never become Prometheus labels.
+
+export const propertyEnrichmentEnqueuesTotal = new Counter({
+  name: 'property_enrichment_enqueues_total',
+  help: 'Post-commit Property enrichment enqueue attempts by bounded outcome',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
 // ─── Ask / AI Home Concierge metrics ───────────────────────────────────────
 // Labels are bounded registry values. Never attach raw prompts, user IDs,
 // property IDs, session IDs, execution IDs, or captured values.

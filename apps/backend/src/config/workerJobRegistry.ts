@@ -74,6 +74,25 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     supportsPropertyScope: true,
     humanApprovalClass: 'NONE',
   },
+  {
+    key: 'property-enrichment',
+    name: 'Property Enrichment',
+    description: 'Enriches a committed Property from an exact RentCast public-record match.',
+    category: 'PROPERTY_INTELLIGENCE',
+    schedule: 'On-demand (event-driven)',
+    cronExpression: '',
+    type: 'bullmq',
+    queueName: 'property-enrichment-queue',
+    jobName: 'rentcast-property-enrichment-v1',
+    triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    externalProvider: 'RENTCAST',
+    humanApprovalClass: 'NONE',
+  },
 
   // ── Recalls (BullMQ repeatable) ───────────────────────────────────────────
   {

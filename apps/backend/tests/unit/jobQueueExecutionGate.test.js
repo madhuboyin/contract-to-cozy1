@@ -48,6 +48,59 @@ test('requiring JobQueue.service.ts never constructs a real Queue (no Redis conn
   // have regressed back to eager module-scope `new Queue(...)`.
   const mod = loadFreshModule();
   assert.equal(typeof mod.getPropertyIntelligenceQueue, 'function');
+  assert.equal(typeof mod.getPropertyEnrichmentQueue, 'function');
+});
+
+test('property enrichment enqueue uses a safe versioned payload and stable BullMQ-safe job id', async () => {
+  const mod = loadFreshModule();
+  const added = [];
+  mod.getPropertyEnrichmentQueue.__setForTesting({
+    add: async (name, data, opts) => {
+      added.push({ name, data, opts });
+      return { id: opts.jobId };
+    },
+    getJob: async () => undefined,
+  });
+
+  const outcome = await new mod.JobQueueService()
+    .enqueuePropertyEnrichment('property-1', 7);
+
+  assert.equal(outcome, 'ENQUEUED');
+  assert.deepEqual(added, [{
+    name: 'rentcast-property-enrichment-v1',
+    data: {
+      propertyId: 'property-1',
+      provider: 'RENTCAST',
+      addressVersion: 7,
+      contractVersion: 1,
+    },
+    opts: {
+      jobId: 'rentcast-property-1-7-v1',
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+    },
+  }]);
+  assert.equal(Object.hasOwn(added[0].data, 'address'), false);
+  assert.equal(Object.hasOwn(added[0].data, 'apiKey'), false);
+  assert.equal(added[0].opts.jobId.includes(':'), false);
+});
+
+test('property enrichment duplicate enqueue coalesces without adding another job', async () => {
+  const mod = loadFreshModule();
+  let addCalls = 0;
+  mod.getPropertyEnrichmentQueue.__setForTesting({
+    add: async () => {
+      addCalls += 1;
+      return { id: 'unexpected' };
+    },
+    getJob: async (jobId) => ({ id: jobId }),
+  });
+
+  const outcome = await new mod.JobQueueService()
+    .enqueuePropertyEnrichment('property-1', 7);
+
+  assert.equal(outcome, 'DEDUPLICATED');
+  assert.equal(addCalls, 0);
 });
 
 test('enqueuePropertyIntelligenceJobs enqueues all three jobs when the policy allows it', async () => {

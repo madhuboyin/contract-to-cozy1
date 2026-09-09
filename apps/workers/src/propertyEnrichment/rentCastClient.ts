@@ -63,6 +63,30 @@ export interface RentCastClientOptions {
   timeoutMs?: number;
   maxResponseBytes?: number;
   now?: () => Date;
+  observe?: (observation: RentCastRequestObservation) => void;
+}
+
+export type RentCastRequestClassification =
+  | 'not_configured'
+  | 'invalid_request'
+  | 'timeout'
+  | 'network'
+  | 'http_400'
+  | 'http_401'
+  | 'http_403'
+  | 'http_404'
+  | 'http_429'
+  | 'http_500'
+  | 'http_504'
+  | 'http_5xx'
+  | 'http_other'
+  | 'invalid_response'
+  | 'success';
+
+export interface RentCastRequestObservation {
+  classification: RentCastRequestClassification;
+  durationSeconds: number;
+  resultCount: number | null;
 }
 
 function defaultFetch(url: string, init: Parameters<RentCastFetchLike>[1]) {
@@ -133,6 +157,7 @@ export class RentCastClient {
   private readonly timeoutMs: number;
   private readonly maxResponseBytes: number;
   private readonly now: () => Date;
+  private readonly observe?: (observation: RentCastRequestObservation) => void;
 
   constructor(options: RentCastClientOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? defaultFetch;
@@ -140,15 +165,33 @@ export class RentCastClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_RENTCAST_TIMEOUT_MS;
     this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_RENTCAST_MAX_RESPONSE_BYTES;
     this.now = options.now ?? (() => new Date());
+    this.observe = options.observe;
   }
 
   async fetchPropertyRecords(
     address: PropertyAddressIdentity,
   ): Promise<RentCastFetchOutcome> {
+    const startedAt = Date.now();
+    const finish = (
+      outcome: RentCastFetchOutcome,
+      classification: RentCastRequestClassification,
+      resultCount: number | null = null,
+    ): RentCastFetchOutcome => {
+      try {
+        this.observe?.({
+          classification,
+          durationSeconds: Math.max(0, Date.now() - startedAt) / 1_000,
+          resultCount,
+        });
+      } catch {
+        // Metrics must never change provider behavior.
+      }
+      return outcome;
+    };
     const key = this.readApiKey()?.trim();
-    if (!key) return { kind: 'NOT_CONFIGURED' };
+    if (!key) return finish({ kind: 'NOT_CONFIGURED' }, 'not_configured');
     if (!validRequestAddress(address)) {
-      return { kind: 'TERMINAL', code: 'INVALID_REQUEST' };
+      return finish({ kind: 'TERMINAL', code: 'INVALID_REQUEST' }, 'invalid_request');
     }
 
     const url = new URL(RENTCAST_PROPERTIES_URL);
@@ -168,30 +211,35 @@ export class RentCastClient {
         });
       } catch {
         return controller.signal.aborted
-          ? { kind: 'RETRYABLE', code: 'TIMEOUT' }
-          : { kind: 'RETRYABLE', code: 'NETWORK' };
+          ? finish({ kind: 'RETRYABLE', code: 'TIMEOUT' }, 'timeout')
+          : finish({ kind: 'RETRYABLE', code: 'NETWORK' }, 'network');
       }
 
       const completedAt = this.now();
       if (response.status === 404) {
-        return { kind: 'NO_RESULT', requestCompletedAt: completedAt };
+        return finish({ kind: 'NO_RESULT', requestCompletedAt: completedAt }, 'http_404', 0);
       }
-      if (!response.ok) return classifyHttpFailure(response.status);
+      if (!response.ok) {
+        const classification: RentCastRequestClassification = [400, 401, 403, 429, 500, 504].includes(response.status)
+          ? `http_${response.status}` as RentCastRequestClassification
+          : response.status >= 500 ? 'http_5xx' : 'http_other';
+        return finish(classifyHttpFailure(response.status), classification);
+      }
 
       try {
         const text = await boundedResponseText(response, this.maxResponseBytes);
-        if (text === null) return { kind: 'TERMINAL', code: 'INVALID_RESPONSE' };
+        if (text === null) return finish({ kind: 'TERMINAL', code: 'INVALID_RESPONSE' }, 'invalid_response');
         const parsed = responseSchema.safeParse(JSON.parse(text));
-        if (!parsed.success) return { kind: 'TERMINAL', code: 'INVALID_RESPONSE' };
+        if (!parsed.success) return finish({ kind: 'TERMINAL', code: 'INVALID_RESPONSE' }, 'invalid_response');
         const records = parsed.data as RentCastPropertyRecord[];
         if (records.length === 0) {
-          return { kind: 'NO_RESULT', requestCompletedAt: completedAt };
+          return finish({ kind: 'NO_RESULT', requestCompletedAt: completedAt }, 'success', 0);
         }
-        return { kind: 'SUCCESS', records, requestCompletedAt: completedAt };
+        return finish({ kind: 'SUCCESS', records, requestCompletedAt: completedAt }, 'success', records.length);
       } catch {
         return controller.signal.aborted
-          ? { kind: 'RETRYABLE', code: 'TIMEOUT' }
-          : { kind: 'TERMINAL', code: 'INVALID_RESPONSE' };
+          ? finish({ kind: 'RETRYABLE', code: 'TIMEOUT' }, 'timeout')
+          : finish({ kind: 'TERMINAL', code: 'INVALID_RESPONSE' }, 'invalid_response');
       }
     } finally {
       clearTimeout(timeout);
