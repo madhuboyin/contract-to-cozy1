@@ -1,13 +1,16 @@
 {
+    "id": "/?source=pwa",
     "name": "Contract to Cozy",
     "short_name": "C2C",
     "description": "Your complete property management companion",
-    "start_url": "/dashboard",
+    "start_url": "/dashboard?source=pwa",
+    "scope": "/",
     "display": "standalone",
+    "display_override": ["standalone", "minimal-ui"],
+    "launch_handler": { "client_mode": "navigate-existing" },
     "background_color": "#ffffff",
     "theme_color": "#0d9488",
     "orientation": "portrait",
-    "scope": "/",
     "categories": ["productivity", "utilities"],
     "icons": [
       { "src": "/icons/icon-72x72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },

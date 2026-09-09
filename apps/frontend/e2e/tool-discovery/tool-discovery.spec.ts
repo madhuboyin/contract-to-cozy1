@@ -437,7 +437,7 @@ test('standalone mobile PWA preserves actual-view behavior', async ({ page }, te
   const manifest = await page.request.get('/manifest.json');
   expect(manifest.ok()).toBe(true);
   expect(await manifest.json()).toMatchObject({
-    start_url: '/dashboard',
+    start_url: '/dashboard?source=pwa',
     display: 'standalone',
     scope: '/',
   });

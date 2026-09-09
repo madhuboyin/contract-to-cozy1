@@ -24,7 +24,8 @@ persistence, install experience, push, and the manifest.
 - Track C — **in progress**: C1 + C2 done (SW registration reliability, `updateViaCache:
   'none'`, `/sw.js` `no-cache` header — closes F8, F11). C3 + C4 done (SW-update toast
   replaces `window.confirm`; iOS install hint gated to Safari + signed-in — closes F9).
-  C5–C6 open.
+  C5 done (manifest `id` / `display_override` / `launch_handler` / `start_url` attribution
+  — closes F10 bar deferred `screenshots`). C6 open.
 
 ---
 
@@ -60,7 +61,7 @@ is that the desktop flow must render and behave exactly as it does today.
 | F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No | ✅ fixed (B3) |
 | F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both | ✅ fixed (C1) |
 | F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ✅ fixed (C3 + C4) |
-| F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No | ⬜ |
+| F10 | Manifest missing `id`, `screenshots`, `display_override`, attribution | Low | No | ✅ fixed (C5) — `screenshots` still deferred with B1 |
 | F11 | No `updateViaCache` control and no cache header for `/sw.js` | Low | No | ✅ fixed (C1 + C2) |
 | F12 | No automated PWA verification in CI | Low | No | ⬜ |
 | F13 | `web-share=()` blocks the Web Share API for report sharing | Low | Fixes both | ✅ fixed (B2) |
@@ -323,6 +324,13 @@ so installed-app launches are invisible to analytics.
 
 **Desktop-safe** — the manifest is ignored by a normal desktop browser tab.
 
+**Resolution — C5:** `public/manifest.json` now sets `id: "/?source=pwa"` (stable,
+independent of `start_url`), `display_override: ["standalone", "minimal-ui"]`,
+`launch_handler: { client_mode: "navigate-existing" }`, and `start_url:
+"/dashboard?source=pwa"`. The tool-discovery e2e manifest assertion was updated to match.
+Locked in by `apps/frontend/src/__tests__/manifest.test.ts` (5). `screenshots` stays
+deferred with the B1 splash-screen work — it needs real device captures.
+
 #### F11 — No `updateViaCache` control and no cache header for `/sw.js`
 
 `navigator.serviceWorker.register()` is called without `{ updateViaCache: 'none' }`,
@@ -468,7 +476,7 @@ Small fixes that make the existing PWA behave the way it already claims to.
 | C2 | Add `Cache-Control: no-cache` for `/sw.js` in `next.config.js` headers. | F11 | S | None — one asset's revalidation policy | ✅ |
 | C3 | Replace the `window.confirm` update flow with a non-blocking "Update ready — reload" toast. Keep dismiss behaviour identical. | F9 (update half) | S | Shared component — additive toast; review once on desktop | ✅ |
 | C4 | Gate the iOS "Add to Home Screen" card to Safari only, suppress it in in-app web views, and show it only after authentication. | F9 (iOS half) | S | None — desktop uses the `beforeinstallprompt` branch, unchanged | ✅ |
-| C5 | Add manifest `id`, `display_override: ["standalone", "minimal-ui"]`, `launch_handler`, and a `start_url` attribution parameter. | F10 | S | None — manifest is inert in a desktop tab | ⬜ |
+| C5 | Add manifest `id`, `display_override: ["standalone", "minimal-ui"]`, `launch_handler`, and a `start_url` attribution parameter. | F10 | S | None — manifest is inert in a desktop tab | ✅ |
 | C6 | Generalise push: one notifications setting plus a shared subscription helper that every feature calls, replacing the tool-local implementation. | F6 | M | None — new setting; existing flows untouched | ⬜ |
 
 **What shipped so far in Track C**
@@ -492,6 +500,11 @@ Small fixes that make the existing PWA behave the way it already claims to.
   Home Screen" card on `isIOSSafari() && useAuth().isAuthenticated`; the Android
   `beforeinstallprompt` path is untouched. Tests: `pwa.test.ts` UA cases (4) +
   `InstallPrompt.test.tsx` (3). **Closes F9** together with C3.
+- **C5** — `public/manifest.json`: `id: "/?source=pwa"`, `display_override: ["standalone",
+  "minimal-ui"]`, `launch_handler: { client_mode: "navigate-existing" }`, `start_url:
+  "/dashboard?source=pwa"`. The tool-discovery e2e assertion was updated to the new
+  `start_url`. New test `apps/frontend/src/__tests__/manifest.test.ts` (5). **Closes F10**
+  (bar `screenshots`, deferred with B1).
 
 ### Track D — Verification
 
@@ -504,13 +517,11 @@ So this layer stops being invisible to the test suite.
 
 ### Suggested order
 
-1. **Truth and quick correctness** — A1, A2, A3, B2, C1, C2. Remove the false promises
-   and the dead module, unblock the camera, make registration and worker freshness
-   reliable.
-2. **Install quality** — B1, C5, C3, C4. Real artwork, complete manifest, a civilised
-   update prompt, a scoped install hint.
-3. **Shared platform work** — ~~B3~~ (done), C6, D1, D2. The `/api/mobile/home` endpoint
-   is in; remaining: unified push and CI coverage for the whole layer.
+1. **Truth and quick correctness** — ~~A1, A2, A3, B2, C1, C2~~ **done.**
+2. **Install quality** — ~~C5, C3, C4~~ **done**; B1 icons done, B1 splash screens +
+   manifest `screenshots` still pending (need real device captures).
+3. **Shared platform work** — ~~B3~~ done; remaining: **C6** (unified push, also finishes
+   F6) and **D1 / D2** (CI coverage for the whole layer — F12).
 4. **Only if going native** — ~~B4~~ (done). APNs delivery + `/api/push/devices` are in
    and inert until `APNS_*` is set; a wrapped-PWA shell simply never configures them.
 
