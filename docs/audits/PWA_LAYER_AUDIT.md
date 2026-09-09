@@ -21,11 +21,13 @@ persistence, install experience, push, and the manifest.
     the "part" of F6 that unblocks native push. **Requires `prisma db push`** (new
     `push_devices` table + `PushDevicePlatform` enum) + `apps/workers` prisma client
     resync.
-- Track C — **in progress**: C1 + C2 done (SW registration reliability, `updateViaCache:
-  'none'`, `/sw.js` `no-cache` header — closes F8, F11). C3 + C4 done (SW-update toast
-  replaces `window.confirm`; iOS install hint gated to Safari + signed-in — closes F9).
-  C5 done (manifest `id` / `display_override` / `launch_handler` / `start_url` attribution
-  — closes F10 bar deferred `screenshots`). C6 open.
+- Track C — **C1–C6 done**: C1 + C2 (SW registration reliability, `updateViaCache: 'none'`,
+  `/sw.js` `no-cache` header — closes F8, F11); C3 + C4 (SW-update toast replaces
+  `window.confirm`; iOS install hint gated to Safari + signed-in — closes F9); C5 (manifest
+  `id` / `display_override` / `launch_handler` / `start_url` attribution — closes F10 bar
+  deferred `screenshots`); C6 (feature-agnostic push subscription service + endpoints + a
+  per-device notifications toggle — closes F6 with B4).
+- Track D (F12 — CI coverage for the PWA layer) — not started.
 
 ---
 
@@ -57,7 +59,7 @@ is that the desktop flow must render and behave exactly as it does today.
 | F3 | `/offline` route is unreachable while offline | High | No | ✅ fixed (A3) |
 | F4 | `Permissions-Policy: camera=()` disables in-app camera capture | High | Fixes both | ✅ fixed (B2) |
 | F5 | App icon set is placeholder art; no maskable icon, screenshots, or splash | High | No | 🟡 icons fixed (B1); splash + screenshots deferred |
-| F6 | Push notifications wired to one tool only; no general opt-in | Medium | No | 🟡 native push infra done (B4); general opt-in is C6 |
+| F6 | Push notifications wired to one tool only; no general opt-in | Medium | No | ✅ fixed (B4 native infra + C6 general opt-in) |
 | F7 | No aggregation endpoints — the dashboard composes its data client-side | Medium | No | ✅ fixed (B3) |
 | F8 | Service-worker registration can silently no-op on fast loads | Medium | Fixes both | ✅ fixed (C1) |
 | F9 | Update prompt uses `window.confirm()`; iOS install hint over-fires | Medium | Shared component | ✅ fixed (C3 + C4) |
@@ -222,12 +224,21 @@ here.
 **Desktop-safe** — a shared subscription helper and a notifications setting are
 additive. Web Push also works in desktop Chrome, so this is upside, not risk.
 
-**Partial resolution — B4:** the native-push *infrastructure* is now in place — a
-`PushDevice` model, `POST/DELETE/GET /api/push/devices`, and an APNs delivery branch in
-the workers push job (inert until `APNS_*` is configured). This is the piece a native
-iOS app needs. The remaining half of F6 — one general "turn on notifications" setting and
-a shared browser subscription helper replacing the tool-local implementation — is **C6**,
-still open.
+**Resolution — B4 + C6:**
+
+- **B4 (native infra):** `PushDevice` model, `POST/DELETE/GET /api/push/devices`, and an
+  APNs delivery branch in the workers push job (inert until `APNS_*` is configured) — the
+  piece a native iOS app needs.
+- **C6 (general opt-in):** browser push subscription register/revoke logic is extracted
+  from the refinance tool into `apps/backend/src/services/pushSubscription.service.ts`, with
+  feature-agnostic endpoints `GET /api/push/vapid-public-key`, `GET /api/push/subscriptions`
+  (status), `POST /api/push/subscriptions`, `POST /api/push/subscriptions/revoke`. The
+  refinance service now delegates to the shared functions (same behaviour, same call
+  sites). Frontend: `src/lib/pushNotifications.ts` (`enablePush` / `disablePush` /
+  `getPushStatus`) and a `PushNotificationSetting` toggle on the `/dashboard/notifications`
+  page — one switch per device. Existing refinance flow untouched. Tests:
+  `pushSubscriptionService.test.js` (6), `pushNotifications.test.ts` (5),
+  `PushNotificationSetting.test.tsx` (4).
 
 #### F7 — No aggregation endpoints; the dashboard composes its data in the browser
 
@@ -477,7 +488,7 @@ Small fixes that make the existing PWA behave the way it already claims to.
 | C3 | Replace the `window.confirm` update flow with a non-blocking "Update ready — reload" toast. Keep dismiss behaviour identical. | F9 (update half) | S | Shared component — additive toast; review once on desktop | ✅ |
 | C4 | Gate the iOS "Add to Home Screen" card to Safari only, suppress it in in-app web views, and show it only after authentication. | F9 (iOS half) | S | None — desktop uses the `beforeinstallprompt` branch, unchanged | ✅ |
 | C5 | Add manifest `id`, `display_override: ["standalone", "minimal-ui"]`, `launch_handler`, and a `start_url` attribution parameter. | F10 | S | None — manifest is inert in a desktop tab | ✅ |
-| C6 | Generalise push: one notifications setting plus a shared subscription helper that every feature calls, replacing the tool-local implementation. | F6 | M | None — new setting; existing flows untouched | ⬜ |
+| C6 | Generalise push: one notifications setting plus a shared subscription helper that every feature calls, replacing the tool-local implementation. | F6 | M | None — new setting; existing flows untouched | ✅ |
 
 **What shipped so far in Track C**
 
@@ -505,6 +516,12 @@ Small fixes that make the existing PWA behave the way it already claims to.
   "/dashboard?source=pwa"`. The tool-discovery e2e assertion was updated to the new
   `start_url`. New test `apps/frontend/src/__tests__/manifest.test.ts` (5). **Closes F10**
   (bar `screenshots`, deferred with B1).
+- **C6** — browser push subscription logic extracted from the refinance radar tool into
+  `apps/backend/src/services/pushSubscription.service.ts`; feature-agnostic endpoints under
+  `/api/push` (`vapid-public-key`, `subscriptions` GET/POST, `subscriptions/revoke`); the
+  refinance service delegates to the shared functions unchanged. Frontend
+  `src/lib/pushNotifications.ts` + a `PushNotificationSetting` toggle on
+  `/dashboard/notifications`. Tests (15 across backend + frontend). **Closes F6** with B4.
 
 ### Track D — Verification
 
@@ -520,8 +537,8 @@ So this layer stops being invisible to the test suite.
 1. **Truth and quick correctness** — ~~A1, A2, A3, B2, C1, C2~~ **done.**
 2. **Install quality** — ~~C5, C3, C4~~ **done**; B1 icons done, B1 splash screens +
    manifest `screenshots` still pending (need real device captures).
-3. **Shared platform work** — ~~B3~~ done; remaining: **C6** (unified push, also finishes
-   F6) and **D1 / D2** (CI coverage for the whole layer — F12).
+3. **Shared platform work** — ~~B3, C6~~ done; remaining: **D1 / D2** (CI coverage for the
+   whole layer — F12).
 4. **Only if going native** — ~~B4~~ (done). APNs delivery + `/api/push/devices` are in
    and inert until `APNS_*` is set; a wrapped-PWA shell simply never configures them.
 

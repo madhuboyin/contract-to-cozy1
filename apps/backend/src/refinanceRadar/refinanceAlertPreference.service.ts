@@ -9,6 +9,10 @@ import type { RefinanceAlertPreferenceBody } from './validators/refinanceRadar.v
 import type { RefinanceAlertReadiness } from './refinanceFreshness';
 import { APIError } from '../middleware/error.middleware';
 import {
+  upsertPushSubscription,
+  revokePushSubscription,
+} from '../services/pushSubscription.service';
+import {
   decideRefinanceAlertRollout,
   type RefinanceAlertRolloutMode,
 } from './refinanceAlertRollout';
@@ -236,6 +240,9 @@ export async function updateRefinanceAlertPreference(
   return getRefinanceAlertPreference(userId, propertyId);
 }
 
+// Browser push subscription register/revoke is now shared, feature-agnostic
+// logic — see services/pushSubscription.service.ts (PWA audit C6). These
+// wrappers keep the refinance controller's call sites and behaviour identical.
 export async function registerRefinancePushSubscription(
   userId: string,
   input: {
@@ -244,50 +251,14 @@ export async function registerRefinancePushSubscription(
   },
   userAgent?: string,
 ): Promise<void> {
-  if (!isWebPushConfigured()) {
-    throw new APIError(
-      'Push alerts are not configured.',
-      409,
-      'WEB_PUSH_NOT_CONFIGURED',
-    );
-  }
-  const existing = await prisma.pushSubscription.findUnique({
-    where: { endpoint: input.endpoint },
-    select: { userId: true },
-  });
-  if (existing && existing.userId !== userId) {
-    throw new APIError(
-      'This browser subscription is already registered to another account.',
-      409,
-      'WEB_PUSH_SUBSCRIPTION_CONFLICT',
-    );
-  }
-  await prisma.pushSubscription.upsert({
-    where: { endpoint: input.endpoint },
-    create: {
-      userId,
-      endpoint: input.endpoint,
-      p256dh: input.keys.p256dh,
-      auth: input.keys.auth,
-      userAgent: userAgent?.slice(0, 500),
-    },
-    update: {
-      p256dh: input.keys.p256dh,
-      auth: input.keys.auth,
-      userAgent: userAgent?.slice(0, 500),
-      revokedAt: null,
-    },
-  });
+  await upsertPushSubscription(userId, input, userAgent);
 }
 
 export async function revokeRefinancePushSubscription(
   userId: string,
   endpoint: string,
 ): Promise<void> {
-  await prisma.pushSubscription.updateMany({
-    where: { userId, endpoint, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
+  await revokePushSubscription(userId, endpoint);
 }
 
 const CONFIDENCE_RANK: Record<RefinanceConfidenceLevel, number> = {

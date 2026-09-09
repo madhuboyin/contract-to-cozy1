@@ -11,6 +11,7 @@ import { toSafeAppPath } from '@/lib/security/url';
 import { resolveNotificationActionUrl } from '@/lib/notifications/destination';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/components/ui/use-toast';
+import { PushNotificationSetting } from '@/components/system/PushNotificationSetting';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -406,6 +407,16 @@ export default function NotificationsPage() {
             </p>
           </div>
         ) : null}
+      </MobileCard>
+      <MobileCard className="space-y-3">
+        <div>
+          <p className="font-semibold text-slate-900">Push notifications</p>
+          <p className="text-sm text-slate-600">
+            One switch per device. Turn this on wherever you want ContractToCozy alerts —
+            phone, tablet, or desktop.
+          </p>
+        </div>
+        <PushNotificationSetting />
       </MobileCard>
       {visibleNotifications.length === 0 ? (
         <EmptyStateCard
