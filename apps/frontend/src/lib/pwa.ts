@@ -6,6 +6,12 @@
  */
 export const SW_UPDATE_READY_EVENT = 'ctc:sw-update-ready';
 
+// Set when the user accepts the "Update available" toast. The controllerchange
+// listener in registerServiceWorker() reloads the page once — but only when the
+// user asked for it, never on a first-ever SW activation.
+let updateAcceptedByUser = false;
+let reloadingForUpdate = false;
+
 /**
  * Register the service worker for PWA functionality.
  * Returns a cleanup function that clears the update interval.
@@ -51,6 +57,20 @@ export function registerServiceWorker(): (() => void) | undefined {
   let swRegistration: ServiceWorkerRegistration | undefined;
   let updateFoundHandler: (() => void) | undefined;
   let loadListenerAttached = false;
+
+  // Reload once the accepted update actually takes control. Guarded so a
+  // first-ever activation (no prior controller) never triggers a reload.
+  const onControllerChange = () => {
+    if (updateAcceptedByUser && !reloadingForUpdate) {
+      reloadingForUpdate = true;
+      window.location.reload();
+    }
+  };
+  const canWatchController =
+    typeof navigator.serviceWorker.addEventListener === 'function';
+  if (canWatchController) {
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+  }
 
   const registerAndWatch = async () => {
     try {
@@ -112,7 +132,39 @@ export function registerServiceWorker(): (() => void) | undefined {
     if (loadListenerAttached) {
       window.removeEventListener('load', registerAndWatch);
     }
+    if (canWatchController) {
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+    }
   };
+}
+
+/**
+ * Called when the user accepts the "Update available" toast. Tells the waiting
+ * service worker to activate; the `controllerchange` listener installed by
+ * registerServiceWorker() then reloads the page exactly once. Falls back to a
+ * plain reload when there is no waiting worker or the SW API is unavailable.
+ */
+export async function applyServiceWorkerUpdate(): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  updateAcceptedByUser = true;
+
+  if (!('serviceWorker' in navigator)) {
+    window.location.reload();
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (registration?.waiting) {
+      registration.waiting.postMessage('SKIP_WAITING');
+      return; // onControllerChange reloads once the new worker takes over
+    }
+  } catch {
+    // fall through to a plain reload
+  }
+
+  window.location.reload();
 }
 
 /**

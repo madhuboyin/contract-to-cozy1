@@ -2,15 +2,25 @@
 //
 // Server-side composition for the mobile home screen (PWA audit remediation B3).
 //
-// The web dashboard builds its "urgent actions" list in the browser
-// (apps/frontend/src/lib/dashboard/urgentActions.ts) by fanning out to five
-// endpoints and merging the results. Any second client — a wrapped PWA view,
-// the native iOS app, a watch complication — would otherwise have to re-do that
-// merge. This module is the single server-side source of truth for it, exposed
-// through GET /api/mobile/home.
+// ⚠️ EXPERIMENTAL — NO CONSUMERS. As of PWA audit round 2 (F16) nothing in
+// apps/frontend or apps/ios calls GET /api/mobile/home. It was built ahead of a
+// second client. Treat it as unversioned and unstable until a client adopts it.
 //
-// The desktop flow is untouched: the web client keeps its existing calls until
-// it is migrated separately.
+// It is a HAND-PORT of apps/frontend/src/lib/dashboard/urgentActions.ts, and the
+// two have ALREADY DIVERGED. Known differences (do not assume parity):
+//   - Overdue maintenance: this reads PropertyMaintenanceTask; the frontend
+//     reads HomeBuyerChecklist tasks (the "two task systems" split). These are
+//     different datasets — a client on this endpoint sees a different list.
+//   - Incidents: this also excludes EXPIRED and isSuppressed; the frontend does
+//     not.
+//   - Deep links: healthInsightSetupRoute() here is a coarse .includes() guess;
+//     the frontend uses anchorForHealthFactor / propertyEditHref /
+//     buildGuidanceOverviewHref.
+// Reconciling these (which maintenance source is canonical for a second client,
+// a shared deep-link resolver) needs a product decision — tracked as a
+// follow-up, not resolved here.
+//
+// The desktop flow is untouched: the web client keeps its existing calls.
 
 import { prisma } from '../lib/prisma';
 import {
@@ -157,7 +167,8 @@ function withHref(action: Omit<MobileUrgentAction, 'href'>): MobileUrgentAction 
 
 // ---------------------------------------------------------------------------
 // Urgent-action consolidation — ports consolidateUrgentActions() from
-// apps/frontend/src/lib/dashboard/urgentActions.ts. Same sources, same ordering.
+// apps/frontend/src/lib/dashboard/urgentActions.ts. Same ordering; sources have
+// diverged (see the EXPERIMENTAL note at the top of this file — F16).
 // ---------------------------------------------------------------------------
 
 function isActionableCoverageGap(item: {

@@ -50,10 +50,11 @@ export function getChecklistEntries(checklist: HomeBuyerChecklist | null | undef
   });
 }
 
-// NOTE: this consolidation logic is also implemented server-side in
-// apps/backend/src/services/mobileHome.service.ts (GET /api/mobile/home), which
-// native / wrapped clients use. Keep the two in sync — same sources, same
-// ordering, same coverage-gap threshold.
+// NOTE: apps/backend/src/services/mobileHome.service.ts (GET /api/mobile/home)
+// is a hand-port of this logic for a future native/wrapped client. It currently
+// has NO consumers and has already diverged (maintenance data source, incident
+// filter, deep-link resolution) — see the EXPERIMENTAL note in that file (PWA
+// audit F16). This function remains the source of truth for the web dashboard.
 export function consolidateUrgentActions(
   properties: ScoredProperty[],
   checklistItems: ChecklistEntry[],

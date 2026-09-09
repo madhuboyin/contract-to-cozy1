@@ -32,7 +32,13 @@ describe('registerServiceWorker', () => {
     originalServiceWorker = (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
     Object.defineProperty(navigator, 'serviceWorker', {
       configurable: true,
-      value: { register, controller: null, ready: Promise.resolve({}) },
+      value: {
+        register,
+        controller: null,
+        ready: Promise.resolve({}),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      },
     });
     jest.spyOn(console, 'log').mockImplementation(() => {});
   });

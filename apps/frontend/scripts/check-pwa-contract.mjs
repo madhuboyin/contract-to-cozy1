@@ -116,6 +116,17 @@ export function runPwaContractChecks() {
   );
   check('sw: never intercepts API calls', /pathname\.startsWith\('\/api\/'\)/.test(sw));
   check('sw: never intercepts RSC requests', /_rsc=/.test(sw));
+  // F15: intercepting navigations must not add a serial round-trip.
+  check('sw: enables navigation preload', /navigationPreload\.enable\(\)/.test(sw));
+  check('sw: navigate branch uses the preload response', /event\.preloadResponse/.test(sw));
+  // F17: update activation is opt-in — the only skipWaiting() call is gated on a
+  // SKIP_WAITING message, and the install handler does not call it.
+  const installBlock = sw.match(/addEventListener\('install'[\s\S]*?\n\}\);/)?.[0] ?? '';
+  check('sw: install handler does not call skipWaiting', !/skipWaiting/.test(installBlock));
+  check(
+    'sw: activates a waiting worker only on SKIP_WAITING message',
+    /'SKIP_WAITING'[\s\S]{0,80}skipWaiting\(\)/.test(sw),
+  );
 
   // ── offline route ───────────────────────────────────────────────────────
   check('offline route exists', exists('src/app/offline/page.tsx'));
@@ -127,6 +138,17 @@ export function runPwaContractChecks() {
   check(
     'registration runs immediately when the document is already loaded',
     /document\.readyState === 'complete'/.test(pwaLib),
+  );
+  // F17: the update toast's Reload action drives an opt-in SKIP_WAITING flow.
+  check(
+    'pwa.ts: applyServiceWorkerUpdate posts SKIP_WAITING and reloads on controllerchange',
+    /applyServiceWorkerUpdate/.test(pwaLib) &&
+      /postMessage\('SKIP_WAITING'\)/.test(pwaLib) &&
+      /'controllerchange'/.test(pwaLib),
+  );
+  check(
+    'ServiceWorkerUpdatePrompt calls applyServiceWorkerUpdate',
+    /applyServiceWorkerUpdate/.test(read('src/components/system/ServiceWorkerUpdatePrompt.tsx')),
   );
 
   // ── config ──────────────────────────────────────────────────────────────

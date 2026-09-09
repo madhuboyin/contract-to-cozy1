@@ -1,4 +1,4 @@
-const CACHE_NAME = 'c2c-v1.3.0';
+const CACHE_NAME = 'c2c-v1.4.0';
 
 // The only HTML document this worker caches: a static "you're offline" shell
 // served when a navigation cannot reach the network. It carries no user data.
@@ -20,10 +20,14 @@ async function trimCache(cacheName, maxEntries) {
   }
 }
 
-// Install — precache the offline fallback shell, then activate immediately.
-// The precache is best-effort: if it fails (e.g. installed while offline),
-// installation still succeeds and the fetch handler simply has no fallback
-// until the next successful update.
+// Install — precache the offline fallback shell. The precache is best-effort:
+// if it fails (e.g. installed while offline), installation still succeeds and
+// the fetch handler simply has no fallback until the next successful update.
+//
+// NOTE: no self.skipWaiting() here. A new worker waits until the page tells it
+// to take over (the "Update available" toast → applyServiceWorkerUpdate() in
+// lib/pwa.ts → SKIP_WAITING message below). The first-ever install still
+// activates promptly because there is no controlled page to wait behind.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
@@ -33,19 +37,41 @@ self.addEventListener('install', (event) => {
       } catch (err) {
         // best-effort — ignore
       }
-      await self.skipWaiting();
     })()
   );
 });
 
-// Activate — clear all old caches and take control.
+// The page asks a waiting worker to activate only when the user accepts the
+// update toast. Until then the current worker keeps serving the session.
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Activate — clear old caches, enable navigation preload, take control.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((names) => Promise.all(
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(
         names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
-      ))
-      .then(() => self.clients.claim())
+      );
+
+      // Navigation preload lets the browser start the navigation request in
+      // parallel with the worker boot. Since this worker intercepts every
+      // navigation (for the offline fallback), without preload the boot and
+      // the fetch would run serially — a latency tax on every navigation.
+      if (self.registration.navigationPreload) {
+        try {
+          await self.registration.navigationPreload.enable();
+        } catch (err) {
+          // not fatal — falls back to a plain fetch()
+        }
+      }
+
+      await self.clients.claim();
+    })()
   );
 });
 
@@ -59,20 +85,29 @@ self.addEventListener('fetch', (event) => {
 
   const { pathname, search } = new URL(url);
 
-  // Navigations: go straight to the network, exactly as before — the online
-  // path is unchanged and server redirects (auth, etc.) are still followed by
-  // the browser because fetch() of a navigation yields an opaque redirect that
-  // respondWith passes through untouched. The ONLY added behaviour is that a
-  // network failure now falls back to the cached offline shell instead of the
-  // browser's default error page. .catch() fires only on a network-layer
-  // failure; HTTP error responses (4xx/5xx) still resolve and pass through.
+  // Navigations: online behaviour is unchanged — the navigation-preload
+  // response (or a plain fetch) goes straight back to the browser, and server
+  // redirects (auth, etc.) are still followed because a navigation fetch yields
+  // an opaque redirect that respondWith passes through untouched. The ONLY
+  // added behaviour: a network-layer failure falls back to the cached offline
+  // shell instead of the browser's default error page. HTTP 4xx/5xx still
+  // resolve and pass through — only a thrown/rejected fetch hits the catch.
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() =>
-        caches.match(OFFLINE_URL, { ignoreSearch: true }).then(
-          (cached) => cached || Response.error()
-        )
-      )
+      (async () => {
+        try {
+          // Prefer the browser's parallel navigation-preload response, then a
+          // plain network fetch. Both yield an opaque redirect for auth 3xx,
+          // which respondWith() passes through to the browser untouched.
+          const preload = await event.preloadResponse;
+          if (preload) return preload;
+          return await fetch(event.request);
+        } catch (err) {
+          // Network-layer failure only (HTTP 4xx/5xx still resolve above).
+          const cached = await caches.match(OFFLINE_URL, { ignoreSearch: true });
+          return cached || Response.error();
+        }
+      })()
     );
     return;
   }

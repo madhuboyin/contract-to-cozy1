@@ -3,6 +3,9 @@ import { authenticate, restrictToHomeowner } from '../middleware/auth.middleware
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { getMobileHome } from '../controllers/mobileHome.controller';
 
+// ⚠️ EXPERIMENTAL — no consumers yet (PWA audit F16). See
+// services/mobileHome.service.ts for the known divergences from the web
+// dashboard's own consolidation logic. Unversioned until a client adopts it.
 const router = Router();
 
 router.use(apiRateLimiter);

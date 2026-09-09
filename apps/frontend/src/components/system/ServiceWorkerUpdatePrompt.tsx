@@ -9,7 +9,7 @@
 import { useEffect } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
-import { SW_UPDATE_READY_EVENT } from '@/lib/pwa';
+import { SW_UPDATE_READY_EVENT, applyServiceWorkerUpdate } from '@/lib/pwa';
 
 export function ServiceWorkerUpdatePrompt() {
   useEffect(() => {
@@ -20,7 +20,7 @@ export function ServiceWorkerUpdatePrompt() {
         action: (
           <ToastAction
             altText="Reload the page to load the latest version"
-            onClick={() => window.location.reload()}
+            onClick={() => { void applyServiceWorkerUpdate(); }}
           >
             Reload
           </ToastAction>

@@ -4,7 +4,7 @@
 persistence, install experience, push, and the manifest.
 **Date:** 2026-09-08
 **Method:** Static read of source at branch `main`.
-**Findings:** 5 high · 4 medium · 5 low.
+**Findings:** 5 high · 4 medium · 5 low (round 1) · 8 more in [round 2](#audit-round-2--post-remediation) (2 medium · 6 low).
 **Companion artifact:** https://claude.ai/code/artifact/82e63600-49ce-445d-9b40-0060f1e8caa1
 
 **Progress:**
@@ -602,3 +602,114 @@ attention each part gets.
 *Prepared from a static read of `apps/frontend` at branch `main`. Finding F4
 (`camera=()`) is stated from the header directive and merits a one-line runtime check.
 All file references are relative to the repository root.*
+
+---
+
+## Audit round 2 — post-remediation
+
+**Date:** 2026-09-09
+**Method:** Fresh static read of the PWA surface *after* Tracks A–D landed — not a
+re-check of F1–F14 (those hold). Looks for issues the remediation introduced or left.
+**Findings:** 2 medium · 6 low. None re-open F1–F14.
+
+| ID | Finding | Severity | Status |
+|----|---------|----------|--------|
+| F15 | SW now intercepts every navigation via `respondWith(fetch())` — the exact path F3's original code avoided for auth correctness; no navigation preload | Medium | ✅ fixed — nav preload + preloadResponse |
+| F16 | `GET /api/mobile/home` (B3) has zero callers and has already drifted from the frontend source of truth | Medium | 🟡 marked experimental; reconciliation needs product input |
+| F17 | `install` calls `self.skipWaiting()` unconditionally, making the new "Update available — Reload" toast hollow | Low/Med | ✅ fixed — opt-in `SKIP_WAITING` message |
+| F18 | `enablePush()` / `getPushStatus()` hang forever if SW registration was skipped (`serviceWorker.ready` never resolves) | Low | ⬜ open |
+| F19 | Manifest `id` carries a query string; `shortcuts` lack `?source=pwa` attribution | Low | ⬜ open |
+| F20 | `/offline` is a client component — controls dead without hydration, no still-offline feedback | Low | ⬜ open |
+| F21 | `registerServiceWorker` leaks interval + `updatefound` listener if unmounted before the async `register()` resolves | Low | ⬜ open |
+| F22 | Residual dead code (`OfflineBanner` unused `useSlowConnection`); the D1 contract check is source-regex only, not behavioural | Low | ⬜ open |
+
+### F15 — SW re-routes every navigation through `respondWith(fetch(...))`
+
+The F3 fix replaced `if (mode === 'navigate') return;` with
+`event.respondWith(fetch(event.request).catch(… OFFLINE_URL …))`. The original early
+return was deliberate — its comment: *"so auth redirects stay correct."* Now every
+top-level navigation is re-originated from the worker, so auth-redirect correctness
+depends on `respondWith()` passing an `opaqueredirect` response through cleanly (a path
+with a history of iOS Safari bugs), and it has only been statically verified. There is
+also no `navigationPreload`, so the worker boot and the navigation fetch run serially —
+a latency tax on every navigation, desktop included.
+
+**Fix (shipped):** `activate` now calls `self.registration.navigationPreload.enable()`,
+and the navigate branch prefers `event.preloadResponse` before falling back to `fetch`,
+then to the cached `/offline` shell. Still merits one real online smoke test of the
+logged-out→login redirect and a mid-session 401 redirect on iOS Safari.
+
+### F16 — `GET /api/mobile/home` is unused and already drifted
+
+No consumer in `apps/frontend` or `apps/ios`. Meanwhile the hand-port in
+`mobileHome.service.ts` has diverged from `lib/dashboard/urgentActions.ts`:
+
+- **Overdue maintenance reads a different data source.** Frontend uses `checklistItems`
+  (legacy `HomeBuyerChecklist`); backend queries `propertyMaintenanceTask` — the
+  documented "two task systems" trap. A native client would show a different overdue
+  list than web.
+- Incident filter differs (backend also excludes `EXPIRED` + `isSuppressed`).
+- Deep-link resolution differs (backend `healthInsightSetupRoute` is a 3-branch
+  `.includes()` guess; frontend uses `anchorForHealthFactor` / `propertyEditHref` /
+  `buildGuidanceOverviewHref`).
+
+Same category as the original F1 (well-built code nothing runs) plus a "keep in sync"
+comment pair that will rot.
+
+**Fix (partial):** the service and route are now labelled **EXPERIMENTAL — no
+consumers**, and the "keep in sync" comments downgraded to state the known divergences
+explicitly. Full reconciliation (which maintenance source is canonical for a second
+client, shared deep-link resolution) needs a product decision and is tracked as a
+follow-up, not closed here.
+
+### F17 — Unconditional `skipWaiting()` contradicts the opt-in update toast
+
+`install` called `self.skipWaiting()` and `activate` calls `clients.claim()`, so by the
+time `ServiceWorkerUpdatePrompt` rendered the toast the new worker already controlled
+the page. "Reload to update" was a reassurance, not an action; a user who dismissed it
+was already on the new SW.
+
+**Fix (shipped):** `install` no longer calls `skipWaiting`. A `message` handler in the
+SW calls `self.skipWaiting()` only on a `'SKIP_WAITING'` message. `pwa.ts` gains
+`applyServiceWorkerUpdate()` — posts `SKIP_WAITING` to `registration.waiting`, then
+reloads once on `controllerchange`; `ServiceWorkerUpdatePrompt`'s **Reload** action
+calls it. First-ever installs still activate promptly (no waiting worker exists when
+nothing controls the page).
+
+### F18 — Push helpers can hang when the SW never registered
+
+`enablePush()` and `getPushStatus()` both await `navigator.serviceWorker.ready`, which
+never resolves if registration was skipped — and `pwa.ts` has a real skip path (the
+Trusted Types `TrustedScriptURL` branch returns without registering). The
+`/dashboard/notifications` toggle would spin with no timeout. `isPushSupported()` checks
+`'serviceWorker' in navigator` but not that a registration exists. **Fix:** race
+`.ready` against a timeout, or check `getRegistration()` first.
+
+### F19 — Manifest identity / attribution nits
+
+`id: "/?source=pwa"` should be a stable bare identity (`"/"`) — attribution already
+comes from `start_url`, and folding it into `id` means any later tweak to that query
+re-registers the app as a new PWA. `shortcuts` still use bare `/dashboard`,
+`/dashboard/maintenance`, `/dashboard/bookings` with no `?source=pwa`.
+
+### F20 — `/offline` is a client component
+
+`app/offline/page.tsx` is `'use client'` with `useRouter`. Served as the offline
+fallback, its JS chunks may not be cached (cache-first only caches what's been
+visited), so "Try Again" / "Go to Dashboard" are dead until hydration, and `handleRetry`
+silently no-ops when still offline. **Fix:** make it a server component with plain
+`<a href>` links so it works with zero JS.
+
+### F21 — `registerServiceWorker` unmount leak
+
+`cleanup` runs synchronously while `registerAndWatch()` is still pending;
+`swRegistration` / `intervalId` are still undefined, so a later resolve installs a
+1-hour `setInterval` and an `updatefound` listener nothing can clear. Latent only
+because `<Providers>` never unmounts — but C1 touched this code and left it.
+
+### F22 — Residual dead code + shallow CI check
+
+`OfflineBanner.tsx` still calls `useSlowConnection()` into an unused binding (leftover
+from the A1 copy rewrite). `check-pwa-contract.mjs` is pure source-text regex — it
+guards against deletion, not behavioural regression, and cannot catch an F15-class
+problem. The audit's own Lighthouse/Playwright follow-up remains the real gap.
