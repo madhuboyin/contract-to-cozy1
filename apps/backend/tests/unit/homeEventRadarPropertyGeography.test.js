@@ -5,6 +5,7 @@ require('ts-node/register/transpile-only');
 
 const {
   buildPropertyGeographyInvalidation,
+  hasPropertyAddressIdentityChanged,
   hasPropertyLocationIdentityChanged,
   normalizeCountyFips,
   normalizeUsZip,
@@ -47,6 +48,14 @@ test('recognizes semantic location changes while ignoring formatting-only edits'
   );
   assert.equal(hasPropertyLocationIdentityChanged(property, { zipCode: '08540' }), true);
   assert.equal(hasPropertyLocationIdentityChanged(property, { address: '96 Ashford Dr' }), true);
+});
+
+test('tracks unit changes as address identity without changing geographic identity', () => {
+  const unitProperty = { ...property, unit: 'Apt 4B' };
+  assert.equal(hasPropertyAddressIdentityChanged(unitProperty, { unit: ' apt   4b ' }), false);
+  assert.equal(hasPropertyAddressIdentityChanged(unitProperty, { unit: 'Unit 5C' }), true);
+  assert.equal(hasPropertyAddressIdentityChanged(unitProperty, { unit: null }), true);
+  assert.equal(hasPropertyLocationIdentityChanged(unitProperty, {}), false);
 });
 
 test('builds a fail-closed geography invalidation patch', () => {

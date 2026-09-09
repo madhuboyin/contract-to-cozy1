@@ -28,6 +28,17 @@ describe('buildSparsePropertyUpdatePayload', () => {
     });
   });
 
+  it('includes a unit only when the address-line field changed', () => {
+    expect(buildSparsePropertyUpdatePayload(
+      { unit: 'Apt 4B', city: 'Boston' },
+      { unit: true },
+    )).toEqual({ unit: 'Apt 4B' });
+    expect(buildSparsePropertyUpdatePayload(
+      { unit: null },
+      { unit: true },
+    )).toEqual({ unit: null });
+  });
+
   it('includes the normalized exterior envelope when an exterior fact changes', () => {
     const exteriorProfile = {
       hasPrivateOutdoorSpace: null,

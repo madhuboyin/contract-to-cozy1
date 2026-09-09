@@ -1498,12 +1498,13 @@ class APIClient {
 
   async getAddressDetails(placeId: string, sessionToken: string): Promise<APIResponse<{
     address: string;
+    unit?: string;
     city: string;
     state: string;
     zipCode: string;
   }>> {
     const params = new URLSearchParams({ placeId, sessionToken });
-    const res = await this.get<{ address: string; city: string; state: string; zipCode: string }>(
+    const res = await this.get<{ address: string; unit?: string; city: string; state: string; zipCode: string }>(
       `/api/properties/address-details?${params}`,
     );
     return { success: true, data: res.data };
@@ -1646,6 +1647,7 @@ class APIClient {
   async createProperty(data: {
     name?: string;
     address: string;
+    unit?: string | null;
     city: string;
     state: string;
     zipCode: string;
@@ -1681,6 +1683,7 @@ class APIClient {
     data: {
       name?: string;
       address?: string;
+      unit?: string | null;
       city?: string;
       state?: string;
       zipCode?: string;

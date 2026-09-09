@@ -24,7 +24,9 @@ import { SeasonalChecklistService } from './seasonalChecklist.service';
 import { resolveCurrentSeasonWindow } from './seasonal/seasonWindow';
 import {
   buildPropertyGeographyInvalidation,
+  hasPropertyAddressIdentityChanged,
   hasPropertyLocationIdentityChanged,
+  normalizeOptionalUnit,
   normalizeUsZip,
 } from '../modules/homeEventRadar/domain/propertyGeography';
 import {
@@ -101,6 +103,7 @@ interface PropertyApplianceInput {
 interface CreatePropertyData {
   name?: string | null; // Allow null for optional string
   address: string;
+  unit?: string | null;
   city: string;
   state: string;
   zipCode: string;
@@ -184,6 +187,7 @@ interface UpdatePropertyData extends Partial<CreatePropertyData> {
 
 const SAVINGS_BENEFITS_RELEVANT_PROPERTY_UPDATE_FIELDS = new Set<keyof UpdatePropertyData>([
   'address',
+  'unit',
   'city',
   'state',
   'zipCode',
@@ -590,12 +594,16 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
 export async function createProperty(userId: string, data: CreatePropertyData): Promise<ScoredProperty> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
   const capturedAt = new Date();
+  const normalizedUnit = normalizeOptionalUnit(data.unit);
   const property = await runSerializablePropertyCreate(async (tx) => {
     const [duplicate, existingPropertyCount] = await Promise.all([
       tx.property.findFirst({
         where: {
           homeownerProfileId,
           address: { equals: data.address.trim(), mode: 'insensitive' },
+          unit: normalizedUnit
+            ? { equals: normalizedUnit, mode: 'insensitive' }
+            : null,
           city: { equals: data.city.trim(), mode: 'insensitive' },
           state: { equals: data.state.trim(), mode: 'insensitive' },
           zipCode: normalizeUsZip(data.zipCode),
@@ -623,9 +631,10 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       data: {
       homeownerProfileId,
       name: data.name || null,
-      address: data.address,
-      city: data.city,
-      state: data.state.toUpperCase(),
+      address: data.address.trim(),
+      unit: normalizedUnit,
+      city: data.city.trim(),
+      state: data.state.trim().toUpperCase(),
       zipCode: normalizeUsZip(data.zipCode),
       normalizedZipCode: normalizeUsZip(data.zipCode),
       geocodingStatus: 'PENDING',
@@ -1031,9 +1040,10 @@ export async function updateProperty(
   
 
   // Use a proper type for updatePayload for better type checking
-  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'majorAppliances' | 'exteriorProfile' | 'responsibilities'>> & {
+  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'unit' | 'city' | 'state' | 'zipCode' | 'majorAppliances' | 'exteriorProfile' | 'responsibilities'>> & {
     name?: string | null;
     address?: string;
+    unit?: string | null;
     city?: string;
     state?: string;
     zipCode?: string;
@@ -1043,9 +1053,10 @@ export async function updateProperty(
 
 
   if (data.name !== undefined) updatePayload.name = data.name;
-  if (data.address !== undefined) updatePayload.address = data.address;
-  if (data.city !== undefined) updatePayload.city = data.city;
-  if (data.state !== undefined) updatePayload.state = data.state.toUpperCase();
+  if (data.address !== undefined) updatePayload.address = data.address.trim();
+  if (data.unit !== undefined) updatePayload.unit = normalizeOptionalUnit(data.unit);
+  if (data.city !== undefined) updatePayload.city = data.city.trim();
+  if (data.state !== undefined) updatePayload.state = data.state.trim().toUpperCase();
   if (data.zipCode !== undefined) updatePayload.zipCode = normalizeUsZip(data.zipCode);
   if (data.timezone !== undefined) updatePayload.timezone = data.timezone?.trim() || null;
   if (data.isPrimary !== undefined) updatePayload.isPrimary = data.isPrimary;
@@ -1140,6 +1151,13 @@ export async function updateProperty(
     ...(data.state !== undefined ? { state: data.state } : {}),
     ...(data.zipCode !== undefined ? { zipCode: data.zipCode } : {}),
   });
+  const addressIdentityChanged = hasPropertyAddressIdentityChanged(existingProperty, {
+    ...(data.address !== undefined ? { address: data.address } : {}),
+    ...(data.unit !== undefined ? { unit: data.unit } : {}),
+    ...(data.city !== undefined ? { city: data.city } : {}),
+    ...(data.state !== undefined ? { state: data.state } : {}),
+    ...(data.zipCode !== undefined ? { zipCode: data.zipCode } : {}),
+  });
   const radarReconciliationReasons =
     radarReconciliationReasonsForPropertyUpdate(data, locationIdentityChanged);
 
@@ -1148,6 +1166,7 @@ export async function updateProperty(
     ...(locationIdentityChanged
       ? buildPropertyGeographyInvalidation(data.zipCode ?? existingProperty.zipCode)
       : {}),
+    ...(addressIdentityChanged ? { addressIdentityVersion: { increment: 1 } } : {}),
     ...(data.exteriorProfile !== undefined ? {
       exteriorProfile: {
         upsert: { create: data.exteriorProfile, update: data.exteriorProfile },
@@ -1157,6 +1176,12 @@ export async function updateProperty(
   const factKeys = capturedFactKeys(data);
   const capturedAt = new Date();
   const property = await prisma.$transaction(async (tx) => {
+    if (addressIdentityChanged) {
+      await tx.propertyExternalIdentity.updateMany({
+        where: { propertyId },
+        data: { matchStatus: 'STALE', nextRefreshAt: null, failureCode: null },
+      });
+    }
     if (locationIdentityChanged) {
       // Coverage and matches are disposable projections of the previous
       // property geography. Matches remain durable so the asynchronous

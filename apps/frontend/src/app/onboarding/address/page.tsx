@@ -48,6 +48,7 @@ export default function AddressOnboardingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [address, setAddress] = useState('');
+  const [unit, setUnit] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
@@ -111,7 +112,7 @@ export default function AddressOnboardingPage() {
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!situation || (situation !== 'buying' && !triggerType)) return;
-    const submittedAddress = normalizeOnboardingAddress({ address, city, state, zipCode });
+    const submittedAddress = normalizeOnboardingAddress({ address, unit, city, state, zipCode });
     const validationError = onboardingAddressError(submittedAddress);
     if (validationError) {
       toast({ title: 'Complete the address', description: validationError, variant: 'destructive' });
@@ -361,9 +362,10 @@ export default function AddressOnboardingPage() {
                 <p className="mt-1 text-sm text-slate-500">Choose a suggestion or enter the complete address yourself.</p>
               </div>
               <AddressAutocomplete
-                value={{ address, city, state, zipCode }}
+                value={{ address, unit, city, state, zipCode }}
                 onChange={(next) => {
                   setAddress(next.address);
+                  setUnit(next.unit ?? '');
                   setCity(next.city);
                   setState(next.state);
                   setZipCode(next.zipCode);
@@ -375,6 +377,16 @@ export default function AddressOnboardingPage() {
                 placeholder="94 Ashford Drive"
                 autoFocus
               />
+              <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                Unit or apartment <span className="font-normal text-slate-400">(optional)</span>
+                <Input
+                  value={unit}
+                  onChange={(event) => { setUnit(event.target.value.slice(0, 50)); setAddressResolved(false); }}
+                  autoComplete="address-line2"
+                  maxLength={50}
+                  placeholder="Apt 4B"
+                />
+              </label>
               <div className="grid gap-3 sm:grid-cols-[1fr_96px_128px]">
                 <label className="space-y-1.5 text-sm font-medium text-slate-700">
                   City <span className="text-red-500">*</span>

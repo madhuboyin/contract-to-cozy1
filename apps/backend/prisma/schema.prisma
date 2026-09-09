@@ -248,6 +248,16 @@ enum PropertyFactObservationState {
   UNKNOWN
 }
 
+enum PropertyExternalMatchStatus {
+  PENDING
+  MATCHED
+  NO_MATCH
+  AMBIGUOUS
+  FAILED
+  STALE
+  NOT_CONFIGURED
+}
+
 enum HeatingType {
   HVAC
   FURNACE
@@ -3961,9 +3971,11 @@ model Property {
   // Address Details (Existing Fields)
   name    String? // e.g., "Main Home", "Investment Property"
   address String
+  unit    String?
   city    String
   state   String
   zipCode String
+  addressIdentityVersion Int @default(1)
 
   // Cached geocode result for weather jobs (freeze-risk, severe-weather-alerts).
   // Avoids re-geocoding the same zip on every 15-min job run. geocodedZipCode
@@ -4333,6 +4345,7 @@ model Property {
   salePrepProfile      PropertySalePrepProfile?
   responsibilities     PropertyResponsibility[]
   propertyFactEvidence PropertyFactEvidence[]
+  externalIdentities   PropertyExternalIdentity[]
 
   // Decision Platform (Ask Intelligence FRD Phase 7A — see
   // docs/product/decision-platform/adr-0001-ownership-and-scope.md)
@@ -4352,6 +4365,39 @@ model Property {
   @@index([countyFips])
   @@index([locationPoint], type: Gist)
   @@map("properties")
+}
+
+model PropertyExternalIdentity {
+  id                  String                      @id @default(uuid())
+  propertyId          String
+  provider            String
+  externalId          String?
+  assessorId          String?
+  matchStatus         PropertyExternalMatchStatus @default(PENDING)
+  matchMethod         String?
+  matchedAddress      String?
+  matchedUnit         String?
+  matchedCity         String?
+  matchedState        String?
+  matchedZipCode      String?
+  addressVersion      Int
+  contractVersion     Int
+  responseFingerprint String?
+  acceptedFactKeys    String[]                    @default([])
+  lastAttemptedAt     DateTime?
+  lastSucceededAt     DateTime?
+  nextRefreshAt       DateTime?
+  failureCode         String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, provider])
+  // PostgreSQL permits multiple NULLs while enforcing uniqueness for matched IDs.
+  @@unique([provider, externalId])
+  @@index([provider, matchStatus, nextRefreshAt])
+  @@map("property_external_identities")
 }
 
 model PropertyExteriorProfile {

@@ -325,6 +325,7 @@ const propertySchema = z.object({
   name: z.string().optional().nullable(),
   isPrimary: z.boolean(),
   address: z.string().min(1, { message: "Street Address is required." }),
+  unit: z.string().max(50, { message: "Unit must be 50 characters or fewer." }).optional().nullable(),
   city: z.string().min(1, { message: "City is required." }),
   state: z.string().min(2, { message: "State must be 2 characters." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
@@ -435,6 +436,7 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         name: property.name || null, 
         isPrimary: property.isPrimary ?? false, 
         address: property.address,
+        unit: property.unit,
         city: property.city,
         state: property.state,
         zipCode: property.zipCode,
@@ -772,7 +774,7 @@ export default function EditPropertyPage() {
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
     defaultValues: {
-      name: "", isPrimary: false, address: "", city: "", state: "", zipCode: "", timezone: null,
+      name: "", isPrimary: false, address: "", unit: null, city: "", state: "", zipCode: "", timezone: null,
       dwellingType: "UNKNOWN", ownershipForm: "UNKNOWN", propertyUse: "UNKNOWN",
       occupancyStatus: "UNKNOWN", responsibilities: defaultResponsibilityParties('UNKNOWN'),
       propertySize: null, yearBuilt: null, bedrooms: null, bathrooms: null,
@@ -846,6 +848,7 @@ export default function EditPropertyPage() {
       const payload = {
         name: data.name ?? undefined,
         address: data.address,
+        unit: data.unit?.trim() || null,
         city: data.city,
         state: data.state.toUpperCase(), 
         zipCode: data.zipCode,
@@ -1723,6 +1726,17 @@ export default function EditPropertyPage() {
                       )}
                     />
                   </div>
+                  <FormField
+                    control={form.control}
+                    name="unit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">Unit or apartment <span className="font-normal text-gray-400">(optional)</span></FormLabel>
+                        <FormControl><Input id="field-unit" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="Apt 4B" autoComplete="address-line2" maxLength={50} {...field} value={field.value ?? ""} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_84px_120px]">
                     <FormField
                       control={form.control}

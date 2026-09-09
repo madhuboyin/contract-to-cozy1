@@ -5,7 +5,7 @@ type SparsePayloadOptions = {
 };
 
 const DIRECT_FIELD_NAMES = [
-  'name', 'address', 'city', 'state', 'zipCode', 'timezone', 'isPrimary',
+  'name', 'address', 'unit', 'city', 'state', 'zipCode', 'timezone', 'isPrimary',
   'dwellingType', 'ownershipForm', 'propertyUse', 'occupancyStatus',
   'propertySize', 'yearBuilt', 'bedrooms', 'bathrooms',
   'heatingType', 'coolingType', 'waterHeaterType', 'roofType',

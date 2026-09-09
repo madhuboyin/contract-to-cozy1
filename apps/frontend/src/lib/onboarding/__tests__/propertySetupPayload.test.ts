@@ -30,6 +30,16 @@ describe('property setup create payloads', () => {
     });
   });
 
+  it('preserves an optional unit in both property creation paths', () => {
+    const unitAddress = { ...address, unit: '  Apt 4B  ' };
+    expect(buildAddressPropertyCreatePayload(unitAddress, false, false)).toMatchObject({ unit: 'Apt 4B' });
+    expect(buildConfirmedPropertyCreatePayload(unitAddress, {
+      dwellingType: 'UNKNOWN',
+      basementConfiguration: 'UNKNOWN',
+      hasPoolOrSpa: 'UNKNOWN',
+    })).toMatchObject({ unit: 'Apt 4B' });
+  });
+
   it('omits every unanswered established-owner fact', () => {
     const result = buildConfirmedPropertyCreatePayload(address, {
       dwellingType: 'UNKNOWN',

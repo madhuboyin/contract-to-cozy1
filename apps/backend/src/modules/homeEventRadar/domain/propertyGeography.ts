@@ -29,8 +29,19 @@ export type PropertyLocationIdentity = {
 
 export type PropertyLocationPatch = Partial<PropertyLocationIdentity>;
 
+export type PropertyAddressIdentity = PropertyLocationIdentity & {
+  unit?: string | null;
+};
+
+export type PropertyAddressPatch = Partial<PropertyAddressIdentity>;
+
 function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
+}
+
+export function normalizeOptionalUnit(value: string | null | undefined): string | null {
+  const normalized = value?.trim().replace(/\s+/g, ' ') ?? '';
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizedIdentity(
@@ -65,6 +76,15 @@ export function hasPropertyLocationIdentityChanged(
     before.state !== after.state ||
     before.zipCode !== after.zipCode
   );
+}
+
+export function hasPropertyAddressIdentityChanged(
+  current: PropertyAddressIdentity,
+  patch: PropertyAddressPatch,
+): boolean {
+  return hasPropertyLocationIdentityChanged(current, patch)
+    || normalizeText(normalizeOptionalUnit(current.unit) ?? '')
+      !== normalizeText(normalizeOptionalUnit(patch.unit === undefined ? current.unit : patch.unit) ?? '');
 }
 
 export function buildPropertyGeographyInvalidation(

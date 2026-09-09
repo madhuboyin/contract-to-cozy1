@@ -17,7 +17,7 @@ import {
 import { buildAddressPropertyCreatePayload } from '@/lib/onboarding/propertySetupPayload';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
-const EMPTY_ADDRESS: OnboardingAddress = { address: '', city: '', state: '', zipCode: '' };
+const EMPTY_ADDRESS: OnboardingAddress = { address: '', unit: '', city: '', state: '', zipCode: '' };
 const INPUT_CLASS = 'min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500/40 focus:outline-none focus:ring-2 focus:ring-teal-500/20';
 
 export default function NewPropertyPage() {
@@ -146,6 +146,10 @@ export default function NewPropertyPage() {
               </button>
             ) : (
               <div className="mt-4 grid gap-4 sm:grid-cols-2" aria-label="Confirm address details">
+                <label className="space-y-1.5 text-sm font-medium text-slate-700 sm:col-span-2">
+                  Unit or apartment <span className="font-normal text-slate-400">(optional)</span>
+                  <input value={address.unit ?? ''} onChange={(event) => setAddress((current) => ({ ...current, unit: event.target.value.slice(0, 50) }))} className={INPUT_CLASS} autoComplete="address-line2" maxLength={50} placeholder="Apt 4B" />
+                </label>
                 <label className="space-y-1.5 text-sm font-medium text-slate-700">
                   City <span className="text-red-500">*</span>
                   <input value={address.city} onChange={(event) => setAddress((current) => ({ ...current, city: event.target.value }))} className={INPUT_CLASS} autoComplete="address-level2" />

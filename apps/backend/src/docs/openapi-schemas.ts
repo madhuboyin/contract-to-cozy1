@@ -32,12 +32,19 @@
  *           format: uuid
  *         address:
  *           type: string
+ *         unit:
+ *           type: string
+ *           nullable: true
+ *           maxLength: 50
  *         city:
  *           type: string
  *         state:
  *           type: string
  *         zipCode:
  *           type: string
+ *         addressIdentityVersion:
+ *           type: integer
+ *           minimum: 1
  *         dwellingType:
  *           type: string
  *           enum: [DETACHED_SINGLE_FAMILY, ATTACHED_SINGLE_FAMILY, TOWNHOUSE, CONDO_UNIT, APARTMENT_UNIT, DUPLEX, MULTI_FAMILY, MANUFACTURED_HOME, OTHER, UNKNOWN]

@@ -3,14 +3,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Loader2, MapPin } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import type { OnboardingAddress } from '@/lib/onboarding/addressIntegrity';
 
-type AddressValue = { address: string; city: string; state: string; zipCode: string };
 type Suggestion = { placeId: string; label: string };
 
 interface AddressAutocompleteProps {
-  value: AddressValue;
-  onChange: (next: AddressValue) => void;
-  onResolved?: (next: AddressValue) => void;
+  value: OnboardingAddress;
+  onChange: (next: OnboardingAddress) => void;
+  onResolved?: (next: OnboardingAddress) => void;
   inputClassName: string;
   label?: string;
   placeholder?: string;

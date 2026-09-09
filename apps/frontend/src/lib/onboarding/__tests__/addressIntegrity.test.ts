@@ -1,5 +1,6 @@
 import {
   addressOnlyPropertyData,
+  normalizeOnboardingAddress,
   onboardingAddressError,
   sameOnboardingAddress,
   reconcilePropertyLookup,
@@ -61,5 +62,17 @@ describe('onboarding address integrity', () => {
       { address: ' 1 Main St ', city: 'Princeton', state: 'nj', zipCode: '08536' },
       { address: '1 main st', city: 'princeton', state: 'NJ', zipCode: '08536' },
     )).toBe(true);
+  });
+
+  it('normalizes and distinguishes apartment units', () => {
+    expect(normalizeOnboardingAddress({ ...newJerseyAddress, unit: '  Apt   4B ' })).toMatchObject({ unit: 'Apt 4B' });
+    expect(sameOnboardingAddress(
+      { ...newJerseyAddress, unit: 'Apt 4B' },
+      { ...newJerseyAddress, unit: ' apt 4b ' },
+    )).toBe(true);
+    expect(sameOnboardingAddress(
+      { ...newJerseyAddress, unit: 'Apt 4B' },
+      { ...newJerseyAddress, unit: 'Apt 5C' },
+    )).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ require('ts-node/register');
 
 const {
   createPropertyFact,
+  getFactDefinition,
   getContextCompleteness,
   getPropertyContext,
   inspectDecisionFacts,
@@ -131,6 +132,18 @@ test('property API validation accepts canonical classifications and rejects cont
     ...base,
     exteriorProfile: { hasPrivateOutdoorSpace: false, outdoorSpaceTypes: ['BALCONY'] },
   }).success, false);
+});
+
+test('property API trims an optional unit and bounds its length', () => {
+  const base = { address: '1 Main St', city: 'Boston', state: 'MA', zipCode: '02108' };
+  assert.equal(createPropertySchema.parse({ ...base, unit: '  Apt 4B  ' }).unit, 'Apt 4B');
+  assert.equal(createPropertySchema.safeParse({ ...base, unit: 'x'.repeat(51) }).success, false);
+  assert.equal(createPropertySchema.parse({ ...base, unit: null }).unit, null);
+});
+
+test('registers county and five-digit county FIPS as location facts', () => {
+  assert.equal(getFactDefinition('location.county').canonicalOwner, 'Property.county');
+  assert.equal(getFactDefinition('location.countyFips').canonicalOwner, 'Property.countyFips');
 });
 
 test('authorizes before assembly and invokes only requested scope assemblers', async () => {

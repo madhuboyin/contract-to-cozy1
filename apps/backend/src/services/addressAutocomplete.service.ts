@@ -7,6 +7,7 @@ export interface AddressSuggestion {
 
 export interface ResolvedAddress {
   address: string;
+  unit?: string;
   city: string;
   state: string;
   zipCode: string;
@@ -82,6 +83,7 @@ export async function resolveAddress(placeId: string, sessionToken: string): Pro
   const components = data?.addressComponents || [];
   const streetNumber = componentValue(components, 'street_number');
   const route = componentValue(components, 'route');
+  const unit = componentValue(components, 'subpremise').trim();
   const address = [streetNumber, route].filter(Boolean).join(' ');
   const city = componentValue(components, 'locality')
     || componentValue(components, 'postal_town')
@@ -90,6 +92,6 @@ export async function resolveAddress(placeId: string, sessionToken: string): Pro
   const zipCode = componentValue(components, 'postal_code');
 
   return address && city && state && /^\d{5}$/.test(zipCode)
-    ? { address, city, state, zipCode }
+    ? { address, ...(unit ? { unit } : {}), city, state, zipCode }
     : null;
 }

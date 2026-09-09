@@ -71,7 +71,7 @@ export default function ConfirmOnboardingPage() {
   const [success, setSuccess] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
-  const [addressDraft, setAddressDraft] = useState({ address: '', city: '', state: '', zipCode: '' });
+  const [addressDraft, setAddressDraft] = useState({ address: '', unit: '', city: '', state: '', zipCode: '' });
   const [homeProfile, setHomeProfile] = useState<HomeProfileDraft>(EMPTY_HOME_PROFILE);
   const [committedPropertyId, setCommittedPropertyId] = useState<string | null>(null);
 
@@ -91,6 +91,7 @@ export default function ConfirmOnboardingPage() {
         setCommittedPropertyId(payload.data.committedPropertyId ?? null);
         setAddressDraft({
           address: payload.data.address ?? '',
+          unit: payload.data.unit ?? '',
           city: payload.data.city ?? '',
           state: payload.data.state ?? '',
           zipCode: payload.data.zipCode ?? '',
@@ -129,6 +130,9 @@ export default function ConfirmOnboardingPage() {
     const correctedData = {
       ...data,
       ...addressOnlyPropertyData(addressDraft),
+      // Explicitly clear a previously resolved subpremise when the homeowner
+      // removes it; the normalized address object omits empty optional fields.
+      unit: addressDraft.unit.trim() || null,
       addressSource: 'MANUAL',
     };
     setSavingAddress(true);
@@ -327,6 +331,10 @@ export default function ConfirmOnboardingPage() {
                     <Input value={addressDraft.address} onChange={(event) => setAddressDraft((current) => ({ ...current, address: event.target.value }))} autoComplete="street-address" />
                   </label>
                   <label className="block space-y-1 text-xs font-semibold text-slate-600">
+                    Unit or apartment <span className="font-normal text-slate-400">(optional)</span>
+                    <Input value={addressDraft.unit} onChange={(event) => setAddressDraft((current) => ({ ...current, unit: event.target.value.slice(0, 50) }))} autoComplete="address-line2" maxLength={50} />
+                  </label>
+                  <label className="block space-y-1 text-xs font-semibold text-slate-600">
                     City
                     <Input value={addressDraft.city} onChange={(event) => setAddressDraft((current) => ({ ...current, city: event.target.value }))} autoComplete="address-level2" />
                   </label>
@@ -345,7 +353,7 @@ export default function ConfirmOnboardingPage() {
                       {savingAddress ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save address'}
                     </Button>
                     <Button type="button" size="sm" variant="outline" onClick={() => {
-                      setAddressDraft({ address: data.address, city: data.city, state: data.state, zipCode: data.zipCode });
+                      setAddressDraft({ address: data.address, unit: data.unit ?? '', city: data.city, state: data.state, zipCode: data.zipCode });
                       setEditingAddress(false);
                     }} disabled={savingAddress}>Cancel</Button>
                   </div>
@@ -353,6 +361,7 @@ export default function ConfirmOnboardingPage() {
               ) : (
                 <>
                   <p className="font-bold text-slate-900">{data.address}</p>
+                  {data.unit && <p className="text-sm text-slate-600">{data.unit}</p>}
                   <p className="text-sm text-slate-600">{data.city}, {data.state} {data.zipCode}</p>
                   {data.addressSource !== 'LOOKUP' && (
                     <p className="mt-2 text-xs font-medium text-brand-700">Address confirmed · public property facts remain unknown</p>

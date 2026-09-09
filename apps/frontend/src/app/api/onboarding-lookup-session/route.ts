@@ -7,6 +7,7 @@ const MAX_AGE_SECONDS = 15 * 60;
 
 type OnboardingLookupPayload = {
   address: string;
+  unit?: string;
   addressSource?: 'LOOKUP' | 'AUTOCOMPLETE' | 'MANUAL';
   city?: string;
   state?: string;
@@ -123,6 +124,7 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
 
   return {
     address,
+    unit: normalizeString(source.unit),
     addressSource,
     city,
     state,

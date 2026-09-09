@@ -209,9 +209,10 @@ export const changePasswordSchema = z.object({
 export const createPropertySchema = z.object({
   // Existing fields (Required for initial property creation)
   name: z.string().max(100).optional(),
-  address: z.string().min(1, 'Address is required'),
-  city: z.string().min(1, 'City is required'),
-  state: z.string().length(2, 'State must be 2 characters'),
+  address: z.string().trim().min(1, 'Address is required'),
+  unit: z.string().trim().max(50, 'Unit must be 50 characters or fewer').nullable().optional(),
+  city: z.string().trim().min(1, 'City is required'),
+  state: z.string().trim().length(2, 'State must be 2 characters'),
   zipCode: z.string().regex(/^\d{5}$/, 'ZIP code must be 5 digits'),
   timezone: z.string().trim().min(1).max(100).refine((value) => {
     try {

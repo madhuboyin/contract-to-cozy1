@@ -1869,9 +1869,11 @@ export interface Property {
   homeownerProfileId: string;
   name: string | null;
   address: string;
+  unit: string | null;
   city: string;
   state: string;
   zipCode: string;
+  addressIdentityVersion: number;
   timezone: string | null;
   isPrimary: boolean;
   householdRole?: HouseholdRole | null; // Present when user is a household member (not the owner)
