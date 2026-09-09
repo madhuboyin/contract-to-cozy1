@@ -162,6 +162,10 @@ test('trigger-first UI asks the situation before address and renders evidence-bo
     path.resolve(__dirname, '../../../frontend/src/app/onboarding/confirm/page.tsx'),
     'utf8',
   );
+  const entryContextHelper = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/lib/onboarding/onboardingEntryContext.ts'),
+    'utf8',
+  );
   const firstValuePage = fs.readFileSync(
     path.resolve(__dirname, '../../../frontend/src/app/onboarding/first-value/page.tsx'),
     'utf8',
@@ -175,7 +179,8 @@ test('trigger-first UI asks the situation before address and renders evidence-bo
   assert.match(addressPage, /Target closing date/);
   assert.match(addressPage, /Inspection status/);
   assert.match(addressPage, /Unknown dates are fine/);
-  assert.match(addressPage, /activeTrigger/);
+  assert.match(entryContextHelper, /activeTrigger/);
+  assert.match(entryContextHelper, /option\.type !== 'NONE_EXPLORING' \|\| situation === 'exploring'/);
   assert.match(addressPage, /Continue without public records/);
   assert.match(addressPage, /Unknown home facts will stay unknown/);
   assert.match(confirmPage, /captureEntryContext/);

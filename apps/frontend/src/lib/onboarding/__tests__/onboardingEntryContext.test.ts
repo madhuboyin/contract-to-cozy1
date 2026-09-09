@@ -1,4 +1,8 @@
-import { buildOnboardingActivationContext } from '@/lib/onboarding/onboardingEntryContext';
+import {
+  buildOnboardingActivationContext,
+  isOnboardingTriggerCompatible,
+  onboardingTriggerOptionsForSituation,
+} from '@/lib/onboarding/onboardingEntryContext';
 
 const base = {
   triggerType: 'PROJECT' as const,
@@ -61,5 +65,18 @@ describe('buildOnboardingActivationContext', () => {
       ownershipState: 'SHOPPING',
       propertyOrigin: 'UNKNOWN',
     });
+  });
+
+  it('does not offer or build the exploration-only trigger for an owner', () => {
+    expect(onboardingTriggerOptionsForSituation('own').map((option) => option.type))
+      .not.toContain('NONE_EXPLORING');
+    expect(onboardingTriggerOptionsForSituation('exploring').map((option) => option.type))
+      .toContain('NONE_EXPLORING');
+    expect(isOnboardingTriggerCompatible('EXISTING_OWNER_TRIGGER', 'NONE_EXPLORING')).toBe(false);
+    expect(() => buildOnboardingActivationContext({
+      ...base,
+      situation: 'own',
+      triggerType: 'NONE_EXPLORING',
+    })).toThrow('Choose a goal that matches where you are in your home journey.');
   });
 });

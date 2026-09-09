@@ -1,4 +1,32 @@
+import type { ActivationEntryContextInput } from '@/types';
+
 type SessionFetch = typeof fetch;
+
+export async function persistOnboardingTriggerCorrection(
+  data: Record<string, unknown>,
+  trigger: Pick<ActivationEntryContextInput['activeTrigger'], 'type' | 'label'>,
+  fetcher: SessionFetch = fetch,
+): Promise<Record<string, unknown>> {
+  const activationContext = data.activationContext as ActivationEntryContextInput | undefined;
+  if (!activationContext) throw new Error('Setup context is missing');
+  const correctedData = {
+    ...data,
+    activationContext: {
+      ...activationContext,
+      activeTrigger: {
+        ...activationContext.activeTrigger,
+        ...trigger,
+      },
+    },
+  };
+  const response = await fetcher('/api/onboarding-lookup-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: correctedData }),
+  });
+  if (!response.ok) throw new Error('Unable to save the corrected goal');
+  return correctedData;
+}
 
 export async function persistCommittedOnboardingProperty(
   data: Record<string, unknown>,

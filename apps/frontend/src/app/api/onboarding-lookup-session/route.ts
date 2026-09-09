@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { ActivationEntryContextInput } from '@/types';
 import { normalizeCommittedPropertyId } from '@/lib/onboarding/onboardingSession';
+import { isOnboardingTriggerCompatible } from '@/lib/onboarding/onboardingEntryContext';
 
 const LOOKUP_COOKIE = 'ctc_onboarding_lookup';
 const MAX_AGE_SECONDS = 15 * 60;
@@ -39,7 +40,10 @@ function normalizeOptionalIsoDate(value: unknown): string | null {
   return new Date(value).toISOString();
 }
 
-function sanitizeActivationContext(value: unknown): ActivationEntryContextInput | undefined {
+export function sanitizeActivationContext(
+  value: unknown,
+  options: { allowIncompatible?: boolean } = {},
+): ActivationEntryContextInput | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const source = value as Record<string, unknown>;
   const trigger = source.activeTrigger && typeof source.activeTrigger === 'object'
@@ -53,6 +57,10 @@ function sanitizeActivationContext(value: unknown): ActivationEntryContextInput 
   }
   const label = normalizeString(trigger.label);
   if (!label) return undefined;
+  if (!options.allowIncompatible &&
+    !isOnboardingTriggerCompatible(String(source.entryPath), String(trigger.type))) {
+    return undefined;
+  }
   const buyerSource = source.buyer && typeof source.buyer === 'object'
     ? source.buyer as Record<string, unknown>
     : null;
@@ -101,7 +109,10 @@ function normalizeBoolean(value: unknown): boolean | null | undefined {
   return value === null ? null : typeof value === 'boolean' ? value : undefined;
 }
 
-function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
+export function sanitizePayload(
+  input: unknown,
+  options: { allowIncompatibleActivationContext?: boolean } = {},
+): OnboardingLookupPayload | null {
   if (!input || typeof input !== 'object') return null;
   const source = input as Record<string, unknown>;
   const address = normalizeString(source.address);
@@ -115,6 +126,11 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
   if (!city || !state?.match(/^[A-Z]{2}$/) || !zipCode?.match(/^\d{5}$/)) {
     return null;
   }
+
+  const activationContext = sanitizeActivationContext(source.activationContext, {
+    allowIncompatible: options.allowIncompatibleActivationContext,
+  });
+  if (source.activationContext !== undefined && !activationContext) return null;
 
   return {
     address,
@@ -131,7 +147,7 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
       ? source.basementConfiguration as OnboardingLookupPayload['basementConfiguration']
       : 'UNKNOWN',
     hasPoolOrSpa: normalizeBoolean(source.hasPoolOrSpa),
-    activationContext: sanitizeActivationContext(source.activationContext),
+    activationContext,
     committedPropertyId: normalizeCommittedPropertyId(source.committedPropertyId),
   };
 }
@@ -144,7 +160,9 @@ function decodePayload(cookieValue: string | undefined): OnboardingLookupPayload
   if (!cookieValue) return null;
   try {
     const parsed = JSON.parse(Buffer.from(cookieValue, 'base64url').toString('utf8'));
-    return sanitizePayload(parsed);
+    // Read legacy incompatible sessions so the confirmation page can repair them
+    // without losing a Property ID that may already have been committed.
+    return sanitizePayload(parsed, { allowIncompatibleActivationContext: true });
   } catch {
     return null;
   }

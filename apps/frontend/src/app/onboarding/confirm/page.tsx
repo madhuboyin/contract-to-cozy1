@@ -22,9 +22,15 @@ import { buildConfirmedPropertyCreatePayload } from '@/lib/onboarding/propertySe
 import {
   clearOnboardingLookupSession,
   persistCommittedOnboardingProperty,
+  persistOnboardingTriggerCorrection,
 } from '@/lib/onboarding/onboardingSessionClient';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
 import type { BasementConfiguration, DwellingType } from '@/types';
+import {
+  isOnboardingTriggerCompatible,
+  ONBOARDING_TRIGGER_OPTIONS,
+  type OnboardingTriggerType,
+} from '@/lib/onboarding/onboardingEntryContext';
 
 type HomeProfileDraft = {
   dwellingType: DwellingType;
@@ -74,6 +80,7 @@ export default function ConfirmOnboardingPage() {
   const [addressDraft, setAddressDraft] = useState({ address: '', unit: '', city: '', state: '', zipCode: '' });
   const [homeProfile, setHomeProfile] = useState<HomeProfileDraft>(EMPTY_HOME_PROFILE);
   const [committedPropertyId, setCommittedPropertyId] = useState<string | null>(null);
+  const [savingTriggerCorrection, setSavingTriggerCorrection] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -162,6 +169,17 @@ export default function ConfirmOnboardingPage() {
       toast({
         title: 'Setup context is missing',
         description: 'Return to the previous step and choose what brought you here before adding the home.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!isOnboardingTriggerCompatible(
+      activationContext.entryPath,
+      activationContext.activeTrigger?.type,
+    )) {
+      toast({
+        title: 'Choose a different goal',
+        description: '“Just understand my home” belongs to the Exploring journey. Choose what you need as a homeowner to continue.',
         variant: 'destructive',
       });
       return;
@@ -271,9 +289,40 @@ export default function ConfirmOnboardingPage() {
     }
   };
 
+  const saveTriggerCorrection = async (type: OnboardingTriggerType, label: string) => {
+    const activationContext = data?.activationContext;
+    if (!activationContext) return;
+    setSavingTriggerCorrection(true);
+    try {
+      const correctedData = await persistOnboardingTriggerCorrection(data, { type, label });
+      setData(correctedData);
+      toast({
+        title: 'Goal updated',
+        description: committedPropertyId
+          ? 'Your saved home is unchanged. You can now continue to its first action.'
+          : 'You can now add the home and continue to its first action.',
+      });
+    } catch {
+      toast({
+        title: 'Unable to update your goal',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingTriggerCorrection(false);
+    }
+  };
+
   if (!data) return null;
   const isBuyerJourney = data.activationContext?.entryPath === 'EXISTING_HOME_PURCHASE';
   const isEstablishedOwnerJourney = data.activationContext?.entryPath === 'EXISTING_OWNER_TRIGGER';
+  const needsTriggerCorrection = Boolean(
+    data.activationContext && !isOnboardingTriggerCompatible(
+      data.activationContext.entryPath,
+      data.activationContext.activeTrigger?.type,
+    ),
+  );
+  const recoveryTriggerOptions = ONBOARDING_TRIGGER_OPTIONS.filter((option) => option.type !== 'NONE_EXPLORING');
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -467,10 +516,33 @@ export default function ConfirmOnboardingPage() {
               </div>
             </div>
 
+            {needsTriggerCorrection && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-left" role="alert">
+                <p className="font-bold text-amber-950">Choose what you need as a homeowner</p>
+                <p className="mt-1 text-sm text-amber-900">
+                  “Just understand my home” belongs to the Exploring journey. Choose a homeowner goal below to continue
+                  {committedPropertyId ? ' with the home already saved.' : '.'}
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {recoveryTriggerOptions.map((option) => (
+                    <button
+                      key={option.type}
+                      type="button"
+                      disabled={savingTriggerCorrection}
+                      onClick={() => void saveTriggerCorrection(option.type, option.label)}
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 hover:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <Button 
               className="w-full h-14 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-lg transition-all"
               onClick={handleConfirm}
-              disabled={submitting || editingAddress}
+              disabled={submitting || editingAddress || needsTriggerCorrection || savingTriggerCorrection}
             >
               {submitting ? (
                 <Loader2 className="h-6 w-6 animate-spin" />

@@ -5,6 +5,34 @@ export type OnboardingTriggerType = ActivationEntryContextInput['activeTrigger']
 export type BuyerPurchaseStage = NonNullable<ActivationEntryContextInput['buyer']>['purchaseStage'];
 export type BuyerInspectionStatus = NonNullable<ActivationEntryContextInput['buyer']>['inspectionStatus'];
 
+export const ONBOARDING_TRIGGER_OPTIONS: ReadonlyArray<{
+  type: OnboardingTriggerType;
+  label: string;
+}> = [
+  { type: 'REPAIR', label: 'Something needs repair' },
+  { type: 'REPLACEMENT', label: 'Repair or replace a system' },
+  { type: 'CONTRACTOR_QUOTE', label: 'Review a contractor quote' },
+  { type: 'MAINTENANCE_BACKLOG', label: 'Catch up on maintenance' },
+  { type: 'INSURANCE_COVERAGE', label: 'Insurance or warranty question' },
+  { type: 'PROJECT', label: 'Plan a home project' },
+  { type: 'ANTICIPATED_COST', label: 'Prepare for a future cost' },
+  { type: 'NONE_EXPLORING', label: 'Just understand my home' },
+];
+
+export function onboardingTriggerOptionsForSituation(
+  situation: OnboardingSituation,
+) {
+  return ONBOARDING_TRIGGER_OPTIONS.filter((option) =>
+    option.type !== 'NONE_EXPLORING' || situation === 'exploring');
+}
+
+export function isOnboardingTriggerCompatible(
+  entryPath: string,
+  triggerType: string,
+): boolean {
+  return triggerType !== 'NONE_EXPLORING' || entryPath === 'EXPLORATION';
+}
+
 type OnboardingEntryContextOptions = {
   situation: OnboardingSituation;
   triggerType: OnboardingTriggerType | null;
@@ -58,12 +86,16 @@ export function buildOnboardingActivationContext(
   }
 
   if (!options.triggerType) throw new Error('Choose what brought you here.');
+  const entryPath = options.situation === 'new-build'
+    ? 'NEW_HOME_SETUP'
+    : options.situation === 'exploring'
+      ? 'EXPLORATION'
+      : 'EXISTING_OWNER_TRIGGER';
+  if (!isOnboardingTriggerCompatible(entryPath, options.triggerType)) {
+    throw new Error('Choose a goal that matches where you are in your home journey.');
+  }
   return {
-    entryPath: options.situation === 'new-build'
-      ? 'NEW_HOME_SETUP'
-      : options.situation === 'exploring'
-        ? 'EXPLORATION'
-        : 'EXISTING_OWNER_TRIGGER',
+    entryPath,
     ownershipState: options.situation === 'new-build'
       ? 'UNDER_CONTRACT'
       : options.situation === 'exploring'

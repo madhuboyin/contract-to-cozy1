@@ -1,6 +1,7 @@
 import {
   clearOnboardingLookupSession,
   persistCommittedOnboardingProperty,
+  persistOnboardingTriggerCorrection,
 } from '@/lib/onboarding/onboardingSessionClient';
 
 describe('onboarding session completion helpers', () => {
@@ -28,5 +29,37 @@ describe('onboarding session completion helpers', () => {
     await expect(clearOnboardingLookupSession(failedFetch)).resolves.toBeUndefined();
     expect(warning).toHaveBeenCalledTimes(2);
     warning.mockRestore();
+  });
+
+  it('corrects a legacy trigger without losing the committed Property ID', async () => {
+    const fetcher = jest.fn().mockResolvedValue({ ok: true });
+    const committedPropertyId = '4df2ac7b-b715-4ad9-9400-4ce0d10c4e78';
+    const corrected = await persistOnboardingTriggerCorrection({
+      address: '1 Main St',
+      committedPropertyId,
+      activationContext: {
+        entryPath: 'EXISTING_OWNER_TRIGGER',
+        ownershipState: 'ESTABLISHED_OWNER',
+        propertyOrigin: 'EXISTING_HOME',
+        activeTrigger: {
+          type: 'NONE_EXPLORING',
+          label: 'Just understand my home',
+          detail: null,
+          entityType: 'PROPERTY',
+          entityId: null,
+          source: 'USER_SELECTED',
+        },
+      },
+    }, { type: 'PROJECT', label: 'Plan a home project' }, fetcher);
+
+    expect(corrected).toMatchObject({
+      committedPropertyId,
+      activationContext: {
+        activeTrigger: { type: 'PROJECT', label: 'Plan a home project' },
+      },
+    });
+    expect(fetcher).toHaveBeenCalledWith('/api/onboarding-lookup-session', expect.objectContaining({
+      body: expect.stringContaining(committedPropertyId),
+    }));
   });
 });

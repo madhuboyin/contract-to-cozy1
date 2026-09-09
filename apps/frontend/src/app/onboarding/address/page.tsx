@@ -20,22 +20,13 @@ import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/prop
 import type { BasementConfiguration, DwellingType } from '@/types';
 import {
   buildOnboardingActivationContext,
+  ONBOARDING_TRIGGER_OPTIONS,
+  onboardingTriggerOptionsForSituation,
   type BuyerInspectionStatus,
   type BuyerPurchaseStage,
   type OnboardingSituation as Situation,
   type OnboardingTriggerType as TriggerType,
 } from '@/lib/onboarding/onboardingEntryContext';
-
-const TRIGGER_OPTIONS: Array<{ type: TriggerType; label: string }> = [
-  { type: 'REPAIR', label: 'Something needs repair' },
-  { type: 'REPLACEMENT', label: 'Repair or replace a system' },
-  { type: 'CONTRACTOR_QUOTE', label: 'Review a contractor quote' },
-  { type: 'MAINTENANCE_BACKLOG', label: 'Catch up on maintenance' },
-  { type: 'INSURANCE_COVERAGE', label: 'Insurance or warranty question' },
-  { type: 'PROJECT', label: 'Plan a home project' },
-  { type: 'ANTICIPATED_COST', label: 'Prepare for a future cost' },
-  { type: 'NONE_EXPLORING', label: 'Just understand my home' },
-];
 
 /**
  * AddressOnboardingPage is the first "Wow" moment.
@@ -79,7 +70,7 @@ export default function AddressOnboardingPage() {
 
   const buildActivationContext = () => {
     if (!situation) throw new Error('Choose where you are in the home journey.');
-    const selectedTrigger = TRIGGER_OPTIONS.find((option) => option.type === triggerType);
+    const selectedTrigger = ONBOARDING_TRIGGER_OPTIONS.find((option) => option.type === triggerType);
     return buildOnboardingActivationContext({
       situation,
       triggerType,
@@ -219,8 +210,10 @@ export default function AddressOnboardingPage() {
                     type="button"
                     onClick={() => {
                       setSituation(value);
-                      if (value === 'exploring') setTriggerType('NONE_EXPLORING');
-                      if (value !== 'exploring' && triggerType === 'NONE_EXPLORING') setTriggerType(null);
+                      setTriggerType((current) => {
+                        if (value === 'exploring') return 'NONE_EXPLORING';
+                        return current === 'NONE_EXPLORING' ? null : current;
+                      });
                     }}
                     aria-pressed={situation === value}
                     className={`min-h-11 rounded-xl border px-2 text-sm font-semibold ${
@@ -298,7 +291,7 @@ export default function AddressOnboardingPage() {
               <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                 <legend className="px-2 text-sm font-bold text-slate-900">What brought you here?</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {TRIGGER_OPTIONS.map((option) => (
+                  {onboardingTriggerOptionsForSituation(situation).map((option) => (
                     <button
                       key={option.type}
                       type="button"
