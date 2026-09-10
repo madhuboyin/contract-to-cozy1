@@ -19,7 +19,7 @@ const payload = {
   propertyId: '11111111-1111-4111-8111-111111111111',
   provider: 'RENTCAST',
   addressVersion: 1,
-  contractVersion: 1,
+  contractVersion: 2,
 };
 
 function record(overrides = {}) {
@@ -184,13 +184,13 @@ test('applies the FRD cache windows and only suppresses the same current contrac
 
   const state = {
     addressVersion: 1,
-    contractVersion: 1,
+    contractVersion: 2,
     matchStatus: 'MATCHED',
     nextRefreshAt: new Date('2026-09-10T00:00:00.000Z'),
   };
   assert.equal(shouldSuppressEnrichment(state, payload, completedAt), true);
   assert.equal(shouldSuppressEnrichment({ ...state, addressVersion: 2 }, payload, completedAt), false);
-  assert.equal(shouldSuppressEnrichment({ ...state, contractVersion: 2 }, payload, completedAt), false);
+  assert.equal(shouldSuppressEnrichment({ ...state, contractVersion: 1 }, payload, completedAt), false);
   assert.equal(shouldSuppressEnrichment({ ...state, matchStatus: 'STALE' }, payload, completedAt), false);
   assert.equal(shouldSuppressEnrichment({ ...state, nextRefreshAt: completedAt }, payload, completedAt), false);
 });
@@ -214,7 +214,7 @@ test('skips deleted, old-address, and fresh-cache jobs before provider I/O', asy
   const cached = harness({ outerProperty: property({
     externalIdentities: [{
       addressVersion: 1,
-      contractVersion: 1,
+      contractVersion: 2,
       matchStatus: 'MATCHED',
       nextRefreshAt: new Date('2026-10-01T00:00:00.000Z'),
     }],
@@ -236,7 +236,7 @@ test('coalesces a duplicate outcome that became fresh while provider I/O was in 
   const state = harness({
     innerExternalState: {
       addressVersion: 1,
-      contractVersion: 1,
+      contractVersion: 2,
       matchStatus: 'MATCHED',
       nextRefreshAt: new Date('2026-12-08T12:00:00.000Z'),
     },
@@ -258,6 +258,18 @@ test('persists no-match and ambiguity with the seven-day negative cache', async 
   assert.equal(noMatchState.matchStatus, 'NO_MATCH');
   assert.equal(noMatchState.nextRefreshAt.toISOString(), '2026-09-16T12:00:00.000Z');
   assert.equal(noMatchState.externalId, null);
+  assert.equal(noMatchState.failureCode, 'NO_PROVIDER_RESULTS');
+
+  const addressMismatch = harness({
+    clientOutcome: {
+      kind: 'SUCCESS', records: [record({ city: 'Austin' })], requestCompletedAt: completedAt,
+    },
+  });
+  await addressMismatch.service.enrich(payload);
+  assert.equal(
+    operations(addressMismatch.calls, 'identity.upsert')[0].args.update.failureCode,
+    'ADDRESS_COMPONENT_MISMATCH',
+  );
 
   const ambiguous = harness({
     clientOutcome: {
@@ -267,6 +279,7 @@ test('persists no-match and ambiguity with the seven-day negative cache', async 
   const result = await ambiguous.service.enrich(payload);
   assert.equal(result.status, 'AMBIGUOUS');
   assert.equal(operations(ambiguous.calls, 'identity.upsert')[0].args.update.matchStatus, 'AMBIGUOUS');
+  assert.equal(operations(ambiguous.calls, 'identity.upsert')[0].args.update.failureCode, 'MULTIPLE_EXACT_MATCHES');
   assert.equal(operations(ambiguous.calls, 'evidence.create').length, 0);
 });
 

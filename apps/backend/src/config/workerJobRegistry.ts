@@ -83,7 +83,7 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '',
     type: 'bullmq',
     queueName: 'property-enrichment-queue',
-    jobName: 'rentcast-property-enrichment-v1',
+    jobName: 'rentcast-property-enrichment-v2',
     triggerSupported: false,
     impact: 'HOMEOWNER_STATE',
     customerJob: 'STAY_AHEAD',

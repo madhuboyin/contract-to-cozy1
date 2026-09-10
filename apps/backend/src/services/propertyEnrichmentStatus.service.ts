@@ -20,6 +20,25 @@ export interface PropertyEnrichmentStatusDto {
   lastSuccessfulAt: string | null;
   nextRefreshAt: string | null;
   acceptedFactKeys: string[];
+  reason: PropertyEnrichmentStatusReason;
+}
+
+export type PropertyEnrichmentStatusReason =
+  | 'NO_PROVIDER_RESULTS'
+  | 'ADDRESS_COMPONENT_MISMATCH'
+  | 'MULTIPLE_EXACT_MATCHES'
+  | null;
+
+const SAFE_STATUS_REASONS = new Set<Exclude<PropertyEnrichmentStatusReason, null>>([
+  'NO_PROVIDER_RESULTS',
+  'ADDRESS_COMPONENT_MISMATCH',
+  'MULTIPLE_EXACT_MATCHES',
+]);
+
+function safeStatusReason(value: string | null): PropertyEnrichmentStatusReason {
+  return value && SAFE_STATUS_REASONS.has(value as Exclude<PropertyEnrichmentStatusReason, null>)
+    ? value as Exclude<PropertyEnrichmentStatusReason, null>
+    : null;
 }
 
 interface PropertyEnrichmentStatusDependencies {
@@ -49,6 +68,7 @@ export async function getPropertyEnrichmentStatus(
       lastAttemptedAt: true,
       lastSucceededAt: true,
       nextRefreshAt: true,
+      failureCode: true,
     },
   });
 
@@ -60,6 +80,7 @@ export async function getPropertyEnrichmentStatus(
       lastSuccessfulAt: null,
       nextRefreshAt: null,
       acceptedFactKeys: [],
+      reason: null,
     };
   }
 
@@ -87,5 +108,6 @@ export async function getPropertyEnrichmentStatus(
     lastSuccessfulAt: iso(identity.lastSucceededAt),
     nextRefreshAt: iso(identity.nextRefreshAt),
     acceptedFactKeys: eligibleFactKeys.filter((factKey) => activeFactKeys.has(factKey)),
+    reason: safeStatusReason(identity.failureCode),
   };
 }

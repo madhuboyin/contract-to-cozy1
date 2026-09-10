@@ -4,7 +4,7 @@
  * Keep provider payloads and credentials out of jobs. The worker reloads the
  * current canonical address and rejects jobs for an old address version.
  */
-export const PROPERTY_ENRICHMENT_CONTRACT_VERSION = 1 as const;
+export const PROPERTY_ENRICHMENT_CONTRACT_VERSION = 2 as const;
 export const RENTCAST_PROVIDER = 'RENTCAST' as const;
 export const RENTCAST_EVIDENCE_SOURCE = 'PUBLIC_RECORD' as const;
 export const RENTCAST_SOURCE_ENTITY_TYPE = 'RENTCAST_PROPERTY_RECORD' as const;

@@ -11,7 +11,7 @@ const {
 } = require('../../src/propertyEnrichment/contracts.ts');
 
 test('RentCast enrichment contracts are versioned and public-record sourced', () => {
-  assert.equal(PROPERTY_ENRICHMENT_CONTRACT_VERSION, 1);
+  assert.equal(PROPERTY_ENRICHMENT_CONTRACT_VERSION, 2);
   assert.equal(RENTCAST_PROVIDER, 'RENTCAST');
   assert.equal(RENTCAST_EVIDENCE_SOURCE, 'PUBLIC_RECORD');
   assert.notEqual(RENTCAST_EVIDENCE_SOURCE, 'USER_REPORTED');

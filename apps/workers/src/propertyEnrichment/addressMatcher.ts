@@ -60,7 +60,13 @@ export function normalizeUnit(value: string | null | undefined): string | null {
 }
 
 export function normalizeCity(value: string): string {
-  return normalizePunctuation(value);
+  return normalizePunctuation(value)
+    // Census/assessor and postal sources commonly disagree only on whether a
+    // civil municipality designator is included. Remove a deliberately small
+    // allowlist at the boundary; never apply fuzzy or substring matching.
+    .replace(/^(?:TOWNSHIP|TWP|BOROUGH|BORO|CITY|VILLAGE) OF\s+/, '')
+    .replace(/\s+(?:TOWNSHIP|TWP|BOROUGH|BORO|CITY|VILLAGE)$/, '')
+    .trim();
 }
 
 export function normalizeState(value: string): string {

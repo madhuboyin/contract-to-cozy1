@@ -275,6 +275,7 @@ export interface PropertyEnrichmentStatus {
   lastSuccessfulAt: string | null;
   nextRefreshAt: string | null;
   acceptedFactKeys: string[];
+  reason: 'NO_PROVIDER_RESULTS' | 'ADDRESS_COMPONENT_MISMATCH' | 'MULTIPLE_EXACT_MATCHES' | null;
 }
 
 /**

@@ -1,6 +1,6 @@
 # RentCast Property Setup Integration — Functional Requirements Document
 
-**Version:** 1.1
+**Version:** 1.2
 **Status:** Implemented
 **Date:** 2026-09-09
 **Product area:** Property setup, Property Details, and Property Context
@@ -27,6 +27,8 @@ The integration shall preserve the progressive setup contract established in Pha
 6. RentCast last-sale, valuation, owner, and mailing-address data are not imported in this release.
 
 Version 1.1 streamlines the visible setup journey without changing the provider boundary. The address action now commits the minimal Property (the event that queues enrichment), the confirmation surface performs a bounded read of first-party enrichment status and Property data, and matched facts are shown for correction before the user enters the relevant workspace. The browser still never calls RentCast directly and setup never waits indefinitely for it.
+
+Version 1.2 corrects a production-discovered locality representation gap. Civil municipality labels such as `Plainsboro Township` and postal locality labels such as `Plainsboro` may identify the same municipality. The exact matcher now removes only an allowlisted leading or trailing civil designator while preserving strict street, unit, state, ZIP, and single-candidate requirements. Version-1 negative decisions are replayed in a bounded worker startup scan, and the safe status contract distinguishes an empty provider response from a returned record that failed identity checks.
 
 ## 2. Problem Statement
 
@@ -103,7 +105,7 @@ Quantitative enrichment-match targets shall be established after baseline metric
 - A blocking lookup step, setup spinner that waits for RentCast, or new required profile questions.
 - A manual homeowner refresh control that can create unbounded paid requests.
 - A new general-purpose job platform; the existing BullMQ/worker infrastructure shall be reused.
-- Database migration scripts or existing-user backfill. The user will create and apply migrations.
+- Database migration scripts or a general-purpose existing-user enrichment backfill. The user will create and apply migrations. A bounded replay of stale negative decisions after a match-contract correction is part of operational recovery.
 - Additional external property-data providers. The data model and service contract shall remain provider-neutral.
 
 ## 5. Product Decisions
@@ -122,7 +124,7 @@ Frontend routes shall not decide whether to call RentCast. Every Property creati
 
 ### PD-4 — Exact identity precedes enrichment
 
-Canonical facts may be updated only after one RentCast result matches the normalized street, city, state, ZIP, and unit rules. Zero results, multiple plausible results, missing required unit identity, or conflicting location components produce no enrichment.
+Canonical facts may be updated only after one RentCast result matches the normalized street, municipality, state, ZIP, and unit rules. Municipality normalization may remove only an allowlisted civil designator at the name boundary (for example, `Township of Plainsboro` or `Plainsboro Township` to `Plainsboro`). Zero results, multiple plausible results, missing required unit identity, or conflicting location components produce no enrichment.
 
 ### PD-5 — Public record is evidence, not confirmation
 
@@ -251,7 +253,7 @@ Logs shall use Property ID, provider, job ID, HTTP classification, duration, res
 ### 7.4 Match policy
 
 **FR-MATCH-01**
-Matching shall compare normalized street number/name, city, state, ZIP, and unit. Punctuation, case, common street suffix abbreviations, and whitespace may be normalized; semantic components may not be discarded.
+Matching shall compare normalized street number/name, municipality, state, ZIP, and unit. Punctuation, case, common street suffix abbreviations, whitespace, and an allowlisted leading or trailing civil municipality designator (`Township`, `Twp`, `Borough`, `Boro`, `City`, or `Village`) may be normalized. No other semantic component may be discarded, and fuzzy or substring city matching is prohibited.
 
 **FR-MATCH-02**
 A unit-bearing Property requires the same normalized unit in the accepted RentCast record.
@@ -357,10 +359,10 @@ Property Details shall label active provider-supported facts as “Public record
 The existing edit control shall be the correction path. A homeowner correction shall display as homeowner-provided after save.
 
 **FR-UX-04**
-No match, ambiguity, failure, or missing configuration shall not produce an alarming homeowner notification. Unknown fields remain ordinary opportunities to add details.
+No match, ambiguity, failure, or missing configuration shall produce an alarming homeowner notification. Unknown fields remain ordinary opportunities to add details.
 
 **FR-UX-05**
-An authorized property member may read a compact enrichment status containing provider, status, last attempted date, last successful date, next refresh date, and accepted fact keys. The response shall not expose raw provider data, owner information, or operational credentials.
+An authorized property member may read a compact enrichment status containing provider, status, a bounded reason, last attempted date, last successful date, next refresh date, and accepted fact keys. Allowed negative reasons are `NO_PROVIDER_RESULTS`, `ADDRESS_COMPONENT_MISMATCH`, and `MULTIPLE_EXACT_MATCHES`. The response shall not expose raw provider data, address components, owner information, operational error text, or credentials.
 
 **FR-UX-06**
 No public endpoint shall accept an arbitrary address for paid RentCast lookup. Any enrichment-status endpoint shall be property-scoped and use existing Property authorization.
@@ -446,7 +448,7 @@ interface PropertyEnrichmentJobPayload {
   propertyId: string;
   provider: 'RENTCAST';
   addressVersion: number;
-  contractVersion: 1;
+  contractVersion: 2;
 }
 ```
 
@@ -467,7 +469,8 @@ GET /api/properties/:id/enrichment
     "lastAttemptedAt": "2026-09-09T12:00:00.000Z",
     "lastSucceededAt": "2026-09-09T12:00:00.000Z",
     "nextRefreshAt": "2026-12-08T12:00:00.000Z",
-    "acceptedFactKeys": ["core.yearBuilt", "core.propertySizeSqFt"]
+    "acceptedFactKeys": ["core.yearBuilt", "core.propertySizeSqFt"],
+    "reason": null
   }
 }
 ```
@@ -486,7 +489,9 @@ The API shall return an empty/not-started representation when no state exists; i
 ### Matching and mapping
 
 - A single exact address/unit result imports only allowlisted valid values.
+- Postal/civil locality variants that differ only by an allowlisted municipality designator match without weakening other identity checks.
 - Zero results, multiple plausible results, unit mismatch, and location conflict write no canonical facts.
+- A contract-version upgrade boundedly requeues stale negative decisions and bypasses their old cache entry.
 - Bedroom value `0` is retained.
 - Unknown property types and `Land` leave dwelling type unknown.
 - Last sale, AVM, rent, owner, and listing values never enter canonical or financing records.

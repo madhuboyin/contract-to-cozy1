@@ -104,6 +104,7 @@ import {
   propertyEnrichmentConcurrency,
 } from './jobs/propertyEnrichment.job';
 import type { PropertyEnrichmentJobPayload } from './propertyEnrichment/contracts';
+import { requeueStalePropertyEnrichmentContracts } from './propertyEnrichment/requeueStaleContracts';
 import { processMaintenanceReminders } from '@worker-shared/services/maintenanceReminder.service';
 import {
   canonicalWorkerJobKey,
@@ -934,6 +935,11 @@ function startWorker() {
     );
   }
   const enrichmentConcurrency = propertyEnrichmentConcurrency();
+  const propertyEnrichmentReplayQueue = new Queue<PropertyEnrichmentJobPayload>(
+    PROPERTY_ENRICHMENT_QUEUE_NAME,
+    { connection: redisConnection, defaultJobOptions: DEFAULT_JOB_RETENTION },
+  );
+  let enrichmentContractReplayStarted = false;
   const propertyEnrichmentWorker = new Worker<PropertyEnrichmentJobPayload>(
     PROPERTY_ENRICHMENT_QUEUE_NAME,
     async (job) => {
@@ -952,6 +958,16 @@ function startWorker() {
       { queue: PROPERTY_ENRICHMENT_QUEUE_NAME, concurrency: enrichmentConcurrency },
       '[PROPERTY-ENRICHMENT] Consumer ready',
     );
+    if (!enrichmentContractReplayStarted) {
+      enrichmentContractReplayStarted = true;
+      void requeueStalePropertyEnrichmentContracts(propertyEnrichmentReplayQueue)
+        .then((result) => {
+          logger.info(result, '[PROPERTY-ENRICHMENT] Stale contract replay scan completed');
+        })
+        .catch((error) => {
+          logger.error({ err: error }, '[PROPERTY-ENRICHMENT] Stale contract replay scan failed');
+        });
+    }
   });
   propertyEnrichmentWorker.on('active', (job) => {
     jobsActiveGauge.inc({ queue: PROPERTY_ENRICHMENT_QUEUE_NAME });
@@ -1022,6 +1038,10 @@ function startWorker() {
   registerShutdownHandler(
     'propertyEnrichmentWorker',
     () => propertyEnrichmentWorker.close(),
+  );
+  registerShutdownHandler(
+    'propertyEnrichmentReplayQueue',
+    () => propertyEnrichmentReplayQueue.close(),
   );
 
   // =============================================================================

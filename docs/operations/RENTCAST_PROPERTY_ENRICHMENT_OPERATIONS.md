@@ -16,6 +16,28 @@ or raw response.
 `10` are accepted; invalid values fall back to `4`. HTTP requests use the code-owned
 five-second timeout.
 
+## Match contract and recovery
+
+Match contract version 2 treats only an allowlisted civil municipality designator
+as representational. For example, `Plainsboro Township`, `Township of Plainsboro`,
+and `Plainsboro` normalize to the same municipality. Street, unit, state, ZIP, and
+the exactly-one-candidate rule remain strict; fuzzy locality matching is not used.
+
+Negative outcomes retain a bounded reason code:
+
+- `NO_PROVIDER_RESULTS`: RentCast returned no property record.
+- `ADDRESS_COMPONENT_MISMATCH`: one or more records were returned, but none passed
+  the complete normalized identity check.
+- `MULTIPLE_EXACT_MATCHES`: more than one record passed, so no record was selected.
+
+On each worker-process startup, one scan selects at most 250 RentCast identities
+with a pre-version-2 `NO_MATCH` or `AMBIGUOUS` decision. It enqueues the Property's
+current address version under the version-2 job ID. Individual enqueue failures do
+not stop the remainder of the batch; successful processing stores contract version
+2, naturally removing that row from later startup scans. This is a bounded contract
+repair, not a public/manual refresh mechanism or a general historical enrichment
+backfill.
+
 ## Worker image delivery
 
 The Raspberry Pi overlay deploys `ghcr.io/madhuboyin/contract-to-cozy/workers:latest-arm64`. On a push to `main`, `.github/workflows/workers-quality-gates.yml` builds the production worker Dockerfile and publishes both `latest-arm64` and an immutable `${GITHUB_SHA}-arm64` tag. A successful local/CI Docker build alone does not update the cluster image.

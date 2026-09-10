@@ -385,6 +385,7 @@ export class PropertyEnrichmentService {
         payload,
         PropertyExternalMatchStatus.NO_MATCH,
         fetched.requestCompletedAt,
+        'NO_PROVIDER_RESULTS',
       );
     }
 
@@ -400,6 +401,7 @@ export class PropertyEnrichmentService {
         payload,
         PropertyExternalMatchStatus.NO_MATCH,
         fetched.requestCompletedAt,
+        'ADDRESS_COMPONENT_MISMATCH',
       );
     }
     if (match.kind === 'AMBIGUOUS') {
@@ -407,6 +409,7 @@ export class PropertyEnrichmentService {
         payload,
         PropertyExternalMatchStatus.AMBIGUOUS,
         fetched.requestCompletedAt,
+        'MULTIPLE_EXACT_MATCHES',
       );
     }
     return this.persistMatched(payload, match.record, fetched.requestCompletedAt);
@@ -460,6 +463,7 @@ export class PropertyEnrichmentService {
     payload: PropertyEnrichmentJobPayload,
     status: 'NO_MATCH' | 'AMBIGUOUS',
     completedAt: Date,
+    failureCode: 'NO_PROVIDER_RESULTS' | 'ADDRESS_COMPONENT_MISMATCH' | 'MULTIPLE_EXACT_MATCHES',
   ): Promise<PropertyEnrichmentResult> {
     const nextRefreshAt = refreshAtForStatus(status, completedAt);
     return this.db.$transaction(async (tx) => {
@@ -480,6 +484,7 @@ export class PropertyEnrichmentService {
           lastAttemptedAt: completedAt,
           lastSucceededAt: completedAt,
           nextRefreshAt,
+          failureCode,
         },
         update: {
           externalId: null,
@@ -498,7 +503,7 @@ export class PropertyEnrichmentService {
           lastAttemptedAt: completedAt,
           lastSucceededAt: completedAt,
           nextRefreshAt,
-          failureCode: null,
+          failureCode,
         },
       });
       return {

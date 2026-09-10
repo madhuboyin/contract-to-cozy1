@@ -6,6 +6,7 @@ require('ts-node/register');
 const {
   normalizeStreetAddress,
   normalizeUnit,
+  normalizeCity,
   selectExactRentCastMatch,
 } = require('../../src/propertyEnrichment/addressMatcher.ts');
 
@@ -37,6 +38,34 @@ test('normalizes punctuation, whitespace, directionals, suffixes, fractions, and
   assert.equal(normalizeUnit(' Apt. #12-A '), '12-A');
   assert.equal(normalizeUnit('suite 400'), '400');
   assert.equal(normalizeUnit('  '), null);
+});
+
+test('normalizes only allowlisted municipal designators at city boundaries', () => {
+  assert.equal(normalizeCity('Plainsboro Township'), 'PLAINSBORO');
+  assert.equal(normalizeCity('Township of Plainsboro'), 'PLAINSBORO');
+  assert.equal(normalizeCity('Plainsboro Twp.'), 'PLAINSBORO');
+  assert.equal(normalizeCity('Township Village'), 'TOWNSHIP');
+});
+
+test('matches postal and civil municipality names for the same exact property', () => {
+  const plainsboroProperty = {
+    address: '94 Ashford Drive',
+    unit: null,
+    city: 'Plainsboro Township',
+    state: 'NJ',
+    zipCode: '08536',
+  };
+  const outcome = selectExactRentCastMatch(plainsboroProperty, [record({
+    id: '94-ashford',
+    formattedAddress: '94 Ashford Dr, Plainsboro, NJ 08536',
+    addressLine1: '94 Ashford Dr',
+    addressLine2: null,
+    city: 'Plainsboro',
+    state: 'NJ',
+    zipCode: '08536',
+  })]);
+  assert.equal(outcome.kind, 'MATCHED');
+  assert.equal(outcome.record.id, '94-ashford');
 });
 
 test('matches exactly one record after allowed normalization', () => {

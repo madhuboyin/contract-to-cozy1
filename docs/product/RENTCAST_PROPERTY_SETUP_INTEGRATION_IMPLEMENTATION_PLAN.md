@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
-**Version:** 1.1
-**Status:** Implemented — RC-0 through RC-7 complete
+**Version:** 1.2
+**Status:** Implemented — RC-0 through RC-8 complete
 **Date:** 2026-09-09
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)
@@ -17,6 +17,8 @@ Implement one provider-neutral, background enrichment pipeline that runs after e
 The implementation is complete only when provider unavailability cannot block setup, unit ambiguity cannot mutate a Property, homeowner corrections remain authoritative, and all Property creation entry routes share the same backend orchestration.
 
 RC-7 closes the onboarding presentation and deployment gaps discovered during production review: the address CTA commits the minimal Property, the next surface polls first-party enrichment status for a bounded period and prefills matched facts, an immediate goal is optional, confirmation routes directly to an actionable workspace, new empty accounts skip the standalone welcome modal, and the production ARM64 worker image is published to the tag consumed by Kubernetes.
+
+RC-8 closes the false-negative municipality gap found with `Plainsboro Township` versus RentCast's `Plainsboro`: it adds allowlisted civil-designator normalization, bumps the job/match contract to version 2, safely distinguishes provider-empty and address-mismatch outcomes, and boundedly requeues stale version-1 negative decisions at worker startup.
 
 ## 2. Current Repository Baseline
 
@@ -57,7 +59,7 @@ Address CTA -> POST /api/properties
           - cache/idempotency check
           - GET /v1/properties
           - validate response
-          - exact address/unit match
+          - exact address/unit match with bounded municipality normalization
           - allowlist map
                     |
                     v
@@ -109,7 +111,8 @@ Names may be adjusted to existing naming conventions during implementation, but 
 | --- | --- |
 | `apps/workers/src/propertyEnrichment/contracts.ts` | Versioned job, provider response, normalized result, and outcome contracts |
 | `apps/workers/src/propertyEnrichment/rentCastClient.ts` | Fixed-origin authenticated HTTP client, timeout, validation, error classification |
-| `apps/workers/src/propertyEnrichment/addressMatcher.ts` | Deterministic street/unit normalization and exact-match selection |
+| `apps/workers/src/propertyEnrichment/addressMatcher.ts` | Deterministic street/unit/municipality normalization and exact-match selection |
+| `apps/workers/src/propertyEnrichment/requeueStaleContracts.ts` | Bounded recovery replay for stale negative match contracts |
 | `apps/workers/src/propertyEnrichment/rentCastMapper.ts` | Allowlisted type and fact mapping |
 | `apps/workers/src/propertyEnrichment/propertyEnrichment.service.ts` | Cache check, conflict protection, transaction, evidence, and recompute orchestration |
 | `apps/workers/src/jobs/propertyEnrichment.job.ts` | Injectable job handler suitable for environment-independent unit tests |
@@ -383,7 +386,7 @@ Exit criteria:
 Tasks:
 
 - Add `property-enrichment-queue` and a versioned payload with no address/key.
-- Add a stable BullMQ job identity for provider, Property, address version, and contract version. The repository's BullMQ 5.65 runtime rejects the originally proposed four-segment colon form, so the implemented ID is `rentcast-<propertyId>-<addressVersion>-v1`.
+- Add a stable BullMQ job identity for provider, Property, address version, and contract version. The repository's BullMQ 5.65 runtime rejects the originally proposed four-segment colon form, so the current version-2 ID is `rentcast-<propertyId>-<addressVersion>-v2`.
 - Add at most three attempts with exponential backoff for retryable outcomes.
 - Register a worker with default concurrency four, metrics, failure handling, and graceful shutdown.
 - Add a post-commit non-fatal enqueue in the shared Property create service.
@@ -436,6 +439,26 @@ Exit criteria:
 - Worker startup is healthy with and without the key.
 - No metric label is unbounded or contains Property/address/provider-record identity.
 
+### Slice RC-8 — Municipality match correction and stale-negative recovery
+
+**Purpose:** Correct false negatives caused only by civil-versus-postal locality naming without weakening property identity.
+
+Tasks:
+
+- Normalize only the allowlisted municipality designators at a city-name boundary.
+- Keep street, unit, state, ZIP, and exactly-one-candidate checks strict.
+- Persist bounded reason codes that distinguish provider-empty responses, address-component mismatch, and multiple exact candidates.
+- Expose only those safe reason codes through the authorized status projection and show accurate non-alarming onboarding copy.
+- Bump the queue payload/job identity to contract version 2 so version-1 negative caches cannot suppress corrected matching.
+- On worker startup, select at most 250 stale version-1 `NO_MATCH`/`AMBIGUOUS` identities and enqueue their current address version. Continue after an individual enqueue failure and rely on contract-version persistence to remove successful rows from later scans.
+
+Exit criteria:
+
+- `Plainsboro Township` and `Plainsboro` match for an otherwise identical property.
+- A genuinely different city, unit, street, state, or ZIP still produces no match.
+- Existing stale negative decisions are retried without an unbounded scan or public refresh endpoint.
+- Status consumers can distinguish “provider returned nothing” from “a returned record failed identity checks” without receiving raw provider or address data.
+
 ## 8. Test Plan
 
 ### 8.1 Backend and contract tests
@@ -445,7 +468,7 @@ Exit criteria:
 - Address identity version changes only for canonical address/unit changes.
 - Post-commit enqueue exceptions do not reject Property create/update.
 - Enrichment status authorization rejects users without Property access.
-- Status DTO excludes external raw data, assessor ID if not product-required, and failure detail.
+- Status DTO excludes external raw data, assessor ID, operational error text, and non-allowlisted failure detail.
 - Public last sale never maps to `purchasePriceCents` or `purchaseDate`.
 
 ### 8.2 Provider client tests
@@ -459,12 +482,14 @@ Exit criteria:
 ### 8.3 Matcher tests
 
 - Case, punctuation, whitespace, suffix, directional, and unit-prefix normalization.
+- Leading/trailing allowlisted municipality-designator normalization.
 - Exact single-family match.
 - Exact condo/apartment unit match.
 - Missing, wrong, or conflicting unit rejection.
 - Zero qualifying results.
 - Multiple qualifying results produce ambiguity rather than first-result selection.
 - State, ZIP, city, or street conflict rejection.
+- Non-designator city conflicts remain rejected.
 
 ### 8.4 Mapper tests
 
@@ -497,6 +522,7 @@ Exit criteria:
 - Address update enqueues a new version; unrelated update does not.
 - Missing credential and queue outage preserve create success.
 - Worker shutdown closes the consumer.
+- Version-1 negative contracts are selected in a bounded batch and enqueued with the current address version and version-2 job identity.
 
 ### 8.7 Frontend tests
 
@@ -531,12 +557,14 @@ Do not claim live provider, database, queue, or browser execution unless it was 
 - [x] Prisma Client was regenerated; no migration file was committed.
 - [x] RentCast client is worker-only, fixed-origin, timed out, runtime-validated, and redacted.
 - [x] Exact address/unit matching is deterministic and rejects ambiguity.
+- [x] Civil/postal municipality variants normalize through a narrow allowlist while true locality conflicts remain rejected.
 - [x] Mapper includes only the approved property-record allowlist.
 - [x] Provider facts use unverified `PUBLIC_RECORD` evidence.
 - [x] Homeowner/document/inspection facts cannot be overwritten.
 - [x] Last sale and AVM cannot enter financing or Property setup payloads.
 - [x] Property create/update success is independent of enqueue/provider success.
 - [x] Cache, idempotency, retry, and stale-job behavior are covered.
+- [x] Contract-version upgrades boundedly replay stale negative decisions and expose only safe diagnostic reasons.
 - [x] Both Property creation routes share the backend enqueue boundary.
 - [x] Property Details exposes source/freshness and the existing correction path.
 - [x] Worker-only secret wiring and bounded metrics are present.
@@ -554,5 +582,7 @@ Implement in this order:
 5. **RC-4** to connect the safe service to every create/update route.
 6. **RC-5** to remove pre-create lookup coupling and add transparency.
 7. **RC-6** to finish worker deployment, cost visibility, and operational evidence.
+8. **RC-7** to streamline onboarding review and direct workflow handoff.
+9. **RC-8** to correct municipality variants and recover stale negative contracts.
 
 Each slice must be independently reviewable and must leave Property creation functional when RentCast is absent.

@@ -79,6 +79,7 @@ export default function ConfirmOnboardingPage() {
   const [committedPropertyId, setCommittedPropertyId] = useState<string | null>(null);
   const [enrichedProperty, setEnrichedProperty] = useState<Property | null>(null);
   const [enrichmentStatus, setEnrichmentStatus] = useState<PropertyEnrichmentStatus['status']>(null);
+  const [enrichmentReason, setEnrichmentReason] = useState<PropertyEnrichmentStatus['reason']>(null);
   const [checkingEnrichment, setCheckingEnrichment] = useState(false);
   const [enrichmentRefreshVersion, setEnrichmentRefreshVersion] = useState(0);
 
@@ -135,6 +136,7 @@ export default function ConfirmOnboardingPage() {
           if (!active) return;
           const status = statusResponse.success ? statusResponse.data.status : null;
           setEnrichmentStatus(status);
+          setEnrichmentReason(statusResponse.success ? statusResponse.data.reason : null);
           if (propertyResponse.success && propertyResponse.data) {
             const property = propertyResponse.data;
             setEnrichedProperty(property);
@@ -200,6 +202,7 @@ export default function ConfirmOnboardingPage() {
       setHomeProfile(EMPTY_HOME_PROFILE);
       setEnrichedProperty(null);
       setEnrichmentStatus(null);
+      setEnrichmentReason(null);
       setEnrichmentRefreshVersion((current) => current + 1);
       setEditingAddress(false);
       toast({ title: 'Address updated', description: 'Review any optional home details before continuing.' });
@@ -482,7 +485,11 @@ export default function ConfirmOnboardingPage() {
                           ? 'Automatic property details are not configured right now. Add only what you know.'
                           : enrichmentStatus === 'AMBIGUOUS'
                             ? 'We found more than one possible record, so we did not guess.'
-                            : 'We could not confidently match this address. Add only what you know.'}
+                            : enrichmentReason === 'ADDRESS_COMPONENT_MISMATCH'
+                              ? 'A public record was returned, but its address did not pass our exact identity checks. Review the address or add only what you know.'
+                              : enrichmentReason === 'NO_PROVIDER_RESULTS'
+                                ? 'No public record was returned for this address. Add only what you know.'
+                                : 'We could not confidently match this address. Add only what you know.'}
                   </p>
                   {propertyInsight && (
                     <p className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-brand-950">
