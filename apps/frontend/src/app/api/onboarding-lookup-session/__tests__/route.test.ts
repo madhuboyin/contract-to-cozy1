@@ -23,15 +23,20 @@ const incompatibleOwnerContext = {
 };
 
 describe('onboarding lookup session activation context', () => {
-  it('rejects an exploration-only trigger on an owner path for new writes', () => {
-    expect(sanitizeActivationContext(incompatibleOwnerContext)).toBeUndefined();
+  it('accepts a setup-only trigger on an owner path', () => {
+    expect(sanitizeActivationContext(incompatibleOwnerContext)).toMatchObject({
+      entryPath: 'EXISTING_OWNER_TRIGGER',
+      activeTrigger: { type: 'NONE_EXPLORING' },
+    });
     expect(sanitizePayload({
       address: '1 Main St',
       city: 'Princeton',
       state: 'NJ',
       zipCode: '08540',
       activationContext: incompatibleOwnerContext,
-    })).toBeNull();
+    })).toMatchObject({
+      activationContext: { activeTrigger: { type: 'NONE_EXPLORING' } },
+    });
   });
 
   it('can read a legacy incompatible context so confirmation can repair it', () => {

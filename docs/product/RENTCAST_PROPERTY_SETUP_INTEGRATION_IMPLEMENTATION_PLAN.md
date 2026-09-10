@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
-**Version:** 1.0
-**Status:** Implemented — RC-0 through RC-6 complete
+**Version:** 1.1
+**Status:** Implemented — RC-0 through RC-7 complete
 **Date:** 2026-09-09
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)
@@ -16,6 +16,8 @@ Implement one provider-neutral, background enrichment pipeline that runs after e
 
 The implementation is complete only when provider unavailability cannot block setup, unit ambiguity cannot mutate a Property, homeowner corrections remain authoritative, and all Property creation entry routes share the same backend orchestration.
 
+RC-7 closes the onboarding presentation and deployment gaps discovered during production review: the address CTA commits the minimal Property, the next surface polls first-party enrichment status for a bounded period and prefills matched facts, an immediate goal is optional, confirmation routes directly to an actionable workspace, new empty accounts skip the standalone welcome modal, and the production ARM64 worker image is published to the tag consumed by Kubernetes.
+
 ## 2. Current Repository Baseline
 
 | Area | Current state | Required change |
@@ -29,7 +31,8 @@ The implementation is complete only when provider unavailability cannot block se
 | Provider identity | No durable RentCast identity or current match state | Add provider-neutral model |
 | Jobs | BullMQ and a worker process already exist | Add a dedicated event-driven enrichment queue/consumer |
 | Deployment | RentCast key is not wired | Add worker-only secret reference |
-| UI | Property Details edits canonical facts but does not identify RentCast | Add compact provenance/freshness labels |
+| UI | Property Details identifies RentCast, but initial setup previously advanced before enrichment was visible | Add a bounded post-commit review with public-record-prefilled facts and direct workflow handoff |
+| Worker delivery | Kubernetes consumes `workers:latest-arm64`, but the worker quality workflow only built an ephemeral image | Publish `latest-arm64` and immutable SHA ARM64 tags after a successful production Docker build |
 
 ## 3. Target Architecture
 
@@ -37,7 +40,7 @@ The implementation is complete only when provider unavailability cannot block se
 Google Places or manual entry
           |
           v
-POST /api/properties
+Address CTA -> POST /api/properties
           |
           +-- transaction: Property + homeowner evidence + ACL
           |
@@ -66,6 +69,11 @@ POST /api/properties
                     |
                     v
        idempotent downstream recompute
+                    |
+                    v
+       bounded frontend status + Property polling
+       -> review/correct accepted facts
+       -> direct property-scoped workflow
 ```
 
 ### 3.1 Ownership boundaries
@@ -113,8 +121,9 @@ Names may be adjusted to existing naming conventions during implementation, but 
 | File | Change |
 | --- | --- |
 | `apps/frontend/src/components/property/AddressAutocomplete.tsx` | Carry optional unit from resolution and manual entry |
-| `apps/frontend/src/app/onboarding/address/page.tsx` | Stop calling pre-create property lookup; preserve address/unit only |
-| `apps/frontend/src/app/onboarding/confirm/page.tsx` | Review and submit unit without provider-derived create facts |
+| `apps/frontend/src/app/onboarding/address/page.tsx` | Commit the minimal Property from an explicit CTA, which queues backend-owned enrichment; make immediate goal optional |
+| `apps/frontend/src/app/onboarding/confirm/page.tsx` | Boundedly poll status/Property, prefill accepted public-record facts, save only homeowner corrections, and route directly to the relevant workspace |
+| `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` | Send empty new accounts directly to address setup instead of rendering a standalone welcome modal |
 | `apps/frontend/src/app/(dashboard)/dashboard/properties/new/page.tsx` | Capture and submit optional unit |
 | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/edit/page.tsx` | Edit unit and display public-record source/freshness for supported facts |
 | `apps/frontend/src/lib/onboarding/propertySetupPayload.ts` | Remove provider last-sale-to-purchase mapping and include unit |
@@ -126,6 +135,7 @@ Names may be adjusted to existing naming conventions during implementation, but 
 | --- | --- |
 | `infrastructure/kubernetes/base/secrets.yaml.template` | Add placeholder `RENTCAST_API_KEY` |
 | `infrastructure/kubernetes/apps/workers/deployment.yaml` | Inject `RENTCAST_API_KEY` into workers only |
+| `.github/workflows/workers-quality-gates.yml` | Publish the ARM64 worker image tags consumed by the Raspberry Pi overlay |
 | Environment example files, if present | Document worker-only key and bounded timeout/concurrency options |
 | Property setup/product docs | Link Phase A to this Phase B contract and update delivered status |
 

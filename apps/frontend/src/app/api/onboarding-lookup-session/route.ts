@@ -14,6 +14,7 @@ type OnboardingLookupPayload = {
   state?: string;
   zipCode?: string;
   yearBuilt?: number | null;
+  propertySize?: number | null;
   dwellingType?: string | null;
   bedrooms?: number | null;
   bathrooms?: number | null;
@@ -140,6 +141,7 @@ export function sanitizePayload(
     state,
     zipCode,
     yearBuilt: normalizeNumber(source.yearBuilt),
+    propertySize: normalizeNumber(source.propertySize),
     dwellingType: normalizeString(source.dwellingType) ?? null,
     bedrooms: normalizeNumber(source.bedrooms),
     bathrooms: normalizeNumber(source.bathrooms),
@@ -160,8 +162,8 @@ function decodePayload(cookieValue: string | undefined): OnboardingLookupPayload
   if (!cookieValue) return null;
   try {
     const parsed = JSON.parse(Buffer.from(cookieValue, 'base64url').toString('utf8'));
-    // Read legacy incompatible sessions so the confirmation page can repair them
-    // without losing a Property ID that may already have been committed.
+    // Preserve sessions written before setup-only context became valid across
+    // non-buyer entry paths, including any already committed Property ID.
     return sanitizePayload(parsed, { allowIncompatibleActivationContext: true });
   } catch {
     return null;

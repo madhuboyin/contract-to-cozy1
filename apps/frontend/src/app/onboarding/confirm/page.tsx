@@ -22,19 +22,15 @@ import { buildConfirmedPropertyCreatePayload } from '@/lib/onboarding/propertySe
 import {
   clearOnboardingLookupSession,
   persistCommittedOnboardingProperty,
-  persistOnboardingTriggerCorrection,
 } from '@/lib/onboarding/onboardingSessionClient';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
-import type { BasementConfiguration, DwellingType } from '@/types';
-import {
-  isOnboardingTriggerCompatible,
-  ONBOARDING_TRIGGER_OPTIONS,
-  type OnboardingTriggerType,
-} from '@/lib/onboarding/onboardingEntryContext';
+import type { BasementConfiguration, DwellingType, Property } from '@/types';
+import type { PropertyEnrichmentStatus } from '@/lib/api/client';
 
 type HomeProfileDraft = {
   dwellingType: DwellingType;
   yearBuilt: string;
+  propertySize: string;
   bedrooms: string;
   bathrooms: string;
   basementConfiguration: BasementConfiguration;
@@ -44,6 +40,7 @@ type HomeProfileDraft = {
 const EMPTY_HOME_PROFILE: HomeProfileDraft = {
   dwellingType: 'UNKNOWN',
   yearBuilt: '',
+  propertySize: '',
   bedrooms: '',
   bathrooms: '',
   basementConfiguration: 'UNKNOWN',
@@ -80,7 +77,10 @@ export default function ConfirmOnboardingPage() {
   const [addressDraft, setAddressDraft] = useState({ address: '', unit: '', city: '', state: '', zipCode: '' });
   const [homeProfile, setHomeProfile] = useState<HomeProfileDraft>(EMPTY_HOME_PROFILE);
   const [committedPropertyId, setCommittedPropertyId] = useState<string | null>(null);
-  const [savingTriggerCorrection, setSavingTriggerCorrection] = useState(false);
+  const [enrichedProperty, setEnrichedProperty] = useState<Property | null>(null);
+  const [enrichmentStatus, setEnrichmentStatus] = useState<PropertyEnrichmentStatus['status']>(null);
+  const [checkingEnrichment, setCheckingEnrichment] = useState(false);
+  const [enrichmentRefreshVersion, setEnrichmentRefreshVersion] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -106,6 +106,7 @@ export default function ConfirmOnboardingPage() {
         setHomeProfile({
           dwellingType: dwellingTypeDraft(payload.data.dwellingType),
           yearBuilt: numericDraft(payload.data.yearBuilt),
+          propertySize: numericDraft(payload.data.propertySize),
           bedrooms: numericDraft(payload.data.bedrooms),
           bathrooms: numericDraft(payload.data.bathrooms),
           basementConfiguration: ['NONE', 'UNFINISHED', 'FINISHED', 'UNKNOWN'].includes(payload.data.basementConfiguration)
@@ -119,16 +120,53 @@ export default function ConfirmOnboardingPage() {
     })();
   }, [router]);
 
+  useEffect(() => {
+    if (!committedPropertyId) return;
+    let active = true;
+    const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+    (async () => {
+      setCheckingEnrichment(true);
+      try {
+        for (let attempt = 0; attempt < 7 && active; attempt += 1) {
+          const [statusResponse, propertyResponse] = await Promise.all([
+            api.getPropertyEnrichmentStatus(committedPropertyId),
+            api.getProperty(committedPropertyId),
+          ]);
+          if (!active) return;
+          const status = statusResponse.success ? statusResponse.data.status : null;
+          setEnrichmentStatus(status);
+          if (propertyResponse.success && propertyResponse.data) {
+            const property = propertyResponse.data;
+            setEnrichedProperty(property);
+            setHomeProfile((current) => ({
+              ...current,
+              dwellingType: current.dwellingType === 'UNKNOWN' ? dwellingTypeDraft(property.dwellingType) : current.dwellingType,
+              yearBuilt: current.yearBuilt || numericDraft(property.yearBuilt),
+              propertySize: current.propertySize || numericDraft(property.propertySize),
+              bedrooms: current.bedrooms || numericDraft(property.bedrooms),
+              bathrooms: current.bathrooms || numericDraft(property.bathrooms),
+              basementConfiguration: current.basementConfiguration === 'UNKNOWN'
+                ? property.basementConfiguration
+                : current.basementConfiguration,
+              hasPoolOrSpa: current.hasPoolOrSpa === 'UNKNOWN'
+                ? property.exteriorProfile?.hasPoolOrSpa === true ? 'YES'
+                  : property.exteriorProfile?.hasPoolOrSpa === false ? 'NO' : 'UNKNOWN'
+                : current.hasPoolOrSpa,
+            }));
+          }
+          if (['MATCHED', 'NO_MATCH', 'AMBIGUOUS', 'FAILED', 'NOT_CONFIGURED'].includes(String(status))) break;
+          await wait(800);
+        }
+      } catch (error) {
+        console.warn('Unable to refresh property details after setup:', error);
+      } finally {
+        if (active) setCheckingEnrichment(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [committedPropertyId, enrichmentRefreshVersion]);
+
   const saveAddressCorrection = async () => {
-    if (committedPropertyId) {
-      toast({
-        title: 'Home already saved',
-        description: 'Finish setup, then edit the address from Property Details.',
-        variant: 'destructive',
-      });
-      setEditingAddress(false);
-      return;
-    }
     const validationError = onboardingAddressError(addressDraft);
     if (validationError) {
       toast({ title: 'Complete the address', description: validationError, variant: 'destructive' });
@@ -144,6 +182,14 @@ export default function ConfirmOnboardingPage() {
     };
     setSavingAddress(true);
     try {
+      if (committedPropertyId) {
+        const normalized = addressOnlyPropertyData(addressDraft);
+        const propertyResponse = await api.updateProperty(committedPropertyId, {
+          ...normalized,
+          unit: normalized.unit ?? null,
+        });
+        if (!propertyResponse.success) throw new Error(propertyResponse.message || 'Unable to update the saved home address');
+      }
       const response = await fetch('/api/onboarding-lookup-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,6 +198,9 @@ export default function ConfirmOnboardingPage() {
       if (!response.ok) throw new Error('Unable to save corrected address');
       setData(correctedData);
       setHomeProfile(EMPTY_HOME_PROFILE);
+      setEnrichedProperty(null);
+      setEnrichmentStatus(null);
+      setEnrichmentRefreshVersion((current) => current + 1);
       setEditingAddress(false);
       toast({ title: 'Address updated', description: 'Review any optional home details before continuing.' });
     } catch {
@@ -173,26 +222,17 @@ export default function ConfirmOnboardingPage() {
       });
       return;
     }
-    if (!isOnboardingTriggerCompatible(
-      activationContext.entryPath,
-      activationContext.activeTrigger?.type,
-    )) {
-      toast({
-        title: 'Choose a different goal',
-        description: '“Just understand my home” belongs to the Exploring journey. Choose what you need as a homeowner to continue.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const isEstablishedOwnerJourney = activationContext.entryPath === 'EXISTING_OWNER_TRIGGER';
-
-    const yearBuilt = isEstablishedOwnerJourney ? undefined : optionalNumber(homeProfile.yearBuilt);
-    const bedrooms = isEstablishedOwnerJourney ? undefined : optionalNumber(homeProfile.bedrooms);
-    const bathrooms = isEstablishedOwnerJourney ? undefined : optionalNumber(homeProfile.bathrooms);
+    const yearBuilt = optionalNumber(homeProfile.yearBuilt);
+    const propertySize = optionalNumber(homeProfile.propertySize);
+    const bedrooms = optionalNumber(homeProfile.bedrooms);
+    const bathrooms = optionalNumber(homeProfile.bathrooms);
     const currentYear = new Date().getFullYear();
     if (yearBuilt !== undefined && (!Number.isInteger(yearBuilt) || yearBuilt < 1700 || yearBuilt > currentYear + 1)) {
       toast({ title: 'Check the year built', description: `Enter a year from 1700 to ${currentYear + 1}, or leave it blank.`, variant: 'destructive' });
+      return;
+    }
+    if (propertySize !== undefined && (!Number.isFinite(propertySize) || propertySize <= 0 || propertySize > 1_000_000)) {
+      toast({ title: 'Check the square footage', description: 'Enter a positive square-foot value, or leave it blank.', variant: 'destructive' });
       return;
     }
     if (bedrooms !== undefined && (!Number.isInteger(bedrooms) || bedrooms <= 0 || bedrooms > 99)) {
@@ -215,9 +255,10 @@ export default function ConfirmOnboardingPage() {
           const response = await api.createProperty(buildConfirmedPropertyCreatePayload(data, {
             ...homeProfile,
             yearBuilt,
+            propertySize,
             bedrooms,
             bathrooms,
-          }, { includeOptionalFacts: !isEstablishedOwnerJourney }));
+          }));
           if (!response.success || !response.data?.id) {
             throw new Error(response.message || "We couldn't claim your home. Please try again.");
           }
@@ -242,6 +283,28 @@ export default function ConfirmOnboardingPage() {
       // Retry this write on every confirmation attempt so a transient session failure can heal.
       await persistCommittedOnboardingProperty(data, propertyId);
 
+      const propertyChanges: Parameters<typeof api.updateProperty>[1] = {};
+      if (homeProfile.dwellingType !== 'UNKNOWN' && homeProfile.dwellingType !== enrichedProperty?.dwellingType) {
+        propertyChanges.dwellingType = homeProfile.dwellingType;
+      }
+      if (yearBuilt !== undefined && yearBuilt !== enrichedProperty?.yearBuilt) propertyChanges.yearBuilt = yearBuilt;
+      if (propertySize !== undefined && propertySize !== enrichedProperty?.propertySize) propertyChanges.propertySize = propertySize;
+      if (bedrooms !== undefined && bedrooms !== enrichedProperty?.bedrooms) propertyChanges.bedrooms = bedrooms;
+      if (bathrooms !== undefined && bathrooms !== enrichedProperty?.bathrooms) propertyChanges.bathrooms = bathrooms;
+      if (homeProfile.basementConfiguration !== 'UNKNOWN' && homeProfile.basementConfiguration !== enrichedProperty?.basementConfiguration) {
+        propertyChanges.basementConfiguration = homeProfile.basementConfiguration;
+      }
+      if (homeProfile.hasPoolOrSpa !== 'UNKNOWN') {
+        const hasPoolOrSpa = homeProfile.hasPoolOrSpa === 'YES';
+        if (hasPoolOrSpa !== enrichedProperty?.exteriorProfile?.hasPoolOrSpa) {
+          propertyChanges.exteriorProfile = { ...enrichedProperty?.exteriorProfile, hasPoolOrSpa };
+        }
+      }
+      if (Object.keys(propertyChanges).length > 0) {
+        const updateResponse = await api.updateProperty(propertyId, propertyChanges);
+        if (!updateResponse.success) throw new Error(updateResponse.message || 'Unable to save confirmed property details.');
+      }
+
       const contextResponse = await api.captureEntryContext(propertyId, activationContext);
       if (!contextResponse.success) {
         throw new Error(contextResponse.message || 'Unable to save activation context.');
@@ -256,12 +319,6 @@ export default function ConfirmOnboardingPage() {
           : buyerJourney ? 'Your closing journey is ready.' : 'Your first action is ready.',
       });
 
-      track('property_claimed', {
-        zipCode: data.zipCode,
-        yearBuilt: yearBuilt || 0,
-        source: data.addressSource === 'MANUAL' ? 'MANUAL' : 'API'
-      });
-
       const startedAt = Number(sessionStorage.getItem('onboarding_started_at'));
       track('property_onboarded', {
         propertyId,
@@ -269,8 +326,18 @@ export default function ConfirmOnboardingPage() {
       });
       sessionStorage.removeItem('onboarding_started_at');
 
-      // Navigation is the success path. Cookie cleanup is best-effort and cannot block it.
-      setTimeout(() => router.push(`/onboarding/first-value?propertyId=${encodeURIComponent(propertyId)}`), 1200);
+      let destination = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
+      if (activationContext.activeTrigger.type !== 'NONE_EXPLORING') {
+        const firstValueResponse = await api.getActivationFirstValue(propertyId);
+        if (firstValueResponse.success && firstValueResponse.data) {
+          destination = firstValueResponse.data.buyer?.planHref
+            ?? firstValueResponse.data.action.primaryCta.href;
+        }
+      }
+
+      // Continue directly into the actionable property workflow. The former
+      // standalone first-value page repeated this same action before routing.
+      router.push(destination);
       void clearOnboardingLookupSession();
     } catch (error: any) {
       console.error('Confirm error:', error);
@@ -289,40 +356,14 @@ export default function ConfirmOnboardingPage() {
     }
   };
 
-  const saveTriggerCorrection = async (type: OnboardingTriggerType, label: string) => {
-    const activationContext = data?.activationContext;
-    if (!activationContext) return;
-    setSavingTriggerCorrection(true);
-    try {
-      const correctedData = await persistOnboardingTriggerCorrection(data, { type, label });
-      setData(correctedData);
-      toast({
-        title: 'Goal updated',
-        description: committedPropertyId
-          ? 'Your saved home is unchanged. You can now continue to its first action.'
-          : 'You can now add the home and continue to its first action.',
-      });
-    } catch {
-      toast({
-        title: 'Unable to update your goal',
-        description: 'Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingTriggerCorrection(false);
-    }
-  };
-
   if (!data) return null;
   const isBuyerJourney = data.activationContext?.entryPath === 'EXISTING_HOME_PURCHASE';
-  const isEstablishedOwnerJourney = data.activationContext?.entryPath === 'EXISTING_OWNER_TRIGGER';
-  const needsTriggerCorrection = Boolean(
-    data.activationContext && !isOnboardingTriggerCompatible(
-      data.activationContext.entryPath,
-      data.activationContext.activeTrigger?.type,
-    ),
-  );
-  const recoveryTriggerOptions = ONBOARDING_TRIGGER_OPTIONS.filter((option) => option.type !== 'NONE_EXPLORING');
+  const displayedYearBuilt = Number(homeProfile.yearBuilt);
+  const propertyInsight = enrichmentStatus === 'MATCHED' && Number.isInteger(displayedYearBuilt)
+    ? `Built about ${Math.max(0, new Date().getFullYear() - displayedYearBuilt)} years ago — we’ll prioritize age-relevant systems and maintenance.`
+    : enrichmentStatus === 'MATCHED' && homeProfile.propertySize
+      ? `${Number(homeProfile.propertySize).toLocaleString()} sq ft can now inform project scope and maintenance planning.`
+      : null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -352,18 +393,18 @@ export default function ConfirmOnboardingPage() {
               <div className="w-12 h-12 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Building className="h-6 w-6 text-brand-600" />
               </div>
-              <h1 className="text-2xl font-bold text-slate-900">{isBuyerJourney ? 'Confirm this purchase' : 'Confirm this home'}</h1>
+              <h1 className="text-2xl font-bold text-slate-900">Review your home details</h1>
               <p className="text-slate-500">
                 {isBuyerJourney
-                  ? 'We’ll create the property-scoped closing plan before showing your first action.'
-                  : 'We’ll connect the address to your selected goal and show the next useful action.'}
+                  ? 'Confirm the public-record details we found, then open your closing plan.'
+                  : 'Confirm what we found, correct anything that is wrong, then continue to your home workspace.'}
               </p>
             </div>
 
             <div className="bg-slate-50 rounded-2xl p-4 text-left border border-slate-100">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-xs font-bold text-slate-500 tracking-normal">Property Address</p>
-                {!editingAddress && !committedPropertyId && (
+                {!editingAddress && (
                   <button
                     type="button"
                     onClick={() => setEditingAddress(true)}
@@ -417,12 +458,46 @@ export default function ConfirmOnboardingPage() {
               )}
             </div>
 
-            {!isEstablishedOwnerJourney && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm">
+            <div className="rounded-2xl border border-brand-200 bg-brand-50 p-5 text-left" aria-live="polite">
+              <div className="flex items-start gap-3">
+                {checkingEnrichment
+                  ? <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-brand-700" />
+                  : <Sparkles className="mt-0.5 h-5 w-5 text-brand-700" />}
+                <div>
+                  <p className="font-bold text-brand-950">
+                    {checkingEnrichment ? 'Finding available property details…' : enrichmentStatus === 'MATCHED'
+                      ? 'Public-record details found'
+                      : enrichmentStatus === 'PENDING' || enrichmentStatus === null
+                        ? 'Property lookup is continuing in the background'
+                        : 'Public-record lookup complete'}
+                  </p>
+                  <p className="mt-1 text-sm text-brand-900">
+                    {checkingEnrichment
+                      ? 'You can continue at any time; this lookup will not block setup.'
+                      : enrichmentStatus === 'MATCHED'
+                        ? 'Review the details below. We save only the corrections you make.'
+                        : enrichmentStatus === 'PENDING' || enrichmentStatus === null
+                          ? 'Continue now or add only what you know. Any later match will update your home record.'
+                        : enrichmentStatus === 'NOT_CONFIGURED'
+                          ? 'Automatic property details are not configured right now. Add only what you know.'
+                          : enrichmentStatus === 'AMBIGUOUS'
+                            ? 'We found more than one possible record, so we did not guess.'
+                            : 'We could not confidently match this address. Add only what you know.'}
+                  </p>
+                  {propertyInsight && (
+                    <p className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-brand-950">
+                      First useful insight: {propertyInsight}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm">
               <div className="mb-4">
-                <p className="font-bold text-slate-900">A few details for better guidance</p>
+                <p className="font-bold text-slate-900">Confirm the available details</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  We use these to tailor inspection questions and age-specific reminders. Estimates are fine.
+                  Correct anything that is wrong, or leave unknown fields blank.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -448,6 +523,18 @@ export default function ConfirmOnboardingPage() {
                     placeholder="e.g., 1998"
                     value={homeProfile.yearBuilt}
                     onChange={(event) => setHomeProfile((current) => ({ ...current, yearBuilt: event.target.value }))}
+                  />
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                  Square footage <span className="font-normal text-slate-500">(optional)</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={1000000}
+                    inputMode="numeric"
+                    placeholder="e.g., 2200"
+                    value={homeProfile.propertySize}
+                    onChange={(event) => setHomeProfile((current) => ({ ...current, propertySize: event.target.value }))}
                   />
                 </label>
                 <label className="space-y-1.5 text-sm font-semibold text-slate-700">
@@ -503,7 +590,6 @@ export default function ConfirmOnboardingPage() {
               </div>
               <p className="mt-3 text-xs text-slate-500">Not sure? Choose “I’m not sure” for home type and leave the other fields blank.</p>
               </div>
-            )}
 
             <div className="space-y-4">
               <div className="flex items-center gap-3 text-left">
@@ -516,39 +602,16 @@ export default function ConfirmOnboardingPage() {
               </div>
             </div>
 
-            {needsTriggerCorrection && (
-              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-left" role="alert">
-                <p className="font-bold text-amber-950">Choose what you need as a homeowner</p>
-                <p className="mt-1 text-sm text-amber-900">
-                  “Just understand my home” belongs to the Exploring journey. Choose a homeowner goal below to continue
-                  {committedPropertyId ? ' with the home already saved.' : '.'}
-                </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {recoveryTriggerOptions.map((option) => (
-                    <button
-                      key={option.type}
-                      type="button"
-                      disabled={savingTriggerCorrection}
-                      onClick={() => void saveTriggerCorrection(option.type, option.label)}
-                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 hover:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <Button 
               className="w-full h-14 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-lg transition-all"
               onClick={handleConfirm}
-              disabled={submitting || editingAddress || needsTriggerCorrection || savingTriggerCorrection}
+              disabled={submitting || editingAddress}
             >
               {submitting ? (
                 <Loader2 className="h-6 w-6 animate-spin" />
               ) : (
                 <>
-                  {isBuyerJourney ? 'Create my closing plan' : 'Add home and see first action'}
+                  {isBuyerJourney ? 'Confirm and open my closing plan' : 'Confirm and continue'}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </>
               )}

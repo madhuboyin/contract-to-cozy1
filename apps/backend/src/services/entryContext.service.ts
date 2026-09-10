@@ -87,13 +87,6 @@ export const EntryContextCaptureSchema = z.object({
       });
     }
   }
-  if (value.activeTrigger.type === 'NONE_EXPLORING' && value.entryPath !== 'EXPLORATION') {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['activeTrigger', 'type'],
-      message: 'NONE_EXPLORING is only valid for the EXPLORATION entry path.',
-    });
-  }
 });
 
 export type EntryContextCaptureInput = z.infer<typeof EntryContextCaptureSchema>;

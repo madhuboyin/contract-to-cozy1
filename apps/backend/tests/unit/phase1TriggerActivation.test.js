@@ -45,6 +45,21 @@ test('entry-context capture accepts established owners without inspection eviden
   assert.equal(parsed.ownershipState, 'ESTABLISHED_OWNER');
 });
 
+test('entry-context capture accepts setup-only context without forcing a homeowner goal', () => {
+  const parsed = EntryContextCaptureSchema.parse(validContext({
+    activeTrigger: {
+      type: 'NONE_EXPLORING',
+      label: 'Set up my home',
+      detail: null,
+      entityType: 'PROPERTY',
+      entityId: null,
+      source: 'USER_SELECTED',
+    },
+  }));
+  assert.equal(parsed.entryPath, 'EXISTING_OWNER_TRIGGER');
+  assert.equal(parsed.activeTrigger.type, 'NONE_EXPLORING');
+});
+
 test('entry-context capture keeps purchase and new-construction paths consistent', () => {
   assert.equal(EntryContextCaptureSchema.safeParse(validContext({
     entryPath: 'EXISTING_HOME_PURCHASE',
@@ -180,10 +195,12 @@ test('trigger-first UI asks the situation before address and renders evidence-bo
   assert.match(addressPage, /Inspection status/);
   assert.match(addressPage, /Unknown dates are fine/);
   assert.match(entryContextHelper, /activeTrigger/);
-  assert.match(entryContextHelper, /option\.type !== 'NONE_EXPLORING' \|\| situation === 'exploring'/);
-  assert.match(addressPage, /Continue without public records/);
-  assert.match(addressPage, /Unknown home facts will stay unknown/);
+  assert.match(entryContextHelper, /options\.triggerType \?\? 'NONE_EXPLORING'/);
+  assert.match(addressPage, /Add home and find property details/);
+  assert.match(addressPage, /allow a secure public-record lookup/);
   assert.match(confirmPage, /captureEntryContext/);
+  assert.match(confirmPage, /getPropertyEnrichmentStatus/);
+  assert.match(confirmPage, /Public-record details found/);
   assert.match(firstValuePage, /Evidence used/);
   assert.match(firstValuePage, /Your buyer closing plan is ready/);
   assert.match(firstValuePage, /Open my buyer plan/);

@@ -1,6 +1,6 @@
 # RentCast Property Setup Integration — Functional Requirements Document
 
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Implemented
 **Date:** 2026-09-09
 **Product area:** Property setup, Property Details, and Property Context
@@ -25,6 +25,8 @@ The integration shall preserve the progressive setup contract established in Pha
 4. Unknown remains unknown when RentCast has no reliable value.
 5. Public-record facts are visibly labeled and correctable in Property Details.
 6. RentCast last-sale, valuation, owner, and mailing-address data are not imported in this release.
+
+Version 1.1 streamlines the visible setup journey without changing the provider boundary. The address action now commits the minimal Property (the event that queues enrichment), the confirmation surface performs a bounded read of first-party enrichment status and Property data, and matched facts are shown for correction before the user enters the relevant workspace. The browser still never calls RentCast directly and setup never waits indefinitely for it.
 
 ## 2. Problem Statement
 
@@ -85,6 +87,9 @@ Quantitative enrichment-match targets shall be established after baseline metric
 - Kubernetes secret and worker environment wiring.
 - Metrics, structured redacted logs, usage counters, and focused automated tests.
 - Removal of RentCast from the pre-create onboarding lookup path.
+- A bounded, non-blocking enrichment review immediately after the address-backed Property commits.
+- Optional trigger selection for users who only want to establish their home record.
+- Direct navigation from confirmation into the selected property workflow, without a duplicate first-action interstitial.
 
 ### 4.2 Out of scope
 
@@ -137,13 +142,24 @@ No feature flag or rollout cohort is required. The backend shall enqueue without
 
 ## 6. User Journeys
 
-### 6.1 Create a Property
+### 6.1 Create and review a Property
 
 1. The homeowner selects or manually enters a complete address, including unit when applicable.
-2. The user confirms setup using the existing journey-specific requirements.
-3. ContractToCozy commits the Property and returns success.
-4. ContractToCozy attempts to enqueue a RentCast enrichment job.
-5. The user proceeds to first value or the Property dashboard without waiting for the job.
+2. The homeowner may select an immediate goal; no goal is required for basic setup.
+3. The address CTA clearly states that it adds the home and initiates a secure public-record lookup.
+4. ContractToCozy commits the minimal Property and returns success.
+5. The backend attempts to enqueue a RentCast enrichment job after commit.
+6. The review surface polls only the first-party status and Property endpoints for a bounded period (approximately five seconds). It never calls RentCast and remains actionable throughout.
+7. Matched home type, year built, square footage, bedrooms, and bathrooms are prefilled and labeled as public-record suggestions. Ambiguous, missing, failed, and unconfigured outcomes remain unknown and are explained without guessing.
+8. The homeowner confirms or corrects the available facts and proceeds directly to the buyer plan, selected trigger workflow, or Property dashboard.
+
+### 6.1.1 Immediate value rules
+
+- When year built is available, setup may show the approximate age of the home and explain that age-relevant systems and maintenance will be prioritized.
+- When year built is unavailable but square footage is available, setup may explain that size can now inform project scope and maintenance planning.
+- These statements are bounded uses of accepted canonical facts, not new provider-derived risk, valuation, tax, insurance, or maintenance decisions.
+- A repair selection should invite optional symptom, affected-system, and immediate-safety detail, then route directly to the repair workflow after confirmation.
+- The existing `NONE_EXPLORING` trigger value is retained as the storage/API compatibility value for “Set up my home” on any non-buyer entry path. Its name is legacy taxonomy, not a restriction to the Exploring journey.
 
 ### 6.2 Successful enrichment
 

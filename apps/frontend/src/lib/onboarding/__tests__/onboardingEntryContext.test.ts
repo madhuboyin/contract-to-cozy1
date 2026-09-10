@@ -67,16 +67,19 @@ describe('buildOnboardingActivationContext', () => {
     });
   });
 
-  it('does not offer or build the exploration-only trigger for an owner', () => {
+  it('allows setup without forcing an immediate goal', () => {
     expect(onboardingTriggerOptionsForSituation('own').map((option) => option.type))
-      .not.toContain('NONE_EXPLORING');
+      .toContain('NONE_EXPLORING');
     expect(onboardingTriggerOptionsForSituation('exploring').map((option) => option.type))
       .toContain('NONE_EXPLORING');
-    expect(isOnboardingTriggerCompatible('EXISTING_OWNER_TRIGGER', 'NONE_EXPLORING')).toBe(false);
-    expect(() => buildOnboardingActivationContext({
+    expect(isOnboardingTriggerCompatible('EXISTING_OWNER_TRIGGER', 'NONE_EXPLORING')).toBe(true);
+    expect(buildOnboardingActivationContext({
       ...base,
       situation: 'own',
-      triggerType: 'NONE_EXPLORING',
-    })).toThrow('Choose a goal that matches where you are in your home journey.');
+      triggerType: null,
+    })).toMatchObject({
+      entryPath: 'EXISTING_OWNER_TRIGGER',
+      activeTrigger: { type: 'NONE_EXPLORING', label: 'Set up my home' },
+    });
   });
 });

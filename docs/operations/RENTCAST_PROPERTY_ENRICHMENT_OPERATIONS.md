@@ -16,6 +16,12 @@ or raw response.
 `10` are accepted; invalid values fall back to `4`. HTTP requests use the code-owned
 five-second timeout.
 
+## Worker image delivery
+
+The Raspberry Pi overlay deploys `ghcr.io/madhuboyin/contract-to-cozy/workers:latest-arm64`. On a push to `main`, `.github/workflows/workers-quality-gates.yml` builds the production worker Dockerfile and publishes both `latest-arm64` and an immutable `${GITHUB_SHA}-arm64` tag. A successful local/CI Docker build alone does not update the cluster image.
+
+If setup remains `PENDING` or records `NOT_CONFIGURED`, verify all three boundaries independently: the workflow published a current ARM64 image, the workers Deployment pulled that tag, and `production/app-secrets` contains `RENTCAST_API_KEY`. The backend Deployment should not receive that key.
+
 ## Bounded metrics
 
 - `property_enrichment_enqueues_total{outcome}`: enqueue, deduplication, and failure.

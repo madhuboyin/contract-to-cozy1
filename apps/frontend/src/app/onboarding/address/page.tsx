@@ -8,16 +8,17 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
+import { api, isAmbiguousNetworkError } from '@/lib/api/client';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
 import {
   addressOnlyPropertyData,
   normalizeOnboardingAddress,
   onboardingAddressError,
+  sameOnboardingAddress,
   type OnboardingAddressSource,
 } from '@/lib/onboarding/addressIntegrity';
-import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
-import type { BasementConfiguration, DwellingType } from '@/types';
+import { persistCommittedOnboardingProperty } from '@/lib/onboarding/onboardingSessionClient';
 import {
   buildOnboardingActivationContext,
   ONBOARDING_TRIGGER_OPTIONS,
@@ -51,12 +52,6 @@ export default function AddressOnboardingPage() {
   const [targetCloseDate, setTargetCloseDate] = useState('');
   const [moveInDate, setMoveInDate] = useState('');
   const [buyerConcern, setBuyerConcern] = useState('');
-  const [dwellingType, setDwellingType] = useState<DwellingType | ''>('');
-  const [yearBuilt, setYearBuilt] = useState('');
-  const [bedrooms, setBedrooms] = useState('');
-  const [bathrooms, setBathrooms] = useState('');
-  const [basementConfiguration, setBasementConfiguration] = useState<BasementConfiguration>('UNKNOWN');
-  const [hasPoolOrSpa, setHasPoolOrSpa] = useState<'YES' | 'NO' | 'UNKNOWN'>('UNKNOWN');
 
   // Mount tracking
   React.useEffect(() => {
@@ -84,68 +79,92 @@ export default function AddressOnboardingPage() {
     });
   };
 
-  const prepareConfirmation = async (propertyData: Record<string, unknown>, source: OnboardingAddressSource) => {
+  const prepareConfirmation = async (
+    propertyData: ReturnType<typeof addressOnlyPropertyData>,
+    source: OnboardingAddressSource,
+  ) => {
     const selectedSituation = situation;
     if (!selectedSituation) throw new Error('Choose where you are in the home journey.');
     const activationContext = buildActivationContext();
+    const sessionData = { ...propertyData, activationContext, addressSource: source };
     const sessionRes = await fetch('/api/onboarding-lookup-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { ...propertyData, activationContext, addressSource: source } }),
-        });
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: sessionData }),
+    });
     if (!sessionRes.ok) throw new Error('Unable to prepare onboarding session');
-    track('active_trigger_selected', { triggerType: triggerType!, situation: selectedSituation });
+
+    // A Property must exist before enrichment can be queued. Commit the minimal,
+    // normalized address here, then let the confirmation screen poll the
+    // first-party status endpoint while the worker calls RentCast.
+    const propertiesResponse = await api.getProperties({ force: true });
+    let propertyId = propertiesResponse.success
+      ? propertiesResponse.data?.properties?.find((property) => sameOnboardingAddress(property, propertyData))?.id ?? null
+      : null;
+    if (!propertyId) {
+      try {
+        const createResponse = await api.createProperty({
+          address: String(propertyData.address),
+          unit: typeof propertyData.unit === 'string' ? propertyData.unit : null,
+          city: String(propertyData.city),
+          state: String(propertyData.state),
+          zipCode: String(propertyData.zipCode),
+          isPrimary: true,
+        });
+        if (!createResponse.success || !createResponse.data?.id) {
+          throw new Error(createResponse.message || 'Unable to add this home.');
+        }
+        propertyId = createResponse.data.id;
+      } catch (createError) {
+        if (!isAmbiguousNetworkError(createError)) throw createError;
+        const recovery = await api.getProperties({ force: true });
+        propertyId = recovery.success
+          ? recovery.data?.properties?.find((property) => sameOnboardingAddress(property, propertyData))?.id ?? null
+          : null;
+        if (!propertyId) throw createError;
+      }
+    }
+    const persisted = await persistCommittedOnboardingProperty(sessionData, propertyId);
+    if (!persisted) {
+      throw new Error('Your home was saved, but setup could not continue. Please try again.');
+    }
+    track('active_trigger_selected', {
+      triggerType: activationContext.activeTrigger.type,
+      situation: selectedSituation,
+    });
+    track('property_claimed', {
+      zipCode: propertyData.zipCode,
+      yearBuilt: 0,
+      source: source === 'MANUAL' ? 'MANUAL' : 'API',
+    });
     router.push('/onboarding/confirm');
   };
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!situation || (situation !== 'buying' && !triggerType)) return;
+    if (!situation) return;
     const submittedAddress = normalizeOnboardingAddress({ address, unit, city, state, zipCode });
     const validationError = onboardingAddressError(submittedAddress);
     if (validationError) {
       toast({ title: 'Complete the address', description: validationError, variant: 'destructive' });
       return;
     }
-    const parsedYearBuilt = yearBuilt.trim() === '' ? undefined : Number(yearBuilt);
-    const parsedBedrooms = bedrooms.trim() === '' ? undefined : Number(bedrooms);
-    const parsedBathrooms = bathrooms.trim() === '' ? undefined : Number(bathrooms);
-    const currentYear = new Date().getFullYear();
-    if (parsedYearBuilt !== undefined && (!Number.isInteger(parsedYearBuilt) || parsedYearBuilt < 1700 || parsedYearBuilt > currentYear + 1)) {
-      toast({ title: 'Check the year built', description: `Enter a year from 1700 to ${currentYear + 1}, or leave it blank.`, variant: 'destructive' });
-      return;
-    }
-    if (parsedBedrooms !== undefined && (!Number.isInteger(parsedBedrooms) || parsedBedrooms <= 0 || parsedBedrooms > 99)) {
-      toast({ title: 'Check the bedrooms', description: 'Enter a whole number greater than zero, or leave it blank.', variant: 'destructive' });
-      return;
-    }
-    if (parsedBathrooms !== undefined && (parsedBathrooms <= 0 || parsedBathrooms > 99)) {
-      toast({ title: 'Check the bathrooms', description: 'Enter a number greater than zero, or leave it blank.', variant: 'destructive' });
-      return;
-    }
-
     setLoading(true);
     track('address_lookup_started', { source: 'onboarding_page' });
     if (!addressResolved) track('address_entered_manually', { source: 'onboarding_page' });
 
     const addressSource: OnboardingAddressSource = addressResolved ? 'AUTOCOMPLETE' : 'MANUAL';
-    const propertyData: Record<string, unknown> = situation === 'own'
-      ? addressOnlyPropertyData(submittedAddress)
-      : {
-          ...addressOnlyPropertyData(submittedAddress),
-          ...(dwellingType ? { dwellingType } : {}),
-          ...(parsedYearBuilt === undefined ? {} : { yearBuilt: parsedYearBuilt }),
-          ...(parsedBedrooms === undefined ? {} : { bedrooms: parsedBedrooms }),
-          ...(parsedBathrooms === undefined ? {} : { bathrooms: parsedBathrooms }),
-          ...(basementConfiguration === 'UNKNOWN' ? {} : { basementConfiguration }),
-          ...(hasPoolOrSpa === 'UNKNOWN' ? {} : { hasPoolOrSpa: hasPoolOrSpa === 'YES' }),
-        };
+    const propertyData = addressOnlyPropertyData(submittedAddress);
 
     try {
       await prepareConfirmation(propertyData, addressSource);
     } catch (error) {
-      console.error('Onboarding session error:', error);
-      toast({ title: 'Unable to continue', description: 'Please try again.', variant: 'destructive' });
+      console.error('Onboarding setup error:', error);
+      toast({
+        title: 'Unable to continue',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -289,7 +308,7 @@ export default function AddressOnboardingPage() {
               </fieldset>
             ) : situation ? (
               <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                <legend className="px-2 text-sm font-bold text-slate-900">What brought you here?</legend>
+                <legend className="px-2 text-sm font-bold text-slate-900">What brought you here? <span className="font-normal text-slate-500">(optional)</span></legend>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {onboardingTriggerOptionsForSituation(situation).map((option) => (
                     <button
@@ -310,9 +329,12 @@ export default function AddressOnboardingPage() {
                 <Input
                   value={triggerDetail}
                   onChange={(event) => setTriggerDetail(event.target.value)}
-                  placeholder="Optional detail — system, deadline, quote, or concern"
+                  placeholder={triggerType === 'REPAIR'
+                    ? 'What needs repair? Include symptoms and any active leak, gas, smoke, or sparks.'
+                    : 'Optional detail — system, deadline, quote, or concern'}
                   maxLength={2000}
                 />
+                <p className="text-xs text-slate-500">Skip this if you only want to set up your home. You can choose a goal later.</p>
               </fieldset>
             ) : (
               <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-4 text-sm text-slate-600" role="status">
@@ -375,81 +397,23 @@ export default function AddressOnboardingPage() {
                   />
                 </label>
               </div>
-              {situation !== 'own' && (
-                <div className="border-t border-slate-100 pt-4">
-                <div className="mb-3">
-                  <p className="text-sm font-bold text-slate-900">Help us tailor your first checklist</p>
-                  <p className="mt-1 text-xs text-slate-500">A few basics help us surface age- and home-specific inspection guidance.</p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                    Home type <span className="text-red-500">*</span>
-                    <select
-                      value={dwellingType}
-                      onChange={(event) => setDwellingType(event.target.value as DwellingType)}
-                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    >
-                      <option value="">Select a home type</option>
-                      {DWELLING_TYPE_OPTIONS.map((type) => (
-                        <option key={type} value={type}>{DWELLING_TYPE_LABELS[type]}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                    Approximate year built <span className="font-normal text-slate-400">(optional)</span>
-                    <Input type="number" min={1700} max={new Date().getFullYear() + 1} inputMode="numeric" placeholder="e.g., 1998" value={yearBuilt} onChange={(event) => setYearBuilt(event.target.value)} />
-                  </label>
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                    Bedrooms <span className="font-normal text-slate-400">(optional)</span>
-                    <Input type="number" min={1} max={99} inputMode="numeric" placeholder="e.g., 3" value={bedrooms} onChange={(event) => setBedrooms(event.target.value)} />
-                  </label>
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                    Bathrooms <span className="font-normal text-slate-400">(optional)</span>
-                    <Input type="number" min={0.5} max={99} step={0.5} inputMode="decimal" placeholder="e.g., 2.5" value={bathrooms} onChange={(event) => setBathrooms(event.target.value)} />
-                  </label>
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                    Basement <span className="font-normal text-slate-400">(optional)</span>
-                    <select
-                      value={basementConfiguration}
-                      onChange={(event) => setBasementConfiguration(event.target.value as BasementConfiguration)}
-                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    >
-                      <option value="UNKNOWN">I’m not sure</option>
-                      <option value="NONE">No basement</option>
-                      <option value="UNFINISHED">Unfinished basement</option>
-                      <option value="FINISHED">Finished basement</option>
-                    </select>
-                  </label>
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                    Pool or spa <span className="font-normal text-slate-400">(optional)</span>
-                    <select
-                      value={hasPoolOrSpa}
-                      onChange={(event) => setHasPoolOrSpa(event.target.value as 'YES' | 'NO' | 'UNKNOWN')}
-                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    >
-                      <option value="UNKNOWN">I’m not sure</option>
-                      <option value="NO">No</option>
-                      <option value="YES">Yes</option>
-                    </select>
-                  </label>
-                </div>
-                <p className="mt-2 text-xs text-slate-500">You can leave optional details unanswered and add them later.</p>
-                </div>
-              )}
               <Button 
                 type="submit"
-                disabled={loading || !address.trim() || !city.trim() || !state.trim() || !zipCode.trim() || !situation || (situation !== 'own' && !dwellingType) || (situation !== 'buying' && !triggerType)}
+                disabled={loading || !address.trim() || !city.trim() || !state.trim() || !zipCode.trim() || !situation}
                 className="h-11 w-full rounded-xl bg-slate-900 px-6 text-white font-bold group transition-all"
               >
                 {loading ? (
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
                   <>
-                    Review this address
+                    Add home and find property details
                     <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </Button>
+              <p className="text-center text-xs text-slate-500">
+                By continuing, you add this home and allow a secure public-record lookup. You agree to our Terms of Service and Privacy Policy.
+              </p>
             </div>
           </form>
 

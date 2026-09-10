@@ -60,6 +60,7 @@ describe('property setup create payloads', () => {
     const result = buildConfirmedPropertyCreatePayload(address, {
       dwellingType: 'DETACHED_SINGLE_FAMILY',
       yearBuilt: 1998,
+      propertySize: 2200,
       bedrooms: 3,
       bathrooms: 2.5,
       basementConfiguration: 'NONE',
@@ -69,6 +70,7 @@ describe('property setup create payloads', () => {
     expect(result).toMatchObject({
       dwellingType: 'DETACHED_SINGLE_FAMILY',
       yearBuilt: 1998,
+      propertySize: 2200,
       bedrooms: 3,
       bathrooms: 2.5,
       basementConfiguration: 'NONE',

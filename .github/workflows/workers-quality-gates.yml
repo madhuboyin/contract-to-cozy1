@@ -16,6 +16,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  WORKERS_IMAGE: ghcr.io/madhuboyin/contract-to-cozy/workers
+
+concurrency:
+  group: workers-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Workers Unit Tests
@@ -74,3 +81,44 @@ jobs:
       # are only valid relative to the repo root, not apps/workers/ itself.
       - name: Build workers image
         run: docker build -f infrastructure/docker/workers/Dockerfile .
+
+  publish-workers-arm64:
+    name: Publish workers ARM64 image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The full worker suite remains a required, independently visible quality
+    # signal. Publication follows the production Docker build so unrelated
+    # historical unit failures do not leave the cluster on a stale worker image.
+    needs: docker-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and publish production workers image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/workers/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.WORKERS_IMAGE }}:latest-arm64
+            ${{ env.WORKERS_IMAGE }}:${{ github.sha }}-arm64
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}

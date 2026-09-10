@@ -20,17 +20,16 @@ export const ONBOARDING_TRIGGER_OPTIONS: ReadonlyArray<{
 ];
 
 export function onboardingTriggerOptionsForSituation(
-  situation: OnboardingSituation,
+  _situation: OnboardingSituation,
 ) {
-  return ONBOARDING_TRIGGER_OPTIONS.filter((option) =>
-    option.type !== 'NONE_EXPLORING' || situation === 'exploring');
+  return ONBOARDING_TRIGGER_OPTIONS;
 }
 
 export function isOnboardingTriggerCompatible(
-  entryPath: string,
-  triggerType: string,
+  _entryPath: string,
+  _triggerType: string,
 ): boolean {
-  return triggerType !== 'NONE_EXPLORING' || entryPath === 'EXPLORATION';
+  return true;
 }
 
 type OnboardingEntryContextOptions = {
@@ -85,15 +84,12 @@ export function buildOnboardingActivationContext(
     };
   }
 
-  if (!options.triggerType) throw new Error('Choose what brought you here.');
+  const triggerType = options.triggerType ?? 'NONE_EXPLORING';
   const entryPath = options.situation === 'new-build'
     ? 'NEW_HOME_SETUP'
     : options.situation === 'exploring'
       ? 'EXPLORATION'
       : 'EXISTING_OWNER_TRIGGER';
-  if (!isOnboardingTriggerCompatible(entryPath, options.triggerType)) {
-    throw new Error('Choose a goal that matches where you are in your home journey.');
-  }
   return {
     entryPath,
     ownershipState: options.situation === 'new-build'
@@ -107,8 +103,10 @@ export function buildOnboardingActivationContext(
         ? 'UNKNOWN'
         : 'EXISTING_HOME',
     activeTrigger: {
-      type: options.triggerType,
-      label: options.triggerLabel ?? 'Home planning question',
+      type: triggerType,
+      label: triggerType === 'NONE_EXPLORING'
+        ? 'Set up my home'
+        : options.triggerLabel ?? 'Home planning question',
       detail: options.triggerDetail.trim() || null,
       entityType: 'PROPERTY',
       entityId: null,

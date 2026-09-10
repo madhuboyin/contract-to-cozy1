@@ -6,6 +6,8 @@
 
 **Method:** Read-only repository audit using the current implementation, Prisma schema, related requirements, Graphify, and existing tests. No runtime environment was started and no product code, schema, migrations, or tests were changed.
 
+> Historical snapshot: the trigger-first observations below describe the 2026-09-06 implementation. The 2026-09-09 RentCast RC-7 update now commits the minimal Property from the address CTA, queues post-commit enrichment, performs a bounded public-record review, makes the immediate trigger optional, and routes directly to the relevant workspace. See the RentCast FRD and implementation plan for the current contract.
+
 ## 1. Executive Summary
 
 ContractToCozy does not have one Property Setup flow. It currently has three overlapping experiences:

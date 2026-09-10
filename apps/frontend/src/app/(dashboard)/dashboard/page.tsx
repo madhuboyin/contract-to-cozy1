@@ -24,7 +24,6 @@ import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'd
 import { DashboardShell } from '@/components/DashboardShell';
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { WelcomeModal } from './components/WelcomeModal';
 
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
@@ -629,6 +628,10 @@ export default function DashboardPage() {
     }
   }, [userLoading, user, router]);
 
+  useEffect(() => {
+    if (showWelcomeScreen) router.replace('/onboarding/address');
+  }, [router, showWelcomeScreen]);
+
   const [data, setData] = useState<DashboardData>({
     bookings: [],
     properties: [],
@@ -1210,7 +1213,9 @@ export default function DashboardPage() {
     );
   }
 
-  if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
+  if (showWelcomeScreen && user) {
+    return <DashboardRouteState state="loading" title="Let’s add your home" description="Opening property setup…" />;
+  }
 
   const propertyBriefHref = `/dashboard/properties/${encodeURIComponent(effectiveSelectedPropertyId)}/property-brief`;
   const priorityActionsHref = buildPropertyAwareDashboardHref(
