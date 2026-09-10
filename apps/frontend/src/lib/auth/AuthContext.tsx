@@ -1,7 +1,7 @@
 // apps/frontend/src/lib/auth/AuthContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { User, LoginInput, RegisterInput, LoginResponse, RegisterResponse, MfaChallengeResponse } from '@/types';
 import { api } from '@/lib/api/client';
@@ -98,7 +98,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } else {
       setUser(null);
     }
-  }, [logout]);
+  }, []);
 
 
   const login = useCallback(async (data: LoginInput): Promise<AuthLoginResult | null> => {
@@ -165,8 +165,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // --- Initialization Effect ---
   useEffect(() => {
+    let active = true;
     const initializeAuth = async () => {
       const freshUser = await fetchCurrentUser();
+      if (!active) return;
       if (freshUser) {
         setUser(freshUser);
       } else {
@@ -177,9 +179,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     initializeAuth();
-  }, [logout]);
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const value = {
+  const value = useMemo<AuthContextType>(() => ({
     user,
     loading,
     login,
@@ -193,7 +198,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isAdmin,
     // FIX 4: Add refreshUser to the context value
     refreshUser,
-  };
+  }), [
+    user,
+    loading,
+    login,
+    completeMfaChallenge,
+    completeMfaRecoveryChallenge,
+    logout,
+    register,
+    isAuthenticated,
+    isHomeowner,
+    isProvider,
+    isAdmin,
+    refreshUser,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

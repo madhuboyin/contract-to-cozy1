@@ -30,6 +30,8 @@ Version 1.1 streamlines the visible setup journey without changing the provider 
 
 Version 1.2 corrects a production-discovered locality representation gap. Civil municipality labels such as `Plainsboro Township` and postal locality labels such as `Plainsboro` may identify the same municipality. The exact matcher now removes only an allowlisted leading or trailing civil designator while preserving strict street, unit, state, ZIP, and single-candidate requirements. Version-1 negative decisions are replayed in a bounded worker startup scan, and the safe status contract distinguishes an empty provider response from a returned record that failed identity checks.
 
+Version 1.3 hardens the post-confirmation dashboard handoff after production revealed that a changing authentication-object identity could repeatedly restart the root dashboard bootstrap. The dashboard now keys automatic loading by stable user and selected-property IDs, permits only one automatic bootstrap per key, suppresses state from superseded requests, and reserves another same-key request for an explicit retry. Buyer presentation-mode resolution remains server-derived and failures remain recoverable rather than falling through to homeowner mode.
+
 ## 2. Problem Statement
 
 The current repository contains an `ExternalPropertyDataService` seam and an authenticated `/api/properties/lookup` route, but the RentCast adapter is a stub. Completing only that stub would be unsafe and incomplete:
@@ -154,6 +156,8 @@ No feature flag or rollout cohort is required. The backend shall enqueue without
 6. The review surface polls only the first-party status and Property endpoints for a bounded period (approximately five seconds). It never calls RentCast and remains actionable throughout.
 7. Matched home type, year built, square footage, bedrooms, and bathrooms are prefilled and labeled as public-record suggestions. Ambiguous, missing, failed, and unconfigured outcomes remain unknown and are explained without guessing.
 8. The homeowner confirms or corrects the available facts and proceeds directly to the buyer plan, selected trigger workflow, or Property dashboard.
+9. If the destination is the root Property dashboard, its bootstrap shall run automatically at most once for the stable authenticated-user and selected-property pair. A property change or explicit retry may start a new bootstrap; a React context identity change alone shall not.
+10. A superseded dashboard bootstrap shall not commit loading, presentation-mode, property, or error state after a newer user/property bootstrap starts.
 
 ### 6.1.1 Immediate value rules
 

@@ -1,8 +1,8 @@
 # RentCast Property Setup Integration — Implementation Plan
 
-**Version:** 1.2
-**Status:** Implemented — RC-0 through RC-8 complete
-**Date:** 2026-09-09
+**Version:** 1.3
+**Status:** Implemented — RC-0 through RC-9 complete
+**Date:** 2026-09-10
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)
 **Delivery posture:** Incremental Phase B integration using existing Property Context and BullMQ infrastructure
@@ -19,6 +19,8 @@ The implementation is complete only when provider unavailability cannot block se
 RC-7 closes the onboarding presentation and deployment gaps discovered during production review: the address CTA commits the minimal Property, the next surface polls first-party enrichment status for a bounded period and prefills matched facts, an immediate goal is optional, confirmation routes directly to an actionable workspace, new empty accounts skip the standalone welcome modal, and the production ARM64 worker image is published to the tag consumed by Kubernetes.
 
 RC-8 closes the false-negative municipality gap found with `Plainsboro Township` versus RentCast's `Plainsboro`: it adds allowlisted civil-designator normalization, bumps the job/match contract to version 2, safely distinguishes provider-empty and address-mismatch outcomes, and boundedly requeues stale version-1 negative decisions at worker startup.
+
+RC-9 closes the post-confirmation root-dashboard request loop found during production review: automatic bootstrap is keyed by stable user/property identifiers, duplicate same-key loads are refused, explicit retries supersede prior work, stale responses cannot commit state, and authentication initialization no longer follows callback identity changes.
 
 ## 2. Current Repository Baseline
 
@@ -459,6 +461,25 @@ Exit criteria:
 - Existing stale negative decisions are retried without an unbounded scan or public refresh endpoint.
 - Status consumers can distinguish “provider returned nothing” from “a returned record failed identity checks” without receiving raw provider or address data.
 
+### Slice RC-9 — Stable post-confirmation dashboard bootstrap
+
+**Purpose:** Ensure the direct onboarding handoff cannot create an unbounded root-dashboard request loop.
+
+Tasks:
+
+- Key dashboard bootstrap work by stable authenticated-user ID and selected Property ID rather than the complete authentication object.
+- Admit one automatic bootstrap per stable key and require an explicit retry to repeat the same key.
+- Supersede earlier work when the selected Property changes and prevent its late responses from committing UI state.
+- Initialize authentication once per provider mount and memoize the context value.
+- Preserve server-derived buyer presentation mode; surface a recoverable error when it cannot be resolved.
+
+Exit criteria:
+
+- Rerendering with an equivalent authenticated user does not issue another dashboard request set.
+- A selected-Property change issues one new request set and invalidates the old response.
+- An explicit retry issues one new request set and invalidates the old response.
+- A failed presentation-mode request leaves a retryable error instead of an infinite loading state or homeowner fallthrough.
+
 ## 8. Test Plan
 
 ### 8.1 Backend and contract tests
@@ -532,6 +553,8 @@ Exit criteria:
 - Buyer/new-home explicit user facts remain intact.
 - Public-record label and retrieval date render only for provider-supported active evidence.
 - Editing a provider-filled fact updates its displayed source after query invalidation.
+- Dashboard load coordination rejects duplicate automatic loads for the same user/Property key.
+- Property changes and explicit retries supersede stale dashboard loads.
 
 ## 9. Validation Sequence
 
@@ -569,6 +592,7 @@ Do not claim live provider, database, queue, or browser execution unless it was 
 - [x] Property Details exposes source/freshness and the existing correction path.
 - [x] Worker-only secret wiring and bounded metrics are present.
 - [x] Relevant documentation is updated.
+- [x] Post-confirmation dashboard bootstrap is keyed, deduplicated, and stale-response safe.
 - [x] Lightweight validation and final Graphify update are complete.
 
 ## 11. Recommended Delivery Order
@@ -584,5 +608,6 @@ Implement in this order:
 7. **RC-6** to finish worker deployment, cost visibility, and operational evidence.
 8. **RC-7** to streamline onboarding review and direct workflow handoff.
 9. **RC-8** to correct municipality variants and recover stale negative contracts.
+10. **RC-9** to stabilize the root-dashboard bootstrap reached by direct onboarding handoff.
 
 Each slice must be independently reviewable and must leave Property creation functional when RentCast is absent.

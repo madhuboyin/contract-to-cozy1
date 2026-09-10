@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -70,6 +70,7 @@ import { UnifiedHomeSurface } from '@/components/home/UnifiedHomeSurface';
 import { BuyerClosingHome } from '@/components/home/BuyerClosingHome';
 import { RecentOwnerTransition } from '@/components/home/RecentOwnerTransition';
 import { usePostLoginTransitionReadiness } from '@/components/system/PostLoginTransitionContext';
+import { createDashboardLoadCoordinator } from './dashboardLoadCoordinator';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
@@ -606,6 +607,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: userLoading } = useAuth();
+  const userId = user?.id ?? null;
   const { markReady: markPostLoginReady } = usePostLoginTransitionReadiness();
   const { toast } = useToast();
   const [redirectChecked, setRedirectChecked] = useState(false);
@@ -646,6 +648,7 @@ export default function DashboardPage() {
     error: null,
   });
   const lastKnownPropertiesRef = React.useRef<ScoredProperty[]>([]);
+  const dashboardLoadCoordinatorRef = useRef(createDashboardLoadCoordinator());
   const [isPurchaseMode, setIsPurchaseMode] = useState(false);
   const [isNewHomeMode, setIsNewHomeMode] = useState(false);
   const [presentationMode, setPresentationMode] = useState<BuyerDashboardPresentationMode | null>(null);
@@ -738,8 +741,16 @@ export default function DashboardPage() {
     staleTime: 3 * 60 * 1000,
   });
 
-  const fetchDashboardData = useCallback(async () => {
-    if (!user) return;
+  const fetchDashboardData = useCallback(async (options: { force?: boolean } = {}) => {
+    if (!userId) return;
+
+    const loadCoordinator = dashboardLoadCoordinatorRef.current;
+    const loadToken = loadCoordinator.begin(
+      `${userId}:${selectedPropertyId ?? 'default'}`,
+      options,
+    );
+    if (!loadToken) return;
+    const isCurrentLoad = () => loadCoordinator.isCurrent(loadToken);
     
     setData(prev => ({ ...prev, isLoading: true, error: null }));
     setPresentationMode(null);
@@ -751,6 +762,7 @@ export default function DashboardPage() {
 
       try {
         const propertiesRes = await api.getProperties();
+        if (!isCurrentLoad()) return;
         const properties = propertiesRes.success ? propertiesRes.data.properties : [];
         scoredProperties = properties.map(p => ({
           ...p,
@@ -761,6 +773,7 @@ export default function DashboardPage() {
         })) as ScoredProperty[];
         lastKnownPropertiesRef.current = scoredProperties;
       } catch (error) {
+        if (!isCurrentLoad()) return;
         if (isRateLimitedError(error)) {
           propertyLoadRateLimited = true;
           if (scoredProperties.length === 0) {
@@ -780,6 +793,7 @@ export default function DashboardPage() {
       let recentOwnerTransition: BuyerRecentOwnerTransition | null = null;
       if (propId) {
         const presentationResponse = await api.getBuyerClosingHome(propId);
+        if (!isCurrentLoad()) return;
         if (!presentationResponse.success) {
           throw new Error(presentationResponse.message || 'Unable to resolve the selected property experience.');
         }
@@ -825,6 +839,7 @@ export default function DashboardPage() {
           ? listInventoryItems(propId, {}).catch(() => [])
           : Promise.resolve([]),
       ]);
+      if (!isCurrentLoad()) return;
   
       const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
       const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
@@ -865,6 +880,7 @@ export default function DashboardPage() {
       }
   
     } catch (error) {
+      if (!isCurrentLoad()) return;
       console.error('❌ Dashboard: Error fetching data:', error);
       const message =
         isRateLimitedError(error)
@@ -872,9 +888,9 @@ export default function DashboardPage() {
           : 'Failed to load dashboard data';
       setData(prev => ({ ...prev, isLoading: false, error: message }));
     } finally {
-      setRedirectChecked(true);
+      if (isCurrentLoad()) setRedirectChecked(true);
     }
-  }, [user, selectedPropertyId]);
+  }, [userId, selectedPropertyId]);
   
   const hasTrackedFirstView = React.useRef(false);
   useEffect(() => {
@@ -885,10 +901,10 @@ export default function DashboardPage() {
   }, [userLoading, user, effectiveSelectedPropertyId]);
 
   useEffect(() => {
-    if (!userLoading && user) {
+    if (!userLoading && userId) {
       fetchDashboardData();
     }
-  }, [userLoading, user, fetchDashboardData]);
+  }, [userLoading, userId, fetchDashboardData]);
 
 
   const safeFirstName = user?.firstName || 'there';
@@ -1205,7 +1221,7 @@ export default function DashboardPage() {
         title="Could not load dashboard"
         description={data.error}
         action={
-          <Button type="button" onClick={() => void fetchDashboardData()}>
+          <Button type="button" onClick={() => void fetchDashboardData({ force: true })}>
             Try again
           </Button>
         }
