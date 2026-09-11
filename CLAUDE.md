@@ -71,6 +71,15 @@ Copy `.env.local.example` → `.env.local` at repo root and fill in secrets. Doc
 
 Generate secrets with `openssl rand -hex 32`.
 
+## Writing Architecture Audits / Gap Analyses
+
+Before publishing any audit, gap-analysis, or "current state" document under `docs/architecture/`,
+apply `docs/architecture/AUDIT_METHODOLOGY.md`. It exists because a first-draft audit shipped
+several claims ("transactionally sound," "disconnected by exactly one line," "invisible to X")
+that an external review falsified on direct inspection — each catchable by asking one specific
+failure-mode question the original pass never asked. Run its checklist as a distinct pass, after
+the research pass, before calling the document done.
+
 ## Test Users (seeded)
 
 | Email | Password | Role |
