@@ -1908,6 +1908,7 @@ export interface Property {
   hasCoDetectors: boolean | null;
   hasSecuritySystem: boolean | null;
   hasFireExtinguisher: boolean | null;
+  hasFireplace: boolean | null;
   hasSumpPump: boolean | null;
   hasSumpPumpBackup: boolean | null;
   primaryHeatingFuel: string | null;

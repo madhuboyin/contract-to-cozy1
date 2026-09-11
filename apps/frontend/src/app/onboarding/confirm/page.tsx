@@ -24,7 +24,15 @@ import {
   persistCommittedOnboardingProperty,
 } from '@/lib/onboarding/onboardingSessionClient';
 import { DWELLING_TYPE_LABELS, DWELLING_TYPE_OPTIONS } from '@/lib/property/propertyContextForm';
-import type { BasementConfiguration, DwellingType, Property } from '@/types';
+import type {
+  BasementConfiguration,
+  CoolingType,
+  DwellingType,
+  FoundationType,
+  HeatingType,
+  Property,
+  RoofType,
+} from '@/types';
 import type { PropertyEnrichmentStatus } from '@/lib/api/client';
 
 type HomeProfileDraft = {
@@ -33,6 +41,12 @@ type HomeProfileDraft = {
   propertySize: string;
   bedrooms: string;
   bathrooms: string;
+  heatingType: HeatingType;
+  coolingType: CoolingType;
+  roofType: RoofType;
+  foundationType: FoundationType;
+  sidingType: string;
+  hasFireplace: 'YES' | 'NO' | 'UNKNOWN';
   basementConfiguration: BasementConfiguration;
   hasPoolOrSpa: 'YES' | 'NO' | 'UNKNOWN';
 };
@@ -43,6 +57,12 @@ const EMPTY_HOME_PROFILE: HomeProfileDraft = {
   propertySize: '',
   bedrooms: '',
   bathrooms: '',
+  heatingType: 'UNKNOWN',
+  coolingType: 'UNKNOWN',
+  roofType: 'UNKNOWN',
+  foundationType: 'UNKNOWN',
+  sidingType: '',
+  hasFireplace: 'UNKNOWN',
   basementConfiguration: 'UNKNOWN',
   hasPoolOrSpa: 'UNKNOWN',
 };
@@ -60,6 +80,38 @@ function dwellingTypeDraft(value: unknown): DwellingType {
 function optionalNumber(value: string): number | undefined {
   return value.trim() === '' ? undefined : Number(value);
 }
+
+function enumDraft<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+    ? value as T
+    : fallback;
+}
+
+const HEATING_OPTIONS = ['UNKNOWN', 'HVAC', 'FURNACE', 'HEAT_PUMP', 'RADIATORS'] as const;
+const COOLING_OPTIONS = ['UNKNOWN', 'CENTRAL_AC', 'WINDOW_AC'] as const;
+const ROOF_OPTIONS = ['UNKNOWN', 'SHINGLE', 'TILE', 'FLAT', 'METAL'] as const;
+const FOUNDATION_OPTIONS = ['UNKNOWN', 'BASEMENT', 'CRAWL_SPACE', 'SLAB', 'PIER_AND_BEAM', 'RAISED', 'MIXED', 'OTHER'] as const;
+
+const HOME_FEATURE_LABELS: Record<string, string> = {
+  UNKNOWN: 'I’m not sure',
+  HVAC: 'Central / forced air',
+  FURNACE: 'Furnace',
+  HEAT_PUMP: 'Heat pump',
+  RADIATORS: 'Radiators / radiant',
+  CENTRAL_AC: 'Central air conditioning',
+  WINDOW_AC: 'Window air conditioning',
+  SHINGLE: 'Shingle',
+  TILE: 'Tile',
+  FLAT: 'Flat',
+  METAL: 'Metal',
+  BASEMENT: 'Basement',
+  CRAWL_SPACE: 'Crawl space',
+  SLAB: 'Slab',
+  PIER_AND_BEAM: 'Pier and beam',
+  RAISED: 'Raised',
+  MIXED: 'Mixed',
+  OTHER: 'Other',
+};
 
 /**
  * ConfirmOnboardingPage handles the final conversion.
@@ -110,6 +162,12 @@ export default function ConfirmOnboardingPage() {
           propertySize: numericDraft(payload.data.propertySize),
           bedrooms: numericDraft(payload.data.bedrooms),
           bathrooms: numericDraft(payload.data.bathrooms),
+          heatingType: enumDraft(payload.data.heatingType, HEATING_OPTIONS, 'UNKNOWN'),
+          coolingType: enumDraft(payload.data.coolingType, COOLING_OPTIONS, 'UNKNOWN'),
+          roofType: enumDraft(payload.data.roofType, ROOF_OPTIONS, 'UNKNOWN'),
+          foundationType: enumDraft(payload.data.foundationType, FOUNDATION_OPTIONS, 'UNKNOWN'),
+          sidingType: typeof payload.data.sidingType === 'string' ? payload.data.sidingType : '',
+          hasFireplace: payload.data.hasFireplace === true ? 'YES' : payload.data.hasFireplace === false ? 'NO' : 'UNKNOWN',
           basementConfiguration: ['NONE', 'UNFINISHED', 'FINISHED', 'UNKNOWN'].includes(payload.data.basementConfiguration)
             ? payload.data.basementConfiguration
             : 'UNKNOWN',
@@ -147,6 +205,23 @@ export default function ConfirmOnboardingPage() {
               propertySize: current.propertySize || numericDraft(property.propertySize),
               bedrooms: current.bedrooms || numericDraft(property.bedrooms),
               bathrooms: current.bathrooms || numericDraft(property.bathrooms),
+              heatingType: current.heatingType === 'UNKNOWN'
+                ? enumDraft(property.heatingType, HEATING_OPTIONS, 'UNKNOWN')
+                : current.heatingType,
+              coolingType: current.coolingType === 'UNKNOWN'
+                ? enumDraft(property.coolingType, COOLING_OPTIONS, 'UNKNOWN')
+                : current.coolingType,
+              roofType: current.roofType === 'UNKNOWN'
+                ? enumDraft(property.roofType, ROOF_OPTIONS, 'UNKNOWN')
+                : current.roofType,
+              foundationType: current.foundationType === 'UNKNOWN'
+                ? enumDraft(property.foundationType, FOUNDATION_OPTIONS, 'UNKNOWN')
+                : current.foundationType,
+              sidingType: current.sidingType || property.sidingType || '',
+              hasFireplace: current.hasFireplace === 'UNKNOWN'
+                ? property.hasFireplace === true ? 'YES'
+                  : property.hasFireplace === false ? 'NO' : 'UNKNOWN'
+                : current.hasFireplace,
               basementConfiguration: current.basementConfiguration === 'UNKNOWN'
                 ? property.basementConfiguration
                 : current.basementConfiguration,
@@ -294,6 +369,25 @@ export default function ConfirmOnboardingPage() {
       if (propertySize !== undefined && propertySize !== enrichedProperty?.propertySize) propertyChanges.propertySize = propertySize;
       if (bedrooms !== undefined && bedrooms !== enrichedProperty?.bedrooms) propertyChanges.bedrooms = bedrooms;
       if (bathrooms !== undefined && bathrooms !== enrichedProperty?.bathrooms) propertyChanges.bathrooms = bathrooms;
+      if (homeProfile.heatingType !== 'UNKNOWN' && homeProfile.heatingType !== enrichedProperty?.heatingType) {
+        propertyChanges.heatingType = homeProfile.heatingType;
+      }
+      if (homeProfile.coolingType !== 'UNKNOWN' && homeProfile.coolingType !== enrichedProperty?.coolingType) {
+        propertyChanges.coolingType = homeProfile.coolingType;
+      }
+      if (homeProfile.roofType !== 'UNKNOWN' && homeProfile.roofType !== enrichedProperty?.roofType) {
+        propertyChanges.roofType = homeProfile.roofType;
+      }
+      if (homeProfile.foundationType !== 'UNKNOWN' && homeProfile.foundationType !== enrichedProperty?.foundationType) {
+        propertyChanges.foundationType = homeProfile.foundationType;
+      }
+      if (homeProfile.sidingType.trim() && homeProfile.sidingType.trim() !== enrichedProperty?.sidingType) {
+        propertyChanges.sidingType = homeProfile.sidingType.trim();
+      }
+      if (homeProfile.hasFireplace !== 'UNKNOWN') {
+        const hasFireplace = homeProfile.hasFireplace === 'YES';
+        if (hasFireplace !== enrichedProperty?.hasFireplace) propertyChanges.hasFireplace = hasFireplace;
+      }
       if (homeProfile.basementConfiguration !== 'UNKNOWN' && homeProfile.basementConfiguration !== enrichedProperty?.basementConfiguration) {
         propertyChanges.basementConfiguration = homeProfile.basementConfiguration;
       }
@@ -595,6 +689,54 @@ export default function ConfirmOnboardingPage() {
                   </select>
                 </label>
               </div>
+              <details className="mt-5 rounded-xl border border-slate-200 bg-slate-50 text-left" open={enrichmentStatus === 'MATCHED'}>
+                <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
+                  {enrichmentStatus === 'MATCHED' ? 'More home details from public records' : 'More optional home details'}
+                </summary>
+                <div className="grid gap-4 border-t border-slate-200 p-4 sm:grid-cols-2">
+                  <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                    Heating type
+                    <select value={homeProfile.heatingType} onChange={(event) => setHomeProfile((current) => ({ ...current, heatingType: event.target.value as HeatingType }))} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900">
+                      {HEATING_OPTIONS.map((value) => <option key={value} value={value}>{HOME_FEATURE_LABELS[value]}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                    Cooling type
+                    <select value={homeProfile.coolingType} onChange={(event) => setHomeProfile((current) => ({ ...current, coolingType: event.target.value as CoolingType }))} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900">
+                      {COOLING_OPTIONS.map((value) => <option key={value} value={value}>{HOME_FEATURE_LABELS[value]}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                    Roof type
+                    <select value={homeProfile.roofType} onChange={(event) => setHomeProfile((current) => ({ ...current, roofType: event.target.value as RoofType }))} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900">
+                      {ROOF_OPTIONS.map((value) => <option key={value} value={value}>{HOME_FEATURE_LABELS[value]}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                    Foundation type
+                    <select value={homeProfile.foundationType} onChange={(event) => setHomeProfile((current) => ({ ...current, foundationType: event.target.value as FoundationType }))} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900">
+                      {FOUNDATION_OPTIONS.map((value) => <option key={value} value={value}>{HOME_FEATURE_LABELS[value]}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                    Exterior material
+                    <Input maxLength={100} placeholder="e.g., Brick / Vinyl" value={homeProfile.sidingType} onChange={(event) => setHomeProfile((current) => ({ ...current, sidingType: event.target.value }))} />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+                    Fireplace
+                    <select value={homeProfile.hasFireplace} onChange={(event) => setHomeProfile((current) => ({ ...current, hasFireplace: event.target.value as HomeProfileDraft['hasFireplace'] }))} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-base font-normal text-slate-900">
+                      <option value="UNKNOWN">I’m not sure</option>
+                      <option value="NO">No</option>
+                      <option value="YES">Yes</option>
+                    </select>
+                  </label>
+                  <p className="text-xs text-slate-500 sm:col-span-2">
+                    {enrichmentStatus === 'MATCHED'
+                      ? 'Public-record suggestions can be incomplete or outdated. Correct anything that has changed; we will treat your correction as the authoritative value.'
+                      : 'Add only what you know. You can leave every unknown field unchanged and continue.'}
+                  </p>
+                </div>
+              </details>
               <p className="mt-3 text-xs text-slate-500">Not sure? Choose “I’m not sure” for home type and leave the other fields blank.</p>
               </div>
 

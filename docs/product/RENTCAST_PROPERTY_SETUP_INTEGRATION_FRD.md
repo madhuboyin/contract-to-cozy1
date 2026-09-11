@@ -1,6 +1,6 @@
 # RentCast Property Setup Integration — Functional Requirements Document
 
-**Version:** 1.2
+**Version:** 1.4
 **Status:** Implemented
 **Date:** 2026-09-09
 **Product area:** Property setup, Property Details, and Property Context
@@ -31,6 +31,8 @@ Version 1.1 streamlines the visible setup journey without changing the provider 
 Version 1.2 corrects a production-discovered locality representation gap. Civil municipality labels such as `Plainsboro Township` and postal locality labels such as `Plainsboro` may identify the same municipality. The exact matcher now removes only an allowlisted leading or trailing civil designator while preserving strict street, unit, state, ZIP, and single-candidate requirements. Version-1 negative decisions are replayed in a bounded worker startup scan, and the safe status contract distinguishes an empty provider response from a returned record that failed identity checks.
 
 Version 1.3 hardens the post-confirmation dashboard handoff after production revealed that a changing authentication-object identity could repeatedly restart the root dashboard bootstrap. The dashboard now keys automatic loading by stable user and selected-property IDs, permits only one automatic bootstrap per key, suppresses state from superseded requests, and reserves another same-key request for an explicit retry. Buyer presentation-mode resolution remains server-derived and failures remain recoverable rather than falling through to homeowner mode.
+
+Version 1.4 expands the same RentCast property-record request into seven additional durable property facts: heating type, cooling type, roof type, foundation type, exterior material, fireplace presence, and private-property pool/spa presence. Provider strings use conservative explicit mappings; unsupported or mixed values remain unknown. These facts retain `PUBLIC_RECORD` provenance, appear as correctable suggestions during setup, and advance the enrichment contract to version 3 so prior matched properties can be boundedly re-enriched without retaining raw provider responses.
 
 ## 2. Problem Statement
 
@@ -84,7 +86,7 @@ Quantitative enrichment-match targets shall be established after baseline metric
 - A provider-neutral Property external-identity/enrichment-state model.
 - An event-driven, idempotent RentCast property-record job.
 - RentCast authentication, timeout, response validation, matching, mapping, and error classification.
-- Allowlisted core and location facts.
+- Allowlisted core, location, structure, systems, and private-exterior facts.
 - `PUBLIC_RECORD` Property Fact Evidence with provider lineage and freshness.
 - Source/freshness presentation in Property Details.
 - A read-only property-scoped enrichment-status API.
@@ -154,7 +156,7 @@ No feature flag or rollout cohort is required. The backend shall enqueue without
 4. ContractToCozy commits the minimal Property and returns success.
 5. The backend attempts to enqueue a RentCast enrichment job after commit.
 6. The review surface polls only the first-party status and Property endpoints for a bounded period (approximately five seconds). It never calls RentCast and remains actionable throughout.
-7. Matched home type, year built, square footage, bedrooms, and bathrooms are prefilled and labeled as public-record suggestions. Ambiguous, missing, failed, and unconfigured outcomes remain unknown and are explained without guessing.
+7. Matched core facts are prefilled prominently. Supported structure, HVAC, exterior-material, fireplace, and private pool/spa facts appear in a secondary public-record section so the form gains context without making setup longer or mandatory. Ambiguous, missing, failed, unconfigured, mixed, and unsupported values remain unknown and are explained without guessing.
 8. The homeowner confirms or corrects the available facts and proceeds directly to the buyer plan, selected trigger workflow, or Property dashboard.
 9. If the destination is the root Property dashboard, its bootstrap shall run automatically at most once for the stable authenticated-user and selected-property pair. A property change or explicit retry may start a new bootstrap; a React context identity change alone shall not.
 10. A superseded dashboard bootstrap shall not commit loading, presentation-mode, property, or error state after a newer user/property bootstrap starts.
@@ -291,6 +293,13 @@ Only these RentCast property-record fields may update canonical Property data in
 | `countyFips` | `countyFips` | Valid five-digit county FIPS |
 | `latitude` | `latitude` | Valid latitude; accepted only with valid longitude |
 | `longitude` | `longitude` | Valid longitude; accepted only with valid latitude |
+| `features.heatingType` | `heatingType` | Explicit mapping only; omit when `features.heating` is false or multiple components map differently |
+| `features.coolingType` | `coolingType` | Explicit mapping only; omit when `features.cooling` is false or multiple components map differently |
+| `features.roofType` | `roofType` | Explicit mapping only; roof material/type does not imply roof age |
+| `features.foundationType` | `foundationType` | Explicit mapping only; foundation does not imply basement finish |
+| `features.exteriorType` | `sidingType` | Trimmed, control-character-free text, maximum 100 characters; treated as exterior material rather than a structural inference |
+| `features.fireplace` | `hasFireplace` | Boolean only; `fireplaceType` remains outside the canonical contract |
+| `features.pool` | `PropertyExteriorProfile.hasPoolOrSpa` | Boolean only for detached single-family or manufactured homes; true also requires a non-shared `poolType`; attached, community, public, municipal, or unclassified positive pools remain unknown |
 
 **FR-MAP-02**
 Property type mapping shall be explicit:
@@ -306,6 +315,15 @@ Property type mapping shall be explicit:
 | `Land`, missing, or unknown value | no canonical update / `UNKNOWN` remains |
 
 The adapter shall not infer `ATTACHED_SINGLE_FAMILY`, `DUPLEX`, or another classification not directly represented by the provider value.
+
+Feature enum mappings shall be explicit and conservative:
+
+- heating: `Central`, `Central Heating`, or `Forced Air` → `HVAC`; `Furnace` → `FURNACE`; `Heat Pump` → `HEAT_PUMP`; `Radiant`/`Radiator(s)` → `RADIATORS`;
+- cooling: `Central`, `Central Air`, or `Central A/C` → `CENTRAL_AC`; `Window Unit(s)` or `Window A/C` → `WINDOW_AC`;
+- roof: asphalt/composition/shingle values → `SHINGLE`; tile values → `TILE`; `Flat` → `FLAT`; metal/steel values → `METAL`; and
+- foundation: basement, crawl-space, slab, pier-and-beam, raised, mixed, and other values map only to their same-semantic canonical enums.
+
+RentCast may separate multiple feature values with `/`. All components must be recognized and map to the same canonical enum; otherwise that fact is omitted. Provider booleans that contradict their corresponding type (`heating = false` or `cooling = false`) suppress the type.
 
 **FR-MAP-03**
 Missing, malformed, out-of-range, or unsupported values shall be omitted individually without failing an otherwise valid match.
@@ -452,7 +470,7 @@ interface PropertyEnrichmentJobPayload {
   propertyId: string;
   provider: 'RENTCAST';
   addressVersion: number;
-  contractVersion: 2;
+  contractVersion: 3;
 }
 ```
 
@@ -498,6 +516,10 @@ The API shall return an empty/not-started representation when no state exists; i
 - A contract-version upgrade boundedly requeues stale negative decisions and bypasses their old cache entry.
 - Bedroom value `0` is retained.
 - Unknown property types and `Land` leave dwelling type unknown.
+- Supported RentCast features populate only their registered canonical facts and retain public-record evidence.
+- Unsupported or mixed feature strings do not populate canonical enum fields.
+- Pool data is not applied to attached/shared dwellings where the provider value may describe a community amenity.
+- Roof material does not populate roof replacement year, and foundation type does not populate basement finish.
 - Last sale, AVM, rent, owner, and listing values never enter canonical or financing records.
 
 ### Provenance and correction

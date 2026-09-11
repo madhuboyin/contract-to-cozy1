@@ -12,6 +12,20 @@ export const DEFAULT_RENTCAST_MAX_RESPONSE_BYTES = 1_000_000;
 
 const optionalText = z.string().trim().min(1).max(500).nullish().catch(undefined);
 const optionalNumber = z.number().finite().nullish().catch(undefined);
+const optionalBoolean = z.boolean().nullish().catch(undefined);
+const featuresSchema = z.object({
+  cooling: optionalBoolean,
+  coolingType: optionalText,
+  exteriorType: optionalText,
+  fireplace: optionalBoolean,
+  fireplaceType: optionalText,
+  foundationType: optionalText,
+  heating: optionalBoolean,
+  heatingType: optionalText,
+  pool: optionalBoolean,
+  poolType: optionalText,
+  roofType: optionalText,
+}).nullish().catch(undefined);
 const recordSchema = z.object({
   id: z.string().trim().min(1).max(500),
   formattedAddress: z.string().trim().min(1).max(1_000),
@@ -32,6 +46,7 @@ const recordSchema = z.object({
   lotSize: optionalNumber,
   yearBuilt: optionalNumber,
   assessorID: optionalText,
+  features: featuresSchema,
 });
 const responseSchema = z.array(recordSchema).max(100);
 

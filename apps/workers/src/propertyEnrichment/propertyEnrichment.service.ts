@@ -101,12 +101,18 @@ type PropertyForMerge = {
   propertySize: number | null;
   bedrooms: number | null;
   bathrooms: number | null;
+  heatingType: string | null;
+  coolingType: string | null;
+  roofType: string | null;
+  foundationType: string | null;
+  sidingType: string | null;
+  hasFireplace: boolean | null;
   county: string | null;
   countyFips: string | null;
   latitude: number | null;
   longitude: number | null;
   geocodingProvider: string | null;
-  exteriorProfile: { lotSizeSqFt: number | null } | null;
+  exteriorProfile: { lotSizeSqFt: number | null; hasPoolOrSpa: boolean | null } | null;
   propertyFactEvidence: ActiveEvidence[];
 };
 
@@ -161,7 +167,14 @@ function currentCanonicalValue(
     case 'propertySize': return property.propertySize;
     case 'bedrooms': return property.bedrooms;
     case 'bathrooms': return property.bathrooms;
+    case 'heatingType': return property.heatingType;
+    case 'coolingType': return property.coolingType;
+    case 'roofType': return property.roofType;
+    case 'foundationType': return property.foundationType;
+    case 'sidingType': return property.sidingType;
+    case 'hasFireplace': return property.hasFireplace;
     case 'lotSizeSqFt': return property.exteriorProfile?.lotSizeSqFt ?? null;
+    case 'hasPoolOrSpa': return property.exteriorProfile?.hasPoolOrSpa ?? null;
     case 'county': return property.county;
     case 'countyFips': return property.countyFips;
     case 'coordinates':
@@ -241,6 +254,12 @@ function propertyPatchForFacts(
       case 'propertySize': patch.propertySize = fact.value; break;
       case 'bedrooms': patch.bedrooms = fact.value; break;
       case 'bathrooms': patch.bathrooms = fact.value; break;
+      case 'heatingType': patch.heatingType = fact.value; break;
+      case 'coolingType': patch.coolingType = fact.value; break;
+      case 'roofType': patch.roofType = fact.value; break;
+      case 'foundationType': patch.foundationType = fact.value; break;
+      case 'sidingType': patch.sidingType = fact.value; break;
+      case 'hasFireplace': patch.hasFireplace = fact.value; break;
       case 'county': patch.county = fact.value; break;
       case 'countyFips': patch.countyFips = fact.value; break;
       case 'coordinates':
@@ -254,7 +273,9 @@ function propertyPatchForFacts(
         patch.geocodedAt = observedAt;
         patch.geographyVersion = { increment: 1 };
         break;
-      case 'lotSizeSqFt': break;
+      case 'lotSizeSqFt':
+      case 'hasPoolOrSpa':
+        break;
     }
   }
   return patch;
@@ -548,12 +569,18 @@ export class PropertyEnrichmentService {
           propertySize: true,
           bedrooms: true,
           bathrooms: true,
+          heatingType: true,
+          coolingType: true,
+          roofType: true,
+          foundationType: true,
+          sidingType: true,
+          hasFireplace: true,
           county: true,
           countyFips: true,
           latitude: true,
           longitude: true,
           geocodingProvider: true,
-          exteriorProfile: { select: { lotSizeSqFt: true } },
+          exteriorProfile: { select: { lotSizeSqFt: true, hasPoolOrSpa: true } },
           propertyFactEvidence: {
             where: { factKey: { in: factKeys }, supersededAt: null },
             select: {
@@ -590,11 +617,16 @@ export class PropertyEnrichmentService {
         await tx.property.update({ where: { id: payload.propertyId }, data: propertyPatch });
       }
       const changedLotSize = changed.find((fact) => fact.propertyField === 'lotSizeSqFt');
-      if (changedLotSize) {
+      const changedPool = changed.find((fact) => fact.propertyField === 'hasPoolOrSpa');
+      if (changedLotSize || changedPool) {
+        const exteriorPatch = {
+          ...(changedLotSize ? { lotSizeSqFt: changedLotSize.value as number } : {}),
+          ...(changedPool ? { hasPoolOrSpa: changedPool.value as boolean } : {}),
+        };
         await tx.propertyExteriorProfile.upsert({
           where: { propertyId: payload.propertyId },
-          create: { propertyId: payload.propertyId, lotSizeSqFt: changedLotSize.value as number },
-          update: { lotSizeSqFt: changedLotSize.value as number },
+          create: { propertyId: payload.propertyId, ...exteriorPatch },
+          update: exteriorPatch,
         });
       }
       if (changed.some((fact) => fact.propertyField === 'coordinates')) {

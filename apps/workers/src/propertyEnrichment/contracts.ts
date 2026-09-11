@@ -4,7 +4,7 @@
  * Keep provider payloads and credentials out of jobs. The worker reloads the
  * current canonical address and rejects jobs for an old address version.
  */
-export const PROPERTY_ENRICHMENT_CONTRACT_VERSION = 2 as const;
+export const PROPERTY_ENRICHMENT_CONTRACT_VERSION = 3 as const;
 export const RENTCAST_PROVIDER = 'RENTCAST' as const;
 export const RENTCAST_EVIDENCE_SOURCE = 'PUBLIC_RECORD' as const;
 export const RENTCAST_SOURCE_ENTITY_TYPE = 'RENTCAST_PROPERTY_RECORD' as const;
@@ -52,6 +52,19 @@ export interface RentCastPropertyRecord {
   lotSize?: number | null;
   yearBuilt?: number | null;
   assessorID?: string | null;
+  features?: {
+    cooling?: boolean | null;
+    coolingType?: string | null;
+    exteriorType?: string | null;
+    fireplace?: boolean | null;
+    fireplaceType?: string | null;
+    foundationType?: string | null;
+    heating?: boolean | null;
+    heatingType?: string | null;
+    pool?: boolean | null;
+    poolType?: string | null;
+    roofType?: string | null;
+  } | null;
 }
 
 export type RentCastFetchOutcome =
@@ -82,6 +95,18 @@ export type SupportedDwellingType =
   | 'MULTI_FAMILY'
   | 'MANUFACTURED_HOME';
 
+export type SupportedHeatingType = 'HVAC' | 'FURNACE' | 'HEAT_PUMP' | 'RADIATORS';
+export type SupportedCoolingType = 'CENTRAL_AC' | 'WINDOW_AC';
+export type SupportedRoofType = 'SHINGLE' | 'TILE' | 'FLAT' | 'METAL';
+export type SupportedFoundationType =
+  | 'BASEMENT'
+  | 'CRAWL_SPACE'
+  | 'SLAB'
+  | 'PIER_AND_BEAM'
+  | 'RAISED'
+  | 'MIXED'
+  | 'OTHER';
+
 /**
  * A discriminated allowlist prevents provider financial or identity fields
  * from being mistaken for canonical facts during later persistence work.
@@ -95,6 +120,13 @@ export type MappedPublicRecordFact =
   | { factKey: 'exterior.lotSizeSqFt'; propertyField: 'lotSizeSqFt'; value: number }
   | { factKey: 'location.county'; propertyField: 'county'; value: string }
   | { factKey: 'location.countyFips'; propertyField: 'countyFips'; value: string }
+  | { factKey: 'systems.heatingType'; propertyField: 'heatingType'; value: SupportedHeatingType }
+  | { factKey: 'systems.coolingType'; propertyField: 'coolingType'; value: SupportedCoolingType }
+  | { factKey: 'structure.roofType'; propertyField: 'roofType'; value: SupportedRoofType }
+  | { factKey: 'structure.foundationType'; propertyField: 'foundationType'; value: SupportedFoundationType }
+  | { factKey: 'structure.sidingType'; propertyField: 'sidingType'; value: string }
+  | { factKey: 'systems.hasFireplace'; propertyField: 'hasFireplace'; value: boolean }
+  | { factKey: 'exterior.hasPoolOrSpa'; propertyField: 'hasPoolOrSpa'; value: boolean }
   | {
       factKey: 'location.geocoded';
       propertyField: 'coordinates';

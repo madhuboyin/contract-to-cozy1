@@ -255,6 +255,7 @@ export const createPropertySchema = z.object({
   hasCoDetectors: z.boolean().optional(),
   hasSecuritySystem: z.boolean().optional(),
   hasFireExtinguisher: z.boolean().optional(),
+  hasFireplace: z.boolean().nullable().optional(),
   hasSumpPump: z.boolean().nullable().optional(),
   hasSumpPumpBackup: z.boolean().nullable().optional(),
   primaryHeatingFuel: z.string().max(50).nullable().optional(),

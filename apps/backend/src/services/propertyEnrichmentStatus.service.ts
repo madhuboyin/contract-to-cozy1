@@ -11,6 +11,13 @@ export const RENTCAST_SUPPORTED_FACT_KEYS = [
   'location.county',
   'location.countyFips',
   'location.geocoded',
+  'systems.heatingType',
+  'systems.coolingType',
+  'structure.roofType',
+  'structure.foundationType',
+  'structure.sidingType',
+  'systems.hasFireplace',
+  'exterior.hasPoolOrSpa',
 ] as const;
 
 export interface PropertyEnrichmentStatusDto {

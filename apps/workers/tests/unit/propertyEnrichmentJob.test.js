@@ -13,12 +13,12 @@ const {
 
 function job(overrides = {}) {
   return {
-    id: 'rentcast-property-1-1-v2',
+    id: 'rentcast-property-1-1-v3',
     data: {
       propertyId: 'property-1',
       provider: 'RENTCAST',
       addressVersion: 1,
-      contractVersion: 2,
+      contractVersion: 3,
     },
     attemptsMade: 0,
     opts: { attempts: 3 },

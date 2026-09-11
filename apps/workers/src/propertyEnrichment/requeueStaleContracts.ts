@@ -49,7 +49,9 @@ export interface ContractReplayResult {
 }
 
 /**
- * Replays only stale negative decisions whose matching semantics changed.
+ * Replays prior-contract matches and negative decisions. Version 3 expands
+ * the accepted fact boundary, so previously matched properties need one new
+ * provider read because raw version-2 responses were deliberately discarded.
  * The batch is intentionally bounded; successful processing upgrades the
  * durable identity contract version and removes it from future startup scans.
  */
@@ -62,7 +64,11 @@ export async function requeueStalePropertyEnrichmentContracts(
       provider: RENTCAST_PROVIDER,
       contractVersion: { lt: PROPERTY_ENRICHMENT_CONTRACT_VERSION },
       matchStatus: {
-        in: [PropertyExternalMatchStatus.NO_MATCH, PropertyExternalMatchStatus.AMBIGUOUS],
+        in: [
+          PropertyExternalMatchStatus.MATCHED,
+          PropertyExternalMatchStatus.NO_MATCH,
+          PropertyExternalMatchStatus.AMBIGUOUS,
+        ],
       },
     },
     select: {

@@ -1,7 +1,7 @@
 # RentCast Property Setup Integration — Implementation Plan
 
-**Version:** 1.3
-**Status:** Implemented — RC-0 through RC-9 complete
+**Version:** 1.4
+**Status:** Implemented — RC-0 through RC-10 complete
 **Date:** 2026-09-10
 **Governing requirements:** [`RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md`](./RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md)
 **Predecessor:** [`PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md`](./PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md)
@@ -21,6 +21,8 @@ RC-7 closes the onboarding presentation and deployment gaps discovered during pr
 RC-8 closes the false-negative municipality gap found with `Plainsboro Township` versus RentCast's `Plainsboro`: it adds allowlisted civil-designator normalization, bumps the job/match contract to version 2, safely distinguishes provider-empty and address-mismatch outcomes, and boundedly requeues stale version-1 negative decisions at worker startup.
 
 RC-9 closes the post-confirmation root-dashboard request loop found during production review: automatic bootstrap is keyed by stable user/property identifiers, duplicate same-key loads are refused, explicit retries supersede prior work, stale responses cannot commit state, and authentication initialization no longer follows callback identity changes.
+
+RC-10 makes fuller use of the existing property-record request without retaining the raw response. It accepts seven additional durable features through conservative mappings, writes them through the existing canonical/evidence boundary, exposes them as an optional correction section during setup, advances the job contract to version 3, and boundedly re-enriches prior matched records whose version-2 raw responses were intentionally discarded.
 
 ## 2. Current Repository Baseline
 
@@ -96,14 +98,14 @@ Names may be adjusted to existing naming conventions during implementation, but 
 | File | Change |
 | --- | --- |
 | `apps/backend/prisma/schema.prisma` | Add `Property.unit`, address version, external identity/state model, status enum, and relations |
-| `apps/backend/src/utils/validators.ts` | Add optional unit to create/update schemas |
+| `apps/backend/src/utils/validators.ts` | Validate unit and correctable extended property facts |
 | `apps/backend/src/services/addressAutocomplete.service.ts` | Resolve Google `subpremise` into unit |
 | `apps/backend/src/services/property.service.ts` | Increment address version on identity changes; enqueue after commit without changing success |
 | `apps/backend/src/services/JobQueue.service.ts` | Add lazy enrichment queue and deduplicated enqueue method |
 | `apps/backend/src/config/workerJobRegistry.ts` | Register event-driven external property enrichment |
 | `apps/backend/src/controllers/property.controller.ts` | Add read-only enrichment status handler; retire arbitrary pre-create provider lookup |
 | `apps/backend/src/routes/property.routes.ts` | Add property-scoped authorized status route; remove onboarding dependency on `/lookup` |
-| `apps/backend/src/services/propertyEnrichmentStatus.service.ts` | Produce safe status DTO without raw provider data |
+| `apps/backend/src/services/propertyEnrichmentStatus.service.ts` | Produce safe status DTO with the complete accepted-fact allowlist and no raw provider data |
 | `apps/backend/src/modules/propertyContext/catalog/factCatalog.ts` | Register county/FIPS destinations; reuse existing geocoded and exterior lot-size facts |
 | `apps/backend/src/modules/propertyContext/infrastructure/prismaAssemblers.ts` | Assemble county/FIPS with their evidence metadata |
 
@@ -114,7 +116,7 @@ Names may be adjusted to existing naming conventions during implementation, but 
 | `apps/workers/src/propertyEnrichment/contracts.ts` | Versioned job, provider response, normalized result, and outcome contracts |
 | `apps/workers/src/propertyEnrichment/rentCastClient.ts` | Fixed-origin authenticated HTTP client, timeout, validation, error classification |
 | `apps/workers/src/propertyEnrichment/addressMatcher.ts` | Deterministic street/unit/municipality normalization and exact-match selection |
-| `apps/workers/src/propertyEnrichment/requeueStaleContracts.ts` | Bounded recovery replay for stale negative match contracts |
+| `apps/workers/src/propertyEnrichment/requeueStaleContracts.ts` | Bounded recovery replay for prior-contract matches and negative decisions |
 | `apps/workers/src/propertyEnrichment/rentCastMapper.ts` | Allowlisted type and fact mapping |
 | `apps/workers/src/propertyEnrichment/propertyEnrichment.service.ts` | Cache check, conflict protection, transaction, evidence, and recompute orchestration |
 | `apps/workers/src/jobs/propertyEnrichment.job.ts` | Injectable job handler suitable for environment-independent unit tests |
@@ -388,7 +390,7 @@ Exit criteria:
 Tasks:
 
 - Add `property-enrichment-queue` and a versioned payload with no address/key.
-- Add a stable BullMQ job identity for provider, Property, address version, and contract version. The repository's BullMQ 5.65 runtime rejects the originally proposed four-segment colon form, so the current version-2 ID is `rentcast-<propertyId>-<addressVersion>-v2`.
+- Add a stable BullMQ job identity for provider, Property, address version, and contract version. The repository's BullMQ 5.65 runtime rejects the originally proposed four-segment colon form; the current version-3 ID is `rentcast-<propertyId>-<addressVersion>-v3`.
 - Add at most three attempts with exponential backoff for retryable outcomes.
 - Register a worker with default concurrency four, metrics, failure handling, and graceful shutdown.
 - Add a post-commit non-fatal enqueue in the shared Property create service.
@@ -480,6 +482,28 @@ Exit criteria:
 - An explicit retry issues one new request set and invalidates the old response.
 - A failed presentation-mode request leaves a retryable error instead of an infinite loading state or homeowner fallthrough.
 
+### Slice RC-10 — Extended property-record facts
+
+**Purpose:** Reuse the existing RentCast request for durable home features that immediately improve setup and downstream guidance.
+
+Tasks:
+
+- Extend the strict provider schema with only the approved `features` members; continue stripping garage, owner, sale, tax, HOA, history, and other unapproved response fields.
+- Map heating, cooling, roof, and foundation through explicit same-semantic allowlists; omit unknown and conflicting `/`-separated values.
+- Map bounded exterior material text, fireplace presence, and pool/spa presence. Limit pool mapping to detached single-family and manufactured homes, and require a non-shared provider pool type for positive values, so a shared or unclassified amenity is not represented as private property.
+- Persist all seven facts through registered canonical destinations with the existing public-record precedence and evidence lifecycle.
+- Prefill a secondary, correctable setup section without making any new fact required.
+- Advance the queue payload, job name, cache identity, and worker registry to contract version 3.
+- At worker startup, re-enrich at most 250 prior-contract matched or negative identities per scan; successful v3 persistence removes a row from later scans.
+
+Exit criteria:
+
+- The supplied 5500 Grand Lake Drive fixture maps Forced Air, Central cooling, Asphalt roof, Slab foundation, Siding exterior, fireplace, and private pool into the expected canonical facts.
+- Unsupported or mixed provider enum strings remain unknown rather than being guessed.
+- Homeowner/document/inspection evidence continues to protect every extended fact.
+- Owner, sale, tax, HOA, history, garage, and raw provider fields remain outside the accepted response boundary.
+- Existing matched v2 identities can receive the new facts through a bounded v3 replay.
+
 ## 8. Test Plan
 
 ### 8.1 Backend and contract tests
@@ -519,6 +543,7 @@ Exit criteria:
 - Bedroom `0`, bathroom `0`, and fractional bathrooms.
 - Range rejection for year, size, lot, coordinates, and county FIPS.
 - Field-by-field null handling.
+- Conservative feature mappings, contradictory presence flags, mixed `/` values, and attached-property pool exclusion.
 - Explicit exclusion of sale, valuation, rent, owner, tax, and listing fields.
 - Dollars/cents regression: no provider financial value reaches financing.
 
@@ -543,7 +568,7 @@ Exit criteria:
 - Address update enqueues a new version; unrelated update does not.
 - Missing credential and queue outage preserve create success.
 - Worker shutdown closes the consumer.
-- Version-1 negative contracts are selected in a bounded batch and enqueued with the current address version and version-2 job identity.
+- Prior-contract matches and negative decisions are selected in a bounded batch and enqueued with the current address version and version-3 job identity.
 
 ### 8.7 Frontend tests
 
@@ -593,6 +618,7 @@ Do not claim live provider, database, queue, or browser execution unless it was 
 - [x] Worker-only secret wiring and bounded metrics are present.
 - [x] Relevant documentation is updated.
 - [x] Post-confirmation dashboard bootstrap is keyed, deduplicated, and stale-response safe.
+- [x] Extended RentCast structure, systems, exterior-material, fireplace, and private-pool facts use the v3 evidence boundary.
 - [x] Lightweight validation and final Graphify update are complete.
 
 ## 11. Recommended Delivery Order
@@ -609,5 +635,6 @@ Implement in this order:
 8. **RC-7** to streamline onboarding review and direct workflow handoff.
 9. **RC-8** to correct municipality variants and recover stale negative contracts.
 10. **RC-9** to stabilize the root-dashboard bootstrap reached by direct onboarding handoff.
+11. **RC-10** to accept and review the additional durable property-record features under contract v3.
 
 Each slice must be independently reviewable and must leave Property creation functional when RentCast is absent.

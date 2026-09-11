@@ -51,6 +51,20 @@ function validRecord(overrides = {}) {
     lotSize: 8850,
     yearBuilt: 1973,
     assessorID: '05076-103-0500',
+    features: {
+      cooling: true,
+      coolingType: 'Central',
+      exteriorType: 'Siding',
+      fireplace: true,
+      fireplaceType: 'Masonry',
+      foundationType: 'Slab',
+      heating: true,
+      heatingType: 'Forced Air',
+      pool: true,
+      poolType: 'Concrete',
+      roofType: 'Asphalt',
+      garage: true,
+    },
     owner: { name: 'Must not cross boundary' },
     lastSalePrice: 270000,
     estimatedValue: 300000,
@@ -86,6 +100,8 @@ test('uses the fixed RentCast origin, structured address, suppression flag, and 
   assert.equal(outcome.records[0].owner, undefined);
   assert.equal(outcome.records[0].lastSalePrice, undefined);
   assert.equal(outcome.records[0].estimatedValue, undefined);
+  assert.equal(outcome.records[0].features.roofType, 'Asphalt');
+  assert.equal(outcome.records[0].features.garage, undefined);
 });
 
 test('omits malformed optional values without exposing unknown response fields', async () => {

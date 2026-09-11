@@ -9,7 +9,7 @@ const {
   requeueStalePropertyEnrichmentContracts,
 } = require('../../src/propertyEnrichment/requeueStaleContracts.ts');
 
-test('selects only stale negative contracts and queues current address versions with v2 identity', async () => {
+test('selects prior matches and negative contracts and queues current address versions with v3 identity', async () => {
   let query;
   const added = [];
   const result = await requeueStalePropertyEnrichmentContracts(
@@ -22,20 +22,20 @@ test('selects only stale negative contracts and queues current address versions 
 
   assert.deepEqual(query.where, {
     provider: 'RENTCAST',
-    contractVersion: { lt: 2 },
-    matchStatus: { in: ['NO_MATCH', 'AMBIGUOUS'] },
+    contractVersion: { lt: 3 },
+    matchStatus: { in: ['MATCHED', 'NO_MATCH', 'AMBIGUOUS'] },
   });
   assert.equal(query.take, PROPERTY_ENRICHMENT_CONTRACT_REPLAY_LIMIT);
   assert.deepEqual(added, [{
-    name: 'rentcast-property-enrichment-v2',
+    name: 'rentcast-property-enrichment-v3',
     data: {
       propertyId: 'property-1',
       provider: 'RENTCAST',
       addressVersion: 3,
-      contractVersion: 2,
+      contractVersion: 3,
     },
     options: {
-      jobId: 'rentcast-property-1-3-v2',
+      jobId: 'rentcast-property-1-3-v3',
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
     },

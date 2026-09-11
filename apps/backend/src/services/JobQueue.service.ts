@@ -163,8 +163,8 @@ export const getRenovationEvaluationQueue = createLazyQueue<RenovationEvaluation
 );
 
 export const PROPERTY_ENRICHMENT_QUEUE_NAME = 'property-enrichment-queue';
-export const PROPERTY_ENRICHMENT_JOB_NAME = 'rentcast-property-enrichment-v2';
-export const PROPERTY_ENRICHMENT_CONTRACT_VERSION = 2 as const;
+export const PROPERTY_ENRICHMENT_JOB_NAME = 'rentcast-property-enrichment-v3';
+export const PROPERTY_ENRICHMENT_CONTRACT_VERSION = 3 as const;
 
 export interface PropertyEnrichmentJobPayload {
   propertyId: string;

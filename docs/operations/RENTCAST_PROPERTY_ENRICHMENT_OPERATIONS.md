@@ -16,12 +16,20 @@ or raw response.
 `10` are accepted; invalid values fall back to `4`. HTTP requests use the code-owned
 five-second timeout.
 
-## Match contract and recovery
+## Match and mapping contract recovery
 
-Match contract version 2 treats only an allowlisted civil municipality designator
+The version-2 match correction treats only an allowlisted civil municipality designator
 as representational. For example, `Plainsboro Township`, `Township of Plainsboro`,
 and `Plainsboro` normalize to the same municipality. Street, unit, state, ZIP, and
 the exactly-one-candidate rule remain strict; fuzzy locality matching is not used.
+
+Current contract version 3 keeps those identity rules and expands the accepted
+property-record facts to heating, cooling, roof, foundation, bounded exterior
+material, fireplace presence, and private-property pool/spa presence. Enum values
+use explicit mappings. Unsupported values, contradictory presence flags, and mixed
+`/`-separated values remain unknown. Positive pool values require a non-shared
+pool type and are omitted for attached/shared dwellings because the record may
+describe a community amenity.
 
 Negative outcomes retain a bounded reason code:
 
@@ -30,13 +38,14 @@ Negative outcomes retain a bounded reason code:
   the complete normalized identity check.
 - `MULTIPLE_EXACT_MATCHES`: more than one record passed, so no record was selected.
 
-On each worker-process startup, one scan selects at most 250 RentCast identities
-with a pre-version-2 `NO_MATCH` or `AMBIGUOUS` decision. It enqueues the Property's
-current address version under the version-2 job ID. Individual enqueue failures do
-not stop the remainder of the batch; successful processing stores contract version
-2, naturally removing that row from later startup scans. This is a bounded contract
-repair, not a public/manual refresh mechanism or a general historical enrichment
-backfill.
+On each worker-process startup, one scan selects at most 250 prior-contract RentCast
+identities in `MATCHED`, `NO_MATCH`, or `AMBIGUOUS` state. It enqueues the Property's
+current address version under the version-3 job ID. Replaying prior matches is
+required because raw version-2 provider responses were deliberately not retained.
+Individual enqueue failures do not stop the remainder of the batch; successful
+processing stores contract version 3, naturally removing that row from later startup
+scans. This remains a bounded contract repair, not a public/manual refresh mechanism
+or an unbounded historical enrichment backfill.
 
 ## Worker image delivery
 
@@ -67,7 +76,7 @@ and account usage; do not relax exact address or unit matching to improve match 
 
 | Vendor | Data sent | Purpose | Stored by ContractToCozy | Excluded from ingestion |
 | --- | --- | --- | --- | --- |
-| RentCast | Residential street address, optional unit, city, state, and ZIP | Retrieve public property records after Property create/address change | Provider-neutral match state, selected canonical facts, public-record evidence, and bounded freshness metadata | Raw response, owner/name and mailing data, sale history, valuations/AVM, rent, tax, and listings |
+| RentCast | Residential street address, optional unit, city, state, and ZIP | Retrieve public property records after Property create/address change | Provider-neutral match state; allowlisted core/location/structure/HVAC/exterior/fireplace facts; public-record evidence; bounded freshness metadata | Raw response, owner/name and mailing data, sale history, valuations/AVM, rent, tax, HOA, history, garage, and listings |
 
 RentCast is a third-party property-data provider. Provider-side handling remains
 subject to the applicable RentCast agreement and privacy/security terms. Review

@@ -19,7 +19,7 @@ const payload = {
   propertyId: '11111111-1111-4111-8111-111111111111',
   provider: 'RENTCAST',
   addressVersion: 1,
-  contractVersion: 2,
+  contractVersion: 3,
 };
 
 function record(overrides = {}) {
@@ -61,6 +61,12 @@ function property(overrides = {}) {
     propertySize: null,
     bedrooms: null,
     bathrooms: null,
+    heatingType: null,
+    coolingType: null,
+    roofType: null,
+    foundationType: null,
+    sidingType: null,
+    hasFireplace: null,
     county: null,
     countyFips: null,
     latitude: null,
@@ -184,7 +190,7 @@ test('applies the FRD cache windows and only suppresses the same current contrac
 
   const state = {
     addressVersion: 1,
-    contractVersion: 2,
+    contractVersion: 3,
     matchStatus: 'MATCHED',
     nextRefreshAt: new Date('2026-09-10T00:00:00.000Z'),
   };
@@ -214,7 +220,7 @@ test('skips deleted, old-address, and fresh-cache jobs before provider I/O', asy
   const cached = harness({ outerProperty: property({
     externalIdentities: [{
       addressVersion: 1,
-      contractVersion: 2,
+      contractVersion: 3,
       matchStatus: 'MATCHED',
       nextRefreshAt: new Date('2026-10-01T00:00:00.000Z'),
     }],
@@ -236,7 +242,7 @@ test('coalesces a duplicate outcome that became fresh while provider I/O was in 
   const state = harness({
     innerExternalState: {
       addressVersion: 1,
-      contractVersion: 2,
+      contractVersion: 3,
       matchStatus: 'MATCHED',
       nextRefreshAt: new Date('2026-12-08T12:00:00.000Z'),
     },
@@ -337,6 +343,72 @@ test('atomically fills sparse canonical facts, evidence, identity, geocode, and 
   const change = operations(state.calls, 'change.emit');
   assert.equal(change.length, 1);
   assert.deepEqual(change[0].args.changedFactKeys, result.changedFactKeys);
+});
+
+test('persists allowlisted RentCast feature facts into canonical property and exterior fields', async () => {
+  const enrichedRecord = record({
+    features: {
+      cooling: true,
+      coolingType: 'Central',
+      exteriorType: 'Siding',
+      fireplace: true,
+      foundationType: 'Slab',
+      heating: true,
+      heatingType: 'Forced Air',
+      pool: true,
+      poolType: 'Concrete',
+      roofType: 'Asphalt',
+    },
+  });
+  const state = harness({
+    clientOutcome: { kind: 'SUCCESS', records: [enrichedRecord], requestCompletedAt: completedAt },
+  });
+
+  const result = await state.service.enrich(payload);
+
+  assert.equal(result.status, 'MATCHED');
+  assert.equal(result.changedFactKeys.length, 16);
+  const propertyUpdate = operations(state.calls, 'property.update')[0].args.data;
+  assert.equal(propertyUpdate.heatingType, 'HVAC');
+  assert.equal(propertyUpdate.coolingType, 'CENTRAL_AC');
+  assert.equal(propertyUpdate.roofType, 'SHINGLE');
+  assert.equal(propertyUpdate.foundationType, 'SLAB');
+  assert.equal(propertyUpdate.sidingType, 'Siding');
+  assert.equal(propertyUpdate.hasFireplace, true);
+  const exteriorUpdate = operations(state.calls, 'exterior.upsert')[0].args.update;
+  assert.equal(exteriorUpdate.lotSizeSqFt, 8850);
+  assert.equal(exteriorUpdate.hasPoolOrSpa, true);
+  assert.ok(result.acceptedFactKeys.includes('systems.heatingType'));
+  assert.ok(result.acceptedFactKeys.includes('exterior.hasPoolOrSpa'));
+});
+
+test('protects a homeowner-supported RentCast feature while accepting other unknown features', async () => {
+  const enrichedRecord = record({
+    features: {
+      heating: true,
+      heatingType: 'Forced Air',
+      roofType: 'Asphalt',
+    },
+  });
+  const state = harness({
+    clientOutcome: { kind: 'SUCCESS', records: [enrichedRecord], requestCompletedAt: completedAt },
+    innerProperty: property({
+      heatingType: 'HEAT_PUMP',
+      propertyFactEvidence: [{
+        factKey: 'systems.heatingType',
+        sourceType: 'USER_REPORTED',
+        sourceEntityType: 'PROPERTY_PROFILE',
+        sourceEntityId: 'user-1',
+      }],
+    }),
+  });
+
+  const result = await state.service.enrich(payload);
+
+  assert.ok(result.protectedFactKeys.includes('systems.heatingType'));
+  assert.ok(result.changedFactKeys.includes('structure.roofType'));
+  assert.equal(operations(state.calls, 'property.update')[0].args.data.heatingType, undefined);
+  assert.equal(operations(state.calls, 'property.update')[0].args.data.roofType, 'SHINGLE');
 });
 
 test('retains homeowner/document/inspection facts and canonical values without recognized evidence', async () => {

@@ -139,6 +139,7 @@ interface CreatePropertyData {
   hasCoDetectors?: boolean;
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
+  hasFireplace?: boolean | null;
   hasSumpPump?: boolean | null;
   hasSumpPumpBackup?: boolean | null;
   primaryHeatingFuel?: string | null;
@@ -256,6 +257,7 @@ function capturedFactKeys(data: CreatePropertyData | UpdatePropertyData): string
     ['hasCoDetectors', 'safety.hasCoDetectors'], ['hasSecuritySystem', 'safety.hasSecuritySystem'],
     ['hasFireExtinguisher', 'safety.hasFireExtinguisher'], ['hasSumpPump', 'safety.hasSumpPump'],
     ['hasSumpPumpBackup', 'safety.hasSumpPumpBackup'],
+    ['hasFireplace', 'systems.hasFireplace'],
   ];
   const result = direct.filter(([field]) => data[field] !== undefined).map(([, factKey]) => factKey);
   const exteriorKeyByField: Record<string, string> = {
@@ -669,6 +671,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
+      hasFireplace: data.hasFireplace ?? null,
       hasSumpPump:
         data.hasSumpPump ??
         (data.hasSumpPumpBackup === true ? true : null),
@@ -1098,6 +1101,7 @@ export async function updateProperty(
   if (data.hasCoDetectors !== undefined) updatePayload.hasCoDetectors = data.hasCoDetectors;
   if (data.hasSecuritySystem !== undefined) updatePayload.hasSecuritySystem = data.hasSecuritySystem;
   if (data.hasFireExtinguisher !== undefined) updatePayload.hasFireExtinguisher = data.hasFireExtinguisher;
+  if (data.hasFireplace !== undefined) updatePayload.hasFireplace = data.hasFireplace;
   if (data.hasSumpPump !== undefined) {
     updatePayload.hasSumpPump = data.hasSumpPump;
     if (data.hasSumpPump === false) {

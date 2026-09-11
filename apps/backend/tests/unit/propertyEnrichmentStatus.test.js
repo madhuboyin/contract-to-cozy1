@@ -33,7 +33,7 @@ test('returns only allowlisted facts that still have active RentCast evidence', 
     findIdentity: async () => ({
       externalId: 'rentcast-1',
       matchStatus: 'MATCHED',
-      acceptedFactKeys: ['core.yearBuilt', 'core.bedrooms', 'private.unexpected'],
+      acceptedFactKeys: ['core.yearBuilt', 'core.bedrooms', 'systems.heatingType', 'private.unexpected'],
       lastAttemptedAt: timestamp,
       lastSucceededAt: timestamp,
       nextRefreshAt: new Date('2026-12-08T16:30:00.000Z'),
@@ -41,14 +41,14 @@ test('returns only allowlisted facts that still have active RentCast evidence', 
     }),
     findEvidence: async (query) => {
       evidenceQuery = query;
-      return [{ factKey: 'core.yearBuilt' }];
+      return [{ factKey: 'core.yearBuilt' }, { factKey: 'systems.heatingType' }];
     },
   });
 
-  assert.deepEqual(result.acceptedFactKeys, ['core.yearBuilt']);
+  assert.deepEqual(result.acceptedFactKeys, ['core.yearBuilt', 'systems.heatingType']);
   assert.equal(result.status, 'MATCHED');
   assert.equal(result.lastSuccessfulAt, timestamp.toISOString());
-  assert.deepEqual(evidenceQuery.where.factKey.in, ['core.yearBuilt', 'core.bedrooms']);
+  assert.deepEqual(evidenceQuery.where.factKey.in, ['core.yearBuilt', 'core.bedrooms', 'systems.heatingType']);
   assert.equal(evidenceQuery.where.sourceEntityId, 'rentcast-1');
   assert.doesNotMatch(JSON.stringify(result), /rentcast-1|assessor|failure|unexpected/);
 });

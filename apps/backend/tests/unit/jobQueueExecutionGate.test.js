@@ -67,15 +67,15 @@ test('property enrichment enqueue uses a safe versioned payload and stable BullM
 
   assert.equal(outcome, 'ENQUEUED');
   assert.deepEqual(added, [{
-    name: 'rentcast-property-enrichment-v2',
+    name: 'rentcast-property-enrichment-v3',
     data: {
       propertyId: 'property-1',
       provider: 'RENTCAST',
       addressVersion: 7,
-      contractVersion: 2,
+      contractVersion: 3,
     },
     opts: {
-      jobId: 'rentcast-property-1-7-v2',
+      jobId: 'rentcast-property-1-7-v3',
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
     },

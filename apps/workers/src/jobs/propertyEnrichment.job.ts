@@ -20,7 +20,7 @@ import type { PropertyEnrichmentJobPayload } from '../propertyEnrichment/contrac
 import { PROPERTY_ENRICHMENT_CONTRACT_VERSION } from '../propertyEnrichment/contracts';
 
 export const PROPERTY_ENRICHMENT_QUEUE_NAME = 'property-enrichment-queue';
-export const PROPERTY_ENRICHMENT_JOB_NAME = 'rentcast-property-enrichment-v2';
+export const PROPERTY_ENRICHMENT_JOB_NAME = 'rentcast-property-enrichment-v3';
 export const PROPERTY_ENRICHMENT_MAX_ATTEMPTS = 3;
 export const DEFAULT_PROPERTY_ENRICHMENT_CONCURRENCY = 4;
 
