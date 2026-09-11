@@ -89,6 +89,16 @@ specific scenario that would falsify it, and check the code against that scenari
 different exercise from gathering the findings and should be done as a distinct step, ideally
 after the rest of the document is otherwise complete.
 
+## 8. After fixing any claim, grep the whole document for its repeats
+
+A finding stated once is often restated — in a table row, a KEEP/EXTEND verdict, an
+"opportunities" bullet, a readiness score, the executive summary, and the final verdict. Fixing
+the first occurrence and moving on leaves the others contradicting it. Two of the five issues in
+a second review round were exactly this: a corrected claim in one section, still wrong verbatim
+in two or three other places. Before considering any correction complete, search the full
+document for the term/claim being fixed (a name, a "zero X" phrasing, a recommended enum value)
+and check every hit, not just the one a reviewer pointed at.
+
 ---
 
 *This standard was written after external review of
