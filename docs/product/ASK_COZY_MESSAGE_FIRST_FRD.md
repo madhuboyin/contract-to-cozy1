@@ -254,7 +254,7 @@ Metrics and **pragmatic pilot thresholds** (illustrative starting points — a S
 
 **[REQUIREMENT]** Given an `operationId`, the layer must: resolve adapter (existing `getSkillAdapterForOperation`) → validate policy (existing `resolveEffectiveSkillOperationPolicy`) → resolve registered handler (new registry) → build the normalized invocation envelope → execute → return `AskOperationResult` → emit execution metadata (existing `SkillExecutionBinding`).
 
-**[REQUIREMENT] Canonical envelope**, per Stage 2 §11 with two corrections from this pass's handler inventory (67 operations documented, implementation plan §5, with a completeness caveat at implementation plan §4.8):
+**[REQUIREMENT] Canonical envelope**, per Stage 2 §11 with two corrections from this pass's handler inventory (67 operations documented, implementation plan §5, confirmed complete against the registry per implementation plan §4.8):
 
 ```ts
 type CapabilityInvocationEnvelope = {
@@ -285,7 +285,7 @@ NEW CODE EVIDENCE: this pass's handler inventory (67 operations documented) foun
   MATERIAL_DECISION/CONTRIBUTOR in the operation registry — its confirmation (if any) is
   self-managed inside the specialist-agent runtime, not via the standard command path.
 IMPACT: forcing these two into the same "shim destructures scalar envelope fields" pattern as the
-  other 66 operations either loses information the handler needs or requires an awkward
+  other 65 operations either loses information the handler needs or requires an awkward
   restructure of two of the codebase's more complex flows for no clear benefit.
 RECOMMENDED ADJUSTMENT: define a second, explicit adapter category — "passthrough" — for
   operations whose shim receives the full envelope (and, for GROUNDED_GUIDANCE, the trace object)
@@ -297,7 +297,7 @@ RECOMMENDED ADJUSTMENT: define a second, explicit adapter category — "passthro
 
 **[REQUIREMENT] Handler registration:** Registry keyed by **adapter id** (Stage 2's corrected §11 — not `AskOperationId`, since an adapter's `allowedOperations` is declared as an array). Duplicate-handler registration must fail at initialization (a startup assertion, mirroring the existing `validateSkillAdapterDefinitions`/`validateSkillDefinitions` static-consistency checkers Stage 1 found already exist and run at build/test time); a missing handler for a registered, enabled adapter must fail as a typed `ASK_CAPABILITY_HANDLER_MISSING` error (existing `errorContract: 'ASK_TYPED_RESULT'` convention, per Stage 1's finding on `SkillAdapterDefinition`), never an undefined-function runtime crash; adapter-to-handler integrity is checked by the same initialization validator that already checks adapter-to-operation integrity (`validateSkillAdapterDefinitions`, extend rather than duplicate).
 
-**[REQUIREMENT] Existing handler migration:** every existing handler gets a shim; **thin shims are acceptable and preferred** — do not rewrite handler bodies to a common signature unless a handler is independently being modified for another reason. The full inventory (exact args, adapter ids, confirmation requirements, shim complexity) lives in the implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §5), not duplicated here per the two-document separation — 67 operations documented there, with a completeness caveat at implementation plan §4.8 (this pass's table was not independently diffed against `askOperationRegistry.ts`'s full literal union, so it may be missing one operation). **[FACT — this pass]** summary of the 67 documented: 58 fit the standard scalar-destructure shim pattern, 3 need a `launchContext`-derived field, 3 are trivial (no envelope fields at all), 2 need the passthrough category above, 1 needs context-provider values the envelope doesn't carry; 25 require confirmation via `AskDomainCommandRegistry`.
+**[REQUIREMENT] Existing handler migration:** every existing handler gets a shim; **thin shims are acceptable and preferred** — do not rewrite handler bodies to a common signature unless a handler is independently being modified for another reason. The full inventory (exact args, adapter ids, confirmation requirements, shim complexity) lives in the implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §5), not duplicated here per the two-document separation — 67 operations documented there, confirmed complete against `askOperationRegistry.ts`'s full literal union (implementation plan §4.8's diff: exact match, nothing missing). **[FACT — this pass]** summary of the 67 documented: 58 fit the standard scalar-destructure shim pattern, 3 need a `launchContext`-derived field, 3 are trivial (no envelope fields at all), 2 need the passthrough category above, 1 needs context-provider values the envelope doesn't carry; 25 require confirmation via `AskDomainCommandRegistry`.
 
 ---
 
@@ -560,4 +560,4 @@ Per §15 (extraction) and §11 (routing) — both extend existing infrastructure
 
 ---
 
-*End of Part A. See `docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` (Part B) for phased execution, the full handler migration inventory (67 operations documented, completeness caveat at §4.8), dependency graph, and rollout sequencing.*
+*End of Part A. See `docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` (Part B) for phased execution, the full handler migration inventory (67 operations documented, confirmed complete per §4.8), dependency graph, and rollout sequencing.*
