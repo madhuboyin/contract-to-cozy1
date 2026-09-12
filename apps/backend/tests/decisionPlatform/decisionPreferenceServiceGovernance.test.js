@@ -73,9 +73,15 @@ test('createHvacScenario never calls a preference-save function — no scenario-
   assert.match(body, /getActiveHvacPreferences/, 'createHvacScenario should still read active preferences to establish its baseline');
 });
 
-test('the HVAC_PREFERENCE_FORGET confirm branch marks referencing threads stale after revoking, closing the loop with the Phase 8A staleness mechanism', () => {
-  const branchStart = orchestratorSource.indexOf("execution.operationId === 'HVAC_PREFERENCE_FORGET'");
-  const branchEnd = orchestratorSource.indexOf("} else if (execution.operationId === 'HOME_DEADLINE_MONITOR')", branchStart);
+test('the HVAC_PREFERENCE_FORGET confirm handler marks referencing threads stale after revoking, closing the loop with the Phase 8A staleness mechanism', () => {
+  // Post-Phase-2 (implementation plan §8, §4.9): the confirm-time write
+  // dispatch is no longer an if/else chain inside confirmAskExecution --
+  // each operation's confirm handler is its own top-level function
+  // (confirmCapabilityHandlerRegistry.ts registers it by adapter key), body
+  // moved verbatim. The governance boundary markers below follow that move.
+  const branchStart = orchestratorSource.indexOf('async function confirmHvacPreferenceForget(');
+  const branchEnd = orchestratorSource.indexOf('async function confirmHomeDeadlineMonitor(', branchStart);
+  assert.ok(branchStart >= 0 && branchEnd > branchStart);
   const branch = orchestratorSource.slice(branchStart, branchEnd);
   assert.match(branch, /revokeHvacPreference/);
   assert.match(branch, /markThreadsStaleByIds/);
@@ -107,9 +113,10 @@ test('HVAC_DECISION_START/CONTINUE/SCENARIO declare every block type their own r
   }
 });
 
-test('the HVAC_PREFERENCE_SAVE confirm branch always writes through decisionPreferenceService, never a raw prisma.decisionPreferenceValue.create', () => {
-  const branchStart = orchestratorSource.indexOf("execution.operationId === 'HVAC_PREFERENCE_SAVE'");
-  const branchEnd = orchestratorSource.indexOf("} else if (execution.operationId === 'HVAC_PREFERENCE_FORGET'", branchStart);
+test('the HVAC_PREFERENCE_SAVE confirm handler always writes through decisionPreferenceService, never a raw prisma.decisionPreferenceValue.create', () => {
+  const branchStart = orchestratorSource.indexOf('async function confirmHvacPreferenceSave(');
+  const branchEnd = orchestratorSource.indexOf('async function confirmHvacPreferenceForget(', branchStart);
+  assert.ok(branchStart >= 0 && branchEnd > branchStart);
   const branch = orchestratorSource.slice(branchStart, branchEnd);
   assert.doesNotMatch(branch, /prisma\.decisionPreferenceValue\.(create|update)/);
   assert.match(branch, /saveOwnershipHorizonPreference|saveRepairReplaceApproachPreference/);

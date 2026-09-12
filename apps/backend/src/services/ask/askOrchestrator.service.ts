@@ -87,6 +87,12 @@ import {
   type CapabilityInvocationDependencies,
 } from './capabilityHandlerRegistry';
 import type { CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
+import {
+  confirmCapabilityInvoke,
+  registerConfirmCapabilityHandler,
+  type ConfirmCapabilityContext,
+  type ConfirmCapabilityResult,
+} from './confirmCapabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 import { assertCoverageConflictFree } from '../coverageConflict.service';
 import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
@@ -8036,6 +8042,1153 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
+// Ask Cozy Stage 3, Phase 2 (implementation plan section 8, item "New this
+// revision (Section 4.9)"; FRD section 17). Replaces confirmAskExecution's former
+// ~960-line domain-branching write-dispatch if/else chain with a
+// confirm-time capability registry, mirroring Phase 1's propose-time
+// migration exactly -- one thin registration per confirmation-required
+// operation, handler bodies unchanged (moved verbatim, not rewritten),
+// keyed by each command's own declared adapterKey
+// (ASK_DOMAIN_COMMAND_REGISTRY, the authoritative source for all 25
+// confirmation-required operations). confirmAskExecution's own claim/
+// lease/authorization/completion lifecycle (FRD section 22) is untouched --
+// only the per-operation write dispatch inside its try block moved.
+async function confirmClaimFile(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const title = parameters.claimTitle;
+    const type = parameters.claimType;
+    const description = parameters.claimDescription;
+    const sourceType = parameters.claimSourceType;
+    if (typeof title !== 'string' || !title.trim() || typeof type !== 'string' || !CLAIM_TYPE_PATTERNS.some(([, candidate]) => candidate === type) && type !== 'OTHER') {
+      const error = new Error('The draft claim details are no longer valid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const claim = await ClaimsService.createClaim(execution.propertyId, userId, {
+      title: title.trim(), type: type as ClaimType,
+      description: typeof description === 'string' ? description : null,
+      sourceType: typeof sourceType === 'string' ? sourceType as 'INSURANCE' | 'HOME_WARRANTY' | 'MANUFACTURER_WARRANTY' | 'OUT_OF_POCKET' | 'UNKNOWN' : 'UNKNOWN',
+      generateChecklist: true,
+    });
+    artifactType = 'CLAIM'; artifactId = claim.id;
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['What should I gather for this claim?'] };
+  return { result, artifactType, artifactId };
+}
+async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const claimId = parameters.claimId;
+    const nextStatus = parameters.claimToStatus;
+    if (typeof claimId !== 'string' || typeof nextStatus !== 'string') throw Object.assign(new Error('The claim transition is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const claim = await prisma.claim.findFirst({ where: { id: claimId, propertyId: execution.propertyId }, select: { id: true, title: true, status: true, updatedAt: true } });
+    if (!claim) throw Object.assign(new Error('The selected claim is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const currentVersion = createHash('sha256').update(`${claim.id}:${claim.status}:${claim.updatedAt.toISOString()}`).digest('hex');
+    if (parameters.claimContextVersion !== currentVersion && claim.status !== nextStatus) throw Object.assign(new Error('This claim changed while confirmation was open. Review its current status and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    const updated = claim.status === nextStatus ? await ClaimsService.getClaim(execution.propertyId, claim.id) : await ClaimsService.updateClaim(execution.propertyId, claim.id, userId, { status: nextStatus as ClaimStatus });
+    artifactType = 'CLAIM'; artifactId = claim.id;
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['Show my open claims'] };
+  return { result, artifactType, artifactId };
+}
+async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const findingId = parameters.inspectionFindingId;
+    const reportId = parameters.inspectionReportId;
+    const action = parameters.inspectionFindingAction;
+    if (typeof findingId !== 'string' || typeof reportId !== 'string' || !['ACCEPT', 'DISMISS', 'RESOLVE'].includes(String(action))) throw Object.assign(new Error('The inspection finding action is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, reportId, propertyId: execution.propertyId }, select: { id: true, homeSystem: true, status: true, workDisposition: true, updatedAt: true } });
+    if (!finding) throw Object.assign(new Error('The selected inspection finding is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const currentVersion = createHash('sha256').update(`${finding.id}:${finding.status}:${finding.workDisposition}:${finding.updatedAt.toISOString()}`).digest('hex');
+    const alreadyApplied = (action === 'ACCEPT' && finding.workDisposition === 'ACCEPTED') || (action === 'DISMISS' && finding.status === 'DISMISSED') || (action === 'RESOLVE' && finding.status === 'RESOLVED');
+    if (parameters.inspectionFindingContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This inspection finding changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    if (!alreadyApplied) {
+      if (action === 'ACCEPT') await acceptFindingAsWork(finding.id, reportId, execution.propertyId, userId);
+      else if (action === 'DISMISS') await dismissFinding(finding.id, reportId, execution.propertyId, 'Dismissed through Ask after homeowner confirmation.', userId);
+      else await resolveFinding(finding.id, execution.propertyId, { resolutionMethod: 'HOMEOWNER_CONFIRMED', resolutionNotes: 'Resolved through Ask after homeowner confirmation.' });
+    }
+    artifactType = 'INSPECTION_FINDING'; artifactId = finding.id;
+    const findingReasonCode = action === 'ACCEPT' ? 'INSPECTION_FINDING_ACCEPTED' : action === 'DISMISS' ? 'INSPECTION_FINDING_DISMISSED' : 'INSPECTION_FINDING_RESOLVED';
+    result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: ['Show remaining inspection findings'] };
+  return { result, artifactType, artifactId };
+}
+async function confirmDocumentPromotionConfirm(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const kind = parameters.documentPromotionKind;
+    const candidateId = parameters.documentPromotionId;
+    const parentId = parameters.documentPromotionParentId;
+    const decision = parameters.documentPromotionDecision;
+    if (typeof candidateId !== 'string' || typeof parentId !== 'string' || !['CONFIRM', 'REJECT'].includes(String(decision))) throw Object.assign(new Error('The document-promotion decision is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    if (kind === 'MATERIAL_EXTRACTION_REVIEW') {
+      const review = await prisma.materialExtractionReview.findFirst({ where: { id: candidateId, materialSpecId: parentId, propertyId: execution.propertyId }, select: { id: true, status: true, candidateFields: true, updatedAt: true } });
+      if (!review) throw Object.assign(new Error('The selected material extraction review is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      const currentVersion = createHash('sha256').update(`${kind}:${review.id}:${review.updatedAt.toISOString()}`).digest('hex');
+      if (review.status === 'NEEDS_REVIEW' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This document candidate changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      if (review.status === 'NEEDS_REVIEW') await materialSpecService.reviewExtraction(execution.propertyId, parentId, review.id, userId, { status: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED', reviewedFields: decision === 'CONFIRM' ? review.candidateFields as Record<string, unknown> : undefined, reviewNotes: `${decision === 'CONFIRM' ? 'Confirmed' : 'Rejected'} through Ask after explicit homeowner review.` });
+      if (decision === 'CONFIRM') await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'MATERIAL_SPEC', promotedEntityId: parentId, userId });
+      artifactType = 'MATERIAL_EXTRACTION_REVIEW'; artifactId = review.id;
+    } else if (kind === 'INSURANCE_POLICY_FACT') {
+      const fact = await prisma.insurancePolicyFact.findFirst({ where: { id: candidateId, policyTerm: { propertyId: execution.propertyId, insurancePolicyId: parentId } }, include: { policyTerm: { include: { insurancePolicy: { select: { homeownerProfileId: true } } } } } });
+      if (!fact) throw Object.assign(new Error('The selected policy fact is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      const currentVersion = createHash('sha256').update(`${kind}:${fact.id}:${fact.updatedAt.toISOString()}`).digest('hex');
+      if (fact.confirmationStatus === 'PENDING' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This policy fact changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      if (fact.confirmationStatus === 'PENDING') await confirmPolicyFact({ policyId: parentId, factId: fact.id, homeownerProfileId: fact.policyTerm.insurancePolicy.homeownerProfileId, userId, confirmationStatus: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED' });
+      if (decision === 'CONFIRM') await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSURANCE_POLICY_FACT', promotedEntityId: fact.id, userId });
+      artifactType = 'INSURANCE_POLICY_FACT'; artifactId = fact.id;
+    } else if (kind === 'INSPECTION_REPORT' && decision === 'CONFIRM') {
+      const report = await prisma.inspectionReport.findFirst({ where: { id: candidateId, propertyId: execution.propertyId }, select: { id: true, status: true, updatedAt: true } });
+      if (!report) throw Object.assign(new Error('The selected inspection report is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      const currentVersion = createHash('sha256').update(`${kind}:${report.id}:${report.updatedAt.toISOString()}`).digest('hex');
+      if (report.status === 'REVIEW_PENDING' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This inspection report changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      if (report.status === 'REVIEW_PENDING') await applyWriteBacks(report.id, execution.propertyId, userId);
+      await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSPECTION_REPORT', promotedEntityId: report.id, userId });
+      artifactType = 'INSPECTION_REPORT'; artifactId = report.id;
+    } else throw Object.assign(new Error('This document-promotion action must be reviewed again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/documents`, style: 'PRIMARY' }] }], suggestions: ['Show remaining document reviews'] };
+  return { result, artifactType, artifactId };
+}
+async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const workItemId = parameters.operationalWorkItemId;
+    const action = parameters.operationalWorkAction;
+    if (typeof workItemId !== 'string' || !['ACCEPT', 'DEFER', 'SNOOZE', 'COMPLETE'].includes(String(action))) throw Object.assign(new Error('The Operational Work command is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const observedResult = parameters.operationalWorkObservedResult;
+    if (action === 'COMPLETE' && !['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED'].includes(String(observedResult))) throw Object.assign(new Error('The Operational Work completion result is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const item = await prisma.operationalWorkItem.findFirst({ where: { id: workItemId, propertyId: execution.propertyId }, include: { executions: true } });
+    if (!item) throw Object.assign(new Error('The selected Operational Work item is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const currentVersion = createHash('sha256').update(`${item.id}:${item.state}:${item.updatedAt.toISOString()}:${item.snoozedUntil?.toISOString() ?? ''}`).digest('hex');
+    const alreadyApplied = action === 'ACCEPT' ? item.state === 'ACCEPTED' : action === 'DEFER' ? item.state === 'DEFERRED' : action === 'SNOOZE' ? item.snoozedUntil?.toISOString() === parameters.operationalWorkUntil : ['VERIFIED', 'CLOSED'].includes(item.state);
+    if (parameters.operationalWorkContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This work item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    if (!alreadyApplied) {
+      if (action === 'ACCEPT' || action === 'DEFER') {
+        const target = action === 'ACCEPT' ? 'ACCEPTED' : 'DEFERRED'; assertUserWorkItemTransition(item, target);
+        await transitionWorkItem({ workItemId: item.id, to: target, actorType: 'USER', actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:${action.toLowerCase()}`, timestampValue: action === 'DEFER' && typeof parameters.operationalWorkUntil === 'string' ? new Date(parameters.operationalWorkUntil) : undefined });
+      } else if (action === 'SNOOZE') {
+        if (typeof parameters.operationalWorkUntil !== 'string') throw Object.assign(new Error('The snooze date is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+        await snoozeWorkItem({ workItemId: item.id, snoozedUntil: new Date(parameters.operationalWorkUntil), actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:snooze` });
+      } else await completeAcceptedOperationalWorkItem({
+        workItemId: item.id,
+        propertyId: execution.propertyId,
+        userId,
+        safetyTier: item.safetyTier,
+        decisionLineage: null,
+        recommendationSnapshotId: await resolveWorkItemRecommendationSnapshotId(execution.propertyId, item.id),
+        observedResult: observedResult as 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
+        completedAt: new Date().toISOString(),
+      });
+    }
+    artifactType = 'OPERATIONAL_WORK_ITEM'; artifactId = item.id;
+    const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : 'OPERATIONAL_WORK_COMPLETED';
+    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
+  return { result, artifactType, artifactId };
+}
+async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to complete maintenance tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const taskId = parameters.maintenanceTaskId;
+    if (typeof taskId !== 'string') {
+      const error = new Error('The maintenance task selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: taskId, propertyId: execution.propertyId } });
+    if (!task) {
+      const error = new Error('The selected maintenance task is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const completionIdempotencyKey = `ask:${execution.id}:maintenance-completion`;
+    const completionMetadata = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata)
+      ? task.completionMetadata as Record<string, unknown>
+      : {};
+    const completedByThisExecution = task.status === MaintenanceTaskStatus.COMPLETED
+      && completionMetadata.completionIdempotencyKey === completionIdempotencyKey;
+    if (!completedByThisExecution && (task.status === MaintenanceTaskStatus.COMPLETED
+      || task.status === MaintenanceTaskStatus.CANCELLED
+      || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(task))) {
+      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const actualCostUsd = parameters.maintenanceActualCostUsd;
+    const outcomeHealth = parameters.maintenanceOutcomeHealth;
+    if (actualCostUsd !== null && actualCostUsd !== undefined && (typeof actualCostUsd !== 'number' || actualCostUsd < 0 || actualCostUsd > 10_000_000)) {
+      const error = new Error('The actual maintenance cost is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const projectOutcomeRequired = Boolean(task.actionKey?.match(/^project:[^:]+:follow-up$/));
+    if (projectOutcomeRequired && !['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED'].includes(String(outcomeHealth))) {
+      const error = new Error('Select the project follow-up outcome before completing this task.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const updated = completedByThisExecution
+      ? task
+      : await PropertyMaintenanceTaskService.updateTaskStatus(
+        userId,
+        task.id,
+        MaintenanceTaskStatus.COMPLETED,
+        typeof actualCostUsd === 'number' ? actualCostUsd : undefined,
+        projectOutcomeRequired ? outcomeHealth as 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' : undefined,
+        completionIdempotencyKey,
+      );
+    const taskHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(updated.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_COMPLETED', contextVersion: maintenanceTaskVersion(updated),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `maintenance-completed-${updated.id}`, title: 'Maintenance task completed', status: 'COMPLETED',
+        description: updated.isRecurring && updated.frequency
+          ? 'This occurrence is complete and the recurring task’s next due date has been recalculated.'
+          : 'Completion is recorded in this home’s canonical Maintenance record.',
+        details: [
+          { label: 'Task', value: updated.title },
+          { label: 'Completed', value: humanDate(updated.lastCompletedDate) ?? 'Recorded now' },
+          { label: 'Actual cost', value: updated.actualCost == null ? 'Not recorded' : maintenanceMoney(updated.actualCost) ?? 'Not recorded' },
+          ...(updated.isRecurring ? [{ label: 'Next due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }] : []),
+          ...(projectOutcomeRequired ? [{ label: 'Project outcome', value: String(outcomeHealth).toLowerCase().replace(/_/g, ' ') }] : []),
+        ],
+        actions: [{ id: 'open-task', label: 'Open completed task', href: taskHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What maintenance is still pending?', 'Show maintenance completed this year'],
+    };
+    artifactType = 'PROPERTY_MAINTENANCE_TASK_COMPLETION';
+    artifactId = updated.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to complete Buyer Plan tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const taskId = parameters.buyerTaskId;
+    if (typeof taskId !== 'string') {
+      const error = new Error('The Buyer Plan task selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } } });
+    if (!task) {
+      const error = new Error('The selected Buyer Plan task is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const completionIdempotencyKey = `ask:${execution.id}:buyer-task-completion`;
+    const completionEvidence = task.completionEvidenceJson && typeof task.completionEvidenceJson === 'object' && !Array.isArray(task.completionEvidenceJson)
+      ? task.completionEvidenceJson as Record<string, unknown>
+      : {};
+    const completedByThisExecution = task.status === 'COMPLETED' && completionEvidence.completionIdempotencyKey === completionIdempotencyKey;
+    if (!completedByThisExecution && (task.status === 'COMPLETED'
+      || task.status === 'CANCELLED'
+      || task.status === 'NOT_NEEDED'
+      || parameters.buyerTaskVersion !== buyerTaskVersion(task))) {
+      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const updated = completedByThisExecution
+      ? task
+      : await HomeBuyerTaskService.updateTask(userId, execution.propertyId, task.id, {
+        status: 'COMPLETED',
+        completionEvidenceJson: { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString(), completionIdempotencyKey },
+      });
+    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'BUYER_TASK_COMPLETED', contextVersion: buyerTaskVersion(updated),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `buyer-task-completed-${updated.id}`, title: 'Buyer Plan task completed', status: 'COMPLETED',
+        description: 'Completion is recorded in this purchase’s canonical Buyer Plan and closing readiness is updated.',
+        details: [
+          { label: 'Task', value: updated.title },
+          { label: 'Completion method', value: 'User attestation' },
+        ],
+        actions: [{ id: 'open-task', label: 'Open completed task', href: buyerTaskHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+    };
+    artifactType = 'HOME_BUYER_TASK';
+    artifactId = updated.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmBuyerTaskCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to add Buyer Plan tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const title = parameters.buyerTaskTitle;
+    if (typeof title !== 'string' || !title.trim()) {
+      const error = new Error('The closing checklist item title is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const dueAt = typeof parameters.buyerTaskDueAt === 'string' ? parameters.buyerTaskDueAt : null;
+    const actionKey = `ask:${execution.id}:buyer-task-create`;
+    let created = await prisma.homeBuyerTask.findFirst({ where: { actionKey, checklist: { propertyId: execution.propertyId } } });
+    if (!created) {
+      try {
+        created = await HomeBuyerTaskService.createTask(userId, execution.propertyId, {
+          title, actionKey, dueAt, phase: 'CLOSING_PREP', priority: 'PLAN',
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+        created = await prisma.homeBuyerTask.findFirst({ where: { actionKey, checklist: { propertyId: execution.propertyId } } });
+        if (!created) throw error;
+      }
+    }
+    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(created.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'BUYER_TASK_CREATED', contextVersion: buyerTaskVersion(created),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `buyer-task-created-${created.id}`, title: 'Closing checklist item added', status: 'COMPLETED',
+        description: 'The task is recorded in this purchase’s canonical Buyer Plan.',
+        details: [
+          { label: 'Task', value: created.title },
+          { label: 'Due', value: created.dueAt ? humanDate(created.dueAt) ?? 'Not scheduled' : 'Not scheduled' },
+        ],
+        actions: [{ id: 'open-task', label: 'Open new task', href: buyerTaskHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What should I do next for this purchase?'],
+    };
+    artifactType = 'HOME_BUYER_TASK';
+    artifactId = created.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to update Buyer Plan tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const taskId = parameters.buyerTaskId;
+    if (typeof taskId !== 'string') {
+      const error = new Error('The Buyer Plan task selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } } });
+    if (!task || parameters.buyerTaskVersion !== buyerTaskVersion(task)) {
+      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const buyerAction = parameters.buyerTaskAction;
+    const dueAt = typeof parameters.buyerTaskDueAt === 'string' ? parameters.buyerTaskDueAt : undefined;
+    const assigneeUserId = parameters.buyerTaskAssigneeUserId === null ? null : typeof parameters.buyerTaskAssigneeUserId === 'string' ? parameters.buyerTaskAssigneeUserId : undefined;
+    const updated = await HomeBuyerTaskService.updateTask(userId, execution.propertyId, task.id, {
+      ...(buyerAction === 'RESCHEDULE' && dueAt ? { dueAt } : {}),
+      ...(buyerAction === 'ASSIGN' || buyerAction === 'UNASSIGN' ? { assignedToUserId: assigneeUserId } : {}),
+    });
+    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'BUYER_TASK_UPDATED', contextVersion: buyerTaskVersion(updated),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `buyer-task-updated-${updated.id}`, title: 'Buyer Plan task updated', status: 'COMPLETED',
+        description: 'The change is recorded in this purchase’s canonical Buyer Plan.',
+        details: [
+          { label: 'Task', value: updated.title },
+          ...(dueAt ? [{ label: 'New due date', value: dueAt }] : []),
+        ],
+        actions: [{ id: 'open-task', label: 'Open updated task', href: buyerTaskHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What should I do next for this purchase?'],
+    };
+    artifactType = 'HOME_BUYER_TASK';
+    artifactId = updated.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to classify Buyer Plan findings.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const findingId = parameters.buyerFindingId;
+    const disposition = parameters.buyerFindingDisposition;
+    if (typeof findingId !== 'string' || typeof disposition !== 'string') {
+      const error = new Error('The finding selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, propertyId: execution.propertyId } });
+    if (!finding) {
+      const error = new Error('The selected finding is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const expectedFindingVersion = parameters.buyerFindingVersion;
+    const currentFindingVersion = finding.buyerDispositionAt ? finding.buyerDispositionAt.toISOString() : null;
+    if (expectedFindingVersion !== currentFindingVersion) {
+      const error = new Error('This finding changed while the confirmation was open. Review its current status and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const dispositionResult = await BuyerAcquisitionService.dispositionFinding(userId, execution.propertyId, finding.id, {
+      disposition: disposition as Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>,
+    });
+    const dispositionLabel = ({ VERIFIED_FACT: 'verified fact', PRE_CLOSE_NEGOTIATION: 'seller negotiation', POST_CLOSE_ACTION: 'post-close work', DISMISSED: 'dismissed' } as Record<string, string>)[disposition] ?? disposition;
+    const inspectionHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection-hub`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'BUYER_FINDING_DISPOSITIONED', contextVersion: dispositionResult.finding.buyerDispositionAt?.toISOString() ?? null,
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `buyer-finding-dispositioned-${finding.id}`, title: 'Finding classified', status: 'COMPLETED',
+        description: `This finding is now classified as ${dispositionLabel}.`,
+        details: [
+          { label: 'Finding', value: [finding.homeSystem, finding.subsystem].filter(Boolean).join(' ') },
+          { label: 'Disposition', value: dispositionLabel },
+        ],
+        actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['Which inspection findings still need a decision?', 'What should I do next for this purchase?'],
+    };
+    artifactType = 'INSPECTION_FINDING';
+    artifactId = finding.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const lifecycleAction = parameters.buyerLifecycleAction;
+    const buyerPlanHrefValue = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan`;
+    if (lifecycleAction === 'PAUSE' || lifecycleAction === 'RESUME') {
+      if (access.role !== HouseholdRole.OWNER) {
+        const error = new Error(`Only the property owner can ${lifecycleAction === 'RESUME' ? 'resume' : 'pause'} this purchase.`);
+        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+        throw error;
+      }
+      const updatedPlan = lifecycleAction === 'RESUME'
+        ? await BuyerAcquisitionService.resumeJourney(userId, execution.propertyId, { confirmed: true })
+        : await BuyerAcquisitionService.pauseJourney(userId, execution.propertyId, { confirmed: true });
+      result = {
+        status: 'COMPLETED', reasonCode: lifecycleAction === 'RESUME' ? 'BUYER_JOURNEY_RESUMED' : 'BUYER_JOURNEY_PAUSED', contextVersion: updatedPlan.updatedAt.toISOString(),
+        blocks: [{
+          type: 'WORKFLOW_PROGRESS', id: `buyer-lifecycle-${lifecycleAction.toLowerCase()}`, title: lifecycleAction === 'RESUME' ? 'Purchase resumed' : 'Purchase paused', status: 'COMPLETED',
+          description: lifecycleAction === 'RESUME' ? 'Deadline reminders and active tasks are reactivated.' : 'Deadline reminders are stopped. Recorded work, documents, findings, and evidence are preserved.',
+          details: [],
+          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
+        }],
+        confirmation: null,
+        suggestions: [],
+      };
+      artifactType = 'HOME_BUYER_CHECKLIST';
+      artifactId = updatedPlan.id;
+    } else if (lifecycleAction === 'CANCEL') {
+      if (access.role !== HouseholdRole.OWNER) {
+        const error = new Error('Only the property owner can cancel this purchase.');
+        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+        throw error;
+      }
+      const cancelReason = parameters.buyerCancelReason;
+      if (typeof cancelReason !== 'string' || cancelReason.trim().length < 5) {
+        const error = new Error('A cancellation reason of at least 5 characters is required.');
+        (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+        throw error;
+      }
+      const cancelled = await BuyerAcquisitionService.cancelJourney(userId, execution.propertyId, { confirmed: true, reason: cancelReason });
+      result = {
+        status: 'COMPLETED', reasonCode: 'BUYER_JOURNEY_CANCELLED', contextVersion: cancelled.updatedAt.toISOString(),
+        blocks: [{
+          type: 'WORKFLOW_PROGRESS', id: 'buyer-lifecycle-cancelled', title: 'Purchase cancelled', status: 'COMPLETED',
+          description: 'Reminders are stopped and open work is archived. Completed work, documents, findings, and evidence are preserved.',
+          details: [{ label: 'Reason', value: cancelReason }],
+          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
+        }],
+        confirmation: null,
+        suggestions: [],
+      };
+      artifactType = 'HOME_BUYER_CHECKLIST';
+      artifactId = cancelled.id;
+    } else if (lifecycleAction === 'RESCHEDULE_CLOSING' || lifecycleAction === 'RESCHEDULE_MOVE_IN') {
+      if (access.role === HouseholdRole.VIEWER) {
+        const error = new Error('A contributor or owner is required to change this purchase’s recorded dates.');
+        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+        throw error;
+      }
+      const newDate = parameters.buyerLifecycleDate;
+      if (typeof newDate !== 'string') {
+        const error = new Error('The new date is invalid.');
+        (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+        throw error;
+      }
+      const updatedChecklist = await BuyerAcquisitionService.updateLifecycle(
+        userId,
+        execution.propertyId,
+        lifecycleAction === 'RESCHEDULE_MOVE_IN' ? { moveInDate: newDate } : { targetCloseDate: newDate },
+      );
+      result = {
+        status: 'COMPLETED', reasonCode: 'BUYER_LIFECYCLE_DATE_UPDATED', contextVersion: updatedChecklist.updatedAt.toISOString(),
+        blocks: [{
+          type: 'WORKFLOW_PROGRESS', id: 'buyer-lifecycle-date-updated', title: lifecycleAction === 'RESCHEDULE_MOVE_IN' ? 'Move-in date updated' : 'Target closing date updated', status: 'COMPLETED',
+          description: 'Unedited task due dates were recalculated from the new date.',
+          details: [{ label: 'New date', value: newDate }],
+          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
+        }],
+        confirmation: null,
+        suggestions: [],
+      };
+      artifactType = 'HOME_BUYER_CHECKLIST';
+      artifactId = updatedChecklist.id;
+    } else {
+      const error = new Error('This lifecycle action is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+  return { result, artifactType, artifactId };
+}
+async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to create maintenance tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const expectedMaintenanceVersion = parameters.maintenanceWorkflowVersion;
+    const currentMaintenanceVersion = await maintenanceWorkflowVersion(execution.propertyId);
+    const candidate = MaintenanceTaskWorkflowInputSchema.safeParse({
+      title: parameters.maintenanceTitle,
+      description: parameters.maintenanceDescription ?? undefined,
+      priority: parameters.maintenancePriority,
+      nextDueDate: parameters.maintenanceNextDueDate ?? undefined,
+      estimatedCostUsd: parameters.maintenanceEstimatedCostUsd ?? undefined,
+      isRecurring: parameters.maintenanceIsRecurring,
+      frequency: parameters.maintenanceFrequency ?? undefined,
+    });
+    if (!candidate.success || expectedMaintenanceVersion !== currentMaintenanceVersion) {
+      const error = new Error(expectedMaintenanceVersion !== currentMaintenanceVersion
+        ? 'Maintenance tasks changed while this confirmation was open. Review the current record and try again.'
+        : 'The maintenance task details are invalid.');
+      (error as Error & { code?: string }).code = expectedMaintenanceVersion !== currentMaintenanceVersion
+        ? 'ASK_CONTEXT_VERSION_CONFLICT'
+        : 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const actionKey = `ask:${execution.id}:maintenance-task`;
+    let task = await prisma.propertyMaintenanceTask.findUnique({
+      where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
+    });
+    if (!task) {
+      try {
+        task = await PropertyMaintenanceTaskService.createUserTask(userId, execution.propertyId, {
+          title: candidate.data.title,
+          description: candidate.data.description,
+          priority: candidate.data.priority,
+          estimatedCost: candidate.data.estimatedCostUsd,
+          isRecurring: candidate.data.isRecurring,
+          frequency: candidate.data.isRecurring ? candidate.data.frequency : undefined,
+          nextDueDate: candidate.data.nextDueDate,
+          actionKey,
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+        task = await prisma.propertyMaintenanceTask.findUnique({
+          where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
+        });
+        if (!task) throw error;
+      }
+    }
+    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_CREATED', contextVersion: await maintenanceWorkflowVersion(execution.propertyId),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `maintenance-task-${task.id}`, title: 'Maintenance task created', status: 'COMPLETED',
+        description: 'The task is now part of this home’s canonical Maintenance record.',
+        details: [
+          { label: 'Task', value: task.title },
+          { label: 'Status', value: 'Pending' },
+          { label: 'Priority', value: task.priority.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) },
+          { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
+          { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
+        ],
+        actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What maintenance is still pending?', 'Create another maintenance task'],
+    };
+    artifactType = 'PROPERTY_MAINTENANCE_TASK';
+    artifactId = task.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = MaintenanceTaskUpdateInputSchema.safeParse(parameters.maintenanceUpdate);
+    if (!candidate.success) {
+      const error = new Error('The maintenance update is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const current = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.taskId, propertyId: execution.propertyId } });
+    if (!current || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(current)) {
+      const error = new Error('This task changed while the confirmation was open. Review its current state and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    if (candidate.data.action === 'ASSIGN' || candidate.data.action === 'UNASSIGN') {
+      await householdService.assignTask(execution.propertyId, current.id, 'MAINTENANCE', candidate.data.assigneeUserId ?? null, userId);
+    } else if (candidate.data.action === 'ARCHIVE') {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.CANCELLED);
+    } else if (candidate.data.action === 'REOPEN') {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.PENDING);
+    } else {
+      await PropertyMaintenanceTaskService.updateTask(userId, current.id, {
+        ...(candidate.data.priority ? { priority: candidate.data.priority } : {}),
+        ...(candidate.data.nextDueDate !== undefined ? { nextDueDate: candidate.data.nextDueDate } : {}),
+        ...(candidate.data.title ? { title: candidate.data.title } : {}),
+      });
+    }
+    const updated = await prisma.propertyMaintenanceTask.findUniqueOrThrow({ where: { id: current.id }, include: { assignedTo: { select: { email: true } } } });
+    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(updated.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_UPDATED', contextVersion: maintenanceTaskVersion(updated),
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `maintenance-update-${updated.id}`, title: 'Maintenance task updated', status: candidate.data.action === 'ARCHIVE' ? 'CANCELLED' : 'COMPLETED', description: 'The canonical Maintenance record and its downstream work state were updated.', details: [{ label: 'Task', value: updated.title }, { label: 'Action', value: candidate.data.action.toLowerCase() }, { label: 'Status', value: updated.status.toLowerCase().replace(/_/g, ' ') }, { label: 'Due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }, { label: 'Assignee', value: updated.assignedTo?.email ?? 'Unassigned' }], actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }] }],
+      confirmation: null, suggestions: candidate.data.action === 'ARCHIVE' ? [`Reopen ${updated.title}`] : ['What maintenance is pending?'],
+    };
+    artifactType = command.artifactType;
+    artifactId = updated.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmGuidanceJourneyCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = GuidanceJourneyCommandInputSchema.safeParse(parameters.guidanceJourney);
+    if (!candidate.success) {
+      const error = new Error('The guided plan settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.guidanceJourneyContextVersion !== await guidanceJourneyContextVersion(execution.propertyId, candidate.data)) {
+      const error = new Error('The guided-plan scope changed while confirmation was open. Review the current home record and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const journey = await guidanceJourneyService.createUserInitiatedJourney(execution.propertyId, {
+      scopeCategory: candidate.data.scopeCategory,
+      scopeId: candidate.data.scopeId,
+      issueType: candidate.data.issueType,
+      inventoryItemId: candidate.data.inventoryItemId,
+      serviceKey: candidate.data.serviceKey,
+      customIssueLabel: candidate.data.label,
+      sourceAskExecutionId: execution.id,
+    }, userId);
+    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`;
+    result = { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-${journey.id}`, title: 'Guided plan started', status: 'COMPLETED', description: 'The resumable guidance journey is now linked to this home.', details: [{ label: 'Scope', value: candidate.data.label }, { label: 'Plan', value: candidate.data.issueType.replace(/_/g, ' ') }], actions: [{ id: 'open-journey', label: 'Open guided plan', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
+    artifactType = command.artifactType;
+    artifactId = journey.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = QuoteWorkspaceCommandInputSchema.safeParse(parameters.quoteWorkspace);
+    if (!candidate.success) {
+      const error = new Error('The comparison workspace settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.quoteWorkspaceContextVersion !== await quoteWorkspaceContextVersion(execution.propertyId)) {
+      const error = new Error('Quote workspaces changed while confirmation was open. Review the current comparison and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const created = await getOrCreateQuoteComparisonWorkspace(execution.propertyId, userId, candidate.data);
+    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/quote-comparison?workspaceId=${encodeURIComponent(created.workspace.id)}`;
+    result = { status: 'COMPLETED', reasonCode: created.reused ? 'QUOTE_COMPARISON_REUSED' : 'QUOTE_COMPARISON_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED', description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.', details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }], actions: [{ id: 'open-workspace', label: 'Open comparison', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
+    artifactType = command.artifactType;
+    artifactId = created.workspace.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmHvacDecisionStart(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = HvacDecisionStartInputSchema.safeParse(parameters.hvacDecisionStart);
+    if (!candidate.success) {
+      const error = new Error('The decision thread settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionStartContextVersion(execution.propertyId, candidate.data.inventoryItemId)) {
+      const error = new Error('The HVAC system record changed while confirmation was open. Review the current record and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const startSelection = await decisionThreadService.selectHvacDecisionThread(execution.propertyId, candidate.data.inventoryItemId);
+    if (startSelection.kind !== 'NONE') {
+      const error = new Error('A decision thread already exists for this HVAC system.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const { thread: createdThread, snapshot: createdSnapshot } = await decisionThreadService.createHvacDecisionThread({
+      propertyId: execution.propertyId, userId, inventoryItemId: candidate.data.inventoryItemId, askExecutionId: execution.id,
+    });
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_START_CREATED',
+      blocks: [
+        decisionProgressBlock('hvac-decision-created', 'Decision thread started', createdThread, createdSnapshot, []),
+        whyNowBlock('hvac-decision-why-now', createdSnapshot, []),
+        ...await preferenceReferenceBlocksForSnapshot('hvac-decision-created', createdSnapshot.preferenceReferenceIds),
+      ],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = createdThread.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmHvacDecisionScenario(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = HvacDecisionScenarioInputSchema.safeParse(parameters.hvacDecisionScenario);
+    if (!candidate.success) {
+      const error = new Error('The scenario settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const scenarioThread = await prisma.decisionThread.findFirst({ where: { id: candidate.data.decisionThreadId, propertyId: execution.propertyId }, include: { currentRecommendationSnapshot: true } });
+    if (!scenarioThread) {
+      const error = new Error('Decision thread not found.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const { scenario, scenarioSnapshot } = await decisionThreadService.createHvacScenario(scenarioThread.id, userId, {
+      quoteAmountCents: candidate.data.quoteAmountCents, vendorLabel: candidate.data.vendorLabel, askExecutionId: execution.id,
+    });
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_SCENARIO_CREATED',
+      blocks: [
+        scenarioComparisonBlock(
+          'hvac-scenario-comparison', `Scenario: ${candidate.data.vendorLabel}`, scenarioThread.id, scenario.id,
+          { label: 'Current recommendation', verdictCode: scenarioThread.currentRecommendationSnapshot?.verdictCode ?? 'UNKNOWN', reasonCodes: scenarioThread.currentRecommendationSnapshot?.reasonCodes ?? [], limitationCodes: scenarioThread.currentRecommendationSnapshot?.limitationCodes ?? [] },
+          { label: scenario.label, verdictCode: scenarioSnapshot.verdictCode, reasonCodes: scenarioSnapshot.reasonCodes, limitationCodes: scenarioSnapshot.limitationCodes, assumptions: [{ label: 'Quote amount', value: `$${(candidate.data.quoteAmountCents / 100).toFixed(2)}` }, { label: 'Vendor', value: candidate.data.vendorLabel }] },
+        ),
+        ...await preferenceReferenceBlocksForSnapshot('hvac-scenario', scenarioSnapshot.preferenceReferenceIds),
+      ],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = scenario.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmHvacDecisionAbandon(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = HvacDecisionAbandonInputSchema.safeParse(parameters.hvacDecisionAbandon);
+    if (!candidate.success) {
+      const error = new Error('The abandon request is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const abandonedThread = await decisionThreadService.abandonDecisionThread(candidate.data.decisionThreadId, execution.propertyId);
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_ABANDONED',
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `hvac-decision-abandoned-${abandonedThread.id}`, title: 'Decision abandoned', status: 'COMPLETED', description: 'The decision thread is no longer active. You can start a new one at any time.', details: [{ label: 'Thread', value: abandonedThread.title }], actions: [] }],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = abandonedThread.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmHvacDecisionOutcomeReport(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = HvacDecisionOutcomeReportInputSchema.safeParse(parameters.hvacDecisionOutcomeReport);
+    if (!candidate.success) {
+      const error = new Error('The outcome details are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const { observation } = await outcomeObservationService.recordHomeownerReportedOutcome({
+      propertyId: execution.propertyId, userId, decisionThreadId: candidate.data.decisionThreadId,
+      actionState: candidate.data.actionState, costCents: candidate.data.costCents, occurredOn: null, note: candidate.data.note,
+    });
+    const reportedRows = await outcomeObservationService.getOutcomeSummaryForThread(candidate.data.decisionThreadId, execution.propertyId);
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_RECORDED',
+      blocks: [outcomeSummaryBlock('hvac-outcome-recorded', candidate.data.decisionThreadId, reportedRows)],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = observation.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmHvacDecisionOutcomeUnlink(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = HvacDecisionOutcomeUnlinkInputSchema.safeParse(parameters.hvacDecisionOutcomeUnlink);
+    if (!candidate.success) {
+      const error = new Error('The outcome selection is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const disputed = await outcomeObservationService.disputeOutcomeObservation(candidate.data.outcomeObservationId, execution.propertyId);
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_DISPUTED',
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `hvac-outcome-disputed-${disputed.id}`, title: 'Outcome disputed', status: 'COMPLETED', description: 'The reported outcome is now marked as disputed. It was not deleted.', details: [], actions: [] }],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = disputed.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmHvacPreferenceSave(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = parameters.hvacPreferenceSave as {
+      ownership: decisionPreferenceService.ParsedOwnershipHorizon | null;
+      approach: decisionPreferenceService.ParsedRepairReplaceApproach | null;
+    } | undefined;
+    if (!candidate || (!candidate.ownership && !candidate.approach)) {
+      const error = new Error('The preference details are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const savedIds: string[] = [];
+    const savedBlocks: AskPresentationBlock[] = [];
+    try {
+      if (candidate.ownership) {
+        const saved = await decisionPreferenceService.saveOwnershipHorizonPreference(execution.propertyId, userId, candidate.ownership);
+        savedIds.push(saved.preferenceValueId);
+        savedBlocks.push({
+          type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-ownership-horizon', title: 'Ownership horizon saved',
+          preferenceKey: 'OWNERSHIP_HORIZON', summary: `Saved: plan to sell in about ${candidate.ownership.horizonMonths} months.`,
+          visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: null,
+        });
+      }
+      if (candidate.approach) {
+        const saved = await decisionPreferenceService.saveRepairReplaceApproachPreference(execution.propertyId, userId, candidate.approach);
+        savedIds.push(saved.preferenceValueId);
+        savedBlocks.push({
+          type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-approach', title: 'Approach saved',
+          preferenceKey: 'REPAIR_REPLACE_APPROACH', summary: `Saved: ${candidate.approach.approach.replace(/_/g, ' ').toLowerCase()}.`,
+          visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: null,
+        });
+      }
+    } catch (caught) {
+      if (caught instanceof HouseholdProfileNotEnabledError) {
+        const error = new Error('The optional household profile is not enabled for this property yet, so this plan cannot be saved as a household preference. Enable the household profile first, then try again.');
+        (error as Error & { code?: string }).code = 'ASK_HOUSEHOLD_PROFILE_REQUIRED';
+        throw error;
+      }
+      throw caught;
+    }
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_SAVED',
+      blocks: savedBlocks, confirmation: null, suggestions: ['Should I repair or replace my HVAC?'],
+    };
+    artifactType = command.artifactType;
+    artifactId = savedIds[0] ?? '';
+  return { result, artifactType, artifactId };
+}
+async function confirmHvacPreferenceForget(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = parameters.hvacPreferenceForget as { preferenceValueId: string } | undefined;
+    if (!candidate?.preferenceValueId) {
+      const error = new Error('The preference to forget is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    let affectedThreadIds: string[];
+    try {
+      ({ affectedThreadIds } = await decisionPreferenceService.revokeHvacPreference(candidate.preferenceValueId, userId));
+    } catch (caught) {
+      if (caught instanceof PreferenceNotAuthorizedError) {
+        const error = new Error(caught.message);
+        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+        throw error;
+      }
+      throw caught;
+    }
+    await decisionThreadService.markThreadsStaleByIds(affectedThreadIds, 'PREFERENCE_REVOKED');
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_FORGOTTEN',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `hvac-preference-forgotten-${candidate.preferenceValueId}`, title: 'Preference forgotten', status: 'COMPLETED',
+        description: affectedThreadIds.length ? 'Affected decisions will be recalculated the next time you open them.' : 'No active decision used this preference.',
+        details: [], actions: [],
+      }],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = candidate.preferenceValueId;
+  return { result, artifactType, artifactId };
+}
+async function confirmHomeDeadlineMonitor(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const candidate = HomeDeadlineMonitorInputSchema.safeParse(parameters.homeDeadlineMonitor);
+    if (!candidate.success) {
+      const error = new Error('The expiration reminder settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    let task;
+    if (candidate.data.sourceType === 'MAINTENANCE') {
+      task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } });
+      if (!task || task.status === MaintenanceTaskStatus.CANCELLED || !task.nextDueDate || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(task)) {
+        const error = new Error('This maintenance task changed while confirmation was open. Review the current task and try again.');
+        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+        throw error;
+      }
+    } else {
+      // Unlike the MAINTENANCE branch above, this previously reused
+      // candidate.data.dueDate/title from prep time with no recheck at all
+      // -- editing or deleting the warranty/policy during the confirmation
+      // window would silently create a reminder pinned to a stale
+      // expiration date. Re-fetch the actual source record and require it
+      // to match the version captured at prep time before proceeding.
+      const currentSource = candidate.data.sourceType === 'WARRANTY'
+        ? await prisma.warranty.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } })
+        : await prisma.insurancePolicy.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } });
+      await assertCoverageConflictFree(execution.propertyId, prisma, candidate.data.sourceType === 'WARRANTY'
+        ? { warrantyId: candidate.data.sourceId }
+        : { insurancePolicyId: candidate.data.sourceId });
+      if (!currentSource || !currentSource.expiryDate || parameters.homeDeadlineSourceVersion !== homeDeadlineSourceVersion(currentSource as { id: string; expiryDate: Date | null; updatedAt: Date })) {
+        const error = new Error(`This ${candidate.data.sourceType === 'WARRANTY' ? 'warranty' : 'insurance policy'} changed while confirmation was open. Review the current record and try again.`);
+        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+        throw error;
+      }
+      const actionKey = `ask-deadline:${candidate.data.sourceType}:${candidate.data.sourceId}`;
+      task = await prisma.propertyMaintenanceTask.findUnique({ where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } } });
+      if (!task) {
+        try {
+          task = await PropertyMaintenanceTaskService.createUserTask(userId, execution.propertyId, { title: candidate.data.title, priority: MaintenanceTaskPriority.HIGH, nextDueDate: candidate.data.dueDate, actionKey });
+        } catch (error) {
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+          task = await prisma.propertyMaintenanceTask.findUnique({ where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } } });
+          if (!task) throw error;
+        }
+      } else if (task.nextDueDate?.toISOString().slice(0, 10) !== candidate.data.dueDate || task.status === MaintenanceTaskStatus.CANCELLED) {
+        task = await PropertyMaintenanceTaskService.updateTask(userId, task.id, { nextDueDate: candidate.data.dueDate, status: MaintenanceTaskStatus.PENDING, priority: MaintenanceTaskPriority.HIGH });
+      }
+    }
+    // Notification categories are property-wide switches (userId + property +
+    // category + channel), not scoped to the single task/policy just
+    // confirmed. Enabling both MAINTENANCE and MATERIAL_DEADLINE regardless
+    // of which reminder was actually confirmed silently turns on emails for
+    // an unrelated category the consent copy never disclosed. Enable only
+    // the category the confirmed reminder belongs to.
+    const deadlineCategory: 'MAINTENANCE' | 'MATERIAL_DEADLINE' = candidate.data.sourceType === 'MAINTENANCE' ? 'MAINTENANCE' : 'MATERIAL_DEADLINE';
+    const property = await prisma.property.findUnique({ where: { id: execution.propertyId }, select: { timezone: true } });
+    await upsertNotificationPreference(userId, { propertyId: execution.propertyId!, category: deadlineCategory, channel: 'EMAIL', enabled: true, cadence: 'IMMEDIATE', timezone: property?.timezone ?? 'UTC' });
+    const href = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
+    const maintenanceSource = candidate.data.sourceType === 'MAINTENANCE';
+    result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [`Reschedule ${task.title}`, `Archive ${task.title}`] };
+    artifactType = command.artifactType;
+    artifactId = task.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    if (access.role !== HouseholdRole.OWNER) {
+      const error = new Error('Only a household owner can send this invitation.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const inviteEmail = parameters.inviteEmail;
+    const inviteRole = parameters.inviteRole;
+    const expectedHouseholdVersion = parameters.householdContextVersion;
+    const currentHouseholdVersion = await householdWorkflowVersion(execution.propertyId);
+    const candidate = HouseholdInvitationInputSchema.safeParse({ email: inviteEmail, role: inviteRole });
+    if (!candidate.success || expectedHouseholdVersion !== currentHouseholdVersion) {
+      const error = new Error(expectedHouseholdVersion !== currentHouseholdVersion
+        ? 'Household access changed while this confirmation was open. Review the current household and try again.'
+        : 'The household invitation settings are invalid.');
+      (error as Error & { code?: string }).code = expectedHouseholdVersion !== currentHouseholdVersion
+        ? 'ASK_CONTEXT_VERSION_CONFLICT'
+        : 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const invite = await householdService.sendInvite(
+      execution.propertyId,
+      userId,
+      candidate.data,
+      { sourceAskExecutionId: execution.id },
+    );
+    const householdHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/household`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'HOUSEHOLD_INVITATION_PENDING',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `household-invite-${invite.id}`, title: 'Household invitation is pending', status: 'PENDING',
+        description: 'The invitation record is ready. Access is not active until the recipient accepts it.',
+        details: [
+          { label: 'Recipient', value: invite.inviteeEmail },
+          { label: 'Role', value: invitationRoleCopy(invite.role as InvitableHouseholdRole) },
+          { label: 'Expires', value: humanDate(invite.expiresAt) ?? invite.expiresAt.toISOString() },
+          { label: 'Access status', value: 'Pending acceptance' },
+        ],
+        actions: [{ id: 'manage-invitation', label: 'Manage invitation', href: householdHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['Who currently has access to this home?'],
+    };
+    artifactType = 'HOUSEHOLD_INVITE';
+    artifactId = invite.id;
+  return { result, artifactType, artifactId };
+}
+async function confirmRefinanceRateMonitor(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access, command } = ctx;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+    const thresholdPct = parameters.thresholdPct;
+    const product = parameters.product;
+    if (typeof thresholdPct !== 'number' || (product !== 'FIXED_30_YEAR' && product !== 'FIXED_15_YEAR')) {
+      const error = new Error('The monitor settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.refinanceMonitorContextVersion !== await refinanceMonitorContextVersion(userId, execution.propertyId)) {
+      const error = new Error('Mortgage-rate data or notification settings changed while confirmation was open. Review the current settings and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const monitor = await createOrUpdateRefinanceRateMonitor({
+      userId, propertyId: execution.propertyId, thresholdPct,
+      product: product as RefinanceRateMonitorProduct,
+      cadence: NotificationCadence.IMMEDIATE,
+      quietStart: typeof parameters.quietStart === 'string' ? parameters.quietStart : null,
+      quietEnd: typeof parameters.quietEnd === 'string' ? parameters.quietEnd : null,
+      timezone: typeof parameters.timezone === 'string' ? parameters.timezone : 'UTC',
+    });
+    const radarHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/mortgage-refinance-radar?section=alerts`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'RATE_MONITOR_ACTIVE',
+      blocks: [{
+        type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
+        title: 'Mortgage-rate monitor is active', status: monitor.status,
+        threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
+        product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
+        channel: 'Email plus in-app', cadence: monitor.cadence,
+        quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
+        sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
+        actions: [
+          { id: 'edit-monitor', label: 'Edit settings', href: radarHref, style: 'PRIMARY' },
+          { id: 'pause-monitor', label: 'Pause', href: `${radarHref}&monitorAction=pause`, style: 'SECONDARY' },
+          { id: 'stop-monitor', label: 'Stop', href: `${radarHref}&monitorAction=stop`, style: 'QUIET' },
+        ],
+      }],
+      confirmation: null, suggestions: ['Is refinancing worth reviewing now?'],
+    };
+    artifactType = 'REFINANCE_RATE_MONITOR';
+    artifactId = monitor.id;
+  return { result, artifactType, artifactId };
+}
+registerConfirmCapabilityHandler('incident-claim.file', confirmClaimFile);
+registerConfirmCapabilityHandler('incident-claim.transition', confirmClaimTransition);
+registerConfirmCapabilityHandler('inspection-findings.update', confirmInspectionFindingUpdate);
+registerConfirmCapabilityHandler('document-promotion.confirm', confirmDocumentPromotionConfirm);
+registerConfirmCapabilityHandler('home-operations.update', confirmOperationalWorkUpdate);
+registerConfirmCapabilityHandler('maintenance.complete', confirmMaintenanceTaskComplete);
+registerConfirmCapabilityHandler('buyer.task.complete', confirmBuyerTaskComplete);
+registerConfirmCapabilityHandler('buyer.task.create', confirmBuyerTaskCreate);
+registerConfirmCapabilityHandler('buyer.task.update', confirmBuyerTaskUpdate);
+registerConfirmCapabilityHandler('buyer.finding.disposition', confirmBuyerFindingDisposition);
+registerConfirmCapabilityHandler('buyer.lifecycle.update', confirmBuyerLifecycleUpdate);
+registerConfirmCapabilityHandler('maintenance.create', confirmMaintenanceTaskCreate);
+registerConfirmCapabilityHandler('maintenance.update', confirmMaintenanceTaskUpdate);
+registerConfirmCapabilityHandler('guidance.journey.create', confirmGuidanceJourneyCreate);
+registerConfirmCapabilityHandler('quote-comparison.create', confirmQuoteComparisonCreate);
+registerConfirmCapabilityHandler('decision-platform.hvac.start', confirmHvacDecisionStart);
+registerConfirmCapabilityHandler('decision-platform.hvac.scenario', confirmHvacDecisionScenario);
+registerConfirmCapabilityHandler('decision-platform.hvac.abandon', confirmHvacDecisionAbandon);
+registerConfirmCapabilityHandler('decision-platform.hvac.outcome.report', confirmHvacDecisionOutcomeReport);
+registerConfirmCapabilityHandler('decision-platform.hvac.outcome.unlink', confirmHvacDecisionOutcomeUnlink);
+registerConfirmCapabilityHandler('decision-platform.hvac.preference.save', confirmHvacPreferenceSave);
+registerConfirmCapabilityHandler('decision-platform.hvac.preference.forget', confirmHvacPreferenceForget);
+registerConfirmCapabilityHandler('home-deadline.monitor', confirmHomeDeadlineMonitor);
+registerConfirmCapabilityHandler('household.invitation', confirmHouseholdInvitation);
+registerConfirmCapabilityHandler('refinance.monitor', confirmRefinanceRateMonitor);
+
 export async function confirmAskExecution(userId: string, executionId: string, input: SubmitAskConfirmation): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution || !execution.propertyId) {
@@ -8265,966 +9418,12 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   let artifactType: string;
   let artifactId: string;
   try {
-  if (execution.operationId === 'CLAIM_FILE') {
-    const title = parameters.claimTitle;
-    const type = parameters.claimType;
-    const description = parameters.claimDescription;
-    const sourceType = parameters.claimSourceType;
-    if (typeof title !== 'string' || !title.trim() || typeof type !== 'string' || !CLAIM_TYPE_PATTERNS.some(([, candidate]) => candidate === type) && type !== 'OTHER') {
-      const error = new Error('The draft claim details are no longer valid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const claim = await ClaimsService.createClaim(execution.propertyId, userId, {
-      title: title.trim(), type: type as ClaimType,
-      description: typeof description === 'string' ? description : null,
-      sourceType: typeof sourceType === 'string' ? sourceType as 'INSURANCE' | 'HOME_WARRANTY' | 'MANUFACTURER_WARRANTY' | 'OUT_OF_POCKET' | 'UNKNOWN' : 'UNKNOWN',
-      generateChecklist: true,
+  {
+    const confirmed = await confirmCapabilityInvoke(execution.operationId as AskOperationId, {
+      execution: execution as typeof execution & { propertyId: string },
+      userId, parameters, access, command,
     });
-    artifactType = 'CLAIM'; artifactId = claim.id;
-    result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['What should I gather for this claim?'] };
-  } else if (execution.operationId === 'CLAIM_TRANSITION') {
-    const claimId = parameters.claimId;
-    const nextStatus = parameters.claimToStatus;
-    if (typeof claimId !== 'string' || typeof nextStatus !== 'string') throw Object.assign(new Error('The claim transition is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const claim = await prisma.claim.findFirst({ where: { id: claimId, propertyId: execution.propertyId }, select: { id: true, title: true, status: true, updatedAt: true } });
-    if (!claim) throw Object.assign(new Error('The selected claim is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const currentVersion = createHash('sha256').update(`${claim.id}:${claim.status}:${claim.updatedAt.toISOString()}`).digest('hex');
-    if (parameters.claimContextVersion !== currentVersion && claim.status !== nextStatus) throw Object.assign(new Error('This claim changed while confirmation was open. Review its current status and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-    const updated = claim.status === nextStatus ? await ClaimsService.getClaim(execution.propertyId, claim.id) : await ClaimsService.updateClaim(execution.propertyId, claim.id, userId, { status: nextStatus as ClaimStatus });
-    artifactType = 'CLAIM'; artifactId = claim.id;
-    result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['Show my open claims'] };
-  } else if (execution.operationId === 'INSPECTION_FINDING_UPDATE') {
-    const findingId = parameters.inspectionFindingId;
-    const reportId = parameters.inspectionReportId;
-    const action = parameters.inspectionFindingAction;
-    if (typeof findingId !== 'string' || typeof reportId !== 'string' || !['ACCEPT', 'DISMISS', 'RESOLVE'].includes(String(action))) throw Object.assign(new Error('The inspection finding action is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, reportId, propertyId: execution.propertyId }, select: { id: true, homeSystem: true, status: true, workDisposition: true, updatedAt: true } });
-    if (!finding) throw Object.assign(new Error('The selected inspection finding is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const currentVersion = createHash('sha256').update(`${finding.id}:${finding.status}:${finding.workDisposition}:${finding.updatedAt.toISOString()}`).digest('hex');
-    const alreadyApplied = (action === 'ACCEPT' && finding.workDisposition === 'ACCEPTED') || (action === 'DISMISS' && finding.status === 'DISMISSED') || (action === 'RESOLVE' && finding.status === 'RESOLVED');
-    if (parameters.inspectionFindingContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This inspection finding changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-    if (!alreadyApplied) {
-      if (action === 'ACCEPT') await acceptFindingAsWork(finding.id, reportId, execution.propertyId, userId);
-      else if (action === 'DISMISS') await dismissFinding(finding.id, reportId, execution.propertyId, 'Dismissed through Ask after homeowner confirmation.', userId);
-      else await resolveFinding(finding.id, execution.propertyId, { resolutionMethod: 'HOMEOWNER_CONFIRMED', resolutionNotes: 'Resolved through Ask after homeowner confirmation.' });
-    }
-    artifactType = 'INSPECTION_FINDING'; artifactId = finding.id;
-    const findingReasonCode = action === 'ACCEPT' ? 'INSPECTION_FINDING_ACCEPTED' : action === 'DISMISS' ? 'INSPECTION_FINDING_DISMISSED' : 'INSPECTION_FINDING_RESOLVED';
-    result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: ['Show remaining inspection findings'] };
-  } else if (execution.operationId === 'DOCUMENT_PROMOTION_CONFIRM') {
-    const kind = parameters.documentPromotionKind;
-    const candidateId = parameters.documentPromotionId;
-    const parentId = parameters.documentPromotionParentId;
-    const decision = parameters.documentPromotionDecision;
-    if (typeof candidateId !== 'string' || typeof parentId !== 'string' || !['CONFIRM', 'REJECT'].includes(String(decision))) throw Object.assign(new Error('The document-promotion decision is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    if (kind === 'MATERIAL_EXTRACTION_REVIEW') {
-      const review = await prisma.materialExtractionReview.findFirst({ where: { id: candidateId, materialSpecId: parentId, propertyId: execution.propertyId }, select: { id: true, status: true, candidateFields: true, updatedAt: true } });
-      if (!review) throw Object.assign(new Error('The selected material extraction review is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-      const currentVersion = createHash('sha256').update(`${kind}:${review.id}:${review.updatedAt.toISOString()}`).digest('hex');
-      if (review.status === 'NEEDS_REVIEW' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This document candidate changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-      if (review.status === 'NEEDS_REVIEW') await materialSpecService.reviewExtraction(execution.propertyId, parentId, review.id, userId, { status: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED', reviewedFields: decision === 'CONFIRM' ? review.candidateFields as Record<string, unknown> : undefined, reviewNotes: `${decision === 'CONFIRM' ? 'Confirmed' : 'Rejected'} through Ask after explicit homeowner review.` });
-      if (decision === 'CONFIRM') await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'MATERIAL_SPEC', promotedEntityId: parentId, userId });
-      artifactType = 'MATERIAL_EXTRACTION_REVIEW'; artifactId = review.id;
-    } else if (kind === 'INSURANCE_POLICY_FACT') {
-      const fact = await prisma.insurancePolicyFact.findFirst({ where: { id: candidateId, policyTerm: { propertyId: execution.propertyId, insurancePolicyId: parentId } }, include: { policyTerm: { include: { insurancePolicy: { select: { homeownerProfileId: true } } } } } });
-      if (!fact) throw Object.assign(new Error('The selected policy fact is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-      const currentVersion = createHash('sha256').update(`${kind}:${fact.id}:${fact.updatedAt.toISOString()}`).digest('hex');
-      if (fact.confirmationStatus === 'PENDING' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This policy fact changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-      if (fact.confirmationStatus === 'PENDING') await confirmPolicyFact({ policyId: parentId, factId: fact.id, homeownerProfileId: fact.policyTerm.insurancePolicy.homeownerProfileId, userId, confirmationStatus: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED' });
-      if (decision === 'CONFIRM') await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSURANCE_POLICY_FACT', promotedEntityId: fact.id, userId });
-      artifactType = 'INSURANCE_POLICY_FACT'; artifactId = fact.id;
-    } else if (kind === 'INSPECTION_REPORT' && decision === 'CONFIRM') {
-      const report = await prisma.inspectionReport.findFirst({ where: { id: candidateId, propertyId: execution.propertyId }, select: { id: true, status: true, updatedAt: true } });
-      if (!report) throw Object.assign(new Error('The selected inspection report is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-      const currentVersion = createHash('sha256').update(`${kind}:${report.id}:${report.updatedAt.toISOString()}`).digest('hex');
-      if (report.status === 'REVIEW_PENDING' && parameters.documentPromotionContextVersion !== currentVersion) throw Object.assign(new Error('This inspection report changed while confirmation was open.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-      if (report.status === 'REVIEW_PENDING') await applyWriteBacks(report.id, execution.propertyId, userId);
-      await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSPECTION_REPORT', promotedEntityId: report.id, userId });
-      artifactType = 'INSPECTION_REPORT'; artifactId = report.id;
-    } else throw Object.assign(new Error('This document-promotion action must be reviewed again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/documents`, style: 'PRIMARY' }] }], suggestions: ['Show remaining document reviews'] };
-  } else if (execution.operationId === 'OPERATIONAL_WORK_UPDATE') {
-    const workItemId = parameters.operationalWorkItemId;
-    const action = parameters.operationalWorkAction;
-    if (typeof workItemId !== 'string' || !['ACCEPT', 'DEFER', 'SNOOZE', 'COMPLETE'].includes(String(action))) throw Object.assign(new Error('The Operational Work command is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const observedResult = parameters.operationalWorkObservedResult;
-    if (action === 'COMPLETE' && !['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED'].includes(String(observedResult))) throw Object.assign(new Error('The Operational Work completion result is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const item = await prisma.operationalWorkItem.findFirst({ where: { id: workItemId, propertyId: execution.propertyId }, include: { executions: true } });
-    if (!item) throw Object.assign(new Error('The selected Operational Work item is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const currentVersion = createHash('sha256').update(`${item.id}:${item.state}:${item.updatedAt.toISOString()}:${item.snoozedUntil?.toISOString() ?? ''}`).digest('hex');
-    const alreadyApplied = action === 'ACCEPT' ? item.state === 'ACCEPTED' : action === 'DEFER' ? item.state === 'DEFERRED' : action === 'SNOOZE' ? item.snoozedUntil?.toISOString() === parameters.operationalWorkUntil : ['VERIFIED', 'CLOSED'].includes(item.state);
-    if (parameters.operationalWorkContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This work item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-    if (!alreadyApplied) {
-      if (action === 'ACCEPT' || action === 'DEFER') {
-        const target = action === 'ACCEPT' ? 'ACCEPTED' : 'DEFERRED'; assertUserWorkItemTransition(item, target);
-        await transitionWorkItem({ workItemId: item.id, to: target, actorType: 'USER', actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:${action.toLowerCase()}`, timestampValue: action === 'DEFER' && typeof parameters.operationalWorkUntil === 'string' ? new Date(parameters.operationalWorkUntil) : undefined });
-      } else if (action === 'SNOOZE') {
-        if (typeof parameters.operationalWorkUntil !== 'string') throw Object.assign(new Error('The snooze date is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-        await snoozeWorkItem({ workItemId: item.id, snoozedUntil: new Date(parameters.operationalWorkUntil), actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:snooze` });
-      } else await completeAcceptedOperationalWorkItem({
-        workItemId: item.id,
-        propertyId: execution.propertyId,
-        userId,
-        safetyTier: item.safetyTier,
-        decisionLineage: null,
-        recommendationSnapshotId: await resolveWorkItemRecommendationSnapshotId(execution.propertyId, item.id),
-        observedResult: observedResult as 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
-        completedAt: new Date().toISOString(),
-      });
-    }
-    artifactType = 'OPERATIONAL_WORK_ITEM'; artifactId = item.id;
-    const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : 'OPERATIONAL_WORK_COMPLETED';
-    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
-  } else if (execution.operationId === 'MAINTENANCE_TASK_COMPLETE') {
-    if (access.role === HouseholdRole.VIEWER) {
-      const error = new Error('A contributor or owner is required to complete maintenance tasks.');
-      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-      throw error;
-    }
-    const taskId = parameters.maintenanceTaskId;
-    if (typeof taskId !== 'string') {
-      const error = new Error('The maintenance task selection is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: taskId, propertyId: execution.propertyId } });
-    if (!task) {
-      const error = new Error('The selected maintenance task is no longer available.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const completionIdempotencyKey = `ask:${execution.id}:maintenance-completion`;
-    const completionMetadata = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata)
-      ? task.completionMetadata as Record<string, unknown>
-      : {};
-    const completedByThisExecution = task.status === MaintenanceTaskStatus.COMPLETED
-      && completionMetadata.completionIdempotencyKey === completionIdempotencyKey;
-    if (!completedByThisExecution && (task.status === MaintenanceTaskStatus.COMPLETED
-      || task.status === MaintenanceTaskStatus.CANCELLED
-      || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(task))) {
-      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const actualCostUsd = parameters.maintenanceActualCostUsd;
-    const outcomeHealth = parameters.maintenanceOutcomeHealth;
-    if (actualCostUsd !== null && actualCostUsd !== undefined && (typeof actualCostUsd !== 'number' || actualCostUsd < 0 || actualCostUsd > 10_000_000)) {
-      const error = new Error('The actual maintenance cost is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const projectOutcomeRequired = Boolean(task.actionKey?.match(/^project:[^:]+:follow-up$/));
-    if (projectOutcomeRequired && !['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED'].includes(String(outcomeHealth))) {
-      const error = new Error('Select the project follow-up outcome before completing this task.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const updated = completedByThisExecution
-      ? task
-      : await PropertyMaintenanceTaskService.updateTaskStatus(
-        userId,
-        task.id,
-        MaintenanceTaskStatus.COMPLETED,
-        typeof actualCostUsd === 'number' ? actualCostUsd : undefined,
-        projectOutcomeRequired ? outcomeHealth as 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' : undefined,
-        completionIdempotencyKey,
-      );
-    const taskHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(updated.id)}&from=ask`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_COMPLETED', contextVersion: maintenanceTaskVersion(updated),
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `maintenance-completed-${updated.id}`, title: 'Maintenance task completed', status: 'COMPLETED',
-        description: updated.isRecurring && updated.frequency
-          ? 'This occurrence is complete and the recurring task’s next due date has been recalculated.'
-          : 'Completion is recorded in this home’s canonical Maintenance record.',
-        details: [
-          { label: 'Task', value: updated.title },
-          { label: 'Completed', value: humanDate(updated.lastCompletedDate) ?? 'Recorded now' },
-          { label: 'Actual cost', value: updated.actualCost == null ? 'Not recorded' : maintenanceMoney(updated.actualCost) ?? 'Not recorded' },
-          ...(updated.isRecurring ? [{ label: 'Next due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }] : []),
-          ...(projectOutcomeRequired ? [{ label: 'Project outcome', value: String(outcomeHealth).toLowerCase().replace(/_/g, ' ') }] : []),
-        ],
-        actions: [{ id: 'open-task', label: 'Open completed task', href: taskHref, style: 'PRIMARY' }],
-      }],
-      confirmation: null,
-      suggestions: ['What maintenance is still pending?', 'Show maintenance completed this year'],
-    };
-    artifactType = 'PROPERTY_MAINTENANCE_TASK_COMPLETION';
-    artifactId = updated.id;
-  } else if (execution.operationId === 'BUYER_TASK_COMPLETE') {
-    if (access.role === HouseholdRole.VIEWER) {
-      const error = new Error('A contributor or owner is required to complete Buyer Plan tasks.');
-      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-      throw error;
-    }
-    const taskId = parameters.buyerTaskId;
-    if (typeof taskId !== 'string') {
-      const error = new Error('The Buyer Plan task selection is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } } });
-    if (!task) {
-      const error = new Error('The selected Buyer Plan task is no longer available.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const completionIdempotencyKey = `ask:${execution.id}:buyer-task-completion`;
-    const completionEvidence = task.completionEvidenceJson && typeof task.completionEvidenceJson === 'object' && !Array.isArray(task.completionEvidenceJson)
-      ? task.completionEvidenceJson as Record<string, unknown>
-      : {};
-    const completedByThisExecution = task.status === 'COMPLETED' && completionEvidence.completionIdempotencyKey === completionIdempotencyKey;
-    if (!completedByThisExecution && (task.status === 'COMPLETED'
-      || task.status === 'CANCELLED'
-      || task.status === 'NOT_NEEDED'
-      || parameters.buyerTaskVersion !== buyerTaskVersion(task))) {
-      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const updated = completedByThisExecution
-      ? task
-      : await HomeBuyerTaskService.updateTask(userId, execution.propertyId, task.id, {
-        status: 'COMPLETED',
-        completionEvidenceJson: { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString(), completionIdempotencyKey },
-      });
-    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'BUYER_TASK_COMPLETED', contextVersion: buyerTaskVersion(updated),
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `buyer-task-completed-${updated.id}`, title: 'Buyer Plan task completed', status: 'COMPLETED',
-        description: 'Completion is recorded in this purchase’s canonical Buyer Plan and closing readiness is updated.',
-        details: [
-          { label: 'Task', value: updated.title },
-          { label: 'Completion method', value: 'User attestation' },
-        ],
-        actions: [{ id: 'open-task', label: 'Open completed task', href: buyerTaskHref, style: 'PRIMARY' }],
-      }],
-      confirmation: null,
-      suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
-    };
-    artifactType = 'HOME_BUYER_TASK';
-    artifactId = updated.id;
-  } else if (execution.operationId === 'BUYER_TASK_CREATE') {
-    if (access.role === HouseholdRole.VIEWER) {
-      const error = new Error('A contributor or owner is required to add Buyer Plan tasks.');
-      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-      throw error;
-    }
-    const title = parameters.buyerTaskTitle;
-    if (typeof title !== 'string' || !title.trim()) {
-      const error = new Error('The closing checklist item title is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const dueAt = typeof parameters.buyerTaskDueAt === 'string' ? parameters.buyerTaskDueAt : null;
-    const actionKey = `ask:${execution.id}:buyer-task-create`;
-    let created = await prisma.homeBuyerTask.findFirst({ where: { actionKey, checklist: { propertyId: execution.propertyId } } });
-    if (!created) {
-      try {
-        created = await HomeBuyerTaskService.createTask(userId, execution.propertyId, {
-          title, actionKey, dueAt, phase: 'CLOSING_PREP', priority: 'PLAN',
-        });
-      } catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-        created = await prisma.homeBuyerTask.findFirst({ where: { actionKey, checklist: { propertyId: execution.propertyId } } });
-        if (!created) throw error;
-      }
-    }
-    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(created.id)}&from=ask`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'BUYER_TASK_CREATED', contextVersion: buyerTaskVersion(created),
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `buyer-task-created-${created.id}`, title: 'Closing checklist item added', status: 'COMPLETED',
-        description: 'The task is recorded in this purchase’s canonical Buyer Plan.',
-        details: [
-          { label: 'Task', value: created.title },
-          { label: 'Due', value: created.dueAt ? humanDate(created.dueAt) ?? 'Not scheduled' : 'Not scheduled' },
-        ],
-        actions: [{ id: 'open-task', label: 'Open new task', href: buyerTaskHref, style: 'PRIMARY' }],
-      }],
-      confirmation: null,
-      suggestions: ['What should I do next for this purchase?'],
-    };
-    artifactType = 'HOME_BUYER_TASK';
-    artifactId = created.id;
-  } else if (execution.operationId === 'BUYER_TASK_UPDATE') {
-    if (access.role === HouseholdRole.VIEWER) {
-      const error = new Error('A contributor or owner is required to update Buyer Plan tasks.');
-      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-      throw error;
-    }
-    const taskId = parameters.buyerTaskId;
-    if (typeof taskId !== 'string') {
-      const error = new Error('The Buyer Plan task selection is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } } });
-    if (!task || parameters.buyerTaskVersion !== buyerTaskVersion(task)) {
-      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const buyerAction = parameters.buyerTaskAction;
-    const dueAt = typeof parameters.buyerTaskDueAt === 'string' ? parameters.buyerTaskDueAt : undefined;
-    const assigneeUserId = parameters.buyerTaskAssigneeUserId === null ? null : typeof parameters.buyerTaskAssigneeUserId === 'string' ? parameters.buyerTaskAssigneeUserId : undefined;
-    const updated = await HomeBuyerTaskService.updateTask(userId, execution.propertyId, task.id, {
-      ...(buyerAction === 'RESCHEDULE' && dueAt ? { dueAt } : {}),
-      ...(buyerAction === 'ASSIGN' || buyerAction === 'UNASSIGN' ? { assignedToUserId: assigneeUserId } : {}),
-    });
-    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'BUYER_TASK_UPDATED', contextVersion: buyerTaskVersion(updated),
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `buyer-task-updated-${updated.id}`, title: 'Buyer Plan task updated', status: 'COMPLETED',
-        description: 'The change is recorded in this purchase’s canonical Buyer Plan.',
-        details: [
-          { label: 'Task', value: updated.title },
-          ...(dueAt ? [{ label: 'New due date', value: dueAt }] : []),
-        ],
-        actions: [{ id: 'open-task', label: 'Open updated task', href: buyerTaskHref, style: 'PRIMARY' }],
-      }],
-      confirmation: null,
-      suggestions: ['What should I do next for this purchase?'],
-    };
-    artifactType = 'HOME_BUYER_TASK';
-    artifactId = updated.id;
-  } else if (execution.operationId === 'BUYER_FINDING_DISPOSITION') {
-    if (access.role === HouseholdRole.VIEWER) {
-      const error = new Error('A contributor or owner is required to classify Buyer Plan findings.');
-      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-      throw error;
-    }
-    const findingId = parameters.buyerFindingId;
-    const disposition = parameters.buyerFindingDisposition;
-    if (typeof findingId !== 'string' || typeof disposition !== 'string') {
-      const error = new Error('The finding selection is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, propertyId: execution.propertyId } });
-    if (!finding) {
-      const error = new Error('The selected finding is no longer available.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const expectedFindingVersion = parameters.buyerFindingVersion;
-    const currentFindingVersion = finding.buyerDispositionAt ? finding.buyerDispositionAt.toISOString() : null;
-    if (expectedFindingVersion !== currentFindingVersion) {
-      const error = new Error('This finding changed while the confirmation was open. Review its current status and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const dispositionResult = await BuyerAcquisitionService.dispositionFinding(userId, execution.propertyId, finding.id, {
-      disposition: disposition as Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>,
-    });
-    const dispositionLabel = ({ VERIFIED_FACT: 'verified fact', PRE_CLOSE_NEGOTIATION: 'seller negotiation', POST_CLOSE_ACTION: 'post-close work', DISMISSED: 'dismissed' } as Record<string, string>)[disposition] ?? disposition;
-    const inspectionHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection-hub`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'BUYER_FINDING_DISPOSITIONED', contextVersion: dispositionResult.finding.buyerDispositionAt?.toISOString() ?? null,
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `buyer-finding-dispositioned-${finding.id}`, title: 'Finding classified', status: 'COMPLETED',
-        description: `This finding is now classified as ${dispositionLabel}.`,
-        details: [
-          { label: 'Finding', value: [finding.homeSystem, finding.subsystem].filter(Boolean).join(' ') },
-          { label: 'Disposition', value: dispositionLabel },
-        ],
-        actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }],
-      }],
-      confirmation: null,
-      suggestions: ['Which inspection findings still need a decision?', 'What should I do next for this purchase?'],
-    };
-    artifactType = 'INSPECTION_FINDING';
-    artifactId = finding.id;
-  } else if (execution.operationId === 'BUYER_LIFECYCLE_UPDATE') {
-    const lifecycleAction = parameters.buyerLifecycleAction;
-    const buyerPlanHrefValue = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan`;
-    if (lifecycleAction === 'PAUSE' || lifecycleAction === 'RESUME') {
-      if (access.role !== HouseholdRole.OWNER) {
-        const error = new Error(`Only the property owner can ${lifecycleAction === 'RESUME' ? 'resume' : 'pause'} this purchase.`);
-        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-        throw error;
-      }
-      const updatedPlan = lifecycleAction === 'RESUME'
-        ? await BuyerAcquisitionService.resumeJourney(userId, execution.propertyId, { confirmed: true })
-        : await BuyerAcquisitionService.pauseJourney(userId, execution.propertyId, { confirmed: true });
-      result = {
-        status: 'COMPLETED', reasonCode: lifecycleAction === 'RESUME' ? 'BUYER_JOURNEY_RESUMED' : 'BUYER_JOURNEY_PAUSED', contextVersion: updatedPlan.updatedAt.toISOString(),
-        blocks: [{
-          type: 'WORKFLOW_PROGRESS', id: `buyer-lifecycle-${lifecycleAction.toLowerCase()}`, title: lifecycleAction === 'RESUME' ? 'Purchase resumed' : 'Purchase paused', status: 'COMPLETED',
-          description: lifecycleAction === 'RESUME' ? 'Deadline reminders and active tasks are reactivated.' : 'Deadline reminders are stopped. Recorded work, documents, findings, and evidence are preserved.',
-          details: [],
-          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
-        }],
-        confirmation: null,
-        suggestions: [],
-      };
-      artifactType = 'HOME_BUYER_CHECKLIST';
-      artifactId = updatedPlan.id;
-    } else if (lifecycleAction === 'CANCEL') {
-      if (access.role !== HouseholdRole.OWNER) {
-        const error = new Error('Only the property owner can cancel this purchase.');
-        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-        throw error;
-      }
-      const cancelReason = parameters.buyerCancelReason;
-      if (typeof cancelReason !== 'string' || cancelReason.trim().length < 5) {
-        const error = new Error('A cancellation reason of at least 5 characters is required.');
-        (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-        throw error;
-      }
-      const cancelled = await BuyerAcquisitionService.cancelJourney(userId, execution.propertyId, { confirmed: true, reason: cancelReason });
-      result = {
-        status: 'COMPLETED', reasonCode: 'BUYER_JOURNEY_CANCELLED', contextVersion: cancelled.updatedAt.toISOString(),
-        blocks: [{
-          type: 'WORKFLOW_PROGRESS', id: 'buyer-lifecycle-cancelled', title: 'Purchase cancelled', status: 'COMPLETED',
-          description: 'Reminders are stopped and open work is archived. Completed work, documents, findings, and evidence are preserved.',
-          details: [{ label: 'Reason', value: cancelReason }],
-          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
-        }],
-        confirmation: null,
-        suggestions: [],
-      };
-      artifactType = 'HOME_BUYER_CHECKLIST';
-      artifactId = cancelled.id;
-    } else if (lifecycleAction === 'RESCHEDULE_CLOSING' || lifecycleAction === 'RESCHEDULE_MOVE_IN') {
-      if (access.role === HouseholdRole.VIEWER) {
-        const error = new Error('A contributor or owner is required to change this purchase’s recorded dates.');
-        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-        throw error;
-      }
-      const newDate = parameters.buyerLifecycleDate;
-      if (typeof newDate !== 'string') {
-        const error = new Error('The new date is invalid.');
-        (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-        throw error;
-      }
-      const updatedChecklist = await BuyerAcquisitionService.updateLifecycle(
-        userId,
-        execution.propertyId,
-        lifecycleAction === 'RESCHEDULE_MOVE_IN' ? { moveInDate: newDate } : { targetCloseDate: newDate },
-      );
-      result = {
-        status: 'COMPLETED', reasonCode: 'BUYER_LIFECYCLE_DATE_UPDATED', contextVersion: updatedChecklist.updatedAt.toISOString(),
-        blocks: [{
-          type: 'WORKFLOW_PROGRESS', id: 'buyer-lifecycle-date-updated', title: lifecycleAction === 'RESCHEDULE_MOVE_IN' ? 'Move-in date updated' : 'Target closing date updated', status: 'COMPLETED',
-          description: 'Unedited task due dates were recalculated from the new date.',
-          details: [{ label: 'New date', value: newDate }],
-          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
-        }],
-        confirmation: null,
-        suggestions: [],
-      };
-      artifactType = 'HOME_BUYER_CHECKLIST';
-      artifactId = updatedChecklist.id;
-    } else {
-      const error = new Error('This lifecycle action is no longer available.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-  } else if (execution.operationId === 'MAINTENANCE_TASK_CREATE') {
-    if (access.role === HouseholdRole.VIEWER) {
-      const error = new Error('A contributor or owner is required to create maintenance tasks.');
-      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-      throw error;
-    }
-    const expectedMaintenanceVersion = parameters.maintenanceWorkflowVersion;
-    const currentMaintenanceVersion = await maintenanceWorkflowVersion(execution.propertyId);
-    const candidate = MaintenanceTaskWorkflowInputSchema.safeParse({
-      title: parameters.maintenanceTitle,
-      description: parameters.maintenanceDescription ?? undefined,
-      priority: parameters.maintenancePriority,
-      nextDueDate: parameters.maintenanceNextDueDate ?? undefined,
-      estimatedCostUsd: parameters.maintenanceEstimatedCostUsd ?? undefined,
-      isRecurring: parameters.maintenanceIsRecurring,
-      frequency: parameters.maintenanceFrequency ?? undefined,
-    });
-    if (!candidate.success || expectedMaintenanceVersion !== currentMaintenanceVersion) {
-      const error = new Error(expectedMaintenanceVersion !== currentMaintenanceVersion
-        ? 'Maintenance tasks changed while this confirmation was open. Review the current record and try again.'
-        : 'The maintenance task details are invalid.');
-      (error as Error & { code?: string }).code = expectedMaintenanceVersion !== currentMaintenanceVersion
-        ? 'ASK_CONTEXT_VERSION_CONFLICT'
-        : 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const actionKey = `ask:${execution.id}:maintenance-task`;
-    let task = await prisma.propertyMaintenanceTask.findUnique({
-      where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
-    });
-    if (!task) {
-      try {
-        task = await PropertyMaintenanceTaskService.createUserTask(userId, execution.propertyId, {
-          title: candidate.data.title,
-          description: candidate.data.description,
-          priority: candidate.data.priority,
-          estimatedCost: candidate.data.estimatedCostUsd,
-          isRecurring: candidate.data.isRecurring,
-          frequency: candidate.data.isRecurring ? candidate.data.frequency : undefined,
-          nextDueDate: candidate.data.nextDueDate,
-          actionKey,
-        });
-      } catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-        task = await prisma.propertyMaintenanceTask.findUnique({
-          where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
-        });
-        if (!task) throw error;
-      }
-    }
-    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_CREATED', contextVersion: await maintenanceWorkflowVersion(execution.propertyId),
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `maintenance-task-${task.id}`, title: 'Maintenance task created', status: 'COMPLETED',
-        description: 'The task is now part of this home’s canonical Maintenance record.',
-        details: [
-          { label: 'Task', value: task.title },
-          { label: 'Status', value: 'Pending' },
-          { label: 'Priority', value: task.priority.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) },
-          { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
-          { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
-        ],
-        actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }],
-      }],
-      confirmation: null,
-      suggestions: ['What maintenance is still pending?', 'Create another maintenance task'],
-    };
-    artifactType = 'PROPERTY_MAINTENANCE_TASK';
-    artifactId = task.id;
-  } else if (execution.operationId === 'MAINTENANCE_TASK_UPDATE') {
-    const candidate = MaintenanceTaskUpdateInputSchema.safeParse(parameters.maintenanceUpdate);
-    if (!candidate.success) {
-      const error = new Error('The maintenance update is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const current = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.taskId, propertyId: execution.propertyId } });
-    if (!current || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(current)) {
-      const error = new Error('This task changed while the confirmation was open. Review its current state and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    if (candidate.data.action === 'ASSIGN' || candidate.data.action === 'UNASSIGN') {
-      await householdService.assignTask(execution.propertyId, current.id, 'MAINTENANCE', candidate.data.assigneeUserId ?? null, userId);
-    } else if (candidate.data.action === 'ARCHIVE') {
-      await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.CANCELLED);
-    } else if (candidate.data.action === 'REOPEN') {
-      await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.PENDING);
-    } else {
-      await PropertyMaintenanceTaskService.updateTask(userId, current.id, {
-        ...(candidate.data.priority ? { priority: candidate.data.priority } : {}),
-        ...(candidate.data.nextDueDate !== undefined ? { nextDueDate: candidate.data.nextDueDate } : {}),
-        ...(candidate.data.title ? { title: candidate.data.title } : {}),
-      });
-    }
-    const updated = await prisma.propertyMaintenanceTask.findUniqueOrThrow({ where: { id: current.id }, include: { assignedTo: { select: { email: true } } } });
-    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(updated.id)}&from=ask`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_UPDATED', contextVersion: maintenanceTaskVersion(updated),
-      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `maintenance-update-${updated.id}`, title: 'Maintenance task updated', status: candidate.data.action === 'ARCHIVE' ? 'CANCELLED' : 'COMPLETED', description: 'The canonical Maintenance record and its downstream work state were updated.', details: [{ label: 'Task', value: updated.title }, { label: 'Action', value: candidate.data.action.toLowerCase() }, { label: 'Status', value: updated.status.toLowerCase().replace(/_/g, ' ') }, { label: 'Due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }, { label: 'Assignee', value: updated.assignedTo?.email ?? 'Unassigned' }], actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }] }],
-      confirmation: null, suggestions: candidate.data.action === 'ARCHIVE' ? [`Reopen ${updated.title}`] : ['What maintenance is pending?'],
-    };
-    artifactType = command.artifactType;
-    artifactId = updated.id;
-  } else if (execution.operationId === 'GUIDANCE_JOURNEY_CREATE') {
-    const candidate = GuidanceJourneyCommandInputSchema.safeParse(parameters.guidanceJourney);
-    if (!candidate.success) {
-      const error = new Error('The guided plan settings are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.guidanceJourneyContextVersion !== await guidanceJourneyContextVersion(execution.propertyId, candidate.data)) {
-      const error = new Error('The guided-plan scope changed while confirmation was open. Review the current home record and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const journey = await guidanceJourneyService.createUserInitiatedJourney(execution.propertyId, {
-      scopeCategory: candidate.data.scopeCategory,
-      scopeId: candidate.data.scopeId,
-      issueType: candidate.data.issueType,
-      inventoryItemId: candidate.data.inventoryItemId,
-      serviceKey: candidate.data.serviceKey,
-      customIssueLabel: candidate.data.label,
-      sourceAskExecutionId: execution.id,
-    }, userId);
-    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`;
-    result = { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-${journey.id}`, title: 'Guided plan started', status: 'COMPLETED', description: 'The resumable guidance journey is now linked to this home.', details: [{ label: 'Scope', value: candidate.data.label }, { label: 'Plan', value: candidate.data.issueType.replace(/_/g, ' ') }], actions: [{ id: 'open-journey', label: 'Open guided plan', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
-    artifactType = command.artifactType;
-    artifactId = journey.id;
-  } else if (execution.operationId === 'QUOTE_COMPARISON_CREATE') {
-    const candidate = QuoteWorkspaceCommandInputSchema.safeParse(parameters.quoteWorkspace);
-    if (!candidate.success) {
-      const error = new Error('The comparison workspace settings are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.quoteWorkspaceContextVersion !== await quoteWorkspaceContextVersion(execution.propertyId)) {
-      const error = new Error('Quote workspaces changed while confirmation was open. Review the current comparison and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const created = await getOrCreateQuoteComparisonWorkspace(execution.propertyId, userId, candidate.data);
-    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/quote-comparison?workspaceId=${encodeURIComponent(created.workspace.id)}`;
-    result = { status: 'COMPLETED', reasonCode: created.reused ? 'QUOTE_COMPARISON_REUSED' : 'QUOTE_COMPARISON_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED', description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.', details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }], actions: [{ id: 'open-workspace', label: 'Open comparison', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
-    artifactType = command.artifactType;
-    artifactId = created.workspace.id;
-  } else if (execution.operationId === 'HVAC_DECISION_START') {
-    const candidate = HvacDecisionStartInputSchema.safeParse(parameters.hvacDecisionStart);
-    if (!candidate.success) {
-      const error = new Error('The decision thread settings are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.hvacDecisionContextVersion !== await hvacDecisionStartContextVersion(execution.propertyId, candidate.data.inventoryItemId)) {
-      const error = new Error('The HVAC system record changed while confirmation was open. Review the current record and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const startSelection = await decisionThreadService.selectHvacDecisionThread(execution.propertyId, candidate.data.inventoryItemId);
-    if (startSelection.kind !== 'NONE') {
-      const error = new Error('A decision thread already exists for this HVAC system.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const { thread: createdThread, snapshot: createdSnapshot } = await decisionThreadService.createHvacDecisionThread({
-      propertyId: execution.propertyId, userId, inventoryItemId: candidate.data.inventoryItemId, askExecutionId: execution.id,
-    });
-    result = {
-      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_START_CREATED',
-      blocks: [
-        decisionProgressBlock('hvac-decision-created', 'Decision thread started', createdThread, createdSnapshot, []),
-        whyNowBlock('hvac-decision-why-now', createdSnapshot, []),
-        ...await preferenceReferenceBlocksForSnapshot('hvac-decision-created', createdSnapshot.preferenceReferenceIds),
-      ],
-      confirmation: null, suggestions: [],
-    };
-    artifactType = command.artifactType;
-    artifactId = createdThread.id;
-  } else if (execution.operationId === 'HVAC_DECISION_SCENARIO') {
-    const candidate = HvacDecisionScenarioInputSchema.safeParse(parameters.hvacDecisionScenario);
-    if (!candidate.success) {
-      const error = new Error('The scenario settings are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
-      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const scenarioThread = await prisma.decisionThread.findFirst({ where: { id: candidate.data.decisionThreadId, propertyId: execution.propertyId }, include: { currentRecommendationSnapshot: true } });
-    if (!scenarioThread) {
-      const error = new Error('Decision thread not found.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const { scenario, scenarioSnapshot } = await decisionThreadService.createHvacScenario(scenarioThread.id, userId, {
-      quoteAmountCents: candidate.data.quoteAmountCents, vendorLabel: candidate.data.vendorLabel, askExecutionId: execution.id,
-    });
-    result = {
-      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_SCENARIO_CREATED',
-      blocks: [
-        scenarioComparisonBlock(
-          'hvac-scenario-comparison', `Scenario: ${candidate.data.vendorLabel}`, scenarioThread.id, scenario.id,
-          { label: 'Current recommendation', verdictCode: scenarioThread.currentRecommendationSnapshot?.verdictCode ?? 'UNKNOWN', reasonCodes: scenarioThread.currentRecommendationSnapshot?.reasonCodes ?? [], limitationCodes: scenarioThread.currentRecommendationSnapshot?.limitationCodes ?? [] },
-          { label: scenario.label, verdictCode: scenarioSnapshot.verdictCode, reasonCodes: scenarioSnapshot.reasonCodes, limitationCodes: scenarioSnapshot.limitationCodes, assumptions: [{ label: 'Quote amount', value: `$${(candidate.data.quoteAmountCents / 100).toFixed(2)}` }, { label: 'Vendor', value: candidate.data.vendorLabel }] },
-        ),
-        ...await preferenceReferenceBlocksForSnapshot('hvac-scenario', scenarioSnapshot.preferenceReferenceIds),
-      ],
-      confirmation: null, suggestions: [],
-    };
-    artifactType = command.artifactType;
-    artifactId = scenario.id;
-  } else if (execution.operationId === 'HVAC_DECISION_ABANDON') {
-    const candidate = HvacDecisionAbandonInputSchema.safeParse(parameters.hvacDecisionAbandon);
-    if (!candidate.success) {
-      const error = new Error('The abandon request is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
-      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const abandonedThread = await decisionThreadService.abandonDecisionThread(candidate.data.decisionThreadId, execution.propertyId);
-    result = {
-      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_ABANDONED',
-      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `hvac-decision-abandoned-${abandonedThread.id}`, title: 'Decision abandoned', status: 'COMPLETED', description: 'The decision thread is no longer active. You can start a new one at any time.', details: [{ label: 'Thread', value: abandonedThread.title }], actions: [] }],
-      confirmation: null, suggestions: [],
-    };
-    artifactType = command.artifactType;
-    artifactId = abandonedThread.id;
-  } else if (execution.operationId === 'HVAC_DECISION_OUTCOME_REPORT') {
-    const candidate = HvacDecisionOutcomeReportInputSchema.safeParse(parameters.hvacDecisionOutcomeReport);
-    if (!candidate.success) {
-      const error = new Error('The outcome details are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
-      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const { observation } = await outcomeObservationService.recordHomeownerReportedOutcome({
-      propertyId: execution.propertyId, userId, decisionThreadId: candidate.data.decisionThreadId,
-      actionState: candidate.data.actionState, costCents: candidate.data.costCents, occurredOn: null, note: candidate.data.note,
-    });
-    const reportedRows = await outcomeObservationService.getOutcomeSummaryForThread(candidate.data.decisionThreadId, execution.propertyId);
-    result = {
-      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_RECORDED',
-      blocks: [outcomeSummaryBlock('hvac-outcome-recorded', candidate.data.decisionThreadId, reportedRows)],
-      confirmation: null, suggestions: [],
-    };
-    artifactType = command.artifactType;
-    artifactId = observation.id;
-  } else if (execution.operationId === 'HVAC_DECISION_OUTCOME_UNLINK') {
-    const candidate = HvacDecisionOutcomeUnlinkInputSchema.safeParse(parameters.hvacDecisionOutcomeUnlink);
-    if (!candidate.success) {
-      const error = new Error('The outcome selection is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
-      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const disputed = await outcomeObservationService.disputeOutcomeObservation(candidate.data.outcomeObservationId, execution.propertyId);
-    result = {
-      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_DISPUTED',
-      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `hvac-outcome-disputed-${disputed.id}`, title: 'Outcome disputed', status: 'COMPLETED', description: 'The reported outcome is now marked as disputed. It was not deleted.', details: [], actions: [] }],
-      confirmation: null, suggestions: [],
-    };
-    artifactType = command.artifactType;
-    artifactId = disputed.id;
-  } else if (execution.operationId === 'HVAC_PREFERENCE_SAVE') {
-    const candidate = parameters.hvacPreferenceSave as {
-      ownership: decisionPreferenceService.ParsedOwnershipHorizon | null;
-      approach: decisionPreferenceService.ParsedRepairReplaceApproach | null;
-    } | undefined;
-    if (!candidate || (!candidate.ownership && !candidate.approach)) {
-      const error = new Error('The preference details are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const savedIds: string[] = [];
-    const savedBlocks: AskPresentationBlock[] = [];
-    try {
-      if (candidate.ownership) {
-        const saved = await decisionPreferenceService.saveOwnershipHorizonPreference(execution.propertyId, userId, candidate.ownership);
-        savedIds.push(saved.preferenceValueId);
-        savedBlocks.push({
-          type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-ownership-horizon', title: 'Ownership horizon saved',
-          preferenceKey: 'OWNERSHIP_HORIZON', summary: `Saved: plan to sell in about ${candidate.ownership.horizonMonths} months.`,
-          visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: null,
-        });
-      }
-      if (candidate.approach) {
-        const saved = await decisionPreferenceService.saveRepairReplaceApproachPreference(execution.propertyId, userId, candidate.approach);
-        savedIds.push(saved.preferenceValueId);
-        savedBlocks.push({
-          type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-approach', title: 'Approach saved',
-          preferenceKey: 'REPAIR_REPLACE_APPROACH', summary: `Saved: ${candidate.approach.approach.replace(/_/g, ' ').toLowerCase()}.`,
-          visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: null,
-        });
-      }
-    } catch (caught) {
-      if (caught instanceof HouseholdProfileNotEnabledError) {
-        const error = new Error('The optional household profile is not enabled for this property yet, so this plan cannot be saved as a household preference. Enable the household profile first, then try again.');
-        (error as Error & { code?: string }).code = 'ASK_HOUSEHOLD_PROFILE_REQUIRED';
-        throw error;
-      }
-      throw caught;
-    }
-    result = {
-      status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_SAVED',
-      blocks: savedBlocks, confirmation: null, suggestions: ['Should I repair or replace my HVAC?'],
-    };
-    artifactType = command.artifactType;
-    artifactId = savedIds[0] ?? '';
-  } else if (execution.operationId === 'HVAC_PREFERENCE_FORGET') {
-    const candidate = parameters.hvacPreferenceForget as { preferenceValueId: string } | undefined;
-    if (!candidate?.preferenceValueId) {
-      const error = new Error('The preference to forget is invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    let affectedThreadIds: string[];
-    try {
-      ({ affectedThreadIds } = await decisionPreferenceService.revokeHvacPreference(candidate.preferenceValueId, userId));
-    } catch (caught) {
-      if (caught instanceof PreferenceNotAuthorizedError) {
-        const error = new Error(caught.message);
-        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-        throw error;
-      }
-      throw caught;
-    }
-    await decisionThreadService.markThreadsStaleByIds(affectedThreadIds, 'PREFERENCE_REVOKED');
-    result = {
-      status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_FORGOTTEN',
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `hvac-preference-forgotten-${candidate.preferenceValueId}`, title: 'Preference forgotten', status: 'COMPLETED',
-        description: affectedThreadIds.length ? 'Affected decisions will be recalculated the next time you open them.' : 'No active decision used this preference.',
-        details: [], actions: [],
-      }],
-      confirmation: null, suggestions: [],
-    };
-    artifactType = command.artifactType;
-    artifactId = candidate.preferenceValueId;
-  } else if (execution.operationId === 'HOME_DEADLINE_MONITOR') {
-    const candidate = HomeDeadlineMonitorInputSchema.safeParse(parameters.homeDeadlineMonitor);
-    if (!candidate.success) {
-      const error = new Error('The expiration reminder settings are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    let task;
-    if (candidate.data.sourceType === 'MAINTENANCE') {
-      task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } });
-      if (!task || task.status === MaintenanceTaskStatus.CANCELLED || !task.nextDueDate || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(task)) {
-        const error = new Error('This maintenance task changed while confirmation was open. Review the current task and try again.');
-        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-        throw error;
-      }
-    } else {
-      // Unlike the MAINTENANCE branch above, this previously reused
-      // candidate.data.dueDate/title from prep time with no recheck at all
-      // -- editing or deleting the warranty/policy during the confirmation
-      // window would silently create a reminder pinned to a stale
-      // expiration date. Re-fetch the actual source record and require it
-      // to match the version captured at prep time before proceeding.
-      const currentSource = candidate.data.sourceType === 'WARRANTY'
-        ? await prisma.warranty.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } })
-        : await prisma.insurancePolicy.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } });
-      await assertCoverageConflictFree(execution.propertyId, prisma, candidate.data.sourceType === 'WARRANTY'
-        ? { warrantyId: candidate.data.sourceId }
-        : { insurancePolicyId: candidate.data.sourceId });
-      if (!currentSource || !currentSource.expiryDate || parameters.homeDeadlineSourceVersion !== homeDeadlineSourceVersion(currentSource as { id: string; expiryDate: Date | null; updatedAt: Date })) {
-        const error = new Error(`This ${candidate.data.sourceType === 'WARRANTY' ? 'warranty' : 'insurance policy'} changed while confirmation was open. Review the current record and try again.`);
-        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-        throw error;
-      }
-      const actionKey = `ask-deadline:${candidate.data.sourceType}:${candidate.data.sourceId}`;
-      task = await prisma.propertyMaintenanceTask.findUnique({ where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } } });
-      if (!task) {
-        try {
-          task = await PropertyMaintenanceTaskService.createUserTask(userId, execution.propertyId, { title: candidate.data.title, priority: MaintenanceTaskPriority.HIGH, nextDueDate: candidate.data.dueDate, actionKey });
-        } catch (error) {
-          if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-          task = await prisma.propertyMaintenanceTask.findUnique({ where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } } });
-          if (!task) throw error;
-        }
-      } else if (task.nextDueDate?.toISOString().slice(0, 10) !== candidate.data.dueDate || task.status === MaintenanceTaskStatus.CANCELLED) {
-        task = await PropertyMaintenanceTaskService.updateTask(userId, task.id, { nextDueDate: candidate.data.dueDate, status: MaintenanceTaskStatus.PENDING, priority: MaintenanceTaskPriority.HIGH });
-      }
-    }
-    // Notification categories are property-wide switches (userId + property +
-    // category + channel), not scoped to the single task/policy just
-    // confirmed. Enabling both MAINTENANCE and MATERIAL_DEADLINE regardless
-    // of which reminder was actually confirmed silently turns on emails for
-    // an unrelated category the consent copy never disclosed. Enable only
-    // the category the confirmed reminder belongs to.
-    const deadlineCategory: 'MAINTENANCE' | 'MATERIAL_DEADLINE' = candidate.data.sourceType === 'MAINTENANCE' ? 'MAINTENANCE' : 'MATERIAL_DEADLINE';
-    const property = await prisma.property.findUnique({ where: { id: execution.propertyId }, select: { timezone: true } });
-    await upsertNotificationPreference(userId, { propertyId: execution.propertyId!, category: deadlineCategory, channel: 'EMAIL', enabled: true, cadence: 'IMMEDIATE', timezone: property?.timezone ?? 'UTC' });
-    const href = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
-    const maintenanceSource = candidate.data.sourceType === 'MAINTENANCE';
-    result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [`Reschedule ${task.title}`, `Archive ${task.title}`] };
-    artifactType = command.artifactType;
-    artifactId = task.id;
-  } else if (execution.operationId === 'HOUSEHOLD_INVITATION') {
-    if (access.role !== HouseholdRole.OWNER) {
-      const error = new Error('Only a household owner can send this invitation.');
-      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
-      throw error;
-    }
-    const inviteEmail = parameters.inviteEmail;
-    const inviteRole = parameters.inviteRole;
-    const expectedHouseholdVersion = parameters.householdContextVersion;
-    const currentHouseholdVersion = await householdWorkflowVersion(execution.propertyId);
-    const candidate = HouseholdInvitationInputSchema.safeParse({ email: inviteEmail, role: inviteRole });
-    if (!candidate.success || expectedHouseholdVersion !== currentHouseholdVersion) {
-      const error = new Error(expectedHouseholdVersion !== currentHouseholdVersion
-        ? 'Household access changed while this confirmation was open. Review the current household and try again.'
-        : 'The household invitation settings are invalid.');
-      (error as Error & { code?: string }).code = expectedHouseholdVersion !== currentHouseholdVersion
-        ? 'ASK_CONTEXT_VERSION_CONFLICT'
-        : 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    const invite = await householdService.sendInvite(
-      execution.propertyId,
-      userId,
-      candidate.data,
-      { sourceAskExecutionId: execution.id },
-    );
-    const householdHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/household`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'HOUSEHOLD_INVITATION_PENDING',
-      blocks: [{
-        type: 'WORKFLOW_PROGRESS', id: `household-invite-${invite.id}`, title: 'Household invitation is pending', status: 'PENDING',
-        description: 'The invitation record is ready. Access is not active until the recipient accepts it.',
-        details: [
-          { label: 'Recipient', value: invite.inviteeEmail },
-          { label: 'Role', value: invitationRoleCopy(invite.role as InvitableHouseholdRole) },
-          { label: 'Expires', value: humanDate(invite.expiresAt) ?? invite.expiresAt.toISOString() },
-          { label: 'Access status', value: 'Pending acceptance' },
-        ],
-        actions: [{ id: 'manage-invitation', label: 'Manage invitation', href: householdHref, style: 'PRIMARY' }],
-      }],
-      confirmation: null,
-      suggestions: ['Who currently has access to this home?'],
-    };
-    artifactType = 'HOUSEHOLD_INVITE';
-    artifactId = invite.id;
-  } else {
-    const thresholdPct = parameters.thresholdPct;
-    const product = parameters.product;
-    if (typeof thresholdPct !== 'number' || (product !== 'FIXED_30_YEAR' && product !== 'FIXED_15_YEAR')) {
-      const error = new Error('The monitor settings are invalid.');
-      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-      throw error;
-    }
-    if (parameters.refinanceMonitorContextVersion !== await refinanceMonitorContextVersion(userId, execution.propertyId)) {
-      const error = new Error('Mortgage-rate data or notification settings changed while confirmation was open. Review the current settings and try again.');
-      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
-      throw error;
-    }
-    const monitor = await createOrUpdateRefinanceRateMonitor({
-      userId, propertyId: execution.propertyId, thresholdPct,
-      product: product as RefinanceRateMonitorProduct,
-      cadence: NotificationCadence.IMMEDIATE,
-      quietStart: typeof parameters.quietStart === 'string' ? parameters.quietStart : null,
-      quietEnd: typeof parameters.quietEnd === 'string' ? parameters.quietEnd : null,
-      timezone: typeof parameters.timezone === 'string' ? parameters.timezone : 'UTC',
-    });
-    const radarHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/mortgage-refinance-radar?section=alerts`;
-    result = {
-      status: 'COMPLETED', reasonCode: 'RATE_MONITOR_ACTIVE',
-      blocks: [{
-        type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
-        title: 'Mortgage-rate monitor is active', status: monitor.status,
-        threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
-        product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
-        channel: 'Email plus in-app', cadence: monitor.cadence,
-        quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
-        sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
-        actions: [
-          { id: 'edit-monitor', label: 'Edit settings', href: radarHref, style: 'PRIMARY' },
-          { id: 'pause-monitor', label: 'Pause', href: `${radarHref}&monitorAction=pause`, style: 'SECONDARY' },
-          { id: 'stop-monitor', label: 'Stop', href: `${radarHref}&monitorAction=stop`, style: 'QUIET' },
-        ],
-      }],
-      confirmation: null, suggestions: ['Is refinancing worth reviewing now?'],
-    };
-    artifactType = 'REFINANCE_RATE_MONITOR';
-    artifactId = monitor.id;
+    result = confirmed.result; artifactType = confirmed.artifactType; artifactId = confirmed.artifactId;
   }
   } catch (error) {
     // The claim above (RUNNING + CLAIMED receipt) already committed before

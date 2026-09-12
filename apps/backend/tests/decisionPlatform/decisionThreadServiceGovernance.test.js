@@ -146,9 +146,13 @@ test('every DecisionThreadExecutionLink write is createMany + skipDuplicates, ne
 // back to the AskExecution that triggered it, not just the initial-creation
 // flow.
 test('executionId is threaded from executeOperationCore through both HVAC continuation call sites', () => {
+  // Post-Phase-1 (implementation plan §7): the propose-time dispatch switch
+  // this test originally searched (`case 'HVAC_DECISION_START': return ...`)
+  // was replaced by a capability-registry registration -- same executionId
+  // threading, expressed as a registered shim instead of a switch case.
   assert.match(orchestratorSource, /async function executeOperationCore\(input: \{[^}]*executionId: string/, 'executeOperationCore\'s input type must carry executionId');
-  assert.match(orchestratorSource, /case 'HVAC_DECISION_START': return hvacDecisionStartResult\([^)]*input\.executionId\)/);
-  assert.match(orchestratorSource, /case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult\([\s\S]*?input\.executionId[\s\S]*?\n\s*\);/);
+  assert.match(orchestratorSource, /registerCapabilityHandler\('decision-platform\.hvac\.start', async \(envelope\) => hvacDecisionStartResult\([^)]*envelope\.executionId\)\)/);
+  assert.match(orchestratorSource, /registerCapabilityHandler\('decision-platform\.hvac\.continue', async \(envelope\) => hvacDecisionContinueResult\([\s\S]*?envelope\.executionId[\s\S]*?\n\)\);/);
   const continuationCalls = [...orchestratorSource.matchAll(/decisionThreadService\.continueHvacDecisionThread\(([^)]*)\)/g)];
   assert.ok(continuationCalls.length >= 2, 'expected at least the two HVAC handler call sites');
   for (const match of continuationCalls) {

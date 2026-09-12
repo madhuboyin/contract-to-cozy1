@@ -112,6 +112,8 @@ test('HOME_CHANGE_SUMMARY declares every block type homeChangeSummaryResult can 
   }
 });
 
-test('homeChangeSummaryResult is wired into the operation dispatch switch', () => {
-  assert.match(orchestratorSource, /case 'HOME_CHANGE_SUMMARY': return homeChangeSummaryResult\(/);
+test('homeChangeSummaryResult is wired into the capability handler registry', () => {
+  // Post-Phase-1 (implementation plan §7): the dispatch switch this test
+  // originally searched was replaced by a capability-registry registration.
+  assert.match(orchestratorSource, /registerCapabilityHandler\('home-change\.summary', async \(envelope\) => homeChangeSummaryResult\(/);
 });

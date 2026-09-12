@@ -56,13 +56,26 @@ test('every material Ask command has governed confirmation, authorization, cance
 test('material confirmations acquire a unique leased claim before domain mutation', () => {
   const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
-  const claimCreate = orchestrator.indexOf('await tx.askConfirmationReceipt.create');
-  const firstDomainMutation = orchestrator.indexOf("if (execution.operationId === 'MAINTENANCE_TASK_COMPLETE')", claimCreate);
+  // Post-Phase-2 (implementation plan §8, §4.9): the domain mutation is no
+  // longer inline per-operation branch code positioned later in the same
+  // function -- confirmAskExecution now calls the confirm-time capability
+  // registry once, and the 25 handler functions it dispatches to are
+  // separate, hoisted declarations (their textual file position no longer
+  // implies execution order). The still-meaningful invariant is checked
+  // directly within confirmAskExecution's own body instead: the leased claim
+  // is created before the dispatch call that can trigger a domain write.
+  const confirmStart = orchestrator.indexOf('export async function confirmAskExecution(');
+  assert.ok(confirmStart >= 0);
+  const confirmEnd = orchestrator.indexOf('\nexport async function cancelAskExecution(', confirmStart);
+  assert.ok(confirmEnd > confirmStart);
+  const confirmBody = orchestrator.slice(confirmStart, confirmEnd);
+  const claimCreate = confirmBody.indexOf('await tx.askConfirmationReceipt.create');
+  const dispatchCall = confirmBody.indexOf('await confirmCapabilityInvoke(', claimCreate);
   assert.match(schema, /model AskConfirmationReceipt[\s\S]*leaseExpiresAt\s+DateTime[\s\S]*@@unique\(\[executionId\]\)/);
   assert.ok(claimCreate > 0);
-  assert.ok(firstDomainMutation > claimCreate);
-  assert.match(orchestrator, /status: 'RUNNING', reasonCode: 'ASK_CONFIRMATION_CLAIMED'/);
-  assert.match(orchestrator, /status: 'COMPLETED', artifactType, artifactId, completedAt/);
+  assert.ok(dispatchCall > claimCreate);
+  assert.match(confirmBody, /status: 'RUNNING', reasonCode: 'ASK_CONFIRMATION_CLAIMED'/);
+  assert.match(confirmBody, /status: 'COMPLETED', artifactType, artifactId, completedAt/);
 });
 
 test('grounded-guidance remote fallback demotes low-confidence answers instead of always returning ANSWERED', () => {
