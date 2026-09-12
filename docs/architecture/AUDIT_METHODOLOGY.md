@@ -89,6 +89,22 @@ specific scenario that would falsify it, and check the code against that scenari
 different exercise from gathering the findings and should be done as a distinct step, ideally
 after the rest of the document is otherwise complete.
 
+**Make this pass mechanical, not just attitudinal — run it against the whole document, not just
+the section you're currently writing.** A fast way to find candidates: grep the draft itself for
+absolute language before publishing —
+
+```
+grep -noE "\b(never|always|none|zero|nothing|fully|completely|entirely|invisible|impossible|cannot|can't|structurally|does not exist|doesn't exist)\b" <the-document>.md
+```
+
+Every hit is a claim strong enough to be falsified by one counter-example. Check each one
+against the code (a grep for the thing being claimed absent, at minimum) before the document
+ships — do not limit this pass to whatever a reviewer already flagged, and do not skip it just
+because the document "looks done." Two consecutive review rounds on the same document (see
+Revision notes 1 and 2 in `ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`) each found issues of
+exactly this shape that a grep like the one above, run before publishing, would have caught
+without needing an external reviewer at all.
+
 ## 8. After fixing any claim, grep the whole document for its repeats
 
 A finding stated once is often restated — in a table row, a KEEP/EXTEND verdict, an
