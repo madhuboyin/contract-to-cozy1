@@ -8,7 +8,7 @@ question the original pass never asked. This document is that set of questions, 
 audit asks them the first time.
 
 Apply this before publishing any audit, gap-analysis, or "current state" architecture document
-in this repo — not only when a reviewer asks for a fix. **Items 11-13 apply specifically to
+in this repo — not only when a reviewer asks for a fix. **Items 11-15 apply specifically to
 target-architecture/design documents** (which make decisions rather than report findings) —
 see the note after item 10.
 
@@ -165,8 +165,27 @@ synchronous wait, a background/async path with a different delivery point, or an
 does block after all. State which one, with a concrete fallback for the case the fast path doesn't
 apply.
 
+## 14. Idempotency checks must be scoped to "did this exact operation already run," not to current state
+
+*(Design documents.)* A replay-safety design filtered its dedup lookup to non-superseded/currently-
+active rows — reasonable-sounding, and wrong: if the row this specific execution wrote has since
+been superseded by a *different*, later execution, the filtered lookup finds nothing, concludes no
+prior write exists, and resurrects the stale value. "Did this execution's write already happen" and
+"is this the current value" are different questions; the first must be answered by matching the
+execution's own identity (a source/execution id in the uniqueness key) regardless of what happened
+to the record since, never by filtering on whether the record is still active.
+
+## 15. Persist intent before attempting the risky operation, not after it succeeds
+
+*(Design documents.)* A background/retryable step's durable record (an outbox event, a job row) was
+written only after the risky work — an LLM call, a network request — completed, with the work
+itself run as an in-process task in between. A crash inside that window loses the work with no
+trace it was ever supposed to happen. The record that makes something retryable must exist *before*
+the risk window it's meant to protect, even if that means writing a record for work that (on the
+fast path) completes a moment later and never needs to be retried at all.
+
 ---
 
 *Items 1-10 were written after external review of `ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`;
-items 11-13 after external review of `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` — see each
+items 11-15 after external review of `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` — see each
 document's "Revision note" for the specific findings that prompted them.*
