@@ -5,6 +5,7 @@ import { geminiService } from './gemini.service';
 import { GroundedAskResponseSchema, type GroundedAskProposalInput } from '../productFramework/groundedAsk.contract';
 import { capturePropertyFact } from '../modules/propertyContext/application/capturePropertyFact';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
+import { HomeEventsService } from './homeEvents.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { APIError } from '../middleware/error.middleware';
 import { KnowledgeHubService, type KnowledgeHubArticleListItem } from './knowledgeHub.service';
@@ -17,6 +18,7 @@ import {
 
 const humanize = (key: string) => key.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 const knowledgeHub = new KnowledgeHubService();
+const homeEventsServiceForCapture = new HomeEventsService();
 
 const GUIDANCE_STOP_WORDS = new Set(['about', 'after', 'and', 'are', 'can', 'does', 'for', 'from', 'home', 'how', 'should', 'that', 'the', 'this', 'what', 'when', 'with', 'your']);
 function guidanceTokens(value: string): Set<string> {
@@ -150,10 +152,21 @@ export async function confirmGroundedAskProposal(userId: string, proposalId: str
     });
     if (claimed.count === 0) throw new Error('Proposal was already handled.');
     try {
+      // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §23: "Full —
+      // this is exactly what §19 replaces it with, with the added
+      // attribution/idempotency correctness Stage 2 built in"). proposal.id
+      // is as stable and unique as a real AskExecution.id, so this legacy
+      // path gets the same replay-safe idempotency CAPTURE_FACT_CONFIRM has
+      // -- if a later step in this same confirm call fails after this write
+      // already committed, a retry resolves to the original write instead
+      // of superseding it a second time for no reason.
       const captured = await capturePropertyFact(proposal.propertyId, userId, String(payload.factKey), {
         value: payload.value,
         sourceType: 'USER_REPORTED',
         confidence: 0.9,
+        attribution: 'FIRSTHAND',
+        captureChannel: 'ASK_LEGACY_GROUNDED_PROPOSAL',
+        captureExecutionId: proposal.id,
       });
       return await prisma.groundedAskArtifact.create({
         data: {
@@ -198,6 +211,63 @@ export async function confirmGroundedAskProposal(userId: string, proposalId: str
           proposalId: proposal.id, userId, propertyId: proposal.propertyId,
           artifactType: 'GuidanceJourney',
           artifactJson: { proposalSummary: proposal.summary, linkedEntity: { type: 'GuidanceJourney', id: journey.id }, confirmedByUserId: userId } as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      await prisma.groundedAskProposal.updateMany({
+        where: { id: proposal.id, userId, status: 'CONFIRMED' },
+        data: { status: 'PENDING', confirmedAt: null },
+      });
+      throw error;
+    }
+  }
+
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §23, Phase 0's
+  // resolution). ADD_NOTE previously stored its text only in artifactJson --
+  // "not even a real domain write... not queryable outside its own
+  // proposal" per FRD §23's original finding. Now a real HomeEvent (type:
+  // NOTE, a precedented enum value already used elsewhere), matching
+  // CAPTURE_EVENT_CONFIRM's own Phase 0-decided target. Split into its own
+  // claim+write+catch-revert block (the established pattern this file
+  // already uses for ADD_FACT/CORRECT_FACT and START_JOURNEY) because
+  // HomeEventsService.createHomeEvent uses the global prisma client, not
+  // the catch-all block's tx, so it can't safely join that transaction.
+  // Scoped to proposals that HAVE a property: HomeEvent is inherently
+  // property-scoped and the schema still allows a property-less ADD_NOTE
+  // proposal (groundedAsk.contract.ts's superRefine), so that case falls
+  // through unchanged to the artifactJson-only path below rather than
+  // failing outright -- a deliberate, documented narrowing (Phase 0
+  // decision), not silently dropped, per Implementation Principle #6.
+  if (proposal.kind === 'ADD_NOTE' && proposal.propertyId) {
+    const claimed = await prisma.groundedAskProposal.updateMany({
+      where: { id: proposal.id, userId, status: 'PENDING' },
+      data: { status: 'CONFIRMED', confirmedAt: new Date() },
+    });
+    if (claimed.count === 0) throw new Error('Proposal was already handled.');
+    try {
+      const noteText = String(payload.note);
+      const event = await homeEventsServiceForCapture.createHomeEvent({
+        propertyId: proposal.propertyId,
+        userId,
+        body: {
+          type: 'NOTE',
+          title: noteText.length > 120 ? `${noteText.slice(0, 117)}...` : noteText,
+          summary: noteText,
+          occurredAt: new Date().toISOString(),
+          datePrecision: 'UNKNOWN',
+          idempotencyKey: proposal.id,
+        },
+      });
+      return await prisma.groundedAskArtifact.create({
+        data: {
+          proposalId: proposal.id, userId, propertyId: proposal.propertyId,
+          artifactType: 'HomeEvent',
+          artifactJson: {
+            proposalSummary: proposal.summary,
+            note: noteText,
+            linkedEntity: { type: 'HomeEvent', id: event.id },
+            confirmedByUserId: userId,
+          } as Prisma.InputJsonValue,
         },
       });
     } catch (error) {
