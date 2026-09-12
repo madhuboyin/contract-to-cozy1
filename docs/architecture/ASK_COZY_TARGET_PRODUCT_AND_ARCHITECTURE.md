@@ -4,6 +4,8 @@
 **Baseline:** `docs/architecture/ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md` (Stage 1, three review-corrected revisions, `main@a12ab022`). This document does not repeat Stage 1's findings — it cites them and builds on them. Facts stated here that go beyond Stage 1 were independently verified against the current code during this design pass (five targeted research passes into confirmation mechanics, event/expense/warranty models, conversation-state mechanics, proactive-notification mechanics, and the skill/capability registries) and are cited `path:line` alongside Stage 1 citations.
 **Labeling convention (per the request's evidence requirements):** every substantive claim is tagged **[FACT]** (verified in Stage 1 or this pass's code reading), **[DECISION]** (chosen in this stage — a design choice, not a finding), or **[FUTURE]** (a possibility explicitly deferred, not required for the target architecture). Do not read a **[DECISION]** as though it were established by code inspection.
 
+**Revision note:** an external technical review of the initial draft found seven substantive issues, all verified against the code before correcting (marked **[CORRECTION]** at each site): (1) the confirmation convergence (§16) did not establish the *domain write itself* was replay-safe, only that the receipt's own claim/complete transactions are — fixed with `HomeEvent`'s existing `idempotencyKey`/unique-constraint pattern and a new idempotency check added to `capturePropertyFact`; (2) reusing `PropertyFactEvidence.confidence`/`HomeEvent.confidenceScore` for extraction confidence would have conflated it with fact-reliability, which `groundedAsk.service.ts:85` already consumes for a different purpose (averaging into answer confidence) — fixed with a genuinely separate `extractionConfidence` field and a `attribution` axis for third-party-relayed claims; (3) the compound worked example manufactured `MONTH` date precision from "last summer" and derived exact warranty dates/an issuer from the replacement event, when `Warranty.startDate`/`expiryDate` are required exact fields — fixed by splitting the event and the warranty into two independently-confirmed candidate items and correcting the post-confirmation `verificationStatus`; (4) the parallel-extraction design asserted both "never blocks" and "merges into the same response" without saying which wins — fixed with an explicit bounded-wait-then-async-fallback contract, a new `parentExecutionId` link, and explicit dedup/access-check rules; (5) §11's registry was keyed by `AskOperationId` but looked up by adapter id, and its envelope required `propertyId` while omitting `sessionId` (needed by an existing handler) — both fixed; (6) §19's next-action rule ("propose if context-satisfiable") both under- and over-includes — fixed by reusing `productFramework/capabilities`' existing ranking/suppression machinery this pass found and wasn't originally credited, plus a ready-vs-needs-info split; (7) the selling-scenario walkthrough created a `DecisionThread` without confirmation, contradicting §15's stated rule — resolved with an explicit materiality-based exemption for workflow state versus durable knowledge, and the single-session-pointer design was broadened to use `DecisionThread`'s own multi-goal-capable scoping. Two cleanup items were also applied: a consolidated, accurate schema-change inventory (§14) replacing an undercounted "only two additions" claim repeated in three places, and §33's Stage 3 recommendation reworded to specify direct `prisma/schema.prisma` edits rather than "migration," per this repository's explicit no-migration-scripts convention. A subsequent self-review also found and fixed several section-cross-reference errors in the Architecture Principles table (citations pointing at the wrong section number) — a comprehensive re-check of all ~150 cross-references in the document was not performed, so residual numbering errors elsewhere may exist.
+
 ---
 
 ## 1. Executive Summary
@@ -69,15 +71,15 @@ Per §27 of the request, evaluated against Stage 1 evidence and this stage's dec
 |---|---|---|---|
 | 1 | Conversation is an interface, not the source of truth | **ACCEPT** | Matches §2's layering exactly; no evidence contradicts it |
 | 2 | Domain services own domain logic | **ACCEPT** | Stage 1 found this mostly true already (refinance, HVAC) — extend, don't violate |
-| 3 | Capabilities expose domain functionality to Cozy | **ACCEPT** | This is §13's entire design |
-| 4 | Ask Orchestrator coordinates; it should not become another domain layer | **ACCEPT** | Directly actioned in §14 — the orchestrator's dispatch `switch` is the domain-layer violation being removed |
+| 3 | Capabilities expose domain functionality to Cozy | **ACCEPT** | This is §11's entire design |
+| 4 | Ask Orchestrator coordinates; it should not become another domain layer | **ACCEPT** | Directly actioned in §12 — the orchestrator's dispatch `switch` is the domain-layer violation being removed |
 | 5 | Home knowledge is structured and persistent | **ACCEPT** | Matches Stage 1's finding that the primitives (`PropertyFactEvidence`, `HomeEvent`) already exist and are sound |
-| 6 | Conversation history is not home knowledge | **MODIFY** | Accept as stated, but add a third category: **active workflow state** (`DecisionThread`, in-flight `parametersJson`/`captureRequests`) is neither conversation history nor home knowledge — it's transient-but-durable-across-turns state that must be modeled separately from both (§16) |
-| 7 | Material writes require confirmation and idempotency | **ACCEPT** | Already a hard requirement per the existing Trust FRD (Stage 1 finding); this stage's confirmation convergence (§11, §17) strengthens rather than relaxes it |
-| 8 | Provenance is first-class | **ACCEPT** | Stage 1 found the primitives exist (`PropertyFactSourceType`, `confidence`) but are conflated; §10 separates them without adding a new store |
-| 9 | LLMs interpret and communicate; deterministic systems remain authoritative | **ACCEPT** | This stage's one new LLM surface (§8's extraction pass) is designed to this exact standard (§24) |
-| 10 | Every meaningful response evaluates the next logical action | **ACCEPT** | §17 designs this as a first-class, context-driven step, replacing today's static per-operation strings |
-| 11 | Proactive intelligence and reactive conversation use the same capability layer | **ACCEPT** | §19's `notifyWithAskContinuation` design is exactly this — one continuation mechanism, many producers |
+| 6 | Conversation history is not home knowledge | **MODIFY** | Accept as stated, but add a third category: **active workflow state** (`DecisionThread`, in-flight `parametersJson`/`captureRequests`) is neither conversation history nor home knowledge — it's transient-but-durable-across-turns state that must be modeled separately from both (§17) |
+| 7 | Material writes require confirmation and idempotency | **ACCEPT** | Already a hard requirement per the existing Trust FRD (Stage 1 finding); this stage's confirmation convergence (§11, §16) strengthens rather than relaxes it |
+| 8 | Provenance is first-class | **ACCEPT** | Stage 1 found the primitives exist (`PropertyFactSourceType`, `confidence`) but are conflated; §15 separates them without adding a new store |
+| 9 | LLMs interpret and communicate; deterministic systems remain authoritative | **ACCEPT** | This stage's one new LLM surface (§7's extraction pass) is designed to this exact standard (§24) |
+| 10 | Every meaningful response evaluates the next logical action | **ACCEPT** | §19 designs this as a first-class, context-driven step, replacing today's static per-operation strings |
+| 11 | Proactive intelligence and reactive conversation use the same capability layer | **ACCEPT** | §20's `notifyWithAskContinuation` design is exactly this — one continuation mechanism, many producers |
 | 12 | Do not create an agent where a capability is sufficient | **ACCEPT** | §25 makes this a checkable test, not a slogan, grounded in the one existing specialist agent's actual justification (Stage 1 finding) |
 | 13 | Preserve useful existing architecture; remove weak boundaries where necessary | **ACCEPT** | This is why `GroundedAskProposal` is retired (a weak boundary — a whole parallel confirmation system) while `AskConfirmationReceipt`, `PropertyFactEvidence`, and `DecisionThread` are extended, not replaced |
 | 14 | No production users means architectural cleanup can be favored over backward compatibility | **ACCEPT** | Directly licenses the `GroundedAskProposal` retirement and the `HomeEvent` schema extension — there is no migration audience to protect |
@@ -144,6 +146,18 @@ Background: Domain Event Outbox (KEEP) → per-type consumer (KEEP)
 
 **Why parallel, not sequential:** this is the only option of the four considered that supports a compound message doing both things in one turn without regressing the cost/latency of messages that already resolve to a high-confidence deterministic match today (Stage 1's traced examples: `HOME_ACTIONS` at 0.96, `REFINANCE_ANALYSIS` at 0.97 — Stage 1 did not establish what fraction of real traffic this represents, and this design does not depend on any particular fraction). The pre-filter is what keeps this cheap regardless of that fraction — a turn that never matches the pre-filter's pattern skips the LLM call entirely.
 
+**[CORRECTION — P1]** "Does not block the routed response" and "merges into one `AskExecutionResponse`" cannot both be true unconditionally within one synchronous request/response cycle — an earlier draft asserted both without saying which wins when they conflict, or how a client would receive results that arrive after the response is already sent. This needs an explicit delivery contract:
+
+**[DECISION] Bounded synchronous attempt, with an async fallback that reuses existing infrastructure, not new streaming/polling:**
+1. The extraction call runs with a short, strict timeout (illustrative: ~1.5s — the exact figure is a Stage 3 tuning question, not fixed here). If it completes within the timeout, its candidate items merge into the same response, exactly as described above.
+2. If it does not complete in time, the primary routed response is returned immediately, unaffected — extraction continues in the background as a fire-and-forget task. When it finishes, its candidate item(s) are delivered through the **same mechanism §20 already builds** for any other proactive insight: a `DomainEvent` is emitted, the existing outbox consumer processes it, and `notifyWithAskContinuation` surfaces the resulting `CAPTURE_*_CONFIRM` execution as a `PROACTIVE_INSIGHT`-tagged turn the next time the homeowner opens Cozy. This avoids inventing a second delivery mechanism (streaming or polling) for a case that is architecturally identical to "something was detected in the background."
+
+**[DECISION] Parent/child execution linking:** add `AskExecution.parentExecutionId: String?` (a nullable self-referencing FK — additive, and consolidated into the full schema-change inventory in §14). Every `CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM` execution spawned by extraction sets this to the turn that produced it, so the parent turn's response can list and link to each child's confirmation card, and each is confirmed, edited, or rejected independently through its own `AskConfirmationReceipt` flow — confirming one candidate item never blocks or implicitly resolves another from the same message.
+
+**[DECISION] Dedup with the existing per-operation regex extraction (§7's first paragraph):** general extraction runs *after* routing/dispatch has decided which operation (if any) matched, and is given that operation's already-extracted fields as input. It does not propose a second, competing candidate for a field a routed operation's own bounded extractor (`extractMaintenanceTaskInput`, etc.) already consumed for this exact turn — it only proposes information beyond what the routed operation already captured. This prevents, e.g., a maintenance-cost message from producing both a routed `MAINTENANCE_TASK_COMPLETE` with `actualCost` *and* a duplicate general-extraction candidate proposing the same cost as a standalone fact.
+
+**[DECISION] Safety is not new — it's inherited, and must be verified, not assumed:** every `CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM` operation is registered in the same authorization path the 25 existing material-write commands use — the same `roleFloor` check (a `VIEWER` cannot confirm a captured fact any more than they can create a maintenance task today), the same property-access recheck at confirmation time (§16's saga already rechecks access before completing — this must not be weakened for capture-confirm operations), and the same `AskConfirmationReceipt` idempotency lease. This is inheritance of an existing, working mechanism, not a new safety design — but it must be explicitly wired for the new operation family, not assumed to apply automatically.
+
 ---
 
 ## 8. Intent vs. Information Model
@@ -191,12 +205,16 @@ This is Stage 1's most important finding and this stage's most important design 
 
 **[DECISION]** Add exactly two things that do not exist today; reuse everything else:
 
-**(a) A handler registry** — a plain `Record<AskOperationId, CapabilityHandler>` map, where `CapabilityHandler` is a normalized function type:
+**[CORRECTION — P2]** An earlier draft of this section declared the registry keyed by `AskOperationId` but then described looking handlers up by adapter id — two incompatible keys for the same map. It also required `propertyId` unconditionally and omitted `sessionId`, even though `answerGroundedAsk` (one of the handlers this layer must eventually call) takes `{userId, sessionId, message, propertyId?}` — an optional property, a required session. Both are fixed below.
+
+**(a) A handler registry** — keyed by **adapter id** (the stable, already-unique string identifier an operation resolves *to* via `getSkillAdapterForOperation`, not the operation id itself — an adapter's `allowedOperations` is declared as an array, so the registry's real key is the adapter, with operation-to-adapter resolution handled by the existing lookup, not duplicated in this map):
 
 ```ts
 type CapabilityInvocationEnvelope = {
   userId: string;
-  propertyId: string;
+  propertyId?: string;      // optional — not every operation is property-scoped (e.g. GROUNDED_GUIDANCE's
+                             // GENERAL grounding mode has none)
+  sessionId: string;        // required — omitted from an earlier draft; several existing handlers need it
   message: string;
   executionId: string;
   launchContext?: AskLaunchContext;
@@ -204,13 +222,16 @@ type CapabilityInvocationEnvelope = {
 };
 
 type CapabilityHandler = (envelope: CapabilityInvocationEnvelope) => Promise<AskOperationResult>;
+
+// Keyed by SkillAdapterDefinition.id, e.g. 'refinance.analysis' — not AskOperationId.
+type CapabilityHandlerRegistry = Record<string, CapabilityHandler>;
 ```
 
-**(b) A thin per-operation shim** wrapping each existing handler function, destructuring the common envelope into that handler's actual (non-uniform) positional signature. This is the concrete, unavoidable cost the non-uniform-signature finding (§10) imposes — there is no way to avoid touching every existing handler once, but each shim is a one-line adapter (`(envelope) => refinanceAnalysisResult(envelope.userId, envelope.propertyId)`), not a rewrite of the handler itself.
+**(b) A per-operation shim** wrapping each existing handler function, mapping the common envelope onto that handler's actual (non-uniform) positional signature. **This is not uniformly a one-line destructure** — an earlier draft's example (`(envelope) => refinanceAnalysisResult(envelope.userId, envelope.propertyId)`) is representative of the *simplest* handlers only; others (e.g. `replacementGuidanceResult`'s 5-argument, `focusedInventoryItemId`/`executionId`-carrying signature) need the shim to also pull values out of `launchContext`/`suppliedInput`, not just destructure the envelope's top-level fields. **[DECISION]** Stage 3 must trace each of the ~40 handlers' actual required inputs individually before sizing this work (§31 already flags this; it is restated here because it directly bears on this section's own "no orchestrator edit required" claim, which is true for *future* capabilities but not a description of how cheap migrating *existing* ones will be).
 
 **[DECISION]** `capability.invoke(operationId, envelope)`:
-1. Looks up `getSkillAdapterForOperation(operationId)` (existing, `skillAdapterRegistry.ts:110-112`) and `resolveEffectiveSkillOperationPolicy` (existing) for authorization/risk metadata — **unchanged, reused as-is**.
-2. Looks up the handler in the new registry by the adapter's `id` (the string ids already exist and are unique per Stage 1's finding — this pass confirms no collisions).
+1. Looks up `getSkillAdapterForOperation(operationId)` (existing, `skillAdapterRegistry.ts:110-112`) and `resolveEffectiveSkillOperationPolicy` (existing) for authorization/risk metadata — **unchanged, reused as-is**. This step resolves `operationId → adapter`.
+2. Looks up the handler in the new registry by that adapter's `id` (the string ids already exist and are unique per Stage 1's finding — this pass confirms no collisions) — this is the only lookup the new registry performs; it is never keyed by `operationId` directly.
 3. Calls the shim, gets back `AskOperationResult` — the one already-uniform part of the contract (every handler already returns this today).
 4. Emits the same `SkillExecutionBinding` audit record the existing `skillExecutionBinding.ts` already knows how to build — **unchanged**.
 
@@ -276,7 +297,7 @@ Knowledge update (existing PROPERTY_FACT_CHANGED domain event → intelligenceRe
 | Decisions | `DecisionThread`/`RecommendationSnapshot` (existing, Stage 1 finding) | No |
 | Uncertain / third-party-attributed information | Same target models, tagged via the confidence/attribution fields in §14 — **not** a separate storage tier | No — this is a field-level distinction, not a model-level one |
 
-**[DECISION, directly answering the request's warning]** No new universal knowledge database is introduced. Every category above maps to a model that already exists; the only schema changes anywhere in this document are the two narrow additions in §14.
+**[DECISION, directly answering the request's warning]** No new universal knowledge database is introduced. Every category above maps to a model that already exists; every schema change this document proposes is additive fields on existing models, consolidated in §14's schema-change inventory — not a new table.
 
 ---
 
@@ -289,25 +310,58 @@ Knowledge update (existing PROPERTY_FACT_CHANGED domain event → intelligenceRe
 1. `HomeEvent.providerName: String?` — a fifth denormalized-provider field, consistent with the exact pattern already used three times elsewhere in this schema.
 2. `HomeEvent.warrantyId: String?` (FK → `Warranty`) — a fifth optional related-record link, consistent with `HomeEvent`'s existing pattern of optional links to `Claim`, `Expense`, and `ProjectRecord` (`claimId`, `expenseId`, `projectId` all already exist on this exact model).
 
-**[DECISION]** The conversation-capture layer (§13), not a new domain service, orchestrates the compound write for "I replaced my roof last summer for $14,500 with ABC Roofing, 10-year warranty":
+**[CORRECTION — P1]** An earlier draft's worked example for this statement manufactured precision the statement doesn't actually contain, and got the write-ordering relative to confirmation backwards. Both are fixed below.
 
+**[DECISION]** The conversation-capture layer (§13), not a new domain service, orchestrates the write for "I replaced my roof last summer for $14,500 with ABC Roofing, 10-year warranty" as **two independently-confirmed candidate items**, not one bundled transaction — because the event+cost is confidently derivable from the statement, while the warranty is not:
+
+**Candidate item 1 — the event (confidently derivable):**
 ```
-One transaction:
-  1. Create HomeEvent { isRetrospective: true, occurredAt: <derived>, datePrecision: MONTH,
-                         amount: 14500, providerName: 'ABC Roofing', type: <roof-replacement type>,
-                         sourceType: USER, observationKind: USER_REPORTED,
-                         verificationStatus: PENDING_CONFIRMATION }
-  2. If a warranty duration was extracted: create Warranty { providerName: 'ABC Roofing', cost: null,
-                         startDate: <event date>, expiryDate: <+10 years>, propertyId }
-     and set HomeEvent.warrantyId to the new Warranty's id.
-  3. emitPropertyChangeWithTransaction(...) — reusing the existing PropertyChange fan-in
-     (typed FK via canonicalEventId, which HomeEvent already supports) so this shows up in
-     the homeowner's briefing/history UI for free, exactly as any other HomeEvent would.
+"last summer" → datePrecision: RANGE, dateRangeStart/dateRangeEnd spanning that summer's calendar
+  months (NOT datePrecision: MONTH — a season is a range, not a specific month, and extraction must
+  not report a precision the statement doesn't support)
+amount: 14500 (stated exactly)
+providerName: 'ABC Roofing' (stated exactly, tagged as the installer)
+```
+This becomes one `CAPTURE_EVENT_CONFIRM` execution (§16). Only **once the homeowner confirms it** through the ordinary `AskConfirmationReceipt` saga does the execute phase run:
+```
+Execute phase (runs strictly after confirmation, not before):
+  1. Upsert HomeEvent { idempotencyKey: executionId, isRetrospective: true,
+                         occurredAt: <range start>, datePrecision: RANGE,
+                         dateRangeStart, dateRangeEnd, amount: 14500, providerName: 'ABC Roofing',
+                         type: <roof-replacement type>, sourceType: USER,
+                         observationKind: USER_REPORTED,
+                         verificationStatus: HOMEOWNER_CONFIRMED }   ← not PENDING_CONFIRMATION: the
+                             Ask-level confirmation already happened before this write runs, so the
+                             event's own status should reflect that, not imply confirmation is still
+                             outstanding on a row that was only ever created because it was given.
+  2. emitPropertyChangeWithTransaction(...) — unchanged, existing fan-in.
 ```
 
-This is a genuinely new transactional writer function (not `capturePropertyFact`, which is scoped to scalar `Property` fields) — but it is a thin orchestration function, not a new domain model, and it reuses `HomeEvent`'s existing evidence/verification/supersession machinery (`HomeEventEvidence`, `HomeEventVerificationRecord`) for the confirmation step in §11.
+**Candidate item 2 — the warranty (not confidently derivable, and deliberately *not* bundled into item 1):**
+`Warranty.startDate`/`expiryDate` are **required, exact `DateTime` fields [FACT — this pass, confirmed against schema.prisma]** — "10-year warranty" attached to an already-approximate event date supplies neither an exact start date nor, without asking, any confirmation that the installer (`ABC Roofing`) is actually the warranty *issuer* rather than merely the installer of a manufacturer- or third-party-issued warranty. **[DECISION]** the extraction step does not silently compute `expiryDate = <approximate event date> + 10 years` or copy `providerName` from the linked event into `Warranty.providerName`. Instead, this candidate is surfaced as its own `CAPTURE_FACT_CONFIRM`-family item with an explicit clarifying `captureRequest` (the existing slot-filling mechanism, §7/§9) asking for the warranty's actual start date and confirming (not assuming) the issuer, before a `Warranty` row is ever created. If the homeowner has no exact date, the honest target-architecture answer is: don't create the `Warranty` row yet — surface it as a `MISSING` fact the same way any other incomplete-context capability would (§9, §27), not a record with a fabricated date.
+
+This is a genuinely new transactional writer function (not `capturePropertyFact`, which is scoped to scalar `Property` fields) — but it is a thin orchestration function, not a new domain model, and it reuses `HomeEvent`'s existing evidence/verification/supersession machinery (`HomeEventEvidence`, `HomeEventVerificationRecord`) for the confirmation step in §16.
 
 **[FUTURE, not required now]** A `ProjectRecord` could eventually represent a roof replacement instead of a bare `HomeEvent` if the homeowner wants the fuller project-lifecycle tracking (permits, change orders) — the target architecture doesn't need to decide this now because both paths converge on the same `PropertyChange` fan-in.
+
+### Consolidated schema-change inventory
+
+**[CORRECTION — cleanup]** Multiple places in earlier drafts of this document (the executive summary, this section, and §13's table) claimed "the only schema changes anywhere in this document are the two narrow additions in §14" — that underclaimed the true count once §15–§17's fixes are included. This table is the single accurate inventory; every other section should point here rather than repeat a count.
+
+| Field | Model | New or reused? | Decided in |
+|---|---|---|---|
+| `providerName: String?` | `HomeEvent` | New | §14 |
+| `warrantyId: String?` (FK → `Warranty`) | `HomeEvent` | New | §14 |
+| `captureChannel` (enum or string) | `PropertyFactEvidence`, `HomeEvent` | New (same field shape, two models) | §15 |
+| `extractionConfidence: Float?` | `PropertyFactEvidence`, `HomeEvent` | New — deliberately separate from the existing `confidence`/`confidenceScore` fields, not a reuse of them | §15 |
+| `activeDecisionThreadId: String?` | `AskSession` | New (a same-session cache, not the resolution mechanism — §17) | §17 |
+| `parentExecutionId: String?` (self-FK) | `AskExecution` | New | §7 |
+| `idempotencyKey` (populated, not added) | `HomeEvent` | **Reused** — this field and its `@@unique([propertyId, idempotencyKey])` constraint already exist; the target design is the first thing to actually populate it for this purpose | §16 |
+| `sourceEntityId` (populated, not added) | `PropertyFactEvidence` | **Reused** — already exists; `capturePropertyFact`'s internal idempotency check is new logic, not a new field | §16 |
+| New `goalCode` values (`SELL_HOLD_RENT`, `RENOVATION`, `CLAIM`, `REFINANCE`) | `DecisionThread` | New enum values **if** `goalCode` is a strict Postgres enum; no schema change if it's a string column — **unverified in this pass, Stage 3 must confirm which** | §17 |
+| New operation identifiers (`CAPTURE_FACT_CONFIRM`, `CAPTURE_EVENT_CONFIRM`) | `AskOperationId` / `AskExecution.operationId` | New values **if** `operationId` is a strict Postgres enum; likely a string column given ~40-70 operations have been added incrementally without migrations being a recurring theme in Stage 1 — **unverified in this pass, Stage 3 must confirm** | §16 |
+
+Six genuinely new fields across three models, two reuses of already-existing fields for their evidently-intended purpose, and two enum-extension questions Stage 3 must resolve before treating them as schema-free. None of these individually or collectively constitute a new table or a new universal model — every one attaches to a model this document already establishes is the right target for its category of information.
 
 ---
 
@@ -321,10 +375,11 @@ This is a genuinely new transactional writer function (not `capturePropertyFact`
 |---|---|---|
 | Source (who supplied it) | `sourceType: USER_REPORTED` (on `PropertyFactEvidence`) / `sourceType: USER` (on `HomeEvent`) | **Existing** — unchanged, a homeowner's chat statement is `USER_REPORTED` exactly like a form submission |
 | Capture channel (how C2C received it) | **New**: a `captureChannel` value (`CONVERSATION` \| `FORM` \| `DOCUMENT` \| `INTEGRATION`) | **[DECISION]** add as a field on `PropertyFactEvidence` and `HomeEvent` — small, additive, does not touch `sourceType`'s existing values or consumers |
-| Extraction confidence (how sure was the parse) | **New**: reuse `PropertyFactEvidence.confidence`/`HomeEvent.confidenceScore` for this specific meaning going forward — but **only for conversationally-captured rows** | **[DECISION, with the audit's caution applied]**: before repurposing these fields, this pass confirms `decideFactMerge`'s only current *consumer* of `PropertyFactEvidence.confidence` is its own priority-arbitration logic (Stage 1 finding) — assigning extraction confidence to this field for conversational rows does not conflict with that consumer, since arbitration already treats confidence as "how much to trust this value," which extraction confidence directly answers. **[DECISION]** `HomeEvent.confidenceScore` gets the same treatment. No new confidence field is introduced. |
+| Extraction confidence (how sure was the parse) | **New, separate field**: `extractionConfidence: Float?` on `PropertyFactEvidence` and `HomeEvent` | **[CORRECTION — P1, reversing an earlier draft's decision]** an earlier draft of this table proposed reusing `PropertyFactEvidence.confidence`/`HomeEvent.confidenceScore` for extraction confidence, reasoning that their only consumer (`decideFactMerge`'s priority arbitration) would tolerate the new meaning. That check was too narrow: `answerGroundedAsk` (`groundedAsk.service.ts:85`) already averages `fact.confidence` into the *answer's own* confidence score (`known.reduce((sum, fact) => sum + (fact.confidence ?? ...), 0) / known.length`) — i.e., this field is already load-bearing as "how much should a downstream answer trust this value," which is a different question than "how confident was the parser that it read the sentence correctly." A perfectly-parsed statement about an unreliable claim ("the listing says the roof is new") would get high *extraction* confidence but should get low *fact* confidence — collapsing the two into one field would let good parsing quality silently launder a weak underlying claim into a trusted one. **[DECISION]** keep `confidence`/`confidenceScore` meaning exactly what their existing consumers already assume (fact reliability), and add a genuinely separate `extractionConfidence` field that only the capture pipeline itself reads |
+| Source attribution (firsthand vs. relayed) | **New**: an `attribution: FIRSTHAND \| THIRD_PARTY_RELAYED \| INFERRED` tag on each candidate item, mapped onto `HomeEvent.observationKind`/`verificationStatus` at write time | **[DECISION]** this is the axis that actually answers the "listing says" case — not confidence. "The listing says the roof is new" is `THIRD_PARTY_RELAYED`: the homeowner is still the one telling Cozy this (so `sourceType` stays `USER`), but the underlying claim is attributed to a third party, not observed or asserted firsthand. `THIRD_PARTY_RELAYED` items get `verificationStatus: UNVERIFIED` (not advanced toward confirmation the same way a firsthand statement is) and the extraction's summary/evidence text preserves the attribution phrase verbatim, so a later reviewer sees "per the listing," not a bare fact |
 | Confirmation state | `HomeEvent.verificationStatus: PENDING_CONFIRMATION → HOMEOWNER_CONFIRMED` (already exists, exactly fits); `PropertyFactEvidence.verifiedAt` (already exists) | **Existing** — unchanged |
 
-**[DECISION]** Confidence never bypasses confirmation, per the existing Trust FRD requirement (Stage 1 finding) and principle 7 (§5): every conversationally-captured item reaches `PENDING_CONFIRMATION`/awaits an `AskConfirmationReceipt` regardless of extraction confidence score. Confidence is used only to (a) pre-fill the confirmation prompt's default value and (b) decide whether the extraction step should proactively ask a disambiguating question before even proposing a value (low confidence → ask; high confidence → propose directly) — never to skip the confirmation step itself.
+**[DECISION]** Confidence never bypasses confirmation, per the existing Trust FRD requirement (Stage 1 finding) and principle 7 (§5): every conversationally-captured item's execution reaches `NEEDS_CONFIRMATION` status and awaits an `AskConfirmationReceipt` regardless of extraction confidence score, **except goal/`DecisionThread` attachment, which §17's materiality carve-out addresses separately** (not `PENDING_CONFIRMATION` — that's `HomeEvent`'s own verification-status value, a different enum on a different model; don't conflate the two). `extractionConfidence` is used only to (a) pre-fill the confirmation prompt's default value and (b) decide whether the extraction step should proactively ask a disambiguating question before even proposing a value (low confidence → ask; high confidence → propose directly) — never to skip the confirmation step, and never to set the fact-reliability `confidence`/`confidenceScore` fields, which are populated the same way they already are for any other confirmed `USER_REPORTED` value once the homeowner confirms (independent of how confident the parser was).
 
 ---
 
@@ -341,7 +396,17 @@ This is a genuinely new transactional writer function (not `capturePropertyFact`
 
 **[DECISION]** Option (b). A candidate item proposed by the §7 extraction step is not a separate database row in a separate table — it is a new `AskExecution` created in `NEEDS_CONFIRMATION` status (a status this enum already has), with the candidate payload in `parametersJson` (a field `AskExecution` already has for exactly this purpose — Stage 1 finding: it's where capture-answer state already lives) and a new operation family (`CAPTURE_FACT_CONFIRM`, `CAPTURE_EVENT_CONFIRM`) in the operation registry. Confirming it is an ordinary `confirmAskExecution` call through the **existing, unmodified** `AskConfirmationReceipt` saga. `GroundedAskArtifact`'s role (recording what was created) is already covered by the receipt's own `artifactType`/`artifactId` fields (Stage 1 finding: these already exist on the receipt).
 
-**[DECISION]** `GroundedAskProposal`/`GroundedAskArtifact` are **retired** (§30) — their concept is fully absorbed into the execution/receipt model with strictly more correctness (atomic claim, lease recovery, content-hash conflict detection) and zero new schema.
+**[DECISION]** `GroundedAskProposal`/`GroundedAskArtifact` are **retired** (§30) — their concept is fully absorbed into the execution/receipt model with strictly more correctness (atomic claim, lease recovery, content-hash conflict detection) and zero new schema on the receipt itself.
+
+**[CORRECTION — P1]** The above establishes that the receipt's own claim/complete transactions are correct, but it does not yet establish that the *captured write itself* is replay-safe, and an earlier draft of this section implied it did. The receipt's own documentation (this section, first paragraph) is explicit that the **execute** phase — the actual domain write — happens *outside* any transaction the receipt owns, and that "each domain write is responsible for its own atomicity." A crash between a successful domain write and the receipt's completion transaction causes exactly the failure mode this convergence is supposed to fix: on recovery, the lease-expiry re-claim re-runs the execute phase, and if that phase is not itself idempotent, it creates a duplicate `HomeEvent`/`Warranty`/`PropertyFactEvidence` row.
+
+**[DECISION]** Every domain write invoked from the execute phase must be idempotent against exactly this replay, using a stable, execution-derived key — not "atomic" in isolation, but **safe to run twice**:
+
+- **`HomeEvent`**: **[FACT — this pass]** `HomeEvent` already has an `idempotencyKey` field and an existing `@@unique([propertyId, idempotencyKey])` constraint (`schema.prisma:7525`) — built for exactly this purpose, already used elsewhere in the codebase (`askNotificationContinuation`'s `AskExecution` upsert uses the same pattern on a different model). **[DECISION]** the execute-phase writer sets `HomeEvent.idempotencyKey = executionId` and performs an `upsert` keyed on `(propertyId, idempotencyKey)`, not a bare `create`. A replayed execute phase finds the existing row and returns its id rather than inserting a second one — this also gives the receipt's `complete` phase a way to recover the original `artifactId` on a retried completion, which the content-hash idempotency check on the receipt itself does not by itself guarantee if the artifact was never recorded before the crash.
+- **`Warranty`**: has no `idempotencyKey` field of its own (**[FACT — this pass]**, confirmed absent from its schema). **[DECISION]** rather than adding one, `Warranty` creation is guarded by its parent `HomeEvent`'s idempotent upsert: the writer only creates a `Warranty` row and sets `HomeEvent.warrantyId` when the just-upserted `HomeEvent` did not already have a `warrantyId` set. A replay that finds the `HomeEvent` already linked to a `Warranty` skips warranty creation entirely, rather than creating a second one.
+- **Scalar capture (`PropertyFactEvidence` via `capturePropertyFact`)**: **[FACT — this pass, and the specific mechanism Stage 1 originally flagged]** `capturePropertyFact` currently always `create`s a new `PropertyFactEvidence` row — it has no existing idempotency guard, and this is precisely the failure mode Stage 1's audit identified in the current `GroundedAskProposal` path ("a retry calls `capturePropertyFact` again and can create a second `PropertyFactEvidence` row for the same claim"). Converging onto `AskConfirmationReceipt` does not fix this by itself. **[DECISION]** extend `capturePropertyFact` to accept the calling `executionId` and pass it as `sourceEntityId` (a field `PropertyFactEvidence` already has, per Stage 1's finding, for exactly this kind of polymorphic-source pointer); before creating a new evidence row, check for an existing non-superseded row with the same `(propertyId, factKey, sourceEntityId)` and return it unchanged if found, rather than creating a duplicate. This is a small, additive change to `capturePropertyFact`'s existing internal logic — not a new model, not a new field.
+
+This replay-safety requirement applies uniformly to every domain write this document proposes routing through the confirmation saga (§13's compound writer, the scalar-fact writer) — it is not optional hardening, it is the actual correctness bar "convergence" needs to clear.
 
 **[DECISION]** Corrections/undo: reuse `AskDomainCommandRegistry`'s existing `correctionModes` vocabulary (`EDIT`/`PAUSE`/`RESUME`/`STOP`/`REVERSE`/`REOPEN`/`REVOKE`) for captured facts too — a confirmed `HomeEvent` gets a `REVERSE` correction mode (creating a superseding `HomeEvent` revision via the model's existing `supersedesEventId`/`isCurrent` chain, not a hard delete), consistent with how the model already tracks corrections.
 
@@ -363,7 +428,13 @@ This is a genuinely new transactional writer function (not `capturePropertyFact`
 | **Active workflow state** | `DecisionThread` + `DecisionThreadExecutionLink` | One goal, across sessions | Durable until the goal resolves (`DECIDED`/`COMPLETED`/`ABANDONED`) |
 | **Persistent home knowledge** | `PropertyFactEvidence`, `HomeEvent`, `Warranty`, etc. | The home | Durable forever |
 
-**[DECISION]** `DecisionThread` becomes the general-purpose target for **any** multi-turn goal, not only HVAC — a "life event" candidate item (§8) creates or attaches to a `DecisionThread` (new `goalCode`s: `SELL_HOLD_RENT`, `RENOVATION`, `CLAIM`, `REFINANCE` — reusing the existing enum-extension pattern, not a new model). **[DECISION]** Add one small, additive field: `AskSession.activeDecisionThreadId: String?` — a cheap pointer so a session can answer "what's my current goal" without querying the join table every turn; this does not change `DecisionThreadExecutionLink`'s existing many-to-many semantics, it's a convenience cache on the session side.
+**[DECISION]** `DecisionThread` becomes the general-purpose target for **any** multi-turn goal, not only HVAC — a "life event" candidate item (§8) creates or attaches to a `DecisionThread` (new `goalCode`s: `SELL_HOLD_RENT`, `RENOVATION`, `CLAIM`, `REFINANCE` — reusing the existing enum-extension pattern, not a new model).
+
+**[CORRECTION — P2]** An earlier draft made two mistakes here: (1) it relied on a single `AskSession.activeDecisionThreadId` pointer as if it were the resolution mechanism, which cannot represent a homeowner running two goals at once (selling *and* renovating) or resuming a goal from a different session than the one that opened it; (2) it showed goal creation happening immediately on extraction (§29's selling-scenario trace), silently bypassing §15's confirmation rule ("every conversationally-captured item... awaits an `AskConfirmationReceipt`"), without ever stating why a goal would be exempt.
+
+**[DECISION] Resolution uses `DecisionThread`'s own scoping, not a session pointer:** `DecisionThread.activeIdentityKey` is already scoped per `(propertyId, decisionDefinitionId, primaryEntityType, primaryEntityId)` (Stage 1 finding) — which already supports multiple simultaneously-open threads of *different* goal types for the same property, and is queryable independent of which session is asking. **[DECISION]** the canonical lookup, every turn, is: "does this property have an open thread matching the entity/goal type this turn's routing or extraction referenced?" — not "what does this session's cached pointer say." `AskSession.activeDecisionThreadId` is kept only as an optional, cheap **hint** for the common single-goal-per-session case (skip the lookup if the cache still matches), never the source of truth. Topic switching falls out of this for free: if a turn's referenced entity/goal type doesn't match the session's cached thread but does match a different open thread for the same property, that thread is used and the cache is updated — the two goals never interfere, since each is independently keyed.
+
+**[DECISION] Goal attachment is exempt from §15's per-item confirmation rule, on a materiality basis — stated explicitly here, not left implicit:** creating or attaching to a `DecisionThread` is workflow bookkeeping (§17's own three-layer table above places it in "active workflow state," not "persistent home knowledge"), asserts no fact about the home, and is reversible/abandonable at zero cost — it does not meet the Trust FRD's "material write" bar the confirmation requirement exists to gate (Stage 1 finding, §5 principle 7). **[DECISION]** a tentative goal statement creates/attaches to a thread without a confirmation prompt; the confirmation requirement re-applies in full, unweakened, the moment anything *within* that thread does something materially consequential (a capability write, a fact/event capture) — the thread itself is never the thing being confirmed, only the actions taken inside it are.
 
 **[DECISION]** No raw historical transcript is ever sent to an LLM. The §7 extraction step and any future conversational reasoning consume: the current message, the bounded aggregation context (§9), and — when a `DecisionThread` is active — that thread's already-structured state (`factReferences`, `assumptions`, `options`, `questions`), never a list of prior raw messages. This is what keeps context bounded as conversations grow long, and it reuses a model that already enforces exactly this discipline for HVAC decisioning today.
 
@@ -396,10 +467,23 @@ NextActions(operationResult, context, missingFacts, capabilities, activeThread)
     missingFacts      = context.facts filtered by state === MISSING (existing)
     capabilities      = the skill registry's declared operations, filtered by
                          consumerPolicy allowing ASK and authorizationFloor met (existing metadata, §10)
-    activeThread      = AskSession.activeDecisionThreadId's thread state, if any (new pointer, §17)
+    activeThread      = the property's open DecisionThread matching this turn's referenced entity/goal
+                         type, resolved per §17 (the session's activeDecisionThreadId is only a same-
+                         session cache checked before this lookup, never a substitute for it)
 ```
 
-**[DECISION]** The generation rule is deterministic, not another LLM call: for each capability whose `requiredContextProviders` are satisfiable by combining `context` + the just-produced `operationResult`, and whose `consumerPolicy` includes `ASK`, propose it as a next action if it is not already suppressed by `askSuggestionPolicy.ts`'s existing repeat-filter. This directly fixes Stage 1's two named gaps: `GROUNDED_GUIDANCE` gets real suggestions once it's included in this capability-scan (rather than excluded from `OPERATIONS_BY_CAPABILITY` as today), and the sell/hold/rent → Seller Prep gap closes automatically once Seller Prep is registered as a capability (§22) with `SELL_HOLD_RENT_ANALYSIS`'s output satisfying its context requirements.
+**[CORRECTION — P2]** An earlier draft's rule — "propose any capability whose context providers are satisfiable" — is necessary but not sufficient, and this pass found it should not have been invented from scratch: `productFramework/capabilities` already has real ranking and suppression machinery (`capabilityCandidateMatcher.ts`, `capabilityRanking.ts` — `baseScore`, `capabilitySuppressionPolicy.ts` — `cooldownDaysAfterDismissal`, and `recommendation.triggerFamilies` on `ToolCapabilityDefinition`) that Stage 1 characterized only as "a navigation/recommendation catalog," which undersold it — this is a working relevance-scoring and suppression pipeline, just not currently invoked from Ask's next-action path.
+
+**[DECISION]** The generation rule is deterministic, not another LLM call, and reuses that existing pipeline instead of a bare satisfiability check:
+
+1. **Candidate set**: capabilities whose `consumerPolicy` includes `ASK` (unchanged from the earlier draft).
+2. **Relevance, not just satisfiability**: score each candidate using the existing `capabilityCandidateMatcher`/`capabilityRanking` pipeline — matching `recommendation.triggerFamilies` against the just-produced `operationResult`'s domain/entity, weighted by `baseScore` — rather than treating "context is technically satisfiable" as the only signal. This is what keeps an unrelated-but-technically-satisfiable capability from crowding out a genuinely relevant one.
+3. **Two tiers, not one** — this is the concrete fix for the contradiction with §27's cold-start design, where a next action needing more context should still be surfaced, just differently:
+   - **Ready**: `requiredContextProviders` are fully satisfiable now → a direct action chip that invokes the capability immediately.
+   - **Needs info**: `requiredContextProviders` are partially satisfiable, with the gap being `MISSING` (not unavailable) facts → a conversational prompt ("Tell me about your current mortgage rate to see if refinancing makes sense") that opens the existing `captureRequests`/slot-filling flow (§7, §9), not a dead end. An earlier draft's "satisfiable" gate would have silently excluded this entire tier, which is exactly backwards for cold-start homeowners (§27) who most need to be told what to provide.
+4. **Suppression and a limit**: run candidates through `capabilitySuppressionPolicy.ts`'s existing `cooldownDaysAfterDismissal` check (already built for exactly "don't keep re-suggesting something the user dismissed") *and* `askSuggestionPolicy.ts`'s repeat-filter (both apply — they suppress different things: cooldown suppresses a dismissed suggestion, the repeat-filter suppresses one already shown this turn/session), then cap the result at a small fixed number (reusing the existing max-5 convention already used elsewhere in the Ask response contract, e.g. `askNotificationContinuation`'s `resultJson.suggestions`).
+
+This directly fixes Stage 1's two named gaps — `GROUNDED_GUIDANCE` gets real suggestions once it's included in this scan, and the sell/hold/rent → Seller Prep gap closes once Seller Prep is registered (§22) — while also fixing the over-broad and under-inclusive failure modes an unranked, single-tier "satisfiable → propose" rule would have produced.
 
 **[DECISION]** A next action, when clicked, resumes state via the mechanisms already designed above: if it targets an open `DecisionThread`, it attaches via `DecisionThreadExecutionLink`; if it targets a pending capture, it becomes a new `AskExecution` referencing the same `AskConfirmationReceipt` flow (§16) — no new "resume" mechanism is introduced beyond what §16/§17 already establish.
 
@@ -543,12 +627,16 @@ Applying the request's test — *does exposing this materially improve one of th
 ```
 REQUEST → deterministic routing misses (as today) → falls toward GROUNDED_GUIDANCE
         → §7 pre-filter fires (past-tense replacement verb + cost pattern) → extraction runs
-        → candidate item: EVENT { type: roof-replacement, occurredAt: ~last summer,
-                                    datePrecision: MONTH, amount: 14500, providerName: null }
-        → validated against HomeEvent's schema → new AskExecution (CAPTURE_EVENT_CONFIRM, NEEDS_CONFIRMATION)
+        → candidate item: EVENT { type: roof-replacement, dateRangeStart/End: ~last summer,
+                                    datePrecision: RANGE (not MONTH — a season is a range, §14), amount: 14500,
+                                    providerName: null }
+        → validated against HomeEvent's schema → new AskExecution (CAPTURE_EVENT_CONFIRM, NEEDS_CONFIRMATION,
+          parentExecutionId set to this turn's execution — §7)
         → RESPOND: ordinary GROUNDED_GUIDANCE text/EVIDENCE blocks (unchanged) + a new FACT_CONFIRMATION block
-        → user confirms → AskConfirmationReceipt claim/execute/complete (§16) writes HomeEvent
-          (+ PropertyChange fan-in, unchanged) inside one transaction
+        → user confirms → AskConfirmationReceipt claims (transaction), then the execute phase upserts
+          HomeEvent keyed on (propertyId, idempotencyKey=executionId) — replay-safe per §16 — with
+          verificationStatus: HOMEOWNER_CONFIRMED (confirmation already happened before this write ran),
+          then the receipt completes (transaction) — two transactions bracketing one idempotent write, not one
         → RECOMMEND: "Would you like to add the receipt or warranty document?" (from §19's capability scan,
           since Document upload is a capability whose context requirement — an existing HomeEvent — is now satisfied)
 ```
@@ -584,7 +672,9 @@ REQUEST → deterministic routing may miss on this exact phrasing (Stage 1 findi
           routing-coverage fix, not blocked by this design)
         → §7 pre-filter fires (goal/life-event pattern) → extraction runs
         → candidate item: GOAL { goalCode: SELL_HOLD_RENT, horizon: ~1 year }
-        → new or existing DecisionThread created/attached (§17), AskSession.activeDecisionThreadId set
+        → exempt from §15's confirmation rule on materiality grounds (§17) — a new or existing open
+          DecisionThread for this property/goal type is created/attached directly, no confirmation
+          prompt; AskSession.activeDecisionThreadId set as a same-session cache, not the source of truth
         → RESPOND: SUMMARY acknowledging the goal + capability-derived next steps
         → RECOMMEND: §19's scan, now biased by the active SELL_HOLD_RENT thread, surfaces Seller Prep
           capabilities (§23) the homeowner never had to know existed — this is Test 4 (§35) passing
@@ -695,6 +785,6 @@ Background (independent of the request path above):
 3. Design and build the extraction pre-filter's evaluation harness (§31) before or alongside the extraction pass itself, not after — this is the one genuinely new deterministic component in this design with no existing analog to inherit test discipline from.
 4. Sequence Home Event Radar's outbox migration (§20) early, since it's both a Job 1 blocker and a prerequisite for the generic proactive contract meaning anything for the system Stage 1 flagged as most in need of it.
 5. Resolve the Home Renovation Advisor naming-collision question (§23) before wiring any renovation-related capability, to avoid building against the wrong sibling implementation.
-6. Produce the detailed schema migration for the two narrow additions in §14/§15 (`HomeEvent.providerName`, `HomeEvent.warrantyId`, `captureChannel` fields) as a single small migration, and the operation-registry additions from §16 (`CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM`) alongside it.
+6. **[CORRECTION — cleanup]** Apply §14's consolidated schema-change inventory as direct edits to `prisma/schema.prisma`, per this repository's own convention (no migration scripts — the schema file is edited directly and applied with `npx prisma db push`; migration files are only created manually if ever needed) — an earlier draft of this item said "produce the detailed schema migration," which reads as instructing a migration script and should not be followed literally. Resolve the two flagged enum-vs-string questions in that inventory (`DecisionThread.goalCode`, `AskExecution.operationId`) before editing the schema, since the answer determines whether those two rows need a schema change at all.
 
 Stage 3's job is to sequence this, not to redesign it.
