@@ -1,20 +1,16 @@
 // apps/backend/src/services/domainEvents/domainEvents.service.ts
-import type { Prisma } from '@prisma/client';
+import type { DomainEventType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
 export type DomainEventDb = typeof prisma | Prisma.TransactionClient;
 
+// Ask Cozy Stage 3, Phase 1 (implementation plan §4.4/§7). Previously a
+// hand-copied 9-member literal union that had silently drifted 5 members
+// behind the real, correct 14-member DomainEventType Prisma enum
+// (schema.prisma) -- importing the generated enum directly instead means
+// this can never drift again.
 export type EmitDomainEventInput = {
-  type:
-    | 'CLAIM_SUBMITTED'
-    | 'CLAIM_CLOSED'
-    | 'FOLLOW_UP_DUE'
-    | 'REFINANCE_OPPORTUNITY_OPENED'
-    | 'REFINANCE_OPPORTUNITY_UPDATED'
-    | 'REFINANCE_OPPORTUNITY_CLOSED'
-    | 'RADAR_PROPERTY_RECONCILIATION_REQUESTED'
-    | 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED'
-    | 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED';
+  type: DomainEventType;
   propertyId?: string | null;
   userId?: string | null;
   idempotencyKey?: string | null;
@@ -45,7 +41,7 @@ export class DomainEventsService {
 
     return db.domainEvent.create({
       data: {
-        type: input.type as any,
+        type: input.type,
         status: 'PENDING',
         propertyId: input.propertyId ?? null,
         userId: input.userId ?? null,

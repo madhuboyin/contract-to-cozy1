@@ -194,6 +194,8 @@ import { validateAskOperationDefinitions } from './services/ask/askOperationRegi
 import { validateAskAudiencePolicies } from './services/ask/askAudiencePolicy';
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
 import { validateAskLlmPurposeContracts } from './services/ask/askRemoteFallbackTypedClaims';
+import { validateCapabilityHandlerRegistry } from './services/ask/capabilityHandlerRegistry';
+import './services/ask/askOrchestrator.service';
 import { validateSkillDefinitions } from './services/skills/skillRegistry';
 import { validateSkillContextProviderDefinitions } from './services/skills/context/skillContextProviderRegistry';
 import { validateSkillAdapterDefinitions } from './services/skills/adapters/skillAdapterRegistry';
@@ -226,6 +228,7 @@ const askRegistryIssues = [
   ...validateAskAudiencePolicies(),
   ...validateAskDomainCommandRegistry(),
   ...validateAskLlmPurposeContracts(),
+  ...validateCapabilityHandlerRegistry(),
   ...validateSkillDefinitions(),
   ...validateSkillContextProviderDefinitions(),
   ...validateSkillAdapterDefinitions(),

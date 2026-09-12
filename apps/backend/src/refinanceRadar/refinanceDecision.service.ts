@@ -7,6 +7,7 @@ import {
 import type { RecommendationAttributionRelationshipType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { DomainEventsService } from '../services/domainEvents/domainEvents.service';
 import {
   recordDecisionRecordOutcome,
   resolveCurrentDecisionSnapshotId,
@@ -467,24 +468,25 @@ export async function recordRefinanceDecision(input: {
     }
 
     const eventType = eventTypeForTransition(fromStatus, toStatus);
-    await tx.domainEvent.create({
-      data: {
-        type: eventType,
-        status: 'PENDING',
-        propertyId: input.propertyId,
-        userId: input.userId,
-        idempotencyKey: `refinance-decision:${history.id}`,
-        payload: {
-          decisionId,
-          historyId: history.id,
-          fromStatus,
-          toStatus,
-          version,
-          nextReviewAt: nextReviewAt?.toISOString() ?? null,
-          occurredAt: history.occurredAt.toISOString(),
-        },
+    // Implementation plan §4.4/§7: was a raw tx.domainEvent.create bypassing
+    // DomainEventsService.emit() entirely because the typed helper didn't
+    // support these 5 refinance event types (now widened to the full,
+    // correct 14-member DomainEventType enum).
+    await DomainEventsService.emit({
+      type: eventType,
+      propertyId: input.propertyId,
+      userId: input.userId,
+      idempotencyKey: `refinance-decision:${history.id}`,
+      payload: {
+        decisionId,
+        historyId: history.id,
+        fromStatus,
+        toStatus,
+        version,
+        nextReviewAt: nextReviewAt?.toISOString() ?? null,
+        occurredAt: history.occurredAt.toISOString(),
       },
-    });
+    }, tx);
 
     const influencingRecommendationSnapshotId = current?.influencingRecommendationSnapshotId
       ?? candidateRecommendationSnapshotId;

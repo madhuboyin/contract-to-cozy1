@@ -77,6 +77,12 @@ import {
   type AskOperationResolution,
   type AskOperationResult,
 } from './askOperationRegistry';
+import {
+  capabilityInvoke,
+  registerCapabilityHandler,
+  type CapabilityInvocationDependencies,
+} from './capabilityHandlerRegistry';
+import type { CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 import { assertCoverageConflictFree } from '../coverageConflict.service';
 import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
@@ -6128,111 +6134,149 @@ export async function hvacSpecialistEngageResult(
   }
 }
 
+// Ask Cozy Stage 3, Phase 1 (implementation plan §7; FRD §16-17). Registers
+// this file's 67 existing per-operation handlers as thin shims against the
+// capability registry (capabilityHandlerRegistry.ts), keyed by each
+// operation's own declared adapterKey (ASK_OPERATION_DEFINITIONS -- the
+// authoritative source for all 67, independent of the separate, optional
+// SkillAdapterDefinition table). Handler bodies are unchanged; each shim
+// only adapts CapabilityInvocationEnvelope (+ CapabilityInvocationDependencies
+// for the two handlers that need composed context or a trace object, neither
+// of which belongs in the homeowner-shaped envelope) onto the handler's own,
+// pre-existing positional signature -- exactly what used to be one line of a
+// switch statement here, now one registration call. Adding capability #68
+// means adding one new entry to this block (or, for a handler whose body
+// lives in its own file, calling registerCapabilityHandler directly from
+// there) -- never a new branch in dispatchOperationAdapterResult below,
+// which no longer branches on operationId at all.
+registerCapabilityHandler('boundary.emergency', async () => emergencyResult());
+registerCapabilityHandler('boundary.unsafe-restricted', async () => unsafeRestrictedResult());
+registerCapabilityHandler('boundary.out-of-scope', async () => outOfScopeResult());
+registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('maintenance.create', async (envelope) => maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
+  const composedContext = deps.composedContext!;
+  const seasonalEntry = composedContext.entries.find(
+    (entry) => entry.key === skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER),
+  );
+  return maintenanceResult(
+    envelope.userId,
+    envelope.propertyId!,
+    envelope.message,
+    composedContext.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
+    (composedContext.values[skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER)] as SeasonalChecklistContext | undefined) ?? null,
+    seasonalEntry?.status === 'AVAILABLE',
+  );
+});
+registerCapabilityHandler('coverage.review', async (envelope) => coverageResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('incident-claim.status', async (envelope) => incidentClaimStatusResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('incident-claim.file', async (envelope) => claimFileResult(envelope.propertyId!, envelope.message));
+registerCapabilityHandler('incident-claim.transition', async (envelope) => claimTransitionResult(envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('incident-claim.continuation', async (envelope) => incidentContinuationResult(envelope.propertyId!));
+registerCapabilityHandler('savings.opportunities', async (envelope) => savingsOpportunitiesResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('ownership.costs', async (envelope) => ownershipCostsResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('inventory.lookup', async (envelope) => inventoryLookupResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('property.summary', async (envelope) => propertySummaryResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('intelligence-envelope.query', async (envelope) => intelligenceEnvelopeQueryResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor));
+registerCapabilityHandler('home-actions.feed', async (envelope) => homeActionsResult(
+  envelope.userId,
+  envelope.propertyId!,
+  envelope.message,
+  envelope.launchContext?.entityType === 'HOME_ACTION'
+    ? envelope.launchContext.actionId ?? envelope.launchContext.entityId
+    : null,
+));
+registerCapabilityHandler('home-operations.update', async (envelope) => operationalWorkUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('inspection-findings.review', async (envelope) => inspectionFindingsResult(envelope.propertyId!));
+registerCapabilityHandler('inspection-findings.update', async (envelope) => inspectionFindingUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('document-promotion.review', async (envelope) => documentPromotionReviewResult(envelope.propertyId!));
+registerCapabilityHandler('document-promotion.confirm', async (envelope) => documentPromotionConfirmResult(envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('inventory.replacement', async (envelope) => replacementGuidanceResult(
+  envelope.userId,
+  envelope.propertyId!,
+  envelope.message,
+  envelope.launchContext?.entityType === 'INVENTORY_ITEM' ? envelope.launchContext.entityId : null,
+  envelope.executionId,
+));
+registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('household.invitation', async (envelope) => householdInvitationResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanceJourneyCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
+registerCapabilityHandler('quote-comparison.review', async (envelope) => quoteComparisonReviewResult(envelope.propertyId!));
+registerCapabilityHandler('home-deadline.monitor', async (envelope) => homeDeadlineMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('capital-reserve.plan', async (envelope) => capitalReservePlanResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('property-tax.appeal-readiness', async (envelope) => propertyTaxAppealReadinessResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('renovation-permit.readiness', async (envelope) => renovationPermitReadinessResult(envelope.propertyId!, envelope.message));
+registerCapabilityHandler('major-event.entry', async (envelope) => majorEventEntryResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('capability.discovery', async (envelope) => capabilityResult(envelope.userId, envelope.propertyId, envelope.message));
+// Passthrough category (FRD §16): receives the whole envelope, plus the
+// trace object groundedGuidanceResult needs but which the envelope itself
+// deliberately never carries (Stage 2 §11 correction).
+registerCapabilityHandler('grounded.guidance', async (envelope, deps) => groundedGuidanceResult(envelope, deps.trace));
+registerCapabilityHandler('decision-platform.hvac.start', async (envelope) => hvacDecisionStartResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.executionId));
+// Passthrough category (FRD §16): receives the whole launchContext object
+// rather than a derived field; confirmation is self-managed inside the
+// specialist-agent runtime (implementation plan §4.7, resolved -- by
+// design, not a gap).
+registerCapabilityHandler('decision-platform.hvac.specialist-engage', async (envelope) => hvacSpecialistEngageResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.executionId, envelope.launchContext));
+registerCapabilityHandler('decision-platform.hvac.continue', async (envelope) => hvacDecisionContinueResult(
+  envelope.userId,
+  envelope.propertyId!,
+  envelope.message,
+  envelope.executionId,
+  envelope.launchContext?.entityType === 'DECISION_THREAD' ? envelope.launchContext.entityId : null,
+));
+registerCapabilityHandler('decision-platform.hvac.scenario', async (envelope) => hvacDecisionScenarioResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.abandon', async (envelope) => hvacDecisionAbandonResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.preference.save', async (envelope) => hvacPreferenceSaveResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.preference.forget', async (envelope) => hvacPreferenceForgetResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('home-change.summary', async (envelope) => homeChangeSummaryResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('decision-platform.hvac.outcome.report', async (envelope) => hvacDecisionOutcomeReportResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.outcome.view', async (envelope) => hvacDecisionOutcomeViewResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.outcome.unlink', async (envelope) => hvacDecisionOutcomeUnlinkResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('buyer.plan.status', async (envelope) => buyerPlanStatusResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.deadlines', async (envelope) => buyerDeadlinesResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.document-readiness', async (envelope) => buyerDocumentReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.inspection-review', async (envelope) => buyerInspectionReviewResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.task.complete', async (envelope) => buyerTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('buyer.task.create', async (envelope) => buyerTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('buyer.task.update', async (envelope) => buyerTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('buyer.move-status', async (envelope) => buyerMoveStatusResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.financing-readiness', async (envelope) => buyerFinancingReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.title-escrow-readiness', async (envelope) => buyerTitleEscrowReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.walkthrough-readiness', async (envelope) => buyerWalkthroughReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.disclosure-funds-readiness', async (envelope) => buyerDisclosureFundsReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.closing-day-readiness', async (envelope) => buyerClosingDayReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.contract-timeline', async (envelope) => buyerContractTimelineResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.negotiation-readiness', async (envelope) => buyerNegotiationReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.cost-readiness', async (envelope) => buyerCostReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.finding.disposition', async (envelope) => buyerFindingDispositionResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('buyer.lifecycle.update', async (envelope) => buyerLifecycleUpdateResult(envelope.userId, envelope.propertyId!, envelope.message));
+
+function buildCapabilityInvocationEnvelope(
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
+): CapabilityInvocationEnvelope {
+  return {
+    userId: input.userId,
+    propertyId: input.propertyId ?? undefined,
+    sessionId: input.sessionId,
+    executionId: input.executionId,
+    message: input.message,
+    launchContext: input.launchContext,
+    continuationCursor: input.continuationCursor ?? undefined,
+  };
+}
+
 async function dispatchOperationAdapterResult(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
   trace?: SkillExecutionTimingTrace,
 ): Promise<AskOperationResult> {
-  switch (input.operation.operationId) {
-    case 'EMERGENCY_BOUNDARY': return emergencyResult();
-    case 'UNSAFE_RESTRICTED_BOUNDARY': return unsafeRestrictedResult();
-    case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
-    case 'MAINTENANCE_TASK_COMPLETE': return maintenanceTaskCompleteResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_TASK_UPDATE': return maintenanceTaskUpdateResult(input.userId, input.propertyId!, input.message);
-    case 'MAINTENANCE_STATUS': {
-      const seasonalEntry = composedContext!.entries.find(
-        (entry) => entry.key === skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER),
-      );
-      return maintenanceResult(
-        input.userId,
-        input.propertyId!,
-        input.message,
-        composedContext!.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
-        (composedContext!.values[skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER)] as SeasonalChecklistContext | undefined) ?? null,
-        seasonalEntry?.status === 'AVAILABLE',
-      );
-    }
-    case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
-    case 'INCIDENT_CLAIM_STATUS': return incidentClaimStatusResult(input.userId, input.propertyId!, input.message);
-    case 'CLAIM_FILE': return claimFileResult(input.propertyId!, input.message);
-    case 'CLAIM_TRANSITION': return claimTransitionResult(input.propertyId!, input.message, input.launchContext);
-    case 'INCIDENT_CONTINUATION': return incidentContinuationResult(input.propertyId!);
-    case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
-    case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
-    case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
-    case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
-    case 'INTELLIGENCE_ENVELOPE_QUERY': return intelligenceEnvelopeQueryResult(input.userId, input.propertyId!, input.message, input.continuationCursor);
-    case 'HOME_ACTIONS': return homeActionsResult(
-      input.userId,
-      input.propertyId!,
-      input.message,
-      input.launchContext?.entityType === 'HOME_ACTION'
-        ? input.launchContext.actionId ?? input.launchContext.entityId
-        : null,
-    );
-    case 'OPERATIONAL_WORK_UPDATE': return operationalWorkUpdateResult(input.propertyId!, input.message, input.launchContext);
-    case 'INSPECTION_FINDINGS': return inspectionFindingsResult(input.propertyId!);
-    case 'INSPECTION_FINDING_UPDATE': return inspectionFindingUpdateResult(input.propertyId!, input.message, input.launchContext);
-    case 'DOCUMENT_PROMOTION_REVIEW': return documentPromotionReviewResult(input.propertyId!);
-    case 'DOCUMENT_PROMOTION_CONFIRM': return documentPromotionConfirmResult(input.propertyId!, input.message, input.launchContext);
-    case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(
-      input.userId,
-      input.propertyId!,
-      input.message,
-      input.launchContext?.entityType === 'INVENTORY_ITEM' ? input.launchContext.entityId : null,
-      input.executionId,
-    );
-    case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
-    case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
-    case 'SELL_HOLD_RENT_ANALYSIS': return sellHoldRentAnalysisResult(input.userId, input.propertyId!);
-    case 'HOUSEHOLD_INVITATION': return householdInvitationResult(input.userId, input.propertyId!, input.message);
-    case 'GUIDANCE_JOURNEY_CREATE': return guidanceJourneyCreateResult(input.userId, input.propertyId!, input.message);
-    case 'QUOTE_COMPARISON_CREATE': return quoteComparisonCreateResult(input.propertyId!, input.message);
-    case 'QUOTE_COMPARISON_REVIEW': return quoteComparisonReviewResult(input.propertyId!);
-    case 'HOME_DEADLINE_MONITOR': return homeDeadlineMonitorResult(input.userId, input.propertyId!, input.message);
-    case 'CAPITAL_RESERVE_PLAN': return capitalReservePlanResult(input.userId, input.propertyId!);
-    case 'PROPERTY_TAX_APPEAL_READINESS': return propertyTaxAppealReadinessResult(input.userId, input.propertyId!, input.message);
-    case 'RENOVATION_PERMIT_READINESS': return renovationPermitReadinessResult(input.propertyId!, input.message);
-    case 'MAJOR_EVENT_ENTRY': return majorEventEntryResult(input.userId, input.propertyId!, input.message);
-    case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
-    case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input, trace);
-    case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message, input.executionId);
-    case 'HVAC_SPECIALIST_ENGAGE': return hvacSpecialistEngageResult(input.userId, input.propertyId!, input.message, input.executionId, input.launchContext);
-    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(
-      input.userId,
-      input.propertyId!,
-      input.message,
-      input.executionId,
-      input.launchContext?.entityType === 'DECISION_THREAD' ? input.launchContext.entityId : null,
-    );
-    case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_PREFERENCE_FORGET': return hvacPreferenceForgetResult(input.userId, input.propertyId!, input.message);
-    case 'HOME_CHANGE_SUMMARY': return homeChangeSummaryResult(input.userId, input.propertyId!);
-    case 'HVAC_DECISION_OUTCOME_REPORT': return hvacDecisionOutcomeReportResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_DECISION_OUTCOME_VIEW': return hvacDecisionOutcomeViewResult(input.userId, input.propertyId!, input.message);
-    case 'HVAC_DECISION_OUTCOME_UNLINK': return hvacDecisionOutcomeUnlinkResult(input.userId, input.propertyId!, input.message);
-    case 'BUYER_PLAN_STATUS': return buyerPlanStatusResult(input.userId, input.propertyId!);
-    case 'BUYER_DEADLINES': return buyerDeadlinesResult(input.userId, input.propertyId!);
-    case 'BUYER_DOCUMENT_READINESS': return buyerDocumentReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_INSPECTION_REVIEW': return buyerInspectionReviewResult(input.userId, input.propertyId!);
-    case 'BUYER_TASK_COMPLETE': return buyerTaskCompleteResult(input.userId, input.propertyId!, input.message);
-    case 'BUYER_TASK_CREATE': return buyerTaskCreateResult(input.userId, input.propertyId!, input.message);
-    case 'BUYER_TASK_UPDATE': return buyerTaskUpdateResult(input.userId, input.propertyId!, input.message);
-    case 'BUYER_MOVE_STATUS': return buyerMoveStatusResult(input.userId, input.propertyId!);
-    case 'BUYER_FINANCING_READINESS': return buyerFinancingReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_TITLE_ESCROW_READINESS': return buyerTitleEscrowReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_WALKTHROUGH_READINESS': return buyerWalkthroughReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_DISCLOSURE_FUNDS_READINESS': return buyerDisclosureFundsReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_CLOSING_DAY_READINESS': return buyerClosingDayReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_CONTRACT_TIMELINE': return buyerContractTimelineResult(input.userId, input.propertyId!);
-    case 'BUYER_NEGOTIATION_READINESS': return buyerNegotiationReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_COST_READINESS': return buyerCostReadinessResult(input.userId, input.propertyId!);
-    case 'BUYER_FINDING_DISPOSITION': return buyerFindingDispositionResult(input.userId, input.propertyId!, input.message);
-    case 'BUYER_LIFECYCLE_UPDATE': return buyerLifecycleUpdateResult(input.userId, input.propertyId!, input.message);
-  }
+  const deps: CapabilityInvocationDependencies = { composedContext, trace };
+  return capabilityInvoke(input.operation.operationId, buildCapabilityInvocationEnvelope(input), deps);
 }
 
 function canonicalAdapterSourceEvidence(
