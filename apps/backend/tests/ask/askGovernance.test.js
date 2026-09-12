@@ -25,7 +25,9 @@ const {
 
 test('every Ask operation has a complete governed definition', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 67);
+  // 67 from Phase 1's original inventory + CAPTURE_FACT_CONFIRM/
+  // CAPTURE_EVENT_CONFIRM (Phase 2, implementation plan §8; FRD §19/§20).
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 69);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -39,7 +41,9 @@ test('every material Ask command has governed confirmation, authorization, cance
   // per-command loop below (cancellation/correction/role-floor/adapter parity)
   // still passes for it. The compiler already ties the registry to
   // ASK_DOMAIN_COMMAND_IDS one-to-one; this catches an unreviewed addition.
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 25);
+  // 25 from Phase 2's original if/else-chain migration + CAPTURE_FACT_CONFIRM/
+  // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20).
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 27);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

@@ -1,4 +1,5 @@
 import {
+  AskCaptureAttribution,
   DwellingType,
   FoundationType,
   BasementConfiguration,
@@ -129,9 +130,38 @@ export const capturePropertyFactInputSchema = z.object({
   sourceType: z.nativeEnum(PropertyFactSourceType).default('USER_REPORTED'),
   confidence: z.number().min(0).max(1).nullable().optional(),
   validUntil: z.coerce.date().nullable().optional(),
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19). All four
+  // optional and unused by every existing caller (the property-context
+  // capture controller, groundedAsk.service.ts's legacy ADD_FACT/CORRECT_FACT
+  // path) -- omitting them preserves this function's exact prior behavior.
+  // Only the new CAPTURE_FACT_CONFIRM operation (confirmCapabilityHandlerRegistry.ts)
+  // passes them.
+  attribution: z.nativeEnum(AskCaptureAttribution).nullable().optional(),
+  captureChannel: z.string().trim().max(100).nullable().optional(),
+  extractionConfidence: z.number().min(0).max(1).nullable().optional(),
+  // Idempotency key for a conversational capture-confirm write -- NOT
+  // sourceEntityId, which already means "acting user" for every existing
+  // caller (line ~307 below); reusing it would break ordinary repeat edits
+  // by the same homeowner (Stage 2's third-round correction, FRD §19).
+  captureExecutionId: z.string().trim().min(1).nullable().optional(),
 });
 
 export type CapturePropertyFactInput = z.infer<typeof capturePropertyFactInputSchema>;
+
+// FRD §19: for THIRD_PARTY_RELAYED/INFERRED attribution, the write must NOT
+// apply the unconditional verifiedAt-set/confidence:0.9 treatment this
+// function has always used for every USER_REPORTED value (confirmed still
+// true below) -- write verifiedAt: null and a distinctly lower confidence
+// instead. No exact figure is specified upstream; 0.5 is chosen here as
+// clearly below the 0.9 firsthand default while still above an "unknown"
+// answer's absence of confidence, and is intentionally the same for both
+// non-firsthand attributions rather than inventing an unrequested finer
+// distinction between them.
+const NON_FIRSTHAND_CONFIDENCE = 0.5;
+
+function isNonFirsthandAttribution(attribution: AskCaptureAttribution | null | undefined): boolean {
+  return attribution === 'THIRD_PARTY_RELAYED' || attribution === 'INFERRED';
+}
 
 export function isContextCaptureSupported(factKey: string): boolean {
   return factKey in propertyFacts || factKey in exteriorFacts || factKey in salePrepFacts || factKey in responsibilityScopes;
@@ -274,11 +304,29 @@ export async function capturePropertyFact(
   if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) throw new PropertyContextAccessDeniedError();
 
   const input = capturePropertyFactInputSchema.parse(rawInput);
+
+  // FRD §19/§22: idempotency dedup must resolve to the original execution's
+  // write regardless of current supersession state -- a stale replay must
+  // not resurrect a value a later, unrelated correction already superseded.
+  // Checked before the value is even normalized/validated again, since a
+  // genuine replay carries the same (already-validated) captureExecutionId
+  // the original write already succeeded with.
+  if (input.captureExecutionId) {
+    const existing = await prisma.propertyFactEvidence.findFirst({
+      where: { propertyId, factKey, captureExecutionId: input.captureExecutionId },
+    });
+    if (existing) {
+      const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [definition.scope] });
+      return { fact: snapshot.facts[factKey], contextVersion: snapshot.contextVersion, evidenceIds: [existing.id] };
+    }
+  }
+
   const value = normalizeCaptureValue(factKey, input.value);
   const radarReconciliationReason =
     radarReconciliationReasonForFactKey(factKey);
   const unknownAnswer = value === null || value === 'UNKNOWN';
   const observedAt = new Date();
+  const nonFirsthand = isNonFirsthandAttribution(input.attribution);
 
   let evidenceId = '';
   try {
@@ -305,10 +353,14 @@ export async function capturePropertyFact(
           observationState: unknownAnswer ? 'UNKNOWN' : 'KNOWN',
           sourceEntityType: 'PROPERTY_CONTEXT_CAPTURE',
           sourceEntityId: userId,
-          confidence: input.confidence ?? (input.sourceType === 'USER_REPORTED' ? 0.9 : null),
+          confidence: input.confidence ?? (nonFirsthand ? NON_FIRSTHAND_CONFIDENCE : (input.sourceType === 'USER_REPORTED' ? 0.9 : null)),
           observedAt,
           validUntil: input.validUntil ?? null,
-          verifiedAt: input.sourceType === 'USER_REPORTED' ? observedAt : null,
+          verifiedAt: nonFirsthand ? null : (input.sourceType === 'USER_REPORTED' ? observedAt : null),
+          captureExecutionId: input.captureExecutionId ?? null,
+          captureChannel: input.captureChannel ?? null,
+          attribution: input.attribution ?? null,
+          extractionConfidence: input.extractionConfidence ?? null,
         },
       });
       evidenceId = evidence.id;
@@ -348,6 +400,25 @@ export async function capturePropertyFact(
     });
     propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: factKey, outcome: 'success' });
   } catch (error) {
+    // Defense-in-depth for the race the initial check above (line ~315)
+    // can't close by itself: two concurrent replays of the same
+    // captureExecutionId both pass the pre-check, then one loses the
+    // @@unique([propertyId, factKey, captureExecutionId]) race here. Resolve
+    // to the winner's row rather than surfacing a spurious failure.
+    if (
+      input.captureExecutionId
+      && error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2002'
+    ) {
+      const winner = await prisma.propertyFactEvidence.findFirst({
+        where: { propertyId, factKey, captureExecutionId: input.captureExecutionId },
+      });
+      if (winner) {
+        propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: factKey, outcome: 'success' });
+        const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [definition.scope] });
+        return { fact: snapshot.facts[factKey], contextVersion: snapshot.contextVersion, evidenceIds: [winner.id] };
+      }
+    }
     propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: factKey, outcome: 'error' });
     throw error;
   }

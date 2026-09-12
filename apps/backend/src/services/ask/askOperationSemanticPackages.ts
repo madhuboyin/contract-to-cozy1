@@ -77,6 +77,16 @@ const jobs: Record<AskOperationId, string> = {
   BUYER_COST_READINESS: 'explain recorded near-term purchase costs',
   BUYER_FINDING_DISPOSITION: 'classify an inspection finding as negotiation, post-close work, verified fact, or dismissed',
   BUYER_LIFECYCLE_UPDATE: 'cancel this purchase or change its recorded closing/move-in dates',
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20). Not
+  // routed to today -- Phase 3's deterministic pre-filter/extraction is what
+  // makes conversational capture reachable; these examples anticipate that
+  // routing (an explicit "record that..." request is a reasonable match
+  // even before extraction exists) rather than describing current behavior.
+  // Until Phase 3 lands, the propose-time handler these route to returns a
+  // defensive boundary, not a confirmation -- see capabilityHandlerRegistry
+  // registration in askOrchestrator.service.ts.
+  CAPTURE_FACT_CONFIRM: 'record a fact about the home directly from conversation',
+  CAPTURE_EVENT_CONFIRM: 'record something that happened at the home directly from conversation',
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
@@ -147,6 +157,8 @@ const positives: Record<AskOperationId, readonly string[]> = {
   BUYER_COST_READINESS: ['What could cost me money in the first 90 days?', 'What are the near-term costs for this purchase?', 'What will this purchase cost me before closing?'],
   BUYER_FINDING_DISPOSITION: ['Move the roof finding into my post-close plan', 'Classify the electrical finding as a negotiation item', 'Mark the paint finding as a verified fact'],
   BUYER_LIFECYCLE_UPDATE: ['Cancel this purchase', 'We closed today', 'Change my target closing date to next month'],
+  CAPTURE_FACT_CONFIRM: ['Record that my roof was replaced in 2020', 'Please note my foundation is a poured concrete slab', 'Save that my water heater was installed last year'],
+  CAPTURE_EVENT_CONFIRM: ['I had the chimney swept last week', 'We had a small kitchen fire in March, nothing serious', 'The plumber fixed a leak under the sink yesterday'],
 };
 
 const negatives: Record<AskOperationId, readonly string[]> = {
@@ -217,6 +229,8 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   BUYER_FINDING_DISPOSITION: ['What should I discuss with my agent about the inspection?', 'What could cost me money in the first 90 days?'],
   BUYER_COST_READINESS: ['Cancel this purchase', 'Move the roof finding into my post-close plan'],
   BUYER_LIFECYCLE_UPDATE: ['What could cost me money in the first 90 days?', 'What should I do next for this purchase?'],
+  CAPTURE_FACT_CONFIRM: ['What is my roof type?', 'Create a maintenance task for the roof'],
+  CAPTURE_EVENT_CONFIRM: ['What maintenance is pending?', 'Show my home timeline'],
 };
 
 const answerPositives: Record<AskOperationId, readonly string[]> = {
@@ -287,6 +301,8 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   BUYER_COST_READINESS: ['Recorded near-term purchase costs are summarized as a modelled estimate.'],
   BUYER_FINDING_DISPOSITION: ['The selected finding can be reclassified after confirmation.'],
   BUYER_LIFECYCLE_UPDATE: ['This purchase can be cancelled or its recorded dates updated after confirmation.'],
+  CAPTURE_FACT_CONFIRM: ['The stated property fact is ready to be saved to the canonical Living Home Record after confirmation.'],
+  CAPTURE_EVENT_CONFIRM: ['The described event is ready to be added to the canonical home timeline after confirmation.'],
 };
 
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
@@ -357,6 +373,8 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   BUYER_COST_READINESS: ['Inspection findings under negotiation are organized by seller response'],
   BUYER_FINDING_DISPOSITION: ['This purchase can be cancelled after confirmation'],
   BUYER_LIFECYCLE_UPDATE: ['The selected finding is reclassified as a verified fact'],
+  CAPTURE_FACT_CONFIRM: ['The described event is added to the canonical home timeline'],
+  CAPTURE_EVENT_CONFIRM: ['The stated property fact is saved to the canonical Living Home Record'],
 };
 
 export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, AskOperationSemanticPackage>> = Object.freeze(

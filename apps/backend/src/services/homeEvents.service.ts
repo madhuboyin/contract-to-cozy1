@@ -116,6 +116,13 @@ export class HomeEventsService {
     if (!ok) throw new APIError('Parent event not found', 404, 'PARENT_EVENT_NOT_FOUND');
   }
 
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8/§17; FRD §20).
+  private async assertWarrantyBelongs(propertyId: string, warrantyId?: string | null) {
+    if (!warrantyId) return;
+    const ok = await prisma.warranty.findFirst({ where: { id: warrantyId, propertyId }, select: { id: true } });
+    if (!ok) throw new APIError('Warranty not found', 404, 'WARRANTY_NOT_FOUND');
+  }
+
   private async assertNoParentCycle(propertyId: string, eventId: string, parentEventId?: string | null) {
     let cursor = parentEventId ?? null;
     const visited = new Set<string>();
@@ -540,6 +547,7 @@ export class HomeEventsService {
     await this.assertClaimBelongs(propertyId, body.claimId ?? null);
     await this.assertExpenseBelongs(propertyId, body.expenseId ?? null);
     await this.assertParentEventBelongs(propertyId, body.parentEventId ?? null);
+    await this.assertWarrantyBelongs(propertyId, body.warrantyId ?? null);
 
     // If idempotencyKey provided, try to return existing first (clean UX)
     if (body.idempotencyKey) {
@@ -578,6 +586,14 @@ export class HomeEventsService {
           inventoryItemId: body.inventoryItemId ?? null,
           claimId: body.claimId ?? null,
           expenseId: body.expenseId ?? null,
+          // Ask Cozy Stage 3, Phase 2 (implementation plan §8/§17; FRD §20) --
+          // additive fields, undefined for every existing caller that
+          // doesn't pass them (this method's own prior behavior unchanged).
+          warrantyId: body.warrantyId ?? null,
+          providerName: body.providerName ?? null,
+          captureChannel: body.captureChannel ?? null,
+          attribution: body.attribution ?? null,
+          extractionConfidence: body.extractionConfidence ?? null,
 
           meta: body.meta ?? undefined,
           groupKey: body.groupKey ?? null,

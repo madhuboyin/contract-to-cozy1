@@ -96,7 +96,14 @@ export type AskOperationId =
   | 'BUYER_NEGOTIATION_READINESS'
   | 'BUYER_COST_READINESS'
   | 'BUYER_FINDING_DISPOSITION'
-  | 'BUYER_LIFECYCLE_UPDATE';
+  | 'BUYER_LIFECYCLE_UPDATE'
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20/§22).
+  // Not reachable via ordinary message routing -- created directly in
+  // NEEDS_CONFIRMATION status by whatever produces a capture candidate
+  // (Phase 3's extraction; a synthetic test harness in this phase). Zero
+  // schema change needed for these two string literals (§4.3, verified).
+  | 'CAPTURE_FACT_CONFIRM'
+  | 'CAPTURE_EVENT_CONFIRM';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -284,6 +291,15 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // transition in the service layer, so it is intentionally unavailable
   // rather than simulated (FRD §21.1).
   BUYER_LIFECYCLE_UPDATE: definition('BUYER_LIFECYCLE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer.lifecycle.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20/§22).
+  // MATERIAL_DECISION: these write durable canonical facts/events. Never
+  // routed to directly (see the AskOperationId union comment above) -- the
+  // propose-time handler exists only so Phase 1's capability registry has
+  // no coverage gap; it returns a boundary explaining this, not a
+  // confirmation card. The real work happens confirm-time
+  // (confirmCapabilityHandlerRegistry.ts).
+  CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {

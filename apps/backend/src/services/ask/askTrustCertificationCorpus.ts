@@ -214,6 +214,9 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   BUYER_COST_READINESS: 'Two open Buyer Plan tasks carry a recorded price tag, totaling twelve hundred dollars in near-term buyer expense.',
   BUYER_FINDING_DISPOSITION: 'The water-heater finding can be reclassified as post-close work after confirmation.',
   BUYER_LIFECYCLE_UPDATE: 'This purchase can be cancelled after confirmation, preserving completed work and uploaded evidence.',
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20).
+  CAPTURE_FACT_CONFIRM: 'The stated property fact is ready to be saved to the canonical Living Home Record after confirmation.',
+  CAPTURE_EVENT_CONFIRM: 'The described event is ready to be added to the canonical home timeline after confirmation.',
 });
 
 export const ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES = Object.freeze(

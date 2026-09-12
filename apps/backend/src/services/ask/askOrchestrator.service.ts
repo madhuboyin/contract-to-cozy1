@@ -1,4 +1,4 @@
-import { AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
+import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -96,6 +96,9 @@ import {
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 import { assertCoverageConflictFree } from '../coverageConflict.service';
 import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
+import { capturePropertyFact } from '../../modules/propertyContext/application/capturePropertyFact';
+import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
+import { HomeEventsService } from '../homeEvents.service';
 import { getFinancialContextDecisions } from '../financialContext/context';
 import { getProfile, upsertProfile } from '../financing.service';
 import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.service';
@@ -6206,6 +6209,30 @@ registerCapabilityHandler('buyer.cost-readiness', async (envelope) => buyerCostR
 registerCapabilityHandler('buyer.finding.disposition', async (envelope) => buyerFindingDispositionResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('buyer.lifecycle.update', async (envelope) => buyerLifecycleUpdateResult(envelope.userId, envelope.propertyId!, envelope.message));
 
+// Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20/§22).
+// CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM are never reached through
+// ordinary message routing -- a capture candidate is created directly in
+// NEEDS_CONFIRMATION status by whatever produced it (Phase 3's extraction;
+// a synthetic test harness in this phase), never proposed from a raw
+// homeowner message. This handler exists only so Phase 1's capability
+// registry has no coverage gap for these two operations; the real
+// propose-time and confirm-time work is confirmAskExecution's job (the
+// confirm-time registry, below).
+function captureNotDirectlyRoutableResult(kind: 'fact' | 'event'): AskOperationResult {
+  return {
+    status: 'OUT_OF_SCOPE',
+    reasonCode: 'ASK_CAPTURE_NOT_DIRECTLY_ROUTABLE',
+    blocks: [{
+      type: 'BOUNDARY', id: `capture-${kind}-confirm-not-routable`, title: 'This isn\'t something you can ask for directly', severity: 'INFO',
+      body: `A ${kind} capture confirmation is created automatically when Ask recognizes something you mentioned in conversation -- it can't be started directly.`,
+      suggestions: [],
+    }],
+    suggestions: [],
+  };
+}
+registerCapabilityHandler('capture.fact.confirm', async () => captureNotDirectlyRoutableResult('fact'));
+registerCapabilityHandler('capture.event.confirm', async () => captureNotDirectlyRoutableResult('event'));
+
 function buildCapabilityInvocationEnvelope(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
 ): CapabilityInvocationEnvelope {
@@ -9188,6 +9215,98 @@ registerConfirmCapabilityHandler('decision-platform.hvac.preference.forget', con
 registerConfirmCapabilityHandler('home-deadline.monitor', confirmHomeDeadlineMonitor);
 registerConfirmCapabilityHandler('household.invitation', confirmHouseholdInvitation);
 registerConfirmCapabilityHandler('refinance.monitor', confirmRefinanceRateMonitor);
+
+// Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20/§22). The
+// two new capture-confirm write handlers -- the actual functional core this
+// phase's acceptance criterion is about (a synthetic candidate can be
+// confirmed, retried under a lease-reclaim race, rejected, and persisted
+// exactly once). Both delegate the real write to an existing, idempotent
+// writer (capturePropertyFact / HomeEventsService.createHomeEvent) keyed on
+// this execution's own id -- captureExecutionId / idempotencyKey
+// respectively -- rather than reimplementing idempotency here.
+const homeEventsServiceForCapture = new HomeEventsService();
+
+async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, command } = ctx;
+  const factKey = parameters.factKey;
+  if (typeof factKey !== 'string' || !factKey.trim()) {
+    throw Object.assign(new Error('The fact to capture is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  const sourceType: PropertyFactSourceType = typeof parameters.sourceType === 'string'
+    ? parameters.sourceType as PropertyFactSourceType
+    : 'USER_REPORTED';
+  const attribution: AskCaptureAttribution | null = typeof parameters.attribution === 'string'
+    ? parameters.attribution as AskCaptureAttribution
+    : null;
+  const captureChannel = typeof parameters.captureChannel === 'string' ? parameters.captureChannel : 'ASK_CHAT';
+  const extractionConfidence = typeof parameters.extractionConfidence === 'number' ? parameters.extractionConfidence : null;
+  const confidence = typeof parameters.confidence === 'number' ? parameters.confidence : null;
+
+  let capture: Awaited<ReturnType<typeof capturePropertyFact>>;
+  try {
+    capture = await capturePropertyFact(execution.propertyId, userId, factKey, {
+      value: parameters.value,
+      sourceType,
+      confidence,
+      attribution,
+      captureChannel,
+      extractionConfidence,
+      captureExecutionId: execution.id,
+    });
+  } catch (error) {
+    if (error instanceof PropertyContextAccessDeniedError) {
+      throw Object.assign(new Error('You do not have permission to update this property record.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    }
+    throw error;
+  }
+  const evidenceId = capture.evidenceIds[0] ?? '';
+  const propertyRecordHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/edit`;
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'FACT_CAPTURED',
+    blocks: [{
+      type: 'SUMMARY', id: `fact-captured-${evidenceId}`, title: 'Recorded to your property record', tone: 'POSITIVE',
+      body: `"${factKey}" is now saved to your Living Home Record.`,
+      actions: [{ id: 'open-property-record', label: 'Open property record', href: propertyRecordHref, style: 'PRIMARY' }],
+    }],
+    confirmation: null, suggestions: [],
+  };
+  return { result, artifactType: command.artifactType, artifactId: evidenceId };
+}
+registerConfirmCapabilityHandler('capture.fact.confirm', confirmCaptureFact);
+
+async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, command } = ctx;
+  const type = parameters.type;
+  const title = parameters.title;
+  const occurredAt = parameters.occurredAt;
+  if (typeof type !== 'string' || typeof title !== 'string' || !title.trim() || typeof occurredAt !== 'string') {
+    throw Object.assign(new Error('The home event to record is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  const created = await homeEventsServiceForCapture.createHomeEvent({
+    propertyId: execution.propertyId,
+    userId,
+    body: {
+      ...parameters,
+      type,
+      title,
+      occurredAt,
+      idempotencyKey: execution.id,
+    },
+  });
+  const timelineHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/timeline`;
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'EVENT_CAPTURED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `event-captured-${created.id}`, title: 'Added to your home timeline', status: 'COMPLETED',
+      description: 'This event is now part of your home\'s canonical timeline.',
+      details: [{ label: 'Event', value: created.title }],
+      actions: [{ id: 'open-timeline', label: 'Open timeline', href: timelineHref, style: 'PRIMARY' }],
+    }],
+    confirmation: null, suggestions: [],
+  };
+  return { result, artifactType: command.artifactType, artifactId: created.id };
+}
+registerConfirmCapabilityHandler('capture.event.confirm', confirmCaptureEvent);
 
 export async function confirmAskExecution(userId: string, executionId: string, input: SubmitAskConfirmation): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });

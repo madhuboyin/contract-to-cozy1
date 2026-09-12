@@ -24,6 +24,9 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'INSPECTION_FINDING_UPDATE',
   'DOCUMENT_PROMOTION_CONFIRM',
   'OPERATIONAL_WORK_UPDATE',
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20).
+  'CAPTURE_FACT_CONFIRM',
+  'CAPTURE_EVENT_CONFIRM',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -91,6 +94,18 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   INSPECTION_FINDING_UPDATE: command('INSPECTION_FINDING_UPDATE', 'INSPECTION_FINDING_UPDATE', 'inspection-findings.update', 'CONTRIBUTOR', 'INSPECTION_FINDING', ['EDIT', 'REOPEN'], { title: 'Inspection finding not changed', body: 'The finding and any linked Operational Work Item remain unchanged.', suggestion: 'Show my open inspection findings' }),
   DOCUMENT_PROMOTION_CONFIRM: command('DOCUMENT_PROMOTION_CONFIRM', 'DOCUMENT_PROMOTION_CONFIRM', 'document-promotion.confirm', 'CONTRIBUTOR', 'DOCUMENT_PROMOTION', ['EDIT'], { title: 'Document candidate not promoted', body: 'No extracted candidate became canonical Home Record truth.', suggestion: 'Show pending document reviews' }),
   OPERATIONAL_WORK_UPDATE: command('OPERATIONAL_WORK_UPDATE', 'OPERATIONAL_WORK_UPDATE', 'home-operations.update', 'CONTRIBUTOR', 'OPERATIONAL_WORK_ITEM', ['EDIT', 'REOPEN', 'STOP'], { title: 'Operational Work not changed', body: 'The work item lifecycle, schedule, and evidence remain unchanged.', suggestion: 'Show my home operations' }),
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8/§4.1; FRD §19/§20).
+  // correctionModes: ['EDIT'] describes intent, not a wired mechanism --
+  // §4.1 confirmed the correctionModes vocabulary itself is entirely
+  // unconsumed metadata (nothing reads it to drive dispatch). The real
+  // correction path is PropertyFactEvidence's existing supersededAt chain /
+  // HomeEvent's existing supersedesEventId/isCurrent chain, not yet wired
+  // for these two operations as of this slice (implementation plan §8's
+  // status note) -- EDIT here just keeps this registry's own completeness
+  // convention (every material command declares a correction affordance)
+  // truthful about what's intended.
+  CAPTURE_FACT_CONFIRM: command('CAPTURE_FACT_CONFIRM', 'CAPTURE_FACT_CONFIRM', 'capture.fact.confirm', 'CONTRIBUTOR', 'PROPERTY_FACT_EVIDENCE', ['EDIT'], { title: 'Fact not recorded', body: 'No property fact or evidence record was changed.', suggestion: 'Show my property record' }),
+  CAPTURE_EVENT_CONFIRM: command('CAPTURE_EVENT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'capture.event.confirm', 'CONTRIBUTOR', 'HOME_EVENT', ['EDIT'], { title: 'Event not recorded', body: 'No home timeline event was created.', suggestion: 'Show my home timeline' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

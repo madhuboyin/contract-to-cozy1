@@ -16,9 +16,11 @@ const { AskCapabilityHandlerMissingError } = require('../../src/services/ask/cap
 // production bootstrap does before running validateCapabilityHandlerRegistry.
 require('../../src/services/ask/askOrchestrator.service.ts');
 
-test('every one of the 67 Ask operations resolves to a registered capability handler', () => {
+test('every one of the 69 Ask operations resolves to a registered capability handler', () => {
   const operationIds = Object.keys(ASK_OPERATION_DEFINITIONS);
-  assert.equal(operationIds.length, 67);
+  // 67 from Phase 1's original inventory + CAPTURE_FACT_CONFIRM/
+  // CAPTURE_EVENT_CONFIRM (Phase 2, implementation plan §8; FRD §19/§20).
+  assert.equal(operationIds.length, 69);
   assert.deepEqual(validateCapabilityHandlerRegistry(), []);
 });
 
