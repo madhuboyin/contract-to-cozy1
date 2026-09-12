@@ -79,7 +79,11 @@ import {
 } from './askOperationRegistry';
 import {
   capabilityInvoke,
+  needsPropertyResult,
+  operationalUnavailableResult,
+  permissionRequiredResult,
   registerCapabilityHandler,
+  skillRuntimeUnavailableReason,
   type CapabilityInvocationDependencies,
 } from './capabilityHandlerRegistry';
 import type { CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
@@ -160,7 +164,6 @@ import {
 } from '../skills/skillExecutionTelemetry';
 import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
 import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
-import { SKILL_DEPENDENCY_ACTIVATIONS } from '../skills/skillDependencyRegistry';
 import { buildFocusedHomeActionGuidance, focusedHomeActionCategory, focusedHomeActionQuestion, focusedOperationForLaunchContext } from './askFocusedGuidance';
 import { lifecyclePromptsFor } from './askLifecyclePromptPolicy';
 import { applyAskAudiencePresentation } from './askAudiencePresentation';
@@ -688,22 +691,6 @@ async function householdInvitationResult(
       expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
-  };
-}
-
-function needsPropertyResult(): AskOperationResult {
-  return {
-    status: 'NEEDS_PROPERTY',
-    reasonCode: 'ASK_PROPERTY_REQUIRED',
-    blocks: [{
-      type: 'SUMMARY',
-      id: 'property-required',
-      title: 'Select a home to continue',
-      body: 'This question needs a specific Living Home Record. Select a home, then Ask will continue with the same question.',
-      tone: 'CAUTION',
-      actions: [{ id: 'select-property', label: 'Select a home', href: '/dashboard/properties', style: 'PRIMARY' }],
-    }],
-    suggestions: ['You can also ask a general home-care question without selecting a property.'],
   };
 }
 
@@ -5538,29 +5525,6 @@ async function maybeSynthesizeDeterministicResult(operationId: AskOperationResol
   }
 }
 
-function operationalUnavailableResult(reason:
-  | 'ASK_DISABLED'
-  | 'ASK_SKILL_DISABLED'
-  | 'ASK_SKILL_POLICY_MISMATCH'
-  | 'ASK_SKILL_DEPENDENCY_UNAVAILABLE'
-  | 'OPERATION_DISABLED'
-  | 'REMOTE_GENERATION_DISABLED'
-): AskOperationResult {
-  const remoteOnly = reason === 'REMOTE_GENERATION_DISABLED';
-  return {
-    status: 'UNAVAILABLE',
-    reasonCode: reason,
-    blocks: [{
-      type: 'BOUNDARY', id: 'ask-operational-boundary', title: remoteOnly ? 'General guidance is temporarily limited' : 'This Ask capability is temporarily unavailable', severity: 'INFO',
-      body: remoteOnly
-        ? 'Record-based questions and registered home tools are still available, but open-ended generated guidance is currently turned off. Ask will not invent an answer while generation is unavailable.'
-        : 'This capability has been paused by an operational control. Your home record was not changed.',
-      suggestions: ['Ask about recorded maintenance, coverage, savings, inventory, home actions, or your property summary.'],
-    }],
-    suggestions: ['What maintenance is pending?', 'Summarize my home record', 'Which items are missing coverage?'],
-  };
-}
-
 function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresentationBlock['type'][] {
   const operation = getAskOperationDefinition(operationId);
   const skill = getSkillForOperation(operationId);
@@ -5588,26 +5552,6 @@ function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: Ask
       );
     }
   }
-}
-
-type SkillRuntimeUnavailableReason = 'ASK_SKILL_DISABLED' | 'ASK_SKILL_POLICY_MISMATCH' | 'ASK_SKILL_DEPENDENCY_UNAVAILABLE';
-
-function skillRuntimeUnavailableReason(
-  operationId: AskOperationId,
-  controls: ReturnType<typeof readAskOperationalControls>,
-): SkillRuntimeUnavailableReason | null {
-  const skill = getSkillForOperation(operationId);
-  if (!skill) return null;
-  if (skill.operationalStatus !== 'ENABLED' || !controls.skillEnabled(skill.id)) return 'ASK_SKILL_DISABLED';
-  const dependencyActivation = SKILL_DEPENDENCY_ACTIVATIONS[skill.id];
-  if (!dependencyActivation || dependencyActivation.skillVersion !== skill.version || dependencyActivation.status === 'UNAVAILABLE') {
-    return 'ASK_SKILL_DEPENDENCY_UNAVAILABLE';
-  }
-  if (!resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')) return 'ASK_SKILL_POLICY_MISMATCH';
-  const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === getAskOperationDefinition(operationId).adapterKey);
-  const adapter = adapterReference ? getSkillAdapter(adapterReference.id, adapterReference.version) : undefined;
-  if (!adapter || !adapter.allowedOperations.includes(operationId) || !controls.adapterEnabled(adapter.id)) return 'ASK_SKILL_DEPENDENCY_UNAVAILABLE';
-  return null;
 }
 
 async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
@@ -6274,8 +6218,9 @@ async function dispatchOperationAdapterResult(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
   trace?: SkillExecutionTimingTrace,
+  propertyAccess?: PropertyAccess | null,
 ): Promise<AskOperationResult> {
-  const deps: CapabilityInvocationDependencies = { composedContext, trace };
+  const deps: CapabilityInvocationDependencies = { composedContext, trace, propertyAccess };
   return capabilityInvoke(input.operation.operationId, buildCapabilityInvocationEnvelope(input), deps);
 }
 
@@ -6317,8 +6262,9 @@ async function dispatchOperationAdapter(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
   composedContext: ComposedSkillContext | null,
   trace?: SkillExecutionTimingTrace,
+  propertyAccess?: PropertyAccess | null,
 ): Promise<AskOperationResult> {
-  const result = await dispatchOperationAdapterResult(input, composedContext, trace);
+  const result = await dispatchOperationAdapterResult(input, composedContext, trace, propertyAccess);
   return attachAskAuthoritativeSourceEvidence(
     result,
     canonicalAdapterSourceEvidence(input.operation.operationId, composedContext),
@@ -6357,15 +6303,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     }
     const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
     if (rank[access.role] < rank[authorizationFloor]) {
-      return {
-        status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-        blocks: [{
-          type: 'SUMMARY', id: 'ask-operation-permission', title: `${authorizationFloor.toLowerCase()} access is required`,
-          body: 'This registered operation is unavailable for your current household role. No home record was changed.',
-          tone: 'CAUTION', actions: [],
-        }],
-        suggestions: ['Ask a read-only question about this home'],
-      };
+      return permissionRequiredResult(authorizationFloor);
     }
   }
   let composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null = null;
@@ -6435,7 +6373,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
       );
     }
   }
-  if (!skill) return dispatchOperationAdapter(input, composedContext, trace);
+  if (!skill) return dispatchOperationAdapter(input, composedContext, trace, propertyAccess);
   const adapterResolutionStartedAt = process.hrtime.bigint();
   const adapterReference = skill.allowedAdapters.find((candidate) => candidate.id === definition.adapterKey)!;
   const adapter = getSkillAdapter(adapterReference.id, adapterReference.version)!;
@@ -6448,7 +6386,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   const canonicalStartedAt = process.hrtime.bigint();
   let canonicalStatus = 'threw';
   try {
-    const canonicalResult = await dispatchOperationAdapter(input, composedContext, trace);
+    const canonicalResult = await dispatchOperationAdapter(input, composedContext, trace, propertyAccess);
     const presentedResult = householdRole
       ? applyAskAudiencePresentation({
         result: canonicalResult,

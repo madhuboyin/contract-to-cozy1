@@ -109,12 +109,17 @@ test('adapter registry validation rejects mismatched ownership, duplicate operat
 
 test('runtime checks adapter availability before context composition or dispatch and rechecks pending writes', () => {
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
-  const runtimeCheck = orchestrator.indexOf('function skillRuntimeUnavailableReason(');
-  const adapterCheck = orchestrator.indexOf("return 'ASK_SKILL_DEPENDENCY_UNAVAILABLE'", runtimeCheck);
+  // Post-Phase-1 policy-enforcement fix: skillRuntimeUnavailableReason now
+  // lives in capabilityHandlerRegistry.ts (askOrchestrator.service.ts
+  // imports it, single source of truth for both callers) -- its own
+  // internal ordering is checked against that file instead.
+  const registry = readFileSync(resolve(__dirname, '../../src/services/ask/capabilityHandlerRegistry.ts'), 'utf8');
+  const runtimeCheck = registry.indexOf('function skillRuntimeUnavailableReason(');
+  const adapterCheck = registry.indexOf("return 'ASK_SKILL_DEPENDENCY_UNAVAILABLE'", runtimeCheck);
   const coreStart = orchestrator.indexOf('async function executeOperationCore(');
   const coreRuntimeCheck = orchestrator.indexOf('skillRuntimeUnavailableReason(input.operation.operationId, controls)', coreStart);
   const compose = orchestrator.indexOf('composedContext = await composeSkillContext', coreStart);
-  const dispatch = orchestrator.indexOf('dispatchOperationAdapter(input, composedContext, trace)', coreStart);
+  const dispatch = orchestrator.indexOf('dispatchOperationAdapter(input, composedContext, trace, propertyAccess)', coreStart);
   assert.ok(adapterCheck > runtimeCheck);
   assert.ok(coreRuntimeCheck > coreStart && coreRuntimeCheck < compose);
   assert.ok(compose < dispatch);

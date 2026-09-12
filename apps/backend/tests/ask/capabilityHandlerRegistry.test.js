@@ -57,5 +57,20 @@ test('propose-time dispatch no longer branches on operationId inside askOrchestr
   assert.match(dispatchBody, /capabilityInvoke\(input\.operation\.operationId, buildCapabilityInvocationEnvelope\(input\), deps\)/);
   // Every operation still goes through the one existing dispatch wrapper
   // (dispatchOperationAdapter) that attaches authoritative source evidence.
-  assert.match(orchestrator, /dispatchOperationAdapter\(input, composedContext, trace\)/);
+  assert.match(orchestrator, /dispatchOperationAdapter\(input, composedContext, trace, propertyAccess\)/);
+});
+
+test('capabilityInvoke enforces operational and property-authorization policy itself, not just the orchestrator caller', () => {
+  // Review finding: calling a disabled operation directly through
+  // capabilityInvoke() previously still executed and returned ANSWERED,
+  // because policy/authorization checks lived only in the orchestrator's
+  // executeOperationCore, never inside the reusable invocation layer
+  // itself. Both checks must now be enforced by capabilityInvoke() with no
+  // orchestrator involved at all.
+  const registry = readFileSync(resolve(__dirname, '../../src/services/ask/capabilityHandlerRegistry.ts'), 'utf8');
+  const invokeStart = registry.indexOf('async function invokeGuarded(');
+  assert.ok(invokeStart >= 0);
+  assert.match(registry, /export function capabilityInvoke\(/);
+  assert.match(registry.slice(invokeStart), /controls\.operationEnabled\(operationId\)/);
+  assert.match(registry.slice(invokeStart), /HOUSEHOLD_ROLE_RANK\[access\.role\] < HOUSEHOLD_ROLE_RANK\[authorizationFloor\]/);
 });
