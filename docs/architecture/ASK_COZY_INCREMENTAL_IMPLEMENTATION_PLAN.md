@@ -5,6 +5,7 @@
 **Evidence discipline:** every claim about current implementation is cited `path:line` and was verified fresh during this stage's research (five parallel verification passes into correction-mode dispatch, schema representations, Home Event Radar runtime state, the handler inventory (67 operations documented, confirmed complete against the registry per §4.8), and existing UI/eval infrastructure) — not copied from Stage 2 without re-checking where implementation detail matters, per this stage's explicit instruction.
 **Revision note 1:** an external review round against this document and the FRD together, checked against fresh code reading rather than taken on faith, found: a second, undocumented dispatch surface for confirmed-write execution (§4.9, new); Phase 3's own representative mortgage-rate example targets a fact the current capture path rejects (§9); Phase 3's async-fallback delivery has an unstated dependency on Phase 5 infrastructure (§9, §15); a real contradiction between this document's own §8 and §20 on which phase adds three schema fields (§20, fixed); and one review claim — that the request's instructions prohibit production-usage gating and rollout flags — was checked directly against the original request text and found unsupported (the request explicitly asks for these flags and this risk ordering in its own §39/§40); Phase 7's "production use, not just tested" gate is this document's own addition beyond the request's vaguer "proves stable," softened accordingly (§13).
 **Revision note 2:** a follow-up review round found revision 1 had acknowledged two gaps without closing them. Both now closed: §9 specifies the financing writer's full atomicity/idempotency contract (transaction shape modeled on `capturePropertyFact`, evidence-create gating the profile upsert for replay safety, and verification that the existing financing context assembler already reads real evidence over its synthetic fallback with zero reader-side change) and explicitly revises Phase 3's acceptance criterion to exclude proactive async-fallback delivery rather than leaving that gap implicit; §18/§19 decide the child-execution delivery contract (a bounded, one-level-deep `childExecutions` field on the response, plus a one-line frontend change) instead of deferring the choice.
+**Revision note 3 — Phase 0 implementation pass (this session):** closes every decision §6 listed as blocking Phase 1, each verified fresh against code rather than assumed, per `docs/architecture/AUDIT_METHODOLOGY.md`: §4.2's two `GroundedAskProposal.kind` gaps (`UPLOAD_EVIDENCE` scoped to `HomeEventEvidence`-backed evidence on a sibling `HomeEvent` candidate only, not a generic cross-kind link — the schema has no evidence-attachment target for any other candidate type, confirmed by reading `PropertyFactEvidence`'s columns directly, so that remainder is left explicitly open rather than silently dropped; `ADD_NOTE` mapped onto `HomeEvent` with `type: NOTE`, already a precedented enum value in production code paths); §4.6's domain-list fix (per-component allowlist, not unconditional widen) **plus a new finding this pass's own verification surfaced that the FRD's speculative "may already keep results relevant" framing turned out to be false**: `matchesQuery`'s domain and entityRef filters are independent ANDs, and `PropertyRadarMatch`/`PropertyRadarCompoundInsight` — the actual source of the WEATHER-domain radar insights this fix exists to surface — never populate an `entityRef` at all, so neither fix option alone makes Scenario 8.4 work; §4.7's `HVAC_SPECIALIST_ENGAGE` question (closed: not a gap, see below); and the renovation-naming ambiguity FRD §31 flagged (closed: two genuinely distinct features, no rewiring — new §4.10). One more Phase 0-flagged item lived only in the FRD, not mirrored into this document's own §4/§6 checklist (FRD §33): whether a `HomeEvent` review/correction UI exists — confirmed yes, already fully wired (`/dashboard/properties/[id]/timeline`, `correctHomeEvent` PATCH with a required `correctionReason`), no new UI work needed. No schema edits or code changes were made in this pass; per this document's own charter (line 3), Phase 0 output is decisions, cited against code, not implementation.
 
 ---
 
@@ -72,7 +73,65 @@ RECOMMENDED ADJUSTMENT: build correction/reversal for captured facts and events 
 ```
 
 ### 4.2 `GroundedAskProposal.kind` mapping — 2 of 7 kinds need a Phase 0 decision, not an assumed mapping
-Full table in FRD §23. `ADD_FACT`/`CORRECT_FACT`/`CREATE_TASK`/`START_JOURNEY`/`COMPARE_OPTIONS` map cleanly (the last three onto exact existing operations with zero semantic drift). `UPLOAD_EVIDENCE` and `ADD_NOTE` do not — see FRD §23 for the specific gap in each. **Action:** resolve both before Phase 2's retirement work begins, not during it.
+Full table in FRD §23. `ADD_FACT`/`CORRECT_FACT`/`CREATE_TASK`/`START_JOURNEY`/`COMPARE_OPTIONS` map cleanly (the last three onto exact existing operations with zero semantic drift). `UPLOAD_EVIDENCE` and `ADD_NOTE` do not — see FRD §23 for the specific gap in each.
+
+**Phase 0 resolution (this pass), both verified fresh against code:**
+
+```
+UPLOAD_EVIDENCE:
+  NEW CODE EVIDENCE: today's confirm path (`groundedAsk.service.ts:252-260`) only verifies an
+    already-uploaded Document belongs to the user/property, then records the linkage inside
+    `GroundedAskArtifact.artifactJson` (`groundedAsk.service.ts:261-273`) — it never writes
+    `Document` itself and never uses either of the schema's two real "Document evidences record X"
+    join tables. `DOCUMENT_PROMOTION_CONFIRM`, checked directly, writes to a materially different
+    target: it promotes an already-extracted candidate field from a domain-specific pending-review
+    row (`MaterialExtractionReview`, `InsurancePolicyFact`, `InspectionReport`) into that domain's
+    canonical record (`MaterialSpec`, `InsurancePolicy`/`InsurancePolicyTerm`, inspection findings)
+    — never touching `Document` or evidence at all (`askOrchestrator.service.ts:8333-8364`). These
+    are confirmed genuinely different persistence targets, not one write under two names — the FRD
+    §23 gap was real, not an artifact of under-specification.
+  SCOPE FINDING: the schema's only "Document is evidence for record X" table is
+    `HomeEventEvidence` (`schema.prisma:7545-7567`) — and its `eventId` is a required FK to
+    `HomeEvent`, not a generic polymorphic target. `PropertyFactEvidence` (`schema.prisma:4489-4506`)
+    — the only other plausible target, for evidence on a captured fact rather than an event — has
+    no `documentId` column and no evidence-array of any kind. So there is no existing schema
+    surface for "this Document is evidence for a *fact*, task, journey, or comparison candidate,"
+    only for a HomeEvent.
+  DECISION: do not extend `DOCUMENT_PROMOTION_CONFIRM`'s semantics (confirmed wrong target above).
+    Scope `UPLOAD_EVIDENCE` down to what the schema actually supports today: evidence attached to a
+    sibling `HomeEvent` capture candidate in the same extraction batch, using the same bidirectional
+    `linkedExecutionId` sibling-linking mechanism §22 already specifies for Warranty/HomeEvent pairs,
+    writing to `HomeEventEvidence` on confirm (`documentId` + `eventId` + `sourceEntityType`/
+    `sourceEntityId` for secondary provenance). Evidence for any other candidate kind (a fact, a
+    task, a journey) has no existing write target and is **left explicitly open** — this is a real
+    schema-change decision (a `documentId`/evidence-array on `PropertyFactEvidence`, or an
+    equivalent), out of a verification-only Phase 0's scope per this document's own charter (line 3:
+    no schema edits in this document). Whoever scopes Phase 3 (the phase that first touches
+    `PropertyFactEvidence` writes, §9) must decide whether to add it there or continue deferring it
+    — tracked here so it is not silently dropped the way the original UPLOAD_EVIDENCE gap was.
+
+ADD_NOTE:
+  NEW CODE EVIDENCE: note text lives only in `GroundedAskArtifact.artifactJson`
+    (`groundedAsk.service.ts:265-271`) today — no dedicated column, no queryable domain model, per
+    FRD §23's original finding, confirmed unchanged. `HomeEvent.type` already has a precedented
+    `NOTE` value in the `HomeEventType` enum (`schema.prisma:7328-7344`), already used by
+    `permitDetection.service.ts:299` and `claims.service.ts:1151` — this is not a hypothetical fit,
+    it is an existing pattern. `HomeEvent.occurredAt` is a required, non-nullable column
+    (`schema.prisma:7440`), so a note cannot be literally dateless — it needs `occurredAt` defaulted
+    to confirm-time and `datePrecision: UNKNOWN` (`schema.prisma:7378-7384`, an existing enum
+    variant built for exactly this). `amount`/`summary` are nullable (`schema.prisma:7450, 7447`),
+    so a note with no dollar figure is fully supported.
+  DECISION: `ADD_NOTE` → `HomeEvent` capture (§20) with `type: NOTE`, `occurredAt` = confirm time,
+    `datePrecision: UNKNOWN`, `amount`/`summary` null. No new model. **Behavior change to flag
+    explicitly, not silently absorb:** today's proposal schema exempts `ADD_NOTE` alone from
+    requiring a `propertyId` (`groundedAsk.contract.ts:18`); `HomeEvent` is inherently
+    property-scoped, so this mapping requires a `propertyId` for every note going forward. Accepted
+    under Implementation Principle #6 (no production users exist yet) — but Phase 3, which
+    implements this capture path, must state this narrowing in its own acceptance criteria rather
+    than let it surface as an unreviewed regression.
+```
+
+**Action closed this revision** — both decisions above are final for this program; the one remainder (non-HomeEvent evidence attachment) is a tracked, explicit open item for Phase 3's scoping, not an unresolved Phase 0 question.
 
 ### 4.3 `AskOperationId` / `DecisionThread.goalCode` schema representation — resolved, no schema change needed
 **[FACT]** `AskExecution.operationId` (`schema.prisma:7951`) is a plain nullable `String`; `AskOperationId` (`askOperationRegistry.ts:19-22`) is a plain TS string-literal union, not generated from or synced with any Prisma enum. `DecisionThread.goalCode` (`schema.prisma:8269`) is likewise a plain, non-nullable `String`, no Prisma enum exists. **Conclusion:** adding `CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM` and `SELL_HOLD_RENT`/`RENOVATION`/`CLAIM`/`REFINANCE` requires zero schema change — new string literals used by convention, exactly like every existing addition to these two spaces.
@@ -115,8 +174,72 @@ RECOMMENDED ADJUSTMENT: as part of Phase 1 (the first phase touching DomainEvent
 - **(b)** Per-component allowlist: add `WEATHER` only for `ROOF`/`FOUNDATION`/`EXTERIOR`/`SITE` (each has a plausible WEATHER-domain rule), excluding `INTERIOR`.
 **Action:** before picking (a) or (b), verify `intelligenceEnvelopeQuery.service.ts`'s `entityRef`/`componentKind` filtering logic (not read in this pass) — it may already keep results relevant regardless of domain-list breadth, which would make (a) safe and simpler.
 
-### 4.7 Handler inventory, and the one confirmation-registry question it surfaced
-Full handler table in §5 below — completed in this pass, not deferred. That table surfaced one open question worth resolving here rather than leaving implicit: `HVAC_SPECIALIST_ENGAGE` is classified `MATERIAL_DECISION`/`CONTRIBUTOR` in `askOperationRegistry.ts` but has **no entry** in `askDomainCommandRegistry.ts` — every other material-write operation has one. Its confirmation (if any) is handled inside the specialist-agent runtime itself, not via the standard command path. **Action:** confirm with whoever owns the HVAC specialist-agent pattern whether that self-managed confirmation is an intentional design choice (the agent runtime has its own audit trail, so a second confirmation layer may be redundant) or a genuine gap that predates this program — before this operation is migrated in Phase 1, since the capability-invocation layer's "passthrough" category (FRD §16) needs to know which behavior to preserve.
+**Phase 0 resolution (this pass):** the FRD's speculation above does not hold — verified directly.
+
+```
+NEW CODE EVIDENCE: `matchesQuery` (`intelligenceEnvelopeQuery.service.ts:505-516`) applies the
+  `domains` filter and the `entityRefs` filter as two independent `if (...) return false` checks —
+  an item must pass both, neither compensates for the other. So entity-ref scoping does not make an
+  unconditional domain widen "safe by narrowing anyway," as the open question above speculated.
+NEW FINDING (not previously flagged, more consequential than the (a)/(b) choice itself):
+  `matchesEntityScope` (`:490-503`) only matches a componentKind-scoped `{PROPERTY, entityId,
+  componentKind}` query against an item whose `subject.entityRef.entityType === 'INVENTORY_ITEM'`
+  with a category in `COMPONENT_INVENTORY_CATEGORIES`. Of the seven envelope producer readers, only
+  three ever populate `entityRef` at all: `Signal`, `GuidanceSignal` (`guidanceSignalEnvelopeAdapter.ts:38-44`,
+  only when the underlying row has an `inventoryItemId`), and `RecommendationSnapshot`
+  (`intelligenceEnvelopeQuery.service.ts:349-354`, same condition). `PropertyRadarMatch` and
+  `PropertyRadarCompoundInsight` — the producers that actually carry the WEATHER-domain radar
+  insights this fix exists to surface (`SEVERE_WEATHER_OPEN_ROOF_ISSUE`, `heavy_rain`,
+  `flood_risk`, etc., per `envelopeMappingRegistry.ts:63-89`) — never set `entityRef`
+  (`intelligenceEnvelopeQuery.service.ts:397-460`, no `entityRef` field in either mapped item).
+  `matchesEntityScope` returns `false` immediately when `actual` is absent (`:492`). So today, no
+  Radar-sourced item can ever satisfy a component-scoped query from `resolveAskEnvelopeQueryScope`
+  — regardless of which domain-list option is chosen, Scenario 8.4 (asking about roof weather risk)
+  would still return nothing from Radar.
+DECISION: adopt **(b)**, the per-component allowlist (`ROOF`/`FOUNDATION`/`EXTERIOR`/`SITE` gain
+  `WEATHER`; `INTERIOR` does not) — it is strictly more precise than (a) with no downside now that
+  entity-ref scoping is confirmed not to compensate for an overly broad domain list, and it
+  documents intent correctly for future WEATHER-domain rules. **But this alone does not achieve the
+  fix's actual goal.** Separately required, and not previously scoped anywhere in this program:
+  give `propertyRadarMatchEnvelopeAdapter`/`propertyRadarCompoundInsightEnvelopeAdapter` an
+  `entityRef` (at minimum `{entityType: 'PROPERTY', entityId, componentKind}` when a radar rule can
+  be attributed to a specific component — e.g. `SEVERE_WEATHER_OPEN_ROOF_ISSUE` → `ROOF`) before
+  §31's Scenario 8.4 is actually demonstrable. Scoped into **Phase 7** (§13, Home Event Radar
+  exposure), alongside the already-known Radar-seed-data precondition (§4.5) — both are
+  preconditions for the same demonstration, not Phase 0 or Phase 1 work, since neither phase
+  touches these adapters.
+```
+
+### 4.7 Handler inventory, and the one confirmation-registry question it surfaced — **CLOSED this revision**
+Full handler table in §5 below — completed in this pass, not deferred. That table surfaced one open question worth resolving here rather than leaving implicit: `HVAC_SPECIALIST_ENGAGE` is classified `MATERIAL_DECISION`/`CONTRIBUTOR` in `askOperationRegistry.ts` but has **no entry** in `askDomainCommandRegistry.ts` — every other material-write operation has one. Its confirmation (if any) is handled inside the specialist-agent runtime itself, not via the standard command path.
+
+**Phase 0 resolution (this pass):**
+
+```
+NEW CODE EVIDENCE: `hvacSpecialistEngageResult` (`askOrchestrator.service.ts:5897-6135`) never
+  returns `NEEDS_CONFIRMATION` — it resolves only to `ANSWERED`/`READY_WITH_LIMITATIONS`/
+  `NEEDS_ENTITY`/`BLOCKED`/`UNAVAILABLE` (`:6072-6085`, `:6091-6135`) and never enters the
+  `AskConfirmationReceipt` flow at all. Tracing into the runtime it calls
+  (`hvacRepairReplaceSpecialist.service.ts:1-9`, header comment: "drives the canonical
+  decision-family adapter... never recomputes HVAC scoring"), the only Prisma writes anywhere in
+  that file are through the `DecisionThread`/`RecommendationSnapshot` decision-family adapter —
+  advisory decision-support records, not a consequential real-world mutation. No booking,
+  scheduling, or claim-creation call exists in this path. Separately, the agent runtime has its own
+  durable, immutable audit trail, architecturally parallel to `AskConfirmationReceipt` rather than
+  absent: `AgentRun` (`schema.prisma:15800-15828`, immutable terminal insert per run, full
+  attribution — `principalUserId`, `propertyId`, `originAskExecutionId`, etc.),
+  `AgentRunReservation` (`:15771-15798`, concurrency/claim control), `AgentState`
+  (`:15844-15866`, CAS-versioned pause/resume state), and `ToolInvocation`
+  (`:15868+`, per-tool-call audit rows).
+VERDICT: not a gap. The specialist writes only advisory artifacts, never a consequential mutation,
+  and substitutes a dedicated, equally durable, agent-specific audit trail for the homeowner
+  confirmation gate specifically because what it writes doesn't warrant one.
+DECISION: no `askDomainCommandRegistry` entry for `HVAC_SPECIALIST_ENGAGE`. Its confirmation column
+  in §5's table stays `N`, now resolved rather than open; Phase 1's passthrough-category shim
+  (FRD §16) preserves this behavior as-is — no new confirmation wiring needed.
+```
+
+No Phase 0 action remains for this item.
 
 ### 4.8 Handler count: a caveat on this pass's own inventory — **CLOSED this revision**
 **[FACT — this pass]** The table in §5 documents **67** operations, cross-referenced by name against `askOperationRegistry.ts`, `askDomainCommandRegistry.ts`, and the orchestrator's dispatch `switch`. Earlier drafts of this stage's documents referred to "68 operations" throughout (an estimate carried from the research task's framing, not a recount against the finished table) — the table itself, once built, contains 67 distinct `operationId` values.
@@ -155,6 +278,34 @@ RECOMMENDED ADJUSTMENT: fold migrating the 8285+ confirmed-write chain into Phas
   remains.
 ```
 Reflected in Phase 2's Work (§8) and Test G's restated scope (§23) below.
+
+### 4.10 Renovation naming ambiguity (FRD §31) — **CLOSED this revision**
+FRD §31 flagged that `RENOVATION_PERMIT_READINESS` calls a thinner `permitTracker`/`renovationCase` pair while a separate, richer `homeRenovationAdvisor/` module exists with zero references from `services/ask/` — Phase 0 was asked to decide which implementation Ask should invoke before any renovation-related capability work proceeds.
+
+```
+NEW CODE EVIDENCE: `renovationPermitReadinessResult` (`askOrchestrator.service.ts:3299-3318`)
+  confirmed to call `listRenovationCases` (`renovationCase.service.ts`), `permitTrackerService
+  .getPermitSummary` (`permitTracker.service.ts`), and `getRenovationReadiness`
+  (`renovationReadiness.service.ts`) — exactly as the plan's original inventory claimed, no
+  drift. These operate on an already-started, governed `RenovationCase` (scope versions,
+  participants, links) and its readiness checklist against canonical project/permit/compliance/
+  quote/schedule/evidence records.
+  `homeRenovationAdvisor/` (`homeRenovationAdvisor.service.ts:1-53`,
+  `evaluationEngine.service.ts:1-40`) is a self-contained prospective jurisdiction/risk evaluator —
+  its own Prisma models (`RenovationAdvisorSession` etc.), running `evaluatePermit`/
+  `evaluateTaxImpact`/`evaluateLicensing` against a resolved jurisdiction to produce a risk level,
+  confidence score, warnings, and next actions as a versioned "session" — answering "what
+  jurisdictional risk would a prospective project of type X carry?", not tied to any
+  `RenovationCase`.
+VERDICT: two legitimately different features that happen to share the word "renovation," not one
+  feature wired to the wrong implementation. `RENOVATION_PERMIT_READINESS` already invokes the
+  correct target for what it answers (an in-progress case's permit/readiness status).
+DECISION: no rewiring. Drop the "confirm target implementation before migrating" caveat on this
+  operation's §5 row — it migrates in Phase 1 like any other Simple row. `homeRenovationAdvisor/`
+  remains unexposed via Ask; if it is exposed in a future phase, it needs its own new
+  `operationId` (e.g. a distinct `RENOVATION_RISK_ASSESSMENT`-shaped operation), never folded into
+  or confused with `RENOVATION_PERMIT_READINESS`.
+```
 
 ---
 
@@ -196,7 +347,7 @@ Reflected in Phase 2's Work (§8) and Test G's restated scope (§23) below.
 | HOME_DEADLINE_MONITOR | home-deadline.monitor | homeDeadlineMonitorResult (:1333) | userId, propertyId, message | MUTATION_PREPARATION | Y — HOME_DEADLINE_MONITOR_CREATE | Simple |
 | CAPITAL_RESERVE_PLAN | capital-reserve.plan | capitalReservePlanResult (:3230) | userId, propertyId only | READ | N | Simple |
 | PROPERTY_TAX_APPEAL_READINESS | property-tax.appeal-readiness | propertyTaxAppealReadinessResult (:3271) | userId, propertyId, message | READ | N | Simple |
-| RENOVATION_PERMIT_READINESS | renovation-permit.readiness | renovationPermitReadinessResult (:3299) | propertyId, message (no userId) | READ | N | Simple — but see §4.2/FRD §31: confirm target implementation before migrating |
+| RENOVATION_PERMIT_READINESS | renovation-permit.readiness | renovationPermitReadinessResult (:3299) | propertyId, message (no userId) | READ | N | Simple — target implementation confirmed correct, resolved §4.10 |
 | MAJOR_EVENT_ENTRY | major-event.entry | majorEventEntryResult (:3323) | userId, propertyId, message | READ | N | Simple |
 | EMERGENCY_BOUNDARY | boundary.emergency | emergencyResult (:5416) | none | READ | N | Trivial |
 | UNSAFE_RESTRICTED_BOUNDARY | boundary.unsafe-restricted | unsafeRestrictedResult (:5442) | none | READ | N | Trivial |
@@ -204,7 +355,7 @@ Reflected in Phase 2's Work (§8) and Test G's restated scope (§23) below.
 | GROUNDED_GUIDANCE | grounded.guidance | groundedGuidanceResult (:5607) | entire input object + separate trace object | READ | N | **Passthrough category** (FRD §16) — highest complexity |
 | HVAC_DECISION_START | decision-platform.hvac.start | hvacDecisionStartResult (:1970) | userId, propertyId, message, executionId | MUTATION_PREPARATION | Y — HVAC_DECISION_START | Simple |
 | HVAC_DECISION_CONTINUE | decision-platform.hvac.continue | hvacDecisionContinueResult (:2024) | userId, propertyId, message, executionId, launchContext-derived entityId | READ | N | Medium |
-| HVAC_SPECIALIST_ENGAGE | decision-platform.hvac.specialist-engage | hvacSpecialistEngageResult (:5897) | userId, propertyId, message, executionId, whole launchContext | MUTATION_PREPARATION | **N — no askDomainCommandRegistry entry despite MATERIAL_DECISION/CONTRIBUTOR classification; confirmation self-managed inside the agent runtime** | **Passthrough category** (FRD §16) — resolve confirmation-registry gap in Phase 0 |
+| HVAC_SPECIALIST_ENGAGE | decision-platform.hvac.specialist-engage | hvacSpecialistEngageResult (:5897) | userId, propertyId, message, executionId, whole launchContext | MUTATION_PREPARATION (advisory only — never returns NEEDS_CONFIRMATION) | N — by design, resolved §4.7: writes only advisory DecisionThread/RecommendationSnapshot records, gated by its own AgentRun/AgentState/ToolInvocation audit trail instead of AskConfirmationReceipt | **Passthrough category** (FRD §16) — confirmation question closed, no registry entry needed |
 | HVAC_DECISION_SCENARIO | decision-platform.hvac.scenario | hvacDecisionScenarioResult (:2117) | userId, propertyId, message | MUTATION_PREPARATION | Y — HVAC_DECISION_SCENARIO | Simple |
 | HVAC_DECISION_ABANDON | decision-platform.hvac.abandon | hvacDecisionAbandonResult (:2173) | userId, propertyId, message | MUTATION_PREPARATION | Y — HVAC_DECISION_ABANDON | Simple |
 | HVAC_PREFERENCE_SAVE | decision-platform.hvac.preference.save | hvacPreferenceSaveResult (:2354) | userId, propertyId, message | MUTATION_PREPARATION | Y — HVAC_PREFERENCE_SAVE | Simple |
@@ -234,15 +385,20 @@ Reflected in Phase 2's Work (§8) and Test G's restated scope (§23) below.
 
 **Coverage: 67 operations documented above, none guessed, confirmed complete** — §4.8 records the automated diff against `askOperationRegistry.ts`'s full literal union: exact match, nothing missing. Cross-cutting internal helper functions (`audienceApplicabilityResult`, `needsPropertyResult`, `hvacDecisionThreadAmbiguousResult`, `buyerNotActiveResult`, `routingClarificationResult`, `maybeSynthesizeDeterministicResult`, `operationalUnavailableResult`, `dispatchOperationAdapterResult`) are invoked within several handlers above and are correctly excluded — they are not per-operation handlers themselves.
 
-**Summary (recounted directly from the table above, correcting an earlier draft's arithmetic error):** 58 "Simple" (pure scalar destructure, including `INTELLIGENCE_ENVELOPE_QUERY` once `continuationCursor` is added to the envelope), 3 "Medium" (need one `launchContext`-derived field), 3 "Trivial" (no envelope fields at all), 2 "Passthrough" (`GROUNDED_GUIDANCE`, `HVAC_SPECIALIST_ENGAGE` — receive the whole envelope/launchContext, per FRD §16's new adapter category), 1 "High" (`MAINTENANCE_STATUS` — needs context-provider values the envelope doesn't carry). 58+3+3+2+1 = 67, matching the table's row count. 25 require confirmation via `AskDomainCommandRegistry`; `HVAC_SPECIALIST_ENGAGE`'s confirmation status is flagged **[OPEN]** pending Phase 0's decision (§4.7 above / FRD §16).
+**Summary (recounted directly from the table above, correcting an earlier draft's arithmetic error):** 58 "Simple" (pure scalar destructure, including `INTELLIGENCE_ENVELOPE_QUERY` once `continuationCursor` is added to the envelope), 3 "Medium" (need one `launchContext`-derived field), 3 "Trivial" (no envelope fields at all), 2 "Passthrough" (`GROUNDED_GUIDANCE`, `HVAC_SPECIALIST_ENGAGE` — receive the whole envelope/launchContext, per FRD §16's new adapter category), 1 "High" (`MAINTENANCE_STATUS` — needs context-provider values the envelope doesn't carry). 58+3+3+2+1 = 67, matching the table's row count. 25 require confirmation via `AskDomainCommandRegistry`; `HVAC_SPECIALIST_ENGAGE`'s confirmation status is resolved as intentionally self-managed, not a gap (§4.7 above / FRD §16).
 
 ---
 
 ## 6. Phase 0 — Pre-implementation Verification
 
-Output: this document's §4 (already complete) plus the remaining decisions it flags as open — `UPLOAD_EVIDENCE`/`ADD_NOTE` target representations (§4.2), the envelope-scope fix choice for `askEnvelopeQueryScope.ts` (§4.6), `HVAC_SPECIALIST_ENGAGE`'s confirmation-registry question (§4.7). §4.8's handler-count diff is closed as of this revision (exact match, no open action). §4.9 (the confirmed-write dispatch surface) is a scoping decision for Phase 2, not Phase 0 — no code changes start there before Phase 1 either way.
+Output: this document's §4, now fully closed as of this revision — `UPLOAD_EVIDENCE`/`ADD_NOTE` target representations (§4.2), the envelope-scope fix choice for `askEnvelopeQueryScope.ts` (§4.6), `HVAC_SPECIALIST_ENGAGE`'s confirmation-registry question (§4.7), and the renovation naming ambiguity (§4.10). §4.8's handler-count diff was closed the prior revision (exact match, no open action). §4.9 (the confirmed-write dispatch surface) is a scoping decision for Phase 2, not Phase 0 — no code changes start there before Phase 1 either way.
 
-**Acceptance criterion:** all items in §4 have either a resolved answer (4.1, 4.3, 4.4, 4.8) or an explicit, documented decision/action (4.2's two gaps, 4.6's fix choice, 4.7's confirmation question) before Phase 1 begins.
+**Acceptance criterion — met as of this revision:** every item in §4 now has either a resolved answer (4.1, 4.3, 4.4, 4.8) or an explicit, documented decision (4.2's two gaps, 4.6's fix choice, 4.7's confirmation question, 4.10's renovation-naming question). §4.5 (Home Event Radar runtime population) remains genuinely open pending a reachable database — by design not a Phase 0 blocker, since it only gates Phase 7's live demonstration, not any Phase 0–6 code path.
+
+**New scope this pass generated for later phases** (neither invented nor silently dropped — tracked here so Phase 1 doesn't have to rediscover them):
+1. **Phase 3** must decide whether to add a `documentId`/evidence-array capability to `PropertyFactEvidence` (or continue deferring it) — `UPLOAD_EVIDENCE` evidence on anything other than a sibling `HomeEvent` candidate has no existing schema target (§4.2).
+2. **Phase 3** must state explicitly, in its own acceptance criteria, that capturing an `ADD_NOTE` now requires a `propertyId` where it previously didn't (§4.2) — a deliberate narrowing under Implementation Principle #6, not an unreviewed regression.
+3. **Phase 7** must give `PropertyRadarMatch`/`PropertyRadarCompoundInsight`'s envelope adapters an `entityRef` before Scenario 8.4 is demonstrable — the domain-list fix alone (§4.6) does not surface Radar-sourced WEATHER items to a component-scoped query, since those two adapters never populate `entityRef` today. Add this as a third precondition alongside §4.5's existing seed-data gap.
 
 ---
 
