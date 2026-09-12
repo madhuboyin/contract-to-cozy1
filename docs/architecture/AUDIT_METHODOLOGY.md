@@ -8,7 +8,9 @@ question the original pass never asked. This document is that set of questions, 
 audit asks them the first time.
 
 Apply this before publishing any audit, gap-analysis, or "current state" architecture document
-in this repo — not only when a reviewer asks for a fix.
+in this repo — not only when a reviewer asks for a fix. **Items 11-13 apply specifically to
+target-architecture/design documents** (which make decisions rather than report findings) —
+see the note after item 10.
 
 ## 1. Label every claim as executed, code-traced, or inferred — and say so in the text
 
@@ -133,8 +135,38 @@ in two or three other places. Before considering any correction complete, search
 document for the term/claim being fixed (a name, a "zero X" phrasing, a recommended enum value)
 and check every hit, not just the one a reviewer pointed at.
 
+## 11. Before deciding to reuse an existing field for a new purpose, find every existing consumer
+
+*(Design documents.)* A Stage 2 draft proposed reusing `PropertyFactEvidence.confidence` (and its
+`HomeEvent` analog) to also carry "how confident was the extraction step," reasoning that the one
+consumer it remembered (`decideFactMerge`'s priority arbitration) would tolerate the new meaning.
+It missed a second, already-existing consumer (`groundedAsk.service.ts` averaging that same field
+into answer-level confidence) that assumes a *different* meaning (fact reliability, not parse
+confidence) — reusing the field would have let a well-parsed but unreliable claim ("the listing
+says...") silently inherit high trust. Before deciding a field's meaning can be safely extended,
+grep for every place that reads it, not just the one place you remember deciding its current
+meaning.
+
+## 12. A worked example must not manufacture precision the input doesn't contain
+
+*(Design documents.)* A design document's own example ("I replaced my roof last summer for
+$14,500... 10-year warranty") turned "last summer" into a specific month and derived an exact
+warranty expiry date and issuer from data the statement never supplied — because a worked example
+reads better when it's clean and fully resolved. Check a worked example against the schema's
+actual constraints (a required exact date field cannot be populated from a vague duration) the
+same way you'd check a factual claim about existing code. If the honest answer is "this needs a
+clarifying question," show that step, don't skip past it for narrative tidiness.
+
+## 13. "Never blocks" and "merges into the same response" cannot both be true without saying how
+
+*(Design documents.)* A design that says a step "does not block the response" and also "merges its
+output into that same response" has left out the mechanism that reconciles the two — a bounded
+synchronous wait, a background/async path with a different delivery point, or an admission that it
+does block after all. State which one, with a concrete fallback for the case the fast path doesn't
+apply.
+
 ---
 
-*This standard was written after external review of
-`ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md` — see that document's "Revision note" for the
-specific findings that prompted it.*
+*Items 1-10 were written after external review of `ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`;
+items 11-13 after external review of `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` — see each
+document's "Revision note" for the specific findings that prompted them.*
