@@ -7,6 +7,7 @@ STAGE 2 ASSUMPTION → NEW CODE EVIDENCE → IMPACT → RECOMMENDED ADJUSTMENT
 ```
 Two such adjustments are formatted this way directly in this document (§14, §16); two more appear in the companion implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §4.1, §4.4); one more (the `GroundedAskProposal.kind` mapping gaps) is presented as a table rather than this format, in §23 below and implementation plan §4.2 — all five are evidence-backed, none speculative.
 **Labeling convention (continued from Stage 2):** **[FACT]** verified in Stage 1/2 or this pass's fresh code reading; **[REQUIREMENT]** a Stage 3 functional/technical requirement (not a finding); **[OPEN]** a question this pass could not resolve and flags for the implementation plan or Phase 0.
+**Revision note 1:** an external review round against this document and the implementation plan together, checked against fresh code reading rather than taken on faith, found: a second, undocumented orchestrator dispatch surface for confirmed-write execution that §16/§17's "zero dispatch branches" criterion didn't originally cover (§17, fixed); a mislabeled mechanism in §22 that conflated `AskConfirmationReceipt`'s confirmation saga with the unrelated `DomainEvent`-backed extraction job's own claim-token fencing (§22, fixed); an unaddressed gap in how a response surfaces that a captured candidate's child execution exists at all, not just how its confirmation card renders once found (§28, flagged **[OPEN]**); and a representative example (§19, the mortgage-rate statement) that targets a fact this pass confirmed is not writable through this section's own capture mechanism (§19, flagged with the implementation plan's fix).
 
 ---
 
@@ -154,7 +155,10 @@ A single message may produce multiple types simultaneously (§8.3's combined exa
 9.  Deduplicate against routed-operation capture (Stage 2 §7's dedup rule)
 10. Validate candidate information (Zod, against each target model's existing schema)
 11. Assemble response (existing AskPresentationBlock construction)
-12. Surface confirmation via the existing `confirmation` field on each child execution (§14 finding — not a new block)
+12. Surface confirmation via the existing `confirmation` field on each child execution (§14 finding
+    — not a new block; **§28's [OPEN] item**: how the *response* exposes that a new child
+    execution exists at all is not yet decided, only that its own confirmation card doesn't need a
+    new block type once discovered)
 13. Generate contextual next actions (§27)
 14. [ASYNC] Persist durable extraction intent before step 8 is attempted, not after (Stage 2 §7's
     persist-first correction) — this step's ordering is actually *before* step 8, listed here for
@@ -307,6 +311,8 @@ RECOMMENDED ADJUSTMENT: define a second, explicit adapter category — "passthro
 
 Testable directly: a new capability's PR diff touches the handler registry (one new entry) and its own skill package — never `askOrchestrator.service.ts`'s dispatch switch.
 
+**[FACT — new this pass, found during a cross-document consistency review]** `askOrchestrator.service.ts` has **two** dispatch surfaces by `operationId`, not one: the propose-time switch (`:6137-6234`, produces each operation's initial result, including confirmation cards for the 25 confirmation-required operations) and a separate confirm-time if/else chain (`:8285` onward) that runs each of those 25 operations' actual write once the homeowner confirms — `CLAIM_FILE`'s `ClaimsService.createClaim` call, `INSPECTION_FINDING_UPDATE`'s finding-status writers, and others. The capability-invocation layer above (§16) only replaces the first surface. This criterion is not met until both are migrated — implementation plan §4.9/§8 covers the second as Phase 2 scope.
+
 ---
 
 ## 18. Knowledge Capture
@@ -326,6 +332,8 @@ Per Stage 2 §9/§13's per-category routing table — no new universal store; ev
 - confirmation: via `AskConfirmationReceipt` (§22), never bypassed by confidence
 - idempotency: new `captureExecutionId` field + `@@unique([propertyId, factKey, captureExecutionId])` — **not** `sourceEntityId`, which this pass confirmed (`capturePropertyFact.ts:309`) already means "acting user" for every existing caller; reusing it would break ordinary repeat edits by the same homeowner (Stage 2's third-round correction)
 - supersession/conflict: existing `supersededAt` chain and `decideFactMerge` priority pattern, unchanged; idempotency dedup must resolve to the original execution's write regardless of current supersession state (Stage 2's second-round correction — a stale replay must not resurrect a value a later, unrelated correction already superseded)
+
+**[FACT — new this pass, found during a cross-document consistency review]** Not every scalar fact goes through `capturePropertyFact`/`PropertyFactEvidence`: `factCatalog.ts` marks a subset (e.g. `financial.currentMortgage`, `financial.financingProfile`) `writable: false`, with their `canonicalOwner` naming a distinct model (`PropertyFinancingProfile`) that `capturePropertyFact` does not write to at all — a mortgage-rate statement is this section's own representative example (implementation plan §9) but does not go through this section's mechanism. **[REQUIREMENT]** For any fact whose canonical owner is not `PropertyFactEvidence`, capture requires its own dedicated writer against that model, following the same confirmation/idempotency/attribution shape as above but not literally the same `capturePropertyFact` function; implementation plan §9 specifies the first such case (`PropertyFinancingProfile.interestRateBps`).
 
 ---
 
@@ -372,10 +380,10 @@ candidate → AskExecution (NEEDS_CONFIRMATION, parametersJson holds the candida
 - **Reject**: existing `rejectGroundedAskProposal`-equivalent path — status → `REJECTED`/`CANCELLED`, no domain write.
 - **Edit-before-confirm**: candidate payload is editable via the existing `captureRequests`/`suppliedInput` mechanism before the confirm call, not a separate edit endpoint.
 - **Retry**: idempotent per-model, as above — a replayed execute phase never duplicates or resurrects a superseded value (Stage 2's second-round correction, resolved via matching on the execution's own identity, never on current/active state).
-- **Timeout / stale lease**: existing lease-expiry re-claim pattern (`AskConfirmationReceipt`'s 60-second lease, incrementing attempt count — unchanged, already correct per Stage 2's verification).
+- **Timeout / stale lease (`AskConfirmationReceipt`, the confirmation saga)**: existing lease-expiry re-claim pattern (60-second lease, incrementing attempt count — unchanged, already correct per Stage 2's verification).
 - **Duplicate request**: existing content-hash comparison on the receipt (`P2002`-catch-and-re-read), unchanged.
 - **Permission change / property access lost between proposal and confirmation**: re-check access at confirmation completion time, not only at proposal time (Stage 2 §16's explicit requirement, inherited from the existing `AskConfirmationReceipt` saga's own behavior — this is not new, just newly required for the capture-confirm operation family too).
-- **Partial failure (a slow, reclaimed attempt finishes late)**: the commit-time claim-token re-verification (Stage 2's fourth-round correction) — a stale attempt's entire transaction, including any candidate writes, rolls back if its claim token no longer matches.
+- **Partial failure — a *different* mechanism, on a *different* subsystem, than the two bullets above (relabeled this pass — an earlier draft placed this under the `AskConfirmationReceipt` canonical lifecycle above, which conflated two independent mechanisms):** this bullet is about the `DomainEvent`-backed **extraction job's** candidate-set persistence (implementation plan §4.9/§8), not about `AskConfirmationReceipt` at all — `AskConfirmationReceipt`'s own reclaim behavior is the "Timeout / stale lease" bullet above, and needed no new mechanism this stage. What *is* new: a slow, reclaimed extraction attempt (one still finishing after its `DomainEvent` lease was legitimately reclaimed by a later attempt) must not persist its candidate set once its claim token no longer matches the current `attempts` value on that `DomainEvent` row (Stage 2's fourth-round correction) — the commit-time claim-token re-verification, a conditional update inside the same transaction as the candidate creates, rolls the whole transaction back including any candidate writes if the check fails.
 - **Warranty/event dependency ordering**: bidirectional `linkedExecutionId` (Stage 2's fourth-round correction — set on both sibling candidates, not one-sided) plus asynchronous reconciliation via a `DomainEvent` (`ASK_CAPTURE_LINK_RECONCILE`) processed against durably-committed state, not a synchronous check at completion time (Stage 2's third-round correction of a race-prone earlier design).
 
 **[REQUIREMENT]** Material writes are never committed by the extraction LLM directly — extraction produces typed candidates only; every persistence path above runs through this confirmation lifecycle, with zero exception (Stage 2 §15, unconditional per the existing Trust FRD).
@@ -444,6 +452,8 @@ Corrected design (Stage 2's second-round finding, incorporating an under-credite
 **[REQUIREMENT]** Keep `AskPresentationBlock` (**[FACT — this pass]** confirmed 24 current variants: `SUMMARY`, `GROUPED_LIST`, `TABLE`, `CAPABILITY_LIST`, `EVIDENCE`, `BOUNDARY`, `MONITOR`, `WORKFLOW_PROGRESS`, `METRIC_ROW`, `TIMELINE`, `COMPARISON`, `DECISION_TRACE`, `DECISION_PROGRESS`, `SCENARIO_COMPARISON`, `PREFERENCE_REFERENCE`, `WHY_NOW`, `RECOMMENDATION_CHANGE`, `CHANGE_SUMMARY`, `PRIORITY_LIST`, `OUTCOME_SUMMARY`, `ASSUMPTIONS`, `LIMITATION`, `EMPTY_STATE`, `ERROR_STATE`). Add exactly **one** new block type: `PROACTIVE_INSIGHT` (a genuine gap — no existing field distinguishes a Cozy-initiated execution). **Do not add `FACT_CONFIRMATION`** — per §14's STAGE 2 ASSUMPTION correction, the existing `confirmation` field already covers this need with zero new schema.
 
 **[REQUIREMENT]** Frontend impact (**[FACT — this pass]**): `AskWorkspace.tsx`'s `BlockView` is a single 1707-line function using an inline `if (block.type === 'X')` chain — not a per-block-component architecture. Adding `PROACTIVE_INSIGHT` means one more `if` branch in this same file (and the mirrored type in `apps/frontend/src/features/ask/types.ts`); no new component-registry pattern is introduced by this program.
+
+**[OPEN — new this pass, found during a cross-document consistency review]** Rendering a captured candidate's `confirmation` field (§14's correction, above) assumes the frontend already knows the candidate's child `AskExecution` exists. It does not: `ask()` (`AskWorkspace.tsx:1435`) only appends the one execution its own response returned, and nothing currently tells the workspace that a turn also created a *separate* execution for a captured candidate. §10's Turn Processing Contract step 12 ("surface confirmation... on each child execution") describes an outcome the response contract as specified does not yet deliver — `AskExecutionResponseSchema`'s `confirmation` field is singular and belongs to one execution, not a list of newly created ones. Implementation plan §19 lays out the two options (a small schema addition to expose child execution IDs inline, or routing every capture confirmation through §29's proactive continuation instead) and defers the choice to Phase 0. This is a genuine open item, not resolved by this pass — flagging it here rather than letting §14's "zero new schema" framing imply the delivery question is already settled.
 
 ---
 
@@ -545,7 +555,7 @@ Per §15 (extraction) and §11 (routing) — both extend existing infrastructure
 
 ## 40. Acceptance Criteria
 
-**[REQUIREMENT]** This FRD is satisfied when every user story in §8 passes its stated behavior against the turn processing contract (§10), every knowledge-capture target (§19–§21) enforces its idempotency/attribution/confirmation requirements under the race-condition tests defined in the implementation plan (§23), the capability layer (§16) passes every operation (the confirmed complete set per implementation plan §4.8) through the registry with zero orchestrator dispatch branches remaining, and the extraction evaluation corpus (§15) clears its pilot thresholds. Full Definition of Done in the implementation plan (§27).
+**[REQUIREMENT]** This FRD is satisfied when every user story in §8 passes its stated behavior against the turn processing contract (§10), every knowledge-capture target (§19–§21) enforces its idempotency/attribution/confirmation requirements under the race-condition tests defined in the implementation plan (§23), the capability layer (§16/§17) passes every operation (the 67-operation set confirmed complete per implementation plan §4.8) through the registry with zero orchestrator dispatch branches remaining **on either dispatch surface — propose-time and confirm-time (§17's new finding, implementation plan §4.9)**, and the extraction evaluation corpus (§15) clears its pilot thresholds. Full Definition of Done in the implementation plan (§27).
 
 ---
 

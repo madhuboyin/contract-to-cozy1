@@ -3,6 +3,7 @@
 **Type:** Phased execution plan. No implementation, no schema edits, no migrations in this document.
 **Baseline:** `docs/product/ASK_COZY_MESSAGE_FIRST_FRD.md` (Part A — defines *what*) and `docs/architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` (Stage 2 — architecture decisions, treated as approved baseline per this stage's brief). This document defines *how to get there incrementally*.
 **Evidence discipline:** every claim about current implementation is cited `path:line` and was verified fresh during this stage's research (five parallel verification passes into correction-mode dispatch, schema representations, Home Event Radar runtime state, the handler inventory (67 operations documented — see §4.8 for a completeness caveat), and existing UI/eval infrastructure) — not copied from Stage 2 without re-checking where implementation detail matters, per this stage's explicit instruction.
+**Revision note 1:** an external review round against this document and the FRD together, checked against fresh code reading rather than taken on faith, found: a second, undocumented dispatch surface for confirmed-write execution (§4.9, new); Phase 3's own representative mortgage-rate example targets a fact the current capture path rejects (§9); Phase 3's async-fallback delivery has an unstated dependency on Phase 5 infrastructure (§9, §15); a real contradiction between this document's own §8 and §20 on which phase adds three schema fields (§20, fixed); and one review claim — that the request's instructions prohibit production-usage gating and rollout flags — was checked directly against the original request text and found unsupported (the request explicitly asks for these flags and this risk ordering in its own §39/§40); Phase 7's "production use, not just tested" gate is this document's own addition beyond the request's vaguer "proves stable," softened accordingly (§13).
 
 ---
 
@@ -116,8 +117,43 @@ RECOMMENDED ADJUSTMENT: as part of Phase 1 (the first phase touching DomainEvent
 ### 4.7 Handler inventory, and the one confirmation-registry question it surfaced
 Full handler table in §5 below — completed in this pass, not deferred. That table surfaced one open question worth resolving here rather than leaving implicit: `HVAC_SPECIALIST_ENGAGE` is classified `MATERIAL_DECISION`/`CONTRIBUTOR` in `askOperationRegistry.ts` but has **no entry** in `askDomainCommandRegistry.ts` — every other material-write operation has one. Its confirmation (if any) is handled inside the specialist-agent runtime itself, not via the standard command path. **Action:** confirm with whoever owns the HVAC specialist-agent pattern whether that self-managed confirmation is an intentional design choice (the agent runtime has its own audit trail, so a second confirmation layer may be redundant) or a genuine gap that predates this program — before this operation is migrated in Phase 1, since the capability-invocation layer's "passthrough" category (FRD §16) needs to know which behavior to preserve.
 
-### 4.8 Handler count: a caveat on this pass's own inventory
-**[FACT — this pass, a limit on its own completeness]** The table in §5 documents **67** operations, cross-referenced by name against `askOperationRegistry.ts`, `askDomainCommandRegistry.ts`, and the orchestrator's dispatch `switch`. Earlier drafts of this stage's documents referred to "68 operations" throughout (an estimate carried from the research task's framing, not a recount against the finished table) — the table itself, once built, contains 67 distinct `operationId` values. This pass did not re-run a fresh, independent count of `AskOperationId`'s full literal union directly against `askOperationRegistry.ts` as a separate check, so it cannot rule out that one operation was missed during the table's construction. **Action for Phase 0:** before starting Phase 1's migration, run a single automated diff (the exact list of `AskOperationId` string literals in `askOperationRegistry.ts` against the 67 `operationId` values in §5's table) to confirm the table is complete, and add any missing row before migration begins. Every count derived from this table elsewhere in this document and the FRD (Simple/Medium/Trivial/Passthrough/High tallies, the "25 require confirmation" figure) is accurate **relative to the 67 rows actually documented**, not independently re-verified against a 68th, undocumented operation.
+### 4.8 Handler count: a caveat on this pass's own inventory — **CLOSED this revision**
+**[FACT — this pass]** The table in §5 documents **67** operations, cross-referenced by name against `askOperationRegistry.ts`, `askDomainCommandRegistry.ts`, and the orchestrator's dispatch `switch`. Earlier drafts of this stage's documents referred to "68 operations" throughout (an estimate carried from the research task's framing, not a recount against the finished table) — the table itself, once built, contains 67 distinct `operationId` values.
+
+**Action closed this revision:** ran the automated diff this subsection originally deferred to Phase 0 — the exact `AskOperationId` string-literal union in `askOperationRegistry.ts:19-99` (67 literals) against the 67 `operationId` values in §5's table. Result: **exact match, no missing operation, no extra row, no duplicate.** Every count derived from this table elsewhere in this document and the FRD (Simple/Medium/Trivial/Passthrough/High tallies, the "25 require confirmation" figure) is now confirmed complete against the registry's full literal union, not merely "relative to the rows documented." No Phase 0 action remains for this item.
+
+### 4.9 Confirmed-write execution is a second, undocumented dispatch surface — new finding this revision
+```
+STAGE 2 ASSUMPTION: `capability.invoke()` (§2.4's `operationId → skill adapter → capability
+  handler registry → input shim → existing domain service` model) is the one dispatch surface
+  the orchestrator uses per operation, and migrating it plus the routing `switch`
+  (askOrchestrator.service.ts:6137-6234) satisfies Test G ("a new capability's PR diff touches
+  the registry, never askOrchestrator.service.ts's dispatch switch").
+NEW CODE EVIDENCE: the 6137-6234 switch (and the handler call sites §5's table documents) only
+  produce each operation's *result* — for the 25 confirmation-required rows, that result is a
+  MUTATION_PREPARATION (the confirmation card), not the actual write. The actual write happens
+  later, when the homeowner confirms, inside a SEPARATE if/else chain keyed on
+  `execution.operationId` starting at askOrchestrator.service.ts:8285 (e.g. `CLAIM_FILE` at
+  :8286 calling `ClaimsService.createClaim`, `INSPECTION_FINDING_UPDATE` at :8315 calling
+  `acceptFindingAsWork`/`dismissFinding`/`resolveFinding`, `DOCUMENT_PROMOTION_CONFIRM` at :8327
+  with its own three-way `kind` dispatch inside). This chain runs well past line 8360 and is not
+  cross-referenced by, or included in, §5's inventory, Phase 1's "Work," or Test G's stated scope.
+IMPACT: Phase 1 (capability invocation) and the current Handler Migration Inventory only replace
+  the PREPARE-time dispatch. Test G would not actually hold after Phase 1: a new confirmed-write
+  capability still requires a new branch in the 8285+ chain, exactly the outcome Test G exists to
+  prevent. This is a second, equally real instance of the same problem §16/§17 already target —
+  just not the one those sections' code reading found.
+RECOMMENDED ADJUSTMENT: fold migrating the 8285+ confirmed-write chain into Phase 2 ("Confirmation
+  Convergence & Write Safety" — the phase whose whole purpose is the write path, and which already
+  touches every one of these operations' `AskConfirmationReceipt` completion step). Extend the
+  capability-handler registry (or add a second, confirm-time registry keyed the same way) so each
+  of the 25 confirmation-required operations in §5 registers its confirmed-write handler exactly
+  once, and retire the 8285+ chain incrementally exactly as Phase 1 retires 6137-6234. Update Test
+  G (FRD §17, this document §23) to state explicitly that it covers both the propose-time dispatch
+  and the confirm-time execution dispatch — a capability is not fully migrated until neither
+  remains.
+```
+Reflected in Phase 2's Work (§8) and Test G's restated scope (§23) below.
 
 ---
 
@@ -203,9 +239,9 @@ Full handler table in §5 below — completed in this pass, not deferred. That t
 
 ## 6. Phase 0 — Pre-implementation Verification
 
-Output: this document's §4 (already complete) plus the remaining decisions it flags as open — `UPLOAD_EVIDENCE`/`ADD_NOTE` target representations (§4.2), the envelope-scope fix choice for `askEnvelopeQueryScope.ts` (§4.6), `HVAC_SPECIALIST_ENGAGE`'s confirmation-registry question (§4.7), and the handler-count reconciliation (§4.8). No broad refactoring starts before these decisions are made — everything else in §4 already has a resolved answer.
+Output: this document's §4 (already complete) plus the remaining decisions it flags as open — `UPLOAD_EVIDENCE`/`ADD_NOTE` target representations (§4.2), the envelope-scope fix choice for `askEnvelopeQueryScope.ts` (§4.6), `HVAC_SPECIALIST_ENGAGE`'s confirmation-registry question (§4.7). §4.8's handler-count diff is closed as of this revision (exact match, no open action). §4.9 (the confirmed-write dispatch surface) is a scoping decision for Phase 2, not Phase 0 — no code changes start there before Phase 1 either way.
 
-**Acceptance criterion:** all items in §4 have either a resolved answer (4.1, 4.3, 4.4) or an explicit, documented decision/action (4.2's two gaps, 4.6's fix choice, 4.7's confirmation question, 4.8's handler-count diff) before Phase 1 begins.
+**Acceptance criterion:** all items in §4 have either a resolved answer (4.1, 4.3, 4.4, 4.8) or an explicit, documented decision/action (4.2's two gaps, 4.6's fix choice, 4.7's confirmation question) before Phase 1 begins.
 
 ---
 
@@ -215,7 +251,7 @@ Output: this document's §4 (already complete) plus the remaining decisions it f
 
 **Work:** `CapabilityInvocationEnvelope` (FRD §16, including the `continuationCursor` field and the passthrough category for `GROUNDED_GUIDANCE`/`HVAC_SPECIALIST_ENGAGE`), `CapabilityHandlerRegistry` keyed by adapter id, `capability.invoke()`, incremental migration of the handlers per §5's inventory (67 operations documented, completeness caveat at §4.8; Simple/Trivial rows first — lowest risk, highest count; Medium rows next; Passthrough rows last, since they need the adapter-category decision from Phase 0 settled first). Widen `EmitDomainEventInput.type` to the full 14-member `DomainEventType` enum as part of this phase's own `DomainEvent` touch-points (§4.4).
 
-**Acceptance criterion:** existing Ask behavior is functionally equivalent for all documented operations (§4.8's count-reconciliation diff run first, so "all" means the confirmed complete set, not just the 67 in §5's table) (verified against the existing 48-file `apps/backend/tests/ask/` suite, unchanged pass rate), and capability execution no longer requires domain-specific switch logic inside the orchestrator for any migrated operation.
+**Acceptance criterion:** existing Ask behavior is functionally equivalent for all 67 documented operations (§4.8's diff confirmed this is the complete set) (verified against the existing 48-file `apps/backend/tests/ask/` suite, unchanged pass rate), and the propose-time dispatch (the 6137-6234 switch) no longer requires domain-specific switch logic inside the orchestrator for any migrated operation. This phase migrates propose-time dispatch only — the confirm-time execution dispatch (§4.9) is Phase 2's, not this phase's, so Test G is not fully satisfied until Phase 2 also lands.
 
 **Independently releasable:** yes — this phase changes nothing a homeowner can observe.
 
@@ -226,13 +262,14 @@ Output: this document's §4 (already complete) plus the remaining decisions it f
 **Goal:** prove the write path safe with a synthetic candidate before extraction ever produces a real one.
 
 **Work:**
-- Extend `AskConfirmationReceipt`'s pattern to the new `CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM` operation family (FRD §22) — no schema change to the receipt itself (Stage 2's decision), but new schema fields on the target models: `PropertyFactEvidence.captureExecutionId` + its unique constraint, `Warranty.sourceExecutionId` + its unique constraint, `HomeEvent.providerName`/`warrantyId`, `captureChannel`/`attribution`/`extractionConfidence` on both `PropertyFactEvidence` and `HomeEvent`, `AskExecution.parentExecutionId`/`linkedExecutionId` (full inventory in §17).
+- Extend `AskConfirmationReceipt`'s pattern to the new `CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM` operation family (FRD §22) — no schema change to the receipt itself (Stage 2's decision), but new schema fields on the target models: `PropertyFactEvidence.captureExecutionId` + its unique constraint, `Warranty.sourceExecutionId` + its unique constraint, `HomeEvent.providerName`/`warrantyId`, `captureChannel`/`attribution`/`extractionConfidence` on both `PropertyFactEvidence` and `HomeEvent`, `AskExecution.parentExecutionId`/`linkedExecutionId` (full inventory in §17). These columns land now — before extraction exists — because the new confirm operation family writes them for every capture regardless of source (a routed, deterministic capture is `attribution: FIRSTHAND` with high confidence too); Phase 3 is what first makes an LLM the thing setting non-trivial values into columns Phase 2 already created (see §20's corrected phase assignment).
+- **New this revision (§4.9):** migrate the 25 confirmation-required operations' confirm-time write dispatch off the `askOrchestrator.service.ts:8285+` if/else chain and onto a confirm-time capability handler, one registry entry per operation, exactly as Phase 1 migrates the propose-time switch. This is Phase 2's work, not Phase 1's, because it's fundamentally a write-safety concern (the same handlers this phase is already touching for `AskConfirmationReceipt` convergence) — see §4.9 for why Phase 1 alone does not satisfy Test G.
 - Implement the commit-time claim-token re-verification for the `DomainEvent`-backed extraction job (FRD §22, Stage 2's fourth-round correction) — this is infrastructure Phase 2 builds even though Phase 3 is what first uses it, since Phase 2's acceptance criterion explicitly requires proving retry/reclaim safety before extraction exists.
 - Implement bidirectional `linkedExecutionId` + `ASK_CAPTURE_LINK_RECONCILE` async reconciliation (FRD §22) for the event/warranty pairing case — buildable and testable synthetically before extraction can produce such a pair.
 - Resolve §4.1's correction finding: build `HomeEvent`/`PropertyFactEvidence` correction on their existing supersession chains, not on `correctionModes`.
 - Map `GroundedAskProposal`'s 5 clean kinds onto their target operations; resolve `UPLOAD_EVIDENCE`/`ADD_NOTE` per Phase 0's decision; do not retire `GroundedAskProposal`/`GroundedAskArtifact` until all 7 have passing parity tests (FRD §23, explicit).
 
-**Acceptance criterion:** a synthetically-created candidate fact/event (created directly via a test harness, no LLM involved) can be confirmed, retried under a simulated lease-reclaim race, rejected, and persisted exactly once — including the event+warranty pairing case under simulated concurrent confirmation — with zero LLM extraction involved anywhere in this phase's tests.
+**Acceptance criterion:** a synthetically-created candidate fact/event (created directly via a test harness, no LLM involved) can be confirmed, retried under a simulated lease-reclaim race, rejected, and persisted exactly once — including the event+warranty pairing case under simulated concurrent confirmation — with zero LLM extraction involved anywhere in this phase's tests. Additionally (§4.9): all 25 confirmation-required operations from §5 execute their confirmed write through the new confirm-time registry, with the `askOrchestrator.service.ts:8285+` chain deleted, not just shrunk — this is what makes Test G actually true.
 
 **Independently releasable:** yes, behind a flag (§21) — the new operation family exists and is testable without any conversational trigger reaching it yet.
 
@@ -244,13 +281,38 @@ Output: this document's §4 (already complete) plus the remaining decisions it f
 
 **Recommended first supported types:** scalar fact, simple retrospective home event (per the request's explicit recommendation — not warranty, not goal, not every category at once).
 
-**Work:** deterministic pre-filter (FRD §13) with its own unit-test suite; extraction evaluation harness and corpus (FRD §15) built *alongside* the extraction pass itself, not after (per the request's explicit sequencing instruction, since this is the one genuinely new deterministic component with no existing analog to inherit test discipline from); constrained extraction (FRD §14); candidate execution creation using Phase 2's now-proven write path; confirmation via the existing `confirmation` field (not a new block — FRD §14's correction); persistence via `capturePropertyFact` (extended) and the new `HomeEvent` writer; `PropertyChange` fan-in (existing, unchanged); correction path (via §8.2's supersession-based mechanism, not `correctionModes`).
+**Work:** deterministic pre-filter (FRD §13) with its own unit-test suite; extraction evaluation harness and corpus (FRD §15) built *alongside* the extraction pass itself, not after (per the request's explicit sequencing instruction, since this is the one genuinely new deterministic component with no existing analog to inherit test discipline from); constrained extraction (FRD §14); candidate execution creation using Phase 2's now-proven write path; confirmation via the existing `confirmation` field (not a new block — FRD §14's correction); persistence via `capturePropertyFact` (extended) and the new `HomeEvent` writer; `PropertyChange` fan-in (existing, unchanged); correction path (via §8.2's supersession-based mechanism, not `correctionModes`); a minimal `PropertyFinancingProfile.interestRateBps` writer (new this revision — see the mortgage-rate finding below).
 
-**Representative scenarios:** "My mortgage rate is 6.75%." / "I replaced my roof last summer for $14,500." (warranty explicitly deferred — Stage 2 §14's Candidate item 2 pattern is designed but not required for MVP scope).
+```
+NEW EVIDENCE AGAINST THE REQUEST'S OWN REPRESENTATIVE EXAMPLE (not a Stage 2 assumption — this
+  scenario is the request's §36/Phase-3 text, checked against fresh code this pass):
+NEW CODE EVIDENCE: `financial.currentMortgage`/`financial.financingProfile` are marked
+  `writable: false` in `factCatalog.ts:127-128` (`canonicalOwner: PropertyFinancingProfile`), and
+  `capturePropertyFact.ts:270-271` throws `Property Context fact is not writable through
+  contextual capture` for any non-writable key. `PropertyFinancingProfile` (`schema.prisma:19375`)
+  is a separate, `propertyId`-unique 1:1 model with `interestRateBps: Int?` — not a
+  `PropertyFactEvidence` row — so the generic extended `capturePropertyFact` writer this phase
+  already plans cannot serve this example regardless of the writable flag; a distinct writer is
+  needed no matter what.
+IMPACT: "My mortgage rate is 6.75%" would fail today exactly as extraction would try to persist
+  it, via the exact path this phase's own Work list names as the persistence mechanism.
+RECOMMENDED ADJUSTMENT: add one small, explicitly-scoped writer for this phase: upsert
+  `PropertyFinancingProfile.interestRateBps` by `propertyId`, converting the extracted percentage
+  to basis points (`Math.round(rate * 100)`, i.e. 6.75 → 675), with the same
+  `captureExecutionId`/attribution/confidence provenance columns Phase 2 added applied here too
+  (on `PropertyFactEvidence`-shaped metadata alongside the `PropertyFinancingProfile` write, not
+  instead of it, so correction/audit UI still has a row to point at). This is a one-field, one-
+  model writer — small — but it is new, not "already extended `capturePropertyFact`" as originally
+  scoped, and belongs in this phase's estimate rather than being silently absorbed by it.
+```
 
-**Acceptance criterion:** information supplied naturally in conversation becomes structured, confirmed home knowledge, visible to the existing aggregation-context read path on the next turn, with the extraction evaluation corpus clearing its pilot thresholds (FRD §15).
+**Async-fallback delivery — dependency not previously stated (new this revision):** per FRD §10's Turn Processing Contract, a synchronous extraction attempt that misses its ~1.5s budget falls back to the existing `DomainEvent` outbox, completing later via a worker. Once it completes, the resulting child execution needs to reach the homeowner. The only delivery mechanism this program builds for exactly that shape of event — "a background process created something the homeowner should see, outside the request/response cycle" — is `notifyWithAskContinuation`, generalized in **Phase 5**, not this phase. Until Phase 5 ships, an async-fallback capture is durably persisted (the write is safe, per Phase 2) but not proactively surfaced; the homeowner sees it only if they happen to reopen the *same* session (`getAskSession` returns all executions for a `sessionId`, `askOrchestrator.service.ts:9395`, so it is not lost — merely not announced). **Action:** state this interim behavior explicitly in this phase's own scope rather than leaving it implicit, and add Phase 5 as a partial dependency of this phase's async-fallback path specifically (§15/§16 below) — the synchronous, common-case capture path has no such dependency.
 
-**Independently releasable:** yes, behind a flag — homeowners who don't trigger the pre-filter see no change.
+**Representative scenarios:** "My mortgage rate is 6.75%." (now covered by the writer above) / "I replaced my roof last summer for $14,500." (warranty explicitly deferred — Stage 2 §14's Candidate item 2 pattern is designed but not required for MVP scope).
+
+**Acceptance criterion:** information supplied naturally in conversation becomes structured, confirmed home knowledge, visible to the existing aggregation-context read path on the next turn, with the extraction evaluation corpus clearing its pilot thresholds (FRD §15). The mortgage-rate scenario specifically exercises the new `PropertyFinancingProfile` writer, not `capturePropertyFact`.
+
+**Independently releasable:** yes, behind a flag — homeowners who don't trigger the pre-filter see no change. The async-fallback path's *delivery* (not its correctness) is not independently complete until Phase 5 — see above.
 
 ---
 
@@ -294,7 +356,7 @@ Output: this document's §4 (already complete) plus the remaining decisions it f
 
 ## 13. Phase 7 — Additional Capability Exposure
 
-Only after Phases 1–2 are stable in production use (not just tested). Candidates, prioritized by the Three Jobs (Stage 1/2), not code availability: Seller Prep (needed by Phase 6, effectively co-scheduled), Home Event Radar query capability (blocked on §4.5/§4.6), Home Renovation Advisor (blocked on §4.2's naming-ambiguity resolution — do not wire until resolved), coverage/insurance, personalization-supported ranking (explicitly deferred per Stage 2 §23 — core next-actions works without it), documents, additional maintenance intelligence.
+Only after Phases 1–2 prove stable (the request's own §36 criterion) — **softened this revision:** an earlier draft required "production use, not just tested" as this phase's gate. That specific bar is this document's own addition, not the request's: the request's §36 asks only that "the core architecture proves stable," and its own §41 states there are currently no production users at all, which a hard production-use gate sits awkwardly against. Demonstrated stability under this program's own test/eval suites (§23/§24) is the actual gate; a genuine production rollout, once users exist, only strengthens that signal rather than being required to reach it. Candidates, prioritized by the Three Jobs (Stage 1/2), not code availability: Seller Prep (needed by Phase 6, effectively co-scheduled), Home Event Radar query capability (blocked on §4.5/§4.6), Home Renovation Advisor (blocked on §4.2's naming-ambiguity resolution — do not wire until resolved), coverage/insurance, personalization-supported ranking (explicitly deferred per Stage 2 §23 — core next-actions works without it), documents, additional maintenance intelligence.
 
 ---
 
@@ -331,6 +393,8 @@ Phase 3's "capture a retrospective home event" slice, filled in as a worked exam
 ## 15. Dependency Graph
 
 See §3. Additional detail: Phase 4 (Next Actions) depends on Phase 1 (needs the capability registry to scan) but **not** on Phase 3 (extraction) — it can be built and demonstrated against existing routed operations alone, then automatically benefits once Phase 3 adds capture-confirm operations to the registry.
+
+**New this revision:** Phase 3's async-fallback delivery has a partial, previously-unstated dependency on Phase 5 (§9) — the synchronous capture path and the write itself have no such dependency, only the proactive-notification half of the fallback case does. This does not block Phase 3 from shipping before Phase 5 (the fallback write is still safe and eventually visible per §9), it only means the *fully delivered* async-fallback experience isn't complete until Phase 5 lands too.
 
 ---
 
@@ -374,7 +438,12 @@ No new public API endpoints — extraction and next-action generation are intern
 
 ## 19. Frontend Change Inventory
 
-**[FACT — this pass]** `AskWorkspace.tsx`'s `BlockView` is a single 1707-line function with an inline `if (block.type === 'X')` chain — no per-block component split. Changes required: one new `if` branch for `PROACTIVE_INSIGHT` (mirrored in `apps/frontend/src/features/ask/types.ts`); **no change needed for confirmation rendering** (the existing `confirmation` field's renderer, already exercised by 25 commands, is reused as-is per FRD §14/§28's correction — this removes what would otherwise have been a second new-block frontend change).
+**[FACT — this pass]** `AskWorkspace.tsx`'s `BlockView` is a single 1707-line function with an inline `if (block.type === 'X')` chain — no per-block component split. Changes required: one new `if` branch for `PROACTIVE_INSIGHT` (mirrored in `apps/frontend/src/features/ask/types.ts`); **no change needed for confirmation rendering itself** (the existing `confirmation` field's renderer, already exercised by 25 commands, is reused as-is per FRD §14/§28's correction — this removes what would otherwise have been a second new-block frontend change).
+
+**New this revision — child-execution delivery (FRD §16's [OPEN] child-execution note):** rendering is not the gap; *discovery* is. **[FACT — this pass]** `ask()` (`AskWorkspace.tsx:1435`) appends exactly one execution — `response.data` — to state, and `updateExecution` (`:1532`) only replaces the entry whose `executionId` already matches. Neither path has any way to learn that a turn's response also caused Cozy to create one or more *separate* child `AskExecution` rows (Stage 2 §17's design for a captured candidate) — the same `executionId` cannot carry a second, different execution's confirmation on `AskExecutionResponseSchema`'s singular `confirmation` field. Two additive fixes close this, and this document does not pick between them without a schema decision in Phase 0:
+- **(a)** add `childExecutionIds: string[]` (or nested summaries, bounded like `captureRequests: z.array(...).max(3)` already is) to `AskExecutionResponseSchema`, and have the frontend fetch/render each inline when the synchronous extraction attempt completes within the turn — this *is* a schema change, contradicting §14/§16's "zero new schema" framing for the in-turn case specifically (the framing is still correct for the confirmation-card mechanism itself, just not for how a turn response exposes that a second execution now exists).
+- **(b)** never surface a captured candidate inline; always route it through `notifyWithAskContinuation` (§29/Phase 5) as its own proactive continuation, even when extraction finishes fast — simpler, but means every capture confirmation is a second interaction the homeowner has to notice and open, not a same-turn card, until Phase 5 ships.
+**Action for Phase 0:** pick (a) or (b) before Phase 3 builds against either assumption; §9's async-fallback note below assumes (b) is at minimum the *fallback* path regardless of which is chosen for the fast path.
 
 ---
 
@@ -384,9 +453,9 @@ Summarized by phase — full detail per-slice in §14's template, per-operation 
 
 | Phase | New backend modules/files | Modified existing files | New Prisma fields (see §17) |
 |---|---|---|---|
-| 1 | `services/ask/capabilityInvocation/` (envelope type, registry, `capability.invoke()`), one shim file per operation family | `askOrchestrator.service.ts` (dispatch `switch` replaced incrementally), `domainEvents.service.ts` (`EmitDomainEventInput.type` widened) | None |
-| 2 | `services/ask/captureConfirmation/` (new operation-family handlers), `services/ask/captureLinkReconciliation.ts` | `groundedAsk.service.ts` (kind-by-kind migration), `capturePropertyFact.ts` (idempotency check), `modules/propertyContext/application/` (`HomeEvent`/`Warranty` writers) | `PropertyFactEvidence.captureExecutionId`, `Warranty.sourceExecutionId`, `AskExecution.parentExecutionId`/`linkedExecutionId` |
-| 3 | `services/ask/conversationalUnderstanding/` (pre-filter, extraction call, candidate-set persistence) | `askOrchestrator.service.ts` (one new call site) | `HomeEvent.providerName`/`warrantyId`, `captureChannel`/`attribution`/`extractionConfidence` on `PropertyFactEvidence` and `HomeEvent` |
+| 1 | `services/ask/capabilityInvocation/` (envelope type, registry, `capability.invoke()`), one shim file per operation family | `askOrchestrator.service.ts` (propose-time dispatch `switch`, lines 6137-6234, replaced incrementally), `domainEvents.service.ts` (`EmitDomainEventInput.type` widened) | None |
+| 2 | `services/ask/captureConfirmation/` (new operation-family handlers), `services/ask/captureLinkReconciliation.ts`, one confirm-time handler per confirmation-required operation (§4.9, new this revision) | `groundedAsk.service.ts` (kind-by-kind migration), `capturePropertyFact.ts` (idempotency check), `modules/propertyContext/application/` (`HomeEvent`/`Warranty` writers), `askOrchestrator.service.ts` (confirm-time dispatch chain, lines 8285+, replaced incrementally — §4.9) | `PropertyFactEvidence.captureExecutionId`, `Warranty.sourceExecutionId`, `AskExecution.parentExecutionId`/`linkedExecutionId`, `HomeEvent.providerName`/`warrantyId`, `captureChannel`/`attribution`/`extractionConfidence` on `PropertyFactEvidence` and `HomeEvent` (**corrected this revision** — these three columns are added here, in Phase 2, because the new confirm operation family writes them for every capture regardless of source; see Phase 2's Work, §8) |
+| 3 | `services/ask/conversationalUnderstanding/` (pre-filter, extraction call, candidate-set persistence), a minimal `PropertyFinancingProfile.interestRateBps` upsert writer (§9, new this revision) | `askOrchestrator.service.ts` (one new call site) | None new — Phase 3 is the first to write non-trivial `attribution`/`extractionConfidence` values into the columns Phase 2 already added, not a new column itself |
 | 4 | `services/ask/nextActions/` | `askOrchestrator.service.ts` (removes static suggestion tables) | None |
 | 5 | `services/notifications/notifyWithAskContinuation.ts` | `maintenanceReminder.service.ts`, `refinanceRateMonitor.service.ts` (both simplified to call the new wrapper), `modules/homeEventRadar/` (notification path migrated to the `DomainEvent` rail) | None |
 | 6 | None new — extends `DecisionThread` usage | `askOrchestrator.service.ts` (goal-candidate routing), `AskSession` read/write sites | `AskSession.activeDecisionThreadId` |
@@ -443,7 +512,7 @@ Extends existing infrastructure — **[FACT — this pass]** 48 existing `.test.
 
 ## 25. Risks
 
-**High-risk (sequence first, per the request's explicit risk-based ordering):** write confirmation correctness (Phase 2's entire purpose), idempotency under lease-reclaim races (Stage 2's fourth-round finding — genuinely subtle, needs dedicated race-condition tests, §23), extraction accuracy (no amount of architecture fixes a poorly-calibrated pre-filter), event/fact classification (a `GOAL` misclassified as a `FACT` creates the wrong kind of record), async retry races (the shared-lease-ownership contract, Stage 2's third-round finding), authorization (re-check at confirmation completion, not just proposal time), handler migration (67 operations documented, 2 genuine structural outliers found this pass that Stage 2 didn't know about, count to be reconciled per §4.8 before Phase 1 starts).
+**High-risk (sequence first, per the request's explicit risk-based ordering):** write confirmation correctness (Phase 2's entire purpose, now including the confirm-time dispatch migration found this revision, §4.9), idempotency under lease-reclaim races (Stage 2's fourth-round finding — genuinely subtle, needs dedicated race-condition tests, §23), extraction accuracy (no amount of architecture fixes a poorly-calibrated pre-filter), event/fact classification (a `GOAL` misclassified as a `FACT` creates the wrong kind of record), async retry races (the shared-lease-ownership contract, Stage 2's third-round finding), authorization (re-check at confirmation completion, not just proposal time), handler migration (67 operations documented and confirmed complete against the registry per §4.8, 2 genuine structural outliers found this pass that Stage 2 didn't know about, plus a second dispatch surface for the 25 confirmation-required operations found this revision, §4.9), child-execution delivery for captured candidates (new this revision, §19 — undecided between an in-turn schema addition and a continuation-only delivery model), the Phase 3 mortgage-rate example's missing writer (new this revision, §9 — small but previously unscoped).
 
 **Lower-risk (sequence later):** visual block additions (reduced from two to one after this pass's `FACT_CONFIRMATION` finding), suggestion text, additional capability exposure (Phase 7).
 
@@ -465,8 +534,8 @@ The program is complete when all seven tests from the request pass together, plu
 - **Test D:** "Is my roof at risk because of recent storms?" → property + weather/radar intelligence (blocked on §4.5/§4.6 being resolved).
 - **Test E:** "I'm thinking about selling next year." → durable goal → relevant capabilities → continued conversation across sessions.
 - **Test F:** Background signal → one contextual proactive Ask continuation.
-- **Test G:** New capability added → registry/shim registration → no new orchestrator domain branch.
-- **Test H (added this pass):** A confirmation whose lease is reclaimed mid-flight while the original attempt is still running does not persist the stale attempt's result once its claim token has moved on (FRD §22, Stage 2's fourth-round correction — this is the one race condition subtle enough to deserve its own named acceptance test, not just inclusion in "idempotency works").
+- **Test G:** New capability added → registry/shim registration → no new orchestrator domain branch, **covering both dispatch surfaces (corrected this revision, §4.9)**: neither the propose-time registry (Phase 1) nor the confirm-time registry (Phase 2) gains a new `askOrchestrator.service.ts` branch when a new confirmation-required capability is added.
+- **Test H (added this pass, relabeled this revision):** the `DomainEvent`-backed **extraction job's** candidate-set persistence — not the `AskConfirmationReceipt` confirmation saga, which is a separate mechanism with its own, already-correct lease pattern — whose claim is reclaimed mid-flight while the original attempt is still running does not persist the stale attempt's result once its claim token has moved on (FRD §22, Stage 2's fourth-round correction — this is the one race condition subtle enough to deserve its own named acceptance test, not just inclusion in "idempotency works").
 - **Test I (added this pass):** All 7 `GroundedAskProposal` kinds — including `UPLOAD_EVIDENCE` and `ADD_NOTE`, whose target representations this pass found were not yet decided — have passing parity tests before the old mechanism is deleted.
 
 ---
