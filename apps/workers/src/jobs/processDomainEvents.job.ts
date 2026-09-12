@@ -1,3 +1,4 @@
+import type { DomainEventType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { claimDetailUrl } from '../lib/deepLinks';
@@ -12,23 +13,17 @@ import {
   processRecomputeRequestedEvent,
   processRecomputeRetryRequestedEvent,
 } from '@worker-shared/services/intelligenceRecompute/intelligenceRecompute.service';
+import {
+  reconcileCaptureLink,
+} from '@worker-shared/services/ask/captureLinkReconciliation';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
-type DomainEventType =
-  | 'CLAIM_SUBMITTED'
-  | 'CLAIM_CLOSED'
-  | 'FOLLOW_UP_DUE'
-  | 'REFINANCE_OPPORTUNITY_OPENED'
-  | 'REFINANCE_OPPORTUNITY_UPDATED'
-  | 'REFINANCE_OPPORTUNITY_CLOSED'
-  | 'REFINANCE_DATA_REQUIRED'
-  | 'REFINANCE_DECISION_RECORDED'
-  | 'REFINANCE_DECISION_CHANGED'
-  | 'REFINANCE_NEXT_STEP_STARTED'
-  | 'REFINANCE_OUTCOME_COMPLETED'
-  | 'RADAR_PROPERTY_RECONCILIATION_REQUESTED'
-  | 'PROPERTY_INTELLIGENCE_RECOMPUTE_REQUESTED'
-  | 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED';
+// Ask Cozy Stage 3, Phase 2 (implementation plan §4.4/§8; FRD §17).
+// DomainEventType is now the real Prisma-generated enum, imported above,
+// not a hand-copied union -- it had already drifted from the schema before
+// this phase touched anything (Phase 0's audit, implementation plan §4.4),
+// and this file's own new ASK_CAPTURE_LINK_RECONCILE consumer below needs
+// the two members this phase's earlier schema commit added.
 
 export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
 export const DOMAIN_EVENT_LEASE_MS = 15 * 60_000;
@@ -42,6 +37,7 @@ export interface ProcessDomainEventsDeps {
   radarPropertyReconciliation?: typeof processRadarPropertyReconciliationEvent;
   recomputeRequested?: typeof processRecomputeRequestedEvent;
   recomputeRetryRequested?: typeof processRecomputeRetryRequestedEvent;
+  captureLinkReconcile?: typeof reconcileCaptureLink;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -51,6 +47,7 @@ const defaultDeps: ProcessDomainEventsDeps = {
   radarPropertyReconciliation: processRadarPropertyReconciliationEvent,
   recomputeRequested: processRecomputeRequestedEvent,
   recomputeRetryRequested: processRecomputeRetryRequestedEvent,
+  captureLinkReconcile: reconcileCaptureLink,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -300,6 +297,19 @@ function handleRecomputeRetryRequested(ev: any, deps: ProcessDomainEventsDeps) {
   });
 }
 
+// Ask Cozy Stage 3, Phase 2 (implementation plan §8/§20; FRD §22). No real
+// emitter yet (nothing creates a linked capture pair before Phase 3's
+// warranty-capture work, which hasn't started) -- reconcileCaptureLink is
+// itself a no-op whenever an execution has no linkedExecutionId or either
+// side hasn't completed, so this consumer is safe to register ahead of any
+// producer, matching the claim-token utility's own "buildable and testable
+// synthetically" precedent.
+function handleAskCaptureLinkReconcile(ev: any, deps: ProcessDomainEventsDeps) {
+  const executionId = ev.payload?.executionId;
+  mustHave(executionId, 'ASK_CAPTURE_LINK_RECONCILE event missing executionId');
+  return (deps.captureLinkReconcile ?? reconcileCaptureLink)(executionId);
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -414,6 +424,9 @@ export async function processDomainEventsJob(
           break;
         case 'PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED':
           processingOutcome = await handleRecomputeRetryRequested(ev, deps);
+          break;
+        case 'ASK_CAPTURE_LINK_RECONCILE':
+          await handleAskCaptureLinkReconcile(ev, deps);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

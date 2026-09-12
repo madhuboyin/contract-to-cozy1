@@ -46,6 +46,7 @@ function fakeDeps({
   recomputeRequestedShouldFail = false,
   recomputeRetryRequestedResult = { status: 'SUCCEEDED' },
   recomputeRetryRequestedShouldFail = false,
+  captureLinkReconcileShouldFail = false,
 }) {
   const calls = {
     updates: [],
@@ -55,6 +56,7 @@ function fakeDeps({
     radarReconciliations: [],
     recomputeRequested: [],
     recomputeRetryRequested: [],
+    captureLinkReconcile: [],
   };
 
   const deps = {
@@ -109,6 +111,10 @@ function fakeDeps({
       calls.recomputeRetryRequested.push(input);
       if (recomputeRetryRequestedShouldFail) throw new Error('recompute retry handling failed');
       return recomputeRetryRequestedResult;
+    },
+    captureLinkReconcile: async (executionId) => {
+      calls.captureLinkReconcile.push(executionId);
+      if (captureLinkReconcileShouldFail) throw new Error('capture link reconcile failed');
     },
   };
   return { deps, calls };
@@ -334,6 +340,51 @@ test('processes a PROPERTY_INTELLIGENCE_RECOMPUTE_RETRY_REQUESTED event and disp
   assert.equal(result.processed, 1);
   assert.equal(calls.recomputeRetryRequested.length, 1);
   assert.deepEqual(calls.recomputeRetryRequested[0], { recomputeRunId: 'run-1', targetId: 'target-1' });
+});
+
+test('processes an ASK_CAPTURE_LINK_RECONCILE event, dispatching the executionId to the reconciler', async () => {
+  const reconcileEvent = eventFixture({
+    type: 'ASK_CAPTURE_LINK_RECONCILE',
+    payload: { executionId: 'execution-1' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [reconcileEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.deepEqual(calls.captureLinkReconcile, ['execution-1']);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+});
+
+test('an ASK_CAPTURE_LINK_RECONCILE event missing executionId fails without dispatching', async () => {
+  const reconcileEvent = eventFixture({
+    type: 'ASK_CAPTURE_LINK_RECONCILE',
+    payload: {},
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [reconcileEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  assert.equal(calls.captureLinkReconcile.length, 0);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+});
+
+test('ASK_CAPTURE_LINK_RECONCILE reconciler failures use the shared retry/dead-letter path', async () => {
+  const reconcileEvent = eventFixture({
+    type: 'ASK_CAPTURE_LINK_RECONCILE',
+    payload: { executionId: 'execution-1' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [reconcileEvent], captureLinkReconcileShouldFail: true });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /capture link reconcile failed/);
 });
 
 test('a malformed refinance transition is retried as FAILED', async () => {
