@@ -105,7 +105,25 @@ Revision notes 1 and 2 in `ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`) each 
 exactly this shape that a grep like the one above, run before publishing, would have caught
 without needing an external reviewer at all.
 
-## 8. After fixing any claim, grep the whole document for its repeats
+## 8. Separate what's required from how it could be built
+
+When a document says closing a gap "requires" a specific mechanism (a new extraction stage, a
+new enum value, a new table), check whether that's actually established or whether only the
+*outcome* is established (e.g., "free text needs to become a structured fact somehow"). State
+correctness/reachability fixes (a transactional bug, a missing wire-up) as true requirements —
+they're bugs, not designs. State everything else as an outcome with candidate designs, and don't
+let a stronger phrasing survive in a summary, a matrix row, or a scenario writeup after the
+detailed section has already been correctly hedged — this is a specific case of item 9 below.
+
+## 9. When correcting an overclaim, check whether the fix itself becomes a new overclaim
+
+A false "zero X" is easy to overcorrect into "always X" without tracing the value all the way
+downstream. If a function returns a non-empty value, check every filter/suppression/gating step
+between that return and what the user actually sees before asserting the value survives. Apply
+the same failure-mode-first standard (item 2) to your own corrections that you applied to find
+the original issue — a correction is a new claim, not an exemption from verification.
+
+## 10. After fixing any claim, grep the whole document for its repeats
 
 A finding stated once is often restated — in a table row, a KEEP/EXTEND verdict, an
 "opportunities" bullet, a readiness score, the executive summary, and the final verdict. Fixing
