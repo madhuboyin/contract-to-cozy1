@@ -8,7 +8,7 @@ question the original pass never asked. This document is that set of questions, 
 audit asks them the first time.
 
 Apply this before publishing any audit, gap-analysis, or "current state" architecture document
-in this repo — not only when a reviewer asks for a fix. **Items 11-15 apply specifically to
+in this repo — not only when a reviewer asks for a fix. **Items 11-18 apply specifically to
 target-architecture/design documents** (which make decisions rather than report findings) —
 see the note after item 10.
 
@@ -184,8 +184,40 @@ trace it was ever supposed to happen. The record that makes something retryable 
 the risk window it's meant to protect, even if that means writing a record for work that (on the
 fast path) completes a moment later and never needs to be retried at all.
 
+## 16. Before adding a uniqueness constraint on an existing field, check its granularity matches the new use
+
+*(Design documents.)* A fix reused an existing polymorphic-source field for a new uniqueness
+constraint, having confirmed the field existed and was semantically plausible — but every existing
+caller populated it at a coarser grain (one value per *user*, not per *operation*), so the
+constraint collided on a second, legitimate use by the same user and silently swallowed it as a
+"duplicate." Finding a field is not the same as finding a field with the right grain. Before
+keying a new constraint on an existing field, check what value every existing caller actually
+writes into it, not just what the field is named or what it's documented to mean.
+
+## 17. Synchronizing two independent operations by checking each other's state at completion time races
+
+*(Design documents.)* A design had operation A, on completing, check whether sibling operation B
+had also completed yet, and vice versa — intending whichever finished second to do a follow-up
+step. If both complete close together, each can check before the other has committed, both see
+"not done," and neither ever checks again. Any time two independent operations need to synchronize
+by observing each other, do it asynchronously against durably-committed state (an event processed
+after commit, not a query run during it) — the operation that commits later is then guaranteed to
+see the earlier one already done, because durable processing happens strictly after commit, not
+in a window that can race it.
+
+## 18. A fast inline path and a durable background worker for the same job need one shared claim, not two triggers
+
+*(Design documents.)* A design let a job run either inline (as a latency optimization) or via a
+durable background worker (as the retry path), coordinating them after the fact by having the
+worker check whether the inline path already produced a result. This under-specifies what happens
+when a result is partial (multiple items expected, only some produced) and doesn't prevent both
+paths from running concurrently. The fix is one shared claim/lease that both triggers compete for
+— whichever wins is the only one that runs the job — plus atomic all-or-nothing persistence of
+whatever the job produces, so "partially done" is never an observable state either trigger has to
+reason about.
+
 ---
 
 *Items 1-10 were written after external review of `ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`;
-items 11-15 after external review of `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` — see each
+items 11-18 after external review of `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` — see each
 document's "Revision note" for the specific findings that prompted them.*
