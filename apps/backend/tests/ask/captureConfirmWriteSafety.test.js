@@ -92,3 +92,51 @@ test('CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM reuse confirmAskExecution\'s on
   assert.ok(confirmFactIdx > 0 && confirmFactIdx < dispatchIdx, 'CAPTURE_FACT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
   assert.ok(confirmEventIdx > 0 && confirmEventIdx < dispatchIdx, 'CAPTURE_EVENT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
 });
+
+// Correction path (implementation plan §8/§4.1; FRD §4.1's finding: build on
+// the existing supersession chains, not correctionModes).
+
+test('PropertyFactEvidence correction needs no new code: a second CAPTURE_FACT_CONFIRM for the same factKey with a new captureExecutionId already supersedes the prior evidence through the existing write path', () => {
+  // Documents a deliberate no-op decision rather than asserting new
+  // behavior: writeCanonicalFact + the supersededAt: null -> observedAt
+  // updateMany already run for every non-idempotent-replay write,
+  // independent of whether the caller thinks of it as "a new value" or "a
+  // correction" -- the captureExecutionId check earlier in the file only
+  // short-circuits a REPLAY of the SAME execution, never a second, distinct
+  // correcting execution for the same factKey.
+  assert.match(captureSource, /await tx\.propertyFactEvidence\.updateMany\(\{\s*where: \{ propertyId, factKey, supersededAt: null \},\s*data: \{ supersededAt: observedAt \}/);
+});
+
+test('HomeEventsService.updateHomeEvent no longer collides on its own idempotencyKey unique constraint when correcting an idempotencyKey-bearing event', () => {
+  // Bug found while wiring Ask's conversational correction: the replacement
+  // row previously carried forward existing.idempotencyKey verbatim, which
+  // collides with the original (now isCurrent: false) row's own entry under
+  // @@unique([propertyId, idempotencyKey]) -- Postgres enforces uniqueness
+  // regardless of isCurrent. Every CAPTURE_EVENT_CONFIRM-created event now
+  // has a non-null idempotencyKey, so this is no longer a rare, unhit edge
+  // case. Fixed to default null (a correction is a distinct write, not a
+  // replay of the one it replaces) with an explicit override for callers
+  // that need their own idempotency marker on the replacement.
+  const idx = homeEventsServiceSource.indexOf('async updateHomeEvent(');
+  assert.ok(idx > 0);
+  assert.match(homeEventsServiceSource.slice(idx, idx + 200), /options\?: \{ idempotencyKey\?: string \| null \}/);
+  const createIdx = homeEventsServiceSource.indexOf('idempotencyKey: options?.idempotencyKey !== undefined ? options.idempotencyKey : null,', idx);
+  assert.ok(createIdx > idx, 'the replacement create must no longer copy existing.idempotencyKey verbatim');
+});
+
+test('confirmCaptureEvent\'s correction branch guards updateHomeEvent (which has no idempotency check of its own) with its own pre-check keyed on this execution\'s id, so a lease-reclaim retry cannot chain a second correction', () => {
+  const eventIdx = orchestratorSource.indexOf('async function confirmCaptureEvent(');
+  assert.ok(eventIdx > 0);
+  const body = orchestratorSource.slice(eventIdx, orchestratorSource.indexOf('registerConfirmCapabilityHandler(\'capture.event.confirm\'', eventIdx));
+  assert.match(body, /const correctingEventId = typeof parameters\.correctingEventId === 'string'/);
+  assert.match(body, /const correctionIdempotencyKey = `ask-correction:\$\{execution\.id\}`;/);
+  assert.match(body, /prisma\.homeEvent\.findFirst\(\{\s*where: \{ propertyId: execution\.propertyId, idempotencyKey: correctionIdempotencyKey \}/);
+  // The pre-check must run, and return early, BEFORE updateHomeEvent is ever
+  // called -- otherwise the guard doesn't actually prevent the second call.
+  const precheckIdx = body.indexOf('alreadyCorrected');
+  const writerCallIdx = body.indexOf('homeEventsServiceForCapture.updateHomeEvent(');
+  assert.ok(precheckIdx > 0 && precheckIdx < writerCallIdx);
+  // The writer call must pass the same key through so the row it creates is
+  // actually findable by the pre-check on a retry.
+  assert.match(body, /\{ idempotencyKey: correctionIdempotencyKey \}/);
+});

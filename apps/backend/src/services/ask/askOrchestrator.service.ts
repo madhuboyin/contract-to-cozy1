@@ -99,6 +99,7 @@ import { captureFeatureContext } from '../../modules/propertyContext/application
 import { capturePropertyFact } from '../../modules/propertyContext/application/capturePropertyFact';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
 import { HomeEventsService } from '../homeEvents.service';
+import { APIError } from '../../middleware/error.middleware';
 import { getFinancialContextDecisions } from '../financialContext/context';
 import { getProfile, upsertProfile } from '../financing.service';
 import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.service';
@@ -9274,8 +9275,73 @@ async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<Confir
 }
 registerConfirmCapabilityHandler('capture.fact.confirm', confirmCaptureFact);
 
+function captureEventResult(propertyId: string, event: { id: string; title: string }, corrected: boolean): AskOperationResult {
+  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  return {
+    status: 'COMPLETED', reasonCode: corrected ? 'EVENT_CORRECTED' : 'EVENT_CAPTURED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `event-${corrected ? 'corrected' : 'captured'}-${event.id}`, title: corrected ? 'Home timeline event corrected' : 'Added to your home timeline', status: 'COMPLETED',
+      description: corrected
+        ? 'A new revision replaces the prior entry on your home\'s canonical timeline; the original is preserved as history.'
+        : 'This event is now part of your home\'s canonical timeline.',
+      details: [{ label: 'Event', value: event.title }],
+      actions: [{ id: 'open-timeline', label: 'Open timeline', href: timelineHref, style: 'PRIMARY' }],
+    }],
+    confirmation: null, suggestions: [],
+  };
+}
+
 async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, command } = ctx;
+
+  // Ask Cozy Stage 3, Phase 2 (implementation plan §8/§4.1; FRD §20).
+  // Correction is built on HomeEvent's existing supersedesEventId/isCurrent
+  // revision chain (HomeEventsService.updateHomeEvent, already proven by the
+  // homeowner-facing timeline correction UI) -- never on correctionModes,
+  // which §4.1 confirmed is entirely unconsumed metadata. A homeowner
+  // follow-up that corrects something Ask already captured supplies
+  // correctingEventId (how that resolution happens -- matching the
+  // conversational reference to the right prior HomeEvent -- is Phase 3's
+  // extraction job, not this phase's).
+  const correctingEventId = typeof parameters.correctingEventId === 'string' ? parameters.correctingEventId : null;
+  if (correctingEventId) {
+    // updateHomeEvent has no idempotency check of its own (unlike
+    // createHomeEvent) -- it unconditionally supersedes and creates a
+    // replacement every time it's called, so a lease-reclaim retry of this
+    // same execution would otherwise chain a second, spurious correction on
+    // top of the first. Guard it the same way capturePropertyFact guards
+    // its own write: check for this execution's own prior replacement
+    // before ever calling the writer.
+    const correctionIdempotencyKey = `ask-correction:${execution.id}`;
+    const alreadyCorrected = await prisma.homeEvent.findFirst({
+      where: { propertyId: execution.propertyId, idempotencyKey: correctionIdempotencyKey },
+    });
+    if (alreadyCorrected) {
+      return { result: captureEventResult(execution.propertyId, alreadyCorrected, true), artifactType: command.artifactType, artifactId: alreadyCorrected.id };
+    }
+    let replacement: Awaited<ReturnType<typeof homeEventsServiceForCapture.updateHomeEvent>>;
+    try {
+      replacement = await homeEventsServiceForCapture.updateHomeEvent(
+        execution.propertyId,
+        correctingEventId,
+        {
+          ...parameters,
+          correctionReason: typeof parameters.correctionReason === 'string' && parameters.correctionReason.trim()
+            ? parameters.correctionReason
+            : 'Corrected through Ask after homeowner confirmation.',
+        },
+        userId,
+        { idempotencyKey: correctionIdempotencyKey },
+      );
+    } catch (error) {
+      if (error instanceof APIError && error.code === 'HOME_EVENT_NOT_FOUND') {
+        throw Object.assign(new Error('The event to correct is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      }
+      throw error;
+    }
+    return { result: captureEventResult(execution.propertyId, replacement, true), artifactType: command.artifactType, artifactId: replacement.id };
+  }
+
   const type = parameters.type;
   const title = parameters.title;
   const occurredAt = parameters.occurredAt;
@@ -9293,18 +9359,7 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
       idempotencyKey: execution.id,
     },
   });
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/timeline`;
-  const result: AskOperationResult = {
-    status: 'COMPLETED', reasonCode: 'EVENT_CAPTURED',
-    blocks: [{
-      type: 'WORKFLOW_PROGRESS', id: `event-captured-${created.id}`, title: 'Added to your home timeline', status: 'COMPLETED',
-      description: 'This event is now part of your home\'s canonical timeline.',
-      details: [{ label: 'Event', value: created.title }],
-      actions: [{ id: 'open-timeline', label: 'Open timeline', href: timelineHref, style: 'PRIMARY' }],
-    }],
-    confirmation: null, suggestions: [],
-  };
-  return { result, artifactType: command.artifactType, artifactId: created.id };
+  return { result: captureEventResult(execution.propertyId, created, false), artifactType: command.artifactType, artifactId: created.id };
 }
 registerConfirmCapabilityHandler('capture.event.confirm', confirmCaptureEvent);
 

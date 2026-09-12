@@ -641,7 +641,7 @@ export class HomeEventsService {
     }
   }
 
-  async updateHomeEvent(propertyId: string, eventId: string, patch: any, userId: string) {
+  async updateHomeEvent(propertyId: string, eventId: string, patch: any, userId: string, options?: { idempotencyKey?: string | null }) {
     const existing = await prisma.homeEvent.findFirst({
       where: { id: eventId, propertyId, isCurrent: true, deletedAt: null },
       include: { documents: true, evidence: true },
@@ -702,7 +702,20 @@ export class HomeEventsService {
             ? moneyToDecimalString(patch.valueDelta) : existing.valueDelta,
           meta: patch.meta !== undefined ? patch.meta : (existing.meta ?? undefined),
           groupKey: patch.groupKey !== undefined ? patch.groupKey : existing.groupKey,
-          idempotencyKey: existing.idempotencyKey,
+          // Fixed bug (found while adding Ask conversational correction,
+          // implementation plan §8/§4.1): carrying forward existing.idempotencyKey
+          // verbatim, when non-null, collided with the original (now
+          // isCurrent: false) row's own @@unique([propertyId, idempotencyKey])
+          // entry -- Postgres enforces uniqueness across all rows regardless
+          // of isCurrent, so any correction of an idempotencyKey-bearing
+          // event (previously rare enough to go unhit; now routine, since
+          // CAPTURE_EVENT_CONFIRM always sets one) would throw P2002.
+          // A correction is a materially different write than the one that
+          // produced the row it replaces and deserves its own identity, so
+          // the default is null, not a carried-forward collision; a caller
+          // that needs its own idempotency marker on the replacement (this
+          // file's Ask correction handler) passes one explicitly.
+          idempotencyKey: options?.idempotencyKey !== undefined ? options.idempotencyKey : null,
           sourceBadge: 'USER_REPORTED',
           confidenceScore: existing.confidenceScore,
           provenanceId: existing.provenanceId,
