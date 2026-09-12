@@ -2,7 +2,7 @@
 
 **Type:** Phased execution plan. No implementation, no schema edits, no migrations in this document.
 **Baseline:** `docs/product/ASK_COZY_MESSAGE_FIRST_FRD.md` (Part A — defines *what*) and `docs/architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` (Stage 2 — architecture decisions, treated as approved baseline per this stage's brief). This document defines *how to get there incrementally*.
-**Evidence discipline:** every claim about current implementation is cited `path:line` and was verified fresh during this stage's research (five parallel verification passes into correction-mode dispatch, schema representations, Home Event Radar runtime state, the full 68-operation handler inventory, and existing UI/eval infrastructure) — not copied from Stage 2 without re-checking where implementation detail matters, per this stage's explicit instruction.
+**Evidence discipline:** every claim about current implementation is cited `path:line` and was verified fresh during this stage's research (five parallel verification passes into correction-mode dispatch, schema representations, Home Event Radar runtime state, the handler inventory (67 operations documented — see §4.8 for a completeness caveat), and existing UI/eval infrastructure) — not copied from Stage 2 without re-checking where implementation detail matters, per this stage's explicit instruction.
 
 ---
 
@@ -113,14 +113,17 @@ RECOMMENDED ADJUSTMENT: as part of Phase 1 (the first phase touching DomainEvent
 - **(b)** Per-component allowlist: add `WEATHER` only for `ROOF`/`FOUNDATION`/`EXTERIOR`/`SITE` (each has a plausible WEATHER-domain rule), excluding `INTERIOR`.
 **Action:** before picking (a) or (b), verify `intelligenceEnvelopeQuery.service.ts`'s `entityRef`/`componentKind` filtering logic (not read in this pass) — it may already keep results relevant regardless of domain-list breadth, which would make (a) safe and simpler.
 
-### 4.7 Handler inventory
-Full 68-operation table in §5 below — completed in this pass, not deferred.
+### 4.7 Handler inventory, and the one confirmation-registry question it surfaced
+Full handler table in §5 below — completed in this pass, not deferred. That table surfaced one open question worth resolving here rather than leaving implicit: `HVAC_SPECIALIST_ENGAGE` is classified `MATERIAL_DECISION`/`CONTRIBUTOR` in `askOperationRegistry.ts` but has **no entry** in `askDomainCommandRegistry.ts` — every other material-write operation has one. Its confirmation (if any) is handled inside the specialist-agent runtime itself, not via the standard command path. **Action:** confirm with whoever owns the HVAC specialist-agent pattern whether that self-managed confirmation is an intentional design choice (the agent runtime has its own audit trail, so a second confirmation layer may be redundant) or a genuine gap that predates this program — before this operation is migrated in Phase 1, since the capability-invocation layer's "passthrough" category (FRD §16) needs to know which behavior to preserve.
+
+### 4.8 Handler count: a caveat on this pass's own inventory
+**[FACT — this pass, a limit on its own completeness]** The table in §5 documents **67** operations, cross-referenced by name against `askOperationRegistry.ts`, `askDomainCommandRegistry.ts`, and the orchestrator's dispatch `switch`. Earlier drafts of this stage's documents referred to "68 operations" throughout (an estimate carried from the research task's framing, not a recount against the finished table) — the table itself, once built, contains 67 distinct `operationId` values. This pass did not re-run a fresh, independent count of `AskOperationId`'s full literal union directly against `askOperationRegistry.ts` as a separate check, so it cannot rule out that one operation was missed during the table's construction. **Action for Phase 0:** before starting Phase 1's migration, run a single automated diff (the exact list of `AskOperationId` string literals in `askOperationRegistry.ts` against the 67 `operationId` values in §5's table) to confirm the table is complete, and add any missing row before migration begins. Every count derived from this table elsewhere in this document and the FRD (Simple/Medium/Trivial/Passthrough/High tallies, the "25 require confirmation" figure) is accurate **relative to the 67 rows actually documented**, not independently re-verified against a 68th, undocumented operation.
 
 ---
 
 ## 5. Handler Migration Inventory
 
-**[FACT — this pass]** All 68 `AskOperationId` values, cross-referenced against `askOperationRegistry.ts` (adapter keys), `askDomainCommandRegistry.ts` (confirmation requirements), and the single dispatch `switch` in `askOrchestrator.service.ts:6137-6234`. Every row below is directly observed from a handler call site and its definition — none inferred.
+**[FACT — this pass]** 67 `AskOperationId` values documented (see §4.8 for why this may not be the full set), cross-referenced against `askOperationRegistry.ts` (adapter keys), `askDomainCommandRegistry.ts` (confirmation requirements), and the single dispatch `switch` in `askOrchestrator.service.ts:6137-6234`. Every row below is directly observed from a handler call site and its definition — none inferred.
 
 | operationId | adapterId | handler (file:line) | current args | effect | confirmation (Y/N, via) | shim complexity |
 |---|---|---|---|---|---|---|
@@ -192,17 +195,17 @@ Full 68-operation table in §5 below — completed in this pass, not deferred.
 | BUYER_FINDING_DISPOSITION | buyer.finding.disposition | buyerFindingDispositionResult (:4812) | userId, propertyId, message | MUTATION_PREPARATION | Y — BUYER_FINDING_DISPOSITION | Simple |
 | BUYER_LIFECYCLE_UPDATE | buyer.lifecycle.update | buyerLifecycleUpdateResult (:4875) | userId, propertyId, message | MUTATION_PREPARATION | Y — BUYER_LIFECYCLE_UPDATE | Simple |
 
-**Coverage: all 68 operations represented, none skipped or guessed.** Cross-cutting internal helper functions (`audienceApplicabilityResult`, `needsPropertyResult`, `hvacDecisionThreadAmbiguousResult`, `buyerNotActiveResult`, `routingClarificationResult`, `maybeSynthesizeDeterministicResult`, `operationalUnavailableResult`, `dispatchOperationAdapterResult`) are invoked within several handlers above and are correctly excluded — they are not per-operation handlers themselves.
+**Coverage: 67 operations documented above, none guessed** — see §4.8 for the caveat that this count has not been independently diffed against `askOperationRegistry.ts`'s full literal union, so one operation may still be missing pending that check. Cross-cutting internal helper functions (`audienceApplicabilityResult`, `needsPropertyResult`, `hvacDecisionThreadAmbiguousResult`, `buyerNotActiveResult`, `routingClarificationResult`, `maybeSynthesizeDeterministicResult`, `operationalUnavailableResult`, `dispatchOperationAdapterResult`) are invoked within several handlers above and are correctly excluded — they are not per-operation handlers themselves.
 
-**Summary:** 61 "Simple" (pure scalar destructure), 3 "Medium" (need one `launchContext`-derived field), 3 "Trivial" (no envelope fields at all), 2 "Passthrough" (`GROUNDED_GUIDANCE`, `HVAC_SPECIALIST_ENGAGE` — receive the whole envelope/launchContext, per FRD §16's new adapter category). 25 require confirmation via `AskDomainCommandRegistry`; `HVAC_SPECIALIST_ENGAGE`'s confirmation status is flagged **[OPEN]** pending Phase 0's decision (§4.7 above / FRD §16).
+**Summary (recounted directly from the table above, correcting an earlier draft's arithmetic error):** 58 "Simple" (pure scalar destructure, including `INTELLIGENCE_ENVELOPE_QUERY` once `continuationCursor` is added to the envelope), 3 "Medium" (need one `launchContext`-derived field), 3 "Trivial" (no envelope fields at all), 2 "Passthrough" (`GROUNDED_GUIDANCE`, `HVAC_SPECIALIST_ENGAGE` — receive the whole envelope/launchContext, per FRD §16's new adapter category), 1 "High" (`MAINTENANCE_STATUS` — needs context-provider values the envelope doesn't carry). 58+3+3+2+1 = 67, matching the table's row count. 25 require confirmation via `AskDomainCommandRegistry`; `HVAC_SPECIALIST_ENGAGE`'s confirmation status is flagged **[OPEN]** pending Phase 0's decision (§4.7 above / FRD §16).
 
 ---
 
 ## 6. Phase 0 — Pre-implementation Verification
 
-Output: this document's §4 (already complete) plus the remaining decisions it flags as open — `UPLOAD_EVIDENCE`/`ADD_NOTE` target representations (§4.2), the envelope-scope fix choice for `askEnvelopeQueryScope.ts` (§4.6), and `HVAC_SPECIALIST_ENGAGE`'s confirmation-registry gap (§4.7). No broad refactoring starts before these four decisions are made — everything else in §4 already has a resolved answer.
+Output: this document's §4 (already complete) plus the remaining decisions it flags as open — `UPLOAD_EVIDENCE`/`ADD_NOTE` target representations (§4.2), the envelope-scope fix choice for `askEnvelopeQueryScope.ts` (§4.6), `HVAC_SPECIALIST_ENGAGE`'s confirmation-registry question (§4.7), and the handler-count reconciliation (§4.8). No broad refactoring starts before these decisions are made — everything else in §4 already has a resolved answer.
 
-**Acceptance criterion:** all five Phase 0 items in §4 have either a resolved answer (4.1, 4.3, 4.4) or an explicit, documented decision (4.2's two gaps, 4.6's fix choice, 4.7's confirmation question) before Phase 1 begins.
+**Acceptance criterion:** all items in §4 have either a resolved answer (4.1, 4.3, 4.4) or an explicit, documented decision/action (4.2's two gaps, 4.6's fix choice, 4.7's confirmation question, 4.8's handler-count diff) before Phase 1 begins.
 
 ---
 
@@ -210,9 +213,9 @@ Output: this document's §4 (already complete) plus the remaining decisions it f
 
 **Goal:** remove domain dispatch from the orchestrator without changing product behavior.
 
-**Work:** `CapabilityInvocationEnvelope` (FRD §16, including the `continuationCursor` field and the passthrough category for `GROUNDED_GUIDANCE`/`HVAC_SPECIALIST_ENGAGE`), `CapabilityHandlerRegistry` keyed by adapter id, `capability.invoke()`, incremental migration of the 68 handlers per §5's inventory (Simple/Trivial rows first — lowest risk, highest count; Medium rows next; Passthrough rows last, since they need the adapter-category decision from Phase 0 settled first). Widen `EmitDomainEventInput.type` to the full 14-member set as part of this phase's own `DomainEvent` touch-points (§4.4).
+**Work:** `CapabilityInvocationEnvelope` (FRD §16, including the `continuationCursor` field and the passthrough category for `GROUNDED_GUIDANCE`/`HVAC_SPECIALIST_ENGAGE`), `CapabilityHandlerRegistry` keyed by adapter id, `capability.invoke()`, incremental migration of the handlers per §5's inventory (67 operations documented, completeness caveat at §4.8; Simple/Trivial rows first — lowest risk, highest count; Medium rows next; Passthrough rows last, since they need the adapter-category decision from Phase 0 settled first). Widen `EmitDomainEventInput.type` to the full 14-member `DomainEventType` enum as part of this phase's own `DomainEvent` touch-points (§4.4).
 
-**Acceptance criterion:** existing Ask behavior is functionally equivalent for all 68 operations (verified against the existing 48-file `apps/backend/tests/ask/` suite, unchanged pass rate), and capability execution no longer requires domain-specific switch logic inside the orchestrator for any migrated operation.
+**Acceptance criterion:** existing Ask behavior is functionally equivalent for all documented operations (§4.8's count-reconciliation diff run first, so "all" means the confirmed complete set, not just the 67 in §5's table) (verified against the existing 48-file `apps/backend/tests/ask/` suite, unchanged pass rate), and capability execution no longer requires domain-specific switch logic inside the orchestrator for any migrated operation.
 
 **Independently releasable:** yes — this phase changes nothing a homeowner can observe.
 
@@ -357,7 +360,7 @@ Consolidated from Stage 2's final (four-times-corrected) inventory, re-verified 
 | `activeDecisionThreadId: String?` | `AskSession` | Carried from Stage 2 |
 | New `AskOperationId` values (`CAPTURE_FACT_CONFIRM`, `CAPTURE_EVENT_CONFIRM`) | — | **Verified this pass: zero schema change needed** (§4.3) |
 | New `DecisionThread.goalCode` values | — | **Verified this pass: zero schema change needed** (§4.3) |
-| `EmitDomainEventInput.type` widened to 14 members; two new `DomainEventType` members (`ASK_EXTRACTION_REQUESTED`, `ASK_CAPTURE_LINK_RECONCILE`) | `DomainEvent` (Prisma enum) | **New finding this pass** (§4.4) — the enum itself needs 2 new members; the emitter's TS type needs widening to match its own already-existing 14, a pre-existing gap this program's additions would otherwise compound |
+| Two new `DomainEventType` enum members (`ASK_EXTRACTION_REQUESTED`, `ASK_CAPTURE_LINK_RECONCILE`), taking the enum from 14 to 16; `EmitDomainEventInput.type` widened from its current 9 members to the full set (16, once this program's 2 additions land — the pre-existing 9→14 gap and this program's 14→16 addition are the same widening edit, done once) | `DomainEvent` (Prisma enum) | **New finding this pass** (§4.4) — the enum itself needs 2 new members; the emitter's TS type is separately missing 5 pre-existing (refinance) members regardless of this program, a gap this program's additions would otherwise compound rather than fix |
 
 **Per the request's instruction:** this is documentation only. No migration script. Schema edits go directly into `prisma/schema.prisma` when implementation begins; applying them to any database (local or otherwise) is the user's own step, not part of this plan or any future implementation session's automatic responsibility.
 
@@ -401,7 +404,7 @@ Two new `DomainEventType` members and their consumer handlers in `processDomainE
 
 | Flag | Gates | Removal criterion |
 |---|---|---|
-| `askCapabilityInvocationV2` | Phase 1's registry-based dispatch (per-operation, can be enabled incrementally per §5's migration order) | Remove once all 68 operations are migrated and the old switch is deleted |
+| `askCapabilityInvocationV2` | Phase 1's registry-based dispatch (per-operation, can be enabled incrementally per §5's migration order) | Remove once every operation (the confirmed complete set per §4.8) is migrated and the old switch is deleted |
 | `askConfirmationConvergence` | Phase 2's new operation family + `GroundedAskProposal` retirement | Remove once all 7 kinds have parity and the old proposal path is deleted |
 | `askConversationalCapture` | Phase 3's pre-filter/extraction | Remove once pilot thresholds (FRD §15) are cleared in production and the flag has been at 100% for one full release cycle |
 | `askContextualNextActions` | Phase 4 | Remove once next-action generation is the only path (no fallback to static strings remains) |
@@ -440,7 +443,7 @@ Extends existing infrastructure — **[FACT — this pass]** 48 existing `.test.
 
 ## 25. Risks
 
-**High-risk (sequence first, per the request's explicit risk-based ordering):** write confirmation correctness (Phase 2's entire purpose), idempotency under lease-reclaim races (Stage 2's fourth-round finding — genuinely subtle, needs dedicated race-condition tests, §23), extraction accuracy (no amount of architecture fixes a poorly-calibrated pre-filter), event/fact classification (a `GOAL` misclassified as a `FACT` creates the wrong kind of record), async retry races (the shared-lease-ownership contract, Stage 2's third-round finding), authorization (re-check at confirmation completion, not just proposal time), handler migration (68 operations, 2 genuine structural outliers found this pass that Stage 2 didn't know about).
+**High-risk (sequence first, per the request's explicit risk-based ordering):** write confirmation correctness (Phase 2's entire purpose), idempotency under lease-reclaim races (Stage 2's fourth-round finding — genuinely subtle, needs dedicated race-condition tests, §23), extraction accuracy (no amount of architecture fixes a poorly-calibrated pre-filter), event/fact classification (a `GOAL` misclassified as a `FACT` creates the wrong kind of record), async retry races (the shared-lease-ownership contract, Stage 2's third-round finding), authorization (re-check at confirmation completion, not just proposal time), handler migration (67 operations documented, 2 genuine structural outliers found this pass that Stage 2 didn't know about, count to be reconciled per §4.8 before Phase 1 starts).
 
 **Lower-risk (sequence later):** visual block additions (reduced from two to one after this pass's `FACT_CONFIRMATION` finding), suggestion text, additional capability exposure (Phase 7).
 

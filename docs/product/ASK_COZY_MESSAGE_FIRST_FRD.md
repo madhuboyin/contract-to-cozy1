@@ -249,7 +249,7 @@ Metrics and **pragmatic pilot thresholds** (illustrative starting points — a S
 
 **[REQUIREMENT]** Given an `operationId`, the layer must: resolve adapter (existing `getSkillAdapterForOperation`) → validate policy (existing `resolveEffectiveSkillOperationPolicy`) → resolve registered handler (new registry) → build the normalized invocation envelope → execute → return `AskOperationResult` → emit execution metadata (existing `SkillExecutionBinding`).
 
-**[REQUIREMENT] Canonical envelope**, per Stage 2 §11 with two corrections from this pass's full 68-operation handler inventory (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §5):
+**[REQUIREMENT] Canonical envelope**, per Stage 2 §11 with two corrections from this pass's handler inventory (67 operations documented, implementation plan §5, with a completeness caveat at implementation plan §4.8):
 
 ```ts
 type CapabilityInvocationEnvelope = {
@@ -272,7 +272,7 @@ type CapabilityInvocationEnvelope = {
 STAGE 2 ASSUMPTION: a per-operation shim maps the common envelope onto each handler's actual
   (non-uniform) positional signature — "in some cases requiring lookups beyond simple
   destructuring," per Stage 2's own hedge.
-NEW CODE EVIDENCE: this pass's full 68-operation inventory found two genuine structural outliers,
+NEW CODE EVIDENCE: this pass's handler inventory (67 operations documented) found two genuine structural outliers,
   not just "more complex destructuring": GROUNDED_GUIDANCE takes the entire raw `input` object plus
   a separate `trace` argument (not a scalar subset of the envelope at all), and
   HVAC_SPECIALIST_ENGAGE takes the whole `launchContext` object rather than any derived field, and
@@ -292,7 +292,7 @@ RECOMMENDED ADJUSTMENT: define a second, explicit adapter category — "passthro
 
 **[REQUIREMENT] Handler registration:** Registry keyed by **adapter id** (Stage 2's corrected §11 — not `AskOperationId`, since an adapter's `allowedOperations` is declared as an array). Duplicate-handler registration must fail at initialization (a startup assertion, mirroring the existing `validateSkillAdapterDefinitions`/`validateSkillDefinitions` static-consistency checkers Stage 1 found already exist and run at build/test time); a missing handler for a registered, enabled adapter must fail as a typed `ASK_CAPABILITY_HANDLER_MISSING` error (existing `errorContract: 'ASK_TYPED_RESULT'` convention, per Stage 1's finding on `SkillAdapterDefinition`), never an undefined-function runtime crash; adapter-to-handler integrity is checked by the same initialization validator that already checks adapter-to-operation integrity (`validateSkillAdapterDefinitions`, extend rather than duplicate).
 
-**[REQUIREMENT] Existing handler migration:** every existing handler gets a shim; **thin shims are acceptable and preferred** — do not rewrite handler bodies to a common signature unless a handler is independently being modified for another reason. The full inventory of all 68 operations (exact args, adapter ids, confirmation requirements, shim complexity) lives in the implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §5), not duplicated here per the two-document separation. **[FACT — this pass]** summary: 61 fit the standard scalar-destructure shim pattern, 3 are trivial (no envelope fields at all), 2 need the passthrough category above; 25 require confirmation via `AskDomainCommandRegistry`.
+**[REQUIREMENT] Existing handler migration:** every existing handler gets a shim; **thin shims are acceptable and preferred** — do not rewrite handler bodies to a common signature unless a handler is independently being modified for another reason. The full inventory (exact args, adapter ids, confirmation requirements, shim complexity) lives in the implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §5), not duplicated here per the two-document separation — 67 operations documented there, with a completeness caveat at implementation plan §4.8 (this pass's table was not independently diffed against `askOperationRegistry.ts`'s full literal union, so it may be missing one operation). **[FACT — this pass]** summary of the 67 documented: 58 fit the standard scalar-destructure shim pattern, 3 need a `launchContext`-derived field, 3 are trivial (no envelope fields at all), 2 need the passthrough category above, 1 needs context-provider values the envelope doesn't carry; 25 require confirmation via `AskDomainCommandRegistry`.
 
 ---
 
@@ -441,7 +441,7 @@ Corrected design (Stage 2's second-round finding, incorporating an under-credite
 
 ## 28. Structured UI Blocks
 
-**[REQUIREMENT]** Keep `AskPresentationBlock` (**[FACT — this pass]** confirmed 24 current variants, full list in the implementation plan §5). Add exactly **one** new block type: `PROACTIVE_INSIGHT` (a genuine gap — no existing field distinguishes a Cozy-initiated execution). **Do not add `FACT_CONFIRMATION`** — per §14's STAGE 2 ASSUMPTION correction, the existing `confirmation` field already covers this need with zero new schema.
+**[REQUIREMENT]** Keep `AskPresentationBlock` (**[FACT — this pass]** confirmed 24 current variants: `SUMMARY`, `GROUPED_LIST`, `TABLE`, `CAPABILITY_LIST`, `EVIDENCE`, `BOUNDARY`, `MONITOR`, `WORKFLOW_PROGRESS`, `METRIC_ROW`, `TIMELINE`, `COMPARISON`, `DECISION_TRACE`, `DECISION_PROGRESS`, `SCENARIO_COMPARISON`, `PREFERENCE_REFERENCE`, `WHY_NOW`, `RECOMMENDATION_CHANGE`, `CHANGE_SUMMARY`, `PRIORITY_LIST`, `OUTCOME_SUMMARY`, `ASSUMPTIONS`, `LIMITATION`, `EMPTY_STATE`, `ERROR_STATE`). Add exactly **one** new block type: `PROACTIVE_INSIGHT` (a genuine gap — no existing field distinguishes a Cozy-initiated execution). **Do not add `FACT_CONFIRMATION`** — per §14's STAGE 2 ASSUMPTION correction, the existing `confirmation` field already covers this need with zero new schema.
 
 **[REQUIREMENT]** Frontend impact (**[FACT — this pass]**): `AskWorkspace.tsx`'s `BlockView` is a single 1707-line function using an inline `if (block.type === 'X')` chain — not a per-block-component architecture. Adding `PROACTIVE_INSIGHT` means one more `if` branch in this same file (and the mirrored type in `apps/frontend/src/features/ask/types.ts`); no new component-registry pattern is introduced by this program.
 
@@ -471,7 +471,7 @@ Covered in full in §21. Restated: Job 3 ("when something major happens") is ser
   1. **[FACT — this pass]** the `askEnvelopeQueryScope.ts` domain-mapping bug is confirmed still present exactly as previously described (component-scoped queries hardcode `domains: ['ASSET_LIFECYCLE']`, excluding `WEATHER`). This pass found the fix is **not** simply "always add WEATHER" — roof-related signals are already legitimately split across both domains (`aging_roof_condition_review` → `ASSET_LIFECYCLE`, `SEVERE_WEATHER_OPEN_ROOF_ISSUE` → `WEATHER`), and other WEATHER-domain rules (`heavy_rain`/`flood_risk`, gutter drainage) plausibly apply to `FOUNDATION`/`SITE`/`EXTERIOR` too, not just `ROOF`. Phase 0 must decide between an unconditional widen (`domains: ['ASSET_LIFECYCLE', 'WEATHER']` for every matched component) or a per-component allowlist (excluding `INTERIOR`, which has no plausible WEATHER-domain rule) — and must first verify `intelligenceEnvelopeQuery.service.ts`'s entityRef-filtering logic, since it may already keep results relevant regardless of which option is chosen (not verified in this pass).
   2. **[FACT — this pass]** runtime Radar population could not be verified in this environment (no reachable database matching the app's configured connection string) — but the seed script (`apps/backend/prisma/seed.ts`) was confirmed to create **zero** `PropertyRadarMatch`/`RadarEvent` rows for any seeded test property. Treat "Radar data exists for a demo/test property" as a precondition to establish (via the real ingestion pipeline or a purpose-built fixture), not an assumption — this is a real Phase 0 blocker for any live demonstration of Scenario 8.4, not just a documentation gap.
 
-- **Refinance — reference implementation, wrap cleanly, do not refactor.** Per Stage 2 §25/this document's §8.1: direct capability access, deterministic calculations, graceful degradation, missing-context capture, clear output states. The capability layer's shim for `refinance.analysis` is the simplest in the entire 68-operation inventory (2 args, no `message` needed) — no reason to touch the underlying service.
+- **Refinance — reference implementation, wrap cleanly, do not refactor.** Per Stage 2 §25/this document's §8.1: direct capability access, deterministic calculations, graceful degradation, missing-context capture, clear output states. The capability layer's shim for `refinance.analysis` is the simplest in the entire handler inventory (2 args, no `message` needed) — no reason to touch the underlying service.
 
 - **Seller Prep / life-event — expose now.** Per §8.5/§21/§26. `SellerPrepService` is confirmed UI-decoupled already (Stage 1 finding) — needs a new Ask operation registration, not new business logic.
 
@@ -545,8 +545,8 @@ Per §15 (extraction) and §11 (routing) — both extend existing infrastructure
 
 ## 40. Acceptance Criteria
 
-**[REQUIREMENT]** This FRD is satisfied when every user story in §8 passes its stated behavior against the turn processing contract (§10), every knowledge-capture target (§19–§21) enforces its idempotency/attribution/confirmation requirements under the race-condition tests defined in the implementation plan (§23), the capability layer (§16) passes all 68 operations through the registry with zero orchestrator dispatch branches remaining, and the extraction evaluation corpus (§15) clears its pilot thresholds. Full Definition of Done in the implementation plan (§27).
+**[REQUIREMENT]** This FRD is satisfied when every user story in §8 passes its stated behavior against the turn processing contract (§10), every knowledge-capture target (§19–§21) enforces its idempotency/attribution/confirmation requirements under the race-condition tests defined in the implementation plan (§23), the capability layer (§16) passes every operation (the confirmed complete set per implementation plan §4.8) through the registry with zero orchestrator dispatch branches remaining, and the extraction evaluation corpus (§15) clears its pilot thresholds. Full Definition of Done in the implementation plan (§27).
 
 ---
 
-*End of Part A. See `docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` (Part B) for phased execution, the full 68-operation handler migration inventory, dependency graph, and rollout sequencing.*
+*End of Part A. See `docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` (Part B) for phased execution, the full handler migration inventory (67 operations documented, completeness caveat at §4.8), dependency graph, and rollout sequencing.*
