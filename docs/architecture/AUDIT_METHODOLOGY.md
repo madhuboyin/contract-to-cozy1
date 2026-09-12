@@ -8,7 +8,7 @@ question the original pass never asked. This document is that set of questions, 
 audit asks them the first time.
 
 Apply this before publishing any audit, gap-analysis, or "current state" architecture document
-in this repo — not only when a reviewer asks for a fix. **Items 11-18 apply specifically to
+in this repo — not only when a reviewer asks for a fix. **Items 11-20 apply specifically to
 target-architecture/design documents** (which make decisions rather than report findings) —
 see the note after item 10.
 
@@ -216,8 +216,30 @@ paths from running concurrently. The fix is one shared claim/lease that both tri
 whatever the job produces, so "partially done" is never an observable state either trigger has to
 reason about.
 
+## 19. A shared lease stops two attempts from starting together — it doesn't stop a reclaimed one from finishing
+
+*(Design documents.)* A design gave two triggers (an inline fast path, a background worker) one
+shared lease so only one could start a job — correct, but incomplete. A lease can expire and be
+legitimately reclaimed while the original holder is still alive, just slow, not crashed. If that
+stale holder eventually finishes, nothing stops it from committing a result derived from a claim
+that's already moved on — and a downstream idempotency mechanism (deterministic ids, an upsert)
+only prevents *duplicating* rows, it does not prevent a stale result from *overwriting or adding
+to* whatever the current, valid claimant already wrote. The commit itself — not just the start —
+must re-verify the claim token is still current (a conditional update gated on the token observed
+at claim time, failing the whole transaction if it's moved on), or a slow loser can still win.
+
+## 20. A relationship two entities need to check about each other needs a pointer on both sides
+
+*(Design documents.)* A design linked two related records by setting a reference on only one of
+them (reasoning it as "the one that needs to know about the other"). The reconciliation logic that
+used this reference ran from *either* side's completion — but only one side had anything to check.
+Whichever side lacked the pointer had a completion event with nothing to act on, silently defeating
+the reconciliation for that direction. If two entities need to resolve their relationship from
+either one's perspective, both need the reference — not just the one that seemed like the "owning"
+side when the relationship was first written.
+
 ---
 
 *Items 1-10 were written after external review of `ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`;
-items 11-18 after external review of `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` — see each
+items 11-20 after external review of `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` — see each
 document's "Revision note" for the specific findings that prompted them.*
