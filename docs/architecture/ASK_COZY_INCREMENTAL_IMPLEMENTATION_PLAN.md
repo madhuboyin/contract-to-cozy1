@@ -740,6 +740,125 @@ Four real gaps found and closed while verifying, none of them cosmetic:
 
 **Independently releasable:** yes, behind a flag.
 
+**Status (2026-09-13): shipped**, one vertical slice (SELL_HOLD_RENT only), behind two flags (`ASK_CONVERSATIONAL_CAPTURE_ENABLED` and the new `ASK_GOAL_CAPTURE_ENABLED`/`_KILL_SWITCH`, both default OFF). A prior session's own research pass (recorded in memory before this session started) was re-verified against current code before building anything, per this program's standing discipline — most of it held, one real correction below.
+
+```
+STAGE ASSUMPTION (prior research pass): "AskSession.activeDecisionThreadId... implying it might
+  already exist from earlier Decision Platform work, but this was not verified."
+NEW CODE EVIDENCE: read schema.prisma's AskSession model directly -- it had no such field. It was
+  not, in fact, forward-provisioned by any earlier program (unlike Phase 3's own capture fields,
+  which genuinely were).
+IMPACT: a real (small, additive, nullable) schema change was needed for this phase, unlike every
+  other Phase 6 primitive (DecisionThread/goalCode/the generic snapshot adapter), which needed none.
+RECOMMENDED ADJUSTMENT: added `AskSession.activeDecisionThreadId String?`, a plain unenforced
+  pointer (no Prisma relation), matching this schema's existing convention for same-purpose soft
+  caches (e.g. `SaleReadinessItem.canonicalWorkItemId`). Confirmed, not just asserted, that nothing
+  treats a stale/missing value as authoritative -- the real resumption mechanism is
+  `DecisionThread.activeIdentityKey`, looked up fresh by `createOrResumeThread`'s own `selectThread`
+  call every time, independent of this cache.
+```
+
+The prior pass's headline finding held exactly as stated: `sellHoldRentDecisionFamilyAdapter`
+(`domainSnapshotAdapters.ts`) was already registered and already worked from real
+`SellHoldRentAnalysis` rows — this phase's own code needed to *call* it, not build a recommendation
+engine. Building from that reuse point kept the new code small: one 4th extraction-candidate
+category (`GOAL`, `extractionCandidateSchema.ts`), one new prompt block
+(`extractionContract.ts`), a `splitGoalCandidates` array-safety helper (the same
+positional-index-under-compaction bug class Phase 3 already fixed once for WARRANTY links —
+verified this one doesn't reintroduce it, with dedicated tests), and one new
+`SELL_HOLD_RENT_GOAL_CAPTURE` `AskOperationId` processed entirely inside
+`conversationalCapture.ts` (never NEEDS_CONFIRMATION, created directly as COMPLETED, per the
+materiality carve-out FRD §21 states explicitly). `decisionProgressBlock`/`whyNowBlock` (already
+family-generic, confirmed by reading them before reusing) were extracted out of
+`askOrchestrator.service.ts` into a new shared module, `decisionThreadPresentationBlocks.ts` --
+required, not optional polish: `conversationalCapture.ts` cannot import anything defined inside
+`askOrchestrator.service.ts` (that file imports `conversationalCapture.ts` one-directionally, per
+its own header, to dodge a CommonJS circular-import hazard), so the functions had to move to a
+module both files can import.
+
+**Real forks and gaps found and decided explicitly this phase, not silently:**
+
+1. **"Seller Prep capabilities... without navigating there"** — confirmed no Ask Skill/operation for
+   Seller Prep exists (`apps/backend/src/sellerPrep/` is a standalone REST feature only) and building
+   one is real ~8-10-file Skill-registration work, explicitly named Phase 7 scope by this document's
+   own §13. Chose the cheaper option the prior research pass already leaned toward: embed real,
+   live `PropertySaleCase`/`SaleReadinessItem` data (via the existing, already-reviewed
+   `PropertySaleCaseService.getCase`, not a new service) as an inline `GROUPED_LIST` block on the
+   GOAL-capture child execution, with a "Start/Open seller prep" action link either way. This is a
+   scope decision with a real, named alternative — flagged here rather than assumed, matching this
+   program's own Phase 4 precedent (System-A-vs-B), though not separately put to the user this
+   session given the prior pass's own research had already narrowed it to a clear proportionate
+   default.
+2. **The generic snapshot adapter factory silently drops `askExecutionId`** (`createOrResumeThread`'s
+   own interface declares the param; `snapshotDecisionFamilyAdapter.ts`'s actual implementation
+   never destructures or uses it, so no `DecisionThreadExecutionLink` audit row is ever created from
+   this path — confirmed by reading the function, not assumed from the interface). Decided
+   explicitly: **left as-is, not fixed this phase.** `DecisionThreadExecutionLink` is confirmed
+   (schema read directly) to be supplementary audit lineage only — `activeIdentityKey` is what makes
+   resumption correct, independent of this link. Fixing it would mean changing a shared factory used
+   by six decision families (refinance/capital-timeline/ownership-cost/savings-benefit/
+   coverage-question/sell-hold-rent), a cross-cutting change out of proportion to one vertical
+   slice's own scope. Real, named, undone follow-up — not silently ignored.
+3. **Whether the routed `SELL_HOLD_RENT_ANALYSIS` operation itself (a direct question like "should I
+   sell, hold, or rent?") should also attach a DecisionThread on every invocation**, not just the
+   GOAL-statement path. Deliberately NOT done this phase: the acceptance criterion (this section's
+   own text) names only the GOAL-statement scenario, and the "one vertical slice, not every
+   life-event at once" instruction argues against widening scope unprompted. `SELL_HOLD_RENT_ANALYSIS`
+   itself is completely untouched by this phase's code.
+
+**Verified, not assumed, before building:** `SELL_HOLD_RENT_ANALYSIS` (the routed operation) has no
+`askDomainCommandRegistry.ts` entry and is `safetyClass: 'MATERIAL_DECISION'`/family `DECISION_ANALYSIS`,
+not `COMMAND` — it was never confirmation-gated to begin with, independent of anything this phase
+built. `SELL_HOLD_RENT_GOAL_CAPTURE` (the new operation) deliberately uses `safetyClass: 'STANDARD'`,
+unlike the three `CAPTURE_*_CONFIRM` operations' `MATERIAL_DECISION` — this is the materiality
+carve-out's own point, made visible in the registry, not just in prose.
+
+**Registry/governance surface touched, mirroring the exact ritual the three `CAPTURE_*_CONFIRM`
+additions established** (and learning directly from that program's own production incident,
+`project_ask_cozy_stage3_frd_implementation_plan.md`'s memory entry): new `AskOperationId` literal +
+`ASK_OPERATION_DEFINITIONS` entry (70→71); a defensive, never-routed propose-time
+`registerCapabilityHandler` stub; `KNOWN_UNGOVERNED_OPERATIONS` carve-out added
+**proactively this session**, before any deploy, rather than discovered via a crashloop again;
+required entries in all `Record<AskOperationId, ...>` calibration maps (`askOperationSemanticPackages.ts`'s
+`jobs`/`positives`/`negatives`/`answerPositives`/`answerNegatives`, `askTrustCertificationCorpus.ts`'s
+`ASK_CERTIFIED_DIRECT_ANSWERS`) — `tsc --noEmit` catching every missing required key was the actual
+completeness proof, not a manual checklist. `tests/unit/intelligenceRegistries.test.js` run explicitly
+(green) before considering this done, per that program's own standing lesson. No entry added to
+`askDomainCommandRegistry.ts` or `confirmCapabilityHandlerRegistry.ts` — deliberate, since this
+operation is never confirmation-gated (those two registries' own counts, 28, are unchanged).
+
+**Verification discipline applied:** `npx tsc --noEmit` clean on `apps/backend`, `apps/frontend`, and
+`apps/workers` (the last needed its own `npm run prisma:generate` re-sync, per this repo's own
+established workers-Prisma-client convention). New targeted unit tests added
+(`extractionCandidateSchema.test.js`: GOAL schema acceptance/rejection + two `splitGoalCandidates`
+array-index-remap cases, mirroring the exact bug class Phase 3 already found once for WARRANTY
+links) and passing. Existing `conversationalCapture.test.js`/`askGovernance.test.js`/
+`capabilityHandlerRegistry.test.js`/`confirmCapabilityHandlerRegistry.test.js` all re-run individually
+and green, including two source-governance regex tests updated for this phase's own refactor
+(a renamed variable, a restructured transaction boundary) rather than weakened. Per-file sweep (not
+a combined glob, per this program's own standing note that a full-glob run produces resource-contention
+false failures) surfaced two pre-existing, unrelated failure clusters, both confirmed via `git stash` +
+re-run against unmodified `main` before being ruled out as this phase's own regressions: (a) a
+whole-file `ReferenceError: Cannot access 'propertyFacts' before initialization` TDZ crash in
+`extractionCandidateSchema.test.js` and `extractionContract.test.js` when run standalone (reproduces
+identically on `main`; a circular-import module-load-order fragility in `capturePropertyFact.ts`,
+unrelated to this phase's own GOAL-category addition — confirmed the new schema/helper logic itself
+is correct via a throwaway script that pre-warms the same module graph a different way); (b) the
+previously-named `askRoutingCalibration`/`askTrustArchitecture`/`askLaunchContextCapability` cluster
+(also reproduces on `main`, with different exact numeric assertions since those counts scale with
+total operation count — the failures themselves, not just the numbers, are pre-existing). Neither
+cluster was touched or fixed -- both are real, standing, out-of-scope repo issues, not newly
+introduced.
+
+**Not done, stated plainly:** not deployed or browser-verified (both flags default off, no live
+end-to-end conversation run against a real Gemini key or database); no `npx prisma db push` run
+(the user's own manual step, per this program's standing convention — the only schema change is the
+single additive, nullable `AskSession.activeDecisionThreadId` field); `REFINANCE_OPPORTUNITY`
+already has its own registered `DecisionFamilyAdapter` (confirmed by reading
+`decisionFamilyAdapterRegistry.ts`) but is deliberately not wired to GOAL capture this slice, per
+the "one vertical slice" instruction — real, easy, named follow-up work for whoever picks up a
+second goal type; the full Seller Prep Ask Skill (fork #1 above) remains Phase 7 scope, not started.
+
 ---
 
 ## 13. Phase 7 — Additional Capability Exposure
@@ -873,7 +992,7 @@ Two new `DomainEventType` members and their consumer handlers in `processDomainE
 | `askConversationalCapture` | Phase 3's pre-filter/extraction | Remove once pilot thresholds (FRD §15) are cleared in production and the flag has been at 100% for one full release cycle |
 | `askContextualNextActions` | Phase 4 | Remove once next-action generation is the only path (no fallback to static strings remains) |
 | `askProactiveContinuation` (implemented as `ASK_PROACTIVE_CONTINUATION_ENABLED` / `_KILL_SWITCH`, defaults **on**) | Phase 5, all three producers at once (`createAskNotificationContinuation` itself, not per-caller) | Not a migration gate to retire — this is a standing kill switch, kept indefinitely, for instantly stopping Ask continuations without a redeploy |
-| `askDecisionThreadGoals` | Phase 6 | Remove once the selling vertical slice is stable and a second goal type is added |
+| `askDecisionThreadGoals` (implemented as `ASK_GOAL_CAPTURE_ENABLED`/`_KILL_SWITCH`, on top of the already-existing `ASK_CONVERSATIONAL_CAPTURE_ENABLED` this pipeline shares with Phase 3 — both must be on) | Phase 6, GOAL candidate processing (SELL_HOLD_RENT only this slice) | Remove once the selling vertical slice is stable and a second goal type is added |
 
 No flags for trivial internal refactors (e.g., the `DomainEventType` widening in §4.4 ships unflagged, since it's additive and backward-compatible).
 

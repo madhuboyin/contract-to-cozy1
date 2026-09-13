@@ -108,7 +108,15 @@ export type AskOperationId =
   // §9/§22). Same non-routable shape as the two operations above -- only
   // ever created paired with a sibling CAPTURE_EVENT_CONFIRM candidate in
   // the same extraction batch (conversationalCapture.ts).
-  | 'CAPTURE_WARRANTY_CONFIRM';
+  | 'CAPTURE_WARRANTY_CONFIRM'
+  // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same
+  // non-routable shape as the three CAPTURE_* operations above, but not a
+  // "capture" in their sense -- created directly in COMPLETED status (never
+  // NEEDS_CONFIRMATION) by conversationalCapture.ts's GOAL candidate
+  // processing, per the materiality carve-out (a DecisionThread is workflow
+  // state, reversible at zero cost, not durable knowledge requiring
+  // confirmation).
+  | 'SELL_HOLD_RENT_GOAL_CAPTURE';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -306,6 +314,16 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_WARRANTY_CONFIRM: definition('CAPTURE_WARRANTY_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.warranty.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). safetyClass
+  // is STANDARD, not MATERIAL_DECISION, unlike the three CAPTURE_* operations
+  // above -- this is the materiality carve-out's own point: attaching/
+  // creating a DecisionThread is workflow bookkeeping, reversible at zero
+  // cost, and deliberately never confirmation-gated (no
+  // askDomainCommandRegistry.ts entry exists for this operation, unlike the
+  // three above). Never routed to directly, same shape as the three
+  // CAPTURE_* operations -- the propose-time handler exists only so the
+  // capability registry has no coverage gap.
+  SELL_HOLD_RENT_GOAL_CAPTURE: definition('SELL_HOLD_RENT_GOAL_CAPTURE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'sell-hold-rent.goal-capture', ['SUMMARY', 'DECISION_PROGRESS', 'WHY_NOW', 'GROUPED_LIST', 'BOUNDARY']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {

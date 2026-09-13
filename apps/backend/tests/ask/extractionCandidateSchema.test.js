@@ -8,6 +8,7 @@ const {
   ExtractionResultSchema,
   MAX_EXTRACTION_CANDIDATES_PER_TURN,
   filterCandidatesPreservingWarrantyLinks,
+  splitGoalCandidates,
 } = require('../../src/services/ask/conversationalUnderstanding/extractionCandidateSchema.ts');
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9; FRD §14). Pure schema
@@ -236,4 +237,71 @@ test('filterCandidatesPreservingWarrantyLinks: a no-op filter (nothing removed) 
   const warranty = warrantyCandidate({ linkedEventCandidateIndex: 0 });
   const result = filterCandidatesPreservingWarrantyLinks([event, warranty], () => true);
   assert.deepEqual(result, [event, warranty]);
+});
+
+// Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21 "Goal Capture").
+function goalCandidate(overrides = {}) {
+  return {
+    category: 'GOAL',
+    decisionDefinitionId: 'SELL_HOLD_RENT',
+    extractionConfidence: 0.85,
+    attribution: 'FIRSTHAND',
+    sourceSentence: "I'm thinking about selling next year",
+    timeframeLabel: 'next year',
+    ...overrides,
+  };
+}
+
+test('accepts a well-formed GOAL candidate scoped to SELL_HOLD_RENT', () => {
+  const result = ExtractionCandidateSchema.safeParse(goalCandidate());
+  assert.equal(result.success, true);
+});
+
+test('accepts a GOAL candidate with no timeframeLabel stated (presentational only, optional)', () => {
+  const result = ExtractionCandidateSchema.safeParse(goalCandidate({ timeframeLabel: undefined }));
+  assert.equal(result.success, true);
+});
+
+test('rejects a GOAL candidate for any decisionDefinitionId other than SELL_HOLD_RENT -- this vertical slice is deliberately scoped, not every life-event goal at once', () => {
+  const result = ExtractionCandidateSchema.safeParse(goalCandidate({ decisionDefinitionId: 'REFINANCE_OPPORTUNITY' }));
+  assert.equal(result.success, false);
+});
+
+test('splitGoalCandidates: separates GOAL from FACT/EVENT/WARRANTY and remaps a surviving WARRANTY link when a GOAL candidate sits between it and its paired EVENT', () => {
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Furnace replacement', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const goal = goalCandidate();
+  const warranty = warrantyCandidate({ linkedEventCandidateIndex: 0, sourceSentence: 'z' });
+  // Original positions: event@0, goal@1, warranty@2 (linkedEventCandidateIndex points at 0, still correct pre-split).
+  const { nonGoalCandidates, goalCandidates } = splitGoalCandidates([event, goal, warranty]);
+  assert.equal(goalCandidates.length, 1);
+  assert.equal(goalCandidates[0], goal);
+  assert.equal(nonGoalCandidates.length, 2);
+  assert.equal(nonGoalCandidates[0].category, 'EVENT');
+  assert.equal(nonGoalCandidates[1].category, 'WARRANTY');
+  // event stayed at index 0 in the non-GOAL array (goal's removal was after
+  // it), so the warranty's own linkedEventCandidateIndex is unchanged.
+  assert.equal(nonGoalCandidates[1].linkedEventCandidateIndex, 0);
+});
+
+test('splitGoalCandidates: remaps a WARRANTY link correctly when the GOAL candidate sits BEFORE the EVENT it does not reference', () => {
+  const goal = goalCandidate();
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Furnace replacement', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const warranty = warrantyCandidate({ linkedEventCandidateIndex: 1, sourceSentence: 'z' });
+  // Original positions: goal@0, event@1, warranty@2 (linkedEventCandidateIndex points at 1).
+  const { nonGoalCandidates, goalCandidates } = splitGoalCandidates([goal, event, warranty]);
+  assert.equal(goalCandidates.length, 1);
+  assert.equal(nonGoalCandidates.length, 2);
+  assert.equal(nonGoalCandidates[0].category, 'EVENT');
+  assert.equal(nonGoalCandidates[1].category, 'WARRANTY');
+  // event moved from index 1 to index 0 once the GOAL candidate ahead of it
+  // was removed -- the surviving warranty's index must follow it, exactly
+  // the same class of bug this program already fixed once for a dropped
+  // invalid FACT candidate.
+  assert.equal(nonGoalCandidates[1].linkedEventCandidateIndex, 0);
+});
+
+test('splitGoalCandidates: an all-GOAL batch produces an empty non-GOAL array, not an error', () => {
+  const { nonGoalCandidates, goalCandidates } = splitGoalCandidates([goalCandidate(), goalCandidate({ sourceSentence: 'other' })]);
+  assert.equal(nonGoalCandidates.length, 0);
+  assert.equal(goalCandidates.length, 2);
 });

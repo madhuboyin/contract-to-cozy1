@@ -46,6 +46,14 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'CAPTURE_FACT_CONFIRM',
   'CAPTURE_EVENT_CONFIRM',
   'CAPTURE_WARRANTY_CONFIRM',
+  // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same shape
+  // as the three capture operations above -- learned directly from the
+  // production incident documented above, not repeated blind: carved out
+  // here PROACTIVELY, before ever deploying, rather than discovering this
+  // gap in production again. Only ever created programmatically by
+  // conversationalCapture.ts's GOAL candidate processing, never proposed
+  // from a raw homeowner message.
+  'SELL_HOLD_RENT_GOAL_CAPTURE',
 ];
 
 export interface SkillOperationGovernanceContext {

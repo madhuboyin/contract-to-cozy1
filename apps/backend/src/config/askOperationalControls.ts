@@ -27,6 +27,7 @@ export interface AskOperationalControls {
   semanticResponseValidatorEnabled: boolean;
   resultSynthesisEnabled: boolean;
   askConversationalCaptureEnabled: boolean;
+  askGoalCaptureEnabled: boolean;
   askProactiveContinuationEnabled: boolean;
   accountRoleEligibilityEnabled: boolean;
   audiencePolicyEnabled: boolean;
@@ -67,6 +68,19 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
     // conversation), not a refactor of already-shipped behavior.
     askConversationalCaptureEnabled: booleanEnv(env.ASK_CONVERSATIONAL_CAPTURE_ENABLED, false)
       && !booleanEnv(env.ASK_CONVERSATIONAL_CAPTURE_KILL_SWITCH, false),
+    // Ask Cozy Stage 3, Phase 6 (implementation plan §12/§22). A separate
+    // flag from askConversationalCaptureEnabled above, not a reuse of it --
+    // GOAL candidate processing performs a real (if confirmation-exempt)
+    // DecisionThread write, materially different from FACT/EVENT/WARRANTY's
+    // confirmation-gated captures, and this program's own convention is a
+    // dedicated flag per genuinely new write behavior so one can be rolled
+    // out or killed independently of the other. Both must be true for a
+    // GOAL candidate to be processed (conversationalCapture.ts checks
+    // askConversationalCaptureEnabled at the top of the whole pipeline, same
+    // as every other category), so this is additive gating, not a
+    // replacement.
+    askGoalCaptureEnabled: booleanEnv(env.ASK_GOAL_CAPTURE_ENABLED, false)
+      && !booleanEnv(env.ASK_GOAL_CAPTURE_KILL_SWITCH, false),
     // Ask Cozy Stage 3, Phase 5 (implementation plan §22, "Remove once all
     // three producers are migrated"). Defaults on, unlike the conversational-
     // capture flag above -- this isn't a new, unproven capability being

@@ -1,13 +1,13 @@
-// Ask Cozy Stage 3, Phase 3 (implementation plan §9; FRD §14).
+// Ask Cozy Stage 3, Phase 3 (implementation plan §9; FRD §14); GOAL added in
+// Phase 6 (implementation plan §12; FRD §21).
 //
 // The structured-extraction contract's typed candidate shape. Phase 3's own
 // scope (implementation plan §9: "Recommended first supported types: scalar
 // fact, simple retrospective home event -- not warranty, not goal, not
-// every category at once") limits this to FACT and EVENT; GOAL is a real
-// FRD §14 category the pre-filter already recognizes (extractionPreFilter.ts's
-// GOAL_STATEMENT reason) but this schema does not yet accept a GOAL
-// candidate -- extractionContract.ts's system prompt is scoped the same way,
-// and Phase 6 is where DecisionThread creation from a GOAL candidate lands.
+// every category at once") limited this to FACT and EVENT (WARRANTY added
+// same phase, paired-with-event only); GOAL is a real FRD §14 category the
+// pre-filter already recognized before Phase 6 (extractionPreFilter.ts's
+// GOAL_STATEMENT reason) but this schema did not yet accept one.
 import { z } from 'zod';
 import { AskCaptureAttribution, HomeEventType, WarrantyCategory } from '@prisma/client';
 import { isContextCaptureSupported } from '../../../modules/propertyContext/application/capturePropertyFact';
@@ -138,6 +138,34 @@ export const WarrantyExtractionCandidateSchema = z.object({
   { message: 'expiryDate or durationMonths is required', path: ['expiryDate'] },
 );
 
+// Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21 "Goal
+// Capture"). A FOURTH candidate category -- durable workflow state (a
+// DecisionThread), not a fact about the home, hence exempt from the
+// confirmation gate every other category requires (Stage 2's materiality
+// carve-out: "a thread is workflow state... reversible at zero cost").
+// Scoped to exactly the request's own "recommended first vertical slice"
+// ("I'm thinking about selling next year," implementation plan §12) --
+// decisionDefinitionId is a single literal, not the broader set of
+// DecisionDefinitionIds that already have a registered DecisionFamilyAdapter
+// (decisionFamilyAdapterRegistry.ts also has REFINANCE_OPPORTUNITY
+// registered, for example) -- generalizing to those is real, deliberately
+// deferred follow-up work per the plan's own "not every life event at once"
+// instruction, not an oversight. A model-proposed goal for any other
+// definition fails this schema and is silently dropped, exactly like an
+// unsupported FACT factKey today (isContextCaptureSupported's own
+// established precedent).
+export const GoalExtractionCandidateSchema = z.object({
+  category: z.literal('GOAL'),
+  ...baseCandidateFields,
+  decisionDefinitionId: z.literal('SELL_HOLD_RENT'),
+  // Presentational only -- echoed back in the rendered "why now" copy so the
+  // homeowner sees their own stated timeframe reflected accurately. Never
+  // written to any domain column: DecisionThread has no timeframe field of
+  // its own, and inventing one for a single vertical slice would be
+  // speculative schema surface this program's own principles avoid.
+  timeframeLabel: z.string().trim().min(1).max(60).nullable().optional(),
+});
+
 // A plain union, not z.discriminatedUnion: every member schema is wrapped
 // in .refine(), which produces a ZodEffects rather than a bare ZodObject --
 // discriminatedUnion requires the latter. category still disambiguates in
@@ -147,12 +175,22 @@ export const ExtractionCandidateSchema = z.union([
   FactExtractionCandidateSchema,
   EventExtractionCandidateSchema,
   WarrantyExtractionCandidateSchema,
+  GoalExtractionCandidateSchema,
 ]);
 
 export type FactExtractionCandidate = z.infer<typeof FactExtractionCandidateSchema>;
 export type EventExtractionCandidate = z.infer<typeof EventExtractionCandidateSchema>;
 export type WarrantyExtractionCandidate = z.infer<typeof WarrantyExtractionCandidateSchema>;
+export type GoalExtractionCandidate = z.infer<typeof GoalExtractionCandidateSchema>;
 export type ExtractionCandidate = z.infer<typeof ExtractionCandidateSchema>;
+
+// Ask Cozy Stage 3, Phase 6. buildChildExecutionData/persistCandidates's
+// existing FACT/EVENT/WARRANTY loop (conversationalCapture.ts) is typed
+// against this narrower union, not the full ExtractionCandidate, so the
+// compiler proves GOAL candidates (handled on a materially different path,
+// see splitGoalCandidates below) can never reach it -- an exhaustiveness
+// guarantee, not just a runtime convention.
+export type CaptureConfirmExtractionCandidate = Exclude<ExtractionCandidate, GoalExtractionCandidate>;
 
 // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
 // §9/§22). Shared by every filtering step across extractionContract.ts and
@@ -186,6 +224,34 @@ export function filterCandidatesPreservingWarrantyLinks(
     result.push({ ...candidate, linkedEventCandidateIndex: newLinkedIndex });
   }
   return result;
+}
+
+// Ask Cozy Stage 3, Phase 6. GOAL candidates are processed on a materially
+// different path than FACT/EVENT/WARRANTY (immediate, confirmation-exempt
+// DecisionThread attachment rather than a NEEDS_CONFIRMATION child
+// execution -- see conversationalCapture.ts's processGoalCandidates), so
+// they are split out of the batch before that existing per-candidate loop
+// runs. Uses filterCandidatesPreservingWarrantyLinks for the non-GOAL side
+// specifically because removing GOAL candidates (which can appear anywhere
+// in the array, including between an EVENT and its paired WARRANTY) shifts
+// array positions exactly like any other removal this helper already
+// guards against -- a plain `.filter()` here would reintroduce the same bug
+// class Phase 3's own warranty-linking fix closed. GOAL candidates
+// themselves are never a WARRANTY link target, so their own relative order
+// carries no correctness requirement -- a plain filter is fine for that half.
+export function splitGoalCandidates(candidates: ExtractionCandidate[]): {
+  nonGoalCandidates: CaptureConfirmExtractionCandidate[];
+  goalCandidates: GoalExtractionCandidate[];
+} {
+  return {
+    // Safe cast: the predicate provably excludes every GOAL candidate, and
+    // filterCandidatesPreservingWarrantyLinks never introduces one --
+    // CaptureConfirmExtractionCandidate exists precisely so downstream code
+    // (buildChildExecutionData) gets that guarantee as a real compiler
+    // check, not just this comment's word for it.
+    nonGoalCandidates: filterCandidatesPreservingWarrantyLinks(candidates, (candidate) => candidate.category !== 'GOAL') as CaptureConfirmExtractionCandidate[],
+    goalCandidates: candidates.filter((candidate): candidate is GoalExtractionCandidate => candidate.category === 'GOAL'),
+  };
 }
 
 // Bounded per FRD §22's "no duplicate candidate proposals" concern and

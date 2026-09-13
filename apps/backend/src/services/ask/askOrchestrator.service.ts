@@ -146,6 +146,7 @@ import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
 import * as decisionPreferenceService from '../decisionPlatform/decisionPreferenceService';
+import { decisionProgressBlock, whyNowBlock, recommendationChangeBlock } from './decisionThreadPresentationBlocks';
 import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '../decisionPlatform/decisionPreferenceService';
 import * as outcomeObservationService from '../decisionPlatform/outcomeObservationService';
 import { sourceTypeLabel as outcomeSourceTypeLabel } from '../decisionPlatform/outcomeObservationService';
@@ -1829,28 +1830,6 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
 // registered HVAC engine (services/decisionPlatform/), not the generic
 // ReplaceRepairService heuristic.
 
-type DecisionProgressThread = { id: string; lifecycleStatus: string; contextStatus: string; contextIssueCodes: string[] };
-type DecisionProgressSnapshot = { verdictCode: string; reasonCodes: string[]; limitationCodes: string[]; confidenceBreakdown: unknown; generatedAt: Date } | null;
-
-function decisionProgressBlock(
-  id: string, title: string, thread: DecisionProgressThread, snapshot: DecisionProgressSnapshot,
-  actions: { id: string; label: string; href?: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' }[],
-): AskPresentationBlock {
-  return {
-    type: 'DECISION_PROGRESS', id, title,
-    decisionThreadId: thread.id,
-    lifecycleStatus: thread.lifecycleStatus as any,
-    contextStatus: thread.contextStatus as any,
-    verdict: snapshot?.verdictCode ?? null,
-    reasonCodes: snapshot?.reasonCodes ?? [],
-    limitationCodes: snapshot?.limitationCodes ?? [],
-    contextIssueCodes: thread.contextIssueCodes,
-    confidenceLabel: (snapshot?.confidenceBreakdown as { label?: 'HIGH' | 'MEDIUM' | 'LOW' } | undefined)?.label ?? null,
-    generatedAt: snapshot?.generatedAt ? snapshot.generatedAt.toISOString() : null,
-    actions,
-  };
-}
-
 // HvacRepairReplaceVerdict is ordinal (REPAIR < MONITOR < REPLACE), not
 // binary -- comparing verdict codes directly would mislabel, e.g., a
 // REPLACE-to-MONITOR shift as "favors repair" when it's really just "less
@@ -1873,31 +1852,6 @@ function scenarioComparisonBlock(
     scenario: { label: scenario.label, verdict: scenario.verdictCode, reasonCodes: scenario.reasonCodes, limitationCodes: scenario.limitationCodes, assumptions: scenario.assumptions },
     comparisonDirection,
     actions: [],
-  };
-}
-
-// Ask Intelligence FRD Phase 8B — WHY_NOW (§14.2), RECOMMENDATION_CHANGE
-// (§14.3), and PREFERENCE_REFERENCE (§11.4). rendered only from recorded
-// codes on the actual snapshot/diff -- never generated as a post-hoc
-// rationale.
-type ResolvedSnapshot = NonNullable<DecisionProgressSnapshot>;
-
-function whyNowBlock(id: string, snapshot: ResolvedSnapshot, triggerReasonCodes: string[]): AskPresentationBlock {
-  return {
-    type: 'WHY_NOW', id, title: 'Why now',
-    triggerCodes: triggerReasonCodes.length ? triggerReasonCodes : snapshot.reasonCodes,
-    evidenceCodes: snapshot.reasonCodes,
-    timingNote: triggerReasonCodes.length ? 'Recalculated after a recorded fact changed.' : null,
-    confidenceLabel: (snapshot.confidenceBreakdown as { label?: 'HIGH' | 'MEDIUM' | 'LOW' } | undefined)?.label ?? null,
-  };
-}
-
-function recommendationChangeBlock(id: string, decisionThreadId: string, change: decisionPreferenceService.RecommendationChangeDiff): AskPresentationBlock {
-  return {
-    type: 'RECOMMENDATION_CHANGE', id, title: 'What changed', decisionThreadId,
-    previousVerdict: change.previousVerdict, currentVerdict: change.currentVerdict,
-    category: change.category, changedFactors: change.changedFactors,
-    changedAt: new Date().toISOString(),
   };
 }
 
@@ -6238,6 +6192,26 @@ function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty'): 
 registerCapabilityHandler('capture.fact.confirm', async () => captureNotDirectlyRoutableResult('fact'));
 registerCapabilityHandler('capture.event.confirm', async () => captureNotDirectlyRoutableResult('event'));
 registerCapabilityHandler('capture.warranty.confirm', async () => captureNotDirectlyRoutableResult('warranty'));
+
+// Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same
+// defensive shape as the three capture operations above -- a
+// SELL_HOLD_RENT_GOAL_CAPTURE execution is only ever created directly (in
+// COMPLETED status, never NEEDS_CONFIRMATION) by conversationalCapture.ts's
+// GOAL candidate processing; this handler exists only so the capability
+// registry has no coverage gap if the router ever resolves a message to it.
+function goalCaptureNotDirectlyRoutableResult(): AskOperationResult {
+  return {
+    status: 'OUT_OF_SCOPE',
+    reasonCode: 'ASK_GOAL_CAPTURE_NOT_DIRECTLY_ROUTABLE',
+    blocks: [{
+      type: 'BOUNDARY', id: 'sell-hold-rent-goal-capture-not-routable', title: 'This isn\'t something you can ask for directly', severity: 'INFO',
+      body: 'A sell, hold, or rent decision thread is attached automatically when Ask recognizes you mentioning a plan to sell, hold, or rent this home -- it can\'t be started directly.',
+      suggestions: [],
+    }],
+    suggestions: [],
+  };
+}
+registerCapabilityHandler('sell-hold-rent.goal-capture', async () => goalCaptureNotDirectlyRoutableResult());
 
 function buildCapabilityInvocationEnvelope(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },

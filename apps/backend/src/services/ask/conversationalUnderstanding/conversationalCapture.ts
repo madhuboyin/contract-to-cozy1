@@ -23,18 +23,33 @@ import { logger } from '../../../lib/logger';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { normalizeCaptureValue } from '../../../modules/propertyContext/application/capturePropertyFact';
 import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
-import type { AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
+import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
 import { runStructuredExtraction, type RecentHomeEventContext } from './extractionContract';
-import { filterCandidatesPreservingWarrantyLinks } from './extractionCandidateSchema';
-import type { EventExtractionCandidate, ExtractionCandidate, FactExtractionCandidate, WarrantyExtractionCandidate } from './extractionCandidateSchema';
+import { filterCandidatesPreservingWarrantyLinks, splitGoalCandidates } from './extractionCandidateSchema';
+import type { CaptureConfirmExtractionCandidate, EventExtractionCandidate, ExtractionCandidate, FactExtractionCandidate, GoalExtractionCandidate, WarrantyExtractionCandidate } from './extractionCandidateSchema';
+// Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). None of
+// these three create a circular import: SellHoldRentService,
+// sellHoldRentDecisionFamilyAdapter, and PropertySaleCaseService all live
+// outside services/ask/ and import nothing from it (verified by grep before
+// wiring this in), so this file's own one-directional-import discipline
+// (see this file's header) is preserved.
+import { SellHoldRentService } from '../../sellHoldRent.service';
+import { sellHoldRentDecisionFamilyAdapter } from '../../decisionPlatform/domainSnapshotAdapters';
+import { PropertySaleCaseService } from '../../propertySaleCase.service';
+import { decisionProgressBlock, whyNowBlock } from '../decisionThreadPresentationBlocks';
 
 const DOMAIN_EVENT_LEASE_MS = 15 * 60_000;
 // FRD §10: "Step 8's synchronous portion has a strict timeout (~1.5s...)".
 const INLINE_EXTRACTION_BUDGET_MS = 1_500;
 const CONFIRMATION_WINDOW_MS = 30 * 60_000;
 const CAPTURE_CHANNEL = 'ASK_CONVERSATIONAL_CAPTURE';
+// Ask Cozy Stage 3, Phase 6 (implementation plan §12). Shared instance, same
+// as askOrchestrator.service.ts's own module-level sellHoldRentService --
+// this class's only constructor dependency (FinancialAssumptionService)
+// defaults itself, so a plain instance is equivalent to a singleton here.
+const sellHoldRentService = new SellHoldRentService();
 
 export type PersistedCaptureExecution = Awaited<ReturnType<typeof prisma.askExecution.create>>;
 
@@ -580,7 +595,7 @@ export function buildEventContentParameters(candidate: EventExtractionCandidate,
 // resolveWarrantyDates's startDate fallback) -- always undefined/omitted
 // for FACT/EVENT.
 export function buildChildExecutionData(
-  candidate: ExtractionCandidate,
+  candidate: CaptureConfirmExtractionCandidate,
   index: number,
   input: ConversationalCaptureInput,
   now: Date,
@@ -885,6 +900,195 @@ export function filterValidCandidates(candidates: ExtractionCandidate[]): Extrac
   );
 }
 
+// Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21 "Goal
+// Capture"). GOAL candidates are handled entirely separately from
+// FACT/EVENT/WARRANTY: no NEEDS_CONFIRMATION state, no captureRequests, no
+// confirm-time writer -- creating/resuming a DecisionThread happens
+// immediately, per Stage 2's materiality carve-out ("a thread is workflow
+// state... reversible at zero cost"). Each candidate is processed and
+// persisted independently (its own try/catch, its own idempotent
+// clientRequestId lookup) so one candidate's failure -- or the whole
+// property having no computable Sell/Hold/Rent analysis yet -- can never
+// affect another candidate or the FACT/EVENT/WARRANTY captures already
+// committed by persistCandidates's own transaction. Deliberately NOT run
+// inside that transaction: sellHoldRentDecisionFamilyAdapter.createOrResumeThread
+// opens its own separate prisma.$transaction internally (domainSnapshotAdapters.ts),
+// and nesting that (plus the estimate() call before it) inside an
+// already-open outer transaction would hold a DB connection for the
+// duration of both, for zero atomicity benefit -- these writes have no
+// correctness dependency on the FACT/EVENT/WARRANTY rows created alongside
+// them in the same turn.
+
+const SELL_HOLD_RENT_WORKSPACE_HREF = (propertyId: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
+const SELLER_PREP_HREF = (propertyId: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
+
+// Best-effort, read-mostly: PropertySaleCaseService.getCase's own
+// syncReadinessItems only runs (and only writes) when a PropertySaleCase
+// already exists for this property, exactly the same as if the homeowner
+// had opened the Seller Prep page themselves -- calling it here creates no
+// new side effect beyond what that existing, already-reviewed service
+// already does on every read. Never throws: a failure here must not cost
+// the homeowner the DecisionThread attachment this candidate already
+// produced.
+async function buildSellerPrepInlineBlock(userId: string, propertyId: string): Promise<AskPresentationBlock | null> {
+  try {
+    const overview = await PropertySaleCaseService.getCase(userId, propertyId);
+    const href = SELLER_PREP_HREF(propertyId);
+    if (!overview.saleCase) {
+      return {
+        type: 'GROUPED_LIST',
+        id: 'sell-hold-rent-goal-seller-prep',
+        title: 'Getting ready to sell',
+        description: 'A seller-prep checklist can personalize which repairs, records, and cosmetic work to prioritize whenever you are ready to start.',
+        sections: [],
+        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+      };
+    }
+    const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN' && !item.waivedAt).slice(0, 5);
+    return {
+      type: 'GROUPED_LIST',
+      id: 'sell-hold-rent-goal-seller-prep',
+      title: 'Seller prep checklist',
+      description: openItems.length
+        ? 'Open items from your seller-prep checklist.'
+        : 'Your seller-prep checklist has no open items right now.',
+      sections: openItems.length ? [{
+        id: 'open-items',
+        title: 'Open items',
+        count: openItems.length,
+        items: openItems.map((item) => ({ id: item.id, title: item.title, description: item.detail ?? null, meta: [], status: item.status, href })),
+      }] : [],
+      actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+    };
+  } catch (error) {
+    logger.warn({ error, propertyId }, '[ask-conversational-capture] seller-prep inline block failed');
+    return null;
+  }
+}
+
+// sellHoldRentService.estimate() persists the canonical SellHoldRentAnalysis
+// row on every non-scenario call (domainSnapshotAdapters.ts's own header
+// comment: "the same record loadSellHoldRentSourceState... reads"). Calling
+// it here guarantees the generic adapter's loadSourceState has something to
+// snapshot even when the homeowner has never opened the Sell/Hold/Rent tool
+// themselves -- otherwise createOrResumeThread throws "No current
+// recommendation available" for a property with no prior analysis.
+async function ensureCanonicalSellHoldRentAnalysis(propertyId: string, userId: string): Promise<void> {
+  await sellHoldRentService.estimate(propertyId, { years: 5 }, userId);
+}
+
+async function processGoalCandidate(
+  candidate: GoalExtractionCandidate,
+  index: number,
+  input: ConversationalCaptureInput,
+): Promise<PersistedCaptureExecution> {
+  // Deterministic per (parent execution, candidate index), same convention
+  // as buildChildExecutionData's own clientRequestId -- a retried extraction
+  // attempt for the same parent turn resolves to the already-created row
+  // rather than re-running createOrResumeThread (itself idempotent-safe, but
+  // re-running it needlessly on every retry is still wasted work).
+  const clientRequestId = `ask-extraction:${input.parentExecutionId}:goal:${index}`;
+  const existing = await prisma.askExecution.findUnique({
+    where: { userId_clientRequestId: { userId: input.userId, clientRequestId } },
+  });
+  if (existing) return existing;
+
+  await ensureCanonicalSellHoldRentAnalysis(input.propertyId, input.userId);
+  // decisionDefinitionId is a schema-level z.literal('SELL_HOLD_RENT') --
+  // this vertical slice's own deliberate scope, see extractionCandidateSchema.ts.
+  // primaryEntityId is the propertyId itself, matching
+  // sellHoldRentDecisionFamilyAdapter's own primaryEntityType: 'Property'.
+  const lineage = await sellHoldRentDecisionFamilyAdapter.createOrResumeThread({
+    propertyId: input.propertyId,
+    userId: input.userId,
+    primaryEntityId: input.propertyId,
+  });
+  // The generic adapter's own return type (DecisionFamilyThreadLineage)
+  // carries only currentRecommendationSnapshotId, not the full snapshot
+  // fields decisionProgressBlock/whyNowBlock need, nor the thread's own
+  // contextIssueCodes -- one extra query, mirroring exactly the shape
+  // hvacDecisionStartResult already fetches (a DecisionThread row with its
+  // currentRecommendationSnapshot nested), not a redesign.
+  const thread = await prisma.decisionThread.findUniqueOrThrow({
+    where: { id: lineage.decisionThreadId },
+    include: { currentRecommendationSnapshot: true },
+  });
+
+  const blocks: AskPresentationBlock[] = [decisionProgressBlock(
+    'sell-hold-rent-goal-progress',
+    'Sell, hold, or rent this home',
+    thread,
+    thread.currentRecommendationSnapshot,
+    [{ id: 'open-sell-hold-rent', label: 'Explore and adjust scenarios', href: SELL_HOLD_RENT_WORKSPACE_HREF(input.propertyId), style: 'PRIMARY' }],
+  )];
+  if (thread.currentRecommendationSnapshot) blocks.push(whyNowBlock('sell-hold-rent-goal-why-now', thread.currentRecommendationSnapshot, []));
+  const sellerPrepBlock = await buildSellerPrepInlineBlock(input.userId, input.propertyId);
+  if (sellerPrepBlock) blocks.push(sellerPrepBlock);
+
+  // FRD §21: "AskSession.activeDecisionThreadId is a same-session cache
+  // only." The real cross-session resumption mechanism is
+  // DecisionThread.activeIdentityKey, already exercised (independent of
+  // this cache) by createOrResumeThread's own selectThread call above --
+  // this is a same-turn UX nicety (e.g. a follow-up message in the SAME
+  // session can reference "that decision" without repeating the goal
+  // statement), never load-bearing for resumption itself. Best-effort: a
+  // failure here must not cost the homeowner the thread attachment above.
+  await prisma.askSession.update({
+    where: { id: input.sessionId },
+    data: { activeDecisionThreadId: lineage.decisionThreadId },
+  }).catch((error) => {
+    logger.warn({ error, sessionId: input.sessionId }, '[ask-conversational-capture] failed to cache activeDecisionThreadId on session');
+  });
+
+  const timeframeNote = candidate.timeframeLabel ? ` (${candidate.timeframeLabel})` : '';
+  return prisma.askExecution.create({
+    data: {
+      session: { connect: { id: input.sessionId } },
+      user: { connect: { id: input.userId } },
+      property: { connect: { id: input.propertyId } },
+      clientRequestId,
+      message: candidate.sourceSentence,
+      parentExecution: { connect: { id: input.parentExecutionId } },
+      operationId: 'SELL_HOLD_RENT_GOAL_CAPTURE',
+      operationVersion: '1.0',
+      intentFamily: 'COMMAND',
+      status: 'COMPLETED' as AskExecutionStatus,
+      completedAt: new Date(),
+      reasonCode: 'SELL_HOLD_RENT_GOAL_THREAD_ATTACHED',
+      resultJson: {
+        schemaVersion: '1.0',
+        blocks: [{
+          type: 'SUMMARY' as const,
+          id: 'sell-hold-rent-goal-preview',
+          title: 'Noted -- tracking this as a decision you can pick back up any time',
+          body: `Cozy noticed you mentioned: "${candidate.sourceSentence}"${timeframeNote}. Nothing was listed or sold -- this just keeps the sell/hold/rent comparison up to date and easy to return to.`,
+          tone: 'DEFAULT' as const,
+          actions: [],
+        }, ...blocks],
+        captureRequests: [],
+        confirmation: null,
+        clarification: null,
+        suggestions: ['Open Sell / Hold / Rent', 'What would help me get ready to sell?'],
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+}
+
+async function processGoalCandidates(
+  goalCandidates: GoalExtractionCandidate[],
+  input: ConversationalCaptureInput,
+): Promise<PersistedCaptureExecution[]> {
+  const results: PersistedCaptureExecution[] = [];
+  for (const [index, candidate] of goalCandidates.entries()) {
+    try {
+      results.push(await processGoalCandidate(candidate, index, input));
+    } catch (error) {
+      logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] goal candidate processing failed');
+    }
+  }
+  return results;
+}
+
 /**
  * Code review finding (2026-09-13): this used to take a markProcessed flag
  * and, for the worker path, rely on processDomainEvents.job.ts's own
@@ -909,9 +1113,29 @@ async function persistCandidates(
   rawCandidates: ExtractionCandidate[],
   input: ConversationalCaptureInput,
 ): Promise<PersistedCaptureExecution[]> {
-  const candidates = filterValidCandidates(rawCandidates);
+  const validCandidates = filterValidCandidates(rawCandidates);
+  // Ask Cozy Stage 3, Phase 6: GOAL candidates are split out here, before
+  // the transaction below, and processed separately afterward (see
+  // processGoalCandidates's own header comment for why they must not run
+  // inside that transaction). filterCandidatesPreservingWarrantyLinks (used
+  // for the non-GOAL side, via splitGoalCandidates) keeps every remaining
+  // WARRANTY's linkedEventCandidateIndex correct against the array the
+  // existing loop below actually iterates -- a plain filter would silently
+  // break that index if a GOAL candidate happened to sit before a
+  // WARRANTY/EVENT pair in the same extraction batch.
+  const { nonGoalCandidates: candidates, goalCandidates: rawGoalCandidates } = splitGoalCandidates(validCandidates);
+  // Ask Cozy Stage 3, Phase 6: a second, dedicated flag on top of
+  // askConversationalCaptureEnabled (already gating this whole pipeline's
+  // entry point, runConversationalCaptureForTurn, below) -- GOAL processing
+  // performs a real DecisionThread write, materially different from
+  // FACT/EVENT/WARRANTY's confirmation-gated captures, so it can be rolled
+  // out or killed independently. Gated here, the single choke point both
+  // the inline (runConversationalCaptureForTurn) and worker-fallback
+  // (processAskExtractionRequestedEvent) paths funnel through, rather than
+  // at either call site individually.
+  const goalCandidates = readAskOperationalControls().askGoalCaptureEnabled ? rawGoalCandidates : [];
   const now = new Date();
-  return prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     // Applied even for zero candidates (code review finding, 2026-09-13):
     // a stale attempt whose claim was already reclaimed must not mark the
     // event PROCESSED out from under the attempt that reclaimed it.
@@ -964,11 +1188,25 @@ async function persistCandidates(
         processedAt: new Date(),
         processingStartedAt: null,
         leaseExpiresAt: null,
-        payload: { processingOutcome: { candidateCount: created.length } },
+        payload: { processingOutcome: { candidateCount: created.length + goalCandidates.length } },
       },
     });
     return created;
   });
+
+  // Outside the transaction above, deliberately (see this function's own
+  // header comment) -- a GOAL candidate failure here can never roll back or
+  // otherwise affect the FACT/EVENT/WARRANTY rows already committed, and
+  // vice versa. The DomainEvent is already marked PROCESSED by this point,
+  // so a failure here is accepted, precedented loss (this whole pipeline's
+  // own "a missed trigger only loses conversational capture for that turn"
+  // fail-safe principle, extended to "one candidate category's failure
+  // never costs another's already-committed result") rather than retried --
+  // DecisionThread attachment is cheap to re-trigger from a later message
+  // mentioning the same intent, unlike a FACT/EVENT/WARRANTY capture the
+  // homeowner has no reason to repeat.
+  const goalExecutions = await processGoalCandidates(goalCandidates, input);
+  return [...created, ...goalExecutions];
 }
 
 /**

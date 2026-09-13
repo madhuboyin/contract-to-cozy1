@@ -115,7 +115,13 @@ test('persistCandidates always verifies the claim token and marks the DomainEven
   // No markProcessed parameter anymore -- both the inline and worker paths
   // go through the exact same unconditional path.
   assert.doesNotMatch(body, /markProcessed/);
-  const txIdx = body.indexOf('return prisma.$transaction(async (tx) => {');
+  // Ask Cozy Stage 3, Phase 6: no longer a bare `return prisma.$transaction(...)`
+  // -- GOAL candidates (a materially different, confirmation-exempt path,
+  // see processGoalCandidates) are now processed after this transaction
+  // commits, so its result is captured into `created` first. The invariant
+  // this test actually checks (claim verification happens before marking
+  // PROCESSED, inside the same transaction) is unchanged.
+  const txIdx = body.indexOf('await prisma.$transaction(async (tx) => {');
   assert.ok(txIdx > 0);
   const verifyIdx = body.indexOf('await verifyClaimStillOwned(tx, domainEventId, claimedAttempts);', txIdx);
   const processedIdx = body.indexOf("status: 'PROCESSED'", txIdx);
@@ -132,7 +138,7 @@ test('persistCandidates filters candidates through filterValidCandidates before 
   const idx = captureSource.indexOf('async function persistCandidates(');
   assert.ok(idx > 0);
   const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
-  assert.match(body, /const candidates = filterValidCandidates\(rawCandidates\);/);
+  assert.match(body, /const validCandidates = filterValidCandidates\(rawCandidates\);/);
 });
 
 test('isValidFactCandidateValue: financing rate is validated against its own 0-100 percent bound', () => {

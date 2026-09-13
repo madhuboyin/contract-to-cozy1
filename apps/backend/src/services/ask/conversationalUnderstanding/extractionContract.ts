@@ -54,7 +54,7 @@ const SYSTEM_PROMPT_TEMPLATE = (recentHomeEvents: RecentHomeEventContext[]) => `
 
 Return a JSON object: { "candidates": [...] }, an array of at most ${MAX_EXTRACTION_CANDIDATES_PER_TURN} candidates (empty array if nothing qualifies).
 
-Each candidate is EITHER a FACT or an EVENT:
+Each candidate is a FACT, an EVENT, a WARRANTY, or a GOAL:
 
 FACT -- a scalar attribute of the home itself (e.g. a mortgage rate, roof type, year built):
 {
@@ -98,6 +98,16 @@ WARRANTY -- ONLY when the homeowner's statement also describes a home event (a r
   "durationMonths": the warranty's length in months if stated (e.g. "10 year warranty" is 120), otherwise null,
   "expiryDate": an ISO 8601 datetime if an explicit expiration date was stated, otherwise null. Provide EITHER durationMonths OR expiryDate, never neither.
   "linkedEventCandidateIndex": the zero-based index, within this SAME "candidates" array, of the EVENT candidate this warranty belongs to. NEVER invent an index that does not point at an EVENT candidate in this same response.
+  "extractionConfidence": 0 to 1,
+  "attribution": "FIRSTHAND" | "THIRD_PARTY_RELAYED" | "INFERRED",
+  "sourceSentence": the exact sentence this was extracted from
+}
+
+GOAL -- ONLY a clear, forward-looking statement that the homeowner is considering selling this home, holding it, or renting it out at some future point (e.g. "I'm thinking about selling next year", "We might rent this place out once we move", "Starting to consider putting the house on the market"). Do NOT emit a GOAL candidate for a plan to refinance, renovate, or simply move without addressing what happens to THIS home, and do NOT emit one for a direct question asking for a sell/hold/rent comparison right now (that is a request for an answer, not a statement of a future intention) -- omit the candidate entirely in both cases:
+{
+  "category": "GOAL",
+  "decisionDefinitionId": "SELL_HOLD_RENT",
+  "timeframeLabel": a short phrase for when this might happen if stated (e.g. "next year", "in a couple of years"), otherwise null,
   "extractionConfidence": 0 to 1,
   "attribution": "FIRSTHAND" | "THIRD_PARTY_RELAYED" | "INFERRED",
   "sourceSentence": the exact sentence this was extracted from

@@ -7978,6 +7978,18 @@ model AskSession {
   expiresAt    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). A
+  // SAME-SESSION CACHE ONLY, not the actual resumption mechanism -- the real
+  // cross-session/cross-device resumption is DecisionThread.activeIdentityKey
+  // (propertyId+decisionDefinitionId+primaryEntityType+primaryEntityId),
+  // already resolved fresh on every createOrResumeThread call regardless of
+  // whether this cache is set, stale, or missing. Deliberately a plain
+  // string, not a Prisma relation to DecisionThread -- every other soft
+  // cross-model pointer in this schema that is genuinely just a hint (e.g.
+  // SaleReadinessItem.canonicalWorkItemId) is likewise left unenforced,
+  // and a stale/orphaned value here can never cause incorrect behavior
+  // since nothing treats it as authoritative.
+  activeDecisionThreadId String?
 
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   property   Property?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
