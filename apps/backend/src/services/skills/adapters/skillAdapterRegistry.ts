@@ -55,6 +55,7 @@ const DEFINITIONS = [
   adapter('ownership.costs', 'Ownership Cost Intelligence', 'OWNERSHIP_COSTS'),
   adapter('sale-case.analysis', 'Seller Preparation Decision Service', 'SELL_HOLD_RENT_ANALYSIS'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
+  adapter('seller-prep.item-decision', 'PropertySaleCaseService', 'SELLER_PREP_ITEM_DECISION', 'MUTATION_PREPARATION'),
   adapter('household.invitation', 'Household Membership Service', 'HOUSEHOLD_INVITATION', 'MUTATION_PREPARATION'),
   adapter('quote-comparison.create', 'Quote Comparison Workspace', 'QUOTE_COMPARISON_CREATE', 'MUTATION_PREPARATION'),
   adapter('quote-comparison.review', 'Quote Comparison Workspace', 'QUOTE_COMPARISON_REVIEW'),

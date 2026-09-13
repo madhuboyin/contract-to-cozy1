@@ -19,7 +19,7 @@ const TAXONOMY = Object.freeze({
   savings: ['SAVINGS_OPPORTUNITIES'],
   'property-tax': ['PROPERTY_TAX_APPEAL_READINESS'],
   'seller-preparation': ['MAJOR_EVENT_ENTRY'],
-  'seller-prep': ['SELLER_PREP_CHECKLIST'],
+  'seller-prep': ['SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION'],
   'sell-hold-rent': ['SELL_HOLD_RENT_ANALYSIS'],
   renovation: ['RENOVATION_PERMIT_READINESS'],
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],

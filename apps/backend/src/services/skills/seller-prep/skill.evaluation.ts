@@ -6,7 +6,7 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 export const SELLER_PREP_SKILL_EVALUATION = deepFreezeSkillPackage({
   "id": "skill-seller-prep-golden",
   "skillId": "seller-prep",
-  "skillVersion": "1.0.0",
+  "skillVersion": "1.1.0",
   "routingCases": [
     {
       "mode": "EXACT",
@@ -27,6 +27,26 @@ export const SELLER_PREP_SKILL_EVALUATION = deepFreezeSkillPackage({
       "mode": "MISSPELLED",
       "message": "Check my sale readiness for this hom",
       "expectedOperationId": "SELLER_PREP_CHECKLIST"
+    },
+    {
+      "mode": "EXACT",
+      "message": "Waive the seller prep item for the roof repair",
+      "expectedOperationId": "SELLER_PREP_ITEM_DECISION"
+    },
+    {
+      "mode": "PARAPHRASED",
+      "message": "I will pursue the gutter cleaning checklist item",
+      "expectedOperationId": "SELLER_PREP_ITEM_DECISION"
+    },
+    {
+      "mode": "COLLOQUIAL",
+      "message": "Go ahead and waive that sale readiness item for me",
+      "expectedOperationId": "SELLER_PREP_ITEM_DECISION"
+    },
+    {
+      "mode": "MISSPELLED",
+      "message": "Reopen the seller prep item I waivd",
+      "expectedOperationId": "SELLER_PREP_ITEM_DECISION"
     }
   ],
   "operationCases": [
@@ -34,6 +54,13 @@ export const SELLER_PREP_SKILL_EVALUATION = deepFreezeSkillPackage({
       "operationId": "SELLER_PREP_CHECKLIST",
       "expectedAdapter": {
         "id": "seller-prep.checklist",
+        "version": "1.0"
+      }
+    },
+    {
+      "operationId": "SELLER_PREP_ITEM_DECISION",
+      "expectedAdapter": {
+        "id": "seller-prep.item-decision",
         "version": "1.0"
       }
     }
@@ -52,6 +79,11 @@ export const SELLER_PREP_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "consumer": "ASK",
       "operationId": "SELLER_PREP_CHECKLIST",
+      "allowed": true
+    },
+    {
+      "consumer": "ASK",
+      "operationId": "SELLER_PREP_ITEM_DECISION",
       "allowed": true
     }
   ],
@@ -118,11 +150,23 @@ export const SELLER_PREP_SKILL_EVALUATION = deepFreezeSkillPackage({
         "version": "1.0"
       },
       "expectedBehavior": "DEGRADED_OR_UNAVAILABLE"
+    },
+    {
+      "dependencyType": "ADAPTER",
+      "dependency": {
+        "id": "seller-prep.item-decision",
+        "version": "1.0"
+      },
+      "expectedBehavior": "DEGRADED_OR_UNAVAILABLE"
     }
   ],
   "expectedAdapters": [
     {
       "id": "seller-prep.checklist",
+      "version": "1.0"
+    },
+    {
+      "id": "seller-prep.item-decision",
       "version": "1.0"
     }
   ],
@@ -135,18 +179,25 @@ export const SELLER_PREP_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   "expectedStatuses": [
     "ANSWERED",
-    "NOT_APPLICABLE"
+    "NOT_APPLICABLE",
+    "NEEDS_ENTITY",
+    "NEEDS_CONFIRMATION"
   ],
   "expectedBlockTypes": [
     "SUMMARY",
     "GROUPED_LIST",
     "EVIDENCE",
+    "WORKFLOW_PROGRESS",
     "CAPABILITY_LIST",
     "BOUNDARY"
   ],
   "expectedCanonicalCalls": [
     {
       "id": "seller-prep.checklist",
+      "version": "1.0"
+    },
+    {
+      "id": "seller-prep.item-decision",
       "version": "1.0"
     }
   ],

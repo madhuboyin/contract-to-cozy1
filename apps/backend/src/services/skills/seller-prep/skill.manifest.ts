@@ -4,17 +4,18 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 
 export const SELLER_PREP_SKILL = Object.freeze({
   "id": "seller-prep",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "domain": "HOME_TRANSACTION",
   "displayName": "Seller Prep Checklist",
-  "description": "Review the governed seller-prep checklist -- open repairs, records, and presentation work recommended before listing this home for sale.",
+  "description": "Review the governed seller-prep checklist -- open repairs, records, and presentation work recommended before listing this home for sale -- and record a waive/pursue/reopen decision on an exact item.",
   "homeownerJobs": [
     "NAVIGATE_MAJOR_MOMENTS",
     "STAY_AHEAD"
   ],
   "supportedGoals": [
     "review-seller-prep-checklist",
-    "check-sale-readiness"
+    "check-sale-readiness",
+    "decide-seller-prep-item"
   ],
   "aliases": [
     "seller prep checklist",
@@ -27,6 +28,12 @@ export const SELLER_PREP_SKILL = Object.freeze({
       "version": "1.0",
       "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
       "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
+    },
+    {
+      "operationId": "SELLER_PREP_ITEM_DECISION",
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+      "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
     }
   ],
   "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
@@ -35,6 +42,10 @@ export const SELLER_PREP_SKILL = Object.freeze({
     {
       "id": "seller-prep.checklist",
       "version": "1.0"
+    },
+    {
+      "id": "seller-prep.item-decision",
+      "version": "1.0"
     }
   ],
   "allowedExternalConnectors": [],
@@ -42,14 +53,16 @@ export const SELLER_PREP_SKILL = Object.freeze({
     {
       "consumer": "ASK",
       "operations": [
-        "SELLER_PREP_CHECKLIST"
+        "SELLER_PREP_CHECKLIST",
+        "SELLER_PREP_ITEM_DECISION"
       ]
     }
   ],
-  "autonomyLevel": 1,
+  "autonomyLevel": 2,
   "riskPolicy": {
     "effects": [
-      "READ"
+      "READ",
+      "WRITE"
     ],
     "materiality": "MATERIAL",
     "riskDomains": [
@@ -62,6 +75,7 @@ export const SELLER_PREP_SKILL = Object.freeze({
     "SUMMARY",
     "GROUPED_LIST",
     "EVIDENCE",
+    "WORKFLOW_PROGRESS",
     "CAPABILITY_LIST",
     "BOUNDARY"
   ],
@@ -71,6 +85,12 @@ export const SELLER_PREP_SKILL = Object.freeze({
     {
       "type": "OPERATION_CONTRACT",
       "id": "SELLER_PREP_CHECKLIST",
+      "version": "1.0",
+      "required": true
+    },
+    {
+      "type": "OPERATION_CONTRACT",
+      "id": "SELLER_PREP_ITEM_DECISION",
       "version": "1.0",
       "required": true
     }

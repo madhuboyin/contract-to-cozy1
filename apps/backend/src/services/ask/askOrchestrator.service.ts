@@ -5177,6 +5177,137 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
   };
 }
 
+// Ask Cozy Stage 3, Phase 7 write-path slice (implementation plan §13; FRD
+// §31). The real write PropertySaleCaseService.setItemDecision exposes --
+// WAIVE/PURSUE/REOPEN/UNPURSUE on a SaleReadinessItem -- deliberately
+// scoped out of Slice 1 (SELLER_PREP_CHECKLIST). Mirrors
+// INSPECTION_FINDING_UPDATE's own propose/confirm shape exactly (resolve
+// an exact target + action from free text via exactEntityMatch, propose a
+// NEEDS_CONFIRMATION card, apply the write only on confirm).
+const SELLER_PREP_ITEM_ACTION_LABELS: Record<'WAIVE' | 'PURSUE' | 'REOPEN' | 'UNPURSUE', string> = {
+  WAIVE: 'Waive',
+  PURSUE: 'Pursue',
+  REOPEN: 'Reopen',
+  UNPURSUE: 'Unpursue',
+};
+
+const SELLER_PREP_ITEM_ACTION_COPY: Record<'WAIVE' | 'PURSUE' | 'REOPEN' | 'UNPURSUE', string> = {
+  WAIVE: 'Waiving records that you have decided not to address this item before listing.',
+  PURSUE: 'Pursuing records that you have committed to completing this item before listing.',
+  REOPEN: 'Reopening returns this item to open, undecided.',
+  UNPURSUE: 'Removing your pursue commitment returns this item to open, undecided.',
+};
+
+function sellerPrepItemAction(message: string): 'WAIVE' | 'PURSUE' | 'REOPEN' | 'UNPURSUE' | null {
+  // REOPEN/UNPURSUE checked first -- "undo the waive" contains the literal
+  // word "waive", so checking WAIVE first would misclassify it.
+  if (/\b(?:reopen|re-open|undo (?:the |my )?waive|put (?:it |this )?back)\b/i.test(message)) return 'REOPEN';
+  if (/\b(?:unpursue|no longer pursuing|stop pursuing|remove (?:it |this )?from my (?:list|plan))\b/i.test(message)) return 'UNPURSUE';
+  if (/\b(?:waive|skip(?:ping)? this|not doing this|decided not to|won'?t (?:do|fix)|will not (?:do|fix))\b/i.test(message)) return 'WAIVE';
+  if (/\b(?:pursue|i'?ll (?:do|handle|fix|take care of)|committing to|plan to (?:do|fix|handle)|going to (?:do|fix|handle))\b/i.test(message)) return 'PURSUE';
+  return null;
+}
+
+// Optional, best-effort -- a stated "because X"/"since X" trailing clause
+// becomes the durable waivedReason. Absent for every other action (only
+// WAIVE stores a reason; see PropertySaleCaseService.setItemDecision).
+function sellerPrepItemReason(message: string): string | null {
+  const match = /\b(?:because|since)\b\s+(.+)$/i.exec(message.trim());
+  return match ? match[1].trim().slice(0, 500) || null : null;
+}
+
+function sellerPrepItemContextVersion(item: { id: string; status: string; updatedAt: Date }): string {
+  return createHash('sha256').update(`${item.id}:${item.status}:${item.updatedAt.toISOString()}`).digest('hex');
+}
+
+async function sellerPrepItemDecisionResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
+  const overview = await PropertySaleCaseService.getCase(userId, propertyId);
+  if (!overview.saleCase) {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'SELLER_PREP_NO_ACTIVE_CASE',
+      blocks: [{
+        type: 'SUMMARY',
+        id: 'seller-prep-decision-no-case',
+        title: 'No active sale case yet',
+        body: 'Start a sale case before deciding on a seller-prep checklist item.',
+        tone: 'DEFAULT',
+        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'PRIMARY' }],
+      }],
+      suggestions: [],
+    };
+  }
+
+  // RESOLVED items have no further decision to make -- the underlying
+  // source itself already cleared, distinct from a homeowner WAIVE/PURSUE
+  // decision (see SaleReadinessItem.status's own schema comment).
+  const decidable = overview.readinessItems.filter((item) => item.status !== 'RESOLVED');
+  const selected = exactEntityMatch(decidable, message, launchContext);
+  const action = sellerPrepItemAction(message);
+  if (!selected || !action) {
+    return {
+      status: 'NEEDS_ENTITY',
+      reasonCode: 'SELLER_PREP_ITEM_TARGET_REQUIRED',
+      blocks: [{
+        type: 'GROUPED_LIST',
+        id: 'seller-prep-item-targets',
+        title: 'Choose an item and a decision',
+        description: 'Use the exact item title and say waive, pursue, reopen, or unpursue.',
+        sections: [{
+          id: 'items',
+          title: 'Checklist items',
+          count: decidable.length,
+          items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: item.detail ?? null, meta: [], status: item.status, href })),
+        }],
+        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+      }],
+      suggestions: [],
+    };
+  }
+
+  const contextVersion = sellerPrepItemContextVersion(selected);
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const reason = action === 'WAIVE' ? sellerPrepItemReason(message) : null;
+  const actionLabel = SELLER_PREP_ITEM_ACTION_LABELS[action];
+  return {
+    status: 'NEEDS_CONFIRMATION',
+    reasonCode: 'SELLER_PREP_ITEM_DECISION_CONFIRMATION_REQUIRED',
+    contextVersion,
+    parameters: {
+      saleReadinessItemId: selected.id,
+      saleReadinessItemAction: action,
+      saleReadinessItemReason: reason,
+      saleReadinessItemContextVersion: contextVersion,
+      confirmationVersion: 1,
+      confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{
+      type: 'SUMMARY',
+      id: 'seller-prep-item-review',
+      title: `Review ${action.toLowerCase()} decision`,
+      body: SELLER_PREP_ITEM_ACTION_COPY[action],
+      tone: 'CAUTION',
+      actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+    }],
+    confirmation: {
+      confirmationId: `seller-prep-item-${selected.id}-1`,
+      version: 1,
+      title: `${actionLabel} "${selected.title}"?`,
+      description: selected.detail ?? selected.title,
+      fields: [
+        { label: 'Item', value: selected.title },
+        { label: 'Decision', value: action.toLowerCase() },
+        ...(reason ? [{ label: 'Reason', value: reason }] : []),
+      ],
+      confirmLabel: `${actionLabel} item`,
+      consentText: 'I authorize this update to the shared seller-prep checklist.',
+      expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
@@ -6253,6 +6384,7 @@ registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAna
 registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 registerCapabilityHandler('household.invitation', async (envelope) => householdInvitationResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanceJourneyCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
@@ -6745,7 +6877,8 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'SAVINGS_OPPORTUNITIES': return `${base}/tools/home-savings`;
     case 'OWNERSHIP_COSTS': return `${base}/ownership-costs`;
     case 'SELL_HOLD_RENT_ANALYSIS':
-    case 'SELLER_PREP_CHECKLIST': return `${base}/seller-prep`;
+    case 'SELLER_PREP_CHECKLIST':
+    case 'SELLER_PREP_ITEM_DECISION': return `${base}/seller-prep`;
     case 'CAPITAL_RESERVE_PLAN': return `${base}/tools/capital-timeline`;
     case 'PROPERTY_TAX_APPEAL_READINESS': return `${base}/tools/property-tax`;
     case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;
@@ -8376,6 +8509,52 @@ async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Pr
     result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: ['Show remaining inspection findings'] };
   return { result, artifactType, artifactId };
 }
+
+// Ask Cozy Stage 3, Phase 7 write-path slice (implementation plan §13; FRD
+// §31). Unlike INSPECTION_FINDING_UPDATE's three actions, none of which are
+// each other's exact inverse, PropertySaleCaseService.setItemDecision is
+// fully idempotent and unconditional (re-applying the same action is a safe
+// no-op re-write, confirmed by reading its implementation before relying on
+// this) -- so this handler does NOT need an "alreadyApplied" staleness
+// bypass the way confirmInspectionFindingUpdate does; the contextVersion
+// check below always applies, which is actually MORE important here since
+// there is no idempotent-no-op safety net protecting a stale confirm from
+// silently overwriting a decision (and its reason) made by someone else in
+// the meantime.
+async function confirmSellerPrepItemDecision(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const itemId = parameters.saleReadinessItemId;
+  const action = parameters.saleReadinessItemAction;
+  const reason = typeof parameters.saleReadinessItemReason === 'string' ? parameters.saleReadinessItemReason : undefined;
+  if (typeof itemId !== 'string' || !['WAIVE', 'PURSUE', 'REOPEN', 'UNPURSUE'].includes(String(action))) {
+    throw Object.assign(new Error('The seller-prep item decision is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  const item = await prisma.saleReadinessItem.findFirst({
+    where: { id: itemId, saleCase: { propertyId: execution.propertyId } },
+    select: { id: true, title: true, status: true, updatedAt: true },
+  });
+  if (!item) throw Object.assign(new Error('The selected checklist item is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const currentVersion = sellerPrepItemContextVersion(item);
+  if (parameters.saleReadinessItemContextVersion !== currentVersion) {
+    throw Object.assign(new Error('This checklist item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  }
+  await PropertySaleCaseService.setItemDecision(userId, execution.propertyId, item.id, action as 'WAIVE' | 'PURSUE' | 'REOPEN' | 'UNPURSUE', reason);
+  const result: AskOperationResult = {
+    status: 'COMPLETED',
+    reasonCode: `SELLER_PREP_ITEM_${action}`,
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS',
+      id: `seller-prep-item-updated-${item.id}`,
+      title: 'Seller-prep checklist item updated',
+      status: 'COMPLETED',
+      description: 'The shared seller-prep checklist was updated.',
+      details: [{ label: 'Item', value: item.title }, { label: 'Decision', value: String(action).toLowerCase() }],
+      actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/seller-prep`, style: 'PRIMARY' }],
+    }],
+    suggestions: ['Check my sale readiness'],
+  };
+  return { result, artifactType: 'SALE_READINESS_ITEM', artifactId: item.id };
+}
 async function confirmDocumentPromotionConfirm(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
   let result: AskOperationResult;
@@ -9424,6 +9603,7 @@ async function confirmRefinanceRateMonitor(ctx: ConfirmCapabilityContext): Promi
 registerConfirmCapabilityHandler('incident-claim.file', confirmClaimFile);
 registerConfirmCapabilityHandler('incident-claim.transition', confirmClaimTransition);
 registerConfirmCapabilityHandler('inspection-findings.update', confirmInspectionFindingUpdate);
+registerConfirmCapabilityHandler('seller-prep.item-decision', confirmSellerPrepItemDecision);
 registerConfirmCapabilityHandler('document-promotion.confirm', confirmDocumentPromotionConfirm);
 registerConfirmCapabilityHandler('home-operations.update', confirmOperationalWorkUpdate);
 registerConfirmCapabilityHandler('maintenance.complete', confirmMaintenanceTaskComplete);
