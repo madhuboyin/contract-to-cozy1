@@ -19,7 +19,11 @@ import {
 } from '@prisma/client';
 import type { CaptureInputSchema, ContextCaptureDefinition, ScalarCaptureInputSchema } from '../domain/contracts';
 import { getFactDefinition, PROPERTY_FACT_CATALOG } from './factCatalog';
-import { isContextCaptureSupported } from '../application/capturePropertyFact';
+// Imported from the leaf catalog module, not capturePropertyFact.ts itself --
+// that file's own import chain (radarPropertyReconciliation -> ... ->
+// evaluateFeatureContext) leads back to this file, which previously created
+// a genuine circular-import deadlock (see capturePropertyFactCatalog.ts).
+import { isContextCaptureSupported } from '../application/capturePropertyFactCatalog';
 
 type CaptureCopy = Pick<ContextCaptureDefinition, 'title' | 'question' | 'helpText' | 'allowNotSure'>;
 

@@ -10,7 +10,7 @@
 // GOAL_STATEMENT reason) but this schema did not yet accept one.
 import { z } from 'zod';
 import { AskCaptureAttribution, HomeEventType, WarrantyCategory } from '@prisma/client';
-import { isContextCaptureSupported } from '../../../modules/propertyContext/application/capturePropertyFact';
+import { isContextCaptureSupported } from '../../../modules/propertyContext/application/capturePropertyFactCatalog';
 import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 
 // FRD §14: date precision preserved as stated, never manufactured. The
