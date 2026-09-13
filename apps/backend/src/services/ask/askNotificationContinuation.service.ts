@@ -45,10 +45,14 @@ export async function createAskNotificationContinuation(input: AskNotificationCo
   sessionId: string;
   actionUrl: string;
 }> {
+  const controls = readAskOperationalControls();
+  if (!controls.askProactiveContinuationEnabled) {
+    throw new Error('Ask proactive continuation is disabled (ASK_PROACTIVE_CONTINUATION_ENABLED / kill switch).');
+  }
+
   const access = await resolvePropertyAccess(input.userId, input.propertyId);
   if (!access) throw new Error('Property access is unavailable for this Ask notification continuation.');
 
-  const controls = readAskOperationalControls();
   const expiresAt = new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000);
   const definition = getAskOperationDefinition(input.operationId);
   const identity = `${input.userId}:${input.propertyId}:${input.triggerKey}`;

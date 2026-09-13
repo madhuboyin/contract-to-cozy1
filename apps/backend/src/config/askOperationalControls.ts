@@ -27,6 +27,7 @@ export interface AskOperationalControls {
   semanticResponseValidatorEnabled: boolean;
   resultSynthesisEnabled: boolean;
   askConversationalCaptureEnabled: boolean;
+  askProactiveContinuationEnabled: boolean;
   accountRoleEligibilityEnabled: boolean;
   audiencePolicyEnabled: boolean;
   audienceDiscoveryEnabled: boolean;
@@ -66,6 +67,20 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
     // conversation), not a refactor of already-shipped behavior.
     askConversationalCaptureEnabled: booleanEnv(env.ASK_CONVERSATIONAL_CAPTURE_ENABLED, false)
       && !booleanEnv(env.ASK_CONVERSATIONAL_CAPTURE_KILL_SWITCH, false),
+    // Ask Cozy Stage 3, Phase 5 (implementation plan §22, "Remove once all
+    // three producers are migrated"). Defaults on, unlike the conversational-
+    // capture flag above -- this isn't a new, unproven capability being
+    // introduced behind a gate; two of the three producers already create
+    // these continuations in production today. Its real value is the kill
+    // switch: an instant way to stop Ask continuations (and the
+    // PROACTIVE_INSIGHT block they carry) from being attached to monitor
+    // notifications, without a redeploy, if something goes wrong with that
+    // specific mechanism after this phase ships. Every producer degrades to
+    // its plain pre-existing domain-URL notification when this is off,
+    // through the same catch-and-fall-back path already used for any other
+    // continuation-creation failure.
+    askProactiveContinuationEnabled: booleanEnv(env.ASK_PROACTIVE_CONTINUATION_ENABLED, true)
+      && !booleanEnv(env.ASK_PROACTIVE_CONTINUATION_KILL_SWITCH, false),
     accountRoleEligibilityEnabled: booleanEnv(env.ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED, true)
       && !booleanEnv(env.ASK_ACCOUNT_ROLE_ELIGIBILITY_KILL_SWITCH, false),
     audiencePolicyEnabled: booleanEnv(env.ASK_AUDIENCE_POLICY_ENABLED, true)

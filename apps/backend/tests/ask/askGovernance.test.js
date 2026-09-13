@@ -169,6 +169,14 @@ test('material monitor notifications link to durable Ask continuations', () => {
   assert.match(continuation, /askExecutionId: continuation\?\.executionId/);
 });
 
+test('createAskNotificationContinuation is gated by its own kill switch before any side effect', () => {
+  const continuation = readFileSync(resolve(__dirname, '../../src/services/ask/askNotificationContinuation.service.ts'), 'utf8');
+  const flagIndex = continuation.indexOf('askProactiveContinuationEnabled');
+  const accessIndex = continuation.indexOf('resolvePropertyAccess(input.userId');
+  assert.ok(flagIndex >= 0, 'the operational-controls flag must be read');
+  assert.ok(accessIndex > flagIndex, 'the flag check must run before the first side-effecting call (property-access resolution)');
+});
+
 test('notification continuation execution creation is a true atomic upsert, not findUnique-then-create', () => {
   const continuation = readFileSync(resolve(__dirname, '../../src/services/ask/askNotificationContinuation.service.ts'), 'utf8');
   assert.match(continuation, /tx\.askExecution\.upsert\(\{/, 'two racing callers on the same trigger must not both attempt create() and risk an unhandled unique-constraint error');
@@ -313,6 +321,12 @@ test('askConversationalCaptureEnabled defaults off and respects both its enable 
   assert.equal(readAskOperationalControls({}).askConversationalCaptureEnabled, false);
   assert.equal(readAskOperationalControls({ ASK_CONVERSATIONAL_CAPTURE_ENABLED: 'true' }).askConversationalCaptureEnabled, true);
   assert.equal(readAskOperationalControls({ ASK_CONVERSATIONAL_CAPTURE_ENABLED: 'true', ASK_CONVERSATIONAL_CAPTURE_KILL_SWITCH: 'true' }).askConversationalCaptureEnabled, false);
+});
+
+test('askProactiveContinuationEnabled defaults on and respects both its disable flag and kill switch', () => {
+  assert.equal(readAskOperationalControls({}).askProactiveContinuationEnabled, true);
+  assert.equal(readAskOperationalControls({ ASK_PROACTIVE_CONTINUATION_ENABLED: 'false' }).askProactiveContinuationEnabled, false);
+  assert.equal(readAskOperationalControls({ ASK_PROACTIVE_CONTINUATION_KILL_SWITCH: 'true' }).askProactiveContinuationEnabled, false);
 });
 
 test('Ask responses require the current durable presentation schema version', () => {
