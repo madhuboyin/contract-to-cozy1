@@ -5,7 +5,7 @@ const { resolve } = require('node:path');
 
 require('ts-node/register');
 
-const { selectAskNextActionCapabilities, MAX_ASK_NEXT_ACTIONS } = require('../../src/services/ask/askNextActions.ts');
+const { selectAskNextActionCapabilities, deriveAskNextActionsSourceContext, MAX_ASK_NEXT_ACTIONS } = require('../../src/services/ask/askNextActions.ts');
 
 // Ask Cozy Stage 3, Phase 4 (implementation plan §10; FRD §27 "Next
 // Actions"). `selectAskNextActionCapabilities` is the pure half of this
@@ -109,6 +109,31 @@ test('selectAskNextActionCapabilities caps at MAX_ASK_NEXT_ACTIONS (5), the FRD 
   assert.equal(result.length, MAX_ASK_NEXT_ACTIONS);
 });
 
+// External review [P1]: getCapabilitySuggestions previously received no
+// sourceContext at all, so ranking never reflected what the just-answered
+// turn was actually about. deriveAskNextActionsSourceContext is the pure
+// half of that fix -- covers the mapping directly, no I/O.
+test('deriveAskNextActionsSourceContext maps a Home-Action-launched turn to a HOME_ACTION sourceContext', () => {
+  const result = deriveAskNextActionsSourceContext({ actionId: 'action-1', entityType: 'INVENTORY_ITEM', entityId: 'item-1' });
+  assert.deepEqual(result, { kind: 'HOME_ACTION', id: 'action-1', entityType: 'INVENTORY_ITEM', entityId: 'item-1' });
+});
+
+test('deriveAskNextActionsSourceContext maps a Journey-launched turn to a JOURNEY sourceContext when there is no actionId', () => {
+  const result = deriveAskNextActionsSourceContext({ journeyId: 'journey-1' });
+  assert.deepEqual(result, { kind: 'JOURNEY', id: 'journey-1' });
+});
+
+test('deriveAskNextActionsSourceContext prefers actionId over journeyId when a launch context somehow carries both', () => {
+  const result = deriveAskNextActionsSourceContext({ actionId: 'action-1', journeyId: 'journey-1' });
+  assert.equal(result.kind, 'HOME_ACTION');
+});
+
+test('deriveAskNextActionsSourceContext returns null for a plain typed question with no launch context -- falls back to prior broad ranking, not an error', () => {
+  assert.equal(deriveAskNextActionsSourceContext(undefined), null);
+  assert.equal(deriveAskNextActionsSourceContext(null), null);
+  assert.equal(deriveAskNextActionsSourceContext({}), null);
+});
+
 // Source-governance tests for the orchestrator wiring: buildAskNextActionsBlock
 // itself calls getCapabilitySuggestions (a DB-touching function), so the gate
 // widening and call-site wiring are verified against the source directly,
@@ -132,6 +157,30 @@ test('executeOperation\'s next-actions gate includes READY_WITH_LIMITATIONS (thi
   const gateEnd = orchestratorSource.indexOf(') return finalize();', gateStart);
   const gate = orchestratorSource.slice(gateStart, gateEnd);
   assert.match(gate, /\['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'\]\.includes\(result\.status\)/);
+});
+
+const askNextActionsSource = readFileSync(resolve(__dirname, '../../src/services/ask/askNextActions.ts'), 'utf8');
+
+test('External review [P2]: buildAskNextActionsBlock fetches CAPABILITY_SUGGESTIONS_FETCH_LIMIT (10), not MAX_ASK_NEXT_ACTIONS (5) -- exclusions must have candidates left to fall back on', () => {
+  const fnStart = askNextActionsSource.indexOf('export async function buildAskNextActionsBlock(');
+  assert.ok(fnStart > 0);
+  const fnBody = askNextActionsSource.slice(fnStart); // last declaration in the file
+  assert.match(fnBody, /limit: CAPABILITY_SUGGESTIONS_FETCH_LIMIT,/);
+  assert.doesNotMatch(fnBody, /limit: MAX_ASK_NEXT_ACTIONS,/);
+});
+
+test('External review [P1]: buildAskNextActionsBlock derives and passes a sourceContext into getCapabilitySuggestions', () => {
+  const fnStart = askNextActionsSource.indexOf('export async function buildAskNextActionsBlock(');
+  const fnBody = askNextActionsSource.slice(fnStart); // last declaration in the file
+  assert.match(fnBody, /const sourceContext = deriveAskNextActionsSourceContext\(input\.launchContext\);/);
+  assert.match(fnBody, /sourceContext,/);
+});
+
+test('executeOperation threads its own launchContext into buildAskNextActionsBlock so next-action ranking can see the current turn\'s launch signal', () => {
+  const idx = orchestratorSource.indexOf('async function executeOperation(');
+  const callIdx = orchestratorSource.indexOf('await buildAskNextActionsBlock(', idx);
+  const after = orchestratorSource.slice(callIdx, callIdx + 400);
+  assert.match(after, /launchContext: input\.launchContext,/);
 });
 
 test('executeOperation still gates the next-actions block on no outstanding captures, no pending confirmation, and no pre-existing CAPABILITY_LIST block', () => {

@@ -6581,6 +6581,7 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
       userId: input.userId,
       operationId: input.operation.operationId,
       recentCompletedCapabilityIds,
+      launchContext: input.launchContext,
     });
     if (nextActionsBlock) result.blocks.push(nextActionsBlock);
   } catch {
