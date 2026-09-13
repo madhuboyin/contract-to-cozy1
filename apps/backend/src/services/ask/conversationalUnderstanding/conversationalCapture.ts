@@ -59,6 +59,24 @@ function confirmationExpiry(now: Date): Date {
   return new Date(now.getTime() + CONFIRMATION_WINDOW_MS);
 }
 
+// Code review finding (2026-09-13, [P1]): every edit previously rebuilt the
+// confirmation card with a hardcoded `version: 1` -- identical to the
+// version already stored from BEFORE the edit (and to every prior edit's
+// own card), since `confirmAskExecution`'s only defense against a stale
+// confirmation attempt is `expectedVersion !== input.confirmationVersion`
+// (askOrchestrator.service.ts) with no separate confirmationId check in
+// `SubmitAskConfirmationSchema`. A homeowner with an old, pre-edit card
+// still rendered (a stale tab, a race with their own edit) could therefore
+// submit that old card's `confirmationVersion` and have it accepted against
+// the NEW, edited parameters -- authorizing values they never actually
+// reviewed. Every edit now increments this past whatever was last stored,
+// so a stale confirmationVersion is provably rejected by that existing
+// check rather than trivially matching by coincidence.
+function nextConfirmationVersion(parameters: Record<string, unknown>): number {
+  const current = typeof parameters.confirmationVersion === 'number' ? parameters.confirmationVersion : 0;
+  return current + 1;
+}
+
 // Code review finding (2026-09-13): a correction statement had nothing to
 // resolve against -- extraction received no prior events at all. Bounded to
 // a handful of the property's most recent CURRENT events, matching the
@@ -192,21 +210,30 @@ function eventEditCaptureRequest(parameters: Record<string, unknown>, contextVer
   };
 }
 
+// Code review finding (2026-09-13, [P1]): startDate/expiryDate are now
+// editable (previously excluded entirely, leaving no way to correct
+// resolveWarrantyDates's own manufactured guess -- see its header). When
+// `startDateApproximate` is set, the question/helpText call this out
+// directly so the homeowner notices there's a guess to review, not just an
+// optional field to leave alone.
 function warrantyEditCaptureRequest(parameters: Record<string, unknown>, contextVersion: string): AskCaptureRequest {
+  const startDateApproximate = Boolean(parameters.startDateApproximate);
   return {
     requirementId: 'capture-warranty-edit',
     captureKey: 'CAPTURE_WARRANTY_EDIT',
     classification: 'SCENARIO_INPUT',
     state: 'KNOWN',
     title: 'Edit before saving',
-    question: 'Is this warranty information accurate?',
-    helpText: 'Change any field below, then confirm to save the corrected version. Start and expiration dates are not editable here.',
+    question: startDateApproximate ? 'Is this warranty information accurate? The start date is an estimate -- please check it.' : 'Is this warranty information accurate?',
+    helpText: 'Change any field below, then confirm to save the corrected version.',
     inputSchema: { type: 'GROUP', fields: [
       { key: 'providerName', label: 'Provider', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
       { key: 'category', label: 'Coverage type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: Object.values(WarrantyCategory).map((value) => ({ label: value, value })) } },
       { key: 'policyNumber', label: 'Policy number', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
       { key: 'coverageDetails', label: 'Coverage details', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 2000 } },
       { key: 'cost', label: 'Cost', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+      { key: 'startDate', label: startDateApproximate ? 'Start date (estimated)' : 'Start date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+      { key: 'expiryDate', label: 'Expiration date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
     ] },
     currentAnswer: {
       providerName: parameters.providerName,
@@ -214,6 +241,8 @@ function warrantyEditCaptureRequest(parameters: Record<string, unknown>, context
       policyNumber: parameters.policyNumber ?? null,
       coverageDetails: parameters.coverageDetails ?? null,
       cost: parameters.cost ?? null,
+      startDate: typeof parameters.startDate === 'string' ? parameters.startDate.slice(0, 10) : null,
+      expiryDate: typeof parameters.expiryDate === 'string' ? parameters.expiryDate.slice(0, 10) : null,
     },
     allowNotSure: false,
     sensitivity: 'STANDARD',
@@ -223,7 +252,7 @@ function warrantyEditCaptureRequest(parameters: Record<string, unknown>, context
   };
 }
 
-function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expiresAt: Date, index: number) {
+function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expiresAt: Date, index: number, version: number) {
   const confirmationId = `capture-fact-${candidate.factKey}-${index}-${expiresAt.getTime()}`;
   return {
     blocks: [{
@@ -236,7 +265,7 @@ function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expir
     }],
     confirmation: {
       confirmationId,
-      version: 1,
+      version,
       title: 'Save this to your property record?',
       description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
       fields: [
@@ -250,7 +279,7 @@ function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expir
   };
 }
 
-function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, expiresAt: Date, index: number) {
+function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, expiresAt: Date, index: number, version: number) {
   const confirmationId = `capture-event-${index}-${expiresAt.getTime()}`;
   // Code review finding (2026-09-13): a correction's card previously read
   // identically to a brand-new event, with no indication it would replace
@@ -289,7 +318,7 @@ function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, exp
     }],
     confirmation: {
       confirmationId,
-      version: 1,
+      version,
       title,
       description: isCorrection
         ? `Cozy noticed you mentioned: "${candidate.sourceSentence}". This replaces the existing entry with a corrected revision; the original is kept as history. No change is saved until you confirm.`
@@ -315,12 +344,17 @@ function warrantyConfirmationBlocksAndCard(
   index: number,
   resolvedStartDate: Date,
   resolvedExpiryDate: Date,
+  version: number,
+  startDateApproximate: boolean,
 ) {
   const confirmationId = `capture-warranty-${index}-${expiresAt.getTime()}`;
   const fields: Array<{ label: string; value: string }> = [
     { label: 'Provider', value: candidate.providerName },
     { label: 'Coverage', value: candidate.warrantyCategory },
-    { label: 'Start date', value: resolvedStartDate.toLocaleDateString() },
+    // Code review finding (2026-09-13, [P1]): never present a manufactured
+    // guess (e.g. a RANGE-precision event's own dateRangeStart) as a stated
+    // fact -- label it as an estimate instead of a plain "Start date".
+    { label: startDateApproximate ? 'Start date (estimated -- please confirm)' : 'Start date', value: resolvedStartDate.toLocaleDateString() },
     { label: 'Expires', value: resolvedExpiryDate.toLocaleDateString() },
   ];
   if (candidate.policyNumber) fields.push({ label: 'Policy number', value: candidate.policyNumber });
@@ -335,7 +369,7 @@ function warrantyConfirmationBlocksAndCard(
     }],
     confirmation: {
       confirmationId,
-      version: 1,
+      version,
       title: 'Save this warranty to your property record?',
       description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
       fields,
@@ -353,7 +387,7 @@ function warrantyConfirmationBlocksAndCard(
 // isCorrection is read straight from parameters.correctingEventId, so the
 // new-vs-corrected title/copy distinction (eventConfirmationBlocksAndCard's
 // own design) still holds after an edit.
-function eventEditConfirmationBlocksAndCard(mergedParameters: Record<string, unknown>, sourceSentence: string, expiresAt: Date) {
+function eventEditConfirmationBlocksAndCard(mergedParameters: Record<string, unknown>, sourceSentence: string, expiresAt: Date, version: number) {
   const isCorrection = Boolean(mergedParameters.correctingEventId);
   const title = isCorrection ? 'Update this home timeline event?' : 'Add this to your home timeline?';
   const fields: Array<{ label: string; value: string }> = [];
@@ -375,7 +409,7 @@ function eventEditConfirmationBlocksAndCard(mergedParameters: Record<string, unk
     }],
     confirmation: {
       confirmationId,
-      version: 1,
+      version,
       title,
       description: isCorrection
         ? `Cozy noticed you mentioned: "${sourceSentence}". This replaces the existing entry with a corrected revision; the original is kept as history. No change is saved until you confirm.`
@@ -390,18 +424,22 @@ function eventEditConfirmationBlocksAndCard(mergedParameters: Record<string, unk
   };
 }
 
-// Ask Cozy Stage 3, Phase 3 edit-before-confirm. Start/expiry dates are
-// displayed read-only (carried over from the original proposal, unedited --
-// dates are out of this pass's editable scope) rather than omitted, so the
-// homeowner still sees the complete picture before confirming.
-function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, unknown>, sourceSentence: string, expiresAt: Date) {
+// Code review finding (2026-09-13, [P1]): dates were previously read-only
+// here (out of this pass's editable scope) with no way to correct a
+// manufactured guess -- see resolveWarrantyDates's own header. Now
+// editable; `startDateApproximate` is read straight off `mergedParameters`
+// (set `false` by `editCaptureWarrantyCandidate` whenever the homeowner has
+// just supplied/confirmed the date explicitly, so the estimate label
+// disappears the moment it's no longer a guess).
+function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, unknown>, sourceSentence: string, expiresAt: Date, version: number) {
+  const startDateApproximate = Boolean(mergedParameters.startDateApproximate);
   const fields: Array<{ label: string; value: string }> = [
     { label: 'Provider', value: typeof mergedParameters.providerName === 'string' ? mergedParameters.providerName : '' },
     { label: 'Coverage', value: typeof mergedParameters.category === 'string' ? mergedParameters.category : '' },
   ];
   if (typeof mergedParameters.policyNumber === 'string' && mergedParameters.policyNumber) fields.push({ label: 'Policy number', value: mergedParameters.policyNumber });
   if (typeof mergedParameters.cost === 'number') fields.push({ label: 'Cost', value: `$${mergedParameters.cost.toLocaleString()}` });
-  if (typeof mergedParameters.startDate === 'string') fields.push({ label: 'Start date', value: new Date(mergedParameters.startDate).toLocaleDateString() });
+  if (typeof mergedParameters.startDate === 'string') fields.push({ label: startDateApproximate ? 'Start date (estimated -- please confirm)' : 'Start date', value: new Date(mergedParameters.startDate).toLocaleDateString() });
   if (typeof mergedParameters.expiryDate === 'string') fields.push({ label: 'Expires', value: new Date(mergedParameters.expiryDate).toLocaleDateString() });
   const confirmationId = `capture-warranty-edit-${expiresAt.getTime()}`;
   return {
@@ -415,7 +453,7 @@ function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, 
     }],
     confirmation: {
       confirmationId,
-      version: 1,
+      version,
       title: 'Save this warranty to your property record?',
       description: `Cozy noticed you mentioned: "${sourceSentence}". No change is saved until you confirm.`,
       fields,
@@ -433,22 +471,60 @@ function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, 
 // fallback (a warranty is implicitly dated to when the covered item was
 // installed/replaced, absent a separately-stated warranty start date).
 // Exported for direct unit testing (pure, no I/O).
+// Code review finding (2026-09-13, [P1]): this used to treat EVERY resolved
+// startDate as equally trustworthy, including a RANGE-precision event's own
+// `dateRangeStart` (e.g. "last summer" -> a fabricated exact "June 1")  or
+// the `now` fallback -- silently manufacturing precision the homeowner
+// never stated, contradicting the exact-date requirement `Warranty.startDate`
+// (a required, non-nullable `DateTime` with no precision/uncertainty field
+// of its own) is held to. `Warranty` has no way to STORE "approximate," so
+// this can't be fixed by preserving imprecision the way `HomeEvent`'s own
+// `datePrecision` does -- instead, `startDateApproximate` tells the
+// confirmation card to say so honestly (never present a guess as a stated
+// fact) and the edit form to let the homeowner correct it before
+// confirming (previously not editable at all -- the second half of the
+// same finding).
+export interface ResolvedWarrantyDates {
+  startDate: Date;
+  expiryDate: Date;
+  startDateApproximate: boolean;
+}
+
 export function resolveWarrantyDates(
   candidate: WarrantyExtractionCandidate,
   linkedEventCandidate: EventExtractionCandidate | null | undefined,
   now: Date,
-): { startDate: Date; expiryDate: Date } {
-  const startDateIso = candidate.startDate
-    ?? linkedEventCandidate?.occurredAt
-    ?? linkedEventCandidate?.dateRangeStart
-    ?? now.toISOString();
+): ResolvedWarrantyDates {
+  let startDateIso: string;
+  let startDateApproximate: boolean;
+  if (candidate.startDate) {
+    // Explicitly stated by the homeowner for the warranty itself -- exact.
+    startDateIso = candidate.startDate;
+    startDateApproximate = false;
+  } else if (linkedEventCandidate?.occurredAt && linkedEventCandidate.datePrecision === 'EXACT_DATE') {
+    // The paired event's own genuinely exact date -- not a guess.
+    startDateIso = linkedEventCandidate.occurredAt;
+    startDateApproximate = false;
+  } else if (linkedEventCandidate?.occurredAt) {
+    // MONTH/YEAR precision: occurredAt is only a best-guess anchor within
+    // that month/year (per EventExtractionCandidateSchema's own prompt
+    // convention), not a homeowner-stated exact day.
+    startDateIso = linkedEventCandidate.occurredAt;
+    startDateApproximate = true;
+  } else if (linkedEventCandidate?.dateRangeStart) {
+    startDateIso = linkedEventCandidate.dateRangeStart;
+    startDateApproximate = true;
+  } else {
+    startDateIso = now.toISOString();
+    startDateApproximate = true;
+  }
   const startDate = new Date(startDateIso);
-  if (candidate.expiryDate) return { startDate, expiryDate: new Date(candidate.expiryDate) };
+  if (candidate.expiryDate) return { startDate, expiryDate: new Date(candidate.expiryDate), startDateApproximate };
   // Schema refinement guarantees at least one of expiryDate/durationMonths
   // is present, so durationMonths is trusted here without a further guard.
   const expiryDate = new Date(startDate);
   expiryDate.setMonth(expiryDate.getMonth() + (candidate.durationMonths ?? 0));
-  return { startDate, expiryDate };
+  return { startDate, expiryDate, startDateApproximate };
 }
 
 // Code review finding (2026-09-13): a correction previously built a FULL
@@ -521,7 +597,7 @@ export function buildChildExecutionData(
   if (candidate.category === 'FACT') {
     operationId = 'CAPTURE_FACT_CONFIRM';
     reasonCode = 'FACT_CAPTURE_CONFIRMATION_REQUIRED';
-    cards = factConfirmationBlocksAndCard(candidate, expiresAt, index);
+    cards = factConfirmationBlocksAndCard(candidate, expiresAt, index, confirmationVersion);
     parameters = {
       factKey: candidate.factKey,
       value: candidate.value,
@@ -535,7 +611,7 @@ export function buildChildExecutionData(
   } else if (candidate.category === 'EVENT') {
     operationId = 'CAPTURE_EVENT_CONFIRM';
     reasonCode = 'EVENT_CAPTURE_CONFIRMATION_REQUIRED';
-    cards = eventConfirmationBlocksAndCard(candidate, expiresAt, index);
+    cards = eventConfirmationBlocksAndCard(candidate, expiresAt, index, confirmationVersion);
     parameters = {
       // Code review finding (2026-09-13): threaded through so
       // confirmCaptureEvent's existing correctingEventId branch (already
@@ -553,8 +629,8 @@ export function buildChildExecutionData(
   } else {
     operationId = 'CAPTURE_WARRANTY_CONFIRM';
     reasonCode = 'WARRANTY_CAPTURE_CONFIRMATION_REQUIRED';
-    const { startDate, expiryDate } = resolveWarrantyDates(candidate, linkedEventCandidate, now);
-    cards = warrantyConfirmationBlocksAndCard(candidate, expiresAt, index, startDate, expiryDate);
+    const { startDate, expiryDate, startDateApproximate } = resolveWarrantyDates(candidate, linkedEventCandidate, now);
+    cards = warrantyConfirmationBlocksAndCard(candidate, expiresAt, index, startDate, expiryDate, confirmationVersion, startDateApproximate);
     parameters = {
       providerName: candidate.providerName,
       category: candidate.warrantyCategory,
@@ -563,6 +639,7 @@ export function buildChildExecutionData(
       cost: candidate.cost ?? null,
       startDate: startDate.toISOString(),
       expiryDate: expiryDate.toISOString(),
+      startDateApproximate,
       attribution: candidate.attribution,
       captureChannel: CAPTURE_CHANNEL,
       extractionConfidence: candidate.extractionConfidence,
@@ -650,15 +727,23 @@ export function editCaptureFactCandidate(
     sourceSentence,
   };
   if (!isValidFactCandidateValue(candidate)) return null;
+  // Code review finding (2026-09-13, [P1]): every edit must invalidate any
+  // confirmation the homeowner has not yet re-reviewed -- see
+  // nextConfirmationVersion's own header. Both the card's `version` and the
+  // stored `parameters.confirmationVersion` below use this same
+  // incremented number, so a stale confirmationVersion submitted against
+  // this execution is provably rejected by confirmAskExecution's existing
+  // `expectedVersion !== input.confirmationVersion` check.
+  const confirmationVersion = nextConfirmationVersion(parameters);
   const mergedParameters = { ...parameters, value: candidate.value };
   const expiresAt = confirmationExpiry(now);
-  const { blocks, confirmation } = factConfirmationBlocksAndCard(candidate, expiresAt, 0);
+  const { blocks, confirmation } = factConfirmationBlocksAndCard(candidate, expiresAt, 0, confirmationVersion);
   return {
     status: 'NEEDS_CONFIRMATION',
     reasonCode: 'FACT_CAPTURE_CONFIRMATION_REQUIRED',
     blocks, confirmation, suggestions: [],
     captureRequests: [factEditCaptureRequest(mergedParameters, contextVersion)],
-    parameters: { ...mergedParameters, confirmationExpiresAt: expiresAt.toISOString() },
+    parameters: { ...mergedParameters, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString() },
   };
 }
 
@@ -692,25 +777,42 @@ export function editCaptureEventCandidate(
   if ('amount' in parsedAnswer.data) {
     merged.currency = merged.amount != null ? (typeof parameters.currency === 'string' ? parameters.currency : 'USD') : null;
   }
+  // Code review finding (2026-09-13, [P1]): see editCaptureFactCandidate's
+  // own comment -- every edit invalidates any not-yet-re-reviewed
+  // confirmation by incrementing this past whatever was last stored.
+  const confirmationVersion = nextConfirmationVersion(parameters);
   const expiresAt = confirmationExpiry(now);
-  const { blocks, confirmation } = eventEditConfirmationBlocksAndCard(merged, sourceSentence, expiresAt);
+  const { blocks, confirmation } = eventEditConfirmationBlocksAndCard(merged, sourceSentence, expiresAt, confirmationVersion);
   const editRequest = eventEditCaptureRequest(merged, contextVersion);
   return {
     status: 'NEEDS_CONFIRMATION',
     reasonCode: 'EVENT_CAPTURE_CONFIRMATION_REQUIRED',
     blocks, confirmation, suggestions: [],
     captureRequests: editRequest ? [editRequest] : [],
-    parameters: { ...merged, confirmationExpiresAt: expiresAt.toISOString() },
+    parameters: { ...merged, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString() },
   };
 }
 
+const WARRANTY_DATE_STRING = z.string().trim().min(1).refine((value) => !Number.isNaN(new Date(value).getTime()), { message: 'Enter a valid date' });
+
+// Code review finding (2026-09-13, [P1]): startDate/expiryDate are now
+// editable -- previously read-only, with no way to correct
+// resolveWarrantyDates's own manufactured guess (see its header comment).
+// Cross-field validated the same way captureWarranty.ts's actual
+// confirm-time writer validates them, so an edit can never propose a card
+// that would fail once confirmed.
 const WARRANTY_EDIT_ANSWER_SCHEMA = z.object({
   providerName: z.string().trim().min(1).max(160),
   category: z.nativeEnum(WarrantyCategory),
   policyNumber: z.string().trim().max(160).nullable(),
   coverageDetails: z.string().trim().max(2000).nullable(),
   cost: z.number().nonnegative().max(10_000_000).nullable(),
-}).strict();
+  startDate: WARRANTY_DATE_STRING,
+  expiryDate: WARRANTY_DATE_STRING,
+}).strict().refine(
+  (value) => new Date(value.expiryDate) > new Date(value.startDate),
+  { message: 'Expiration date must be after the start date', path: ['expiryDate'] },
+);
 
 export function editCaptureWarrantyCandidate(
   storedParameters: unknown,
@@ -722,15 +824,27 @@ export function editCaptureWarrantyCandidate(
   const parameters = asParameterRecord(storedParameters);
   const parsedAnswer = WARRANTY_EDIT_ANSWER_SCHEMA.safeParse(answer);
   if (!parsedAnswer.success) return null;
-  const merged = { ...parameters, ...parsedAnswer.data };
+  // Code review finding (2026-09-13, [P1]): see editCaptureFactCandidate's
+  // own comment on confirmationVersion. `startDateApproximate: false`
+  // because the homeowner just explicitly supplied/confirmed this date --
+  // it is no longer resolveWarrantyDates's own guess, whatever it was
+  // before this edit.
+  const confirmationVersion = nextConfirmationVersion(parameters);
+  const merged = {
+    ...parameters,
+    ...parsedAnswer.data,
+    startDate: new Date(parsedAnswer.data.startDate).toISOString(),
+    expiryDate: new Date(parsedAnswer.data.expiryDate).toISOString(),
+    startDateApproximate: false,
+  };
   const expiresAt = confirmationExpiry(now);
-  const { blocks, confirmation } = warrantyEditConfirmationBlocksAndCard(merged, sourceSentence, expiresAt);
+  const { blocks, confirmation } = warrantyEditConfirmationBlocksAndCard(merged, sourceSentence, expiresAt, confirmationVersion);
   return {
     status: 'NEEDS_CONFIRMATION',
     reasonCode: 'WARRANTY_CAPTURE_CONFIRMATION_REQUIRED',
     blocks, confirmation, suggestions: [],
     captureRequests: [warrantyEditCaptureRequest(merged, contextVersion)],
-    parameters: { ...merged, confirmationExpiresAt: expiresAt.toISOString() },
+    parameters: { ...merged, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString() },
   };
 }
 

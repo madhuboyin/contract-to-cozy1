@@ -7547,6 +7547,24 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_IDEMPOTENCY_CONFLICT';
       throw error;
     }
+    // Code review finding (2026-09-13, [P1]): capture-edit operations
+    // (CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM/CAPTURE_WARRANTY_CONFIRM)
+    // are never routable via resolveAskOperation -- they are only ever
+    // created programmatically by conversationalCapture.ts, never proposed
+    // from a raw homeowner message. Replaying through resolveAskOperation +
+    // executeOperation below would reroute the candidate's own
+    // sourceSentence (stored as execution.message, e.g. "My home was built
+    // in 1998.") through the full deterministic/semantic router as if it
+    // were a brand-new incoming Ask message, silently overwriting the
+    // already-persisted, correctly-edited confirmation card with an
+    // unrelated result. This branch exists purely for idempotent replay of
+    // an already-successful submission -- the execution row already
+    // reflects that success, so return it directly instead of re-executing
+    // anything.
+    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM') {
+      askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
+      return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    }
     const operation = resolveAskOperation(execution.message);
     const replayed = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
     const resumed = await prisma.askExecution.update({
@@ -8052,9 +8070,25 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     });
     canonicalOwner = 'PropertyFinancingProfile';
   }
+  // Code review finding (2026-09-13, [P1]): this used to be an unconditional
+  // update keyed only on `id` -- if a concurrent request changed this
+  // execution's status between the read at the top of this function and
+  // this write (most concretely: confirmAskExecution claiming it into
+  // RUNNING, or completing it, while this same request was still off
+  // computing an edited result), this write would silently clobber that
+  // newer state back to whatever `result.status` says (typically
+  // NEEDS_CONFIRMATION again, with this attempt's own now-stale
+  // parameters) -- resurrecting an already-confirmed-and-executed capture
+  // into a fresh "pending confirmation" state with mismatched data. Guarded
+  // exactly like the analogous races already fixed elsewhere in this file
+  // (confirmAskExecution's own conflict-release and claim transitions): a
+  // compare-and-swap against `execution.status` as read at the top of this
+  // function, not an unconditional update. If the guard doesn't match,
+  // something else already moved this execution past the status this
+  // request expected -- fail closed rather than overwrite it.
   const saved = await prisma.$transaction(async (tx) => {
-    const updated = await tx.askExecution.update({
-      where: { id: execution.id },
+    const updated = await tx.askExecution.updateMany({
+      where: { id: execution.id, status: execution.status },
       data: {
         status: result.status,
         reasonCode: result.reasonCode,
@@ -8064,6 +8098,11 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
+    if (updated.count !== 1) {
+      const error = new Error('This changed while your edit was being saved -- it may already be confirming or completed. Ask again to review the current state.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
     await tx.askCaptureReceipt.upsert({
       where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
       create: {
@@ -8079,7 +8118,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     await tx.askExecutionEvent.create({
       data: { executionId: execution.id, eventType: 'CONTEXT_CAPTURED', metadataJson: asInputJson({ captureId, captureKey: input.captureKey, canonicalOwner, resumedStatus: result.status }) },
     });
-    return updated;
+    return tx.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   });
   askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'RESUMED' });
   if (result.captureRequests?.some((request) => request.captureKey === input.captureKey)) {

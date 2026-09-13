@@ -255,13 +255,43 @@ function warrantyCandidate(overrides = {}) {
 }
 
 test('resolveWarrantyDates: an explicit expiryDate is used as-is', () => {
-  const { startDate, expiryDate } = resolveWarrantyDates(
+  const { startDate, expiryDate, startDateApproximate } = resolveWarrantyDates(
     warrantyCandidate({ startDate: '2026-08-01T00:00:00.000Z', durationMonths: undefined, expiryDate: '2036-08-01T00:00:00.000Z' }),
     null,
     new Date('2026-09-13T00:00:00.000Z'),
   );
   assert.equal(startDate.toISOString(), '2026-08-01T00:00:00.000Z');
   assert.equal(expiryDate.toISOString(), '2036-08-01T00:00:00.000Z');
+  // A homeowner-stated startDate is never a guess.
+  assert.equal(startDateApproximate, false);
+});
+
+// Code review finding (2026-09-13, [P1]): "last summer" (a RANGE-precision
+// event) was silently becoming an exact warranty start date with no
+// indication it was ever a guess. These four cases cover every branch of
+// the exact-vs-approximate distinction.
+test('resolveWarrantyDates: an EXACT_DATE-precision paired event\'s occurredAt is treated as exact, not approximate', () => {
+  const linkedEvent = { category: 'EVENT', occurredAt: '2026-08-15T00:00:00.000Z', dateRangeStart: null, datePrecision: 'EXACT_DATE' };
+  const { startDateApproximate } = resolveWarrantyDates(warrantyCandidate({ startDate: undefined }), linkedEvent, new Date('2026-09-13T00:00:00.000Z'));
+  assert.equal(startDateApproximate, false);
+});
+
+test('resolveWarrantyDates: a YEAR/MONTH-precision paired event\'s occurredAt is flagged approximate -- it is only a best-guess anchor within that period, not a stated exact day', () => {
+  const linkedEvent = { category: 'EVENT', occurredAt: '2026-06-15T00:00:00.000Z', dateRangeStart: null, datePrecision: 'YEAR' };
+  const { startDateApproximate } = resolveWarrantyDates(warrantyCandidate({ startDate: undefined }), linkedEvent, new Date('2026-09-13T00:00:00.000Z'));
+  assert.equal(startDateApproximate, true);
+});
+
+test('resolveWarrantyDates: a RANGE-precision paired event\'s dateRangeStart is flagged approximate -- the exact reproduction from the finding ("last summer" -> a fabricated exact start)', () => {
+  const linkedEvent = { category: 'EVENT', occurredAt: null, dateRangeStart: '2025-06-01T00:00:00.000Z', datePrecision: 'RANGE' };
+  const { startDate, startDateApproximate } = resolveWarrantyDates(warrantyCandidate({ startDate: undefined }), linkedEvent, new Date('2026-09-13T00:00:00.000Z'));
+  assert.equal(startDate.toISOString(), '2025-06-01T00:00:00.000Z');
+  assert.equal(startDateApproximate, true);
+});
+
+test('resolveWarrantyDates: the "now" fallback (no date information at all) is flagged approximate', () => {
+  const { startDateApproximate } = resolveWarrantyDates(warrantyCandidate({ startDate: undefined }), null, new Date('2026-09-13T00:00:00.000Z'));
+  assert.equal(startDateApproximate, true);
 });
 
 test('resolveWarrantyDates: durationMonths computes expiryDate from startDate when expiryDate is not stated', () => {
@@ -396,8 +426,33 @@ test('buildChildExecutionData: a WARRANTY candidate\'s captureRequest exposes pr
   const data = buildChildExecutionData(candidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
   const request = data.resultJson.captureRequests[0];
   assert.equal(request.captureKey, 'CAPTURE_WARRANTY_EDIT');
-  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'cost']);
-  assert.deepEqual(request.currentAnswer, { providerName: 'Carrier', category: 'HVAC', policyNumber: 'POL-123', coverageDetails: 'Parts and labor', cost: 450 });
+  // Code review finding (2026-09-13, [P1]): dates are now editable (see
+  // resolveWarrantyDates's own header on why a manufactured guess must be
+  // correctable, not just labeled).
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'cost', 'startDate', 'expiryDate']);
+  assert.equal(request.currentAnswer.providerName, 'Carrier');
+  assert.equal(request.currentAnswer.category, 'HVAC');
+  assert.equal(request.currentAnswer.policyNumber, 'POL-123');
+  assert.equal(request.currentAnswer.coverageDetails, 'Parts and labor');
+  assert.equal(request.currentAnswer.cost, 450);
+  assert.match(request.currentAnswer.startDate, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(request.currentAnswer.expiryDate, /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('buildChildExecutionData: a WARRANTY candidate whose start date was only derivable via fallback (not stated) labels it estimated and flags startDateApproximate in the stored parameters', () => {
+  const input = { userId: 'u1', sessionId: 's1', propertyId: 'p1', parentExecutionId: 'e1', message: 'irrelevant', contextVersion: 'ctx-1', skipDueToRoutedCapture: false };
+  const linkedEvent = { category: 'EVENT', occurredAt: null, dateRangeStart: '2025-06-01T00:00:00.000Z', datePrecision: 'RANGE' };
+  const candidate = {
+    category: 'WARRANTY', providerName: 'Carrier', warrantyCategory: 'HVAC', policyNumber: null, coverageDetails: null, cost: null,
+    extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'We installed a new furnace last summer, it has a 10 year warranty from Carrier.',
+    linkedEventCandidateIndex: 0, durationMonths: 120, startDate: undefined,
+  };
+  const data = buildChildExecutionData(candidate, 0, input, new Date('2026-09-13T00:00:00.000Z'), linkedEvent);
+  assert.equal(data.parametersJson.startDateApproximate, true);
+  const request = data.resultJson.captureRequests[0];
+  assert.match(request.question, /estimate/i);
+  assert.match(request.inputSchema.fields.find((field) => field.key === 'startDate').label, /estimated/i);
+  assert.match(data.resultJson.confirmation.fields.find((field) => /Start date/.test(field.label)).label, /estimated/i);
 });
 
 test('editCaptureFactCandidate: a valid edited value produces a fresh NEEDS_CONFIRMATION result with the new value in both parameters and the confirmation card', () => {
@@ -409,6 +464,38 @@ test('editCaptureFactCandidate: a valid edited value produces a fresh NEEDS_CONF
   assert.equal(result.parameters.factKey, 'core.yearBuilt');
   assert.match(result.confirmation.fields.find((field) => field.label === 'Value').value, /2001/);
   assert.equal(result.captureRequests[0].currentAnswer.value, 2001);
+});
+
+// Code review finding (2026-09-13, [P1]): every edit previously rebuilt the
+// confirmation card with a hardcoded version: 1, identical to the version
+// already stored before the edit -- confirmAskExecution's only defense
+// against a stale confirmation attempt (`expectedVersion !== input.confirmationVersion`)
+// was reproducibly a no-op, since both sides trivially matched. An older,
+// pre-edit card could therefore authorize the newly edited value the
+// homeowner never actually reviewed.
+test('editCaptureFactCandidate: increments confirmationVersion past whatever was stored before the edit, in both the stored parameters and the confirmation card itself', () => {
+  const storedParameters = { factKey: 'core.yearBuilt', value: 1998, attribution: 'FIRSTHAND', extractionConfidence: 0.9, confirmationVersion: 1 };
+  const result = editCaptureFactCandidate(storedParameters, 'My home was built in 1998.', 'ctx-1', { value: 2001 }, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result.parameters.confirmationVersion, 2);
+  assert.equal(result.confirmation.version, 2);
+  // A second edit on top of the first increments again, not back to 2.
+  const secondResult = editCaptureFactCandidate({ ...storedParameters, confirmationVersion: 2, value: 2001 }, 'My home was built in 1998.', 'ctx-1', { value: 2002 }, new Date('2026-09-13T01:05:00.000Z'));
+  assert.equal(secondResult.parameters.confirmationVersion, 3);
+  assert.equal(secondResult.confirmation.version, 3);
+});
+
+test('editCaptureFactCandidate: treats a missing stored confirmationVersion as 0, so the first edit still produces version 1 (never version NaN)', () => {
+  const storedParameters = { factKey: 'core.yearBuilt', value: 1998, attribution: 'FIRSTHAND', extractionConfidence: 0.9 };
+  const result = editCaptureFactCandidate(storedParameters, 'irrelevant', 'ctx-1', { value: 2001 }, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result.parameters.confirmationVersion, 1);
+  assert.equal(result.confirmation.version, 1);
+});
+
+test('editCaptureEventCandidate: also increments confirmationVersion past whatever was stored before the edit', () => {
+  const storedParameters = { correctingEventId: 'event-1', amount: 15000, currency: 'USD', attribution: 'FIRSTHAND', confirmationVersion: 1 };
+  const result = editCaptureEventCandidate(storedParameters, 'irrelevant', 'ctx-1', { amount: 15200 }, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result.parameters.confirmationVersion, 2);
+  assert.equal(result.confirmation.version, 2);
 });
 
 test('editCaptureFactCandidate: an invalid edited value (fails the same normalizeCaptureValue check used at proposal time) is rejected, not silently accepted', () => {
@@ -462,25 +549,54 @@ test('editCaptureEventCandidate: returns null when this execution has no editabl
   assert.equal(result, null);
 });
 
-test('editCaptureWarrantyCandidate: a valid full edit updates every editable field and preserves the original (non-editable) dates unchanged', () => {
+test('editCaptureWarrantyCandidate: a valid full edit updates every editable field, including dates the homeowner resubmitted unchanged', () => {
   const storedParameters = {
     providerName: 'Carrier', category: 'HVAC', policyNumber: 'POL-123', coverageDetails: 'Parts and labor', cost: 450,
-    startDate: '2026-08-15T00:00:00.000Z', expiryDate: '2036-08-15T00:00:00.000Z', attribution: 'FIRSTHAND', extractionConfidence: 0.85,
+    startDate: '2026-08-15T00:00:00.000Z', expiryDate: '2036-08-15T00:00:00.000Z', attribution: 'FIRSTHAND', extractionConfidence: 0.85, confirmationVersion: 1,
   };
-  const answer = { providerName: 'Carrier Corp', category: 'HVAC', policyNumber: 'POL-456', coverageDetails: 'Parts, labor, and diagnostics', cost: 500 };
+  const answer = { providerName: 'Carrier Corp', category: 'HVAC', policyNumber: 'POL-456', coverageDetails: 'Parts, labor, and diagnostics', cost: 500, startDate: '2026-08-15', expiryDate: '2036-08-15' };
   const result = editCaptureWarrantyCandidate(storedParameters, 'irrelevant', 'ctx-1', answer, new Date('2026-09-13T01:00:00.000Z'));
   assert.ok(result);
   assert.equal(result.parameters.providerName, 'Carrier Corp');
   assert.equal(result.parameters.policyNumber, 'POL-456');
   assert.equal(result.parameters.cost, 500);
-  assert.equal(result.parameters.startDate, '2026-08-15T00:00:00.000Z');
-  assert.equal(result.parameters.expiryDate, '2036-08-15T00:00:00.000Z');
+  assert.equal(new Date(result.parameters.startDate).toISOString().slice(0, 10), '2026-08-15');
+  assert.equal(new Date(result.parameters.expiryDate).toISOString().slice(0, 10), '2036-08-15');
+  assert.equal(result.parameters.startDateApproximate, false);
   assert.ok(result.confirmation.fields.some((field) => field.label === 'Start date'));
+});
+
+// Code review finding (2026-09-13, [P1]): resolveWarrantyDates can
+// manufacture an inexact guess (a RANGE-precision event's dateRangeStart,
+// or `now`) as if it were an exact Warranty.startDate. This is the fix's
+// other half -- the homeowner must actually be ABLE to correct it, not
+// just see a label. Also covers the P1's "confirmationVersion must
+// invalidate the old card" requirement for the warranty path specifically.
+test('editCaptureWarrantyCandidate: correcting a manufactured start date clears startDateApproximate and increments confirmationVersion past the stale card', () => {
+  const storedParameters = {
+    providerName: 'Carrier', category: 'HVAC', policyNumber: null, coverageDetails: null, cost: null,
+    startDate: '2025-06-01T00:00:00.000Z', expiryDate: '2035-06-01T00:00:00.000Z', startDateApproximate: true, confirmationVersion: 1,
+  };
+  const answer = { providerName: 'Carrier', category: 'HVAC', policyNumber: null, coverageDetails: null, cost: null, startDate: '2025-08-20', expiryDate: '2035-08-20' };
+  const result = editCaptureWarrantyCandidate(storedParameters, 'irrelevant', 'ctx-1', answer, new Date('2026-09-13T01:00:00.000Z'));
+  assert.ok(result);
+  assert.equal(new Date(result.parameters.startDate).toISOString().slice(0, 10), '2025-08-20');
+  assert.equal(result.parameters.startDateApproximate, false);
+  assert.equal(result.parameters.confirmationVersion, 2);
+  assert.equal(result.confirmation.version, 2);
+  assert.ok(!result.confirmation.fields.some((field) => /estimated/i.test(field.label)), 'expected the "estimated" label to disappear once the homeowner has explicitly supplied the date');
+});
+
+test('editCaptureWarrantyCandidate: rejects an expiryDate that is not after startDate', () => {
+  const storedParameters = { providerName: 'Carrier', category: 'HVAC', policyNumber: null, coverageDetails: null, cost: null, startDate: '2026-08-15T00:00:00.000Z', expiryDate: '2036-08-15T00:00:00.000Z' };
+  const answer = { providerName: 'Carrier', category: 'HVAC', policyNumber: null, coverageDetails: null, cost: null, startDate: '2026-08-15', expiryDate: '2020-01-01' };
+  const result = editCaptureWarrantyCandidate(storedParameters, 'irrelevant', 'ctx-1', answer, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result, null);
 });
 
 test('editCaptureWarrantyCandidate: rejects an invalid category enum value', () => {
   const storedParameters = { providerName: 'Carrier', category: 'HVAC', policyNumber: null, coverageDetails: null, cost: null, startDate: '2026-08-15T00:00:00.000Z', expiryDate: '2036-08-15T00:00:00.000Z' };
-  const answer = { providerName: 'Carrier', category: 'NOT_A_REAL_CATEGORY', policyNumber: null, coverageDetails: null, cost: null };
+  const answer = { providerName: 'Carrier', category: 'NOT_A_REAL_CATEGORY', policyNumber: null, coverageDetails: null, cost: null, startDate: '2026-08-15', expiryDate: '2036-08-15' };
   const result = editCaptureWarrantyCandidate(storedParameters, 'irrelevant', 'ctx-1', answer, new Date('2026-09-13T01:00:00.000Z'));
   assert.equal(result, null);
 });
@@ -500,7 +616,12 @@ test('submitAskCapture\'s inline-capture allow-list includes all three capture-c
 });
 
 test('submitAskCapture\'s capture-edit branch never calls a domain-writing service -- it only rebuilds the pending card via editCapture*Candidate', () => {
-  const idx = orchestratorSource.indexOf("execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'");
+  // Anchored on the `} else if (` branch entry, not the bare condition
+  // text -- the idempotency-replay guard above this branch (code review
+  // finding, 2026-09-13) legitimately reuses the same condition for a
+  // different purpose (never re-routing a capture-edit's own message), so
+  // a bare-condition search would find that occurrence first instead.
+  const idx = orchestratorSource.indexOf("} else if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'");
   assert.ok(idx > 0);
   const branchEnd = orchestratorSource.indexOf("} else if (execution.operationId === 'HOME_DEADLINE_MONITOR')", idx);
   assert.ok(branchEnd > idx);
@@ -516,7 +637,7 @@ test('submitAskCapture\'s capture-edit branch never calls a domain-writing servi
 });
 
 test('submitAskCapture\'s capture-edit branch checks captureKey and contextVersion freshness before calling the editor, matching every other branch\'s own gating shape', () => {
-  const idx = orchestratorSource.indexOf("execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'");
+  const idx = orchestratorSource.indexOf("} else if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'");
   const branchEnd = orchestratorSource.indexOf("} else if (execution.operationId === 'HOME_DEADLINE_MONITOR')", idx);
   const branch = orchestratorSource.slice(idx, branchEnd);
   const captureKeyCheck = branch.indexOf("input.captureKey !== editCaptureKey");
@@ -526,4 +647,41 @@ test('submitAskCapture\'s capture-edit branch checks captureKey and contextVersi
   assert.match(branch, /'ASK_CAPTURE_NOT_ACTIVE'/);
   assert.match(branch, /'ASK_CONTEXT_VERSION_CONFLICT'/);
   assert.match(branch, /'ASK_CAPTURE_VALIDATION_ERROR'/);
+});
+
+// Code review findings (2026-09-13, [P1] x2): the two remaining fixes from
+// the same review round live in submitAskCapture's shared plumbing, not the
+// capture-edit branch itself -- covered as source-governance tests for the
+// same reason (no runtime DB-mock harness in this codebase for this class
+// of function).
+
+test('submitAskCapture\'s idempotency-replay branch never reroutes a capture-edit operation through resolveAskOperation/executeOperation -- it returns the already-persisted execution directly', () => {
+  const idx = orchestratorSource.indexOf('export async function submitAskCapture(');
+  assert.ok(idx > 0);
+  const previousCaptureIdx = orchestratorSource.indexOf('if (previousCapture) {', idx);
+  assert.ok(previousCaptureIdx > idx);
+  const guardIdx = orchestratorSource.indexOf(
+    "execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'",
+    previousCaptureIdx,
+  );
+  const resolveIdx = orchestratorSource.indexOf('resolveAskOperation(execution.message)', previousCaptureIdx);
+  assert.ok(guardIdx > previousCaptureIdx, 'expected a capture-edit guard inside the previousCapture (idempotency replay) branch');
+  assert.ok(guardIdx < resolveIdx, 'expected the capture-edit guard to come BEFORE the resolveAskOperation reroute, so it returns first for these three operations');
+  const guardBlock = orchestratorSource.slice(guardIdx, resolveIdx);
+  assert.match(guardBlock, /mapPersistedExecution\(execution, await propertySummary\(execution\.propertyId\)\)/);
+  assert.doesNotMatch(guardBlock, /executeOperation\(/, 'the capture-edit guard must return before ever calling executeOperation');
+});
+
+test('submitAskCapture\'s final save is a compare-and-swap on the execution\'s status as read at the top of the function, not an unconditional update -- a concurrent confirm cannot be silently clobbered', () => {
+  const idx = orchestratorSource.indexOf('export async function submitAskCapture(');
+  const txIdx = orchestratorSource.indexOf('await prisma.$transaction(async (tx) => {', idx);
+  assert.ok(txIdx > idx);
+  const txEnd = orchestratorSource.indexOf('askInlineCapturesTotal.inc(', txIdx);
+  const txBody = orchestratorSource.slice(txIdx, txEnd);
+  assert.match(txBody, /tx\.askExecution\.updateMany\(\{\s*\n\s*where: \{ id: execution\.id, status: execution\.status \}/);
+  assert.match(txBody, /if \(updated\.count !== 1\) \{/);
+  assert.match(txBody, /'ASK_CAPTURE_NOT_ACTIVE'/);
+  // The row is re-read inside the same transaction for the return value,
+  // since updateMany itself doesn't return the updated row.
+  assert.match(txBody, /return tx\.askExecution\.findUniqueOrThrow\(\{ where: \{ id: execution\.id \} \}\);/);
 });
