@@ -256,7 +256,12 @@ test('External review [P1]: buildAskNextActionsBlock derives and passes a source
 test('External review, second round: buildAskNextActionsBlock derives and passes relatedCapabilityIds into selectAskNextActionCapabilities', () => {
   const fnStart = askNextActionsSource.indexOf('export async function buildAskNextActionsBlock(');
   const fnBody = askNextActionsSource.slice(fnStart); // last declaration in the file
-  assert.match(fnBody, /const relatedCapabilityIds = explicitlyRelatedCapabilityIds\(currentCapabilityId\);/);
+  // Phase 6 review: relatedCapabilityIds is now the union of the
+  // just-answered capability's own related ids AND any active long-lived
+  // goal thread's -- see the dedicated Phase 6 tests below for the merge
+  // itself; this test just checks the value still reaches
+  // selectAskNextActionCapabilities.
+  assert.match(fnBody, /explicitlyRelatedCapabilityIds\(currentCapabilityId\)/);
   assert.match(fnBody, /relatedCapabilityIds,/);
 });
 
@@ -308,4 +313,53 @@ test('executeOperation computes recentCompletedCapabilityIds from the same sessi
   const secondQueryIdx = orchestratorSource.indexOf('await prisma.askExecution.findMany(', queryIdx + 1);
   const nextFunctionIdx = orchestratorSource.indexOf('\nfunction captureFallbackHref(', idx);
   assert.ok(secondQueryIdx === -1 || secondQueryIdx > nextFunctionIdx, 'expected no second askExecution.findMany call inside executeOperation for this purpose');
+});
+
+// External review, Phase 6 [P1] (FRD §8.5/§21): an active long-lived goal
+// thread never influenced next-action ranking -- AskSession.activeDecisionThreadId
+// had zero readers anywhere in the backend (confirmed by grep before this
+// fix). These are source-governance tests (activeSellHoldRentGoalRelatedCapabilityIds
+// is DB-touching -- sellHoldRentDecisionFamilyAdapter.selectThread -- with no
+// mock harness in this codebase for this class of function, same
+// established gap as buildAskNextActionsBlock's own getCapabilitySuggestions
+// call, per this file's own header comment).
+test('activeSellHoldRentGoalRelatedCapabilityIds uses selectThread (read-only), never createOrResumeThread, so next-action ranking can never create a thread as a side effect', () => {
+  const fnStart = askNextActionsSource.indexOf('async function activeSellHoldRentGoalRelatedCapabilityIds(');
+  assert.ok(fnStart > 0);
+  const fnBody = askNextActionsSource.slice(fnStart, askNextActionsSource.indexOf('\n}\n', fnStart) + 2);
+  assert.match(fnBody, /sellHoldRentDecisionFamilyAdapter\.selectThread\(propertyId, propertyId\)/);
+  assert.doesNotMatch(fnBody, /createOrResumeThread/);
+  assert.match(fnBody, /selection\.kind === 'UNIQUE'/);
+  // Never throws -- a lookup failure must not turn a successful answer into
+  // a failure, same fail-open convention as every other optional signal
+  // this module reads.
+  assert.match(fnBody, /catch \(error\)/);
+  assert.match(fnBody, /return new Set\(\);/);
+});
+
+test('activeSellHoldRentGoalRelatedCapabilityIds promotes sell-hold-rent AND seller-prep directly -- FRD §8.5 names both, and sell-hold-rent\'s own registry entry does not list seller-prep', () => {
+  const constIdx = askNextActionsSource.indexOf('const SELL_HOLD_RENT_GOAL_RELATED_CAPABILITY_IDS');
+  assert.ok(constIdx > 0);
+  const line = askNextActionsSource.slice(constIdx, askNextActionsSource.indexOf('\n', constIdx));
+  assert.match(line, /\['sell-hold-rent', 'seller-prep'\]/);
+});
+
+test('buildAskNextActionsBlock fetches suggestions, currentCapabilityId relations, and active-goal relations concurrently, then merges the latter two into one relatedCapabilityIds set', () => {
+  const fnStart = askNextActionsSource.indexOf('export async function buildAskNextActionsBlock(');
+  assert.ok(fnStart > 0);
+  const fnBody = askNextActionsSource.slice(fnStart);
+  assert.match(fnBody, /const \[response, currentCapabilityRelatedIds, activeGoalRelatedIds\] = await Promise\.all\(\[/);
+  assert.match(fnBody, /activeSellHoldRentGoalRelatedCapabilityIds\(input\.propertyId\)/);
+  assert.match(fnBody, /const relatedCapabilityIds = new Set\(\[\.\.\.currentCapabilityRelatedIds, \.\.\.activeGoalRelatedIds\]\);/);
+  assert.match(fnBody, /relatedCapabilityIds,\s*\n\s*\);/);
+});
+
+// This does NOT read AskSession.activeDecisionThreadId -- deliberately, per
+// activeSellHoldRentGoalRelatedCapabilityIds's own header comment (a
+// session-scoped cache would fail the "resumes correctly across a new
+// session" acceptance criterion this fix specifically serves).
+test('the active-goal promotion does not depend on AskSession.activeDecisionThreadId', () => {
+  const fnStart = askNextActionsSource.indexOf('async function activeSellHoldRentGoalRelatedCapabilityIds(');
+  const fnBody = askNextActionsSource.slice(fnStart, askNextActionsSource.indexOf('\n}\n', fnStart) + 2);
+  assert.doesNotMatch(fnBody, /activeDecisionThreadId/);
 });

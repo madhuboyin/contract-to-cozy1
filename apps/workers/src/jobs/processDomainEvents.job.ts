@@ -18,6 +18,7 @@ import {
 } from '@worker-shared/services/ask/captureLinkReconciliation';
 import {
   processAskExtractionRequestedEvent,
+  processGoalCandidateAttachEvent,
 } from '@worker-shared/services/ask/conversationalUnderstanding/conversationalCapture';
 import {
   processRadarNotificationMaterializeEvent,
@@ -46,6 +47,7 @@ export interface ProcessDomainEventsDeps {
   captureLinkReconcile?: typeof reconcileCaptureLink;
   askExtractionRequested?: typeof processAskExtractionRequestedEvent;
   radarNotificationMaterialize?: typeof processRadarNotificationMaterializeEvent;
+  goalCandidateAttach?: typeof processGoalCandidateAttachEvent;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -58,6 +60,7 @@ const defaultDeps: ProcessDomainEventsDeps = {
   captureLinkReconcile: reconcileCaptureLink,
   askExtractionRequested: processAskExtractionRequestedEvent,
   radarNotificationMaterialize: processRadarNotificationMaterializeEvent,
+  goalCandidateAttach: processGoalCandidateAttachEvent,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -356,6 +359,22 @@ function handleRadarNotificationMaterialize(ev: any, deps: ProcessDomainEventsDe
   });
 }
 
+// Ask Cozy Stage 3, Phase 6 review [P2] (FRD §21): goal-candidate
+// attachment (a DecisionThread create/resume + child AskExecution) is now
+// its own durable, retryable DomainEvent instead of best-effort work run
+// after the triggering ASK_EXTRACTION_REQUESTED event was already marked
+// PROCESSED -- see conversationalCapture.ts's processGoalCandidateAttachEvent
+// header comment for the full rationale. Self-completing (marks its own
+// event PROCESSED on success), same shape as ASK_EXTRACTION_REQUESTED's own
+// handler -- this file's own generic completion write below is guarded on
+// status still being PROCESSING, so it naturally no-ops here too.
+function handleGoalCandidateAttach(ev: any, deps: ProcessDomainEventsDeps) {
+  return (deps.goalCandidateAttach ?? processGoalCandidateAttachEvent)(
+    { id: ev.id, payload: ev.payload },
+    (ev.attempts ?? 0) + 1,
+  );
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -479,6 +498,9 @@ export async function processDomainEventsJob(
           break;
         case 'RADAR_NOTIFICATION_MATERIALIZE_REQUESTED':
           processingOutcome = await handleRadarNotificationMaterialize(ev, deps);
+          break;
+        case 'ASK_GOAL_CANDIDATE_ATTACH_REQUESTED':
+          processingOutcome = await handleGoalCandidateAttach(ev, deps);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

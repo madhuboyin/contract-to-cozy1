@@ -8,6 +8,8 @@ require('ts-node/register');
 const {
   runConversationalCaptureForTurn,
   isValidFactCandidateValue,
+  isValidGoalCandidate,
+  MIN_GOAL_EXTRACTION_CONFIDENCE,
   filterValidCandidates,
   buildChildExecutionData,
   buildEventContentParameters,
@@ -15,6 +17,7 @@ const {
   editCaptureFactCandidate,
   editCaptureEventCandidate,
   editCaptureWarrantyCandidate,
+  GoalCandidateAttachPayloadSchema,
 } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger call
@@ -116,11 +119,9 @@ test('persistCandidates always verifies the claim token and marks the DomainEven
   // go through the exact same unconditional path.
   assert.doesNotMatch(body, /markProcessed/);
   // Ask Cozy Stage 3, Phase 6: no longer a bare `return prisma.$transaction(...)`
-  // -- GOAL candidates (a materially different, confirmation-exempt path,
-  // see processGoalCandidates) are now processed after this transaction
-  // commits, so its result is captured into `created` first. The invariant
-  // this test actually checks (claim verification happens before marking
-  // PROCESSED, inside the same transaction) is unchanged.
+  // -- the transaction's result is destructured into `{ created, goalAttachEvents }`.
+  // The invariant this test actually checks (claim verification happens
+  // before marking PROCESSED, inside the same transaction) is unchanged.
   const txIdx = body.indexOf('await prisma.$transaction(async (tx) => {');
   assert.ok(txIdx > 0);
   const verifyIdx = body.indexOf('await verifyClaimStillOwned(tx, domainEventId, claimedAttempts);', txIdx);
@@ -132,6 +133,119 @@ test('persistCandidates always verifies the claim token and marks the DomainEven
   // path as the non-empty case (the review's "empty-result path also needs
   // claim-token verification" finding).
   assert.doesNotMatch(body, /if \(candidates\.length === 0\)/);
+});
+
+// External review, Phase 6 [P2] (FRD §21): goal-candidate attachment lost
+// the goal entirely on a crash/DB error, because the triggering
+// ASK_EXTRACTION_REQUESTED event was already marked PROCESSED (its own
+// payload already overwritten) by the time processGoalCandidate ran,
+// outside the transaction, with no retry path. Fixed with a durable,
+// retryable ASK_GOAL_CANDIDATE_ATTACH_REQUESTED DomainEvent per candidate,
+// created atomically inside the SAME transaction as the FACT/EVENT/WARRANTY
+// rows and the PROCESSED marking above -- these tests cover that ordering
+// and the new event's own claim/complete/fail lifecycle.
+test('requestGoalCandidateAttachment is called inside the transaction, before the PROCESSED marking, for each goal candidate', () => {
+  const idx = captureSource.indexOf('async function persistCandidates(');
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  const txIdx = body.indexOf('await prisma.$transaction(async (tx) => {');
+  const goalAttachLoopIdx = body.indexOf('await requestGoalCandidateAttachment(tx, candidate, index, input)', txIdx);
+  const processedIdx = body.indexOf("status: 'PROCESSED'", txIdx);
+  assert.ok(goalAttachLoopIdx > txIdx, 'goal-attach events must be requested inside the transaction');
+  assert.ok(processedIdx > goalAttachLoopIdx, 'the triggering event is marked PROCESSED only after goal-attach events are durably requested');
+});
+
+test('persistCandidates dispatches goal-attach events via claimAndProcessGoalAttachEvent after the transaction, not the old direct processGoalCandidates call', () => {
+  const idx = captureSource.indexOf('async function persistCandidates(');
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /await claimAndProcessGoalAttachEvent\(event\.id\)/);
+  assert.doesNotMatch(body, /processGoalCandidates\(/, 'the old batch function should no longer exist as a call site');
+});
+
+test('processGoalCandidateAttachEvent parses the durable payload, calls processGoalCandidate, and marks its own event PROCESSED guarded on claimedAttempts', () => {
+  const idx = captureSource.indexOf('export async function processGoalCandidateAttachEvent(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /GoalCandidateAttachPayloadSchema\.parse\(event\.payload\)/);
+  assert.match(body, /await processGoalCandidate\(candidate, payload\.index, input\)/);
+  assert.match(body, /where: \{ id: event\.id, attempts: claimedAttempts \}/);
+  assert.match(body, /status: 'PROCESSED'/);
+});
+
+test('claimAndProcessGoalAttachEvent claims PENDING -> PROCESSING before processing, and marks FAILED with backoff on failure -- never silently drops the event', () => {
+  const idx = captureSource.indexOf('async function claimAndProcessGoalAttachEvent(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /status: 'PENDING', availableAt: \{ lte: now \}/);
+  assert.match(body, /status: 'PROCESSING', attempts: \{ increment: 1 \}/);
+  assert.match(body, /status: 'FAILED'/);
+  assert.match(body, /availableAt: new Date\(Date\.now\(\) \+ 60_000\)/);
+});
+
+test('the new ASK_GOAL_CANDIDATE_ATTACH_REQUESTED event is idempotent per (parentExecutionId, index), the same deterministic-identity convention every other candidate-derived row uses', () => {
+  const idx = captureSource.indexOf('async function requestGoalCandidateAttachment(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /const idempotencyKey = `ask-goal-attach:\$\{input\.parentExecutionId\}:\$\{index\}`;/);
+  assert.match(body, /type: 'ASK_GOAL_CANDIDATE_ATTACH_REQUESTED' as any/);
+  assert.match(body, /status: 'PENDING'/);
+});
+
+test('GoalCandidateAttachPayloadSchema accepts a well-formed payload and rejects a malformed one, rather than trusting a stored DomainEvent.payload blindly', () => {
+  const valid = {
+    payloadVersion: 1,
+    parentExecutionId: 'execution-1',
+    index: 0,
+    userId: 'user-1',
+    sessionId: 'session-1',
+    propertyId: 'property-1',
+    contextVersion: 'v1',
+    candidate: {
+      decisionDefinitionId: 'SELL_HOLD_RENT',
+      timeframeLabel: 'next year',
+      sourceSentence: 'I am thinking about selling next year.',
+      extractionConfidence: 0.9,
+      attribution: 'FIRSTHAND',
+    },
+  };
+  assert.deepEqual(GoalCandidateAttachPayloadSchema.parse(valid), valid);
+  assert.doesNotThrow(() => GoalCandidateAttachPayloadSchema.parse({ ...valid, contextVersion: null, candidate: { ...valid.candidate, timeframeLabel: null } }));
+  assert.throws(() => GoalCandidateAttachPayloadSchema.parse({ ...valid, candidate: { ...valid.candidate, decisionDefinitionId: 'RENOVATION' } }));
+  assert.throws(() => GoalCandidateAttachPayloadSchema.parse({ ...valid, candidate: { ...valid.candidate, extractionConfidence: 1.5 } }));
+  assert.throws(() => GoalCandidateAttachPayloadSchema.parse({ ...valid, index: -1 }));
+});
+
+// External review, Phase 6 [P1] (FRD §21): "a GOAL candidate only
+// creates/attaches a thread when the pre-filter+extraction combination
+// reaches its normal confidence bar for the GOAL category" -- verified a
+// GOAL candidate with extractionConfidence: 0 previously passed schema and
+// candidate validation with no gate at all.
+test('isValidGoalCandidate enforces MIN_GOAL_EXTRACTION_CONFIDENCE -- a confidence-0 goal is rejected, avoiding a thread from a casual mention', () => {
+  const goal = (extractionConfidence) => ({ category: 'GOAL', decisionDefinitionId: 'SELL_HOLD_RENT', timeframeLabel: null, extractionConfidence, attribution: 'FIRSTHAND', sourceSentence: 'x' });
+  assert.equal(isValidGoalCandidate(goal(0)), false);
+  assert.equal(isValidGoalCandidate(goal(MIN_GOAL_EXTRACTION_CONFIDENCE - 0.01)), false);
+  assert.equal(isValidGoalCandidate(goal(MIN_GOAL_EXTRACTION_CONFIDENCE)), true);
+  assert.equal(isValidGoalCandidate(goal(1)), true);
+});
+
+test('filterValidCandidates drops a low-confidence GOAL candidate but keeps a valid one alongside it, preserving a later WARRANTY\'s linkedEventCandidateIndex', () => {
+  const lowConfidenceGoal = { category: 'GOAL', decisionDefinitionId: 'SELL_HOLD_RENT', timeframeLabel: null, extractionConfidence: 0, attribution: 'FIRSTHAND', sourceSentence: 'maybe someday' };
+  const validEvent = { category: 'EVENT', eventType: 'REPAIR', title: 'Roof repair', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const validWarranty = { category: 'WARRANTY', providerName: 'Acme', warrantyCategory: 'ROOFING', extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'z', linkedEventCandidateIndex: 1, durationMonths: 12 };
+  const filtered = filterValidCandidates([lowConfidenceGoal, validEvent, validWarranty]);
+  assert.equal(filtered.length, 2);
+  assert.equal(filtered[0].category, 'EVENT');
+  assert.equal(filtered[1].category, 'WARRANTY');
+  // The EVENT shifted from index 1 to index 0 once the GOAL was dropped --
+  // the WARRANTY's own link must have been remapped to follow it, not left
+  // pointing at its original (now-wrong) index.
+  assert.equal(filtered[1].linkedEventCandidateIndex, 0);
+});
+
+test('filterValidCandidates keeps a GOAL candidate at or above the confidence bar', () => {
+  const goodGoal = { category: 'GOAL', decisionDefinitionId: 'SELL_HOLD_RENT', timeframeLabel: 'next year', extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'I am thinking about selling next year.' };
+  const filtered = filterValidCandidates([goodGoal]);
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].category, 'GOAL');
 });
 
 test('persistCandidates filters candidates through filterValidCandidates before ever building a confirmation card', () => {

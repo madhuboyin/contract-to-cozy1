@@ -9470,6 +9470,16 @@ enum DomainEventType {
   // .materialize() synchronously in-process — see
   // radarNotificationMaterializationReconciliation.service.ts.
   RADAR_NOTIFICATION_MATERIALIZE_REQUESTED
+  // Ask Cozy Stage 3, Phase 6 review [P2] (FRD §21). Emitted atomically,
+  // inside persistCandidates's own transaction, alongside the
+  // ASK_EXTRACTION_REQUESTED completion write and the FACT/EVENT/WARRANTY
+  // rows it creates -- so DecisionThread attachment for a GOAL candidate is
+  // durable and retryable (standard PENDING/FAILED backoff/dead-letter,
+  // same as every other DomainEvent type) rather than a best-effort call
+  // made after that transaction had already committed and marked the
+  // triggering event PROCESSED. See conversationalCapture.ts's
+  // processGoalCandidateAttachEvent.
+  ASK_GOAL_CANDIDATE_ATTACH_REQUESTED
 }
 
 enum DomainEventStatus {

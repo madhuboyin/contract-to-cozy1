@@ -57,6 +57,8 @@ function fakeDeps({
   askExtractionRequestedShouldFail = false,
   radarNotificationMaterializeResult = { outcome: 'created', notificationId: 'notification-1' },
   radarNotificationMaterializeShouldFail = false,
+  goalCandidateAttachResult = { id: 'goal-execution-1' },
+  goalCandidateAttachShouldFail = false,
   // Code review finding (2026-09-13): simulate the redundant success
   // completion write itself failing (successCompletionShouldThrow) and/or
   // the row having already moved past PROCESSING by the time either write
@@ -75,6 +77,7 @@ function fakeDeps({
     captureLinkReconcile: [],
     askExtractionRequested: [],
     radarNotificationMaterialize: [],
+    goalCandidateAttach: [],
   };
 
   const deps = {
@@ -163,6 +166,11 @@ function fakeDeps({
       calls.radarNotificationMaterialize.push(event);
       if (radarNotificationMaterializeShouldFail) throw new Error('radar notification materialize handling failed');
       return radarNotificationMaterializeResult;
+    },
+    goalCandidateAttach: async (event, claimedAttempts) => {
+      calls.goalCandidateAttach.push({ event, claimedAttempts });
+      if (goalCandidateAttachShouldFail) throw new Error('goal candidate attach handling failed');
+      return goalCandidateAttachResult;
     },
   };
   return { deps, calls };
@@ -467,6 +475,68 @@ test('RADAR_NOTIFICATION_MATERIALIZE_REQUESTED reconciler failures use the share
   const terminal = calls.updates.find((u) => u.kind === 'terminal');
   assert.equal(terminal.args.data.status, 'FAILED');
   assert.match(terminal.args.data.lastError, /radar notification materialize handling failed/);
+});
+
+// External review, Phase 6 [P2] (FRD §21): goal-candidate attachment is now
+// its own durable, retryable DomainEvent (created atomically inside
+// persistCandidates's own transaction) instead of best-effort work run
+// after the triggering ASK_EXTRACTION_REQUESTED event was already marked
+// PROCESSED -- see conversationalCapture.ts's processGoalCandidateAttachEvent.
+test('processes an ASK_GOAL_CANDIDATE_ATTACH_REQUESTED event, passing the pre-claim attempts + 1 as claimedAttempts, mirroring ASK_EXTRACTION_REQUESTED\'s own contract', async () => {
+  const goalAttachEvent = eventFixture({
+    id: 'event-goal-attach-1',
+    type: 'ASK_GOAL_CANDIDATE_ATTACH_REQUESTED',
+    attempts: 0,
+    payload: {
+      payloadVersion: 1,
+      parentExecutionId: 'execution-1',
+      index: 0,
+      userId: 'user-1',
+      sessionId: 'session-1',
+      propertyId: 'property-1',
+      contextVersion: null,
+      candidate: {
+        decisionDefinitionId: 'SELL_HOLD_RENT',
+        timeframeLabel: 'next year',
+        sourceSentence: 'I am thinking about selling next year.',
+        extractionConfidence: 0.9,
+        attribution: 'FIRSTHAND',
+      },
+    },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [goalAttachEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.goalCandidateAttach.length, 1);
+  assert.equal(calls.goalCandidateAttach[0].claimedAttempts, 1);
+  assert.deepEqual(calls.goalCandidateAttach[0].event, { id: 'event-goal-attach-1', payload: goalAttachEvent.payload });
+  // In real Prisma, processGoalCandidateAttachEvent self-completes (marks
+  // its own event PROCESSED), and this file's generic completion write --
+  // guarded on status still being PROCESSING -- naturally no-ops on top of
+  // that, exactly like ASK_EXTRACTION_REQUESTED's own handler. This fake
+  // deps harness doesn't model that guard (the mock handler never touches
+  // prisma.domainEvent itself), so the generic write below still records,
+  // matching the ASK_EXTRACTION_REQUESTED test's own established assertion
+  // shape.
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+});
+
+test('ASK_GOAL_CANDIDATE_ATTACH_REQUESTED handler failures use the shared retry/dead-letter path', async () => {
+  const goalAttachEvent = eventFixture({
+    type: 'ASK_GOAL_CANDIDATE_ATTACH_REQUESTED',
+    payload: { payloadVersion: 1, parentExecutionId: 'execution-1', index: 0, userId: 'user-1', sessionId: 'session-1', propertyId: 'property-1', contextVersion: null, candidate: { decisionDefinitionId: 'SELL_HOLD_RENT', timeframeLabel: null, sourceSentence: 'x', extractionConfidence: 0.9, attribution: 'FIRSTHAND' } },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [goalAttachEvent], goalCandidateAttachShouldFail: true });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /goal candidate attach handling failed/);
 });
 
 test('processes an ASK_EXTRACTION_REQUESTED event, passing the pre-claim attempts + 1 as claimedAttempts', async () => {

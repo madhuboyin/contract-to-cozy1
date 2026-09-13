@@ -27,7 +27,7 @@ import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFr
 import type { AskOperationResult } from '../askOperationRegistry';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
 import { runStructuredExtraction, type RecentHomeEventContext } from './extractionContract';
-import { filterCandidatesPreservingWarrantyLinks, splitGoalCandidates } from './extractionCandidateSchema';
+import { ExtractionAttributionSchema, filterCandidatesPreservingWarrantyLinks, splitGoalCandidates } from './extractionCandidateSchema';
 import type { CaptureConfirmExtractionCandidate, EventExtractionCandidate, ExtractionCandidate, FactExtractionCandidate, GoalExtractionCandidate, WarrantyExtractionCandidate } from './extractionCandidateSchema';
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). None of
 // these three create a circular import: SellHoldRentService,
@@ -883,6 +883,34 @@ async function verifyClaimStillOwned(tx: Prisma.TransactionClient, domainEventId
   }
 }
 
+// External review, Phase 6 [P1] (FRD §21): "a GOAL candidate only
+// creates/attaches a thread when the pre-filter+extraction combination
+// reaches its normal confidence bar for the GOAL category" -- verified no
+// such bar existed anywhere before this fix: a GOAL candidate with
+// `extractionConfidence: 0` passed schema validation
+// (GoalExtractionCandidateSchema only bounds it to [0, 1]) and
+// `filterValidCandidates` below, straight through to
+// `processGoalCandidate` creating/attaching a real `DecisionThread`.
+// `extractionConfidence` is captured and stored for every category
+// (parametersJson, audit-only today) but was never gated against for
+// FACT/EVENT/WARRANTY either, so there was no existing numeric convention
+// to reuse. This bar is scoped to GOAL specifically because GOAL is the
+// one category exempt from the confirmation gate entirely (§21's own
+// "reversible at zero cost" materiality carve-out) -- for FACT/EVENT/
+// WARRANTY, a low-confidence candidate still reaches a homeowner-reviewed
+// Save card before anything is written; for GOAL, this bar is the ONLY
+// safeguard standing between a casual mention and a real write.
+// `MIN_GOAL_EXTRACTION_CONFIDENCE` is a deliberate, documented choice (not
+// derived from an existing evaluated number, since none exists in this
+// codebase) -- majority-confidence, consistent with "avoid one thread per
+// casual mention."
+export const MIN_GOAL_EXTRACTION_CONFIDENCE = 0.6;
+
+// Exported for direct unit testing (pure, no I/O).
+export function isValidGoalCandidate(candidate: GoalExtractionCandidate): boolean {
+  return candidate.extractionConfidence >= MIN_GOAL_EXTRACTION_CONFIDENCE;
+}
+
 // Code review finding (2026-09-13): a FACT candidate's value was never
 // checked before being turned into a confirmation card -- filtering it here
 // (before persistCandidates opens its transaction) means an invalid value
@@ -891,12 +919,16 @@ async function verifyClaimStillOwned(tx: Prisma.TransactionClient, domainEventId
 // Exported for direct unit testing (pure, no I/O).
 export function filterValidCandidates(candidates: ExtractionCandidate[]): ExtractionCandidate[] {
   // filterCandidatesPreservingWarrantyLinks, not a plain .filter(): dropping
-  // an invalid FACT candidate shifts every later candidate's array
+  // an invalid FACT/GOAL candidate shifts every later candidate's array
   // position, which would otherwise silently invalidate a WARRANTY
   // candidate's linkedEventCandidateIndex elsewhere in this same batch.
   return filterCandidatesPreservingWarrantyLinks(
     candidates,
-    (candidate) => candidate.category !== 'FACT' || isValidFactCandidateValue(candidate),
+    (candidate) => {
+      if (candidate.category === 'FACT') return isValidFactCandidateValue(candidate);
+      if (candidate.category === 'GOAL') return isValidGoalCandidate(candidate);
+      return true;
+    },
   );
 }
 
@@ -918,6 +950,35 @@ export function filterValidCandidates(candidates: ExtractionCandidate[]): Extrac
 // duration of both, for zero atomicity benefit -- these writes have no
 // correctness dependency on the FACT/EVENT/WARRANTY rows created alongside
 // them in the same turn.
+//
+// External review, Phase 6 [P2]: this function (processGoalCandidate) does
+// the actual thread-attachment work for exactly one candidate and stays
+// unchanged in shape -- what changed is HOW it gets called. It used to be
+// invoked directly, outside persistCandidates's transaction, with failures
+// logged and dropped ("accepted, precedented loss") -- but by the time it
+// ran, the triggering ASK_EXTRACTION_REQUESTED event was ALREADY marked
+// PROCESSED and its own payload (the message needed to re-extract) already
+// overwritten, so a crash or DB error here had no retry path at all, not
+// even the whole-turn re-extraction fallback every other failure in this
+// pipeline gets. Fixed with the same durable-DomainEvent pattern this
+// program already uses for exactly this class of problem
+// (radarNotificationMaterializationReconciliation.service.ts's own header
+// comment documents the identical rationale): a new
+// ASK_GOAL_CANDIDATE_ATTACH_REQUESTED event, carrying the already-parsed
+// candidate content (no re-extraction needed), is created ATOMICALLY inside
+// persistCandidates's own transaction -- see requestGoalCandidateAttachment
+// below -- so the durable INTENT to attach this goal is committed in the
+// same all-or-nothing unit as the FACT/EVENT/WARRANTY rows and the
+// ASK_EXTRACTION_REQUESTED completion write, never lost even if everything
+// after that transaction crashes. processGoalCandidateAttachEvent (below)
+// is the new entry point that actually calls this function and only marks
+// its OWN event PROCESSED once thread attachment and this candidate's
+// child AskExecution both fully succeed -- a failure leaves that event
+// PENDING/FAILED, picked up by the worker's own standard backoff/retry
+// poller exactly like every other DomainEvent type, never silently lost.
+// FACT/EVENT/WARRANTY rows remain independently, atomically committed by
+// the transaction above regardless of what happens to any goal-attach
+// event afterward -- unchanged from before this fix.
 
 const SELL_HOLD_RENT_WORKSPACE_HREF = (propertyId: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
 const SELLER_PREP_HREF = (propertyId: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
@@ -1074,19 +1135,171 @@ async function processGoalCandidate(
   });
 }
 
-async function processGoalCandidates(
-  goalCandidates: GoalExtractionCandidate[],
+// External review, Phase 6 [P2]: the durable payload for
+// ASK_GOAL_CANDIDATE_ATTACH_REQUESTED -- deliberately a bare, already-parsed
+// copy of the exact fields processGoalCandidate needs (never a live
+// GoalExtractionCandidate object, which cannot survive a JSON round-trip
+// through DomainEvent.payload as-is), so processing this event never needs
+// to re-run extraction. Mirrors radarNotificationMaterializationReconciliation
+// .service.ts's own payload-schema convention (a plain, versioned Zod
+// object, parsed defensively on read).
+export const GoalCandidateAttachPayloadSchema = z.object({
+  payloadVersion: z.literal(1),
+  parentExecutionId: z.string().trim().min(1),
+  index: z.number().int().nonnegative(),
+  userId: z.string().trim().min(1),
+  sessionId: z.string().trim().min(1),
+  propertyId: z.string().trim().min(1),
+  contextVersion: z.string().trim().min(1).nullable(),
+  candidate: z.object({
+    decisionDefinitionId: z.literal('SELL_HOLD_RENT'),
+    timeframeLabel: z.string().trim().min(1).max(60).nullable(),
+    sourceSentence: z.string().trim().min(1).max(500),
+    extractionConfidence: z.number().min(0).max(1),
+    attribution: ExtractionAttributionSchema,
+  }),
+});
+
+/**
+ * Creates the durable ASK_GOAL_CANDIDATE_ATTACH_REQUESTED event for one
+ * GOAL candidate, inside the caller's own transaction -- called from
+ * persistCandidates's transaction, so this event's existence is committed
+ * atomically with the FACT/EVENT/WARRANTY rows and the triggering
+ * ASK_EXTRACTION_REQUESTED completion write. Idempotent on
+ * (parentExecutionId, index), the same deterministic-identity convention
+ * every other candidate-derived row in this file already uses.
+ */
+async function requestGoalCandidateAttachment(
+  tx: Prisma.TransactionClient,
+  candidate: GoalExtractionCandidate,
+  index: number,
   input: ConversationalCaptureInput,
-): Promise<PersistedCaptureExecution[]> {
-  const results: PersistedCaptureExecution[] = [];
-  for (const [index, candidate] of goalCandidates.entries()) {
-    try {
-      results.push(await processGoalCandidate(candidate, index, input));
-    } catch (error) {
-      logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] goal candidate processing failed');
-    }
+): Promise<{ id: string }> {
+  const idempotencyKey = `ask-goal-attach:${input.parentExecutionId}:${index}`;
+  const payload: z.infer<typeof GoalCandidateAttachPayloadSchema> = {
+    payloadVersion: 1,
+    parentExecutionId: input.parentExecutionId,
+    index,
+    userId: input.userId,
+    sessionId: input.sessionId,
+    propertyId: input.propertyId,
+    contextVersion: input.contextVersion,
+    candidate: {
+      decisionDefinitionId: candidate.decisionDefinitionId,
+      timeframeLabel: candidate.timeframeLabel ?? null,
+      sourceSentence: candidate.sourceSentence,
+      extractionConfidence: candidate.extractionConfidence,
+      attribution: candidate.attribution,
+    },
+  };
+  return tx.domainEvent.upsert({
+    where: { idempotencyKey },
+    create: {
+      type: 'ASK_GOAL_CANDIDATE_ATTACH_REQUESTED' as any,
+      status: 'PENDING',
+      propertyId: input.propertyId,
+      userId: input.userId,
+      idempotencyKey,
+      payload: payload as unknown as Prisma.InputJsonValue,
+    },
+    update: {},
+  });
+}
+
+/**
+ * The actual attachment work for one ASK_GOAL_CANDIDATE_ATTACH_REQUESTED
+ * event -- exported for the workers app's own consumer
+ * (processDomainEvents.job.ts), mirroring processAskExtractionRequestedEvent's
+ * own dual-path shape exactly: this function does the real work given an
+ * ALREADY-CLAIMED event (claimedAttempts supplied by the caller's own claim
+ * step), and marks it PROCESSED itself -- self-completing, like
+ * processAskExtractionRequestedEvent's own handler -- rather than relying
+ * on a generic post-handler write, so both the inline caller below and the
+ * worker's generic dispatch loop (whose own completion write is guarded on
+ * status still being PROCESSING, so it naturally no-ops here exactly like
+ * it already does for ASK_EXTRACTION_REQUESTED) converge safely. Retrying
+ * this event after a partial prior attempt is safe without any extra claim-
+ * token machinery: processGoalCandidate is itself idempotent on
+ * clientRequestId (its own existing-row check), and
+ * sellHoldRentDecisionFamilyAdapter.createOrResumeThread already recovers
+ * from a concurrent-create race via its own P2002 catch (confirmed by
+ * reading domainSnapshotAdapters.ts before relying on it here) -- so two
+ * concurrent attempts at the same event converge on the same thread and the
+ * same child execution rather than duplicating either.
+ */
+export async function processGoalCandidateAttachEvent(
+  event: { id: string; payload: unknown },
+  claimedAttempts: number,
+): Promise<PersistedCaptureExecution> {
+  const payload = GoalCandidateAttachPayloadSchema.parse(event.payload);
+  const candidate: GoalExtractionCandidate = {
+    category: 'GOAL',
+    decisionDefinitionId: payload.candidate.decisionDefinitionId,
+    timeframeLabel: payload.candidate.timeframeLabel,
+    sourceSentence: payload.candidate.sourceSentence,
+    extractionConfidence: payload.candidate.extractionConfidence,
+    attribution: payload.candidate.attribution,
+  };
+  const input: ConversationalCaptureInput = {
+    userId: payload.userId,
+    sessionId: payload.sessionId,
+    propertyId: payload.propertyId,
+    parentExecutionId: payload.parentExecutionId,
+    // processGoalCandidate never reads input.message (it uses the
+    // candidate's own sourceSentence for the child execution's message/
+    // preview text) -- filled in only to satisfy ConversationalCaptureInput's
+    // shape, which other candidate categories do need this for.
+    message: candidate.sourceSentence,
+    contextVersion: payload.contextVersion,
+    skipDueToRoutedCapture: false,
+  };
+  const execution = await processGoalCandidate(candidate, payload.index, input);
+  await prisma.domainEvent.updateMany({
+    where: { id: event.id, attempts: claimedAttempts },
+    data: { status: 'PROCESSED', processedAt: new Date(), processingStartedAt: null, leaseExpiresAt: null },
+  });
+  return execution;
+}
+
+/**
+ * The inline half of the goal-attachment durability fix: claims and
+ * attempts one ASK_GOAL_CANDIDATE_ATTACH_REQUESTED event right after
+ * persistCandidates's own transaction commits -- a pure responsiveness
+ * optimization (the homeowner sees the thread-attachment result in this
+ * same turn when it succeeds within budget), never a correctness
+ * dependency. A lost claim race, a failure, or simply running out of the
+ * outer ~1.5s budget (runConversationalCaptureForTurn's own Promise.race)
+ * all leave the event PENDING/PROCESSING for the worker's own poller to
+ * pick up later via the standard backoff/dead-letter contract -- never
+ * silently dropped. Returns `null` rather than throwing so one event's
+ * failure can never prevent another's inline attempt in the same turn.
+ */
+async function claimAndProcessGoalAttachEvent(eventId: string): Promise<PersistedCaptureExecution | null> {
+  const now = new Date();
+  const claimed = await prisma.domainEvent.updateMany({
+    where: { id: eventId, status: 'PENDING', availableAt: { lte: now } },
+    data: { status: 'PROCESSING', attempts: { increment: 1 }, processingStartedAt: now, leaseExpiresAt: new Date(now.getTime() + DOMAIN_EVENT_LEASE_MS) },
+  });
+  if (claimed.count !== 1) return null;
+  const claimedRow = await prisma.domainEvent.findUnique({ where: { id: eventId }, select: { attempts: true, payload: true } });
+  if (!claimedRow) return null;
+  const claimedAttempts = claimedRow.attempts;
+  try {
+    return await processGoalCandidateAttachEvent({ id: eventId, payload: claimedRow.payload }, claimedAttempts);
+  } catch (error) {
+    logger.warn({ error, eventId }, '[ask-conversational-capture] inline goal-candidate attach attempt failed; leaving for worker retry');
+    await prisma.domainEvent.updateMany({
+      where: { id: eventId, attempts: claimedAttempts },
+      data: {
+        status: 'FAILED',
+        lastError: error instanceof Error ? error.message.slice(0, 2000) : 'Unknown error',
+        availableAt: new Date(Date.now() + 60_000),
+        processingStartedAt: null,
+        leaseExpiresAt: null,
+      },
+    }).catch(() => undefined);
+    return null;
   }
-  return results;
 }
 
 /**
@@ -1115,14 +1328,18 @@ async function persistCandidates(
 ): Promise<PersistedCaptureExecution[]> {
   const validCandidates = filterValidCandidates(rawCandidates);
   // Ask Cozy Stage 3, Phase 6: GOAL candidates are split out here, before
-  // the transaction below, and processed separately afterward (see
-  // processGoalCandidates's own header comment for why they must not run
-  // inside that transaction). filterCandidatesPreservingWarrantyLinks (used
-  // for the non-GOAL side, via splitGoalCandidates) keeps every remaining
-  // WARRANTY's linkedEventCandidateIndex correct against the array the
-  // existing loop below actually iterates -- a plain filter would silently
-  // break that index if a GOAL candidate happened to sit before a
-  // WARRANTY/EVENT pair in the same extraction batch.
+  // the transaction below, and given their own durable
+  // ASK_GOAL_CANDIDATE_ATTACH_REQUESTED events INSIDE that same transaction
+  // (requestGoalCandidateAttachment, below) rather than being processed
+  // directly against a live DecisionThread write -- see
+  // processGoalCandidateAttachEvent's own header comment for the full
+  // rationale (a durable-event fix for a real "goal work lost on crash"
+  // gap). filterCandidatesPreservingWarrantyLinks (used for the non-GOAL
+  // side, via splitGoalCandidates) keeps every remaining WARRANTY's
+  // linkedEventCandidateIndex correct against the array the existing loop
+  // below actually iterates -- a plain filter would silently break that
+  // index if a GOAL candidate happened to sit before a WARRANTY/EVENT pair
+  // in the same extraction batch.
   const { nonGoalCandidates: candidates, goalCandidates: rawGoalCandidates } = splitGoalCandidates(validCandidates);
   // Ask Cozy Stage 3, Phase 6: a second, dedicated flag on top of
   // askConversationalCaptureEnabled (already gating this whole pipeline's
@@ -1135,7 +1352,7 @@ async function persistCandidates(
   // at either call site individually.
   const goalCandidates = readAskOperationalControls().askGoalCaptureEnabled ? rawGoalCandidates : [];
   const now = new Date();
-  const created = await prisma.$transaction(async (tx) => {
+  const { created, goalAttachEvents } = await prisma.$transaction(async (tx) => {
     // Applied even for zero candidates (code review finding, 2026-09-13):
     // a stale attempt whose claim was already reclaimed must not mark the
     // event PROCESSED out from under the attempt that reclaimed it.
@@ -1181,6 +1398,17 @@ async function persistCandidates(
       await tx.askExecution.update({ where: { id: warrantyExecution.id }, data: { linkedExecutionId: eventExecution.id } });
     }
 
+    // External review, Phase 6 [P2]: each GOAL candidate's own durable
+    // attachment intent is created HERE, inside this same transaction --
+    // committed atomically with the FACT/EVENT/WARRANTY rows above and the
+    // ASK_EXTRACTION_REQUESTED completion write below, so a crash after
+    // this transaction commits can never lose a goal candidate outright
+    // (see requestGoalCandidateAttachment's own header comment).
+    const goalAttachEvents: { id: string }[] = [];
+    for (const [index, candidate] of goalCandidates.entries()) {
+      goalAttachEvents.push(await requestGoalCandidateAttachment(tx, candidate, index, input));
+    }
+
     await tx.domainEvent.update({
       where: { id: domainEventId },
       data: {
@@ -1188,24 +1416,28 @@ async function persistCandidates(
         processedAt: new Date(),
         processingStartedAt: null,
         leaseExpiresAt: null,
-        payload: { processingOutcome: { candidateCount: created.length + goalCandidates.length } },
+        payload: { processingOutcome: { candidateCount: created.length + goalAttachEvents.length } },
       },
     });
-    return created;
+    return { created, goalAttachEvents };
   });
 
-  // Outside the transaction above, deliberately (see this function's own
-  // header comment) -- a GOAL candidate failure here can never roll back or
-  // otherwise affect the FACT/EVENT/WARRANTY rows already committed, and
-  // vice versa. The DomainEvent is already marked PROCESSED by this point,
-  // so a failure here is accepted, precedented loss (this whole pipeline's
-  // own "a missed trigger only loses conversational capture for that turn"
-  // fail-safe principle, extended to "one candidate category's failure
-  // never costs another's already-committed result") rather than retried --
-  // DecisionThread attachment is cheap to re-trigger from a later message
-  // mentioning the same intent, unlike a FACT/EVENT/WARRANTY capture the
-  // homeowner has no reason to repeat.
-  const goalExecutions = await processGoalCandidates(goalCandidates, input);
+  // Outside the transaction above, deliberately (see processGoalCandidate's
+  // own header comment for why the actual thread-attachment work -- as
+  // opposed to the durable intent to do it, created inside the transaction
+  // above -- must not run inside it). This is now a pure responsiveness
+  // optimization, not the only chance this goal candidate gets: each
+  // event's own claim/complete/fail lifecycle (claimAndProcessGoalAttachEvent)
+  // means a failure or a crash here leaves it PENDING/FAILED for the
+  // worker's own poller to retry per the standard backoff/dead-letter
+  // contract, never silently lost -- unlike this function's previous
+  // design, where the triggering event was already PROCESSED (its payload
+  // already overwritten) by the time this ran.
+  const goalExecutions: PersistedCaptureExecution[] = [];
+  for (const event of goalAttachEvents) {
+    const execution = await claimAndProcessGoalAttachEvent(event.id);
+    if (execution) goalExecutions.push(execution);
+  }
   return [...created, ...goalExecutions];
 }
 

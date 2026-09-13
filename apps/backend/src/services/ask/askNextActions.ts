@@ -81,6 +81,8 @@ import { canonicalCapabilityRegistry, type CapabilityExplicitSourceContext, type
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import { ASK_OPERATION_CAPABILITY } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import type { AskOperationId } from './askOperationRegistry';
+import { sellHoldRentDecisionFamilyAdapter } from '../decisionPlatform/domainSnapshotAdapters';
+import { logger } from '../../lib/logger';
 
 // FRD §27's own cited convention ("max shown: reuse the existing max-5
 // convention... askNotificationContinuation's resultJson.suggestions").
@@ -121,6 +123,59 @@ export function explicitlyRelatedCapabilityIds(
   if (!currentCapabilityId) return new Set();
   const capability = canonicalCapabilityRegistry.getById(currentCapabilityId);
   return new Set(capability?.recommendation.explicitRelatedCapabilityIds ?? []);
+}
+
+// External review, Phase 6 (FRD §8.5/§21; implementation plan §12): an
+// active long-lived goal thread never influenced next-action ranking at
+// all -- `AskSession.activeDecisionThreadId` (the field
+// `conversationalCapture.ts`'s `processGoalCandidate` writes) had zero
+// readers anywhere in the backend, confirmed by grep before writing this.
+// FRD §8.5's own scenario is explicit: "next-action scan biased toward the
+// active thread surfaces Seller Prep/sell-hold-rent capabilities... without
+// the homeowner needing to know either exists" -- and Phase 4's own header
+// comment above already named this exact gap ("there is no existing
+// DecisionThread-aware sourceContext kind... left as explicit, undone
+// follow-up (candidate for Phase 6...)").
+//
+// Deliberately does NOT read `AskSession.activeDecisionThreadId` -- that
+// field is session-scoped, and the acceptance criterion this fix serves
+// ("resumes correctly across a new session") requires exactly the opposite:
+// a brand-new session has no cached value yet, so relying on it would fail
+// the one case this fix most needs to cover. Uses
+// `sellHoldRentDecisionFamilyAdapter.selectThread` instead -- the SAME
+// canonical, property-scoped `activeIdentityKey` lookup
+// `createOrResumeThread` already resolves against
+// (`snapshotDecisionFamilyAdapter.ts`), confirmed genuinely read-only (a
+// `findMany` plus one freshness read, no writes) before reusing it here for
+// a presentational ranking signal. Returns the sell-hold-rent goal's own
+// directly-named related capabilities (not `explicitRelatedCapabilityIds`'s
+// indirection -- `'sell-hold-rent'`'s own registry entry does not list
+// `'seller-prep'` directly, but FRD §8.5 names both explicitly) whenever an
+// active thread exists for this property, regardless of whether the
+// just-answered operation had anything to do with selling -- an active
+// long-lived goal is exactly the kind of standing context that should bias
+// ranking on ANY turn, not only a sell/hold/rent-routed one.
+//
+// Left explicitly out of scope, not silently dropped: this closes the
+// next-action-ranking half of "Extraction and next-action ranking also
+// receive no active thread state" -- the EXTRACTION half (biasing what
+// counts as a GOAL-shaped follow-up, or resolving a vague reply against the
+// active thread without repeating the goal statement) is a materially
+// different, larger change to the pre-filter/routing layer, not attempted
+// here.
+const SELL_HOLD_RENT_GOAL_RELATED_CAPABILITY_IDS = ['sell-hold-rent', 'seller-prep'] as const;
+
+async function activeSellHoldRentGoalRelatedCapabilityIds(propertyId: string): Promise<ReadonlySet<string>> {
+  try {
+    const selection = await sellHoldRentDecisionFamilyAdapter.selectThread(propertyId, propertyId);
+    return selection.kind === 'UNIQUE' ? new Set(SELL_HOLD_RENT_GOAL_RELATED_CAPABILITY_IDS) : new Set();
+  } catch (error) {
+    // Never let this presentational ranking signal turn a successful answer
+    // into a failure -- same fail-open convention as every other optional
+    // signal buildAskNextActionsBlock reads.
+    logger.warn({ error, propertyId }, '[ask-next-actions] active sell-hold-rent thread lookup failed');
+    return new Set();
+  }
 }
 
 /**
@@ -259,14 +314,18 @@ export async function buildAskNextActionsBlock(input: {
 }): Promise<AskPresentationBlock | null> {
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operationId];
   const sourceContext = deriveAskNextActionsSourceContext(input.launchContext);
-  const relatedCapabilityIds = explicitlyRelatedCapabilityIds(currentCapabilityId);
-  const response = await getCapabilitySuggestions({
-    propertyId: input.propertyId,
-    userId: input.userId,
-    surface: 'RELATED',
-    limit: CAPABILITY_SUGGESTIONS_FETCH_LIMIT,
-    sourceContext,
-  });
+  const [response, currentCapabilityRelatedIds, activeGoalRelatedIds] = await Promise.all([
+    getCapabilitySuggestions({
+      propertyId: input.propertyId,
+      userId: input.userId,
+      surface: 'RELATED',
+      limit: CAPABILITY_SUGGESTIONS_FETCH_LIMIT,
+      sourceContext,
+    }),
+    Promise.resolve(explicitlyRelatedCapabilityIds(currentCapabilityId)),
+    activeSellHoldRentGoalRelatedCapabilityIds(input.propertyId),
+  ]);
+  const relatedCapabilityIds = new Set([...currentCapabilityRelatedIds, ...activeGoalRelatedIds]);
   const capabilities = selectAskNextActionCapabilities(
     response.suggestions,
     currentCapabilityId,
@@ -283,7 +342,9 @@ export async function buildAskNextActionsBlock(input: {
     // (no answer content ever fed ranking). External review, second round:
     // widened to also cover the explicit-related-capability promotion
     // above, which is genuinely "ranked for what you just did" even with
-    // no launch context.
+    // no launch context. Phase 6 review: also true whenever an active
+    // long-lived goal thread biased the ranking, independent of the
+    // just-answered operation.
     description: (sourceContext || relatedCapabilityIds.size > 0)
       ? 'Ranked for what you just did, from your live capability registry.'
       : 'From your live capability registry, prioritized for this property.',

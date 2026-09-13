@@ -227,9 +227,10 @@ export function filterCandidatesPreservingWarrantyLinks(
 }
 
 // Ask Cozy Stage 3, Phase 6. GOAL candidates are processed on a materially
-// different path than FACT/EVENT/WARRANTY (immediate, confirmation-exempt
-// DecisionThread attachment rather than a NEEDS_CONFIRMATION child
-// execution -- see conversationalCapture.ts's processGoalCandidates), so
+// different path than FACT/EVENT/WARRANTY (a durable, retryable
+// ASK_GOAL_CANDIDATE_ATTACH_REQUESTED event rather than a NEEDS_CONFIRMATION
+// child execution -- see conversationalCapture.ts's
+// requestGoalCandidateAttachment/processGoalCandidateAttachEvent), so
 // they are split out of the batch before that existing per-candidate loop
 // runs. Uses filterCandidatesPreservingWarrantyLinks for the non-GOAL side
 // specifically because removing GOAL candidates (which can appear anywhere
