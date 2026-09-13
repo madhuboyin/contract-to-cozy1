@@ -26,8 +26,9 @@ const {
 test('every Ask operation has a complete governed definition', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
   // 67 from Phase 1's original inventory + CAPTURE_FACT_CONFIRM/
-  // CAPTURE_EVENT_CONFIRM (Phase 2, implementation plan §8; FRD §19/§20).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 69);
+  // CAPTURE_EVENT_CONFIRM (Phase 2, implementation plan §8; FRD §19/§20) +
+  // CAPTURE_WARRANTY_CONFIRM (Phase 3 warranty capture writer, §9/§22).
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 70);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -42,8 +43,9 @@ test('every material Ask command has governed confirmation, authorization, cance
   // still passes for it. The compiler already ties the registry to
   // ASK_DOMAIN_COMMAND_IDS one-to-one; this catches an unreviewed addition.
   // 25 from Phase 2's original if/else-chain migration + CAPTURE_FACT_CONFIRM/
-  // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20).
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 27);
+  // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20)
+  // + CAPTURE_WARRANTY_CONFIRM (Phase 3 warranty capture writer, §9/§22).
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 28);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

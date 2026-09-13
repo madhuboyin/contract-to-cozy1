@@ -11,6 +11,7 @@ const {
   filterValidCandidates,
   buildChildExecutionData,
   buildEventContentParameters,
+  resolveWarrantyDates,
 } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger call
@@ -237,4 +238,81 @@ test('buildChildExecutionData sets correctingEventId to null (not undefined) for
   const data = buildChildExecutionData(newCandidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
   assert.equal(data.parametersJson.correctingEventId, null);
   assert.match(data.resultJson.confirmation.title, /^Add /);
+});
+
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan §9/§22).
+
+function warrantyCandidate(overrides = {}) {
+  return {
+    category: 'WARRANTY', providerName: 'Carrier', warrantyCategory: 'HVAC',
+    extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'We installed a new furnace last month, it has a 10 year warranty from Carrier.',
+    linkedEventCandidateIndex: 0, durationMonths: 120,
+    ...overrides,
+  };
+}
+
+test('resolveWarrantyDates: an explicit expiryDate is used as-is', () => {
+  const { startDate, expiryDate } = resolveWarrantyDates(
+    warrantyCandidate({ startDate: '2026-08-01T00:00:00.000Z', durationMonths: undefined, expiryDate: '2036-08-01T00:00:00.000Z' }),
+    null,
+    new Date('2026-09-13T00:00:00.000Z'),
+  );
+  assert.equal(startDate.toISOString(), '2026-08-01T00:00:00.000Z');
+  assert.equal(expiryDate.toISOString(), '2036-08-01T00:00:00.000Z');
+});
+
+test('resolveWarrantyDates: durationMonths computes expiryDate from startDate when expiryDate is not stated', () => {
+  const { startDate, expiryDate } = resolveWarrantyDates(
+    warrantyCandidate({ startDate: '2026-08-01T00:00:00.000Z', durationMonths: 120 }),
+    null,
+    new Date('2026-09-13T00:00:00.000Z'),
+  );
+  assert.equal(startDate.toISOString(), '2026-08-01T00:00:00.000Z');
+  assert.equal(expiryDate.getUTCFullYear(), 2036);
+  assert.equal(expiryDate.getUTCMonth(), startDate.getUTCMonth());
+});
+
+test('resolveWarrantyDates: startDate defaults to the paired EVENT candidate\'s occurredAt when the warranty does not separately state one', () => {
+  const linkedEvent = { category: 'EVENT', occurredAt: '2026-08-15T00:00:00.000Z', dateRangeStart: null };
+  const { startDate } = resolveWarrantyDates(warrantyCandidate({ startDate: undefined }), linkedEvent, new Date('2026-09-13T00:00:00.000Z'));
+  assert.equal(startDate.toISOString(), '2026-08-15T00:00:00.000Z');
+});
+
+test('resolveWarrantyDates: falls back to the paired EVENT\'s dateRangeStart, then now, when neither the warranty nor the event has an occurredAt', () => {
+  const linkedEvent = { category: 'EVENT', occurredAt: null, dateRangeStart: '2026-06-01T00:00:00.000Z' };
+  const { startDate } = resolveWarrantyDates(warrantyCandidate({ startDate: undefined }), linkedEvent, new Date('2026-09-13T00:00:00.000Z'));
+  assert.equal(startDate.toISOString(), '2026-06-01T00:00:00.000Z');
+
+  const { startDate: fallbackToNow } = resolveWarrantyDates(warrantyCandidate({ startDate: undefined }), null, new Date('2026-09-13T00:00:00.000Z'));
+  assert.equal(fallbackToNow.toISOString(), '2026-09-13T00:00:00.000Z');
+});
+
+test('buildChildExecutionData: a WARRANTY candidate produces a CAPTURE_WARRANTY_CONFIRM child with the resolved dates in its parameters', () => {
+  const input = { userId: 'u1', sessionId: 's1', propertyId: 'p1', parentExecutionId: 'e1', message: 'irrelevant', contextVersion: null, skipDueToRoutedCapture: false };
+  const linkedEvent = { category: 'EVENT', occurredAt: '2026-08-15T00:00:00.000Z', dateRangeStart: null };
+  const candidate = warrantyCandidate({ startDate: undefined, policyNumber: 'POL-123', cost: 450 });
+  const data = buildChildExecutionData(candidate, 1, input, new Date('2026-09-13T00:00:00.000Z'), linkedEvent);
+  assert.equal(data.operationId, 'CAPTURE_WARRANTY_CONFIRM');
+  assert.equal(data.reasonCode, 'WARRANTY_CAPTURE_CONFIRMATION_REQUIRED');
+  assert.equal(data.parametersJson.providerName, 'Carrier');
+  assert.equal(data.parametersJson.category, 'HVAC');
+  assert.equal(data.parametersJson.policyNumber, 'POL-123');
+  assert.equal(data.parametersJson.cost, 450);
+  assert.equal(data.parametersJson.startDate, '2026-08-15T00:00:00.000Z');
+  assert.equal(new Date(data.parametersJson.expiryDate).getUTCFullYear(), 2036);
+  assert.match(data.resultJson.confirmation.title, /warranty/i);
+});
+
+// Source-governance test (same class as this file's other persistCandidates
+// coverage): persistCandidates has no runtime DB-mock harness, so the
+// sibling-linking wiring this warranty writer needs is verified against the
+// source directly, matching this file's own established convention.
+test('persistCandidates wires a WARRANTY child\'s linkedExecutionId to its paired EVENT child\'s, bidirectionally, inside the same transaction, and only when neither side is already linked', () => {
+  const idx = captureSource.indexOf('async function persistCandidates(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /candidate\.category !== 'WARRANTY'/);
+  assert.match(body, /if \(warrantyExecution\.linkedExecutionId \|\| eventExecution\.linkedExecutionId\) continue;/);
+  assert.match(body, /data: \{ linkedExecutionId: warrantyExecution\.id \}/);
+  assert.match(body, /data: \{ linkedExecutionId: eventExecution\.id \}/);
 });

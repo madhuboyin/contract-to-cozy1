@@ -15,7 +15,7 @@ require('ts-node/register');
 
 const { sourceRegistryEntry, validateIntelligenceSourceRegistry, AI_SOURCE_REGISTRY } = require('../../src/services/intelligence/sourceRegistry.ts');
 const { executeGovernedAIRequest } = require('../../src/services/ai/aiRequestGovernance.service.ts');
-const { withValidCorrectionReferences } = require('../../src/services/ask/conversationalUnderstanding/extractionContract.ts');
+const { withValidCorrectionReferences, withValidWarrantyLinks } = require('../../src/services/ask/conversationalUnderstanding/extractionContract.ts');
 
 test('ai:ask-conversational-capture-extraction is registered in AI_SOURCE_REGISTRY', () => {
   const entry = sourceRegistryEntry('ai:ask-conversational-capture-extraction');
@@ -123,4 +123,41 @@ test('withValidCorrectionReferences only drops the offending candidate, not the 
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].category, 'FACT');
   assert.equal(invalidReferenceCount, 1);
+});
+
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan §9/§22).
+
+function warrantyCandidate(overrides = {}) {
+  return {
+    category: 'WARRANTY', providerName: 'Carrier', warrantyCategory: 'HVAC',
+    extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'irrelevant',
+    linkedEventCandidateIndex: 0, durationMonths: 120,
+    ...overrides,
+  };
+}
+
+test('withValidWarrantyLinks keeps a WARRANTY candidate whose linkedEventCandidateIndex points at a real EVENT in the same batch', () => {
+  const { candidates, invalidLinkCount } = withValidWarrantyLinks([eventCandidate(), warrantyCandidate({ linkedEventCandidateIndex: 0 })]);
+  assert.equal(candidates.length, 2);
+  assert.equal(invalidLinkCount, 0);
+});
+
+test('withValidWarrantyLinks DROPS a WARRANTY candidate whose linkedEventCandidateIndex is out of bounds', () => {
+  const { candidates, invalidLinkCount } = withValidWarrantyLinks([eventCandidate(), warrantyCandidate({ linkedEventCandidateIndex: 5 })]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].category, 'EVENT');
+  assert.equal(invalidLinkCount, 1);
+});
+
+test('withValidWarrantyLinks DROPS a WARRANTY candidate whose linkedEventCandidateIndex points at a FACT, not an EVENT (the model must not invent a non-EVENT pairing)', () => {
+  const { candidates, invalidLinkCount } = withValidWarrantyLinks([factCandidate(), warrantyCandidate({ linkedEventCandidateIndex: 0 })]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].category, 'FACT');
+  assert.equal(invalidLinkCount, 1);
+});
+
+test('withValidWarrantyLinks keeps a FACT/EVENT candidate with no WARRANTY in the batch unconditionally', () => {
+  const { candidates, invalidLinkCount } = withValidWarrantyLinks([factCandidate(), eventCandidate()]);
+  assert.equal(candidates.length, 2);
+  assert.equal(invalidLinkCount, 0);
 });

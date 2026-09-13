@@ -16,6 +16,7 @@ import {
   ExtractionCandidateSchema,
   ExtractionResultSchema,
   MAX_EXTRACTION_CANDIDATES_PER_TURN,
+  filterCandidatesPreservingWarrantyLinks,
   type ExtractionCandidate,
 } from './extractionCandidateSchema';
 
@@ -85,6 +86,23 @@ EVENT -- something that happened to the home (a repair, replacement, install, se
   "sourceSentence": the exact sentence this was extracted from
 }
 
+WARRANTY -- ONLY when the homeowner's statement also describes a home event (a repair, replacement, or install) that came with a warranty. NEVER emit a WARRANTY candidate on its own with no accompanying EVENT candidate in this same response -- if there is no paired event, omit the warranty information entirely:
+{
+  "category": "WARRANTY",
+  "providerName": the name of the warranty provider/manufacturer/contractor,
+  "warrantyCategory": one of APPLIANCE|HVAC|ROOFING|PLUMBING|ELECTRICAL|STRUCTURAL|HOME_WARRANTY_PLAN|OTHER,
+  "policyNumber": the policy/contract number if stated, otherwise null,
+  "coverageDetails": a short description of what's covered if stated, otherwise null,
+  "cost": the warranty's own cost in dollars if stated separately from the event's cost, otherwise null,
+  "startDate": an ISO 8601 datetime if a start date distinct from the paired event's date was stated, otherwise null (it will default to the paired event's date),
+  "durationMonths": the warranty's length in months if stated (e.g. "10 year warranty" is 120), otherwise null,
+  "expiryDate": an ISO 8601 datetime if an explicit expiration date was stated, otherwise null. Provide EITHER durationMonths OR expiryDate, never neither.
+  "linkedEventCandidateIndex": the zero-based index, within this SAME "candidates" array, of the EVENT candidate this warranty belongs to. NEVER invent an index that does not point at an EVENT candidate in this same response.
+  "extractionConfidence": 0 to 1,
+  "attribution": "FIRSTHAND" | "THIRD_PARTY_RELAYED" | "INFERRED",
+  "sourceSentence": the exact sentence this was extracted from
+}
+
 RECENT HOME EVENTS ON THIS PROPERTY (for correction matching ONLY -- never treat these as new information to extract, and never invent an id not listed here):
 ${recentHomeEvents.length
     ? recentHomeEvents.map((event) => `- id: ${event.id}, title: "${event.title}", date: ${event.occurredAt}${event.amount != null ? `, amount: $${event.amount}` : ''}`).join('\n')
@@ -123,7 +141,12 @@ export function withValidCorrectionReferences(
   allowedEventIds: ReadonlySet<string>,
 ): { candidates: ExtractionCandidate[]; invalidReferenceCount: number } {
   let invalidReferenceCount = 0;
-  const filtered = candidates.filter((candidate) => {
+  // filterCandidatesPreservingWarrantyLinks, not a plain .filter(): dropping
+  // an EVENT candidate here (an invalid correction reference) shifts every
+  // later candidate's array position, which would otherwise silently
+  // invalidate a WARRANTY candidate elsewhere in this same batch whose
+  // linkedEventCandidateIndex pointed past it.
+  const filtered = filterCandidatesPreservingWarrantyLinks(candidates, (candidate) => {
     if (candidate.category !== 'EVENT' || !candidate.correctingEventId) return true;
     if (!allowedEventIds.has(candidate.correctingEventId)) {
       invalidReferenceCount += 1;
@@ -136,6 +159,32 @@ export function withValidCorrectionReferences(
     return true;
   });
   return { candidates: filtered, invalidReferenceCount };
+}
+
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+// §9/§22). Validated against the array as it stands immediately after
+// withValidCorrectionReferences (the caller runs this second, deliberately
+// -- see runStructuredExtraction) -- correctness only requires that this
+// check's own view of the array matches whatever it's filtering, which
+// filterCandidatesPreservingWarrantyLinks's index-remapping guarantees
+// regardless of what upstream filtering already happened. Drops a WARRANTY
+// candidate outright, per the FRD's "warranty needs a sibling event"
+// scoping, rather than proposing it standalone with no valid pairing.
+// Exported for direct unit testing (pure, no I/O).
+export function withValidWarrantyLinks(
+  candidates: ExtractionCandidate[],
+): { candidates: ExtractionCandidate[]; invalidLinkCount: number } {
+  let invalidLinkCount = 0;
+  const filtered = filterCandidatesPreservingWarrantyLinks(candidates, (candidate) => {
+    if (candidate.category !== 'WARRANTY') return true;
+    const linked = candidates[candidate.linkedEventCandidateIndex];
+    if (!linked || linked.category !== 'EVENT') {
+      invalidLinkCount += 1;
+      return false;
+    }
+    return true;
+  });
+  return { candidates: filtered, invalidLinkCount };
 }
 
 /**
@@ -202,8 +251,18 @@ export async function runStructuredExtraction(
 
   const validated = withValidCorrectionReferences(candidates, allowedEventIds);
   droppedCount += validated.invalidReferenceCount;
+  // Runs AFTER correction-reference filtering, not before: this validates
+  // linkedEventCandidateIndex against the array as it stands at this point
+  // (the same one being returned to the caller) -- correction-filtering can
+  // itself drop an EVENT candidate (an invalid correctingEventId), which
+  // would silently invalidate an already-checked warranty link if this ran
+  // first. Running last means no further compaction happens inside this
+  // function after this check, so the index it validates is the index the
+  // caller will actually see.
+  const warrantyValidated = withValidWarrantyLinks(validated.candidates);
+  droppedCount += warrantyValidated.invalidLinkCount;
   if (droppedCount > 0) {
     logger.warn({ droppedCount }, '[ask-conversational-capture] dropped invalid extraction candidate(s)');
   }
-  return { candidates: validated.candidates, droppedCount };
+  return { candidates: warrantyValidated.candidates, droppedCount };
 }

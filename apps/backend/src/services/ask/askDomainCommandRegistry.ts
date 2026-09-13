@@ -27,6 +27,9 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20).
   'CAPTURE_FACT_CONFIRM',
   'CAPTURE_EVENT_CONFIRM',
+  // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+  // §9/§22).
+  'CAPTURE_WARRANTY_CONFIRM',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -106,6 +109,7 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   // truthful about what's intended.
   CAPTURE_FACT_CONFIRM: command('CAPTURE_FACT_CONFIRM', 'CAPTURE_FACT_CONFIRM', 'capture.fact.confirm', 'CONTRIBUTOR', 'PROPERTY_FACT_EVIDENCE', ['EDIT'], { title: 'Fact not recorded', body: 'No property fact or evidence record was changed.', suggestion: 'Show my property record' }),
   CAPTURE_EVENT_CONFIRM: command('CAPTURE_EVENT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'capture.event.confirm', 'CONTRIBUTOR', 'HOME_EVENT', ['EDIT'], { title: 'Event not recorded', body: 'No home timeline event was created.', suggestion: 'Show my home timeline' }),
+  CAPTURE_WARRANTY_CONFIRM: command('CAPTURE_WARRANTY_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'capture.warranty.confirm', 'CONTRIBUTOR', 'WARRANTY', ['EDIT'], { title: 'Warranty not recorded', body: 'No warranty record was created.', suggestion: 'Show my property record' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

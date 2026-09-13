@@ -103,7 +103,12 @@ export type AskOperationId =
   // (Phase 3's extraction; a synthetic test harness in this phase). Zero
   // schema change needed for these two string literals (§4.3, verified).
   | 'CAPTURE_FACT_CONFIRM'
-  | 'CAPTURE_EVENT_CONFIRM';
+  | 'CAPTURE_EVENT_CONFIRM'
+  // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+  // §9/§22). Same non-routable shape as the two operations above -- only
+  // ever created paired with a sibling CAPTURE_EVENT_CONFIRM candidate in
+  // the same extraction batch (conversationalCapture.ts).
+  | 'CAPTURE_WARRANTY_CONFIRM';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -300,6 +305,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // (confirmCapabilityHandlerRegistry.ts).
   CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  CAPTURE_WARRANTY_CONFIRM: definition('CAPTURE_WARRANTY_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.warranty.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {

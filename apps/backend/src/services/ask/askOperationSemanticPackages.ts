@@ -87,6 +87,7 @@ const jobs: Record<AskOperationId, string> = {
   // registration in askOrchestrator.service.ts.
   CAPTURE_FACT_CONFIRM: 'record a fact about the home directly from conversation',
   CAPTURE_EVENT_CONFIRM: 'record something that happened at the home directly from conversation',
+  CAPTURE_WARRANTY_CONFIRM: 'record a warranty for something at the home directly from conversation',
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
@@ -159,6 +160,7 @@ const positives: Record<AskOperationId, readonly string[]> = {
   BUYER_LIFECYCLE_UPDATE: ['Cancel this purchase', 'We closed today', 'Change my target closing date to next month'],
   CAPTURE_FACT_CONFIRM: ['Record that my roof was replaced in 2020', 'Please note my foundation is a poured concrete slab', 'Save that my water heater was installed last year'],
   CAPTURE_EVENT_CONFIRM: ['I had the chimney swept last week', 'We had a small kitchen fire in March, nothing serious', 'The plumber fixed a leak under the sink yesterday'],
+  CAPTURE_WARRANTY_CONFIRM: ['We installed a new furnace last month, it has a 10 year warranty from Carrier', 'The water heater we replaced in June came with a 6 year manufacturer warranty'],
 };
 
 const negatives: Record<AskOperationId, readonly string[]> = {
@@ -231,6 +233,7 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   BUYER_LIFECYCLE_UPDATE: ['What could cost me money in the first 90 days?', 'What should I do next for this purchase?'],
   CAPTURE_FACT_CONFIRM: ['What is my roof type?', 'Create a maintenance task for the roof'],
   CAPTURE_EVENT_CONFIRM: ['What maintenance is pending?', 'Show my home timeline'],
+  CAPTURE_WARRANTY_CONFIRM: ['What is my roof type?', 'Show my home timeline'],
 };
 
 const answerPositives: Record<AskOperationId, readonly string[]> = {
@@ -303,6 +306,7 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   BUYER_LIFECYCLE_UPDATE: ['This purchase can be cancelled or its recorded dates updated after confirmation.'],
   CAPTURE_FACT_CONFIRM: ['The stated property fact is ready to be saved to the canonical Living Home Record after confirmation.'],
   CAPTURE_EVENT_CONFIRM: ['The described event is ready to be added to the canonical home timeline after confirmation.'],
+  CAPTURE_WARRANTY_CONFIRM: ['The described warranty is ready to be saved to the canonical Living Home Record after confirmation.'],
 };
 
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
@@ -375,6 +379,7 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   BUYER_LIFECYCLE_UPDATE: ['The selected finding is reclassified as a verified fact'],
   CAPTURE_FACT_CONFIRM: ['The described event is added to the canonical home timeline'],
   CAPTURE_EVENT_CONFIRM: ['The stated property fact is saved to the canonical Living Home Record'],
+  CAPTURE_WARRANTY_CONFIRM: ['The described event is added to the canonical home timeline', 'The stated property fact is saved to the canonical Living Home Record'],
 };
 
 export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, AskOperationSemanticPackage>> = Object.freeze(

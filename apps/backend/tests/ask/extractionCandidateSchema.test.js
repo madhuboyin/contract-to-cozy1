@@ -7,6 +7,7 @@ const {
   ExtractionCandidateSchema,
   ExtractionResultSchema,
   MAX_EXTRACTION_CANDIDATES_PER_TURN,
+  filterCandidatesPreservingWarrantyLinks,
 } = require('../../src/services/ask/conversationalUnderstanding/extractionCandidateSchema.ts');
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9; FRD §14). Pure schema
@@ -176,4 +177,63 @@ test('correctedFields is optional and defaults to absent for a brand-new event c
     occurredAt: '2026-09-12T00:00:00.000Z', extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'irrelevant',
   });
   assert.equal(result.success, true);
+});
+
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+// §9/§22).
+
+function warrantyCandidate(overrides = {}) {
+  return {
+    category: 'WARRANTY', providerName: 'Carrier', warrantyCategory: 'HVAC',
+    extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'irrelevant',
+    linkedEventCandidateIndex: 0, durationMonths: 120,
+    ...overrides,
+  };
+}
+
+test('accepts a well-formed WARRANTY candidate with durationMonths (no explicit expiryDate)', () => {
+  const result = ExtractionCandidateSchema.safeParse(warrantyCandidate());
+  assert.equal(result.success, true);
+});
+
+test('accepts a well-formed WARRANTY candidate with an explicit expiryDate (no durationMonths)', () => {
+  const result = ExtractionCandidateSchema.safeParse(warrantyCandidate({ durationMonths: undefined, expiryDate: '2036-09-01T00:00:00.000Z' }));
+  assert.equal(result.success, true);
+});
+
+test('rejects a WARRANTY candidate with neither expiryDate nor durationMonths -- no derivable expiry', () => {
+  const result = ExtractionCandidateSchema.safeParse(warrantyCandidate({ durationMonths: undefined }));
+  assert.equal(result.success, false);
+});
+
+test('rejects a WARRANTY candidate with an unrecognized warrantyCategory', () => {
+  const result = ExtractionCandidateSchema.safeParse(warrantyCandidate({ warrantyCategory: 'NOT_A_REAL_CATEGORY' }));
+  assert.equal(result.success, false);
+});
+
+test('filterCandidatesPreservingWarrantyLinks: dropping an earlier candidate remaps a later WARRANTY\'s linkedEventCandidateIndex to its EVENT\'s new position', () => {
+  const badFact = { category: 'FACT', factKey: 'core.yearBuilt', value: 'garbage', extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'x' };
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Furnace replacement', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const warranty = warrantyCandidate({ linkedEventCandidateIndex: 1, sourceSentence: 'z' });
+  // Original positions: badFact@0, event@1, warranty@2 (linkedEventCandidateIndex points at 1).
+  const result = filterCandidatesPreservingWarrantyLinks([badFact, event, warranty], (c) => c !== badFact);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].category, 'EVENT');
+  assert.equal(result[1].category, 'WARRANTY');
+  // event moved from index 1 to index 0 -- the surviving warranty's index must follow it.
+  assert.equal(result[1].linkedEventCandidateIndex, 0);
+});
+
+test('filterCandidatesPreservingWarrantyLinks: drops a WARRANTY outright if its paired EVENT did not survive the filter', () => {
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Furnace replacement', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const warranty = warrantyCandidate({ linkedEventCandidateIndex: 0 });
+  const result = filterCandidatesPreservingWarrantyLinks([event, warranty], (c) => c !== event);
+  assert.equal(result.length, 0);
+});
+
+test('filterCandidatesPreservingWarrantyLinks: a no-op filter (nothing removed) leaves indices untouched', () => {
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Furnace replacement', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const warranty = warrantyCandidate({ linkedEventCandidateIndex: 0 });
+  const result = filterCandidatesPreservingWarrantyLinks([event, warranty], () => true);
+  assert.deepEqual(result, [event, warranty]);
 });

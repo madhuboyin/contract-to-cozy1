@@ -217,6 +217,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20).
   CAPTURE_FACT_CONFIRM: 'The stated property fact is ready to be saved to the canonical Living Home Record after confirmation.',
   CAPTURE_EVENT_CONFIRM: 'The described event is ready to be added to the canonical home timeline after confirmation.',
+  // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan §9/§22).
+  CAPTURE_WARRANTY_CONFIRM: 'The described warranty is ready to be saved to the canonical Living Home Record after confirmation.',
 });
 
 export const ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES = Object.freeze(

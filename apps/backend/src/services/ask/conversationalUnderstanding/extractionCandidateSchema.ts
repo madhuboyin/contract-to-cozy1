@@ -9,7 +9,7 @@
 // candidate -- extractionContract.ts's system prompt is scoped the same way,
 // and Phase 6 is where DecisionThread creation from a GOAL candidate lands.
 import { z } from 'zod';
-import { AskCaptureAttribution, HomeEventType } from '@prisma/client';
+import { AskCaptureAttribution, HomeEventType, WarrantyCategory } from '@prisma/client';
 import { isContextCaptureSupported } from '../../../modules/propertyContext/application/capturePropertyFact';
 import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 
@@ -97,7 +97,48 @@ export const EventExtractionCandidateSchema = z.object({
   { message: 'occurredAt (or dateRangeStart/End for RANGE) is required for the stated datePrecision', path: ['occurredAt'] },
 );
 
-// A plain union, not z.discriminatedUnion: both member schemas are wrapped
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+// §9/§22). A THIRD candidate category, sibling to FACT/EVENT rather than a
+// merged field on the EVENT schema -- Warranty is its own canonical model
+// (schema.prisma's Warranty), not a HomeEvent attribute. Scoped, per the
+// FRD's own "needs a sibling HomeEvent candidate in the same extraction
+// batch" framing, to only ever pair with an EVENT candidate: a
+// warranty-only statement with no accompanying event is dropped entirely
+// (extractionContract.ts's withValidWarrantyLinks), not proposed standalone.
+// `category` is reserved by the discriminant literal above, hence
+// `warrantyCategory` for the schema's own WarrantyCategory enum value.
+export const WarrantyExtractionCandidateSchema = z.object({
+  category: z.literal('WARRANTY'),
+  ...baseCandidateFields,
+  providerName: z.string().trim().min(1).max(160),
+  warrantyCategory: z.nativeEnum(WarrantyCategory),
+  policyNumber: z.string().trim().max(160).nullable().optional(),
+  coverageDetails: z.string().trim().max(2000).nullable().optional(),
+  cost: z.number().nonnegative().max(10_000_000).nullable().optional(),
+  // Both nullable: Warranty.startDate defaults to the paired EVENT
+  // candidate's occurredAt when not separately stated (conversationalCapture.ts's
+  // buildChildExecutionData resolves this -- pure business logic, not a
+  // schema-level default, since it needs the sibling candidate's data).
+  startDate: z.string().datetime().nullable().optional(),
+  // Warranty.expiryDate is required and non-nullable -- computed from
+  // durationMonths when not directly stated (also resolved in
+  // buildChildExecutionData). The refinement below requires at least one of
+  // the two so a usable expiry can always be derived.
+  durationMonths: z.number().int().positive().max(600).nullable().optional(),
+  expiryDate: z.string().datetime().nullable().optional(),
+  // Index into the SAME extraction batch's candidates array identifying the
+  // EVENT candidate this warranty pairs with. Resolved/validated against
+  // the batch at two points: extractionContract.ts's withValidWarrantyLinks
+  // (against the model's raw output) and conversationalCapture.ts's
+  // filterValidCandidates (remapped after any FACT candidate is dropped, so
+  // the index stays correct against the final persisted list).
+  linkedEventCandidateIndex: z.number().int().nonnegative(),
+}).refine(
+  (candidate) => Boolean(candidate.expiryDate) || Boolean(candidate.durationMonths),
+  { message: 'expiryDate or durationMonths is required', path: ['expiryDate'] },
+);
+
+// A plain union, not z.discriminatedUnion: every member schema is wrapped
 // in .refine(), which produces a ZodEffects rather than a bare ZodObject --
 // discriminatedUnion requires the latter. category still disambiguates in
 // practice since each branch's own literal check fails fast for the wrong
@@ -105,11 +146,47 @@ export const EventExtractionCandidateSchema = z.object({
 export const ExtractionCandidateSchema = z.union([
   FactExtractionCandidateSchema,
   EventExtractionCandidateSchema,
+  WarrantyExtractionCandidateSchema,
 ]);
 
 export type FactExtractionCandidate = z.infer<typeof FactExtractionCandidateSchema>;
 export type EventExtractionCandidate = z.infer<typeof EventExtractionCandidateSchema>;
+export type WarrantyExtractionCandidate = z.infer<typeof WarrantyExtractionCandidateSchema>;
 export type ExtractionCandidate = z.infer<typeof ExtractionCandidateSchema>;
+
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+// §9/§22). Shared by every filtering step across extractionContract.ts and
+// conversationalCapture.ts that can remove a candidate from the batch
+// (invalid correction reference, invalid FACT value, invalid warranty
+// link): removing ANY earlier element shifts every later element's array
+// position, which silently invalidates a surviving WARRANTY candidate's
+// linkedEventCandidateIndex if its paired EVENT (or anything before it)
+// gets removed by an unrelated filter. Plain `.filter()` compaction is
+// exactly the bug shape this closes -- this helper always fixes up a
+// surviving WARRANTY's index to its new position, and drops the WARRANTY
+// outright (rather than leaving it pointing at the wrong candidate) if its
+// paired EVENT did not survive `shouldKeep`.
+export function filterCandidatesPreservingWarrantyLinks(
+  candidates: ExtractionCandidate[],
+  shouldKeep: (candidate: ExtractionCandidate) => boolean,
+): ExtractionCandidate[] {
+  const survivors: Array<{ candidate: ExtractionCandidate; originalIndex: number }> = [];
+  candidates.forEach((candidate, originalIndex) => {
+    if (shouldKeep(candidate)) survivors.push({ candidate, originalIndex });
+  });
+  const oldToNewIndex = new Map(survivors.map(({ originalIndex }, newIndex) => [originalIndex, newIndex]));
+  const result: ExtractionCandidate[] = [];
+  for (const { candidate } of survivors) {
+    if (candidate.category !== 'WARRANTY') {
+      result.push(candidate);
+      continue;
+    }
+    const newLinkedIndex = oldToNewIndex.get(candidate.linkedEventCandidateIndex);
+    if (newLinkedIndex === undefined) continue;
+    result.push({ ...candidate, linkedEventCandidateIndex: newLinkedIndex });
+  }
+  return result;
+}
 
 // Bounded per FRD §22's "no duplicate candidate proposals" concern and
 // Stage 2's own no-unbounded-anything convention (captureRequests/

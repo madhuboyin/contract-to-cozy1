@@ -24,7 +24,8 @@ import { normalizeCaptureValue } from '../../../modules/propertyContext/applicat
 import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
 import { runStructuredExtraction, type RecentHomeEventContext } from './extractionContract';
-import type { EventExtractionCandidate, ExtractionCandidate, FactExtractionCandidate } from './extractionCandidateSchema';
+import { filterCandidatesPreservingWarrantyLinks } from './extractionCandidateSchema';
+import type { EventExtractionCandidate, ExtractionCandidate, FactExtractionCandidate, WarrantyExtractionCandidate } from './extractionCandidateSchema';
 
 const DOMAIN_EVENT_LEASE_MS = 15 * 60_000;
 // FRD §10: "Step 8's synchronous portion has a strict timeout (~1.5s...)".
@@ -178,6 +179,73 @@ function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, exp
   };
 }
 
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+// §9/§22). resolvedStartDate/resolvedExpiryDate are passed in already
+// resolved (buildChildExecutionData computes them, since defaulting
+// startDate from the paired EVENT candidate needs that sibling's data, not
+// just this candidate's own fields).
+function warrantyConfirmationBlocksAndCard(
+  candidate: WarrantyExtractionCandidate,
+  expiresAt: Date,
+  index: number,
+  resolvedStartDate: Date,
+  resolvedExpiryDate: Date,
+) {
+  const confirmationId = `capture-warranty-${index}-${expiresAt.getTime()}`;
+  const fields: Array<{ label: string; value: string }> = [
+    { label: 'Provider', value: candidate.providerName },
+    { label: 'Coverage', value: candidate.warrantyCategory },
+    { label: 'Start date', value: resolvedStartDate.toLocaleDateString() },
+    { label: 'Expires', value: resolvedExpiryDate.toLocaleDateString() },
+  ];
+  if (candidate.policyNumber) fields.push({ label: 'Policy number', value: candidate.policyNumber });
+  return {
+    blocks: [{
+      type: 'SUMMARY' as const,
+      id: `capture-warranty-preview-${index}`,
+      title: 'Save this warranty to your property record?',
+      body: `Cozy noticed you mentioned: "${candidate.sourceSentence}"`,
+      tone: 'DEFAULT' as const,
+      actions: [],
+    }],
+    confirmation: {
+      confirmationId,
+      version: 1,
+      title: 'Save this warranty to your property record?',
+      description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
+      fields,
+      confirmLabel: 'Save warranty',
+      consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.',
+      expiresAt: expiresAt.toISOString(),
+    },
+  };
+}
+
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+// §9/§22). Warranty.startDate/expiryDate are both required, non-nullable
+// columns -- resolved here, once, from whichever the candidate stated
+// directly plus the paired EVENT candidate's own date as the startDate
+// fallback (a warranty is implicitly dated to when the covered item was
+// installed/replaced, absent a separately-stated warranty start date).
+// Exported for direct unit testing (pure, no I/O).
+export function resolveWarrantyDates(
+  candidate: WarrantyExtractionCandidate,
+  linkedEventCandidate: EventExtractionCandidate | null | undefined,
+  now: Date,
+): { startDate: Date; expiryDate: Date } {
+  const startDateIso = candidate.startDate
+    ?? linkedEventCandidate?.occurredAt
+    ?? linkedEventCandidate?.dateRangeStart
+    ?? now.toISOString();
+  const startDate = new Date(startDateIso);
+  if (candidate.expiryDate) return { startDate, expiryDate: new Date(candidate.expiryDate) };
+  // Schema refinement guarantees at least one of expiryDate/durationMonths
+  // is present, so durationMonths is trusted here without a further guard.
+  const expiryDate = new Date(startDate);
+  expiryDate.setMonth(expiryDate.getMonth() + (candidate.durationMonths ?? 0));
+  return { startDate, expiryDate };
+}
+
 // Code review finding (2026-09-13): a correction previously built a FULL
 // new-event payload (every field explicitly set, often to a placeholder
 // like datePrecision: UNKNOWN or providerName: null since the model must
@@ -226,22 +294,30 @@ export function buildEventContentParameters(candidate: EventExtractionCandidate,
 }
 
 // Exported for direct unit testing (pure, no I/O -- takes `now` as a param
-// rather than reading the clock itself).
+// rather than reading the clock itself). `linkedEventCandidate` is only
+// relevant for a WARRANTY candidate (its paired EVENT sibling, for
+// resolveWarrantyDates's startDate fallback) -- always undefined/omitted
+// for FACT/EVENT.
 export function buildChildExecutionData(
   candidate: ExtractionCandidate,
   index: number,
   input: ConversationalCaptureInput,
   now: Date,
+  linkedEventCandidate?: EventExtractionCandidate | null,
 ): Prisma.AskExecutionCreateInput {
   const expiresAt = confirmationExpiry(now);
   const confirmationVersion = 1;
-  const operationId = candidate.category === 'FACT' ? 'CAPTURE_FACT_CONFIRM' : 'CAPTURE_EVENT_CONFIRM';
-  const { blocks, confirmation } = candidate.category === 'FACT'
-    ? factConfirmationBlocksAndCard(candidate, expiresAt, index)
-    : eventConfirmationBlocksAndCard(candidate, expiresAt, index);
 
-  const parameters: Record<string, unknown> = candidate.category === 'FACT'
-    ? {
+  let operationId: 'CAPTURE_FACT_CONFIRM' | 'CAPTURE_EVENT_CONFIRM' | 'CAPTURE_WARRANTY_CONFIRM';
+  let reasonCode: string;
+  let cards: { blocks: unknown[]; confirmation: unknown };
+  let parameters: Record<string, unknown>;
+
+  if (candidate.category === 'FACT') {
+    operationId = 'CAPTURE_FACT_CONFIRM';
+    reasonCode = 'FACT_CAPTURE_CONFIRMATION_REQUIRED';
+    cards = factConfirmationBlocksAndCard(candidate, expiresAt, index);
+    parameters = {
       factKey: candidate.factKey,
       value: candidate.value,
       sourceType: 'USER_REPORTED',
@@ -250,8 +326,12 @@ export function buildChildExecutionData(
       extractionConfidence: candidate.extractionConfidence,
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
-    }
-    : {
+    };
+  } else if (candidate.category === 'EVENT') {
+    operationId = 'CAPTURE_EVENT_CONFIRM';
+    reasonCode = 'EVENT_CAPTURE_CONFIRMATION_REQUIRED';
+    cards = eventConfirmationBlocksAndCard(candidate, expiresAt, index);
+    parameters = {
       // Code review finding (2026-09-13): threaded through so
       // confirmCaptureEvent's existing correctingEventId branch (already
       // built for this exact purpose since Phase 2) is actually reachable
@@ -265,6 +345,27 @@ export function buildChildExecutionData(
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
     };
+  } else {
+    operationId = 'CAPTURE_WARRANTY_CONFIRM';
+    reasonCode = 'WARRANTY_CAPTURE_CONFIRMATION_REQUIRED';
+    const { startDate, expiryDate } = resolveWarrantyDates(candidate, linkedEventCandidate, now);
+    cards = warrantyConfirmationBlocksAndCard(candidate, expiresAt, index, startDate, expiryDate);
+    parameters = {
+      providerName: candidate.providerName,
+      category: candidate.warrantyCategory,
+      policyNumber: candidate.policyNumber ?? null,
+      coverageDetails: candidate.coverageDetails ?? null,
+      cost: candidate.cost ?? null,
+      startDate: startDate.toISOString(),
+      expiryDate: expiryDate.toISOString(),
+      attribution: candidate.attribution,
+      captureChannel: CAPTURE_CHANNEL,
+      extractionConfidence: candidate.extractionConfidence,
+      confirmationVersion,
+      confirmationExpiresAt: expiresAt.toISOString(),
+    };
+  }
+  const { blocks, confirmation } = cards;
 
   return {
     session: { connect: { id: input.sessionId } },
@@ -282,7 +383,7 @@ export function buildChildExecutionData(
     operationVersion: '1.0',
     intentFamily: 'COMMAND',
     status: 'NEEDS_CONFIRMATION' as AskExecutionStatus,
-    reasonCode: candidate.category === 'FACT' ? 'FACT_CAPTURE_CONFIRMATION_REQUIRED' : 'EVENT_CAPTURE_CONFIRMATION_REQUIRED',
+    reasonCode,
     contextVersion: input.contextVersion,
     parametersJson: parameters as Prisma.InputJsonValue,
     resultJson: {
@@ -324,7 +425,14 @@ async function verifyClaimStillOwned(tx: Prisma.TransactionClient, domainEventId
 // confirmed.
 // Exported for direct unit testing (pure, no I/O).
 export function filterValidCandidates(candidates: ExtractionCandidate[]): ExtractionCandidate[] {
-  return candidates.filter((candidate) => candidate.category !== 'FACT' || isValidFactCandidateValue(candidate));
+  // filterCandidatesPreservingWarrantyLinks, not a plain .filter(): dropping
+  // an invalid FACT candidate shifts every later candidate's array
+  // position, which would otherwise silently invalidate a WARRANTY
+  // candidate's linkedEventCandidateIndex elsewhere in this same batch.
+  return filterCandidatesPreservingWarrantyLinks(
+    candidates,
+    (candidate) => candidate.category !== 'FACT' || isValidFactCandidateValue(candidate),
+  );
 }
 
 /**
@@ -360,7 +468,15 @@ async function persistCandidates(
     await verifyClaimStillOwned(tx, domainEventId, claimedAttempts);
     const created: PersistedCaptureExecution[] = [];
     for (const [index, candidate] of candidates.entries()) {
-      const data = buildChildExecutionData(candidate, index, input, now);
+      // filterValidCandidates has already remapped linkedEventCandidateIndex
+      // to this same `candidates` array's own indices (see
+      // filterCandidatesPreservingWarrantyLinks), so this lookup is always
+      // the correct sibling, and always a real EVENT candidate (the same
+      // filter drops any WARRANTY whose target didn't survive).
+      const linkedEventCandidate = candidate.category === 'WARRANTY'
+        ? candidates[candidate.linkedEventCandidateIndex] as EventExtractionCandidate
+        : undefined;
+      const data = buildChildExecutionData(candidate, index, input, now, linkedEventCandidate);
       // A retried attempt for the same parent turn resolves to the
       // already-created child via clientRequestId's own uniqueness rather
       // than erroring the whole batch.
@@ -369,6 +485,28 @@ async function persistCandidates(
       });
       created.push(existing ?? await tx.askExecution.create({ data }));
     }
+
+    // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+    // §9/§22, closing the "paired-confirmation scenario has no producer"
+    // gap Phase 2's review left open). Wires each WARRANTY child's
+    // linkedExecutionId to its paired EVENT child's, bidirectionally, in
+    // the SAME transaction that created both rows -- captureLinkReconciliation.ts's
+    // own linkSiblingCaptureExecutions can't be called here directly (it
+    // opens its own top-level prisma.$transaction), so the two updates are
+    // inlined against this transaction's own `tx` instead. Guarded on
+    // linkedExecutionId still being unset so a replay (both children
+    // resolved via the `existing` branch above) is a harmless no-op rather
+    // than clobbering an already-reconciled pair.
+    for (const [index, candidate] of candidates.entries()) {
+      if (candidate.category !== 'WARRANTY') continue;
+      const warrantyExecution = created[index];
+      const eventExecution = created[candidate.linkedEventCandidateIndex];
+      if (!warrantyExecution || !eventExecution) continue;
+      if (warrantyExecution.linkedExecutionId || eventExecution.linkedExecutionId) continue;
+      await tx.askExecution.update({ where: { id: eventExecution.id }, data: { linkedExecutionId: warrantyExecution.id } });
+      await tx.askExecution.update({ where: { id: warrantyExecution.id }, data: { linkedExecutionId: eventExecution.id } });
+    }
+
     await tx.domainEvent.update({
       where: { id: domainEventId },
       data: {

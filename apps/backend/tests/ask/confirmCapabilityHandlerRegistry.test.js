@@ -7,17 +7,18 @@ require('ts-node/register');
 
 const { ASK_DOMAIN_COMMAND_REGISTRY } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { validateConfirmCapabilityHandlerRegistry } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
-// Side-effect import: askOrchestrator.service.ts registers its 25 confirm
+// Side-effect import: askOrchestrator.service.ts registers its 28 confirm
 // handlers against the confirm capability registry at module load, exactly
 // as index.ts's own production bootstrap does before running
 // validateConfirmCapabilityHandlerRegistry.
 require('../../src/services/ask/askOrchestrator.service.ts');
 
-test('every one of the 27 confirmation-required Ask commands resolves to a registered confirm capability handler', () => {
+test('every one of the 28 confirmation-required Ask commands resolves to a registered confirm capability handler', () => {
   const commandIds = Object.keys(ASK_DOMAIN_COMMAND_REGISTRY);
   // 25 from Phase 2's original if/else-chain migration + CAPTURE_FACT_CONFIRM/
-  // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20).
-  assert.equal(commandIds.length, 27);
+  // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20)
+  // + CAPTURE_WARRANTY_CONFIRM (Phase 3 warranty capture writer, §9/§22).
+  assert.equal(commandIds.length, 28);
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 
@@ -32,7 +33,7 @@ test('confirmAskExecution no longer branches on operationId for its write dispat
   assert.match(confirmBody, /await confirmCapabilityInvoke\(execution\.operationId as AskOperationId, \{/);
 });
 
-test('each of the 25 extracted confirm handler functions is registered exactly once, by its command\'s own declared adapterKey', () => {
+test('each of the 28 extracted confirm handler functions is registered exactly once, by its command\'s own declared adapterKey', () => {
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     const escapedKey = definition.adapterKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

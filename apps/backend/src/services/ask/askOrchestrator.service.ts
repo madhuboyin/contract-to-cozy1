@@ -1,4 +1,4 @@
-import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
+import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory, WarrantyCategory } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -98,6 +98,7 @@ import { assertCoverageConflictFree } from '../coverageConflict.service';
 import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
 import { capturePropertyFact } from '../../modules/propertyContext/application/capturePropertyFact';
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
+import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
 import { runConversationalCaptureForTurn } from './conversationalUnderstanding/conversationalCapture';
 import { HomeEventsService } from '../homeEvents.service';
@@ -6221,7 +6222,7 @@ registerCapabilityHandler('buyer.lifecycle.update', async (envelope) => buyerLif
 // registry has no coverage gap for these two operations; the real
 // propose-time and confirm-time work is confirmAskExecution's job (the
 // confirm-time registry, below).
-function captureNotDirectlyRoutableResult(kind: 'fact' | 'event'): AskOperationResult {
+function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty'): AskOperationResult {
   return {
     status: 'OUT_OF_SCOPE',
     reasonCode: 'ASK_CAPTURE_NOT_DIRECTLY_ROUTABLE',
@@ -6235,6 +6236,7 @@ function captureNotDirectlyRoutableResult(kind: 'fact' | 'event'): AskOperationR
 }
 registerCapabilityHandler('capture.fact.confirm', async () => captureNotDirectlyRoutableResult('fact'));
 registerCapabilityHandler('capture.event.confirm', async () => captureNotDirectlyRoutableResult('event'));
+registerCapabilityHandler('capture.warranty.confirm', async () => captureNotDirectlyRoutableResult('warranty'));
 
 function buildCapabilityInvocationEnvelope(
   input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
@@ -9469,6 +9471,56 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
   return { result: captureEventResult(execution.propertyId, created, false), artifactType: command.artifactType, artifactId: created.id };
 }
 registerConfirmCapabilityHandler('capture.event.confirm', confirmCaptureEvent);
+
+// Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
+// §9/§22). Delegates the write to captureWarranty.ts, an idempotent create
+// keyed on this execution's own id (Warranty.sourceExecutionId), mirroring
+// confirmCaptureFact/confirmCaptureEvent's own delegation shape exactly.
+async function confirmCaptureWarranty(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, command } = ctx;
+  const providerName = parameters.providerName;
+  const category = parameters.category;
+  const startDate = parameters.startDate;
+  const expiryDate = parameters.expiryDate;
+  if (
+    typeof providerName !== 'string' || !providerName.trim()
+    || typeof category !== 'string'
+    || typeof startDate !== 'string'
+    || typeof expiryDate !== 'string'
+  ) {
+    throw Object.assign(new Error('The warranty to capture is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  let warranty: Awaited<ReturnType<typeof captureWarranty>>;
+  try {
+    warranty = await captureWarranty(execution.propertyId, userId, {
+      providerName,
+      category: category as WarrantyCategory,
+      policyNumber: typeof parameters.policyNumber === 'string' ? parameters.policyNumber : null,
+      coverageDetails: typeof parameters.coverageDetails === 'string' ? parameters.coverageDetails : null,
+      cost: typeof parameters.cost === 'number' ? parameters.cost : null,
+      startDate,
+      expiryDate,
+      sourceExecutionId: execution.id,
+    });
+  } catch (error) {
+    if (error instanceof PropertyContextAccessDeniedError) {
+      throw Object.assign(new Error('You do not have permission to update this property record.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    }
+    throw error;
+  }
+  const propertyRecordHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/edit`;
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'WARRANTY_CAPTURED',
+    blocks: [{
+      type: 'SUMMARY', id: `warranty-captured-${warranty.id}`, title: 'Recorded to your property record', tone: 'POSITIVE',
+      body: `Your ${providerName} warranty is now saved to your Living Home Record.`,
+      actions: [{ id: 'open-property-record', label: 'Open property record', href: propertyRecordHref, style: 'PRIMARY' }],
+    }],
+    confirmation: null, suggestions: [],
+  };
+  return { result, artifactType: command.artifactType, artifactId: warranty.id };
+}
+registerConfirmCapabilityHandler('capture.warranty.confirm', confirmCaptureWarranty);
 
 export async function confirmAskExecution(userId: string, executionId: string, input: SubmitAskConfirmation): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
