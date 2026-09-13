@@ -5,7 +5,12 @@ const { resolve } = require('node:path');
 
 require('ts-node/register');
 
-const { selectAskNextActionCapabilities, deriveAskNextActionsSourceContext, MAX_ASK_NEXT_ACTIONS } = require('../../src/services/ask/askNextActions.ts');
+const {
+  selectAskNextActionCapabilities,
+  deriveAskNextActionsSourceContext,
+  explicitlyRelatedCapabilityIds,
+  MAX_ASK_NEXT_ACTIONS,
+} = require('../../src/services/ask/askNextActions.ts');
 
 // Ask Cozy Stage 3, Phase 4 (implementation plan §10; FRD §27 "Next
 // Actions"). `selectAskNextActionCapabilities` is the pure half of this
@@ -109,6 +114,78 @@ test('selectAskNextActionCapabilities caps at MAX_ASK_NEXT_ACTIONS (5), the FRD 
   assert.equal(result.length, MAX_ASK_NEXT_ACTIONS);
 });
 
+// External review, second round: the sourceContext fix (below) only reaches
+// launch-context turns; a plain typed question still got fully property-wide
+// ranking, so different topics produced near-identical next-action lists.
+// explicitlyRelatedCapabilityIds/prioritizeExplicitlyRelated close this using
+// the real, registry-validated RELATED_CAPABILITIES table
+// (capabilityDefinitionFactory.ts) -- these ids are real, live capabilities,
+// not test fixtures, so a change to that table could change these
+// assertions; that's expected, not fragile (same as any other test reading
+// live registry data, matching this file's existing pattern).
+test('explicitlyRelatedCapabilityIds resolves the live registry\'s declared related-capability set for a real capability', () => {
+  const result = explicitlyRelatedCapabilityIds('sell-hold-rent');
+  assert.deepEqual([...result].sort(), ['break-even', 'capital-timeline', 'ownership-costs']);
+});
+
+test('explicitlyRelatedCapabilityIds returns an empty set for undefined (operations with no ASK_OPERATION_CAPABILITY entry)', () => {
+  assert.equal(explicitlyRelatedCapabilityIds(undefined).size, 0);
+});
+
+test('explicitlyRelatedCapabilityIds returns an empty set for a real capability that declares no related capabilities', () => {
+  assert.equal(explicitlyRelatedCapabilityIds('maintenance').size, 0);
+});
+
+test('explicitlyRelatedCapabilityIds returns an empty set for an unknown capability id, rather than throwing', () => {
+  assert.equal(explicitlyRelatedCapabilityIds('not-a-real-capability').size, 0);
+});
+
+test('selectAskNextActionCapabilities promotes explicitly-related suggestions ahead of unrelated ones, preserving each partition\'s incoming order', () => {
+  const suggestions = [
+    suggestion({ capabilityId: 'home-timeline', label: 'Home timeline' }),
+    suggestion({ capabilityId: 'ownership-costs', label: 'Ownership costs' }),
+    suggestion({ capabilityId: 'break-even', label: 'Break-even' }),
+    suggestion({ capabilityId: 'status-board', label: 'Status board' }),
+  ];
+  const result = selectAskNextActionCapabilities(
+    suggestions,
+    undefined,
+    new Set(),
+    explicitlyRelatedCapabilityIds('sell-hold-rent'),
+  );
+  assert.deepEqual(result.map((item) => item.id), ['ownership-costs', 'break-even', 'home-timeline', 'status-board']);
+});
+
+test('selectAskNextActionCapabilities is a no-op when relatedCapabilityIds is empty, matching prior behavior exactly', () => {
+  const suggestions = [
+    suggestion({ capabilityId: 'home-timeline', label: 'Home timeline' }),
+    suggestion({ capabilityId: 'ownership-costs', label: 'Ownership costs' }),
+  ];
+  const result = selectAskNextActionCapabilities(suggestions, undefined, new Set(), new Set());
+  assert.deepEqual(result.map((item) => item.id), ['home-timeline', 'ownership-costs']);
+});
+
+// This is the reviewer's own stated verification: two different just-answered
+// operations must produce appropriately different recommendations, even with
+// no launch context and the exact same candidate suggestion list.
+test('two different just-answered capabilities promote genuinely different top suggestions from the same candidate list', () => {
+  const suggestions = [
+    suggestion({ capabilityId: 'home-timeline', label: 'Home timeline' }),
+    suggestion({ capabilityId: 'ownership-costs', label: 'Ownership costs' }),
+    suggestion({ capabilityId: 'property-tax', label: 'Property tax' }),
+    suggestion({ capabilityId: 'coverage-intelligence', label: 'Coverage intelligence' }),
+  ];
+  const afterSellHoldRent = selectAskNextActionCapabilities(
+    suggestions, undefined, new Set(), explicitlyRelatedCapabilityIds('sell-hold-rent'),
+  );
+  const afterOwnershipCosts = selectAskNextActionCapabilities(
+    suggestions, undefined, new Set(), explicitlyRelatedCapabilityIds('ownership-costs'),
+  );
+  assert.equal(afterSellHoldRent[0].id, 'ownership-costs');
+  assert.equal(afterOwnershipCosts[0].id, 'property-tax');
+  assert.notEqual(afterSellHoldRent[0].id, afterOwnershipCosts[0].id);
+});
+
 // External review [P1]: getCapabilitySuggestions previously received no
 // sourceContext at all, so ranking never reflected what the just-answered
 // turn was actually about. deriveAskNextActionsSourceContext is the pure
@@ -174,6 +251,19 @@ test('External review [P1]: buildAskNextActionsBlock derives and passes a source
   const fnBody = askNextActionsSource.slice(fnStart); // last declaration in the file
   assert.match(fnBody, /const sourceContext = deriveAskNextActionsSourceContext\(input\.launchContext\);/);
   assert.match(fnBody, /sourceContext,/);
+});
+
+test('External review, second round: buildAskNextActionsBlock derives and passes relatedCapabilityIds into selectAskNextActionCapabilities', () => {
+  const fnStart = askNextActionsSource.indexOf('export async function buildAskNextActionsBlock(');
+  const fnBody = askNextActionsSource.slice(fnStart); // last declaration in the file
+  assert.match(fnBody, /const relatedCapabilityIds = explicitlyRelatedCapabilityIds\(currentCapabilityId\);/);
+  assert.match(fnBody, /relatedCapabilityIds,/);
+});
+
+test('External review, second round: the next-actions description also reflects the relatedCapabilityIds promotion, not only sourceContext', () => {
+  const fnStart = askNextActionsSource.indexOf('export async function buildAskNextActionsBlock(');
+  const fnBody = askNextActionsSource.slice(fnStart);
+  assert.match(fnBody, /description: \(sourceContext \|\| relatedCapabilityIds\.size > 0\)/);
 });
 
 test('executeOperation threads its own launchContext into buildAskNextActionsBlock so next-action ranking can see the current turn\'s launch signal', () => {

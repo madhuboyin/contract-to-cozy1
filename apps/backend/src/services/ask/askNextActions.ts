@@ -38,9 +38,44 @@
 //   `sourceContext` from `launchContext.actionId`/`journeyId` when present
 //   (`deriveAskNextActionsSourceContext` below) -- HOME_ACTION/JOURNEY are
 //   both real, already-supported `sourceContext` kinds, distinct from the
-//   still-unsupported DECISION_THREAD case above. A turn with neither
-//   signal (a plain typed question) still gets broad, property-relevant
-//   ranking, not goal-scoped -- that residual gap is what remains open.
+//   still-unsupported DECISION_THREAD case above.
+//
+// External review, second round: the sourceContext fix above only reaches
+// turns launched from a Home Action or Journey card -- a plain typed
+// question (no launchContext at all) still got fully property-wide
+// ranking, so two unrelated questions about the same property ("Should I
+// sell or rent?" vs. "What's my HVAC status?") produced near-identical
+// next-action lists, contradicting FRD §27's "current request, current
+// response... logical decision path" inputs. Threading the literal
+// question/answer TEXT into `capabilityCandidateMatcher` was already
+// scoped out above (no free-text scoring mechanism exists there, and
+// building one is separate, much larger work). What FRD §27 actually asks
+// this module to reuse is the matcher's existing STRUCTURED relationship
+// data, not literal text -- and `currentCapabilityId` (derived from
+// `ASK_OPERATION_CAPABILITY[operationId]`, already computed on every turn
+// for exclusion) already names, in structured form, exactly what the
+// current response was about, independent of whether a launchContext
+// exists. `capability.recommendation.explicitRelatedCapabilityIds` is a
+// real, populated, registry-validated relationship table (`RELATED_CAPABILITIES`,
+// `capabilityDefinitionFactory.ts`; every id round-trips through
+// `createToolCapabilityRegistry`'s own no-self-reference/no-unknown-id
+// validation, `capabilityRegistry.ts:82-92`) -- the same data the matcher's
+// own `COMPLETION_OUTPUT_RELATIONSHIP` match kind reads
+// (`capabilityCandidateMatcher.ts:361-365`) and that the sibling "System A"
+// related-capabilities feature (`capabilityRelatedResolver.ts`) also reads
+// directly. Reusing it here (`explicitlyRelatedCapabilityIds` below) to
+// stable-promote already-eligible, already-ranked suggestions that the
+// just-answered capability explicitly names as related closes this for
+// EVERY turn with an `ASK_OPERATION_CAPABILITY` entry, not only
+// launch-context turns -- without inventing new free-text NLP scoring or a
+// new `sourceContext` kind, and without touching the shared
+// `capabilityRecommendation.service.ts` pipeline (this is a local,
+// post-fetch reordering of an already-governed/ranked list, same
+// `baseScore`-respecting order preserved within each partition). A turn
+// whose operation has no `ASK_OPERATION_CAPABILITY` entry (GROUNDED_GUIDANCE)
+// still falls back to unpromoted, property-wide ranking -- that residual
+// case is a real, separate gap (no capability-of-record for that turn at
+// all), not silently absorbed into this fix.
 import { getCapabilitySuggestions } from '../capabilityRecommendation.service';
 import { canonicalCapabilityRegistry, type CapabilityExplicitSourceContext, type CapabilitySuggestion } from '../../productFramework/capabilities';
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
@@ -70,19 +105,61 @@ function readinessLabel(state: 'READY' | 'NEEDS_CONTEXT'): string {
 type AskNextActionCapability = Extract<AskPresentationBlock, { type: 'CAPABILITY_LIST' }>['capabilities'][number];
 
 /**
+ * External review, second round: the structured, registry-validated
+ * counterpart to `deriveAskNextActionsSourceContext` (see this file's
+ * header) -- resolves the just-answered capability's own declared
+ * `explicitRelatedCapabilityIds` so a plain typed question (no launch
+ * context) can still promote genuinely on-topic suggestions. Returns an
+ * empty set when the operation has no `ASK_OPERATION_CAPABILITY` entry, or
+ * when that capability declares no related capabilities -- both real,
+ * unpromoted fallback cases, not errors. Exported for direct unit testing
+ * (pure, no I/O).
+ */
+export function explicitlyRelatedCapabilityIds(
+  currentCapabilityId: string | undefined,
+): ReadonlySet<string> {
+  if (!currentCapabilityId) return new Set();
+  const capability = canonicalCapabilityRegistry.getById(currentCapabilityId);
+  return new Set(capability?.recommendation.explicitRelatedCapabilityIds ?? []);
+}
+
+/**
+ * Stable-promotes suggestions the just-answered capability explicitly
+ * names as related ahead of the rest, preserving each partition's incoming
+ * (already `baseScore`-ranked) relative order. A no-op when
+ * `relatedCapabilityIds` is empty, so callers with no structured turn
+ * signal see unchanged, property-wide ordering.
+ */
+function prioritizeExplicitlyRelated<T extends { capabilityId: string }>(
+  suggestions: readonly T[],
+  relatedCapabilityIds: ReadonlySet<string>,
+): T[] {
+  if (relatedCapabilityIds.size === 0) return [...suggestions];
+  const related: T[] = [];
+  const rest: T[] = [];
+  for (const suggestion of suggestions) {
+    (relatedCapabilityIds.has(suggestion.capabilityId) ? related : rest).push(suggestion);
+  }
+  return [...related, ...rest];
+}
+
+/**
  * The pure half of this module: given an already-fetched suggestion list
  * (from `getCapabilitySuggestions`, the one I/O call this module makes),
  * the just-answered operation's own capability id (if any --
  * GROUNDED_GUIDANCE and other operations with no `ASK_OPERATION_CAPABILITY`
- * entry pass `undefined`), and the set of capabilities owned by this
- * session's own last-5 completed turns (FRD §27's `askSuggestionPolicy.ts`
+ * entry pass `undefined`), the set of capabilities owned by this session's
+ * own last-5 completed turns (FRD §27's `askSuggestionPolicy.ts`
  * repeat-filter requirement, applied here to a structured capability list
- * rather than message strings -- see this file's header), excludes both
- * from the result and maps the rest onto the `CAPABILITY_LIST` block's
- * exact capability shape. `getCapabilitySuggestions` already excludes
- * `UNAVAILABLE` candidates and applies its own property-wide dismissal-
- * cooldown suppression/governance, so no further filtering happens here
- * beyond these two exclusions and the bound. Exported for direct unit
+ * rather than message strings -- see this file's header), and the current
+ * capability's own explicitly-related capability ids (external review,
+ * second round -- see this file's header and `explicitlyRelatedCapabilityIds`
+ * above), excludes the first two from the result, promotes the third, and
+ * maps what remains onto the `CAPABILITY_LIST` block's exact capability
+ * shape. `getCapabilitySuggestions` already excludes `UNAVAILABLE`
+ * candidates and applies its own property-wide dismissal-cooldown
+ * suppression/governance, so no further filtering happens here beyond
+ * these exclusions, the promotion, and the bound. Exported for direct unit
  * testing (pure, no I/O -- `canonicalCapabilityRegistry` is an in-memory
  * manifest lookup, not a DB call, so this remains synchronous and DB-free).
  */
@@ -90,9 +167,10 @@ export function selectAskNextActionCapabilities(
   suggestions: readonly CapabilitySuggestion[],
   currentCapabilityId: string | undefined,
   recentCompletedCapabilityIds: ReadonlySet<string> = new Set(),
+  relatedCapabilityIds: ReadonlySet<string> = new Set(),
 ): AskNextActionCapability[] {
-  return suggestions
-    .filter((suggestion) => suggestion.capabilityId !== currentCapabilityId && !recentCompletedCapabilityIds.has(suggestion.capabilityId))
+  const eligible = suggestions.filter((suggestion) => suggestion.capabilityId !== currentCapabilityId && !recentCompletedCapabilityIds.has(suggestion.capabilityId));
+  return prioritizeExplicitlyRelated(eligible, relatedCapabilityIds)
     .slice(0, MAX_ASK_NEXT_ACTIONS)
     .flatMap((suggestion) => {
       const capability = canonicalCapabilityRegistry.getById(suggestion.capabilityId);
@@ -181,6 +259,7 @@ export async function buildAskNextActionsBlock(input: {
 }): Promise<AskPresentationBlock | null> {
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operationId];
   const sourceContext = deriveAskNextActionsSourceContext(input.launchContext);
+  const relatedCapabilityIds = explicitlyRelatedCapabilityIds(currentCapabilityId);
   const response = await getCapabilitySuggestions({
     propertyId: input.propertyId,
     userId: input.userId,
@@ -188,17 +267,24 @@ export async function buildAskNextActionsBlock(input: {
     limit: CAPABILITY_SUGGESTIONS_FETCH_LIMIT,
     sourceContext,
   });
-  const capabilities = selectAskNextActionCapabilities(response.suggestions, currentCapabilityId, input.recentCompletedCapabilityIds);
+  const capabilities = selectAskNextActionCapabilities(
+    response.suggestions,
+    currentCapabilityId,
+    input.recentCompletedCapabilityIds,
+    relatedCapabilityIds,
+  );
   if (!capabilities.length) return null;
   return {
     type: 'CAPABILITY_LIST',
     id: 'ask-next-actions',
     title: 'What comes next',
     // External review [P1]: this previously said "Ranked from this answer"
-    // unconditionally, which overstated the behavior even before this fix
-    // (no answer content ever fed ranking) -- now genuinely true only when
-    // a real sourceContext was derived from the launch context above.
-    description: sourceContext
+    // unconditionally, which overstated the behavior even before that fix
+    // (no answer content ever fed ranking). External review, second round:
+    // widened to also cover the explicit-related-capability promotion
+    // above, which is genuinely "ranked for what you just did" even with
+    // no launch context.
+    description: (sourceContext || relatedCapabilityIds.size > 0)
       ? 'Ranked for what you just did, from your live capability registry.'
       : 'From your live capability registry, prioritized for this property.',
     capabilities,
