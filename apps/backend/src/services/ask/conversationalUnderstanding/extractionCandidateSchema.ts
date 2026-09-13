@@ -59,6 +59,17 @@ export const EventExtractionCandidateSchema = z.object({
   amount: z.number().nonnegative().max(10_000_000).nullable().optional(),
   currency: z.string().trim().length(3).nullable().optional(),
   providerName: z.string().trim().max(160).nullable().optional(),
+  // Code review finding (2026-09-13): a correction statement ("Actually,
+  // that roof replacement cost $15,000") had no target to resolve to --
+  // this schema had no slot for it, and the extraction call received no
+  // context about prior events to reference in the first place. Set only
+  // when the homeowner is clearly correcting a specific, recently-captured
+  // event supplied in the extraction call's bounded context (see
+  // extractionContract.ts's RECENT HOME EVENTS section); the caller
+  // (runStructuredExtraction) validates this against that same bounded
+  // list and drops the candidate if it names an id outside it, so this
+  // schema itself only proves the envelope shape, not that the id is real.
+  correctingEventId: z.string().trim().min(1).nullable().optional(),
 }).refine(
   (candidate) => {
     if (candidate.datePrecision === 'RANGE') return Boolean(candidate.dateRangeStart && candidate.dateRangeEnd);

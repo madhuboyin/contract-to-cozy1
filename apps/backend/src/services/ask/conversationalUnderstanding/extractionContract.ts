@@ -36,7 +36,20 @@ const ILLUSTRATIVE_FACT_KEYS = [
   FINANCING_CAPTURE_FACT_KEY,
 ];
 
-const SYSTEM_PROMPT = `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
+// Code review finding (2026-09-13): a correction statement ("Actually, that
+// roof replacement cost $15,000") had nothing to resolve against -- the
+// model was never shown any prior events, so it had no way to identify a
+// correction target even if the schema had a slot for one. Bounded (not the
+// full timeline) per the same "no unbounded context" convention as
+// DecisionThread's own structured-state-only rule (FRD §26).
+export interface RecentHomeEventContext {
+  id: string;
+  title: string;
+  occurredAt: string;
+  amount: number | null;
+}
+
+const SYSTEM_PROMPT_TEMPLATE = (recentHomeEvents: RecentHomeEventContext[]) => `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
 
 Return a JSON object: { "candidates": [...] }, an array of at most ${MAX_EXTRACTION_CANDIDATES_PER_TURN} candidates (empty array if nothing qualifies).
 
@@ -65,10 +78,16 @@ EVENT -- something that happened to the home (a repair, replacement, install, se
   "amount": the cost in dollars as a plain number if stated, otherwise null,
   "currency": "USD" if an amount was given, otherwise null,
   "providerName": the name of a contractor/company mentioned, otherwise null,
+  "correctingEventId": if this statement corrects one of the RECENT HOME EVENTS listed below (e.g. "Actually, that roof replacement cost $15,000" referring to a listed roof event), the exact id of that event from the list below. Otherwise null. NEVER invent an id that is not in the list below.
   "extractionConfidence": 0 to 1,
   "attribution": "FIRSTHAND" | "THIRD_PARTY_RELAYED" | "INFERRED",
   "sourceSentence": the exact sentence this was extracted from
 }
+
+RECENT HOME EVENTS ON THIS PROPERTY (for correction matching ONLY -- never treat these as new information to extract, and never invent an id not listed here):
+${recentHomeEvents.length
+    ? recentHomeEvents.map((event) => `- id: ${event.id}, title: "${event.title}", date: ${event.occurredAt}${event.amount != null ? `, amount: $${event.amount}` : ''}`).join('\n')
+    : '(none)'}
 
 Rules:
 - If the message is only a question, a hypothetical, or unrelated to the home, return { "candidates": [] }.
@@ -87,6 +106,26 @@ export interface RunStructuredExtractionResult {
   droppedCount: number;
 }
 
+// Code review finding (2026-09-13): dropping this here, not accepting it at
+// face value, matters regardless of which parse path produced the
+// candidate -- the schema only proves correctingEventId is a well-formed
+// string, not that it names a real event this call was actually shown.
+// Exported for direct unit testing (pure, no I/O) -- the rest of this file
+// requires a live Gemini call to exercise.
+export function withValidCorrectionReferences(
+  candidates: ExtractionCandidate[],
+  allowedEventIds: ReadonlySet<string>,
+): { candidates: ExtractionCandidate[]; invalidReferenceCount: number } {
+  let invalidReferenceCount = 0;
+  const filtered = candidates.filter((candidate) => {
+    if (candidate.category !== 'EVENT' || !candidate.correctingEventId) return true;
+    if (allowedEventIds.has(candidate.correctingEventId)) return true;
+    invalidReferenceCount += 1;
+    return false;
+  });
+  return { candidates: filtered, invalidReferenceCount };
+}
+
 /**
  * The one bounded, schema-constrained LLM call FRD §14 specifies. Never
  * throws for a malformed or unsupported individual candidate -- those are
@@ -95,11 +134,17 @@ export interface RunStructuredExtractionResult {
  * config, or completely unparseable JSON) -- the caller (conversationalCapture.ts)
  * treats that identically to "extraction found nothing," per FRD §13's
  * fail-safe requirement that a missed trigger never blocks the routed
- * answer.
+ * answer. `recentHomeEvents` (code review finding, 2026-09-13) is the
+ * bounded context a correction statement resolves against -- pass [] when
+ * none exists or none is needed.
  */
-export async function runStructuredExtraction(message: string): Promise<RunStructuredExtractionResult> {
+export async function runStructuredExtraction(
+  message: string,
+  recentHomeEvents: RecentHomeEventContext[] = [],
+): Promise<RunStructuredExtractionResult> {
   const ai = getGeminiClient();
   const model = resolveGovernedAIModel('FAST');
+  const allowedEventIds = new Set(recentHomeEvents.map((event) => event.id));
 
   const response = await executeGovernedAIRequest({
     routeId: 'ai:ask-conversational-capture-extraction',
@@ -108,7 +153,7 @@ export async function runStructuredExtraction(message: string): Promise<RunStruc
     structuredOutputConfigured: true,
     work: () => ai.models.generateContent({
       model,
-      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
+      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT_TEMPLATE(recentHomeEvents)}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
       config: { responseMimeType: 'application/json' },
     }),
   });
@@ -122,25 +167,31 @@ export async function runStructuredExtraction(message: string): Promise<RunStruc
   }
 
   const parsed = ExtractionResultSchema.safeParse(parsedJson);
-  if (parsed.success) return { candidates: parsed.data.candidates, droppedCount: 0 };
-
-  // The envelope itself may be well-formed ({ candidates: [...] }) even when
-  // one element inside it fails validation (an invented factKey, a
-  // datePrecision/occurredAt mismatch). Re-validate element-by-element so a
-  // single bad candidate doesn't discard every other candidate in the same
-  // response.
-  const rawCandidates = Array.isArray((parsedJson as { candidates?: unknown })?.candidates)
-    ? (parsedJson as { candidates: unknown[] }).candidates
-    : [];
-  const candidates: ExtractionCandidate[] = [];
+  let candidates: ExtractionCandidate[];
   let droppedCount = 0;
-  for (const rawCandidate of rawCandidates.slice(0, MAX_EXTRACTION_CANDIDATES_PER_TURN)) {
-    const result = ExtractionCandidateSchema.safeParse(rawCandidate);
-    if (result.success) candidates.push(result.data);
-    else droppedCount += 1;
+  if (parsed.success) {
+    candidates = parsed.data.candidates;
+  } else {
+    // The envelope itself may be well-formed ({ candidates: [...] }) even
+    // when one element inside it fails validation (an invented factKey, a
+    // datePrecision/occurredAt mismatch). Re-validate element-by-element so
+    // a single bad candidate doesn't discard every other candidate in the
+    // same response.
+    const rawCandidates = Array.isArray((parsedJson as { candidates?: unknown })?.candidates)
+      ? (parsedJson as { candidates: unknown[] }).candidates
+      : [];
+    candidates = [];
+    for (const rawCandidate of rawCandidates.slice(0, MAX_EXTRACTION_CANDIDATES_PER_TURN)) {
+      const result = ExtractionCandidateSchema.safeParse(rawCandidate);
+      if (result.success) candidates.push(result.data);
+      else droppedCount += 1;
+    }
   }
+
+  const validated = withValidCorrectionReferences(candidates, allowedEventIds);
+  droppedCount += validated.invalidReferenceCount;
   if (droppedCount > 0) {
     logger.warn({ droppedCount }, '[ask-conversational-capture] dropped invalid extraction candidate(s)');
   }
-  return { candidates, droppedCount };
+  return { candidates: validated.candidates, droppedCount };
 }

@@ -20,8 +20,10 @@ import { AskExecutionStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
+import { normalizeCaptureValue } from '../../../modules/propertyContext/application/capturePropertyFact';
+import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
-import { runStructuredExtraction } from './extractionContract';
+import { runStructuredExtraction, type RecentHomeEventContext } from './extractionContract';
 import type { EventExtractionCandidate, ExtractionCandidate, FactExtractionCandidate } from './extractionCandidateSchema';
 
 const DOMAIN_EVENT_LEASE_MS = 15 * 60_000;
@@ -51,6 +53,48 @@ export interface ConversationalCaptureInput {
 
 function confirmationExpiry(now: Date): Date {
   return new Date(now.getTime() + CONFIRMATION_WINDOW_MS);
+}
+
+// Code review finding (2026-09-13): a correction statement had nothing to
+// resolve against -- extraction received no prior events at all. Bounded to
+// a handful of the property's most recent CURRENT events, matching the
+// "no unbounded context" convention used elsewhere in this program (FRD
+// §26). Read-only, no write side effect, safe to call from both the inline
+// and worker paths.
+const RECENT_HOME_EVENT_CONTEXT_LIMIT = 8;
+
+async function fetchRecentHomeEventContext(propertyId: string): Promise<RecentHomeEventContext[]> {
+  const events = await prisma.homeEvent.findMany({
+    where: { propertyId, isCurrent: true, deletedAt: null },
+    orderBy: { occurredAt: 'desc' },
+    take: RECENT_HOME_EVENT_CONTEXT_LIMIT,
+    select: { id: true, title: true, occurredAt: true, amount: true },
+  });
+  return events.map((event) => ({
+    id: event.id,
+    title: event.title,
+    occurredAt: event.occurredAt.toISOString(),
+    amount: event.amount != null ? Number(event.amount) : null,
+  }));
+}
+
+// Code review finding (2026-09-13): a FACT candidate's value was never
+// validated before being proposed for confirmation -- an invalid number or
+// enum value would pass through to a Save card that fails only when the
+// homeowner confirms it, with no editing path to recover. Validate/normalize
+// with the exact same per-factKey logic the confirm-time writer itself uses,
+// so a candidate that would fail there is dropped here instead of proposed.
+// Exported for direct unit testing (pure, no I/O).
+export function isValidFactCandidateValue(candidate: FactExtractionCandidate): boolean {
+  try {
+    if (candidate.factKey === FINANCING_CAPTURE_FACT_KEY) {
+      return typeof candidate.value === 'number' && candidate.value >= 0 && candidate.value <= 100;
+    }
+    normalizeCaptureValue(candidate.factKey, candidate.value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expiresAt: Date, index: number) {
@@ -85,11 +129,17 @@ function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, exp
   const fields = [{ label: 'Event', value: candidate.title }];
   if (candidate.amount != null) fields.push({ label: 'Amount', value: `$${candidate.amount.toLocaleString()}` });
   if (candidate.providerName) fields.push({ label: 'Provider', value: candidate.providerName });
+  // Code review finding (2026-09-13): a correction's card previously read
+  // identically to a brand-new event, with no indication it would replace
+  // an existing record -- matching confirmCaptureEvent's own new-vs-
+  // corrected distinction (captureEventResult) at proposal time too.
+  const isCorrection = Boolean(candidate.correctingEventId);
+  const title = isCorrection ? 'Update this home timeline event?' : 'Add this to your home timeline?';
   return {
     blocks: [{
       type: 'SUMMARY' as const,
       id: `capture-event-preview-${index}`,
-      title: 'Add this to your home timeline?',
+      title,
       body: `Cozy noticed you mentioned: "${candidate.sourceSentence}"`,
       tone: 'DEFAULT' as const,
       actions: [],
@@ -97,17 +147,23 @@ function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, exp
     confirmation: {
       confirmationId,
       version: 1,
-      title: 'Add this to your home timeline?',
-      description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
+      title,
+      description: isCorrection
+        ? `Cozy noticed you mentioned: "${candidate.sourceSentence}". This replaces the existing entry with a corrected revision; the original is kept as history. No change is saved until you confirm.`
+        : `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
       fields,
-      confirmLabel: 'Add to timeline',
-      consentText: 'I confirm this is accurate and authorize ContractToCozy to add it to my home timeline.',
+      confirmLabel: isCorrection ? 'Update timeline entry' : 'Add to timeline',
+      consentText: isCorrection
+        ? 'I confirm this correction is accurate and authorize ContractToCozy to update my home timeline.'
+        : 'I confirm this is accurate and authorize ContractToCozy to add it to my home timeline.',
       expiresAt: expiresAt.toISOString(),
     },
   };
 }
 
-function buildChildExecutionData(
+// Exported for direct unit testing (pure, no I/O -- takes `now` as a param
+// rather than reading the clock itself).
+export function buildChildExecutionData(
   candidate: ExtractionCandidate,
   index: number,
   input: ConversationalCaptureInput,
@@ -132,6 +188,12 @@ function buildChildExecutionData(
       confirmationExpiresAt: expiresAt.toISOString(),
     }
     : {
+      // Code review finding (2026-09-13): threaded through so
+      // confirmCaptureEvent's existing correctingEventId branch (already
+      // built for this exact purpose since Phase 2) is actually reachable
+      // from a conversationally-extracted correction, not just a
+      // hand-constructed candidate.
+      correctingEventId: candidate.correctingEventId ?? null,
       type: candidate.eventType,
       title: candidate.title,
       summary: candidate.summary ?? null,
@@ -203,33 +265,46 @@ async function verifyClaimStillOwned(tx: Prisma.TransactionClient, domainEventId
   }
 }
 
+// Code review finding (2026-09-13): a FACT candidate's value was never
+// checked before being turned into a confirmation card -- filtering it here
+// (before persistCandidates opens its transaction) means an invalid value
+// never reaches the homeowner as a Save card that would only fail once
+// confirmed.
+// Exported for direct unit testing (pure, no I/O).
+export function filterValidCandidates(candidates: ExtractionCandidate[]): ExtractionCandidate[] {
+  return candidates.filter((candidate) => candidate.category !== 'FACT' || isValidFactCandidateValue(candidate));
+}
+
+/**
+ * Code review finding (2026-09-13): this used to take a markProcessed flag
+ * and, for the worker path, rely on processDomainEvents.job.ts's own
+ * generic post-handler write to mark the event PROCESSED -- a SEPARATE,
+ * non-atomic write from the one that created the candidates. A crash
+ * between the two left the candidates durably committed but the event
+ * still PROCESSING; once its lease expired, the event was reclaimed and
+ * extraction ran again, and the retried attempt's OWN candidates would
+ * reuse the first attempt's already-created rows purely by clientRequestId
+ * index position -- silently mixing an old candidate's content with a
+ * different new extraction result at the same index. Always marking
+ * PROCESSED inside this SAME transaction (both paths) closes that window:
+ * a crash before this transaction commits means nothing was created at
+ * all (safe to fully retry); a crash after means the row is already both
+ * populated AND PROCESSED (safe, nothing to retry). The workers' own
+ * generic post-handler write still runs afterward for the worker path and
+ * is now a harmless no-op re-write of the same already-PROCESSED status.
+ */
 async function persistCandidates(
   domainEventId: string,
   claimedAttempts: number,
-  candidates: ExtractionCandidate[],
+  rawCandidates: ExtractionCandidate[],
   input: ConversationalCaptureInput,
-  // The inline (backend, same-process) path is the only caller of this
-  // event; nothing else marks it PROCESSED, so it must do so itself. The
-  // worker-driven path (processAskExtractionRequestedEvent, called from
-  // processDomainEvents.job.ts's generic dispatch loop) passes false --
-  // that loop already marks every event type PROCESSED generically after
-  // its handler returns, using its own (pre-processing) payload snapshot;
-  // marking it here too would just be overwritten by that less-accurate
-  // write immediately after, not a correctness issue but a wasted/confusing
-  // second write.
-  markProcessed: boolean,
 ): Promise<PersistedCaptureExecution[]> {
-  if (candidates.length === 0) {
-    if (markProcessed) {
-      await prisma.domainEvent.update({
-        where: { id: domainEventId },
-        data: { status: 'PROCESSED', processedAt: new Date(), processingStartedAt: null, leaseExpiresAt: null },
-      });
-    }
-    return [];
-  }
+  const candidates = filterValidCandidates(rawCandidates);
   const now = new Date();
   return prisma.$transaction(async (tx) => {
+    // Applied even for zero candidates (code review finding, 2026-09-13):
+    // a stale attempt whose claim was already reclaimed must not mark the
+    // event PROCESSED out from under the attempt that reclaimed it.
     await verifyClaimStillOwned(tx, domainEventId, claimedAttempts);
     const created: PersistedCaptureExecution[] = [];
     for (const [index, candidate] of candidates.entries()) {
@@ -242,18 +317,16 @@ async function persistCandidates(
       });
       created.push(existing ?? await tx.askExecution.create({ data }));
     }
-    if (markProcessed) {
-      await tx.domainEvent.update({
-        where: { id: domainEventId },
-        data: {
-          status: 'PROCESSED',
-          processedAt: new Date(),
-          processingStartedAt: null,
-          leaseExpiresAt: null,
-          payload: { processingOutcome: { candidateCount: created.length } },
-        },
-      });
-    }
+    await tx.domainEvent.update({
+      where: { id: domainEventId },
+      data: {
+        status: 'PROCESSED',
+        processedAt: new Date(),
+        processingStartedAt: null,
+        leaseExpiresAt: null,
+        payload: { processingOutcome: { candidateCount: created.length } },
+      },
+    });
     return created;
   });
 }
@@ -322,8 +395,9 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   // becomes an unhandled rejection.
   const attempt = (async () => {
     try {
-      const { candidates } = await runStructuredExtraction(input.message);
-      return await persistCandidates(domainEventId, claimedAttempts, candidates, input, true);
+      const recentHomeEvents = await fetchRecentHomeEventContext(input.propertyId);
+      const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents);
+      return await persistCandidates(domainEventId, claimedAttempts, candidates, input);
     } catch (error) {
       logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] extraction attempt failed');
       // Release the claim promptly (rather than holding a 15-minute lease
@@ -365,7 +439,8 @@ export async function processAskExtractionRequestedEvent(
   const parent = await prisma.askExecution.findUnique({ where: { id: parentExecutionId }, select: { sessionId: true, contextVersion: true } });
   if (!parent) throw new Error(`ASK_EXTRACTION_REQUESTED event's parent execution ${parentExecutionId} no longer exists`);
 
-  const { candidates } = await runStructuredExtraction(message);
+  const recentHomeEvents = await fetchRecentHomeEventContext(event.propertyId);
+  const { candidates } = await runStructuredExtraction(message, recentHomeEvents);
   const created = await persistCandidates(event.id, claimedAttempts, candidates, {
     userId: event.userId,
     sessionId: parent.sessionId,
@@ -374,6 +449,6 @@ export async function processAskExtractionRequestedEvent(
     message,
     contextVersion: parent.contextVersion,
     skipDueToRoutedCapture: false,
-  }, false);
+  });
   return { candidateCount: created.length };
 }

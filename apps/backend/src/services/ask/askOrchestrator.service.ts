@@ -7157,12 +7157,21 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const resolvedProperty = await propertySummary(executionPropertyId);
     // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger
     // call site; FRD §10 Turn Processing Contract steps 7-8). Independent of
-    // the routed answer above (FRD §10: "Steps 6 and 8 are independent") --
-    // gated off entirely when the routed turn itself is already asking for a
-    // confirmation (avoids stacking two confirmation cards in one turn) or
-    // when routing never resolved to a property.
+    // the routed answer above (FRD §10: "Steps 6 and 8 are independent --
+    // routing succeeding or failing does not gate extraction"). Code review
+    // finding (2026-09-13): this previously also skipped extraction whenever
+    // routing needed clarification or the routed operation itself returned
+    // NEEDS_CONFIRMATION -- an invented UX simplification, not something the
+    // FRD asked for, and it silently discarded an independent home fact
+    // stated in the same message as an ambiguous or confirmation-requiring
+    // command (e.g. "Turn on the AC, and I replaced the roof last summer for
+    // $14,500" would lose the roof fact entirely). childExecutions already
+    // supports multiple simultaneous confirmation cards in one turn by
+    // design (bounded to 3) -- there is no real stacking conflict to avoid.
+    // The only remaining gate is executionPropertyId, since extraction needs
+    // a property to write facts/events to.
     let childExecutionResponses: AskExecutionResponse[] = [];
-    if (executionPropertyId && !routingDecision.requiresClarification && result.status !== 'NEEDS_CONFIRMATION') {
+    if (executionPropertyId) {
       try {
         const capturedChildren = await runConversationalCaptureForTurn({
           userId,

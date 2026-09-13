@@ -46,6 +46,11 @@ export const AI_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Ob
   ai('ai:agent-hvac-typed-claim-narration', 'apps/backend/src/services/agents/agentLlmPurpose.contract.ts', ['home-actions'], 'Use the deterministic registered typed claims without generated narration.'),
   ai('ai:climate-risk', 'apps/backend/src/services/climateRiskPredictor.service.ts', ['climate-risk'], 'Disclose that no property-grounded risk estimate is available.'),
   ai('ai:moving-concierge', 'apps/backend/src/services/movingConcierge.service.ts', ['buyer-closing'], 'Show the canonical moving checklist only.'),
+  // Code review finding (2026-09-13): this route was called by
+  // extractionContract.ts with no registry entry, so every extraction
+  // attempt threw AI_SOURCE_UNREGISTERED before the model was ever invoked
+  // -- conversational capture never actually worked, flag on or off.
+  ai('ai:ask-conversational-capture-extraction', 'apps/backend/src/services/ask/conversationalUnderstanding/extractionContract.ts', ['ask'], 'Extraction produces no candidates for the turn; the routed answer and turn response are unaffected.'),
 ]);
 
 export const PLATFORM_EXTERNAL_SOURCE_REGISTRY: readonly IntelligenceSourceRegistryEntry[] = Object.freeze([
