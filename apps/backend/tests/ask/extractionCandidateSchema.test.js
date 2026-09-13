@@ -147,3 +147,33 @@ test('ExtractionResultSchema caps candidates at MAX_EXTRACTION_CANDIDATES_PER_TU
 test('ExtractionResultSchema accepts an empty candidate list (the common case: nothing to capture)', () => {
   assert.equal(ExtractionResultSchema.safeParse({ candidates: [] }).success, true);
 });
+
+// Code review finding (2026-09-13): correctedFields is the sparse-patch
+// field list a correction candidate must name -- validated at the schema
+// level for shape (referential validity against the bounded context is
+// runStructuredExtraction's job, tested in extractionContract.test.js).
+test('accepts a correction EVENT candidate with a valid correctedFields list', () => {
+  const result = ExtractionCandidateSchema.safeParse({
+    category: 'EVENT', eventType: 'IMPROVEMENT', title: 'Roof replacement', datePrecision: 'UNKNOWN',
+    extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'Actually, that roof replacement cost $15,000.',
+    correctingEventId: 'event-1', correctedFields: ['amount'], amount: 15000,
+  });
+  assert.equal(result.success, true);
+});
+
+test('rejects a correctedFields entry that is not one of the recognized field groups', () => {
+  const result = ExtractionCandidateSchema.safeParse({
+    category: 'EVENT', eventType: 'IMPROVEMENT', title: 'Roof replacement', datePrecision: 'UNKNOWN',
+    extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'irrelevant',
+    correctingEventId: 'event-1', correctedFields: ['notARealField'],
+  });
+  assert.equal(result.success, false);
+});
+
+test('correctedFields is optional and defaults to absent for a brand-new event candidate', () => {
+  const result = ExtractionCandidateSchema.safeParse({
+    category: 'EVENT', eventType: 'REPAIR', title: 'HVAC service', datePrecision: 'EXACT_DATE',
+    occurredAt: '2026-09-12T00:00:00.000Z', extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'irrelevant',
+  });
+  assert.equal(result.success, true);
+});

@@ -88,13 +88,22 @@ test('withValidCorrectionReferences keeps an EVENT candidate with correctingEven
   assert.equal(invalidReferenceCount, 0);
 });
 
-test('withValidCorrectionReferences keeps an EVENT candidate whose correctingEventId is in the allowed set', () => {
+test('withValidCorrectionReferences keeps an EVENT candidate whose correctingEventId is in the allowed set and names at least one corrected field', () => {
   const { candidates, invalidReferenceCount } = withValidCorrectionReferences(
-    [eventCandidate({ correctingEventId: 'event-1' })],
+    [eventCandidate({ correctingEventId: 'event-1', correctedFields: ['amount'] })],
     new Set(['event-1', 'event-2']),
   );
   assert.equal(candidates.length, 1);
   assert.equal(invalidReferenceCount, 0);
+});
+
+test('withValidCorrectionReferences DROPS an EVENT candidate whose correctingEventId is valid but correctedFields is empty (a correction naming nothing to change is meaningless)', () => {
+  const { candidates, invalidReferenceCount } = withValidCorrectionReferences(
+    [eventCandidate({ correctingEventId: 'event-1', correctedFields: [] })],
+    new Set(['event-1']),
+  );
+  assert.equal(candidates.length, 0);
+  assert.equal(invalidReferenceCount, 1);
 });
 
 test('withValidCorrectionReferences DROPS an EVENT candidate whose correctingEventId is not in the allowed set (the model must not invent an id it was never shown)', () => {

@@ -10,6 +10,7 @@ const {
   isValidFactCandidateValue,
   filterValidCandidates,
   buildChildExecutionData,
+  buildEventContentParameters,
 } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger call
@@ -158,12 +159,72 @@ test('buildChildExecutionData threads correctingEventId into the EVENT parameter
   const correctingCandidate = {
     category: 'EVENT', eventType: 'IMPROVEMENT', title: 'Roof replacement', datePrecision: 'UNKNOWN',
     extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'Actually, that roof replacement cost $15,000.',
-    correctingEventId: 'event-1', amount: 15000, currency: 'USD',
+    correctingEventId: 'event-1', correctedFields: ['amount'], amount: 15000, currency: 'USD',
   };
   const data = buildChildExecutionData(correctingCandidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
   assert.equal(data.parametersJson.correctingEventId, 'event-1');
   assert.match(data.resultJson.confirmation.title, /Update/);
   assert.doesNotMatch(data.resultJson.confirmation.title, /^Add /);
+});
+
+// Code review finding (2026-09-13): the exact reproduced defect -- a
+// cost-only correction previously ALSO set date to "now", precision to
+// UNKNOWN, and provider/summary/dateRange to null, which updateHomeEvent's
+// patch.X !== undefined ? patch.X : existing.X logic then treats as
+// explicit, intentional overwrites of the original event's real values.
+test('buildEventContentParameters: a correction naming only ["amount"] includes ONLY amount -- title/date/provider/summary/currency are OMITTED, not nulled, so the original record survives untouched', () => {
+  const correctingCandidate = {
+    category: 'EVENT', eventType: 'IMPROVEMENT', title: 'placeholder title the model had to fill in', datePrecision: 'UNKNOWN',
+    extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'Actually, that roof replacement cost $15,000.',
+    correctingEventId: 'event-1', correctedFields: ['amount'], amount: 15000, currency: 'USD',
+    summary: null, providerName: null, occurredAt: null, dateRangeStart: null, dateRangeEnd: null,
+  };
+  const params = buildEventContentParameters(correctingCandidate, new Date('2026-09-13T00:00:00.000Z'));
+  assert.deepEqual(params, { amount: 15000 });
+  assert.equal('title' in params, false);
+  assert.equal('occurredAt' in params, false);
+  assert.equal('datePrecision' in params, false);
+  assert.equal('dateRangeStart' in params, false);
+  assert.equal('dateRangeEnd' in params, false);
+  assert.equal('providerName' in params, false);
+  assert.equal('summary' in params, false);
+  assert.equal('currency' in params, false, 'currency is a distinct correctable field from amount -- correcting the amount alone must not also touch currency');
+  assert.equal('type' in params, false);
+});
+
+test('buildEventContentParameters: correctedFields: ["date"] bundles occurredAt/datePrecision/dateRangeStart/dateRangeEnd together, and nothing else', () => {
+  const correctingCandidate = {
+    category: 'EVENT', eventType: 'IMPROVEMENT', title: 'placeholder', datePrecision: 'YEAR',
+    extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'Actually, that was in 2023, not 2024.',
+    correctingEventId: 'event-1', correctedFields: ['date'], occurredAt: '2023-06-01T00:00:00.000Z',
+  };
+  const params = buildEventContentParameters(correctingCandidate, new Date('2026-09-13T00:00:00.000Z'));
+  assert.deepEqual(Object.keys(params).sort(), ['dateRangeEnd', 'dateRangeStart', 'datePrecision', 'occurredAt'].sort());
+  assert.equal(params.occurredAt, '2023-06-01T00:00:00.000Z');
+  assert.equal(params.datePrecision, 'YEAR');
+});
+
+test('buildEventContentParameters: a NEW event (correctingEventId null) still includes every content field, unchanged from before this fix', () => {
+  const newCandidate = {
+    category: 'EVENT', eventType: 'REPAIR', title: 'HVAC service', datePrecision: 'EXACT_DATE',
+    extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'I serviced the HVAC yesterday for $275.',
+    correctingEventId: null, occurredAt: '2026-09-12T00:00:00.000Z', amount: 275, currency: 'USD', providerName: null, summary: null,
+  };
+  const params = buildEventContentParameters(newCandidate, new Date('2026-09-13T00:00:00.000Z'));
+  for (const field of ['type', 'title', 'summary', 'occurredAt', 'datePrecision', 'dateRangeStart', 'dateRangeEnd', 'amount', 'currency', 'providerName']) {
+    assert.ok(field in params, `expected new-event parameters to include ${field}`);
+  }
+});
+
+test('a correction candidate with correctingEventId set but no correctedFields (or an empty array) is dropped by withValidCorrectionReferences, not silently accepted as a no-op patch', () => {
+  const { withValidCorrectionReferences } = require('../../src/services/ask/conversationalUnderstanding/extractionContract.ts');
+  const noFieldsNamed = {
+    category: 'EVENT', eventType: 'IMPROVEMENT', title: 'x', datePrecision: 'UNKNOWN',
+    extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'x', correctingEventId: 'event-1', correctedFields: [],
+  };
+  const { candidates, invalidReferenceCount } = withValidCorrectionReferences([noFieldsNamed], new Set(['event-1']));
+  assert.equal(candidates.length, 0);
+  assert.equal(invalidReferenceCount, 1);
 });
 
 test('buildChildExecutionData sets correctingEventId to null (not undefined) for a brand-new EVENT candidate, and titles the card as an add', () => {

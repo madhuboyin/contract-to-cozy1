@@ -126,15 +126,32 @@ function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expir
 
 function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, expiresAt: Date, index: number) {
   const confirmationId = `capture-event-${index}-${expiresAt.getTime()}`;
-  const fields = [{ label: 'Event', value: candidate.title }];
-  if (candidate.amount != null) fields.push({ label: 'Amount', value: `$${candidate.amount.toLocaleString()}` });
-  if (candidate.providerName) fields.push({ label: 'Provider', value: candidate.providerName });
   // Code review finding (2026-09-13): a correction's card previously read
   // identically to a brand-new event, with no indication it would replace
   // an existing record -- matching confirmCaptureEvent's own new-vs-
   // corrected distinction (captureEventResult) at proposal time too.
   const isCorrection = Boolean(candidate.correctingEventId);
   const title = isCorrection ? 'Update this home timeline event?' : 'Add this to your home timeline?';
+  // Code review finding (2026-09-13): a correction card now shows ONLY the
+  // field(s) actually being changed, matching the sparse patch itself
+  // (buildChildExecutionData) -- showing a generic "Event"/"Amount" summary
+  // here would misleadingly imply the whole record was being restated.
+  const fields: Array<{ label: string; value: string }> = [];
+  if (isCorrection) {
+    const corrected = new Set(candidate.correctedFields ?? []);
+    if (corrected.has('title')) fields.push({ label: 'New title', value: candidate.title });
+    if (corrected.has('amount') && candidate.amount != null) fields.push({ label: 'New amount', value: `$${candidate.amount.toLocaleString()}` });
+    if (corrected.has('currency') && candidate.currency) fields.push({ label: 'New currency', value: candidate.currency });
+    if (corrected.has('providerName') && candidate.providerName) fields.push({ label: 'New provider', value: candidate.providerName });
+    if (corrected.has('date')) fields.push({ label: 'New date', value: candidate.occurredAt ?? candidate.dateRangeStart ?? 'Unknown' });
+    if (corrected.has('summary') && candidate.summary) fields.push({ label: 'New details', value: candidate.summary });
+    if (corrected.has('eventType')) fields.push({ label: 'New type', value: candidate.eventType });
+    if (fields.length === 0) fields.push({ label: 'Event', value: candidate.title });
+  } else {
+    fields.push({ label: 'Event', value: candidate.title });
+    if (candidate.amount != null) fields.push({ label: 'Amount', value: `$${candidate.amount.toLocaleString()}` });
+    if (candidate.providerName) fields.push({ label: 'Provider', value: candidate.providerName });
+  }
   return {
     blocks: [{
       type: 'SUMMARY' as const,
@@ -159,6 +176,53 @@ function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, exp
       expiresAt: expiresAt.toISOString(),
     },
   };
+}
+
+// Code review finding (2026-09-13): a correction previously built a FULL
+// new-event payload (every field explicitly set, often to a placeholder
+// like datePrecision: UNKNOWN or providerName: null since the model must
+// fill the schema's other required fields somehow) -- updateHomeEvent
+// treats every explicitly-set field as an intentional change, so a
+// $15,000-amount correction silently wiped the event's real date, provider,
+// and summary back to defaults. For a NEW event (correctingEventId null),
+// every content field is included, as before. For a CORRECTION, ONLY the
+// field group(s) the model named in correctedFields are included; every
+// other field is OMITTED (not set to null), so updateHomeEvent's own
+// `patch.X !== undefined ? patch.X : existing.X` fallback preserves the
+// original record's value untouched. Exported for direct unit testing.
+export function buildEventContentParameters(candidate: EventExtractionCandidate, now: Date): Record<string, unknown> {
+  const dateFields = () => ({
+    // HomeEvent.occurredAt is a required, non-nullable column -- even a
+    // RANGE/UNKNOWN-precision candidate needs a best-guess anchor.
+    // datePrecision is what tells a reader not to trust this to the day.
+    occurredAt: candidate.occurredAt ?? candidate.dateRangeStart ?? now.toISOString(),
+    datePrecision: candidate.datePrecision,
+    dateRangeStart: candidate.dateRangeStart ?? null,
+    dateRangeEnd: candidate.dateRangeEnd ?? null,
+  });
+
+  if (!candidate.correctingEventId) {
+    return {
+      type: candidate.eventType,
+      title: candidate.title,
+      summary: candidate.summary ?? null,
+      ...dateFields(),
+      amount: candidate.amount ?? null,
+      currency: candidate.amount != null ? (candidate.currency ?? 'USD') : null,
+      providerName: candidate.providerName ?? null,
+    };
+  }
+
+  const corrected = new Set(candidate.correctedFields ?? []);
+  const sparse: Record<string, unknown> = {};
+  if (corrected.has('eventType')) sparse.type = candidate.eventType;
+  if (corrected.has('title')) sparse.title = candidate.title;
+  if (corrected.has('summary')) sparse.summary = candidate.summary ?? null;
+  if (corrected.has('date')) Object.assign(sparse, dateFields());
+  if (corrected.has('amount')) sparse.amount = candidate.amount ?? null;
+  if (corrected.has('currency')) sparse.currency = candidate.currency ?? null;
+  if (corrected.has('providerName')) sparse.providerName = candidate.providerName ?? null;
+  return sparse;
 }
 
 // Exported for direct unit testing (pure, no I/O -- takes `now` as a param
@@ -194,19 +258,7 @@ export function buildChildExecutionData(
       // from a conversationally-extracted correction, not just a
       // hand-constructed candidate.
       correctingEventId: candidate.correctingEventId ?? null,
-      type: candidate.eventType,
-      title: candidate.title,
-      summary: candidate.summary ?? null,
-      // HomeEvent.occurredAt is a required, non-nullable column -- even a
-      // RANGE/UNKNOWN-precision candidate needs a best-guess anchor.
-      // datePrecision is what tells a reader not to trust this to the day.
-      occurredAt: candidate.occurredAt ?? candidate.dateRangeStart ?? now.toISOString(),
-      datePrecision: candidate.datePrecision,
-      dateRangeStart: candidate.dateRangeStart ?? null,
-      dateRangeEnd: candidate.dateRangeEnd ?? null,
-      amount: candidate.amount ?? null,
-      currency: candidate.amount != null ? (candidate.currency ?? 'USD') : null,
-      providerName: candidate.providerName ?? null,
+      ...buildEventContentParameters(candidate, now),
       attribution: candidate.attribution,
       captureChannel: CAPTURE_CHANNEL,
       extractionConfidence: candidate.extractionConfidence,

@@ -462,8 +462,25 @@ export async function processDomainEventsJob(
           throw new Error(`Unhandled DomainEvent type: ${type}`);
       }
 
-      await prisma.domainEvent.update({
-        where: { id: ev.id },
+      // Code review finding (2026-09-13): this used to be an unconditional
+      // update -- for ASK_EXTRACTION_REQUESTED, whose handler
+      // (handleAskExtractionRequested -> persistCandidates) already commits
+      // its candidates AND marks this event PROCESSED atomically inside its
+      // OWN transaction, this write is redundant by design (see
+      // conversationalCapture.ts). If this redundant write then failed for
+      // any reason (a transient DB blip), the thrown error fell into the
+      // catch block below, which used to unconditionally flip the row's
+      // status to FAILED/DEAD_LETTER -- discarding a genuinely successful,
+      // already-durably-committed extraction and letting the poller
+      // reprocess it. Guarded on status still being PROCESSING: for every
+      // OTHER event type (none of which self-complete), the row IS still
+      // PROCESSING here, so this proceeds exactly as before; for
+      // ASK_EXTRACTION_REQUESTED, the row is already PROCESSED by the time
+      // we reach this line, so the guard naturally no-ops instead of
+      // re-writing (and potentially clobbering) what the handler already
+      // committed.
+      await prisma.domainEvent.updateMany({
+        where: { id: ev.id, status: 'PROCESSING' as DomainEventStatus },
         data: {
           status: 'PROCESSED' as DomainEventStatus,
           processedAt: new Date(),
@@ -492,8 +509,21 @@ export async function processDomainEventsJob(
       const availableAt = terminalStatus === 'FAILED'
         ? new Date(Date.now() + computeBackoffMinutes(nextAttempts) * 60_000)
         : new Date();
-      await prisma.domainEvent.update({
-        where: { id: ev.id },
+      // Code review finding (2026-09-13): fenced on both status still being
+      // PROCESSING and attempts still matching this iteration's own claimed
+      // value (nextAttempts, the value this loop's own claim above set).
+      // Without the status condition, a handler whose OWN transaction had
+      // already committed the row to PROCESSED (ASK_EXTRACTION_REQUESTED)
+      // but then failed on this file's own redundant follow-up write would
+      // have this catch block flip a genuinely successful, already-durable
+      // result back to FAILED/DEAD_LETTER. Without the attempts condition,
+      // a handler that is merely slow -- past its own lease's expiry, with
+      // a later attempt having already reclaimed and possibly completed the
+      // row -- would let this stale attempt's failure incorrectly overwrite
+      // that later attempt's state. Either guard failing to match means
+      // this specific attempt's failure is stale and must not be recorded.
+      const failureWrite = await prisma.domainEvent.updateMany({
+        where: { id: ev.id, status: 'PROCESSING' as DomainEventStatus, attempts: nextAttempts },
         data: {
           status: terminalStatus,
           lastError: msg.slice(0, 2000),
@@ -502,8 +532,10 @@ export async function processDomainEventsJob(
           leaseExpiresAt: null,
         },
       });
-      if (terminalStatus === 'DEAD_LETTER') deadLettered += 1;
-      else failed += 1;
+      if (failureWrite.count === 1) {
+        if (terminalStatus === 'DEAD_LETTER') deadLettered += 1;
+        else failed += 1;
+      }
     } finally {
       clearInterval(leaseHeartbeat);
     }

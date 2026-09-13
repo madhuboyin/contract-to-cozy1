@@ -70,6 +70,24 @@ export const EventExtractionCandidateSchema = z.object({
   // list and drops the candidate if it names an id outside it, so this
   // schema itself only proves the envelope shape, not that the id is real.
   correctingEventId: z.string().trim().min(1).nullable().optional(),
+  // Code review finding (2026-09-13): without this, a correction candidate
+  // was built into a full new-event payload -- every field (date, provider,
+  // summary, currency) got an explicit value (often a placeholder like
+  // datePrecision: UNKNOWN or providerName: null, since the model has to
+  // fill the schema's other required fields somehow), and the correction
+  // writer (updateHomeEvent, via confirmCaptureEvent) treats every
+  // explicitly-set field as an intentional change -- so a "the roof cost
+  // $15,000, not what I said" correction silently wiped the event's real
+  // date, provider, and summary back to defaults. This is the sparse
+  // patch's field list: conversationalCapture.ts's buildChildExecutionData
+  // includes ONLY the field group(s) named here in a correction's
+  // parameters, leaving everything else omitted (not null) so
+  // updateHomeEvent's own patch.X !== undefined ? patch.X : existing.X
+  // fallback preserves it. 'date' covers occurredAt/datePrecision/
+  // dateRangeStart/dateRangeEnd as one bundle (they must stay internally
+  // consistent with each other). Ignored entirely when correctingEventId is
+  // null (a new event always supplies every field).
+  correctedFields: z.array(z.enum(['eventType', 'title', 'summary', 'date', 'amount', 'currency', 'providerName'])).max(7).optional(),
 }).refine(
   (candidate) => {
     if (candidate.datePrecision === 'RANGE') return Boolean(candidate.dateRangeStart && candidate.dateRangeEnd);

@@ -79,6 +79,7 @@ EVENT -- something that happened to the home (a repair, replacement, install, se
   "currency": "USD" if an amount was given, otherwise null,
   "providerName": the name of a contractor/company mentioned, otherwise null,
   "correctingEventId": if this statement corrects one of the RECENT HOME EVENTS listed below (e.g. "Actually, that roof replacement cost $15,000" referring to a listed roof event), the exact id of that event from the list below. Otherwise null. NEVER invent an id that is not in the list below.
+  "correctedFields": ONLY when correctingEventId is set -- an array naming EXACTLY which of these groups the homeowner is actually correcting: "eventType", "title", "summary", "date" (covers occurredAt/datePrecision/dateRangeStart/dateRangeEnd together), "amount", "currency", "providerName". Include ONLY the group(s) genuinely being changed -- "Actually, that roof replacement cost $15,000" corrects ONLY ["amount"], nothing else, even though you still must fill in title/eventType/date fields elsewhere in this object to keep the JSON well-formed (those other fields will be IGNORED for a correction and the existing record's own values kept instead). Omit or leave empty for a new event (correctingEventId null).
   "extractionConfidence": 0 to 1,
   "attribution": "FIRSTHAND" | "THIRD_PARTY_RELAYED" | "INFERRED",
   "sourceSentence": the exact sentence this was extracted from
@@ -109,9 +110,14 @@ export interface RunStructuredExtractionResult {
 // Code review finding (2026-09-13): dropping this here, not accepting it at
 // face value, matters regardless of which parse path produced the
 // candidate -- the schema only proves correctingEventId is a well-formed
-// string, not that it names a real event this call was actually shown.
-// Exported for direct unit testing (pure, no I/O) -- the rest of this file
-// requires a live Gemini call to exercise.
+// string (and correctedFields a well-formed array), not that the id names a
+// real event this call was actually shown, or that the model actually named
+// which field(s) it means to change. A correction with correctingEventId
+// set but an empty/missing correctedFields would build a patch with nothing
+// in it -- functionally a no-op confirmation card -- so it is dropped here
+// exactly like an out-of-context id, not silently accepted. Exported for
+// direct unit testing (pure, no I/O) -- the rest of this file requires a
+// live Gemini call to exercise.
 export function withValidCorrectionReferences(
   candidates: ExtractionCandidate[],
   allowedEventIds: ReadonlySet<string>,
@@ -119,9 +125,15 @@ export function withValidCorrectionReferences(
   let invalidReferenceCount = 0;
   const filtered = candidates.filter((candidate) => {
     if (candidate.category !== 'EVENT' || !candidate.correctingEventId) return true;
-    if (allowedEventIds.has(candidate.correctingEventId)) return true;
-    invalidReferenceCount += 1;
-    return false;
+    if (!allowedEventIds.has(candidate.correctingEventId)) {
+      invalidReferenceCount += 1;
+      return false;
+    }
+    if (!candidate.correctedFields || candidate.correctedFields.length === 0) {
+      invalidReferenceCount += 1;
+      return false;
+    }
+    return true;
   });
   return { candidates: filtered, invalidReferenceCount };
 }

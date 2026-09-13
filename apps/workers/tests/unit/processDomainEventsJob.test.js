@@ -14,6 +14,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 
 require('ts-node/register');
 
@@ -21,6 +23,10 @@ const {
   MAX_DOMAIN_EVENT_ATTEMPTS,
   processDomainEventsJob,
 } = require('../../src/jobs/processDomainEvents.job.ts');
+
+function readFileSyncForJobSource() {
+  return readFileSync(resolve(__dirname, '../../src/jobs/processDomainEvents.job.ts'), 'utf8');
+}
 
 function eventFixture(overrides = {}) {
   return {
@@ -49,6 +55,12 @@ function fakeDeps({
   captureLinkReconcileShouldFail = false,
   askExtractionRequestedResult = { candidateCount: 0 },
   askExtractionRequestedShouldFail = false,
+  // Code review finding (2026-09-13): simulate the redundant success
+  // completion write itself failing (successCompletionShouldThrow) and/or
+  // the row having already moved past PROCESSING by the time either write
+  // runs (terminalWriteShouldNoOp) -- the guarded-write fix's whole point.
+  successCompletionShouldThrow = false,
+  terminalWriteShouldNoOp = false,
 }) {
   const calls = {
     updates: [],
@@ -67,8 +79,28 @@ function fakeDeps({
       domainEvent: {
         findMany: async () => pendingEvents,
         updateMany: async (args) => {
-          calls.updates.push({ kind: 'claim', args });
-          return { count: lockShouldFail ? 0 : 1 };
+          const status = args.data?.status;
+          // The original claim step (top of the loop) is the only
+          // updateMany call that also increments attempts.
+          if (status === 'PROCESSING' && args.data?.attempts) {
+            calls.updates.push({ kind: 'claim', args });
+            return { count: lockShouldFail ? 0 : 1 };
+          }
+          // Success completion (status: PROCESSED) and failure completion
+          // (status: FAILED/DEAD_LETTER) are both now guarded updateMany
+          // calls -- code review finding (2026-09-13), previously bare
+          // `update` calls with no guard at all.
+          if (status === 'PROCESSED') {
+            calls.updates.push({ kind: 'terminal', args });
+            if (successCompletionShouldThrow) throw new Error('redundant success completion write failed');
+            return { count: terminalWriteShouldNoOp ? 0 : 1 };
+          }
+          if (status === 'FAILED' || status === 'DEAD_LETTER') {
+            calls.updates.push({ kind: 'terminal', args });
+            return { count: terminalWriteShouldNoOp ? 0 : 1 };
+          }
+          // Lease heartbeat renewal (no status change) -- not tracked.
+          return { count: 1 };
         },
         update: async (args) => {
           calls.updates.push({ kind: 'terminal', args });
@@ -557,4 +589,59 @@ test('returns { processed: 0 } immediately when there are no pending events', as
 
   assert.deepEqual(result, { processed: 0 });
   assert.equal(calls.updates.length, 0);
+});
+
+// Code review finding (2026-09-13): the exact scenario reported -- a
+// handler (ASK_EXTRACTION_REQUESTED's, whose own transaction already
+// committed candidates AND marked the event PROCESSED atomically) succeeds,
+// but this file's own REDUNDANT completion write then fails for an
+// unrelated reason. Before this fix, the resulting throw fell into the
+// catch block, which unconditionally flipped the row to FAILED/DEAD_LETTER
+// -- discarding an already-successful, already-durable result and letting
+// the poller reprocess it. terminalWriteShouldNoOp simulates the row's
+// real DB state already being PROCESSED (not PROCESSING) by the time the
+// catch block's own guarded write runs, exactly as a real guarded
+// updateMany would report.
+test('a handler that already self-completed (its own atomic write already committed) is never flipped back to FAILED when this file\'s own redundant completion write subsequently fails', async () => {
+  const extractionEvent = eventFixture({
+    type: 'ASK_EXTRACTION_REQUESTED',
+    payload: { executionId: 'execution-1', message: 'I replaced the roof last summer for $14,500.' },
+  });
+  const { deps, calls } = fakeDeps({
+    pendingEvents: [extractionEvent],
+    askExtractionRequestedResult: { candidateCount: 1 },
+    successCompletionShouldThrow: true,
+    terminalWriteShouldNoOp: true,
+  });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  // Neither counter should reflect a failure -- the handler's own work
+  // genuinely succeeded; this file's own bookkeeping write simply couldn't
+  // re-confirm it, and the guard correctly recognized that and skipped.
+  assert.equal(result.failed, 0);
+  assert.equal(result.deadLettered, 0);
+  assert.equal(result.processed, 0, 'processed is not incremented when the completion write itself throws (distinct from the no-throw no-op case)');
+  const terminalWrites = calls.updates.filter((u) => u.kind === 'terminal');
+  assert.equal(terminalWrites.length, 2, 'expected one attempted PROCESSED write and one attempted FAILED/DEAD_LETTER write, both guarded');
+  assert.equal(terminalWrites[0].args.data.status, 'PROCESSED');
+  assert.ok(['FAILED', 'DEAD_LETTER'].includes(terminalWrites[1].args.data.status));
+});
+
+test('the success completion write is guarded on status still being PROCESSING (updateMany, not a bare update)', () => {
+  const source = readFileSyncForJobSource();
+  const idx = source.indexOf("status: 'PROCESSED' as DomainEventStatus,");
+  assert.ok(idx > 0);
+  const before = source.slice(Math.max(0, idx - 400), idx);
+  assert.match(before, /prisma\.domainEvent\.updateMany\(\{\s*where: \{ id: ev\.id, status: 'PROCESSING' as DomainEventStatus \}/);
+});
+
+test('the failure completion write is guarded on status still being PROCESSING AND attempts still matching this iteration\'s own claim', () => {
+  const source = readFileSyncForJobSource();
+  const idx = source.indexOf('const failureWrite = await prisma.domainEvent.updateMany(');
+  assert.ok(idx > 0);
+  const block = source.slice(idx, source.indexOf(');', idx));
+  assert.match(block, /where: \{ id: ev\.id, status: 'PROCESSING' as DomainEventStatus, attempts: nextAttempts \}/);
+  const afterIdx = source.indexOf('if (failureWrite.count === 1) {', idx);
+  assert.ok(afterIdx > idx, 'failed/deadLettered counters must only increment when the guarded write actually applied');
 });
