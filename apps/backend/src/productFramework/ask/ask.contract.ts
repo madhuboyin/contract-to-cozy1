@@ -492,7 +492,14 @@ export const CreateAskExecutionRequestSchema = z.object({
   }).optional(),
 }).strict();
 
-export const AskExecutionResponseSchema = z.object({
+// Ask Cozy Stage 3, Phase 3 (implementation plan §9/§19; FRD §14/§16/§28).
+// Factored out of AskExecutionResponseSchema so childExecutions below can
+// nest ONE level (each child is a full response object) without a truly
+// recursive Zod schema: AskExecutionResponseChildSchema fixes its own
+// childExecutions at [] by construction (z.tuple([]) accepts only an empty
+// array), matching the plan's explicit decision not to allow arbitrarily
+// deep candidate chains.
+const AskExecutionResponseBaseSchema = z.object({
   schemaVersion: z.literal(ASK_RESPONSE_SCHEMA_VERSION),
   executionId: z.string(),
   sessionId: z.string(),
@@ -526,6 +533,14 @@ export const AskExecutionResponseSchema = z.object({
   suggestions: z.array(z.string()).max(5),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+});
+
+const AskExecutionResponseChildSchema = AskExecutionResponseBaseSchema.extend({
+  childExecutions: z.tuple([]).default([]),
+});
+
+export const AskExecutionResponseSchema = AskExecutionResponseBaseSchema.extend({
+  childExecutions: z.array(AskExecutionResponseChildSchema).max(3).default([]),
 });
 
 export const AskPendingWorkItemSchema = z.object({

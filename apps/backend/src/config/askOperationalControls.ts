@@ -26,6 +26,7 @@ export interface AskOperationalControls {
   constrainedClassifierEnabled: boolean;
   semanticResponseValidatorEnabled: boolean;
   resultSynthesisEnabled: boolean;
+  askConversationalCaptureEnabled: boolean;
   accountRoleEligibilityEnabled: boolean;
   audiencePolicyEnabled: boolean;
   audienceDiscoveryEnabled: boolean;
@@ -59,6 +60,12 @@ export function readAskOperationalControls(env: NodeJS.ProcessEnv = process.env)
       && !booleanEnv(env.ASK_SEMANTIC_RESPONSE_VALIDATOR_KILL_SWITCH, false),
     resultSynthesisEnabled: booleanEnv(env.ASK_RESULT_SYNTHESIS_ENABLED, false)
       && !booleanEnv(env.ASK_RESULT_SYNTHESIS_KILL_SWITCH, false),
+    // Ask Cozy Stage 3, Phase 3 (implementation plan §22). Defaults off,
+    // unlike most flags here that default on -- this gates a genuinely new,
+    // unproven capability (LLM-driven writes-by-proposal from ordinary
+    // conversation), not a refactor of already-shipped behavior.
+    askConversationalCaptureEnabled: booleanEnv(env.ASK_CONVERSATIONAL_CAPTURE_ENABLED, false)
+      && !booleanEnv(env.ASK_CONVERSATIONAL_CAPTURE_KILL_SWITCH, false),
     accountRoleEligibilityEnabled: booleanEnv(env.ASK_ACCOUNT_ROLE_ELIGIBILITY_ENABLED, true)
       && !booleanEnv(env.ASK_ACCOUNT_ROLE_ELIGIBILITY_KILL_SWITCH, false),
     audiencePolicyEnabled: booleanEnv(env.ASK_AUDIENCE_POLICY_ENABLED, true)

@@ -99,6 +99,7 @@ import { captureFeatureContext } from '../../modules/propertyContext/application
 import { capturePropertyFact } from '../../modules/propertyContext/application/capturePropertyFact';
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
+import { runConversationalCaptureForTurn } from './conversationalUnderstanding/conversationalCapture';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
 import { getFinancialContextDecisions } from '../financialContext/context';
@@ -6655,7 +6656,7 @@ function mapPersistedExecution(execution: {
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
   skillId?: string | null; skillVersion?: string | null; skillDomain?: string | null;
   createdAt: Date; updatedAt: Date;
-}, property: { id: string; label: string } | null): AskExecutionResponse {
+}, property: { id: string; label: string } | null, childExecutions: AskExecutionResponse[] = []): AskExecutionResponse {
   const operationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
     ? execution.operationId as AskOperationId
     : null;
@@ -6713,6 +6714,12 @@ function mapPersistedExecution(execution: {
     suggestions: stored.suggestions ?? [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
+    // Ask Cozy Stage 3, Phase 3 (implementation plan §19; FRD §16/§28).
+    // Only ever populated by the turn's own synchronous conversational-
+    // capture attempt (conversationalCapture.ts) -- a persisted execution
+    // read back later (e.g. session history) has none, since a child's own
+    // resultJson has no childExecutions of its own to surface.
+    childExecutions,
   };
   const parsed = AskExecutionResponseSchema.safeParse(candidate);
   if (parsed.success) return parsed.data;
@@ -7147,7 +7154,31 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     });
     askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
-    return mapPersistedExecution(saved, await propertySummary(executionPropertyId));
+    const resolvedProperty = await propertySummary(executionPropertyId);
+    // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger
+    // call site; FRD §10 Turn Processing Contract steps 7-8). Independent of
+    // the routed answer above (FRD §10: "Steps 6 and 8 are independent") --
+    // gated off entirely when the routed turn itself is already asking for a
+    // confirmation (avoids stacking two confirmation cards in one turn) or
+    // when routing never resolved to a property.
+    let childExecutionResponses: AskExecutionResponse[] = [];
+    if (executionPropertyId && !routingDecision.requiresClarification && result.status !== 'NEEDS_CONFIRMATION') {
+      try {
+        const capturedChildren = await runConversationalCaptureForTurn({
+          userId,
+          sessionId: session.id,
+          propertyId: executionPropertyId,
+          parentExecutionId: execution.id,
+          message: input.message,
+          contextVersion: result.contextVersion ?? saved.contextVersion,
+          skipDueToRoutedCapture: operationDefinition.safetyClass === 'MATERIAL_DECISION' && result.status === 'COMPLETED',
+        });
+        childExecutionResponses = capturedChildren.map((child) => mapPersistedExecution(child, resolvedProperty));
+      } catch (error) {
+        logger.warn({ error, executionId: execution.id }, "[ask-conversational-capture] failed to attach captured children to this turn's response");
+      }
+    }
+    return mapPersistedExecution(saved, resolvedProperty, childExecutionResponses);
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';

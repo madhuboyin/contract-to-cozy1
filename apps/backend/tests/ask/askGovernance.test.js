@@ -302,6 +302,13 @@ test('Ask operational controls support global, routing, synthesis, remote, per-o
   assert.equal(killed.operationEnabled('MAINTENANCE_STATUS'), true);
 });
 
+// Ask Cozy Stage 3, Phase 3 (implementation plan §22).
+test('askConversationalCaptureEnabled defaults off and respects both its enable flag and kill switch', () => {
+  assert.equal(readAskOperationalControls({}).askConversationalCaptureEnabled, false);
+  assert.equal(readAskOperationalControls({ ASK_CONVERSATIONAL_CAPTURE_ENABLED: 'true' }).askConversationalCaptureEnabled, true);
+  assert.equal(readAskOperationalControls({ ASK_CONVERSATIONAL_CAPTURE_ENABLED: 'true', ASK_CONVERSATIONAL_CAPTURE_KILL_SWITCH: 'true' }).askConversationalCaptureEnabled, false);
+});
+
 test('Ask responses require the current durable presentation schema version', () => {
   const base = {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
@@ -334,4 +341,41 @@ test('Ask durable response contract accepts clarification and every planned pres
   assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks }).success, true);
   const execution = AskExecutionResponseSchema.parse({ ...base, blocks: [], status: 'NEEDS_CLARIFICATION' });
   assert.equal(AskPendingWorkItemSchema.safeParse({ pendingKind: 'CLARIFICATION', actionLabel: 'Answer one question', execution }).success, true);
+});
+
+// Ask Cozy Stage 3, Phase 3 (implementation plan §9/§19; FRD §16/§28).
+test('childExecutions defaults to empty, accepts up to 3 full child response objects, and nests only one level deep', () => {
+  const base = {
+    schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+    executionId: 'parent-1', sessionId: 'session-1', question: 'I replaced the roof last summer for $14,500.', status: 'ANSWERED',
+    property: null, operation: null, contextVersion: null, blocks: [], captureRequests: [], confirmation: null,
+    suggestions: [], createdAt: '2026-09-12T00:00:00.000Z', updatedAt: '2026-09-12T00:00:00.000Z',
+  };
+  // Omitted entirely -- must default to [].
+  const withoutField = AskExecutionResponseSchema.parse(base);
+  assert.deepEqual(withoutField.childExecutions, []);
+
+  const child = {
+    schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+    executionId: 'child-1', sessionId: 'session-1', question: 'I replaced the roof last summer for $14,500.', status: 'NEEDS_CONFIRMATION',
+    property: null, operation: { id: 'CAPTURE_EVENT_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: null,
+    blocks: [], captureRequests: [], confirmation: {
+      confirmationId: 'capture-event-0-1', version: 1, title: 'Add this to your home timeline?', description: 'desc',
+      fields: [{ label: 'Event', value: 'Roof replacement' }], confirmLabel: 'Add to timeline', consentText: 'consent',
+      expiresAt: '2026-09-12T00:30:00.000Z',
+    },
+    suggestions: [], createdAt: '2026-09-12T00:00:00.000Z', updatedAt: '2026-09-12T00:00:00.000Z',
+  };
+  const withChild = AskExecutionResponseSchema.safeParse({ ...base, childExecutions: [child] });
+  assert.equal(withChild.success, true);
+  assert.equal(withChild.data.childExecutions.length, 1);
+  assert.deepEqual(withChild.data.childExecutions[0].childExecutions, []);
+
+  // Bounded at 3, per FRD §16/§28's decision (mirroring captureRequests's own max(3) precedent).
+  const tooMany = AskExecutionResponseSchema.safeParse({ ...base, childExecutions: [child, child, child, child] });
+  assert.equal(tooMany.success, false);
+
+  // A child cannot itself carry a further nested child -- one level only.
+  const grandchildAttempt = AskExecutionResponseSchema.safeParse({ ...base, childExecutions: [{ ...child, childExecutions: [child] }] });
+  assert.equal(grandchildAttempt.success, false);
 });
