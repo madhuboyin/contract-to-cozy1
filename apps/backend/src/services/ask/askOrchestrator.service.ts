@@ -9388,6 +9388,29 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
       );
     } catch (error) {
       if (error instanceof APIError && error.code === 'HOME_EVENT_NOT_FOUND') {
+        // Code review finding (2026-09-12): a second, tighter race than the
+        // P2002 one below -- if a concurrent winning attempt's WHOLE
+        // transaction (supersede existing.isCurrent -> false AND create the
+        // replacement) commits strictly BETWEEN this call's own
+        // `alreadyCorrected` pre-check and updateHomeEvent's OWN internal
+        // `existing` lookup (findFirst({... isCurrent: true ...})), this
+        // attempt's lookup sees the original event ALREADY superseded and
+        // throws HOME_EVENT_NOT_FOUND -- never reaching the P2002 case below
+        // at all, since it never gets far enough to attempt its own create.
+        // Because the winner's supersede and its replacement-create happen
+        // in the SAME transaction, "the original is already superseded" and
+        // "the winning replacement already exists" become true atomically
+        // together -- so re-reading by correctionIdempotencyKey here is
+        // guaranteed to find the winner whenever this exact race occurs.
+        // Re-check before rejecting, exactly like the P2002 recovery below,
+        // rather than reporting a spurious "no longer available" for a
+        // correction that actually already succeeded.
+        const winner = await prisma.homeEvent.findFirst({
+          where: { propertyId: execution.propertyId, idempotencyKey: correctionIdempotencyKey },
+        });
+        if (winner) {
+          return { result: captureEventResult(execution.propertyId, winner, true), artifactType: command.artifactType, artifactId: winner.id };
+        }
         throw Object.assign(new Error('The event to correct is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
       }
       // Code review finding (2026-09-12): the pre-check above (`alreadyCorrected`)

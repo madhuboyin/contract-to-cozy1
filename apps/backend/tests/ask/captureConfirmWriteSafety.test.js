@@ -215,3 +215,32 @@ test('the confirmation-completion transaction emits ASK_CAPTURE_LINK_RECONCILE w
   // retried completion (the P2002 recovery path) never queues a duplicate.
   assert.match(afterCompletion, /tx\.domainEvent\.upsert\(\{\s*where: \{ idempotencyKey: reconcileIdempotencyKey \}/);
 });
+
+// Second review round (2026-09-12): a regression in the first fix, plus one
+// more real race the first fix's P2002-only recovery didn't cover. Both
+// verified against source before fixing.
+
+test('updateHomeEvent clears projectId (not idempotencyKey) on the superseded row -- the first fix\'s comment described this correctly but the actual data object had dropped projectId: null entirely', () => {
+  const txIdx = homeEventsServiceSource.indexOf('const updated = await prisma.$transaction(async (tx) => {');
+  assert.ok(txIdx > 0);
+  const supersedeIdx = homeEventsServiceSource.indexOf('await tx.homeEvent.update({', txIdx);
+  const supersedeBlock = homeEventsServiceSource.slice(supersedeIdx, homeEventsServiceSource.indexOf('const replacement = await tx.homeEvent.create(', supersedeIdx));
+  assert.match(supersedeBlock, /isCurrent: false/);
+  assert.match(supersedeBlock, /projectId: null/, 'projectId must be cleared on the superseded row -- the replacement carries the same value forward and projectId is @@unique, so omitting this causes a P2002 for any project-linked event');
+  assert.doesNotMatch(supersedeBlock, /idempotencyKey: null/, 'idempotencyKey must still not be cleared (see the prior fix/test above)');
+});
+
+test('confirmCaptureEvent\'s correction branch re-checks the winner on HOME_EVENT_NOT_FOUND before rejecting -- a tighter race than the P2002 case, where a concurrent winner\'s whole transaction (supersede + create) commits between this attempt\'s alreadyCorrected pre-check and updateHomeEvent\'s own internal existing-event lookup', () => {
+  const eventIdx = orchestratorSource.indexOf('async function confirmCaptureEvent(');
+  assert.ok(eventIdx > 0);
+  const body = orchestratorSource.slice(eventIdx, orchestratorSource.indexOf('registerConfirmCapabilityHandler(\'capture.event.confirm\'', eventIdx));
+  const notFoundIdx = body.indexOf("error instanceof APIError && error.code === 'HOME_EVENT_NOT_FOUND'");
+  assert.ok(notFoundIdx > 0);
+  const notFoundBlock = body.slice(notFoundIdx, body.indexOf('// Code review finding (2026-09-12): the pre-check above', notFoundIdx));
+  assert.match(notFoundBlock, /prisma\.homeEvent\.findFirst\(\{\s*where: \{ propertyId: execution\.propertyId, idempotencyKey: correctionIdempotencyKey \}/);
+  assert.match(notFoundBlock, /if \(winner\) \{\s*return \{ result: captureEventResult\(execution\.propertyId, winner, true\)/);
+  // The rejection must come AFTER the winner check, not before it.
+  const winnerCheckIdx = notFoundBlock.indexOf('if (winner)');
+  const rejectIdx = notFoundBlock.indexOf("code: 'ASK_CONFIRMATION_NOT_ACTIVE'");
+  assert.ok(winnerCheckIdx > 0 && rejectIdx > winnerCheckIdx, 'must check for a winner before giving up and rejecting');
+});

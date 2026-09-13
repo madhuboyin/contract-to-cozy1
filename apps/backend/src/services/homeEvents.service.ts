@@ -673,23 +673,29 @@ export class HomeEventsService {
         where: { id: existing.id },
         data: {
           isCurrent: false,
-          // projectId is cleared (not idempotencyKey) because it alone is
-          // @@unique([...]) with the replacement carrying the SAME value
-          // forward (below) -- freeing it here is what avoids that
-          // collision. idempotencyKey must NOT be cleared here (code review
-          // finding, 2026-09-12): the replacement never reuses the
-          // superseded row's own key (it defaults to null, or gets a
-          // distinct explicit one from the caller -- see below), so there
-          // is no collision to avoid, and clearing it breaks a replay of
-          // the ORIGINAL capture that produced this row: createHomeEvent's
-          // own idempotency lookup (line ~554) has no isCurrent filter,
-          // deliberately, so a retried original confirmation still resolves
-          // to this row regardless of later supersession -- exactly the
-          // same "resolve to the original write regardless of current
-          // supersession state" invariant capturePropertyFact.ts already
-          // enforces for PropertyFactEvidence.captureExecutionId. Nulling
-          // this out here would silently defeat that guarantee and let a
-          // stale replay create a second, duplicate event.
+          // projectId IS cleared here (code review finding, 2026-09-12,
+          // catching a regression in the fix just below this comment):
+          // it alone is @@unique, and the replacement carries the SAME
+          // value forward (see `projectId: existing.projectId` below) --
+          // without freeing it here first, that create would hit P2002 for
+          // any project-linked event. This line and the idempotencyKey fix
+          // below it were previously combined into one data object; the
+          // correct fix only removed the idempotencyKey field, not this one.
+          projectId: null,
+          // idempotencyKey is deliberately NOT cleared here: the
+          // replacement never reuses the superseded row's own key (it
+          // defaults to null, or gets a distinct explicit one from the
+          // caller -- see below), so there is no collision to avoid, and
+          // clearing it breaks a replay of the ORIGINAL capture that
+          // produced this row: createHomeEvent's own idempotency lookup
+          // (line ~554) has no isCurrent filter, deliberately, so a
+          // retried original confirmation still resolves to this row
+          // regardless of later supersession -- exactly the same "resolve
+          // to the original write regardless of current supersession
+          // state" invariant capturePropertyFact.ts already enforces for
+          // PropertyFactEvidence.captureExecutionId. Nulling this out here
+          // would silently defeat that guarantee and let a stale replay
+          // create a second, duplicate event.
         },
       });
       const replacement = await tx.homeEvent.create({
