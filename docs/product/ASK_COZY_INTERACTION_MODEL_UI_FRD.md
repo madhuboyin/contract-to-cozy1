@@ -1,0 +1,304 @@
+# Ask Cozy — Interaction Model & UI FRD
+
+**Version:** 1.0  
+**Date:** September 13, 2026  
+**Status:** Specification draft based on the agreed product direction; implementation not performed.  
+**Scope:** Ask Cozy inline interactions. Maintenance is the first implementation slice.
+
+## 1. Purpose and authority
+
+Homeowners can ask naturally or act directly. Cozy presents the simplest useful interface, preserves context, and makes changes clear and reviewable.
+
+Ask Cozy is the primary intent surface. Responses can become interactive working surfaces. Structured domain workspaces remain available for deeper management. Filtering or acting on a result must not turn every interaction into another full response in the transcript.
+
+This document specifies observable UI behavior and shared interaction requirements. It extends the message-first program with stateful results, declared item actions, editable proposals, and context-preserving handoffs. It does not replace domain business rules, security policies, confirmation requirements, or canonical records.
+
+Labels used below:
+
+- **Requirement:** intended behavior for implementation, not an assertion that it exists.
+- **Verified baseline:** observed in the working tree during this review.
+- **Open decision:** a material detail requiring resolution before its dependent behavior is implemented; unrelated work can proceed.
+
+The scope and principles reflect the user's accepted review discussion. Detailed requirements below make those decisions reviewable; unresolved business semantics are identified in §16 instead of silently inferred.
+
+## 2. Sources and verified baseline
+
+Read alongside:
+
+- [Message-First FRD](ASK_COZY_MESSAGE_FIRST_FRD.md), especially §§8, 22, 27–30, 33.
+- [Ask Redo FRD](AI_HOME_CONCIERGE_ASK_REDO_FRD.md), especially §12.1 and the governed-command requirements.
+- [Target Product & Architecture](../architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md).
+- [Incremental Implementation Plan](../architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md), especially the structured-response and child-execution contracts.
+
+| Verified baseline | Implication for this FRD |
+| --- | --- |
+| [Response contract](../../apps/backend/src/productFramework/ask/ask.contract.ts) already defines summaries, grouped lists, tables, timelines, comparisons, progress, evidence, and degraded states | Extend approved components; do not introduce arbitrary generated interfaces |
+| Grouped-list items expose identity, display metadata and a link; shared actions currently expose identity, label, href and style | Item actions and typed interaction dispatch require explicit contract work |
+| [AskWorkspace](../../apps/frontend/src/components/ask/AskWorkspace.tsx) renders ActionLink only when href exists | Adding an action label alone does not implement filtering or mutation |
+| Confirmation is an execution-level object; the current confirmation card presents fields, consent, confirm and cancel | Reuse the confirmation mechanism and add validated editing; do not create a competing confirmation block or write path |
+| [Operation registry](../../apps/backend/src/services/ask/askOperationRegistry.ts) declares maintenance complete/update as confirmation-required commands with CONTRIBUTOR floor | Both maintenance actions retain confirmation and owner/contributor access; viewers remain read-only |
+| [Maintenance orchestration](../../apps/backend/src/services/ask/askOrchestrator.service.ts) queries canonical tasks, resolves scopes, produces counts, versions and source information | Preserve these semantics and domain service ownership when adding inline interactions |
+| Existing links carry Ask return context | Extend and verify filter, selection and return-position continuity; do not claim complete handoff already exists |
+
+The operation registry had pre-existing uncommitted changes at review time. Findings describe the inspected working tree, not an independently verified committed release. Older documents contain implementation snapshots; their line counts and completeness claims are not current verification.
+
+Relationship to earlier scope: Message-First §28 limited that program's new presentation types and did not require this interaction redesign. This FRD adds behavior within approved response components and execution contracts. Dashboard redesign remains separate. Existing capture confirmation, durable domain storage, deterministic capability selection, and outside-chat correction requirements remain applicable.
+
+## 3. Scope and delivery boundaries
+
+| Scope layer | Included |
+| --- | --- |
+| Shared model specified now | Result identity/lifecycle, declared actions, freshness, confirmation/edit states, continuation, reference context, handoff, responsive access, error recovery, attention presentation and next-action selection |
+| First implementation: maintenance | Inline pending results, supported filters, item selection, complete/reschedule with existing confirmation, authoritative reconciliation, explanation follow-up, full-result access, and management handoff |
+| Design validation now | Event capture with uncertain dates and a persistent selling goal; confirm that shared contracts support them without making their full implementation part of maintenance |
+| Subsequent implementation | General editable extraction proposals across domains, cross-domain attention aggregation, and expanded persistent-goal UI; preserve any existing capabilities during maintenance work |
+| Excluded | Dashboard redesign, pinned or secondary workspaces, split-screen Ask, floating canvases, arbitrary generated UI, broad redesign/replacement of domain pages |
+
+Small changes to a destination page to accept context or return to Ask are within the maintenance handoff scope. This does not authorize a broader page redesign. No release gates, feature flags, pilot cohorts or additional approval machinery are introduced.
+
+## 4. Experience principles
+
+**UI-001:** Natural-language input and direct controls are equal ways to act. Do not require a typed message for a visible supported operation.
+
+**UI-002:** Compose approved components from validated data and declared actions. The model cannot provide executable code, arbitrary markup, authorization decisions or arbitrary write destinations.
+
+**UI-003:** Prefer a short answer for a fact and a structured surface when comparison, scanning, editing or action benefits from it. Avoid duplicating the same answer in prose and cards.
+
+**UI-004:** Conversation is not the system of record. Confirmed writes use canonical domain services; the receipt links to the owning record and its existing correction path.
+
+**UI-005:** Provide a useful next step when one exists; otherwise allow the interaction to finish.
+
+## 5. Result identity and state
+
+**RES-001:** Each interactive surface has stable identity bound to its originating execution, block, property scope and canonical query. Item identity uses canonical record references, never row position or display title.
+
+Maintain three distinct concepts:
+
+| Layer | Meaning | Required behavior |
+| --- | --- | --- |
+| Original response | What Cozy answered, with original query/scope and observation time | Retained within existing conversation retention/deletion policies; refresh must not silently overwrite its meaning |
+| Current view | Filters, sort, expanded rows, selection and loaded pages | May change in place without changing domain records |
+| Current data | Latest successful authoritative read and its version/observation time | Used for current counts, membership and permitted operations |
+
+**RES-002:** Normal presentation is compact: scope/filter label, count, and freshness text. Original response details are available on demand. Show specific change counts only when computed from a supported comparison; a timestamp alone proves no changes.
+
+**RES-003:** A new question creates a response. A declared filter or refresh updates its target surface. If a typed request is confidently a refinement of the active read result, preserve the user message and acknowledge the update without appending a duplicate list. Ambiguous requests require target clarification.
+
+**RES-004:** Browsing history does not automatically refetch every result. An older surface shows when it was observed and offers refresh. Interaction requiring current data revalidates that target. Preserve original-answer context when showing a refreshed view.
+
+**RES-005:** View state survives navigation to a management page and back, and ordinary reload of the same session. It does not become a property fact. Cross-device synchronization of transient filters is not required in the first slice. Existing conversation deletion must clear associated view state; no separate indefinite transcript archive is introduced.
+
+## 6. Result lifecycle and freshness
+
+Result state is separate from Ask execution status and from task business status.
+
+| State | Required presentation/behavior |
+| --- | --- |
+| Loading | Stable placeholder and scope; no available write controls based on incomplete data |
+| Ready | Current result, totals, supported actions and observation time |
+| Refreshing | Retain prior content and view state, indicate refresh; prevent conflicting operations on affected targets |
+| Stale or historical | Indicate age or known invalidation; offer refresh; revalidate before write |
+| Partial | Show available data and missing coverage; never label partial totals as complete |
+| Empty | Distinguish no matching records from no recorded tasks; offer clear filters when relevant |
+| Unavailable/error | Explain retrieval failure and supported retry; never substitute an empty result |
+| Access lost | Remove inaccessible data from the active view and block further requests; preserve no usable write action |
+
+**FRESH-001:** Revalidate on explicit refresh, return from a domain edit, known local mutation, and before preparing/executing a write. Recheck authorization and relevant domain version at confirmation. No arbitrary client freshness timeout substitutes for server validation.
+
+**FRESH-002:** If the target materially changed after review, invalidate the old proposal and present the changed state for renewed review. If already completed, report that fact rather than executing again. Deleted, archived or inaccessible targets must not be silently substituted.
+
+**FRESH-003:** Out-of-order fetches cannot overwrite a newer filter, property context or data revision. Background updates must not erase user input or steal focus.
+
+**FRESH-004:** Do not promise live cross-session change detection without a supporting mechanism. v1 can discover external changes on refresh/revalidation. A live subscription is not required.
+
+## 7. Declared action model
+
+**ACT-001:** Separate interaction type, domain operation and target. For example: interaction `MUTATE_RECORD`, operation `MAINTENANCE_TASK_COMPLETE`, target the selected canonical task. `MARK_COMPLETE` is not a new universal interaction type.
+
+| Interaction | Meaning |
+| --- | --- |
+| CONVERSATION_CONTINUE | Create a contextual question/response tied to the source result and selected entity |
+| FILTER_RESULT | Update the target view/query; no domain write |
+| MUTATE_RECORD | Prepare a registered domain operation with validated inputs |
+| NAVIGATE | Open a supported destination with validated handoff context |
+| CONFIRM | Submit the exact current proposal through existing confirmation |
+| EDIT_PROPOSAL | Edit declared fields and request a newly validated proposal |
+| REFRESH | Read current authorized data for the target scope |
+| DISMISS | Apply an explicitly declared local or durable dismissal behavior |
+| REMIND_LATER | Invoke the registered reminder/snooze behavior with required time/channel inputs |
+
+These are conceptual interaction semantics; exact TypeScript/Zod names belong in the implementation design. Not every type must be implemented in maintenance v1.
+
+**ACT-002:** The server owns allowed operations, target validation, role floor, side effects, persistence, confirmation and freshness policy. A response can reference this policy and explain it, but the browser/model cannot override it. Do not repeat the full policy definition in every card.
+
+**ACT-003:** The logical contract carries action identity, type, source result, property/entity target, registered operation when applicable, validated input or input requirements, availability/reason, and presentation label. The dispatcher resolves trusted policy and returns a typed outcome. Unsupported actions fail visibly and safely.
+
+**ACT-004:** Visually distinguish item commands, conversational suggestions and navigation. Use explicit labels. Show at most one primary action per local action group; secondary actions remain discoverable without an excessive chip list.
+
+**ACT-005:** No side effects occur through filters or navigation. Dismissal must say what is hidden and for how long. Remind later must not silently reschedule the underlying task or enable a notification channel.
+
+**ACT-006:** Disable duplicate submissions for an in-flight target and use existing server idempotency semantics. After a lost response, reconcile the original operation before retrying. Button disabling alone is insufficient.
+
+## 8. Confirmation, editing and execution
+
+**CONF-001:** Preserve domain-required confirmation. Maintenance complete and update currently require it. A row action opens a contextual review/input state; it does not perform the mutation first.
+
+**CONF-002:** Show target, proposed changes, relevant side effects and destination before confirmation. Include existing required fields, such as project health outcome when completing a project follow-up. Optional fields do not become mandatory merely because the UI can collect them.
+
+**CONF-003:** Editing uses declared typed fields with existing validation. Editing invalidates the previous confirmation version and consent; the server returns a new validated proposal. Confirming an older version cannot apply edited or stale input. Retain user edits after a validation error.
+
+**CONF-004:** Cancel before submission writes nothing. Once submitted, do not label an action cancelled unless the backend confirms cancellation. Running, succeeded, failed and outcome-unknown states have distinct copy.
+
+**CONF-005:** Successful domain mutation produces a concise receipt and an authoritative result reconciliation. A refresh failure after a successful write must say “Saved; list could not refresh,” preserve the receipt and offer read retry. Never invite the user to repeat a confirmed successful mutation.
+
+**CONF-006:** Receipts remain available in the originating conversation under its normal retention rules. Provide the owning record link. Offer Undo only when an authorized domain reversal exists; otherwise use the supported correction/reopen path with its real semantics.
+
+## 9. Maintenance first implementation
+
+### 9.1 Query and filtering
+
+**MAINT-001:** “Show pending maintenance” returns a single structured inline surface for the selected property. Reuse canonical open-status, priority, date/timezone and default exclusion rules. Pending is a user label for the existing open-task semantics, not a new database status.
+
+**MAINT-002:** Show task title, due date or missing-date label, recorded priority, status and system/room when available. Do not invent dates, priority or risk. Distinguish a recorded urgent priority from overdue timing and from a safety recommendation.
+
+**MAINT-003:** Filter changes update the same surface and query the full matching collection. Never filter only the currently rendered subset while implying a complete result. Show displayed-versus-total counts, load-more/full-result access and a clear-filter action. Preserve canonical sort unless the user selects another supported sort.
+
+**MAINT-004:** “Show urgent only” uses the existing canonical urgent-priority interpretation, with the applied filter labeled. Do not silently combine overdue, high priority and safety risk into a new urgency score. Confirm the precise existing parser semantics during implementation; any discrepancy with this label belongs in §16.
+
+### 9.2 Complete and reschedule
+
+**MAINT-005:** Item selection passes exact identity. Completion sequence: select → gather required inputs → review/confirm → canonical mutation → receipt → reconcile current view. A completed occurrence leaves a pending-only result when it no longer matches. Counts come from authoritative resulting data, not arithmetic decrement. A recurring next occurrence may appear and must be identified accurately.
+
+**MAINT-006:** Reschedule invokes existing maintenance update semantics. Show the current and proposed date and any recurrence consequences required by the domain. Do not treat an operational work-item identifier as interchangeable with a maintenance-task identifier. The adapter must resolve the canonical task and existing synchronization path.
+
+**MAINT-007:** If a date change removes an item from the current filter, show a receipt explaining its new date and reconcile membership. If recurrence scope cannot be determined from the existing domain operation, ask for the supported scope before preparing confirmation; never infer a series-wide change.
+
+### 9.3 Continuation and handoff
+
+**MAINT-008:** “Why is this important?” on a row creates a new grounded response referring to that exact task and its evidence. It does not reset the source filter or start a mutation. Distinguish task instructions from inferred risk and unavailable evidence.
+
+**MAINT-009:** “Open Maintenance” preserves property, representable filters and selected task. Return restores the source result, view and position, then revalidates affected data. See §11 for unsupported context handling.
+
+Maintenance v1 is complete only when this whole interaction chain works; displaying richer cards alone is not completion.
+
+## 10. Reference context and property boundaries
+
+**CTX-001:** Continuations carry source execution/result and explicit selected entity references. Resolve “this task” from explicit selection or one unambiguous candidate, never the first visible row or fuzzy display-name match when several candidates exist.
+
+**CTX-002:** Switching property does not retarget old results or proposals. Historical results keep their original scope visibly labeled. Acting on an older property's result requires returning to that explicit property context and revalidation; new queries use the newly selected property.
+
+**CTX-003:** Filtering away the selected item clears active selection. A prepared proposal retains its explicit target but must visibly name it and revalidate before confirmation. Never substitute another row.
+
+**CTX-004:** Goal continuation uses durable workflow identity where available, independent of conversation view identity. Do not infer permission to create tasks, contact providers or perform external actions from a goal statement.
+
+## 11. Conversation and workspace handoff
+
+**HAND-001:** Handoff logically includes source session/execution/result, property, supported filters/sort, selected record and return position. Use bounded validated context; do not put transcript text, credentials or private proposal fields into URLs.
+
+**HAND-002:** A destination must acknowledge unsupported filters instead of silently dropping them. Preserve representable context and disclose what changed. A missing selected record opens an honest unavailable state or the authorized list, without selecting another record.
+
+**HAND-003:** Returning restores context and refreshes as needed. A direct/deep link without return state still opens a useful domain page. Validate return destinations against supported internal routes; browser history is not authorization.
+
+## 12. Capture and goal design checks
+
+These scenarios validate the shared model now; they are not additional maintenance implementation deliverables.
+
+### 12.1 “I replaced my roof last summer for $14,500.”
+
+- Propose a home event, preserving a date range/precision rather than fabricating an exact date. Where season/year cannot be resolved reliably, retain uncertainty and ask the minimum necessary clarification.
+- Show interpreted event, amount/currency, property and date precision with Edit, Confirm and Cancel.
+- Editing date/cost returns a new validated proposal. No optional provider or receipt is required unless the canonical record requires it.
+- Confirmation persists through the existing capture execution; receipt links to home history and correction.
+- Do not also complete a maintenance task or create a warranty unless separately supported, matched and confirmed under applicable rules.
+- For compound “I serviced it; was that expensive?” messages, answer and capture can proceed independently. Deduplicate capture against routed command inputs and preserve child-execution identity.
+- Asynchronously delivered proposals remain attached to their originating turn; do not steal focus or duplicate an existing candidate. Existing async delivery limitations must be identified before extending that path.
+
+### 12.2 “I'm thinking about selling next year.”
+
+- Use existing goal/DecisionThread semantics to create or attach workflow bookkeeping without adding a material-write confirmation gate, as specified in Message-First §8.5.
+- Present a compact goal/progress surface, known target timing, missing context and supported next steps.
+- Resume the same goal from another session without duplicating it; a materially ambiguous existing goal prompts selection.
+- Confirmation remains required for subsequent consequential domain actions. No automatic bookings, messages, listing changes or invented deadlines.
+- The same result, action, context and freshness concepts apply; a goal needs no arbitrary generated UI.
+
+## 13. Attention and next actions
+
+**ATTN-001:** Shared attention surfaces distinguish immediate safety, time-bound obligations, maintenance priority, financial opportunity and uncertain/speculative concern. Reuse authoritative domain assessments; the presentation layer must not invent a universal risk score.
+
+**ATTN-002:** Show why now, relevant source/time, and uncertainty. Missing or unavailable sources cannot imply “nothing needs attention.” Estimated savings are not guarantees and speculative damage is not known damage.
+
+**ATTN-003:** Dismiss, already handled and remind later must have distinct declared effects. UI dismissal cannot mark maintenance complete. Required safety guidance is not suppressed through a generic presentation shortcut.
+
+**ATTN-004:** Cross-domain ranking and all-property aggregation are subsequent scope, pending §16. The maintenance slice uses selected-property canonical task data.
+
+**NEXT-001:** Evaluate supported next actions during response assembly and after material result changes, using capabilities, missing context, workflow and current business state. Reuse deterministic ranking/suppression; no additional LLM call is required by this rule.
+
+**NEXT-002:** Show a small relevant set and allow none. Respect existing contract caps (including per-block action limits and response suggestion limits); do not multiply identical suggestions across blocks. Suppress completed, unauthorized, unavailable and repeated actions, while offering useful missing-context capture where supported.
+
+## 14. Responsive behavior, accessibility and recovery
+
+**ACCESS-001:** At narrow widths use readable stacked task rows; comparisons may retain accessible horizontal structure where necessary. Essential labels, values and actions must not disappear. Do not use hover-only controls.
+
+**ACCESS-002:** All filters, item actions, inputs and confirmations work with keyboard and assistive technology. Use semantic headings/list/table structures, explicit field labels, visible focus and text alongside status colors.
+
+**ACCESS-003:** Announce filter completion, count changes, validation failures and action outcomes without reading the entire result again. After row removal, focus moves to the next logical row action or result heading. Background refresh does not move focus. Receipts do not depend on a fleeting toast or animation.
+
+**REC-001:** Loading, partial read, no matches, unavailable data, permission loss, stale proposal, validation error, write failure and unknown write outcome have distinct actionable states.
+
+**REC-002:** Preserve filters and entered values across recoverable failures. Do not display success before confirmed execution. Do not permit offline/queued mutations in this slice; explain connectivity failures and reconcile submitted operations on reconnect.
+
+**REC-003:** Invalid/unsupported response components show a safe fallback and supported recovery; they cannot expose raw executable payloads or silently masquerade as another result type.
+
+## 15. Acceptance scenarios
+
+| ID | Given / when | Required observable outcome |
+| --- | --- | --- |
+| A01 | Selected property has open tasks; ask for pending maintenance | One inline result, canonical counts, visible scope and source time |
+| A02 | Result is truncated; choose urgent-only filter | Full-scope filtering, same result identity, accurate filtered total and no duplicate list |
+| A03 | Type an unambiguous filter refinement | User message retained; target updates with a brief acknowledgement |
+| A04 | Several results/tasks could match “this” | Clarification identifies the target before any action |
+| A05 | Complete a non-recurring task | Review/confirmation precedes write; receipt; row/count reconcile to pending filter |
+| A06 | Complete a recurring task | Domain recurrence runs once; resulting occurrence/counts displayed accurately |
+| A07 | Reschedule beyond the current date filter | Reviewed old/new date; successful receipt and correct row membership |
+| A08 | Cancel a prepared action | No domain mutation; prior result remains usable |
+| A09 | Edit a proposal then submit its old confirmation | Old version rejected; edited validated proposal requires fresh confirmation |
+| A10 | Another session changes/completes the task | Revalidation prevents stale write; show current state and required renewed review |
+| A11 | Double-click confirm or lose the successful response | One domain effect; reconcile original execution and show truthful outcome |
+| A12 | Write succeeds but list refresh fails | Success receipt retained; read-retry offered without repeating mutation |
+| A13 | Viewer attempts completion or access is revoked mid-review | Server rejects write; UI reflects current permissions without data leakage |
+| A14 | Switch properties while old result/proposal remains | No silent retargeting; explicit original scope and revalidation |
+| A15 | Older filter fetch finishes after newer one | Newer scope/result remains displayed |
+| A16 | Open Maintenance with filter/selection and return | Context/position restored; changed data revalidated; unsupported context disclosed |
+| A17 | Source fails or only partial data is available | Unavailable/partial state, never false empty or “all clear” |
+| A18 | Keyboard user completes final visible row | Outcome announced; logical focus retained; receipt accessible |
+| A19 | Capture uncertain roof replacement date and edit cost | Precision retained, no premature write, renewed proposal and canonical receipt |
+| A20 | Resume a selling goal in another conversation | Same durable goal identity; no duplicate goal or automatic consequential action |
+| A21 | No relevant next action exists | Response completes without forced suggestions |
+| A22 | Dismiss insight or request reminder | Declared persistence/notification effect; no accidental task completion/reschedule |
+| A23 | Reload session or revisit historical result | View continuity where stored; original response meaning retained; freshness visible |
+| A24 | Target is deleted or destination cannot represent a filter | Honest missing-target/context limitation; no substituted record |
+
+A01–A18, A21, A23–A24 form the maintenance acceptance set where applicable. A19–A20 and A22 are shared-contract walkthroughs until their subsequent implementations are scheduled. Existing application safeguards remain mandatory in every slice.
+
+## 16. Open decisions and implementation obligations
+
+| Item | Boundary / next step |
+| --- | --- |
+| Cross-domain attention ordering and property scope | Product decision needed before implementing aggregation; do not choose numerical weights or all-property behavior here |
+| Reminder/dismissal duration and persistence per domain | Specify against existing domain policy before exposing either action; not necessary for maintenance complete/reschedule |
+| Maintenance filter semantics | Trace the existing parser and domain definitions into typed filters. Preserve canonical meaning; flag discrepancies rather than redefining urgent or pending |
+| Reschedule recurrence scope | Verify the maintenance update contract. If series/occurrence semantics remain materially ambiguous, resolve with product before implementing that branch |
+| Handoff destination capabilities | Inspect actual route/filter support; add minimal context handling or disclose unsupported state as §11 requires |
+| Storage/API design | Map result revisions, view persistence, action dispatch and editable proposal versions onto existing execution/receipt contracts; document required schema changes only after this mapping |
+
+These are scoped decisions and engineering obligations, not approval gates or reasons to defer unrelated implementation. Do not create new infrastructure where existing domain/Ask mechanisms meet the requirement.
+
+## 17. Validation and implementation handoff
+
+This document was checked against the listed FRDs, architecture/plan excerpts, Graphify navigation and directly affected contracts/components. It does not claim runtime execution, current database readiness, or completion of these requirements.
+
+Before code changes, trace maintenance read → typed action → proposal → confirmation → canonical service → recurrence/downstream reconciliation → response refresh → handoff. Update backend contracts, mirrored frontend types, dispatch/rendering and affected documentation together. Reuse the existing confirmation mechanism. If schema changes prove necessary, edit Prisma and generate its client when dependencies are available; the user creates/runs migrations.
+
+Validate implementation primarily through domain/contract review and available lightweight static checks. Use focused environment-independent tests for filter targeting, stale-response ordering, proposal invalidation and reconciliation where available. Do not provision services or browser infrastructure to satisfy this FRD. Record unexecuted runtime/accessibility scenarios honestly, without treating an unavailable environment as a blocker.
+
+Document-review checks: internal links resolve, requirement identifiers are unique, accepted scope is represented, maintenance has an end-to-end acceptance set, and subsequent capabilities are not silently included in its delivery scope.
