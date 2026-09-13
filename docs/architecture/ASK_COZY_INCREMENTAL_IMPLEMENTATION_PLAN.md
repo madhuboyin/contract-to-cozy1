@@ -523,6 +523,21 @@ RECOMMENDED ADJUSTMENT: add one small, explicitly-scoped writer for this phase (
 
 **Independently releasable:** yes, behind a flag — homeowners who don't trigger the pre-filter see no change.
 
+**Status (this pass, 2026-09-12): shipped, behind `askConversationalCaptureEnabled` (default OFF).** Six commits, each independently tsc-clean and targeted-test-verified:
+- `aac6f26e` — `capturePropertyFinancingFact.ts`: the dedicated `PropertyFinancingProfile.interestRateBps` writer this section's own mortgage-rate finding required, full atomicity/idempotency contract as specified above. `confirmCaptureFact` branches `financial.currentMortgage` to it.
+- `b9987f02` — `extractionPreFilter.ts` (pure, no-I/O) + `extractionEvaluationCorpus.ts` (all 11 FRD §15 categories). Pre-filter recall/precision against the frozen corpus: 100%/100%, clearing the 85%/70% pilot thresholds.
+- `f310f3c4` — `extractionCandidateSchema.ts` (FACT/EVENT only — GOAL deliberately excluded, per this section's own "not warranty, not goal" scoping) + `extractionContract.ts` (the bounded Gemini call, following `inspectionExtraction.service.ts`'s established structured-output convention).
+- `5f585bcb` — `ask.contract.ts`'s `childExecutions` field (bounded to 3, one level deep, exactly as §19 specifies) + `conversationalCapture.ts` (persist-first `ASK_EXTRACTION_REQUESTED` DomainEvent → inline claim → 1.5s-budgeted extraction attempt → claim-token-verified child-execution persistence) + the one `askOrchestrator.service.ts` call site, independent of the routed answer per FRD §10.
+- `37b6790a` — the `ASK_EXTRACTION_REQUESTED` worker consumer (`processDomainEvents.job.ts`), closing the async-fallback path for a genuine backend-process crash mid-attempt.
+- `df0fdf43` — frontend: `childExecutions` on the type, one line in `AskWorkspace.tsx`'s `ask()`, exactly as §19 scoped ("one schema field, one line").
+
+**What this pass deliberately did NOT do, left open for a follow-up pass:**
+- **Dedup rule is narrower than Stage 2's field-level design.** `skipDueToRoutedCapture` only fires when the routed operation itself completed a `MATERIAL_DECISION` write this same turn — not the field-level dedup FRD §8.3 describes (a routed `MAINTENANCE_TASK_COMPLETE` that already captured `actualCost` skipping only that field, not the whole turn). Full per-field dedup across all 69 operations was judged too large a sub-slice to fold into this pass silently; flagging it here instead.
+- **GOAL candidates are not extracted.** The pre-filter recognizes goal-statement language (`GOAL_STATEMENT` reason) but `extractionCandidateSchema.ts` only accepts FACT/EVENT — matches this section's own "Recommended first supported types" scoping, but means FRD §8.5's "thinking about selling next year" scenario produces no candidate yet. Phase 6 (DecisionThread expansion) is where this closes.
+- **Extraction accuracy against FRD §15's non-pre-filter metrics (candidate/field/date-precision/attribution accuracy, duplicate rate, false-persistence rate) is not measured.** Those require live Gemini calls scored against the corpus; this pass verified the pre-filter's own recall/precision only (100%/100%) and the candidate schema's validation logic (pure, no LLM). FRD §15 is explicit that these are pilot-readiness gates requiring real usage data, not unit-test assertions — not attempted here.
+- **Warranty pairing (`UPLOAD_EVIDENCE`'s sibling-link mechanism) is untouched.** Phase 2 built `linkSiblingCaptureExecutions`/`ASK_CAPTURE_LINK_RECONCILE` synthetically; this phase's EVENT candidates never call it (no producer creates a linked pair yet, matching this section's own "warranty explicitly deferred" scoping).
+- **Not deployed or browser-verified.** `npx prisma db push` needed no new run this phase (all schema fields were already added in Phase 2, forward-provisioned) — but the flag is off by default and no end-to-end conversation has been run against a live Gemini key in this pass.
+
 ---
 
 ## 10. Phase 4 — Contextual Next Actions
