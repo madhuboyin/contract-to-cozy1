@@ -97,6 +97,7 @@ import { evaluateFeatureContext } from '../../modules/propertyContext/applicatio
 import { assertCoverageConflictFree } from '../coverageConflict.service';
 import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
 import { capturePropertyFact } from '../../modules/propertyContext/application/capturePropertyFact';
+import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
@@ -9243,17 +9244,38 @@ async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<Confir
   const extractionConfidence = typeof parameters.extractionConfidence === 'number' ? parameters.extractionConfidence : null;
   const confidence = typeof parameters.confidence === 'number' ? parameters.confidence : null;
 
+  // Ask Cozy Stage 3, Phase 3 (implementation plan §9; FRD §19's "not every
+  // scalar fact goes through capturePropertyFact" finding). factKey ===
+  // FINANCING_CAPTURE_FACT_KEY is the one case this pass gives its own
+  // writer to -- capturePropertyFact's own !definition.writable gate would
+  // otherwise reject it outright, and the target model isn't
+  // PropertyFactEvidence in the first place.
   let capture: Awaited<ReturnType<typeof capturePropertyFact>>;
   try {
-    capture = await capturePropertyFact(execution.propertyId, userId, factKey, {
-      value: parameters.value,
-      sourceType,
-      confidence,
-      attribution,
-      captureChannel,
-      extractionConfidence,
-      captureExecutionId: execution.id,
-    });
+    if (factKey === FINANCING_CAPTURE_FACT_KEY) {
+      if (typeof parameters.value !== 'number') {
+        throw Object.assign(new Error('The mortgage rate to capture is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      }
+      capture = await capturePropertyFinancingFact(execution.propertyId, userId, {
+        value: parameters.value,
+        sourceType,
+        confidence,
+        attribution,
+        captureChannel,
+        extractionConfidence,
+        captureExecutionId: execution.id,
+      });
+    } else {
+      capture = await capturePropertyFact(execution.propertyId, userId, factKey, {
+        value: parameters.value,
+        sourceType,
+        confidence,
+        attribution,
+        captureChannel,
+        extractionConfidence,
+        captureExecutionId: execution.id,
+      });
+    }
   } catch (error) {
     if (error instanceof PropertyContextAccessDeniedError) {
       throw Object.assign(new Error('You do not have permission to update this property record.'), { code: 'ASK_PERMISSION_REQUIRED' });
