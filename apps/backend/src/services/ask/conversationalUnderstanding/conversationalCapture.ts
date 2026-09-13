@@ -16,12 +16,15 @@
 // backend code workers pulls in via @worker-shared) -- verifyClaimStillOwned
 // below is a small, deliberate duplicate of that same one function, not a
 // reimplementation of the whole claim/lease loop.
-import { AskExecutionStatus, Prisma } from '@prisma/client';
+import { AskCaptureAttribution, AskExecutionStatus, HomeEventType, Prisma, WarrantyCategory } from '@prisma/client';
+import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { normalizeCaptureValue } from '../../../modules/propertyContext/application/capturePropertyFact';
 import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
+import type { AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
+import type { AskOperationResult } from '../askOperationRegistry';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
 import { runStructuredExtraction, type RecentHomeEventContext } from './extractionContract';
 import { filterCandidatesPreservingWarrantyLinks } from './extractionCandidateSchema';
@@ -96,6 +99,128 @@ export function isValidFactCandidateValue(candidate: FactExtractionCandidate): b
   } catch {
     return false;
   }
+}
+
+// Ask Cozy Stage 3, Phase 3 edit-before-confirm (implementation plan §22/
+// FRD §22's own line: "candidate payload is editable via the existing
+// captureRequests/suppliedInput mechanism before the confirm call, not a
+// separate edit endpoint"). One captureRequest is attached to every capture
+// candidate's own resultJson at creation time (below, in buildChildExecutionData)
+// -- the SAME generic submitAskCapture()/AskCaptureReceipt plumbing every
+// other operation's inline-capture edit already uses (askOrchestrator.service.ts),
+// just newly extended to cover these three operations. Deliberately built
+// off the STORED PARAMETERS SHAPE (the exact object persisted to
+// parametersJson), not the ExtractionCandidate type -- this lets the exact
+// same builder run both at creation time and after every edit, since an
+// edited execution no longer has its original ExtractionCandidate object,
+// only its (now updated) parameters.
+//
+// Scope decision, explicit not silent: date/date-precision fields (EVENT's
+// occurredAt/datePrecision/dateRangeStart/dateRangeEnd, WARRANTY's
+// startDate/expiryDate/durationMonths) are NOT editable in this pass --
+// each has cross-field validation dependencies (a RANGE needs two
+// consistent dates; a warranty's expiry is derived from either an explicit
+// date or a duration) that would multiply this feature's surface
+// considerably for comparatively low value against the FRD's own
+// representative examples (which are cost/provider/value corrections, not
+// date corrections). Left open for a follow-up pass.
+function asParameterRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function factEditCaptureRequest(parameters: Record<string, unknown>, contextVersion: string): AskCaptureRequest {
+  const value = parameters.value;
+  const valueType = typeof value;
+  const inputSchema = valueType === 'boolean'
+    ? { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' }
+    : valueType === 'number'
+      ? { type: 'DECIMAL' }
+      : { type: 'SHORT_TEXT', maxLength: 500 };
+  return {
+    requirementId: 'capture-fact-edit',
+    captureKey: 'CAPTURE_FACT_EDIT',
+    classification: 'SCENARIO_INPUT',
+    state: 'KNOWN',
+    title: 'Edit before saving',
+    question: `Is "${parameters.factKey}" correct?`,
+    helpText: 'Change the value below, then confirm to save the corrected version.',
+    inputSchema: { type: 'GROUP', fields: [{ key: 'value', label: 'Value', required: true, inputSchema }] },
+    currentAnswer: { value },
+    allowNotSure: false,
+    sensitivity: 'STANDARD',
+    destinationLabel: 'Used to correct this pending property-record entry before you confirm it',
+    confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+const EVENT_EDITABLE_FIELD_DEFS: Record<'type' | 'title' | 'summary' | 'amount' | 'providerName', {
+  label: string; required: boolean; inputSchema: unknown;
+}> = {
+  type: { label: 'Type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: Object.values(HomeEventType).map((value) => ({ label: value, value })) } },
+  title: { label: 'Title', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+  summary: { label: 'Details', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 500 } },
+  amount: { label: 'Amount', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+  providerName: { label: 'Provider', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+};
+const EVENT_EDITABLE_KEYS = Object.keys(EVENT_EDITABLE_FIELD_DEFS) as Array<keyof typeof EVENT_EDITABLE_FIELD_DEFS>;
+
+// null for a correction execution whose only corrected field(s) are outside
+// this pass's editable set (e.g. correctedFields: ['date'] alone) -- there
+// is nothing left to offer editing on, so no captureRequest is attached
+// rather than one with an empty field list.
+function eventEditCaptureRequest(parameters: Record<string, unknown>, contextVersion: string): AskCaptureRequest | null {
+  const editableKeys = EVENT_EDITABLE_KEYS.filter((key) => key in parameters);
+  if (editableKeys.length === 0) return null;
+  const fields = editableKeys.map((key) => ({ key, label: EVENT_EDITABLE_FIELD_DEFS[key].label, required: EVENT_EDITABLE_FIELD_DEFS[key].required, inputSchema: EVENT_EDITABLE_FIELD_DEFS[key].inputSchema }));
+  const currentAnswer = Object.fromEntries(editableKeys.map((key) => [key, parameters[key] ?? null]));
+  return {
+    requirementId: 'capture-event-edit',
+    captureKey: 'CAPTURE_EVENT_EDIT',
+    classification: 'SCENARIO_INPUT',
+    state: 'KNOWN',
+    title: 'Edit before saving',
+    question: parameters.correctingEventId ? 'Is this correction accurate?' : 'Is this timeline entry accurate?',
+    helpText: 'Change any field below, then confirm to save the corrected version. Date is not editable here.',
+    inputSchema: { type: 'GROUP', fields },
+    currentAnswer,
+    allowNotSure: false,
+    sensitivity: 'STANDARD',
+    destinationLabel: 'Used to correct this pending home-timeline entry before you confirm it',
+    confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+function warrantyEditCaptureRequest(parameters: Record<string, unknown>, contextVersion: string): AskCaptureRequest {
+  return {
+    requirementId: 'capture-warranty-edit',
+    captureKey: 'CAPTURE_WARRANTY_EDIT',
+    classification: 'SCENARIO_INPUT',
+    state: 'KNOWN',
+    title: 'Edit before saving',
+    question: 'Is this warranty information accurate?',
+    helpText: 'Change any field below, then confirm to save the corrected version. Start and expiration dates are not editable here.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'providerName', label: 'Provider', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+      { key: 'category', label: 'Coverage type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: Object.values(WarrantyCategory).map((value) => ({ label: value, value })) } },
+      { key: 'policyNumber', label: 'Policy number', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+      { key: 'coverageDetails', label: 'Coverage details', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 2000 } },
+      { key: 'cost', label: 'Cost', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+    ] },
+    currentAnswer: {
+      providerName: parameters.providerName,
+      category: parameters.category,
+      policyNumber: parameters.policyNumber ?? null,
+      coverageDetails: parameters.coverageDetails ?? null,
+      cost: parameters.cost ?? null,
+    },
+    allowNotSure: false,
+    sensitivity: 'STANDARD',
+    destinationLabel: 'Used to correct this pending property-record entry before you confirm it',
+    confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
 }
 
 function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expiresAt: Date, index: number) {
@@ -213,6 +338,86 @@ function warrantyConfirmationBlocksAndCard(
       version: 1,
       title: 'Save this warranty to your property record?',
       description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
+      fields,
+      confirmLabel: 'Save warranty',
+      consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.',
+      expiresAt: expiresAt.toISOString(),
+    },
+  };
+}
+
+// Ask Cozy Stage 3, Phase 3 edit-before-confirm. Rebuilds the confirmation
+// card after an edit directly from the MERGED parameters object (not a
+// reconstructed ExtractionCandidate) -- an edited execution's original
+// candidate object no longer exists, only its (now updated) parameters.
+// isCorrection is read straight from parameters.correctingEventId, so the
+// new-vs-corrected title/copy distinction (eventConfirmationBlocksAndCard's
+// own design) still holds after an edit.
+function eventEditConfirmationBlocksAndCard(mergedParameters: Record<string, unknown>, sourceSentence: string, expiresAt: Date) {
+  const isCorrection = Boolean(mergedParameters.correctingEventId);
+  const title = isCorrection ? 'Update this home timeline event?' : 'Add this to your home timeline?';
+  const fields: Array<{ label: string; value: string }> = [];
+  if (typeof mergedParameters.title === 'string') fields.push({ label: isCorrection ? 'New title' : 'Event', value: mergedParameters.title });
+  if (typeof mergedParameters.type === 'string') fields.push({ label: isCorrection ? 'New type' : 'Type', value: mergedParameters.type });
+  if (typeof mergedParameters.amount === 'number') fields.push({ label: isCorrection ? 'New amount' : 'Amount', value: `$${mergedParameters.amount.toLocaleString()}` });
+  if (typeof mergedParameters.providerName === 'string' && mergedParameters.providerName) fields.push({ label: isCorrection ? 'New provider' : 'Provider', value: mergedParameters.providerName });
+  if (typeof mergedParameters.summary === 'string' && mergedParameters.summary) fields.push({ label: isCorrection ? 'New details' : 'Details', value: mergedParameters.summary });
+  if (fields.length === 0) fields.push({ label: 'Event', value: typeof mergedParameters.title === 'string' ? mergedParameters.title : 'Event' });
+  const confirmationId = `capture-event-edit-${expiresAt.getTime()}`;
+  return {
+    blocks: [{
+      type: 'SUMMARY' as const,
+      id: 'capture-event-edit-preview',
+      title,
+      body: `Cozy noticed you mentioned: "${sourceSentence}"`,
+      tone: 'DEFAULT' as const,
+      actions: [],
+    }],
+    confirmation: {
+      confirmationId,
+      version: 1,
+      title,
+      description: isCorrection
+        ? `Cozy noticed you mentioned: "${sourceSentence}". This replaces the existing entry with a corrected revision; the original is kept as history. No change is saved until you confirm.`
+        : `Cozy noticed you mentioned: "${sourceSentence}". No change is saved until you confirm.`,
+      fields,
+      confirmLabel: isCorrection ? 'Update timeline entry' : 'Add to timeline',
+      consentText: isCorrection
+        ? 'I confirm this correction is accurate and authorize ContractToCozy to update my home timeline.'
+        : 'I confirm this is accurate and authorize ContractToCozy to add it to my home timeline.',
+      expiresAt: expiresAt.toISOString(),
+    },
+  };
+}
+
+// Ask Cozy Stage 3, Phase 3 edit-before-confirm. Start/expiry dates are
+// displayed read-only (carried over from the original proposal, unedited --
+// dates are out of this pass's editable scope) rather than omitted, so the
+// homeowner still sees the complete picture before confirming.
+function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, unknown>, sourceSentence: string, expiresAt: Date) {
+  const fields: Array<{ label: string; value: string }> = [
+    { label: 'Provider', value: typeof mergedParameters.providerName === 'string' ? mergedParameters.providerName : '' },
+    { label: 'Coverage', value: typeof mergedParameters.category === 'string' ? mergedParameters.category : '' },
+  ];
+  if (typeof mergedParameters.policyNumber === 'string' && mergedParameters.policyNumber) fields.push({ label: 'Policy number', value: mergedParameters.policyNumber });
+  if (typeof mergedParameters.cost === 'number') fields.push({ label: 'Cost', value: `$${mergedParameters.cost.toLocaleString()}` });
+  if (typeof mergedParameters.startDate === 'string') fields.push({ label: 'Start date', value: new Date(mergedParameters.startDate).toLocaleDateString() });
+  if (typeof mergedParameters.expiryDate === 'string') fields.push({ label: 'Expires', value: new Date(mergedParameters.expiryDate).toLocaleDateString() });
+  const confirmationId = `capture-warranty-edit-${expiresAt.getTime()}`;
+  return {
+    blocks: [{
+      type: 'SUMMARY' as const,
+      id: 'capture-warranty-edit-preview',
+      title: 'Save this warranty to your property record?',
+      body: `Cozy noticed you mentioned: "${sourceSentence}"`,
+      tone: 'DEFAULT' as const,
+      actions: [],
+    }],
+    confirmation: {
+      confirmationId,
+      version: 1,
+      title: 'Save this warranty to your property record?',
+      description: `Cozy noticed you mentioned: "${sourceSentence}". No change is saved until you confirm.`,
       fields,
       confirmLabel: 'Save warranty',
       consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.',
@@ -367,6 +572,19 @@ export function buildChildExecutionData(
   }
   const { blocks, confirmation } = cards;
 
+  // Ask Cozy Stage 3, Phase 3 edit-before-confirm (FRD §22). Every capture
+  // candidate carries its own edit captureRequest from the moment it's
+  // proposed, using the SAME contextVersion snapshot as the candidate
+  // itself -- 'unversioned' covers the (rare) case where the parent turn's
+  // own contextVersion is null, matching the placeholder used symmetrically
+  // in submitAskCapture's freshness check for these three operations.
+  const editContextVersion = input.contextVersion ?? 'unversioned';
+  const captureRequests: AskCaptureRequest[] = candidate.category === 'FACT'
+    ? [factEditCaptureRequest(parameters, editContextVersion)]
+    : candidate.category === 'EVENT'
+      ? (() => { const request = eventEditCaptureRequest(parameters, editContextVersion); return request ? [request] : []; })()
+      : [warrantyEditCaptureRequest(parameters, editContextVersion)];
+
   return {
     session: { connect: { id: input.sessionId } },
     user: { connect: { id: input.userId } },
@@ -389,12 +607,130 @@ export function buildChildExecutionData(
     resultJson: {
       schemaVersion: '1.0',
       blocks,
-      captureRequests: [],
+      captureRequests,
       confirmation,
       clarification: null,
       suggestions: [],
     } as unknown as Prisma.InputJsonValue,
     expiresAt,
+  };
+}
+
+// Ask Cozy Stage 3, Phase 3 edit-before-confirm (FRD §22). The submit-time
+// half of the mechanism above: askOrchestrator.service.ts's submitAskCapture
+// calls one of these three once it has verified the captureKey is active
+// and the execution's own stored contextVersion still matches the
+// submitted expectedContextVersion. Each takes the execution's CURRENTLY
+// STORED parametersJson (not the original ExtractionCandidate, which no
+// longer exists once the execution is persisted) plus the submitted answer,
+// re-validates with the exact same per-field logic used at proposal time,
+// and rebuilds a fresh AskOperationResult -- status stays NEEDS_CONFIRMATION,
+// never writes to any domain model directly (only an actual confirm does
+// that). Returns null for any invalid submission; the caller is responsible
+// for turning that into an ASK_CAPTURE_VALIDATION_ERROR.
+
+export function editCaptureFactCandidate(
+  storedParameters: unknown,
+  sourceSentence: string,
+  contextVersion: string,
+  answer: unknown,
+  now: Date,
+): AskOperationResult | null {
+  const parameters = asParameterRecord(storedParameters);
+  const factKey = typeof parameters.factKey === 'string' ? parameters.factKey : null;
+  if (!factKey) return null;
+  const parsedAnswer = z.object({ value: z.unknown() }).strict().safeParse(answer);
+  if (!parsedAnswer.success) return null;
+  const candidate: FactExtractionCandidate = {
+    category: 'FACT',
+    factKey,
+    value: parsedAnswer.data.value,
+    extractionConfidence: typeof parameters.extractionConfidence === 'number' ? parameters.extractionConfidence : 1,
+    attribution: (typeof parameters.attribution === 'string' ? parameters.attribution : 'FIRSTHAND') as AskCaptureAttribution,
+    sourceSentence,
+  };
+  if (!isValidFactCandidateValue(candidate)) return null;
+  const mergedParameters = { ...parameters, value: candidate.value };
+  const expiresAt = confirmationExpiry(now);
+  const { blocks, confirmation } = factConfirmationBlocksAndCard(candidate, expiresAt, 0);
+  return {
+    status: 'NEEDS_CONFIRMATION',
+    reasonCode: 'FACT_CAPTURE_CONFIRMATION_REQUIRED',
+    blocks, confirmation, suggestions: [],
+    captureRequests: [factEditCaptureRequest(mergedParameters, contextVersion)],
+    parameters: { ...mergedParameters, confirmationExpiresAt: expiresAt.toISOString() },
+  };
+}
+
+const EVENT_EDIT_ANSWER_SCHEMAS: Record<keyof typeof EVENT_EDITABLE_FIELD_DEFS, z.ZodTypeAny> = {
+  type: z.nativeEnum(HomeEventType),
+  title: z.string().trim().min(1).max(160),
+  summary: z.string().trim().max(500).nullable(),
+  amount: z.number().nonnegative().max(10_000_000).nullable(),
+  providerName: z.string().trim().max(160).nullable(),
+};
+
+export function editCaptureEventCandidate(
+  storedParameters: unknown,
+  sourceSentence: string,
+  contextVersion: string,
+  answer: unknown,
+  now: Date,
+): AskOperationResult | null {
+  const parameters = asParameterRecord(storedParameters);
+  // Only fields already present on this execution are editable -- a
+  // correction execution only ever has the field(s) it actually corrects
+  // (buildEventContentParameters's sparse patch), so this naturally offers
+  // exactly those fields, never a field the original correction didn't
+  // touch.
+  const editableKeys = EVENT_EDITABLE_KEYS.filter((key) => key in parameters);
+  if (editableKeys.length === 0) return null;
+  const answerShape = Object.fromEntries(editableKeys.map((key) => [key, EVENT_EDIT_ANSWER_SCHEMAS[key]]));
+  const parsedAnswer = z.object(answerShape).strict().safeParse(answer);
+  if (!parsedAnswer.success) return null;
+  const merged: Record<string, unknown> = { ...parameters, ...parsedAnswer.data };
+  if ('amount' in parsedAnswer.data) {
+    merged.currency = merged.amount != null ? (typeof parameters.currency === 'string' ? parameters.currency : 'USD') : null;
+  }
+  const expiresAt = confirmationExpiry(now);
+  const { blocks, confirmation } = eventEditConfirmationBlocksAndCard(merged, sourceSentence, expiresAt);
+  const editRequest = eventEditCaptureRequest(merged, contextVersion);
+  return {
+    status: 'NEEDS_CONFIRMATION',
+    reasonCode: 'EVENT_CAPTURE_CONFIRMATION_REQUIRED',
+    blocks, confirmation, suggestions: [],
+    captureRequests: editRequest ? [editRequest] : [],
+    parameters: { ...merged, confirmationExpiresAt: expiresAt.toISOString() },
+  };
+}
+
+const WARRANTY_EDIT_ANSWER_SCHEMA = z.object({
+  providerName: z.string().trim().min(1).max(160),
+  category: z.nativeEnum(WarrantyCategory),
+  policyNumber: z.string().trim().max(160).nullable(),
+  coverageDetails: z.string().trim().max(2000).nullable(),
+  cost: z.number().nonnegative().max(10_000_000).nullable(),
+}).strict();
+
+export function editCaptureWarrantyCandidate(
+  storedParameters: unknown,
+  sourceSentence: string,
+  contextVersion: string,
+  answer: unknown,
+  now: Date,
+): AskOperationResult | null {
+  const parameters = asParameterRecord(storedParameters);
+  const parsedAnswer = WARRANTY_EDIT_ANSWER_SCHEMA.safeParse(answer);
+  if (!parsedAnswer.success) return null;
+  const merged = { ...parameters, ...parsedAnswer.data };
+  const expiresAt = confirmationExpiry(now);
+  const { blocks, confirmation } = warrantyEditConfirmationBlocksAndCard(merged, sourceSentence, expiresAt);
+  return {
+    status: 'NEEDS_CONFIRMATION',
+    reasonCode: 'WARRANTY_CAPTURE_CONFIRMATION_REQUIRED',
+    blocks, confirmation, suggestions: [],
+    captureRequests: [warrantyEditCaptureRequest(merged, contextVersion)],
+    parameters: { ...merged, confirmationExpiresAt: expiresAt.toISOString() },
   };
 }
 

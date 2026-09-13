@@ -100,7 +100,7 @@ import { capturePropertyFact } from '../../modules/propertyContext/application/c
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
-import { runConversationalCaptureForTurn } from './conversationalUnderstanding/conversationalCapture';
+import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate } from './conversationalUnderstanding/conversationalCapture';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
 import { getFinancialContextDecisions } from '../financialContext/context';
@@ -7571,7 +7571,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -7844,6 +7844,43 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'HouseholdInviteWorkflow';
+  } else if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM') {
+    // Ask Cozy Stage 3, Phase 3 edit-before-confirm (FRD §22's own line:
+    // "candidate payload is editable via the existing captureRequests/
+    // suppliedInput mechanism before the confirm call, not a separate edit
+    // endpoint"). Never writes to any domain model -- only rebuilds this
+    // execution's own pending NEEDS_CONFIRMATION card with the edited
+    // value(s); an actual confirm is still required afterward.
+    const editCaptureKey = execution.operationId === 'CAPTURE_FACT_CONFIRM'
+      ? 'CAPTURE_FACT_EDIT'
+      : execution.operationId === 'CAPTURE_EVENT_CONFIRM'
+        ? 'CAPTURE_EVENT_EDIT'
+        : 'CAPTURE_WARRANTY_EDIT';
+    if (input.captureKey !== editCaptureKey) {
+      const error = new Error('This pending entry can no longer be edited.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const storedContextVersion = execution.contextVersion ?? 'unversioned';
+    if (storedContextVersion !== input.expectedContextVersion) {
+      const error = new Error('This pending entry changed since the form was opened. Review the refreshed values and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const edited = execution.operationId === 'CAPTURE_FACT_CONFIRM'
+      ? editCaptureFactCandidate(execution.parametersJson, execution.message, storedContextVersion, input.answer, new Date())
+      : execution.operationId === 'CAPTURE_EVENT_CONFIRM'
+        ? editCaptureEventCandidate(execution.parametersJson, execution.message, storedContextVersion, input.answer, new Date())
+        : editCaptureWarrantyCandidate(execution.parametersJson, execution.message, storedContextVersion, input.answer, new Date());
+    if (!edited) {
+      const error = new Error('Enter a valid value for this field.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    result = edited;
+    captureId = input.idempotencyKey;
+    capturedContextVersion = storedContextVersion;
+    canonicalOwner = 'AskCaptureCandidateEdit';
   } else if (execution.operationId === 'HOME_DEADLINE_MONITOR') {
     const access = await ensurePropertyAccess(userId, execution.propertyId);
     if (access.role === HouseholdRole.VIEWER) {

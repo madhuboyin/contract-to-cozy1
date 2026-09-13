@@ -12,6 +12,9 @@ const {
   buildChildExecutionData,
   buildEventContentParameters,
   resolveWarrantyDates,
+  editCaptureFactCandidate,
+  editCaptureEventCandidate,
+  editCaptureWarrantyCandidate,
 } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger call
@@ -315,4 +318,212 @@ test('persistCandidates wires a WARRANTY child\'s linkedExecutionId to its paire
   assert.match(body, /if \(warrantyExecution\.linkedExecutionId \|\| eventExecution\.linkedExecutionId\) continue;/);
   assert.match(body, /data: \{ linkedExecutionId: warrantyExecution\.id \}/);
   assert.match(body, /data: \{ linkedExecutionId: eventExecution\.id \}/);
+});
+
+// Ask Cozy Stage 3, Phase 3 edit-before-confirm (FRD §22: "candidate payload
+// is editable via the existing captureRequests/suppliedInput mechanism
+// before the confirm call, not a separate edit endpoint").
+
+test('buildChildExecutionData: a FACT candidate carries a CAPTURE_FACT_EDIT captureRequest with the current value pre-filled', () => {
+  const input = { userId: 'u1', sessionId: 's1', propertyId: 'p1', parentExecutionId: 'e1', message: 'irrelevant', contextVersion: 'ctx-1', skipDueToRoutedCapture: false };
+  const candidate = { category: 'FACT', factKey: 'core.yearBuilt', value: 1998, extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'My home was built in 1998.' };
+  const data = buildChildExecutionData(candidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
+  const requests = data.resultJson.captureRequests;
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].captureKey, 'CAPTURE_FACT_EDIT');
+  assert.equal(requests[0].requirementId, 'capture-fact-edit');
+  assert.equal(requests[0].expectedContextVersion, 'ctx-1');
+  assert.deepEqual(requests[0].currentAnswer, { value: 1998 });
+  // Regression: 'ENHANCEMENT_ACCURACY' was tried first and reverted --
+  // AskWorkspace.tsx renders a wrongly-labeled "Use general estimate"
+  // dismiss button for that classification (fitting for a feature-context
+  // estimate fallback, nonsensical for editing a capture candidate) and
+  // fires a premature `property-context:updated` DOM event on submit (that
+  // event is suppressed only for WORKFLOW_INPUT/SCENARIO_INPUT/PREFERENCE_INPUT
+  // -- appropriate here since an edit never itself writes to PropertyContext,
+  // only an actual confirm does). 'SCENARIO_INPUT' also renders the correct
+  // "Save and update answer" submit label.
+  assert.equal(requests[0].classification, 'SCENARIO_INPUT');
+});
+
+test('buildChildExecutionData: a NEW EVENT candidate\'s captureRequest exposes all five editable fields; a null contextVersion falls back to the shared "unversioned" placeholder', () => {
+  const input = { userId: 'u1', sessionId: 's1', propertyId: 'p1', parentExecutionId: 'e1', message: 'irrelevant', contextVersion: null, skipDueToRoutedCapture: false };
+  const candidate = {
+    category: 'EVENT', eventType: 'REPAIR', title: 'HVAC service', datePrecision: 'EXACT_DATE',
+    occurredAt: '2026-09-12T00:00:00.000Z', amount: 275, currency: 'USD', providerName: 'Acme HVAC', summary: 'Annual service',
+    extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'I serviced the HVAC yesterday for $275.', correctingEventId: null,
+  };
+  const data = buildChildExecutionData(candidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
+  const request = data.resultJson.captureRequests[0];
+  assert.equal(request.captureKey, 'CAPTURE_EVENT_EDIT');
+  assert.equal(request.expectedContextVersion, 'unversioned');
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key).sort(), ['amount', 'providerName', 'summary', 'title', 'type']);
+  assert.equal(request.currentAnswer.title, 'HVAC service');
+  assert.equal(request.currentAnswer.amount, 275);
+});
+
+test('buildChildExecutionData: a correction EVENT candidate\'s captureRequest exposes ONLY the corrected field(s), matching the sparse patch itself', () => {
+  const input = { userId: 'u1', sessionId: 's1', propertyId: 'p1', parentExecutionId: 'e1', message: 'irrelevant', contextVersion: 'ctx-1', skipDueToRoutedCapture: false };
+  const candidate = {
+    category: 'EVENT', eventType: 'IMPROVEMENT', title: 'placeholder', datePrecision: 'UNKNOWN',
+    extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'Actually, that roof replacement cost $15,000.',
+    correctingEventId: 'event-1', correctedFields: ['amount'], amount: 15000, currency: 'USD',
+  };
+  const data = buildChildExecutionData(candidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
+  const request = data.resultJson.captureRequests[0];
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['amount']);
+  assert.equal(request.currentAnswer.amount, 15000);
+});
+
+test('buildChildExecutionData: a correction EVENT candidate whose only corrected field is "date" (outside edit scope) carries NO captureRequest, not an empty-fields one', () => {
+  const input = { userId: 'u1', sessionId: 's1', propertyId: 'p1', parentExecutionId: 'e1', message: 'irrelevant', contextVersion: 'ctx-1', skipDueToRoutedCapture: false };
+  const candidate = {
+    category: 'EVENT', eventType: 'IMPROVEMENT', title: 'placeholder', datePrecision: 'YEAR',
+    extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'Actually, that was in 2023, not 2024.',
+    correctingEventId: 'event-1', correctedFields: ['date'], occurredAt: '2023-06-01T00:00:00.000Z',
+  };
+  const data = buildChildExecutionData(candidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
+  assert.deepEqual(data.resultJson.captureRequests, []);
+});
+
+test('buildChildExecutionData: a WARRANTY candidate\'s captureRequest exposes provider/category/policyNumber/coverageDetails/cost with current values pre-filled', () => {
+  const input = { userId: 'u1', sessionId: 's1', propertyId: 'p1', parentExecutionId: 'e1', message: 'irrelevant', contextVersion: 'ctx-1', skipDueToRoutedCapture: false };
+  const candidate = {
+    category: 'WARRANTY', providerName: 'Carrier', warrantyCategory: 'HVAC', policyNumber: 'POL-123', coverageDetails: 'Parts and labor', cost: 450,
+    extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'We installed a new furnace, it has a 10 year warranty from Carrier.',
+    linkedEventCandidateIndex: 0, durationMonths: 120,
+  };
+  const data = buildChildExecutionData(candidate, 0, input, new Date('2026-09-13T00:00:00.000Z'));
+  const request = data.resultJson.captureRequests[0];
+  assert.equal(request.captureKey, 'CAPTURE_WARRANTY_EDIT');
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'cost']);
+  assert.deepEqual(request.currentAnswer, { providerName: 'Carrier', category: 'HVAC', policyNumber: 'POL-123', coverageDetails: 'Parts and labor', cost: 450 });
+});
+
+test('editCaptureFactCandidate: a valid edited value produces a fresh NEEDS_CONFIRMATION result with the new value in both parameters and the confirmation card', () => {
+  const storedParameters = { factKey: 'core.yearBuilt', value: 1998, sourceType: 'USER_REPORTED', attribution: 'FIRSTHAND', captureChannel: 'ASK_CONVERSATIONAL_CAPTURE', extractionConfidence: 0.9, confirmationVersion: 1, confirmationExpiresAt: '2026-09-13T00:30:00.000Z' };
+  const result = editCaptureFactCandidate(storedParameters, 'My home was built in 1998.', 'ctx-1', { value: 2001 }, new Date('2026-09-13T01:00:00.000Z'));
+  assert.ok(result);
+  assert.equal(result.status, 'NEEDS_CONFIRMATION');
+  assert.equal(result.parameters.value, 2001);
+  assert.equal(result.parameters.factKey, 'core.yearBuilt');
+  assert.match(result.confirmation.fields.find((field) => field.label === 'Value').value, /2001/);
+  assert.equal(result.captureRequests[0].currentAnswer.value, 2001);
+});
+
+test('editCaptureFactCandidate: an invalid edited value (fails the same normalizeCaptureValue check used at proposal time) is rejected, not silently accepted', () => {
+  const storedParameters = { factKey: 'core.yearBuilt', value: 1998, attribution: 'FIRSTHAND', extractionConfidence: 0.9 };
+  const result = editCaptureFactCandidate(storedParameters, 'irrelevant', 'ctx-1', { value: 'not a year' }, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result, null);
+});
+
+test('editCaptureFactCandidate: an answer missing the "value" key is rejected', () => {
+  const storedParameters = { factKey: 'core.yearBuilt', value: 1998, attribution: 'FIRSTHAND', extractionConfidence: 0.9 };
+  const result = editCaptureFactCandidate(storedParameters, 'irrelevant', 'ctx-1', {}, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result, null);
+});
+
+test('editCaptureEventCandidate: editing a correction execution whose only stored field is "amount" accepts a new amount and re-derives currency, and its captureRequest still offers only "amount"', () => {
+  const storedParameters = { correctingEventId: 'event-1', amount: 15000, currency: 'USD', attribution: 'FIRSTHAND', captureChannel: 'ASK_CONVERSATIONAL_CAPTURE', extractionConfidence: 0.8 };
+  const result = editCaptureEventCandidate(storedParameters, 'Actually, that roof replacement cost $15,000.', 'ctx-1', { amount: 15200 }, new Date('2026-09-13T01:00:00.000Z'));
+  assert.ok(result);
+  assert.equal(result.parameters.amount, 15200);
+  assert.equal(result.parameters.currency, 'USD');
+  assert.match(result.confirmation.title, /Update/);
+  assert.deepEqual(result.captureRequests[0].inputSchema.fields.map((f) => f.key), ['amount']);
+});
+
+test('editCaptureEventCandidate: rejects an answer naming a field this execution never had (e.g. "title" on an amount-only correction) -- the edit form only ever offers what the captureRequest itself exposed', () => {
+  const storedParameters = { correctingEventId: 'event-1', amount: 15000, currency: 'USD', attribution: 'FIRSTHAND' };
+  const result = editCaptureEventCandidate(storedParameters, 'irrelevant', 'ctx-1', { amount: 15200, title: 'Roof replacement' }, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result, null);
+});
+
+test('editCaptureEventCandidate: a new (non-correction) event accepts a full edit across all five editable fields', () => {
+  const storedParameters = {
+    correctingEventId: null, type: 'REPAIR', title: 'HVAC service', summary: 'Annual service', amount: 275, currency: 'USD', providerName: 'Acme HVAC',
+    occurredAt: '2026-09-12T00:00:00.000Z', datePrecision: 'EXACT_DATE', dateRangeStart: null, dateRangeEnd: null,
+    attribution: 'FIRSTHAND', extractionConfidence: 0.9,
+  };
+  const answer = { type: 'MAINTENANCE', title: 'HVAC filter change', summary: 'Replaced filter', amount: 90, providerName: 'Acme HVAC' };
+  const result = editCaptureEventCandidate(storedParameters, 'irrelevant', 'ctx-1', answer, new Date('2026-09-13T01:00:00.000Z'));
+  assert.ok(result);
+  assert.equal(result.parameters.type, 'MAINTENANCE');
+  assert.equal(result.parameters.title, 'HVAC filter change');
+  assert.equal(result.parameters.amount, 90);
+  // Untouched fields (dates) survive unchanged.
+  assert.equal(result.parameters.occurredAt, '2026-09-12T00:00:00.000Z');
+  assert.match(result.confirmation.title, /^Add /);
+});
+
+test('editCaptureEventCandidate: returns null when this execution has no editable fields stored at all', () => {
+  const storedParameters = { correctingEventId: 'event-1', occurredAt: '2023-06-01T00:00:00.000Z', datePrecision: 'YEAR', attribution: 'FIRSTHAND' };
+  const result = editCaptureEventCandidate(storedParameters, 'irrelevant', 'ctx-1', {}, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result, null);
+});
+
+test('editCaptureWarrantyCandidate: a valid full edit updates every editable field and preserves the original (non-editable) dates unchanged', () => {
+  const storedParameters = {
+    providerName: 'Carrier', category: 'HVAC', policyNumber: 'POL-123', coverageDetails: 'Parts and labor', cost: 450,
+    startDate: '2026-08-15T00:00:00.000Z', expiryDate: '2036-08-15T00:00:00.000Z', attribution: 'FIRSTHAND', extractionConfidence: 0.85,
+  };
+  const answer = { providerName: 'Carrier Corp', category: 'HVAC', policyNumber: 'POL-456', coverageDetails: 'Parts, labor, and diagnostics', cost: 500 };
+  const result = editCaptureWarrantyCandidate(storedParameters, 'irrelevant', 'ctx-1', answer, new Date('2026-09-13T01:00:00.000Z'));
+  assert.ok(result);
+  assert.equal(result.parameters.providerName, 'Carrier Corp');
+  assert.equal(result.parameters.policyNumber, 'POL-456');
+  assert.equal(result.parameters.cost, 500);
+  assert.equal(result.parameters.startDate, '2026-08-15T00:00:00.000Z');
+  assert.equal(result.parameters.expiryDate, '2036-08-15T00:00:00.000Z');
+  assert.ok(result.confirmation.fields.some((field) => field.label === 'Start date'));
+});
+
+test('editCaptureWarrantyCandidate: rejects an invalid category enum value', () => {
+  const storedParameters = { providerName: 'Carrier', category: 'HVAC', policyNumber: null, coverageDetails: null, cost: null, startDate: '2026-08-15T00:00:00.000Z', expiryDate: '2036-08-15T00:00:00.000Z' };
+  const answer = { providerName: 'Carrier', category: 'NOT_A_REAL_CATEGORY', policyNumber: null, coverageDetails: null, cost: null };
+  const result = editCaptureWarrantyCandidate(storedParameters, 'irrelevant', 'ctx-1', answer, new Date('2026-09-13T01:00:00.000Z'));
+  assert.equal(result, null);
+});
+
+// Source-governance tests for submitAskCapture's own wiring of the three
+// capture-edit operations (submitAskCapture touches the database directly
+// and has no runtime-mocked test harness in this codebase for this class of
+// function -- same established gap as persistCandidates above).
+
+test('submitAskCapture\'s inline-capture allow-list includes all three capture-confirm operations', () => {
+  const idx = orchestratorSource.indexOf('export async function submitAskCapture(');
+  assert.ok(idx > 0);
+  const allowListLine = orchestratorSource.slice(idx, orchestratorSource.indexOf('\n', orchestratorSource.indexOf(".includes(execution.operationId ?? '')", idx)));
+  assert.match(allowListLine, /'CAPTURE_FACT_CONFIRM'/);
+  assert.match(allowListLine, /'CAPTURE_EVENT_CONFIRM'/);
+  assert.match(allowListLine, /'CAPTURE_WARRANTY_CONFIRM'/);
+});
+
+test('submitAskCapture\'s capture-edit branch never calls a domain-writing service -- it only rebuilds the pending card via editCapture*Candidate', () => {
+  const idx = orchestratorSource.indexOf("execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'");
+  assert.ok(idx > 0);
+  const branchEnd = orchestratorSource.indexOf("} else if (execution.operationId === 'HOME_DEADLINE_MONITOR')", idx);
+  assert.ok(branchEnd > idx);
+  const branch = orchestratorSource.slice(idx, branchEnd);
+  assert.match(branch, /editCaptureFactCandidate\(/);
+  assert.match(branch, /editCaptureEventCandidate\(/);
+  assert.match(branch, /editCaptureWarrantyCandidate\(/);
+  assert.match(branch, /canonicalOwner = 'AskCaptureCandidateEdit'/);
+  // No canonical writer of any kind -- capturePropertyFact/capturePropertyFinancingFact/
+  // captureWarranty/HomeEventsService/PropertyMaintenanceTaskService/captureFeatureContext
+  // must never appear inside this branch; only an actual confirm writes.
+  assert.doesNotMatch(branch, /capturePropertyFact\(|capturePropertyFinancingFact\(|captureWarranty\(|homeEventsServiceForCapture\.|PropertyMaintenanceTaskService\.|captureFeatureContext\(/);
+});
+
+test('submitAskCapture\'s capture-edit branch checks captureKey and contextVersion freshness before calling the editor, matching every other branch\'s own gating shape', () => {
+  const idx = orchestratorSource.indexOf("execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM'");
+  const branchEnd = orchestratorSource.indexOf("} else if (execution.operationId === 'HOME_DEADLINE_MONITOR')", idx);
+  const branch = orchestratorSource.slice(idx, branchEnd);
+  const captureKeyCheck = branch.indexOf("input.captureKey !== editCaptureKey");
+  const versionCheck = branch.indexOf("storedContextVersion !== input.expectedContextVersion");
+  const editorCall = branch.indexOf('const edited =');
+  assert.ok(captureKeyCheck > 0 && versionCheck > captureKeyCheck && editorCall > versionCheck, 'expected captureKey check, then contextVersion check, then the editor call, in that order');
+  assert.match(branch, /'ASK_CAPTURE_NOT_ACTIVE'/);
+  assert.match(branch, /'ASK_CONTEXT_VERSION_CONFLICT'/);
+  assert.match(branch, /'ASK_CAPTURE_VALIDATION_ERROR'/);
 });
