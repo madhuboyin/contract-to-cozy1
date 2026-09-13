@@ -31,6 +31,7 @@ const DEFINITIONS = [
   adapter('maintenance.create', 'PropertyMaintenanceTaskService', 'MAINTENANCE_TASK_CREATE', 'MUTATION_PREPARATION'),
   adapter('maintenance.complete', 'PropertyMaintenanceTaskService', 'MAINTENANCE_TASK_COMPLETE', 'MUTATION_PREPARATION'),
   adapter('maintenance.update', 'PropertyMaintenanceTaskService', 'MAINTENANCE_TASK_UPDATE', 'MUTATION_PREPARATION'),
+  adapter('maintenance.forecast', 'maintenancePrediction.service', 'MAINTENANCE_FORECAST'),
   adapter('home-deadline.monitor', 'Maintenance and Notification Preferences', 'HOME_DEADLINE_MONITOR', 'MUTATION_PREPARATION'),
   adapter('inventory.replacement', 'Inventory and ReplaceRepairService', 'REPLACEMENT_GUIDANCE'),
   adapter('decision-platform.hvac.start', 'Decision Platform', 'HVAC_DECISION_START', 'MUTATION_PREPARATION'),
@@ -92,6 +93,7 @@ const DEFINITIONS = [
   adapter('inspection-findings.update', 'InspectionHubService', 'INSPECTION_FINDING_UPDATE', 'MUTATION_PREPARATION'),
   adapter('document-promotion.review', 'Document Promotion Registry', 'DOCUMENT_PROMOTION_REVIEW'),
   adapter('document-promotion.confirm', 'Canonical document promotion adapters', 'DOCUMENT_PROMOTION_CONFIRM', 'MUTATION_PREPARATION'),
+  adapter('documents.lookup', 'Document Vault', 'DOCUMENT_LOOKUP'),
   adapter('guidance.journey.create', 'GuidanceJourneyService', 'GUIDANCE_JOURNEY_CREATE', 'MUTATION_PREPARATION'),
   adapter('home-change.summary', 'PropertyChangeService', 'HOME_CHANGE_SUMMARY'),
 ] as const;

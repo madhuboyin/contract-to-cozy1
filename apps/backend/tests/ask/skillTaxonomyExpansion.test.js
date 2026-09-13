@@ -10,7 +10,7 @@ const { SKILL_EVALUATION_PACKAGES } = require('../../src/services/skills/skillEv
 const { SKILL_DEFINITIONS, getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
 
 const TAXONOMY = Object.freeze({
-  maintenance: ['MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE', 'HOME_DEADLINE_MONITOR'],
+  maintenance: ['MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'HOME_DEADLINE_MONITOR'],
   'repair-replace': ['REPLACEMENT_GUIDANCE', 'HVAC_DECISION_START', 'HVAC_DECISION_CONTINUE', 'HVAC_SPECIALIST_ENGAGE', 'HVAC_DECISION_SCENARIO', 'HVAC_DECISION_ABANDON', 'HVAC_PREFERENCE_SAVE', 'HVAC_PREFERENCE_FORGET', 'HVAC_DECISION_OUTCOME_REPORT', 'HVAC_DECISION_OUTCOME_VIEW', 'HVAC_DECISION_OUTCOME_UNLINK'],
   'capital-planning': ['CAPITAL_RESERVE_PLAN'],
   coverage: ['COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS'],
@@ -36,16 +36,24 @@ const TAXONOMY = Object.freeze({
   'home-operations': ['HOME_ACTIONS', 'OPERATIONAL_WORK_UPDATE', 'GUIDANCE_JOURNEY_CREATE'],
   'inspection-findings': ['INSPECTION_FINDINGS', 'INSPECTION_FINDING_UPDATE'],
   'document-promotion': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
+  documents: ['DOCUMENT_LOOKUP'],
   'query-envelope': ['INTELLIGENCE_ENVELOPE_QUERY'],
 });
 
+// 'maintenance' is deliberately excluded from this list even though
+// MAINTENANCE_FORECAST expands it this phase -- it has a legitimate,
+// pre-existing direct import of MAINTENANCE_TASK_CONTEXT_PROVIDER/
+// SEASONAL_CHECKLIST_CONTEXT_PROVIDER from '../skills/maintenance/
+// skill.manifest' (unrelated to this addition, predates this phase), which
+// this test's own "skills/${skillId}" check would otherwise flag as a
+// forbidden per-Skill coupling.
 const EXPANDED_SKILLS = Object.freeze([
   'capital-planning', 'coverage', 'household', 'ownership-cost', 'property-tax',
   'quote-comparison', 'renovation', 'savings', 'sell-hold-rent', 'seller-preparation',
-  'seller-prep', 'buyer-closing', 'incident-claim', 'home-operations',
+  'seller-prep', 'buyer-closing', 'incident-claim', 'home-operations', 'documents',
 ]);
 
-test('all twenty-one representative Skills own the intended canonical operations', () => {
+test('all twenty-two representative Skills own the intended canonical operations', () => {
   assert.deepEqual(new Set(Object.keys(SKILL_DEFINITIONS)), new Set(Object.keys(TAXONOMY)));
   for (const [skillId, operations] of Object.entries(TAXONOMY)) {
     const skill = SKILL_DEFINITIONS[skillId];

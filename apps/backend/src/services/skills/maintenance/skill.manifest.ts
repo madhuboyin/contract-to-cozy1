@@ -8,6 +8,7 @@ export const MAINTENANCE_SKILL_OPERATIONS: AskOperationId[] = [
   'MAINTENANCE_TASK_CREATE',
   'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE',
+  'MAINTENANCE_FORECAST',
   'HOME_DEADLINE_MONITOR',
 ];
 
@@ -23,10 +24,10 @@ export const SEASONAL_CHECKLIST_CONTEXT_PROVIDER = Object.freeze({
 
 export const MAINTENANCE_SKILL = Object.freeze({
   id: 'maintenance',
-  version: '1.0.0',
+  version: '1.1.0',
   domain: 'HOME_CARE',
   displayName: 'Maintenance',
-  description: 'Understand, create, complete, update, and monitor home maintenance work.',
+  description: 'Understand, create, complete, update, and monitor home maintenance work, and see predicted upcoming maintenance for verified home systems.',
   homeownerJobs: ['STAY_AHEAD', 'DECIDE_WITH_CONFIDENCE'],
   supportedGoals: [
     'understand-maintenance-status',
@@ -34,8 +35,9 @@ export const MAINTENANCE_SKILL = Object.freeze({
     'complete-maintenance-task',
     'update-maintenance-task',
     'monitor-home-deadline',
+    'forecast-maintenance',
   ],
-  aliases: ['maintenance', 'home upkeep', 'service schedule', 'maintenance reminders'],
+  aliases: ['maintenance', 'home upkeep', 'service schedule', 'maintenance reminders', 'maintenance forecast'],
   operations: MAINTENANCE_SKILL_OPERATIONS.map((operationId) => ({
     operationId,
     version: '1.0',
@@ -55,6 +57,7 @@ export const MAINTENANCE_SKILL = Object.freeze({
     { id: 'maintenance.create', version: '1.0' },
     { id: 'maintenance.complete', version: '1.0' },
     { id: 'maintenance.update', version: '1.0' },
+    { id: 'maintenance.forecast', version: '1.0' },
     { id: 'home-deadline.monitor', version: '1.0' },
   ],
   allowedExternalConnectors: [],
@@ -67,7 +70,7 @@ export const MAINTENANCE_SKILL = Object.freeze({
     reversibility: 'PARTIALLY_REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST', 'BOUNDARY'],
   dependencies: [
     ...[PROPERTY_IDENTITY_CONTEXT_PROVIDER, MAINTENANCE_TASK_CONTEXT_PROVIDER].map((provider) => ({
       type: 'CONTEXT_PROVIDER' as const,

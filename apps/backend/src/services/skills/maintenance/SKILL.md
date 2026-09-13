@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Help homeowners understand, create, complete, update, and monitor recorded home maintenance.
+Help homeowners understand, create, complete, update, and monitor recorded home maintenance, and see a rule-based forecast of upcoming maintenance for verified home systems.
 
 ## Homeowner goals
 
@@ -12,12 +12,14 @@ Help homeowners understand, create, complete, update, and monitor recorded home 
 - Mark a maintenance task complete.
 - Reschedule, assign, archive, or reopen a task.
 - Remind me when recorded maintenance or a supported home deadline is due.
+- What maintenance is predicted to come up next for my HVAC, roof, or water heater?
 
 ## Select this Skill when
 
 - the request concerns recorded upkeep, service history, task state, or a maintenance reminder;
-- the homeowner explicitly wants to create, complete, or update a maintenance task; or
-- the homeowner wants a reminder for a registered maintenance or supported home-deadline record.
+- the homeowner explicitly wants to create, complete, or update a maintenance task;
+- the homeowner wants a reminder for a registered maintenance or supported home-deadline record; or
+- the homeowner wants a forecast of upcoming maintenance for verified equipment.
 
 ## Do not select this Skill when
 
@@ -32,6 +34,7 @@ Help homeowners understand, create, complete, update, and monitor recorded home 
 - `MAINTENANCE_TASK_CREATE`
 - `MAINTENANCE_TASK_COMPLETE`
 - `MAINTENANCE_TASK_UPDATE`
+- `MAINTENANCE_FORECAST`
 - `HOME_DEADLINE_MONITOR`
 
 ## Context

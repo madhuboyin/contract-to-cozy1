@@ -26,6 +26,7 @@ test('the static Skill registry validates and groups the existing Maintenance op
       'MAINTENANCE_TASK_CREATE',
       'MAINTENANCE_TASK_COMPLETE',
       'MAINTENANCE_TASK_UPDATE',
+      'MAINTENANCE_FORECAST',
       'HOME_DEADLINE_MONITOR',
     ],
   );

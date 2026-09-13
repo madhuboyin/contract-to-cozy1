@@ -23,7 +23,7 @@ function retiredMaintenance(overrides = {}) {
     owner: 'Homeowner Product / Home Care',
     lifecycleStatus: 'RETIRED',
     operations: [{ id: 'MAINTENANCE_STATUS', version: '1.0' }],
-    supersededByVersion: '1.0.0',
+    supersededByVersion: '1.1.0',
     ...overrides,
   };
 }
@@ -31,15 +31,16 @@ function retiredMaintenance(overrides = {}) {
 test('current Skill versions are projected into immutable minimized lineage', () => {
   assert.deepEqual(validateSkillLineageRegistry(), []);
   assert.equal(Object.keys(SKILL_LINEAGE_REGISTRY).length, Object.keys(SKILL_DEFINITIONS).length);
-  const maintenance = getSkillLineageMetadata('maintenance', '1.0.0');
+  const maintenance = getSkillLineageMetadata('maintenance', '1.1.0');
   assert.deepEqual(maintenance, {
-    id: 'maintenance', version: '1.0.0', domain: 'HOME_CARE', displayName: 'Maintenance',
+    id: 'maintenance', version: '1.1.0', domain: 'HOME_CARE', displayName: 'Maintenance',
     owner: 'Homeowner Product / Home Care', lifecycleStatus: 'DEVELOPMENT',
     operations: [
       { id: 'MAINTENANCE_STATUS', version: '1.0' },
       { id: 'MAINTENANCE_TASK_CREATE', version: '1.0' },
       { id: 'MAINTENANCE_TASK_COMPLETE', version: '1.0' },
       { id: 'MAINTENANCE_TASK_UPDATE', version: '1.0' },
+      { id: 'MAINTENANCE_FORECAST', version: '1.0' },
       { id: 'HOME_DEADLINE_MONITOR', version: '1.0' },
     ],
     supersededByVersion: null,
@@ -55,9 +56,9 @@ test('a retired version remains exactly resolvable but never enters executable r
   const registry = buildSkillLineageRegistry(SKILL_DEFINITIONS, [retired]);
   const resolved = registry[skillLineageKey(retired)];
   assert.equal(resolved.lifecycleStatus, 'RETIRED');
-  assert.equal(resolved.supersededByVersion, '1.0.0');
+  assert.equal(resolved.supersededByVersion, '1.1.0');
   assert.equal(Object.isFrozen(resolved.operations[0]), true);
-  assert.equal(getSkillDefinition('maintenance').version, '1.0.0');
+  assert.equal(getSkillDefinition('maintenance').version, '1.1.0');
   assert.equal(getSkillDefinition('maintenance@0.9.0'), undefined);
 });
 

@@ -19,6 +19,7 @@ import { INCIDENT_CLAIM_SKILL_EVALUATION } from './incident-claim';
 import { HOME_OPERATIONS_SKILL_EVALUATION } from './home-operations';
 import { INSPECTION_FINDINGS_SKILL_EVALUATION } from './inspection-findings';
 import { DOCUMENT_PROMOTION_SKILL_EVALUATION } from './document-promotion';
+import { DOCUMENTS_SKILL_EVALUATION } from './documents';
 import { QUERY_ENVELOPE_SKILL_EVALUATION } from './query-envelope';
 
 export type SkillRoutingFixtureMode = 'EXACT' | 'PARAPHRASED' | 'COLLOQUIAL' | 'MISSPELLED';
@@ -123,6 +124,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
   [QUERY_ENVELOPE_SKILL_EVALUATION.id]: QUERY_ENVELOPE_SKILL_EVALUATION,
   [INSPECTION_FINDINGS_SKILL_EVALUATION.id]: INSPECTION_FINDINGS_SKILL_EVALUATION,
   [DOCUMENT_PROMOTION_SKILL_EVALUATION.id]: DOCUMENT_PROMOTION_SKILL_EVALUATION,
+  [DOCUMENTS_SKILL_EVALUATION.id]: DOCUMENTS_SKILL_EVALUATION,
   [CAPITAL_PLANNING_SKILL_EVALUATION.id]: CAPITAL_PLANNING_SKILL_EVALUATION,
   [COVERAGE_SKILL_EVALUATION.id]: COVERAGE_SKILL_EVALUATION,
   [HOUSEHOLD_SKILL_EVALUATION.id]: HOUSEHOLD_SKILL_EVALUATION,
@@ -144,18 +146,23 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'PARAPHRASED', message: 'Create a maintenance task to clean gutters', expectedOperationId: 'MAINTENANCE_TASK_CREATE' },
       { mode: 'COLLOQUIAL', message: 'Mark the gutter cleaning task complete', expectedOperationId: 'MAINTENANCE_TASK_COMPLETE' },
       { mode: 'MISSPELLED', message: 'What maintenence is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },
+      { mode: 'EXACT', message: 'What maintenance is coming up for my home?', expectedOperationId: 'MAINTENANCE_FORECAST' },
+      { mode: 'PARAPHRASED', message: 'Forecast my upcoming maintenance', expectedOperationId: 'MAINTENANCE_FORECAST' },
+      { mode: 'COLLOQUIAL', message: 'When will my HVAC need service?', expectedOperationId: 'MAINTENANCE_FORECAST' },
+      { mode: 'MISSPELLED', message: 'What upcoming maintenance should I expect soone?', expectedOperationId: 'MAINTENANCE_FORECAST' },
     ],
     ambiguityCases: [{ message: 'Help with my maintenance reminders and service schedule', candidateOperationIds: ['MAINTENANCE_STATUS', 'HOME_DEADLINE_MONITOR'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [
       { consumer: 'ASK', operationId: 'MAINTENANCE_STATUS', allowed: true },
       { consumer: 'PROACTIVE', operationId: 'MAINTENANCE_STATUS', allowed: false },
+      { consumer: 'ASK', operationId: 'MAINTENANCE_FORECAST', allowed: true },
     ],
     negativeCases: [{ message: 'Should I refinance my mortgage?', expectedBehavior: 'DO_NOT_SELECT_SKILL' }],
     exclusionCases: [{ message: 'Diagnose whether my furnace is legally safe to operate', expectedBehavior: 'DO_NOT_EXECUTE_SKILL' }],
     degradedModeCases: [{ dependencyType: 'CONTEXT_PROVIDER', dependency: maintenance.requiredContextProviders[0], expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' }],
     prohibitedAdapters: ['refinance.analysis'],
     prohibitedContextProviders: ['undeclared.financial-context'],
-    expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED'],
+    expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED', 'NOT_APPLICABLE'],
     modelDisabledCase: { message: 'What maintenance is overdue?', expectedOperationId: 'MAINTENANCE_STATUS' },
     continuationCase: { message: 'Now complete it', sourceOperationId: 'MAINTENANCE_STATUS', expectedOperationId: 'MAINTENANCE_TASK_COMPLETE' },
     handoffCase: { suggestedNextSkillId: 'repair-replace', suggestedGoal: 'analyze-repair-or-replace', reasonCodes: ['AGING_ITEM_NEEDS_DECISION'] },

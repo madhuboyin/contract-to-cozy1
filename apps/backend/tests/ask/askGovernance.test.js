@@ -30,8 +30,9 @@ test('every Ask operation has a complete governed definition', () => {
   // CAPTURE_WARRANTY_CONFIRM (Phase 3 warranty capture writer, §9/§22) +
   // SELL_HOLD_RENT_GOAL_CAPTURE (Phase 6, implementation plan §12; FRD §21) +
   // SELLER_PREP_CHECKLIST + SELLER_PREP_ITEM_DECISION + COVERAGE_COMPARISON_STATUS
-  // (Phase 7, implementation plan §13; FRD §31).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 74);
+  // + DOCUMENT_LOOKUP + MAINTENANCE_FORECAST (Phase 7, implementation plan
+  // §13; FRD §31).
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 76);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);

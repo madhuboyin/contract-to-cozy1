@@ -60,6 +60,7 @@ import {
 } from './askAudiencePolicy';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
 import { getOrCreateCoverageComparison } from '../coverageComparison.service';
+import { generateForecast, listForecast } from '../maintenancePrediction.service';
 import { answerGroundedAsk } from '../groundedAsk.service';
 import {
   buildCapabilityCatalog,
@@ -1586,6 +1587,105 @@ async function maintenanceResult(
   };
 }
 
+// Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "additional
+// maintenance intelligence" candidate). Reads maintenancePrediction
+// .service.ts's rule-based forecast (MaintenancePrediction rows,
+// HVAC/ROOF/WATER_HEATER interval rules against verified inventory items)
+// -- distinct from maintenanceResult above, which only reads homeowner-
+// created/scheduled PropertyMaintenanceTask rows. Deliberately NOT a
+// duplicate of HOME_ACTIONS: confirmed by reading homeActionsResult/
+// getHomeActionFeed that maintenancePrediction.service.ts has zero
+// references there or anywhere in the Personalization pipeline -- this is
+// a fully standalone, previously-unconnected surface, not a second
+// ranked action source.
+const MAINTENANCE_FORECAST_PRIORITY_LABELS: Record<number, string> = {
+  5: 'Critical', 4: 'High', 3: 'Medium', 2: 'Low', 1: 'Monitor',
+};
+
+async function maintenanceForecastResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/maintenance`;
+
+  let predictions = await listForecast(propertyId);
+  // listForecast never lazily generates (confirmed by reading it) -- unlike
+  // Coverage Comparison's own getOrCreateCoverageComparison, an empty
+  // result here could mean "never generated" rather than "genuinely
+  // nothing to forecast." generateForecast is cheap, deterministic, and
+  // local-only (verified by reading its implementation -- no external
+  // calls, dedup'd via an in-flight map), so materializing it once as part
+  // of this read follows the same precedent Coverage Comparison already
+  // established, rather than answering a stale empty state.
+  if (predictions.length === 0) {
+    await generateForecast(propertyId);
+    predictions = await listForecast(propertyId);
+  }
+
+  if (predictions.length === 0) {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'MAINTENANCE_FORECAST_NO_VERIFIED_SYSTEMS',
+      blocks: [{
+        type: 'EMPTY_STATE',
+        id: 'maintenance-forecast-empty',
+        title: 'No maintenance forecast available yet',
+        body: 'Ask found no verified HVAC, roof, or water-heater inventory items to forecast maintenance for. Verify these items in your inventory to unlock predictions.',
+        actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href, style: 'PRIMARY' }],
+      }],
+      suggestions: ['What maintenance is pending?'],
+    };
+  }
+
+  const overdueCount = predictions.filter((prediction) => prediction.status === 'OVERDUE').length;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'maintenance-forecast-summary',
+    title: `${predictions.length} predicted maintenance item${predictions.length === 1 ? '' : 's'}`,
+    body: overdueCount
+      ? `${overdueCount} already overdue based on this forecast.`
+      : `Next predicted: ${predictions[0].taskName} around ${humanDate(predictions[0].predictedDate)}.`,
+    tone: overdueCount ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href, style: 'SECONDARY' }],
+  }, {
+    type: 'GROUPED_LIST',
+    id: 'maintenance-forecast-items',
+    title: 'Predicted maintenance',
+    description: 'A rule-based forecast for verified HVAC, roof, and water-heater inventory items -- not a substitute for a professional inspection.',
+    sections: [{
+      id: 'maintenance-forecast-all',
+      title: overdueCount ? 'Predicted or overdue' : 'Predicted',
+      count: predictions.length,
+      items: predictions.slice(0, 20).map((prediction) => ({
+        id: prediction.id,
+        title: prediction.taskName,
+        description: prediction.reasoning ?? null,
+        meta: [
+          prediction.inventoryItem?.name ?? null,
+          MAINTENANCE_FORECAST_PRIORITY_LABELS[prediction.priority] ?? `Priority ${prediction.priority}`,
+          `${prediction.status === 'OVERDUE' ? 'Overdue since' : 'Predicted'} ${humanDate(prediction.predictedDate)}`,
+        ].filter((value): value is string => Boolean(value)),
+        status: prediction.status,
+        href,
+      })),
+    }],
+    actions: [],
+  }, {
+    type: 'BOUNDARY',
+    id: 'maintenance-forecast-boundary',
+    title: 'Rule-based forecast, not a professional inspection',
+    body: 'These predictions come from typical service-interval rules for verified equipment, not a diagnosis of this specific unit\'s current condition.',
+    severity: 'INFO',
+    suggestions: [],
+  }];
+
+  return {
+    status: 'ANSWERED',
+    reasonCode: overdueCount ? 'MAINTENANCE_FORECAST_HAS_OVERDUE' : 'MAINTENANCE_FORECAST_READY',
+    contextVersion: createHash('sha256').update(JSON.stringify(predictions.map((prediction) => ({ id: prediction.id, status: prediction.status, updatedAt: prediction.updatedAt })))).digest('hex'),
+    blocks,
+    suggestions: ['What maintenance is pending?'],
+  };
+}
+
 const COVERAGE_GROUP_LABELS: Record<CoverageReviewGroup, string> = {
   NO_COVERAGE: 'No coverage confirmed',
   COVERAGE_UNCLEAR: 'Coverage unclear',
@@ -2731,6 +2831,81 @@ async function documentPromotionConfirmResult(propertyId: string, message: strin
   const contextVersion = createHash('sha256').update(`${selected.kind}:${selected.id}:${selected.updatedAt.toISOString()}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [{ id: 'open-documents', label: 'Review source', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
+}
+
+// Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "documents"
+// candidate). Reads the Document vault itself (prisma.document, grouped
+// by type and verification status) -- distinct from
+// documentPromotionReviewResult/documentPromotionConfirmResult above,
+// which only ever read pendingDocumentPromotionCandidates (a queue of
+// pending extraction candidates), never prisma.document directly
+// (confirmed by reading both handlers before writing this one).
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  INSPECTION_REPORT: 'Inspection reports', ESTIMATE: 'Estimates', INVOICE: 'Invoices', CONTRACT: 'Contracts',
+  PERMIT: 'Permits', PHOTO: 'Photos', VIDEO: 'Videos', INSURANCE_CERTIFICATE: 'Insurance certificates',
+  LICENSE: 'Licenses', HOME_REPORT_PDF: 'Home report PDFs', OTHER: 'Other',
+};
+
+async function documentLookupResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
+  const documents = await prisma.document.findMany({
+    where: { propertyId, deletedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (documents.length === 0) {
+    return {
+      status: 'ANSWERED',
+      reasonCode: 'NO_DOCUMENTS_ON_FILE',
+      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no uploaded documents recorded for this home yet.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }],
+      suggestions: [],
+    };
+  }
+
+  const grouped = new Map<string, typeof documents>();
+  for (const document of documents) {
+    const existing = grouped.get(document.type) ?? [];
+    existing.push(document);
+    grouped.set(document.type, existing);
+  }
+  const unverifiedCount = documents.filter((document) => document.verificationStatus === 'UNVERIFIED' || document.verificationStatus === 'PENDING').length;
+
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'document-lookup-summary',
+    title: `${documents.length} document${documents.length === 1 ? '' : 's'} on file`,
+    body: unverifiedCount ? `${unverifiedCount} not yet verified.` : 'All recorded documents are verified.',
+    tone: unverifiedCount ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }],
+  }, {
+    type: 'GROUPED_LIST',
+    id: 'document-lookup-groups',
+    title: 'Documents by type',
+    description: 'Uploaded documents recorded for this property, grouped by type.',
+    sections: [...grouped.entries()].sort(([left], [right]) => (DOCUMENT_TYPE_LABELS[left] ?? left).localeCompare(DOCUMENT_TYPE_LABELS[right] ?? right)).map(([type, docs]) => ({
+      id: `document-lookup-${type.toLowerCase()}`,
+      title: DOCUMENT_TYPE_LABELS[type] ?? type,
+      count: docs.length,
+      items: docs.slice(0, 20).map((document) => ({
+        id: document.id,
+        title: document.name,
+        description: document.description ?? null,
+        meta: [document.verificationStatus.toLowerCase().replace(/_/g, ' '), humanDate(document.createdAt)].filter((value): value is string => Boolean(value)),
+        status: document.verificationStatus,
+        href,
+      })),
+    })),
+    actions: [],
+  }];
+
+  return {
+    status: 'ANSWERED',
+    reasonCode: unverifiedCount ? 'DOCUMENTS_INCLUDE_UNVERIFIED' : 'DOCUMENTS_ALL_VERIFIED',
+    contextVersion: createHash('sha256').update(JSON.stringify(documents.map((document) => ({ id: document.id, verificationStatus: document.verificationStatus, updatedAt: document.updatedAt })))).digest('hex'),
+    blocks,
+    suggestions: ['Open Documents'],
+  };
 }
 
 function operationalWorkAction(message: string): 'ACCEPT' | 'DEFER' | 'SNOOZE' | 'COMPLETE' | null {
@@ -6502,6 +6677,7 @@ registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
     seasonalEntry?.status === 'AVAILABLE',
   );
 });
+registerCapabilityHandler('maintenance.forecast', async (envelope) => maintenanceForecastResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('coverage.review', async (envelope) => coverageResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('coverage.comparison-status', async (envelope) => coverageComparisonStatusResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('incident-claim.status', async (envelope) => incidentClaimStatusResult(envelope.userId, envelope.propertyId!, envelope.message));
@@ -6526,6 +6702,7 @@ registerCapabilityHandler('inspection-findings.review', async (envelope) => insp
 registerCapabilityHandler('inspection-findings.update', async (envelope) => inspectionFindingUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
 registerCapabilityHandler('document-promotion.review', async (envelope) => documentPromotionReviewResult(envelope.propertyId!));
 registerCapabilityHandler('document-promotion.confirm', async (envelope) => documentPromotionConfirmResult(envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('documents.lookup', async (envelope) => documentLookupResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('inventory.replacement', async (envelope) => replacementGuidanceResult(
   envelope.userId,
   envelope.propertyId!,
@@ -7043,10 +7220,12 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'INSPECTION_FINDINGS':
     case 'INSPECTION_FINDING_UPDATE': return `${base}/inspection`;
     case 'DOCUMENT_PROMOTION_REVIEW':
-    case 'DOCUMENT_PROMOTION_CONFIRM': return `${base}/documents`;
+    case 'DOCUMENT_PROMOTION_CONFIRM':
+    case 'DOCUMENT_LOOKUP': return `${base}/documents`;
     case 'HOUSEHOLD_INVITATION': return `${base}/household`;
     case 'MAINTENANCE_TASK_CREATE':
-    case 'MAINTENANCE_TASK_COMPLETE': return `${base}/maintenance`;
+    case 'MAINTENANCE_TASK_COMPLETE':
+    case 'MAINTENANCE_FORECAST': return `${base}/maintenance`;
     default: return `${base}/edit`;
   }
 }

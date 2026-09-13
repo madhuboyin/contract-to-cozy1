@@ -81,6 +81,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('MAINTENANCE_TASK_CREATE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('MAINTENANCE_TASK_COMPLETE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('MAINTENANCE_TASK_UPDATE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('MAINTENANCE_FORECAST', ALL_MODES),
   definePolicy('HOME_DEADLINE_MONITOR', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('COVERAGE_GAPS', ALL_MODES),
   definePolicy('COVERAGE_COMPARISON_STATUS', ALL_MODES),
@@ -94,6 +95,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   // those canonical records can be shown.
   definePolicy('OWNERSHIP_COSTS', ALL_MODES),
   definePolicy('INVENTORY_LOOKUP', ALL_MODES),
+  definePolicy('DOCUMENT_LOOKUP', ALL_MODES),
   definePolicy('PROPERTY_SUMMARY', ALL_MODES),
   // A bounded read of normalized intelligence already derived for this home.
   // It does not become more reliable when a buying/owning/selling stage is

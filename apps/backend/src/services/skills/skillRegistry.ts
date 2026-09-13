@@ -29,6 +29,7 @@ import { INCIDENT_CLAIM_SKILL } from './incident-claim';
 import { HOME_OPERATIONS_SKILL } from './home-operations';
 import { INSPECTION_FINDINGS_SKILL } from './inspection-findings';
 import { DOCUMENT_PROMOTION_SKILL } from './document-promotion';
+import { DOCUMENTS_SKILL } from './documents';
 import { QUERY_ENVELOPE_SKILL } from './query-envelope';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from './context/propertyIdentityContext.contract';
@@ -70,6 +71,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'home-operations': HOME_OPERATIONS_SKILL,
   'inspection-findings': INSPECTION_FINDINGS_SKILL,
   'document-promotion': DOCUMENT_PROMOTION_SKILL,
+  documents: DOCUMENTS_SKILL,
   'query-envelope': QUERY_ENVELOPE_SKILL,
 } satisfies Readonly<Record<string, SkillDefinition>>);
 

@@ -26,7 +26,7 @@ function maintenanceBinding() {
 test('execution binding pins every executable contract before context composition', () => {
   const binding = maintenanceBinding();
   assert.equal(binding.schemaVersion, SKILL_EXECUTION_BINDING_SCHEMA_VERSION);
-  assert.deepEqual(binding.skill, { id: 'maintenance', version: '1.0.0', domain: 'HOME_CARE' });
+  assert.deepEqual(binding.skill, { id: 'maintenance', version: '1.1.0', domain: 'HOME_CARE' });
   assert.deepEqual(binding.operation, { id: 'MAINTENANCE_STATUS', version: '1.0' });
   assert.deepEqual(binding.adapter, { id: 'maintenance.status', version: '1.0' });
   assert.deepEqual(binding.contextProviders, [

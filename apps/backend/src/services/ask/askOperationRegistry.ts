@@ -21,6 +21,17 @@ export type AskOperationId =
   | 'MAINTENANCE_TASK_CREATE'
   | 'MAINTENANCE_TASK_COMPLETE'
   | 'MAINTENANCE_TASK_UPDATE'
+  // Phase 7 (implementation plan §13; FRD §31 "additional maintenance
+  // intelligence" candidate). Reads maintenancePrediction.service.ts's
+  // rule-based forecast (MaintenancePrediction rows) -- distinct from
+  // MAINTENANCE_STATUS, which only reads homeowner-created/scheduled
+  // PropertyMaintenanceTask rows, and from HOME_ACTIONS, which already
+  // owns the single governed intelligence/action surface (Personalization
+  // Engine, environment insights) and must not get a competing source
+  // (confirmed: maintenancePrediction.service.ts has zero references from
+  // homeActions.service.ts or the personalization pipeline -- a genuinely
+  // standalone, unconnected surface).
+  | 'MAINTENANCE_FORECAST'
   | 'COVERAGE_GAPS'
   // Phase 7 (implementation plan §13; FRD §31 coverage/insurance candidate).
   // Distinct from COVERAGE_GAPS's per-inventory-item review: reads the
@@ -38,6 +49,14 @@ export type AskOperationId =
   | 'SAVINGS_OPPORTUNITIES'
   | 'OWNERSHIP_COSTS'
   | 'INVENTORY_LOOKUP'
+  // Phase 7 (implementation plan §13; FRD §31 "documents" candidate).
+  // Reads the Document vault directly (prisma.document, grouped by type
+  // and verification status) -- distinct from DOCUMENT_PROMOTION_REVIEW,
+  // which only covers pending document-derived extraction candidates, not
+  // the document vault itself (confirmed by reading that handler first;
+  // neither it nor INVENTORY_LOOKUP/PROPERTY_SUMMARY ever query
+  // prisma.document).
+  | 'DOCUMENT_LOOKUP'
   | 'PROPERTY_SUMMARY'
   | 'INTELLIGENCE_ENVELOPE_QUERY'
   | 'HOME_ACTIONS'
@@ -178,9 +197,9 @@ export interface AskOperationResult {
 
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
-  'MAINTENANCE_TASK_UPDATE', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
+  'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
   'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION',
-  'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP',
+  'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
 ]);
@@ -218,6 +237,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MAINTENANCE_TASK_CREATE: definition('MAINTENANCE_TASK_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   MAINTENANCE_TASK_COMPLETE: definition('MAINTENANCE_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   MAINTENANCE_TASK_UPDATE: definition('MAINTENANCE_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
+  MAINTENANCE_FORECAST: definition('MAINTENANCE_FORECAST', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'maintenance.forecast', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   COVERAGE_GAPS: definition('COVERAGE_GAPS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
   COVERAGE_COMPARISON_STATUS: definition('COVERAGE_COMPARISON_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.comparison-status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   INCIDENT_CLAIM_STATUS: definition('INCIDENT_CLAIM_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'incident-claim.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
@@ -227,6 +247,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   SAVINGS_OPPORTUNITIES: definition('SAVINGS_OPPORTUNITIES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'savings.opportunities', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   OWNERSHIP_COSTS: definition('OWNERSHIP_COSTS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'ownership.costs', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   INVENTORY_LOOKUP: definition('INVENTORY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inventory.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
+  DOCUMENT_LOOKUP: definition('DOCUMENT_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'documents.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   INTELLIGENCE_ENVELOPE_QUERY: definition('INTELLIGENCE_ENVELOPE_QUERY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'intelligence-envelope.query', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   // Phase 9B (FRD §17/§21.2) adds PRIORITY_LIST as an additive, versioned
@@ -405,6 +426,12 @@ const unauthorizedDataAccessPattern = /\b(?:show|list|give|export|send|reveal|ac
 const outOfScopePattern = /\b(python|javascript|typescript|coding interview|video game|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|developer message|ignore\b.{0,20}\b(?:previous|prior) instructions|forget\b.{0,20}\b(?:previous|prior) instructions|override (?:the )?(?:system|developer|safety) instructions|pretend (?:that )?you are|act as (?:dan|an unrestricted)|reveal (?:your |the )?(?:prompt|instructions)|jailbreak|base64[- ]decode (?:this|the prompt)|drop (?:a )?(?:table|database)|(?:run|execute|apply) (?:this |the |a )?(?:sql|database query)|production database|delete (?:every|all) (?:property|user|record)|shell command|malware|ransomware|phishing|steal (?:a )?(?:password|credential)|celebrity news|school essay)\b/i;
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|what(?:'s| is) due|completed work|pending work|service history|what did (?:i|we) complete|work (?:i |we )?(?:completed|finished)|what should (?:i|we) do before (?:winter|spring|summer|fall|autumn))\b/i;
 const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b/i;
+// Deliberately checked before the very broad maintenancePattern below
+// (which matches on the bare word "maintenance"/"task" alone and would
+// otherwise swallow this) -- requires a forecast/predict/upcoming word
+// paired with maintenance, or an explicit "when will X need service"
+// phrasing.
+const maintenanceForecastPattern = /\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up)\b.{0,50}\bmaintenance\b|\bmaintenance\b.{0,50}\b(?:forecast|predict(?:ed|ion|ive)?|upcoming|coming up|should i expect)\b|\bwhen will (?:my |the )?(?:hvac|furnace|water heater|roof|boiler) need (?:service|maintenance|replacement|attention)\b/i;
 const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
 const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore)\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
 const guidanceJourneyCreatePattern = /\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
@@ -457,6 +484,11 @@ const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)
 const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
 const documentPromotionConfirmPattern = /\b(?:confirm|reject|promote|apply)\b.{0,80}\b(?:document|extraction|extracted|policy fact|inspection report)\b/i;
 const documentPromotionReviewPattern = /(?:\b(?:show|review|list|what)\b.{0,80}\b(?:document|documnt|extraction|extracted)\b.{0,50}\b(?:review|confirmation|pending|promotion|facts?)\b|\b(?:review|show|list)\b.{0,40}\bpending\b.{0,40}\b(?:document|documnt|extraction)\b)/i;
+// Checked after documentPromotionConfirm/ReviewPattern above (both require
+// extra review/confirmation/pending/promotion/facts wording this bare
+// vault-lookup phrasing never carries) -- "show my documents" is the
+// document vault itself, not a pending extraction-candidate queue.
+const documentLookupPattern = /\b(?:show|list|see|find|what)\b.{0,40}\b(?:my |the |our )?documents?\b|\bdocuments? (?:do i have|on file|i have)\b|\bhow many documents\b/i;
 const operationalWorkUpdatePattern = /\b(?:accept|defer|snooze|complete|finish|dismiss)\b.{0,80}\b(?:operational work|work item|home work|tracked work)\b|\b(?:operational work|work item|tracked work)\b.{0,80}\b(?:accept|defer|snooze|complete|finish|dismiss)\b/i;
 const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b/i;
 const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of owning\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
@@ -703,6 +735,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (maintenanceCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_CREATE', 0.97);
   }
+  if (maintenanceForecastPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('MAINTENANCE_FORECAST', 0.96);
+  }
   if (coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('COVERAGE_COMPARISON_STATUS', 0.96);
   }
@@ -719,6 +754,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
   if (documentPromotionConfirmPattern.test(message)) return resolved('DOCUMENT_PROMOTION_CONFIRM', 0.98);
   if (documentPromotionReviewPattern.test(message)) return resolved('DOCUMENT_PROMOTION_REVIEW', 0.96);
+  if (documentLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('DOCUMENT_LOOKUP', 0.95);
+  }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
   if (savingsOpportunitiesPattern.test(message)) {
     return resolved('SAVINGS_OPPORTUNITIES', 0.97);
