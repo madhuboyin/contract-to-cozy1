@@ -128,6 +128,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('CAPITAL_RESERVE_PLAN', OWNER_LIFECYCLE_MODES),
   definePolicy('PROPERTY_TAX_APPEAL_READINESS', ALL_MODES),
   definePolicy('RENOVATION_PERMIT_READINESS', KNOWN_MODES),
+  definePolicy('SELLER_PREP_CHECKLIST', OWNER_LIFECYCLE_MODES),
   definePolicy('MAJOR_EVENT_ENTRY', OWNER_LIFECYCLE_MODES),
   // Buyer & Closing is transaction-scoped. These operations require an
   // active BUYING journey; UNKNOWN receives the standard context-required

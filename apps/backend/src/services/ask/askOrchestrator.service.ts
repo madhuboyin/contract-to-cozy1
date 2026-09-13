@@ -115,6 +115,7 @@ import { HomeSavingsService } from '../homeSavings.service';
 import { HiddenAssetService } from '../hiddenAssets.service';
 import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service';
 import { SellHoldRentService } from '../sellHoldRent.service';
+import { PropertySaleCaseService } from '../propertySaleCase.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
 import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
@@ -5068,6 +5069,114 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
   };
 }
 
+// Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "Seller Prep
+// — expose now, needs a new Ask operation registration, not new business
+// logic"). Reads the real, canonical PropertySaleCase/SaleReadinessItem
+// checklist directly -- the same PropertySaleCaseService.getCase call
+// conversationalCapture.ts's own buildSellerPrepInlineBlock already makes
+// for the SELL_HOLD_RENT_GOAL_CAPTURE addendum -- but as its own, richer,
+// directly-askable answer (category-grouped, cost-estimated) rather than
+// only a 5-item addendum. getCase's own requireAccess call already enforces
+// this operation's VIEWER role floor; no separate ensurePropertyAccess call
+// needed here. Deliberately read-only for this first Phase 7 slice: the
+// real write path (PropertySaleCaseService.setItemDecision -- WAIVE/
+// PURSUE/REOPEN/UNPURSUE) is a genuine, separate, confirmation-gated
+// follow-up capability, not attempted here.
+const SALE_READINESS_CATEGORY_LABELS: Record<string, string> = {
+  SAFETY_STRUCTURAL: 'Safety & structural',
+  SYSTEMS_MAINTENANCE: 'Systems & maintenance',
+  PERMITS_DISCLOSURE: 'Permits & disclosure',
+  DOCUMENTATION_RECORDS: 'Documentation & records',
+  FINANCIAL_DECISION: 'Financial decisions',
+  PRESENTATION: 'Presentation',
+};
+
+function sellerPrepCostRangeMeta(item: { estimatedCostMinCents: number | null; estimatedCostMaxCents: number | null }): string[] {
+  if (item.estimatedCostMinCents == null) return [];
+  const min = money(item.estimatedCostMinCents / 100);
+  if (item.estimatedCostMaxCents == null || item.estimatedCostMaxCents === item.estimatedCostMinCents) {
+    return [`${min} estimated`];
+  }
+  return [`${min}–${money(item.estimatedCostMaxCents / 100)} estimated`];
+}
+
+async function sellerPrepChecklistResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
+  const overview = await PropertySaleCaseService.getCase(userId, propertyId);
+
+  if (!overview.saleCase) {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'SELLER_PREP_NO_ACTIVE_CASE',
+      blocks: [{
+        type: 'SUMMARY',
+        id: 'seller-prep-no-case',
+        title: 'No active sale case yet',
+        body: overview.canCreate
+          ? 'Start a sale case to get a personalized seller-prep checklist -- repairs, records, and cosmetic work prioritized for this home.'
+          : 'A seller-prep checklist becomes available once this property is marked for sale.',
+        tone: 'DEFAULT',
+        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'PRIMARY' }],
+      }],
+      suggestions: ['Should I sell, hold, or rent this home?'],
+    };
+  }
+
+  const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN');
+  const pursuingItems = overview.readinessItems.filter((item) => item.status === 'PURSUING');
+  const waivedCount = overview.readinessItems.filter((item) => item.status === 'WAIVED').length;
+
+  const grouped = new Map<string, typeof openItems>();
+  for (const item of openItems) {
+    const existing = grouped.get(item.category) ?? [];
+    existing.push(item);
+    grouped.set(item.category, existing);
+  }
+
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'seller-prep-summary',
+    title: 'Your seller-prep checklist',
+    body: openItems.length
+      ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}.`
+      : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
+    tone: 'DEFAULT',
+    actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+  }];
+
+  if (openItems.length) {
+    blocks.push({
+      type: 'GROUPED_LIST',
+      id: 'seller-prep-open-items',
+      title: 'Open items',
+      description: 'Repairs, records, and presentation work recommended before listing, grouped by category.',
+      sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([category, items]) => ({
+        id: `seller-prep-${category.toLowerCase()}`,
+        title: SALE_READINESS_CATEGORY_LABELS[category] ?? category,
+        count: items.length,
+        items: items.slice(0, 20).map((item) => ({
+          id: item.id,
+          title: item.title,
+          description: item.detail ?? null,
+          meta: sellerPrepCostRangeMeta(item),
+          status: item.status,
+          href,
+        })),
+      })),
+      actions: [],
+    });
+  }
+
+  return {
+    status: 'ANSWERED',
+    reasonCode: openItems.length ? 'SELLER_PREP_ITEMS_OPEN' : 'SELLER_PREP_NO_OPEN_ITEMS',
+    blocks,
+    suggestions: openItems.length
+      ? ['What should I prioritize first?', 'Open seller prep']
+      : ['Open Sell / Hold / Rent'],
+  };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
@@ -6143,6 +6252,7 @@ registerCapabilityHandler('inventory.replacement', async (envelope) => replaceme
 registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('household.invitation', async (envelope) => householdInvitationResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanceJourneyCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
@@ -6634,7 +6744,8 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'REFINANCE_ANALYSIS': return `${base}/tools/financing/profile`;
     case 'SAVINGS_OPPORTUNITIES': return `${base}/tools/home-savings`;
     case 'OWNERSHIP_COSTS': return `${base}/ownership-costs`;
-    case 'SELL_HOLD_RENT_ANALYSIS': return `${base}/seller-prep`;
+    case 'SELL_HOLD_RENT_ANALYSIS':
+    case 'SELLER_PREP_CHECKLIST': return `${base}/seller-prep`;
     case 'CAPITAL_RESERVE_PLAN': return `${base}/tools/capital-timeline`;
     case 'PROPERTY_TAX_APPEAL_READINESS': return `${base}/tools/property-tax`;
     case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;

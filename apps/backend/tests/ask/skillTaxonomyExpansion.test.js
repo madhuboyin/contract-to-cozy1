@@ -19,6 +19,7 @@ const TAXONOMY = Object.freeze({
   savings: ['SAVINGS_OPPORTUNITIES'],
   'property-tax': ['PROPERTY_TAX_APPEAL_READINESS'],
   'seller-preparation': ['MAJOR_EVENT_ENTRY'],
+  'seller-prep': ['SELLER_PREP_CHECKLIST'],
   'sell-hold-rent': ['SELL_HOLD_RENT_ANALYSIS'],
   renovation: ['RENOVATION_PERMIT_READINESS'],
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],
@@ -41,10 +42,10 @@ const TAXONOMY = Object.freeze({
 const EXPANDED_SKILLS = Object.freeze([
   'capital-planning', 'coverage', 'household', 'ownership-cost', 'property-tax',
   'quote-comparison', 'renovation', 'savings', 'sell-hold-rent', 'seller-preparation',
-  'buyer-closing', 'incident-claim', 'home-operations',
+  'seller-prep', 'buyer-closing', 'incident-claim', 'home-operations',
 ]);
 
-test('all twenty representative Skills own the intended canonical operations', () => {
+test('all twenty-one representative Skills own the intended canonical operations', () => {
   assert.deepEqual(new Set(Object.keys(SKILL_DEFINITIONS)), new Set(Object.keys(TAXONOMY)));
   for (const [skillId, operations] of Object.entries(TAXONOMY)) {
     const skill = SKILL_DEFINITIONS[skillId];

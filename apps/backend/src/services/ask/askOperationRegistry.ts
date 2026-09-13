@@ -50,6 +50,15 @@ export type AskOperationId =
   | 'CAPITAL_RESERVE_PLAN'
   | 'PROPERTY_TAX_APPEAL_READINESS'
   | 'RENOVATION_PERMIT_READINESS'
+  // Phase 7 (implementation plan §13; FRD §31 "Seller Prep — expose now,
+  // needs a new Ask operation registration, not new business logic" --
+  // SellerPrepService is confirmed UI-decoupled already). Reads the real,
+  // canonical PropertySaleCase/SaleReadinessItem checklist directly
+  // (PropertySaleCaseService.getCase) -- the same read Phase 6's inline
+  // buildSellerPrepInlineBlock already performs, now exposed as its own
+  // directly-askable operation with a real, standalone answer rather than
+  // only an addendum to a SELL_HOLD_RENT_GOAL_CAPTURE turn.
+  | 'SELLER_PREP_CHECKLIST'
   | 'MAJOR_EVENT_ENTRY'
   | 'EMERGENCY_BOUNDARY'
   | 'UNSAFE_RESTRICTED_BOUNDARY'
@@ -156,7 +165,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY',
+  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST',
   'COVERAGE_GAPS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -229,6 +238,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   CAPITAL_RESERVE_PLAN: definition('CAPITAL_RESERVE_PLAN', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-reserve.plan', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RENOVATION_PERMIT_READINESS: definition('RENOVATION_PERMIT_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'renovation-permit.readiness', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
+  SELLER_PREP_CHECKLIST: definition('SELLER_PREP_CHECKLIST', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'seller-prep.checklist', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
   MAJOR_EVENT_ENTRY: definition('MAJOR_EVENT_ENTRY', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'major-event.entry', ['SUMMARY', 'CAPABILITY_LIST', 'BOUNDARY']),
   EMERGENCY_BOUNDARY: definition('EMERGENCY_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'EMERGENCY_BOUNDARY', null, 'boundary.emergency', ['BOUNDARY']),
   UNSAFE_RESTRICTED_BOUNDARY: definition('UNSAFE_RESTRICTED_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'UNSAFE_RESTRICTED_BOUNDARY', null, 'boundary.unsafe-restricted', ['BOUNDARY']),
@@ -388,6 +398,17 @@ const homeDeadlineMonitorPattern = /\b(?:notify|alert|remind|monitor|tell me)\b.
 const capitalReservePattern = /\b(?:capital reserve plan|reserve fund|sinking fund|capital timeline|capital plan|major replacements?|future home expenses?|how much should i save|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
 const propertyTaxAppealPattern = /\b(?:property tax|assessment|assessed value|tax class|tax exemption)\b.{0,80}\b(?:appeal|contest|challenge|readiness|overassessed|too high|evidence|deadline)\b|\b(?:appeal|contest|challenge)\b.{0,60}\b(?:property tax|assessment|assessed value|tax class|exemption)\b/i;
 const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit|inspection|hoa)\b.{0,80}\b(?:ready|readiness|start|require|needed|block|blocking|blockers?|compliance|status)\b|\b(?:can i start|am i ready|what is blocking|what are the blockers?)\b.{0,60}\b(?:renovation|remodel|project|work)\b/i;
+// Phase 7 (implementation plan §13; FRD §31 "Seller Prep — expose now").
+// Deliberately narrower than majorEventPattern's broad "help/guide/prepare/
+// plan/checklist ... selling my home" entry-point phrasing (checked below,
+// unchanged) -- this targets specific "is my home ready to sell / check my
+// sale readiness" phrasing so a real, data-backed checklist answer wins
+// over the generic capability-discovery entry point for the phrasing that
+// most directly asks for it. Checked BEFORE majorEventPattern in the
+// cascade below for exactly that reason -- majorEventEntryResult's own
+// suggestion text already says "Check sale readiness" verbatim, which this
+// pattern is written to catch.
+const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling readiness|listing readiness)\b|\b(?:am i|are we|is (?:my|this|the) home)\b.{0,25}\bready\b.{0,25}\bto (?:sell|list)\b|\bcheck\b.{0,15}\b(?:sale|seller|selling)\b.{0,15}\breadiness\b/i;
 const majorEventPattern = /\b(?:help|guide|prepare|plan|checklist|what should i do|what do i need)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|major renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
 // Record-query status of already-recorded canonical Incident/Claim rows
@@ -638,6 +659,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (renovationPermitPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('RENOVATION_PERMIT_READINESS', 0.97);
+  }
+  if (sellerPrepChecklistPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('SELLER_PREP_CHECKLIST', 0.97);
   }
   if (majorEventPattern.test(message)) {
     return resolved('MAJOR_EVENT_ENTRY', 0.96);
