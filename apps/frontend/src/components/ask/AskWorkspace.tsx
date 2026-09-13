@@ -1432,7 +1432,14 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
-      setExecutions((current) => [...current, response.data!]);
+      // Ask Cozy Stage 3, Phase 3 (implementation plan §19; FRD §16/§28).
+      // A synchronous conversational-capture candidate arrives inline as a
+      // full child execution on this same response -- spread it into the
+      // flat executions array so it renders (via its own confirmation
+      // field) exactly like any other execution. No new rendering code:
+      // ConfirmationCard/BlockView already operate per-executionId,
+      // agnostic to whether it arrived as the "main" response or here.
+      setExecutions((current) => [...current, response.data!, ...(response.data!.childExecutions ?? [])]);
       setJustUpdatedExecutionId(response.data.executionId);
       if (attribution) track('ask_prompt_outcome', {
         propertyId: selectedPropertyId ?? null,

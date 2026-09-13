@@ -78,6 +78,14 @@ export interface AskExecutionResponse {
   suggestions: string[];
   createdAt: string;
   updatedAt: string;
+  // Ask Cozy Stage 3, Phase 3 (implementation plan §9/§19; FRD §16/§28). A
+  // synchronous conversational-capture attempt (a fact/event the homeowner
+  // mentioned in passing, e.g. "I replaced the roof last summer for
+  // $14,500.") delivers its own confirmation-required child execution here,
+  // in the SAME turn's response that triggered it -- not a separate fetch.
+  // Bounded to 3, one level deep (a child's own childExecutions is always
+  // []): matches the backend's AskExecutionResponseSchema exactly.
+  childExecutions: AskExecutionResponse[];
 }
 
 export interface AskPendingWorkItem {
