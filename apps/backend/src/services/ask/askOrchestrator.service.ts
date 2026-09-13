@@ -165,6 +165,7 @@ import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecution
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
 import {
+  ASK_OPERATION_CAPABILITY,
   ASK_CAPABILITY_UNIQUE_OPERATION,
 } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../skills/skillRouter';
@@ -6500,6 +6501,45 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
         parameters: { ...(coreResult.parameters ?? {}), requirementReasonCode: coreResult.reasonCode ?? null },
       }
       : coreResult;
+  // Ask Cozy Stage 3, Phase 4 (implementation plan §10; FRD §27:
+  // "Suppression: existing capabilitySuppressionPolicy.ts... plus existing
+  // askSuggestionPolicy.ts repeat-filter -- both apply, they suppress
+  // different things"). Hoisted above `finalize` (previously computed only
+  // inside it, for the string-suggestion repeat-filter alone) so the same
+  // one query also feeds the next-actions block below: a capability whose
+  // owning operation was one of this session's own last 5 completed turns
+  // is excluded from next-action suggestions, the session-recency
+  // counterpart to `capabilitySuppressionPolicy.ts`'s own property-wide,
+  // 30-day dismissal-cooldown suppression (already applied automatically
+  // inside `getCapabilitySuggestions`, `askNextActions.ts`'s one call).
+  // `askSuggestionPolicy.ts`'s own `suppressRepeatedAskSuggestions` is
+  // string-message-shaped and not reused verbatim here -- a structured
+  // capability candidate has no message text to key off -- but this is the
+  // same underlying signal (recently-completed turns this session)
+  // suppressing the analogous thing for a different response shape.
+  let recentCompletedMessages: string[] = [];
+  let recentCompletedCapabilityIds: ReadonlySet<string> = new Set();
+  try {
+    const recent = await prisma.askExecution.findMany({
+      where: {
+        sessionId: input.sessionId,
+        userId: input.userId,
+        id: { not: input.executionId },
+        status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+      select: { message: true, operationId: true },
+    });
+    recentCompletedMessages = recent.map((execution) => execution.message);
+    recentCompletedCapabilityIds = new Set(
+      recent
+        .map((execution) => (execution.operationId ? ASK_OPERATION_CAPABILITY[execution.operationId as AskOperationId] : undefined))
+        .filter((capabilityId): capabilityId is string => Boolean(capabilityId)),
+    );
+  } catch {
+    // Suggestion continuity is optional and must not block the answer.
+  }
   const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
     const skillHandoff = resolveSkillHandoffSuggestion({
@@ -6528,23 +6568,6 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
     });
     if (skill && skillHandoff) {
       askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
-    }
-    let recentCompletedMessages: string[] = [];
-    try {
-      const recent = await prisma.askExecution.findMany({
-        where: {
-          sessionId: input.sessionId,
-          userId: input.userId,
-          id: { not: input.executionId },
-          status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] },
-        },
-        orderBy: { updatedAt: 'desc' },
-        take: 5,
-        select: { message: true },
-      });
-      recentCompletedMessages = recent.map((execution) => execution.message);
-    } catch {
-      // Suggestion continuity is optional and must not block the answer.
     }
     const suggestionAwareResult = suppressRepeatedAskSuggestions(
       { ...result, skillHandoff },
@@ -6583,6 +6606,7 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
       propertyId: input.propertyId,
       userId: input.userId,
       operationId: input.operation.operationId,
+      recentCompletedCapabilityIds,
     });
     if (nextActionsBlock) result.blocks.push(nextActionsBlock);
   } catch {

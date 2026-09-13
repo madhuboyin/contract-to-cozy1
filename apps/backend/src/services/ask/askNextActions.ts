@@ -55,24 +55,28 @@ type AskNextActionCapability = Extract<AskPresentationBlock, { type: 'CAPABILITY
 
 /**
  * The pure half of this module: given an already-fetched suggestion list
- * (from `getCapabilitySuggestions`, the one I/O call this module makes) and
- * the just-answered operation's own capability id (if any -- GROUNDED_GUIDANCE
- * and other operations with no `ASK_OPERATION_CAPABILITY` entry pass
- * `undefined`), excludes that capability from the result (never suggest
- * "what you just did" as a next action) and maps the rest onto the
- * `CAPABILITY_LIST` block's exact capability shape. `getCapabilitySuggestions`
- * already excludes `UNAVAILABLE` candidates and applies suppression/governance
- * itself, so no further filtering happens here beyond self-exclusion and the
- * bound. Exported for direct unit testing (pure, no I/O --
- * `canonicalCapabilityRegistry` is an in-memory manifest lookup, not a DB
- * call, so this remains synchronous and DB-free).
+ * (from `getCapabilitySuggestions`, the one I/O call this module makes),
+ * the just-answered operation's own capability id (if any --
+ * GROUNDED_GUIDANCE and other operations with no `ASK_OPERATION_CAPABILITY`
+ * entry pass `undefined`), and the set of capabilities owned by this
+ * session's own last-5 completed turns (FRD §27's `askSuggestionPolicy.ts`
+ * repeat-filter requirement, applied here to a structured capability list
+ * rather than message strings -- see this file's header), excludes both
+ * from the result and maps the rest onto the `CAPABILITY_LIST` block's
+ * exact capability shape. `getCapabilitySuggestions` already excludes
+ * `UNAVAILABLE` candidates and applies its own property-wide dismissal-
+ * cooldown suppression/governance, so no further filtering happens here
+ * beyond these two exclusions and the bound. Exported for direct unit
+ * testing (pure, no I/O -- `canonicalCapabilityRegistry` is an in-memory
+ * manifest lookup, not a DB call, so this remains synchronous and DB-free).
  */
 export function selectAskNextActionCapabilities(
   suggestions: readonly CapabilitySuggestion[],
   currentCapabilityId: string | undefined,
+  recentCompletedCapabilityIds: ReadonlySet<string> = new Set(),
 ): AskNextActionCapability[] {
   return suggestions
-    .filter((suggestion) => suggestion.capabilityId !== currentCapabilityId)
+    .filter((suggestion) => suggestion.capabilityId !== currentCapabilityId && !recentCompletedCapabilityIds.has(suggestion.capabilityId))
     .slice(0, MAX_ASK_NEXT_ACTIONS)
     .flatMap((suggestion) => {
       const capability = canonicalCapabilityRegistry.getById(suggestion.capabilityId);
@@ -106,6 +110,7 @@ export async function buildAskNextActionsBlock(input: {
   propertyId: string;
   userId: string;
   operationId: AskOperationId;
+  recentCompletedCapabilityIds?: ReadonlySet<string>;
 }): Promise<AskPresentationBlock | null> {
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operationId];
   const response = await getCapabilitySuggestions({
@@ -114,7 +119,7 @@ export async function buildAskNextActionsBlock(input: {
     surface: 'RELATED',
     limit: MAX_ASK_NEXT_ACTIONS,
   });
-  const capabilities = selectAskNextActionCapabilities(response.suggestions, currentCapabilityId);
+  const capabilities = selectAskNextActionCapabilities(response.suggestions, currentCapabilityId, input.recentCompletedCapabilityIds);
   if (!capabilities.length) return null;
   return {
     type: 'CAPABILITY_LIST',

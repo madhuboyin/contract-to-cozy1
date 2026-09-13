@@ -72,6 +72,31 @@ test('selectAskNextActionCapabilities passes every suggestion through when curre
   assert.equal(result.length, 2);
 });
 
+// FRD §27: "Suppression: existing capabilitySuppressionPolicy.ts... plus
+// existing askSuggestionPolicy.ts repeat-filter -- both apply, they
+// suppress different things." capabilitySuppressionPolicy.ts's own
+// dismissal-cooldown is already applied inside getCapabilitySuggestions
+// (verified by reading capabilityRecommendation.service.ts's own
+// evaluateCapabilitySuggestions, which calls applyCapabilitySuppressionPolicy
+// before ranking) -- these two tests cover the second, separate mechanism:
+// excluding a capability owned by one of this session's own last-5
+// completed turns (the session-recency counterpart askOrchestrator.service.ts
+// now computes and passes through).
+test('selectAskNextActionCapabilities excludes a capability recently completed this session, even when it is not the current operation\'s own capability', () => {
+  const result = selectAskNextActionCapabilities(
+    [suggestion({ capabilityId: 'maintenance' }), suggestion({ capabilityId: 'home-operations', label: 'Manage home operations' })],
+    undefined,
+    new Set(['maintenance']),
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'home-operations');
+});
+
+test('selectAskNextActionCapabilities defaults recentCompletedCapabilityIds to empty when omitted -- callers that never pass it are unaffected', () => {
+  const result = selectAskNextActionCapabilities([suggestion({ capabilityId: 'maintenance' })], undefined);
+  assert.equal(result.length, 1);
+});
+
 test('selectAskNextActionCapabilities drops a suggestion whose capabilityId is not in the live registry, rather than throwing or emitting a broken entry', () => {
   const result = selectAskNextActionCapabilities([suggestion({ capabilityId: 'not-a-real-capability' })], undefined);
   assert.deepEqual(result, []);
@@ -127,4 +152,21 @@ test('executeOperation calls buildAskNextActionsBlock inside a try/catch so a ne
   assert.ok(before.length < 200, 'expected the buildAskNextActionsBlock call to sit directly inside a nearby try block');
   const after = orchestratorSource.slice(callIdx, callIdx + 400);
   assert.match(after, /catch \{/);
+  assert.match(after, /recentCompletedCapabilityIds,/);
+});
+
+test('executeOperation computes recentCompletedCapabilityIds from the same session-recency query as recentCompletedMessages, once, before finalize -- not a second DB round trip', () => {
+  const idx = orchestratorSource.indexOf('async function executeOperation(');
+  const queryIdx = orchestratorSource.indexOf('await prisma.askExecution.findMany(', idx);
+  assert.ok(queryIdx > idx);
+  const finalizeIdx = orchestratorSource.indexOf('const finalize = async ()', idx);
+  assert.ok(queryIdx < finalizeIdx, 'expected the recency query to be hoisted above finalize, not run inside it');
+  const queryBlock = orchestratorSource.slice(queryIdx, orchestratorSource.indexOf('} catch {', queryIdx));
+  assert.match(queryBlock, /select: \{ message: true, operationId: true \}/);
+  assert.match(queryBlock, /recentCompletedCapabilityIds = new Set\(/);
+  // Only ever one findMany for this purpose in the function -- not a
+  // second, duplicated query inside finalize for the message-only case.
+  const secondQueryIdx = orchestratorSource.indexOf('await prisma.askExecution.findMany(', queryIdx + 1);
+  const nextFunctionIdx = orchestratorSource.indexOf('\nfunction captureFallbackHref(', idx);
+  assert.ok(secondQueryIdx === -1 || secondQueryIdx > nextFunctionIdx, 'expected no second askExecution.findMany call inside executeOperation for this purpose');
 });
