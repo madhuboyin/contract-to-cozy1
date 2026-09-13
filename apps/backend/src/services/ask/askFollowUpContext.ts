@@ -41,11 +41,35 @@ const FOLLOW_UP_LOOKBACK_MS = 30 * 60 * 1000;
 const ENTITY_CONTINUATION_PATTERN = /\b(?:complete|finish|mark|update|reschedule|cancel|archive|reopen)\b.{0,25}\b(it|that one|this one|that task|this task|the other one)\b/i;
 const FILTER_CONTINUATION_PATTERN = /^\s*(?:only|just|now show|now only show|instead show|filter to|show only|and only)\b/i;
 
+// External review, Phase 5: a proactive continuation card (any producer --
+// `createAskNotificationContinuation` stamps this on every one) opens a
+// dedicated Ask session built around exactly one triggering signal. Radar's
+// own suggested chips ("What should I do about this?", "How urgent is
+// this?") are vague-referent follow-ups that don't match ANY of the four
+// patterns above -- entity/filter/pagination/specialist -- so they used to
+// short-circuit the top-level gate below and never even read the prior
+// execution, let alone its structured signal context.
+const MONITOR_VAGUE_FOLLOWUP_PATTERN = /^\s*(?:what should i do(?: about (?:this|it))?|how (?:urgent|serious|bad) is (?:this|it)|what does (?:this|it) mean|should i (?:be )?worr(?:y|ied) about (?:this|it))\s*\??\s*$/i;
+
+// Narrower than the general ENTITY_CONTINUATION_PATTERN verb set -- only
+// gates the one monitor-continuation branch below (Maintenance's "Now
+// complete it"), not the other five verbs, which have no equivalent
+// suppliedInput-backed operation to force-route to yet.
+const MAINTENANCE_COMPLETE_VERB_PATTERN = /\b(?:complete|finish)\b/i;
+
 export interface AskFollowUpResolution {
   effectiveMessage: string;
   forcedOperationId: AskOperationId | null;
   sourceExecutionId: string | null;
   continuationCursor: string | null;
+  // External review, Phase 5: the structured counterpart to
+  // `effectiveMessage`'s text-only rewriting -- carries a prior proactive
+  // continuation's own resolved ids (a Maintenance task, a Radar match)
+  // forward into the next operation's `CapabilityInvocationEnvelope.suppliedInput`
+  // (a field the contract already declared but nothing ever populated or
+  // read, confirmed by grep before wiring this). `null` when no structured
+  // context applies -- the overwhelming majority of turns.
+  suppliedInput: Record<string, unknown> | null;
 }
 
 interface PriorExecutionRow {
@@ -54,10 +78,22 @@ interface PriorExecutionRow {
   message: string;
   resultJson: unknown;
   parametersJson: unknown;
+  launchContextJson: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// A proactive continuation card is marked the same way for every producer
+// (`createAskNotificationContinuation`'s own `launchContextJson.surface`),
+// regardless of which monitor created it -- Radar, Maintenance, Refinance.
+function isMonitorNotificationCard(row: PriorExecutionRow): boolean {
+  return isRecord(row.launchContextJson) && row.launchContextJson.surface === 'MONITOR_NOTIFICATION';
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+  return typeof record[key] === 'string' && record[key] ? (record[key] as string) : null;
 }
 
 // A prior answer is reusable as an entity referent only when it named
@@ -120,7 +156,7 @@ async function findRecentPriorExecution(sessionId: string, propertyId: string | 
       createdAt: { gte: new Date(Date.now() - FOLLOW_UP_LOOKBACK_MS) },
     },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, operationId: true, message: true, resultJson: true, parametersJson: true },
+    select: { id: true, operationId: true, message: true, resultJson: true, parametersJson: true, launchContextJson: true },
   });
   return row;
 }
@@ -136,31 +172,62 @@ export async function resolveAskFollowUpMessage(input: {
   propertyId: string | null | undefined;
   message: string;
 }): Promise<AskFollowUpResolution> {
-  const fallback: AskFollowUpResolution = { effectiveMessage: input.message, forcedOperationId: null, sourceExecutionId: null, continuationCursor: null };
+  const fallback: AskFollowUpResolution = { effectiveMessage: input.message, forcedOperationId: null, sourceExecutionId: null, continuationCursor: null, suppliedInput: null };
   const entityMatch = ENTITY_CONTINUATION_PATTERN.exec(input.message);
   const isFilterContinuation = FILTER_CONTINUATION_PATTERN.test(input.message);
   const isEnvelopePagination = ENVELOPE_PAGINATION_PATTERN.test(input.message);
   const isSpecialistContinuation = SPECIALIST_CONTINUATION_PATTERN.test(input.message);
-  if (!entityMatch && !isFilterContinuation && !isEnvelopePagination && !isSpecialistContinuation) return fallback;
+  const isMonitorVagueFollowup = MONITOR_VAGUE_FOLLOWUP_PATTERN.test(input.message);
+  if (!entityMatch && !isFilterContinuation && !isEnvelopePagination && !isSpecialistContinuation && !isMonitorVagueFollowup) return fallback;
 
   const prior = await findRecentPriorExecution(input.sessionId, input.propertyId);
   if (!prior || !prior.operationId) return fallback;
 
   if (entityMatch) {
     const entityTitle = extractSingularEntityTitle(prior.resultJson);
-    if (!entityTitle) return fallback;
-    const pronounSpan = entityMatch[1];
-    // String.replace(pronounSpan, ...) would rewrite the *first* occurrence
-    // of that substring anywhere in the message, not necessarily the one
-    // the regex matched -- e.g. "I know it's overdue, mark it complete"
-    // would garble the "it" inside "it's" instead. The capture group is
-    // always the tail of the whole match (the pattern's trailing \b is
-    // zero-width, nothing follows the group), so its exact position can be
-    // computed from the match length instead of searched for.
-    const groupStart = entityMatch.index + entityMatch[0].length - pronounSpan.length;
-    const groupEnd = groupStart + pronounSpan.length;
-    const rewritten = `${input.message.slice(0, groupStart)}${entityTitle}${input.message.slice(groupEnd)}`;
-    return { effectiveMessage: rewritten, forcedOperationId: null, sourceExecutionId: prior.id, continuationCursor: null };
+    if (entityTitle) {
+      const pronounSpan = entityMatch[1];
+      // String.replace(pronounSpan, ...) would rewrite the *first* occurrence
+      // of that substring anywhere in the message, not necessarily the one
+      // the regex matched -- e.g. "I know it's overdue, mark it complete"
+      // would garble the "it" inside "it's" instead. The capture group is
+      // always the tail of the whole match (the pattern's trailing \b is
+      // zero-width, nothing follows the group), so its exact position can be
+      // computed from the match length instead of searched for.
+      const groupStart = entityMatch.index + entityMatch[0].length - pronounSpan.length;
+      const groupEnd = groupStart + pronounSpan.length;
+      const rewritten = `${input.message.slice(0, groupStart)}${entityTitle}${input.message.slice(groupEnd)}`;
+      return { effectiveMessage: rewritten, forcedOperationId: null, sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: null };
+    }
+
+    // External review [P1]: a proactive Maintenance continuation card
+    // (MAINTENANCE_STATUS operationId, MONITOR_NOTIFICATION launchContext)
+    // has no extractable task TITLE in its resultJson -- its WORKFLOW_PROGRESS
+    // `details` use generic labels ("What changed", "Why it matters"), never
+    // `label: 'Task'` -- so `extractSingularEntityTitle` above always returns
+    // null for it and "Now complete it" fell through to the fallback,
+    // unresolved, for every maintenance-deadline notification. The exact
+    // task id was sitting in the card's own `parametersJson.taskId` the
+    // whole time (`maintenanceReminder.service.ts`'s own `parameters:
+    // { taskId: task.id, ... }`). Resolved via `suppliedInput.taskId`
+    // instead of title-rewriting -- the same deterministic id-lookup
+    // `maintenanceTaskCompleteResult` already uses for submitAskCapture's
+    // own capture-edit path (askOrchestrator.service.ts:1078-1079), and
+    // genuinely more precise than a title match would be.
+    if (MAINTENANCE_COMPLETE_VERB_PATTERN.test(input.message) && prior.operationId === 'MAINTENANCE_STATUS' && isMonitorNotificationCard(prior)) {
+      const parameters = isRecord(prior.parametersJson) ? prior.parametersJson : {};
+      const taskId = stringField(parameters, 'taskId');
+      if (taskId) {
+        return {
+          effectiveMessage: input.message,
+          forcedOperationId: 'MAINTENANCE_TASK_COMPLETE',
+          sourceExecutionId: prior.id,
+          continuationCursor: null,
+          suppliedInput: { taskId },
+        };
+      }
+    }
+    return fallback;
   }
 
   if (isEnvelopePagination && prior.operationId === 'INTELLIGENCE_ENVELOPE_QUERY') {
@@ -172,6 +239,7 @@ export async function resolveAskFollowUpMessage(input: {
         forcedOperationId: 'INTELLIGENCE_ENVELOPE_QUERY',
         sourceExecutionId: prior.id,
         continuationCursor: cursor,
+        suppliedInput: null,
       };
     }
   }
@@ -182,6 +250,7 @@ export async function resolveAskFollowUpMessage(input: {
       forcedOperationId: 'HVAC_SPECIALIST_ENGAGE',
       sourceExecutionId: prior.id,
       continuationCursor: null,
+      suppliedInput: null,
     };
   }
 
@@ -191,6 +260,31 @@ export async function resolveAskFollowUpMessage(input: {
       forcedOperationId: prior.operationId as AskOperationId,
       sourceExecutionId: prior.id,
       continuationCursor: null,
+      suppliedInput: null,
+    };
+  }
+
+  // External review [P1]: Radar's own suggested follow-ups ("What should I
+  // do about this?", "How urgent is this?") carry no entity/filter/
+  // pagination/specialist pattern at all -- they used to never even reach
+  // this function's DB read (the top-level gate above returned fallback
+  // immediately). Once the prior execution is confirmed to be a Radar
+  // proactive continuation card, its own `radarMatchId`/`radarEventId`
+  // (`radarNotificationDelivery.service.ts`'s own `parameters:
+  // { radarEventId, radarMatchId, ... }`) are threaded forward as
+  // `suppliedInput` so the next INTELLIGENCE_ENVELOPE_QUERY turn can scope
+  // its answer to the exact match that triggered this session, not a
+  // property-wide dump with zero memory of what "this" refers to.
+  if (isMonitorVagueFollowup && prior.operationId === 'INTELLIGENCE_ENVELOPE_QUERY' && isMonitorNotificationCard(prior)) {
+    const parameters = isRecord(prior.parametersJson) ? prior.parametersJson : {};
+    const radarMatchId = stringField(parameters, 'radarMatchId');
+    const radarEventId = stringField(parameters, 'radarEventId');
+    return {
+      effectiveMessage: `${prior.message}. ${input.message}`,
+      forcedOperationId: 'INTELLIGENCE_ENVELOPE_QUERY',
+      sourceExecutionId: prior.id,
+      continuationCursor: null,
+      suppliedInput: (radarMatchId || radarEventId) ? { radarMatchId, radarEventId } : null,
     };
   }
 

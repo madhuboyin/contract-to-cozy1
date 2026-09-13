@@ -31,8 +31,16 @@ function priorRow(overrides) {
     message: 'What maintenance is overdue?',
     resultJson: { blocks: [] },
     parametersJson: {},
+    launchContextJson: null,
     ...overrides,
   };
+}
+
+// External review [P1]: a proactive continuation card (any producer) is
+// marked this way by createAskNotificationContinuation.ts's own
+// launchContextJson.surface, regardless of which monitor created it.
+function monitorNotificationLaunchContext(triggerKey) {
+  return { surface: 'MONITOR_NOTIFICATION', entityType: 'MONITOR_SIGNAL', actionId: triggerKey, returnTo: '/dashboard' };
 }
 
 test('no prior execution leaves the message unchanged', async () => {
@@ -180,4 +188,114 @@ test('entity continuation substitutes only the matched pronoun occurrence, not a
   // "it's" (the first occurrence in the string) instead of the "it" the
   // regex actually matched in "mark it complete", garbling the sentence.
   assert.equal(result.effectiveMessage, "I know it's overdue, mark Clean the gutters complete");
+});
+
+// External review [P1]: Radar's own suggested follow-ups ("What should I do
+// about this?", "How urgent is this?") matched none of the four prior
+// patterns above and used to short-circuit before this function's DB read
+// even ran -- these tests cover the new fifth pattern that carries a Radar
+// proactive continuation's structured signal (radarMatchId/radarEventId)
+// forward as suppliedInput.
+test('a Radar-suggested vague follow-up carries the triggering match/event forward as suppliedInput', async () => {
+  mockRow = priorRow({
+    operationId: 'INTELLIGENCE_ENVELOPE_QUERY',
+    message: 'A monitored event ("Severe Thunderstorm Warning") may affect this property. What changed, why does it matter, and what should I do next?',
+    parametersJson: { radarEventId: 'radar-event-1', radarMatchId: 'radar-match-1', radarNotificationDecisionId: 'decision-1', impact: 'high', severity: 'severe' },
+    launchContextJson: monitorNotificationLaunchContext('home-event-radar:decision-1'),
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'What should I do about this?' });
+  assert.equal(result.forcedOperationId, 'INTELLIGENCE_ENVELOPE_QUERY');
+  assert.equal(result.sourceExecutionId, 'prior-execution-1');
+  assert.deepEqual(result.suppliedInput, { radarMatchId: 'radar-match-1', radarEventId: 'radar-event-1' });
+  assert.match(result.effectiveMessage, /Severe Thunderstorm Warning/);
+  assert.match(result.effectiveMessage, /What should I do about this\?/);
+});
+
+test('"How urgent is this?" is also recognized as the same Radar vague-follow-up pattern', async () => {
+  mockRow = priorRow({
+    operationId: 'INTELLIGENCE_ENVELOPE_QUERY',
+    parametersJson: { radarEventId: 'radar-event-1', radarMatchId: 'radar-match-1' },
+    launchContextJson: monitorNotificationLaunchContext('home-event-radar:decision-1'),
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'How urgent is this?' });
+  assert.equal(result.forcedOperationId, 'INTELLIGENCE_ENVELOPE_QUERY');
+  assert.deepEqual(result.suppliedInput, { radarMatchId: 'radar-match-1', radarEventId: 'radar-event-1' });
+});
+
+test('a vague follow-up is NOT treated as a Radar continuation when the prior turn was not a proactive monitor card', async () => {
+  mockRow = priorRow({
+    operationId: 'INTELLIGENCE_ENVELOPE_QUERY',
+    parametersJson: { radarEventId: 'radar-event-1', radarMatchId: 'radar-match-1' },
+    launchContextJson: null,
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'What should I do about this?' });
+  assert.equal(result.forcedOperationId, null);
+  assert.equal(result.suppliedInput, null);
+  assert.equal(result.effectiveMessage, 'What should I do about this?');
+});
+
+test('a vague follow-up is NOT treated as a Radar continuation when the monitor card is a different producer\'s (e.g. Maintenance)', async () => {
+  mockRow = priorRow({
+    operationId: 'MAINTENANCE_STATUS',
+    parametersJson: { taskId: 'task-1' },
+    launchContextJson: monitorNotificationLaunchContext('maintenance-task-1'),
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'What should I do about this?' });
+  assert.equal(result.forcedOperationId, null);
+  assert.equal(result.suppliedInput, null);
+});
+
+// External review [P1]: a proactive Maintenance continuation card has no
+// extractable task TITLE in its resultJson (generic "What changed"/"Why it
+// matters" labels, never label: 'Task') -- "Now complete it" always fell
+// through to the fallback for it. These tests cover the id-based
+// (suppliedInput.taskId) resolution added alongside the title-based path.
+test('Maintenance\'s "Now complete it" resolves via suppliedInput.taskId against a proactive monitor card, even with no extractable task title', async () => {
+  mockRow = priorRow({
+    operationId: 'MAINTENANCE_STATUS',
+    message: 'A monitored maintenance deadline may need your attention. What changed, why does it matter, and what should I do next?',
+    resultJson: {
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS',
+        id: 'monitor-trigger-details',
+        details: [
+          { label: 'What changed', value: 'Gutter cleaning is due in 3 days' },
+          { label: 'Why it matters', value: 'The recorded maintenance obligation has entered its reminder window' },
+        ],
+      }],
+    },
+    parametersJson: { taskId: 'task-42', dueAt: '2026-09-20T00:00:00.000Z', daysUntilDue: 3, actionKey: null },
+    launchContextJson: monitorNotificationLaunchContext('maintenance-task-42'),
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'Now complete it.' });
+  assert.equal(result.forcedOperationId, 'MAINTENANCE_TASK_COMPLETE');
+  assert.equal(result.sourceExecutionId, 'prior-execution-1');
+  assert.deepEqual(result.suppliedInput, { taskId: 'task-42' });
+  assert.equal(result.effectiveMessage, 'Now complete it.');
+});
+
+test('a non-complete verb ("update it") against the same Maintenance monitor card is left unresolved, not silently mapped', async () => {
+  mockRow = priorRow({
+    operationId: 'MAINTENANCE_STATUS',
+    resultJson: { blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'monitor-trigger-details', details: [{ label: 'What changed', value: 'x' }] }] },
+    parametersJson: { taskId: 'task-42' },
+    launchContextJson: monitorNotificationLaunchContext('maintenance-task-42'),
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'Update it.' });
+  assert.equal(result.forcedOperationId, null);
+  assert.equal(result.suppliedInput, null);
+  assert.equal(result.effectiveMessage, 'Update it.');
+});
+
+test('"Now complete it" against a non-monitor MAINTENANCE_STATUS turn with no extractable title still falls back exactly as before', async () => {
+  mockRow = priorRow({
+    operationId: 'MAINTENANCE_STATUS',
+    resultJson: { blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'x', details: [{ label: 'Something else', value: 'x' }] }] },
+    parametersJson: { taskId: 'task-42' },
+    launchContextJson: null,
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'Now complete it.' });
+  assert.equal(result.forcedOperationId, null);
+  assert.equal(result.suppliedInput, null);
+  assert.equal(result.effectiveMessage, 'Now complete it.');
 });

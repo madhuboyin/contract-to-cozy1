@@ -55,6 +55,8 @@ function fakeDeps({
   captureLinkReconcileShouldFail = false,
   askExtractionRequestedResult = { candidateCount: 0 },
   askExtractionRequestedShouldFail = false,
+  radarNotificationMaterializeResult = { outcome: 'created', notificationId: 'notification-1' },
+  radarNotificationMaterializeShouldFail = false,
   // Code review finding (2026-09-13): simulate the redundant success
   // completion write itself failing (successCompletionShouldThrow) and/or
   // the row having already moved past PROCESSING by the time either write
@@ -72,6 +74,7 @@ function fakeDeps({
     recomputeRetryRequested: [],
     captureLinkReconcile: [],
     askExtractionRequested: [],
+    radarNotificationMaterialize: [],
   };
 
   const deps = {
@@ -155,6 +158,11 @@ function fakeDeps({
       calls.askExtractionRequested.push({ event, claimedAttempts });
       if (askExtractionRequestedShouldFail) throw new Error('ask extraction requested handling failed');
       return askExtractionRequestedResult;
+    },
+    radarNotificationMaterialize: async (event) => {
+      calls.radarNotificationMaterialize.push(event);
+      if (radarNotificationMaterializeShouldFail) throw new Error('radar notification materialize handling failed');
+      return radarNotificationMaterializeResult;
     },
   };
   return { deps, calls };
@@ -425,6 +433,40 @@ test('ASK_CAPTURE_LINK_RECONCILE reconciler failures use the shared retry/dead-l
   const terminal = calls.updates.find((u) => u.kind === 'terminal');
   assert.equal(terminal.args.data.status, 'FAILED');
   assert.match(terminal.args.data.lastError, /capture link reconcile failed/);
+});
+
+// External review [P2]: FRD §29/§31 -- Home Event Radar's notification path
+// migrated off its direct Notification write onto this same DomainEvent
+// rail (radarNotificationMaterializationReconciliation.service.ts).
+test('processes a RADAR_NOTIFICATION_MATERIALIZE_REQUESTED event, dispatching it to the reconciler', async () => {
+  const materializeEvent = eventFixture({
+    type: 'RADAR_NOTIFICATION_MATERIALIZE_REQUESTED',
+    payload: { payloadVersion: 1, decisionId: 'decision-1', propertyId: 'property-1' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [materializeEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.radarNotificationMaterialize.length, 1);
+  assert.deepEqual(calls.radarNotificationMaterialize[0].payload, { payloadVersion: 1, decisionId: 'decision-1', propertyId: 'property-1' });
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+});
+
+test('RADAR_NOTIFICATION_MATERIALIZE_REQUESTED reconciler failures use the shared retry/dead-letter path', async () => {
+  const materializeEvent = eventFixture({
+    type: 'RADAR_NOTIFICATION_MATERIALIZE_REQUESTED',
+    payload: { payloadVersion: 1, decisionId: 'decision-1', propertyId: 'property-1' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [materializeEvent], radarNotificationMaterializeShouldFail: true });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /radar notification materialize handling failed/);
 });
 
 test('processes an ASK_EXTRACTION_REQUESTED event, passing the pre-claim attempts + 1 as claimedAttempts', async () => {

@@ -5574,7 +5574,18 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   };
 }
 
-async function intelligenceEnvelopeQueryResult(userId: string, propertyId: string, message: string, cursor?: string | null): Promise<AskOperationResult> {
+// External review [P1]: Radar's own proactive continuation carries a real
+// `radarMatchId` (radarNotificationDelivery.service.ts's own `parameters:
+// { radarEventId, radarMatchId, ... }`), and the envelope producer's own
+// `source.sourceRecordId` for a PropertyRadarMatch-sourced item IS that
+// same match row's id (`intelligenceEnvelopeQuery.service.ts`'s
+// `sourceRecordId: row.id` inside its `PropertyRadarMatch` reader) -- so
+// this can scope precisely to the exact triggering match without the
+// broader entityRef-on-Radar-producers gap (Phase 0 §4.6, tracked
+// separately into Phase 7) ever coming into play.
+type RadarEnvelopeQuerySuppliedInput = { radarMatchId?: string | null; radarEventId?: string | null };
+
+async function intelligenceEnvelopeQueryResult(userId: string, propertyId: string, message: string, cursor?: string | null, suppliedInput?: RadarEnvelopeQuerySuppliedInput): Promise<AskOperationResult> {
   const scope = resolveAskEnvelopeQueryScope(propertyId, message);
   const page = await queryIntelligenceEnvelope({
     propertyId,
@@ -5583,7 +5594,17 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
     ...(cursor ? { cursor } : {}),
     limit: 20,
   });
-  if (!page.items.length && !page.diagnostics.length) {
+  const radarMatchId = suppliedInput?.radarMatchId ?? null;
+  const scopedToRadarMatch = radarMatchId
+    ? page.items.filter((item) => item.source.sourceRecordId === radarMatchId)
+    : [];
+  // Fall back to the unfiltered page rather than an artificially empty
+  // result when the originating match's own item didn't come back on this
+  // page (aged out, deleted) -- a broader answer beats a false "nothing
+  // found" for a signal the homeowner was just notified about.
+  const items = scopedToRadarMatch.length ? scopedToRadarMatch : page.items;
+
+  if (!items.length && !page.diagnostics.length) {
     return {
       status: 'ANSWERED',
       contextVersion: page.contextVersion,
@@ -5598,8 +5619,8 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
     };
   }
 
-  const grouped = new Map<string, typeof page.items>();
-  for (const item of page.items) {
+  const grouped = new Map<string, typeof items>();
+  for (const item of items) {
     const existing = grouped.get(item.domain) ?? [];
     existing.push(item);
     grouped.set(item.domain, existing);
@@ -5607,22 +5628,22 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'intelligence-envelope-summary',
-    title: 'Registered home intelligence',
-    body: `${page.items.length} normalized intelligence item${page.items.length === 1 ? '' : 's'} from ${new Set(page.items.map((item) => item.source.sourceModel)).size} registered producer${new Set(page.items.map((item) => item.source.sourceModel)).size === 1 ? '' : 's'}.`,
+    title: scopedToRadarMatch.length ? 'The event you were notified about' : 'Registered home intelligence',
+    body: `${items.length} normalized intelligence item${items.length === 1 ? '' : 's'} from ${new Set(items.map((item) => item.source.sourceModel)).size} registered producer${new Set(items.map((item) => item.source.sourceModel)).size === 1 ? '' : 's'}${scopedToRadarMatch.length ? ' -- scoped to the specific monitored event that triggered this conversation.' : '.'}`,
     tone: page.diagnostics.length ? 'CAUTION' : 'DEFAULT',
     actions: [],
   }];
-  if (page.items.length) {
+  if (items.length) {
     blocks.push({
       type: 'GROUPED_LIST',
       id: 'intelligence-envelope-items',
       title: 'Derived intelligence by domain',
       description: 'This is a normalized read of registered Envelope producers, not every Home Action or ordinary domain record.',
-      sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, items]) => ({
+      sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, sectionItems]) => ({
         id: `envelope-${domain.toLowerCase()}`,
         title: domain.replace(/_/g, ' ').toLowerCase(),
-        count: items.length,
-        items: items.map((item) => ({
+        count: sectionItems.length,
+        items: sectionItems.map((item) => ({
           id: item.envelopeKey,
           title: `${item.type.replace(/_/g, ' ').toLowerCase()} · ${item.source.producer}`,
           description: item.qualifiedClaim?.verdict ?? `${item.source.sourceModel} · ${item.freshness.currentness.toLowerCase()}`,
@@ -5633,7 +5654,7 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
       })),
       actions: [],
     });
-    const evidence = page.items.flatMap((item) => item.evidence).slice(0, 20);
+    const evidence = items.flatMap((item) => item.evidence).slice(0, 20);
     if (evidence.length) {
       blocks.push({
         type: 'EVIDENCE',
@@ -6064,7 +6085,15 @@ export async function hvacSpecialistEngageResult(
 registerCapabilityHandler('boundary.emergency', async () => emergencyResult());
 registerCapabilityHandler('boundary.unsafe-restricted', async () => unsafeRestrictedResult());
 registerCapabilityHandler('boundary.out-of-scope', async () => outOfScopeResult());
-registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message));
+// External review [P1]: `envelope.suppliedInput` was declared on
+// CapabilityInvocationEnvelope but never read anywhere in the normal
+// propose-time dispatch path (confirmed by grep before wiring this) --
+// only submitAskCapture's own capture-edit flow passed a supplied-input
+// equivalent, and only by calling maintenanceTaskCompleteResult directly,
+// bypassing this registration entirely. Reading it here is what lets a
+// resolved Maintenance monitor-continuation (askFollowUpContext.ts's
+// suppliedInput.taskId) reach this handler at all.
+registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined));
 registerCapabilityHandler('maintenance.create', async (envelope) => maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
@@ -6090,7 +6119,7 @@ registerCapabilityHandler('savings.opportunities', async (envelope) => savingsOp
 registerCapabilityHandler('ownership.costs', async (envelope) => ownershipCostsResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('inventory.lookup', async (envelope) => inventoryLookupResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('property.summary', async (envelope) => propertySummaryResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('intelligence-envelope.query', async (envelope) => intelligenceEnvelopeQueryResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor));
+registerCapabilityHandler('intelligence-envelope.query', async (envelope) => intelligenceEnvelopeQueryResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor, envelope.suppliedInput as RadarEnvelopeQuerySuppliedInput | undefined));
 registerCapabilityHandler('home-actions.feed', async (envelope) => homeActionsResult(
   envelope.userId,
   envelope.propertyId!,
@@ -6214,7 +6243,7 @@ function goalCaptureNotDirectlyRoutableResult(): AskOperationResult {
 registerCapabilityHandler('sell-hold-rent.goal-capture', async () => goalCaptureNotDirectlyRoutableResult());
 
 function buildCapabilityInvocationEnvelope(
-  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null },
 ): CapabilityInvocationEnvelope {
   return {
     userId: input.userId,
@@ -6224,11 +6253,12 @@ function buildCapabilityInvocationEnvelope(
     message: input.message,
     launchContext: input.launchContext,
     continuationCursor: input.continuationCursor ?? undefined,
+    suppliedInput: input.suppliedInput ?? undefined,
   };
 }
 
 async function dispatchOperationAdapterResult(
-  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null },
   composedContext: Awaited<ReturnType<typeof composeSkillContext>> | null,
   trace?: SkillExecutionTimingTrace,
   propertyAccess?: PropertyAccess | null,
@@ -6272,7 +6302,7 @@ function canonicalAdapterSourceEvidence(
 }
 
 async function dispatchOperationAdapter(
-  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null },
+  input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null },
   composedContext: ComposedSkillContext | null,
   trace?: SkillExecutionTimingTrace,
   propertyAccess?: PropertyAccess | null,
@@ -6284,7 +6314,7 @@ async function dispatchOperationAdapter(
   );
 }
 
-async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   const skill = getSkillForOperation(input.operation.operationId);
@@ -6439,7 +6469,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
 // Functional Completeness FRD Phase 0) — same computed values, single-sourced
 // and validated at startup instead of an untyped inline map.
 
-async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; deferSemanticValidation?: boolean }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function executeOperation(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null; deferSemanticValidation?: boolean }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const skill = getSkillForOperation(input.operation.operationId);
   const skillStartedAt = skill ? Date.now() : null;
   let coreResult: AskOperationResult;
@@ -7079,7 +7109,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
         ))
-        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext, continuationCursor: followUp.continuationCursor, deferSemanticValidation: true }, skillTelemetryTrace),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification

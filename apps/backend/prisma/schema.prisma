@@ -9463,6 +9463,13 @@ enum DomainEventType {
   // synchronous check at completion time.
   ASK_EXTRACTION_REQUESTED
   ASK_CAPTURE_LINK_RECONCILE
+  // Ask Cozy Stage 3, Phase 5 (FRD §29/§31: "Home Event Radar migrates its
+  // direct Notification write onto this same DomainEvent rail"). Emitted at
+  // the decision/materialize boundary (radarNotificationDecision.service.ts)
+  // instead of that service calling RadarNotificationDeliveryService
+  // .materialize() synchronously in-process — see
+  // radarNotificationMaterializationReconciliation.service.ts.
+  RADAR_NOTIFICATION_MATERIALIZE_REQUESTED
 }
 
 enum DomainEventStatus {

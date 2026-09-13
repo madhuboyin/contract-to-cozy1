@@ -78,3 +78,50 @@ test('the orchestrator Envelope case does not reach promotion, ranking, or cover
   // It reads the authorized query service and nothing broader.
   assert.ok(body.includes('queryIntelligenceEnvelope'));
 });
+
+// External review [P1]: Radar's own suggested follow-ups ("What should I do
+// about this?") used to reach this operation with zero memory of the
+// triggering match -- askFollowUpContext.ts now resolves that into
+// suppliedInput.radarMatchId, and this operation must actually use it to
+// scope its answer, not just accept and ignore the parameter. Source-
+// governance style (DB-touching function, no mock harness in this repo for
+// this class of function -- same convention askNextActions.test.js
+// documents for buildAskNextActionsBlock).
+test('intelligenceEnvelopeQueryResult accepts suppliedInput and scopes items to the supplied radarMatchId via source.sourceRecordId', () => {
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const start = source.indexOf('async function intelligenceEnvelopeQueryResult');
+  assert.ok(start >= 0);
+  const body = source.slice(start, source.indexOf('\n}\n', start) + 2);
+  assert.match(body, /suppliedInput\?: RadarEnvelopeQuerySuppliedInput/);
+  assert.match(body, /const radarMatchId = suppliedInput\?\.radarMatchId \?\? null;/);
+  assert.match(body, /item\.source\.sourceRecordId === radarMatchId/);
+  // Falls back to the unfiltered page when nothing matched, rather than an
+  // artificially empty result for a signal the homeowner was just notified about.
+  assert.match(body, /scopedToRadarMatch\.length \? scopedToRadarMatch : page\.items/);
+});
+
+test('the maintenance.complete and intelligence-envelope.query registrations both read envelope.suppliedInput', () => {
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(
+    source,
+    /registerCapabilityHandler\('maintenance\.complete', async \(envelope\) => maintenanceTaskCompleteResult\(envelope\.userId, envelope\.propertyId!, envelope\.message, envelope\.suppliedInput as MaintenanceCompletionWorkflowInput \| undefined\)\);/,
+  );
+  assert.match(
+    source,
+    /registerCapabilityHandler\('intelligence-envelope\.query', async \(envelope\) => intelligenceEnvelopeQueryResult\(envelope\.userId, envelope\.propertyId!, envelope\.message, envelope\.continuationCursor, envelope\.suppliedInput as RadarEnvelopeQuerySuppliedInput \| undefined\)\);/,
+  );
+});
+
+test('suppliedInput is threaded end-to-end: askFollowUpContext\'s result reaches buildCapabilityInvocationEnvelope', () => {
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  // The one call site that actually has a resolved followUp to thread.
+  assert.match(source, /suppliedInput: followUp\.suppliedInput,/);
+  // The envelope builder actually sets it on CapabilityInvocationEnvelope,
+  // not just accepting and dropping it (envelope.suppliedInput was
+  // previously declared on the contract but never populated anywhere --
+  // confirmed by grep before this fix).
+  const envelopeBuilderStart = source.indexOf('function buildCapabilityInvocationEnvelope(');
+  assert.ok(envelopeBuilderStart >= 0);
+  const envelopeBuilderBody = source.slice(envelopeBuilderStart, source.indexOf('\n}\n', envelopeBuilderStart) + 2);
+  assert.match(envelopeBuilderBody, /suppliedInput: input\.suppliedInput \?\? undefined,/);
+});

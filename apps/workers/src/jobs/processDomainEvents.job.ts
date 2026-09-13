@@ -19,6 +19,9 @@ import {
 import {
   processAskExtractionRequestedEvent,
 } from '@worker-shared/services/ask/conversationalUnderstanding/conversationalCapture';
+import {
+  processRadarNotificationMaterializeEvent,
+} from '@worker-shared/modules/homeEventRadar/services/radarNotificationMaterializationReconciliation.service';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
 // Ask Cozy Stage 3, Phase 2 (implementation plan §4.4/§8; FRD §17).
@@ -42,6 +45,7 @@ export interface ProcessDomainEventsDeps {
   recomputeRetryRequested?: typeof processRecomputeRetryRequestedEvent;
   captureLinkReconcile?: typeof reconcileCaptureLink;
   askExtractionRequested?: typeof processAskExtractionRequestedEvent;
+  radarNotificationMaterialize?: typeof processRadarNotificationMaterializeEvent;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -53,6 +57,7 @@ const defaultDeps: ProcessDomainEventsDeps = {
   recomputeRetryRequested: processRecomputeRetryRequestedEvent,
   captureLinkReconcile: reconcileCaptureLink,
   askExtractionRequested: processAskExtractionRequestedEvent,
+  radarNotificationMaterialize: processRadarNotificationMaterializeEvent,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -337,6 +342,20 @@ function handleAskExtractionRequested(ev: any, deps: ProcessDomainEventsDeps) {
   );
 }
 
+// Ask Cozy Stage 3, Phase 5 (FRD §29/§31: Home Event Radar's direct
+// Notification write migrated onto this rail -- see
+// radarNotificationMaterializationReconciliation.service.ts's own header
+// comment for the full rationale). materialize() is itself idempotent
+// (dedup via the decision's own notificationId / the deterministic
+// deduplicationKey), so an at-least-once redelivery of this event is safe.
+function handleRadarNotificationMaterialize(ev: any, deps: ProcessDomainEventsDeps) {
+  return (deps.radarNotificationMaterialize ?? processRadarNotificationMaterializeEvent)({
+    id: ev.id,
+    propertyId: ev.propertyId ?? null,
+    payload: ev.payload,
+  });
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -457,6 +476,9 @@ export async function processDomainEventsJob(
           break;
         case 'ASK_EXTRACTION_REQUESTED':
           processingOutcome = await handleAskExtractionRequested(ev, deps);
+          break;
+        case 'RADAR_NOTIFICATION_MATERIALIZE_REQUESTED':
+          processingOutcome = await handleRadarNotificationMaterialize(ev, deps);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

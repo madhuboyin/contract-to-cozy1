@@ -284,10 +284,8 @@ test('decision persistence is idempotent on match, immutable revision, and user'
   const service = new RadarNotificationDecisionService(
     db,
     { NODE_ENV: 'production' },
-    {
-      materialize: async (input) => {
-        materializations.push(input);
-      },
+    async (input) => {
+      materializations.push(input);
     },
   );
   const input = {
@@ -345,7 +343,13 @@ test('decision persistence is idempotent on match, immutable revision, and user'
   });
   assert.equal(decisions.length, 1);
   assert.equal(materializations.length, 2);
-  assert.equal(materializations[0].decision.id, decisions[0].id);
+  // External review [P2]: FRD §29/§31 -- the decision service now REQUESTS
+  // materialization (a DomainEvent, decisionId + propertyId only) instead
+  // of calling RadarNotificationDeliveryService.materialize() directly with
+  // the full decision/match/event payload; see
+  // radarNotificationMaterializationReconciliation.service.ts.
+  assert.equal(materializations[0].decisionId, decisions[0].id);
+  assert.equal(materializations[0].propertyId, 'property-1');
   assert.equal(decisions[0].policyVersion, RADAR_NOTIFICATION_POLICY_VERSION);
 });
 

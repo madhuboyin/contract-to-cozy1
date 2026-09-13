@@ -11,9 +11,8 @@ import {
   type RadarNotificationPreferenceProjection,
 } from '../domain/radarNotificationPreferences';
 import {
-  radarNotificationDeliveryService,
-  type RadarNotificationMaterializationInput,
-} from './radarNotificationDelivery.service';
+  requestRadarNotificationMaterialization,
+} from './radarNotificationMaterializationReconciliation.service';
 
 type RadarNotificationDecisionDatabase = {
   property: {
@@ -189,9 +188,15 @@ export class RadarNotificationDecisionService {
   constructor(
     private readonly db: RadarNotificationDecisionDatabase = prisma as any,
     private readonly env: NodeJS.ProcessEnv = process.env,
-    private readonly deliveryService: {
-      materialize(input: RadarNotificationMaterializationInput): Promise<unknown>;
-    } = radarNotificationDeliveryService,
+    // FRD §29/§31: this used to call RadarNotificationDeliveryService
+    // .materialize() directly and synchronously -- migrated onto the
+    // DomainEvent rail (see radarNotificationMaterializationReconciliation
+    // .service.ts's own header comment for the full rationale). The
+    // decision service's own responsibility ends at "eligible, please
+    // materialize" -- the async consumer owns actually doing so.
+    private readonly requestMaterialization: (
+      input: { decisionId: string; propertyId: string },
+    ) => Promise<unknown> = requestRadarNotificationMaterialization,
   ) {}
 
   async evaluateMatch(
@@ -306,13 +311,7 @@ export class RadarNotificationDecisionService {
         if (existing.outcome === 'suppressed') suppressed += 1;
         else {
           eligible += 1;
-          await this.deliveryService.materialize({
-            propertyId: input.propertyId,
-            decision: existing,
-            match: input.match,
-            event: input.event,
-            revision: { id: input.revision.id },
-          });
+          await this.requestMaterialization({ decisionId: existing.id, propertyId: input.propertyId });
         }
         continue;
       }
@@ -399,13 +398,7 @@ export class RadarNotificationDecisionService {
       if (decision.outcome === 'suppressed') suppressed += 1;
       else {
         eligible += 1;
-        await this.deliveryService.materialize({
-          propertyId: input.propertyId,
-          decision: persistedDecision,
-          match: input.match,
-          event: input.event,
-          revision: { id: input.revision.id },
-        });
+        await this.requestMaterialization({ decisionId: persistedDecision.id, propertyId: input.propertyId });
       }
     }
     return {
