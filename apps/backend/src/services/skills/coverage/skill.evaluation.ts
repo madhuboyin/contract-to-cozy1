@@ -6,7 +6,7 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
   "id": "skill-coverage-golden",
   "skillId": "coverage",
-  "skillVersion": "1.0.0",
+  "skillVersion": "1.1.0",
   "routingCases": [
     {
       "mode": "EXACT",
@@ -27,6 +27,26 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
       "mode": "MISSPELLED",
       "message": "Show missing coverage for my applicances",
       "expectedOperationId": "COVERAGE_GAPS"
+    },
+    {
+      "mode": "EXACT",
+      "message": "What's my coverage comparison status?",
+      "expectedOperationId": "COVERAGE_COMPARISON_STATUS"
+    },
+    {
+      "mode": "PARAPHRASED",
+      "message": "Compare my current insurance policy against alternatives",
+      "expectedOperationId": "COVERAGE_COMPARISON_STATUS"
+    },
+    {
+      "mode": "COLLOQUIAL",
+      "message": "Should I switch my home insurance?",
+      "expectedOperationId": "COVERAGE_COMPARISON_STATUS"
+    },
+    {
+      "mode": "MISSPELLED",
+      "message": "Am I better off shopping for new insurance rihgt now?",
+      "expectedOperationId": "COVERAGE_COMPARISON_STATUS"
     }
   ],
   "operationCases": [
@@ -34,6 +54,13 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
       "operationId": "COVERAGE_GAPS",
       "expectedAdapter": {
         "id": "coverage.review",
+        "version": "1.0"
+      }
+    },
+    {
+      "operationId": "COVERAGE_COMPARISON_STATUS",
+      "expectedAdapter": {
+        "id": "coverage.comparison-status",
         "version": "1.0"
       }
     }
@@ -52,6 +79,11 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "consumer": "ASK",
       "operationId": "COVERAGE_GAPS",
+      "allowed": true
+    },
+    {
+      "consumer": "ASK",
+      "operationId": "COVERAGE_COMPARISON_STATUS",
       "allowed": true
     }
   ],
@@ -84,6 +116,10 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
   "negativeCases": [
     {
       "message": "Show my monthly ownership costs",
+      "expectedBehavior": "DO_NOT_SELECT_SKILL"
+    },
+    {
+      "message": "Compare these contractor bids",
       "expectedBehavior": "DO_NOT_SELECT_SKILL"
     }
   ],
@@ -118,11 +154,23 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
         "version": "1.0"
       },
       "expectedBehavior": "DEGRADED_OR_UNAVAILABLE"
+    },
+    {
+      "dependencyType": "ADAPTER",
+      "dependency": {
+        "id": "coverage.comparison-status",
+        "version": "1.0"
+      },
+      "expectedBehavior": "DEGRADED_OR_UNAVAILABLE"
     }
   ],
   "expectedAdapters": [
     {
       "id": "coverage.review",
+      "version": "1.0"
+    },
+    {
+      "id": "coverage.comparison-status",
       "version": "1.0"
     }
   ],
@@ -135,7 +183,9 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   "expectedStatuses": [
     "ANSWERED",
-    "READY_WITH_LIMITATIONS"
+    "READY_WITH_LIMITATIONS",
+    "NOT_APPLICABLE",
+    "BLOCKED"
   ],
   "expectedBlockTypes": [
     "SUMMARY",
@@ -147,6 +197,10 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
   "expectedCanonicalCalls": [
     {
       "id": "coverage.review",
+      "version": "1.0"
+    },
+    {
+      "id": "coverage.comparison-status",
       "version": "1.0"
     }
   ],

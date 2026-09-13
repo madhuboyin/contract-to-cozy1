@@ -4,26 +4,35 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 
 export const COVERAGE_SKILL = Object.freeze({
   "id": "coverage",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "domain": "HOME_PROTECTION",
   "displayName": "Coverage",
-  "description": "Review recorded warranty and insurance coverage gaps and evidence readiness.",
+  "description": "Review recorded warranty and insurance coverage gaps and evidence readiness, and check how your current insurance policy compares to alternative quotes or terms.",
   "homeownerJobs": [
     "STAY_AHEAD",
     "DECIDE_WITH_CONFIDENCE"
   ],
   "supportedGoals": [
     "review-coverage-gaps",
-    "review-coverage-evidence"
+    "review-coverage-evidence",
+    "review-coverage-comparison"
   ],
   "aliases": [
     "coverage review",
     "coverage gaps",
-    "warranty evidence readiness"
+    "warranty evidence readiness",
+    "coverage comparison",
+    "insurance comparison"
   ],
   "operations": [
     {
       "operationId": "COVERAGE_GAPS",
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+      "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
+    },
+    {
+      "operationId": "COVERAGE_COMPARISON_STATUS",
       "version": "1.0",
       "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
       "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
@@ -35,6 +44,10 @@ export const COVERAGE_SKILL = Object.freeze({
     {
       "id": "coverage.review",
       "version": "1.0"
+    },
+    {
+      "id": "coverage.comparison-status",
+      "version": "1.0"
     }
   ],
   "allowedExternalConnectors": [],
@@ -42,7 +55,8 @@ export const COVERAGE_SKILL = Object.freeze({
     {
       "consumer": "ASK",
       "operations": [
-        "COVERAGE_GAPS"
+        "COVERAGE_GAPS",
+        "COVERAGE_COMPARISON_STATUS"
       ]
     }
   ],
@@ -72,6 +86,12 @@ export const COVERAGE_SKILL = Object.freeze({
     {
       "type": "OPERATION_CONTRACT",
       "id": "COVERAGE_GAPS",
+      "version": "1.0",
+      "required": true
+    },
+    {
+      "type": "OPERATION_CONTRACT",
+      "id": "COVERAGE_COMPARISON_STATUS",
       "version": "1.0",
       "required": true
     }

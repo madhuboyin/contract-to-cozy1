@@ -83,6 +83,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('MAINTENANCE_TASK_UPDATE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_DEADLINE_MONITOR', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('COVERAGE_GAPS', ALL_MODES),
+  definePolicy('COVERAGE_COMPARISON_STATUS', ALL_MODES),
   definePolicy('INCIDENT_CLAIM_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('CLAIM_FILE', ALL_MODES),
   definePolicy('CLAIM_TRANSITION', ALL_MODES),

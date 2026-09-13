@@ -22,6 +22,15 @@ export type AskOperationId =
   | 'MAINTENANCE_TASK_COMPLETE'
   | 'MAINTENANCE_TASK_UPDATE'
   | 'COVERAGE_GAPS'
+  // Phase 7 (implementation plan §13; FRD §31 coverage/insurance candidate).
+  // Distinct from COVERAGE_GAPS's per-inventory-item review: reads the
+  // per-policy CoverageComparison (current verified policy vs. alternative
+  // quotes/terms, equivalence status, any recorded decision) via the same
+  // getOrCreateCoverageComparison call the existing GET
+  // /coverage-comparison route already makes. Read-only -- adding an
+  // option or recording a decision is a separate, document-dependent,
+  // multi-step write deliberately out of scope for this slice.
+  | 'COVERAGE_COMPARISON_STATUS'
   | 'INCIDENT_CLAIM_STATUS'
   | 'CLAIM_FILE'
   | 'CLAIM_TRANSITION'
@@ -171,7 +180,7 @@ const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
   'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION',
-  'COVERAGE_GAPS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP',
+  'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
 ]);
@@ -210,6 +219,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MAINTENANCE_TASK_COMPLETE: definition('MAINTENANCE_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   MAINTENANCE_TASK_UPDATE: definition('MAINTENANCE_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
   COVERAGE_GAPS: definition('COVERAGE_GAPS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
+  COVERAGE_COMPARISON_STATUS: definition('COVERAGE_COMPARISON_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.comparison-status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   INCIDENT_CLAIM_STATUS: definition('INCIDENT_CLAIM_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'incident-claim.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   CLAIM_FILE: definition('CLAIM_FILE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'incident-claim.file', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CLAIM_TRANSITION: definition('CLAIM_TRANSITION', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'incident-claim.transition', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
@@ -425,6 +435,13 @@ const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling read
 const sellerPrepItemDecisionPattern = /\b(?:waive|pursue|reopen|unpursue)\b.{0,60}\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b|\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b.{0,60}\b(?:waive|pursue|reopen|unpursue)\b/i;
 const majorEventPattern = /\b(?:help|guide|prepare|plan|checklist|what should i do|what do i need)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|major renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
+// Deliberately checked before coveragePattern in the cascade below:
+// "compare my insurance coverage" contains coveragePattern's own bare
+// "insurance coverage" alternative, but a compare/switch/shop/equivalent
+// verb makes the per-policy comparison the more specific, correct match.
+// Bare coverage-gap phrasing with no such verb still falls through to
+// coveragePattern untouched.
+const coverageComparisonPattern = /\b(?:compar(?:e|ison)|switch(?:ing)?|shop(?:ping)? (?:for|around)|equivalent)\b.{0,50}\b(?:insurance|policy|policies|coverage)\b|\b(?:insurance|policy|policies|coverage)\b.{0,50}\b(?:compar(?:e|ison)|switch(?:ing)?|shop(?:ping)?|equivalent)\b|\bcoverage comparison\b|\bkeep or (?:switch|change) (?:my )?(?:insurance|policy)\b/i;
 // Record-query status of already-recorded canonical Incident/Claim rows
 // (§9.2 requires "active projects, incidents, claims, permits, and
 // inspections" coverage). Deliberately distinct from majorEventPattern's
@@ -685,6 +702,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (maintenanceCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_CREATE', 0.97);
+  }
+  if (coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('COVERAGE_COMPARISON_STATUS', 0.96);
   }
   if (coveragePattern.test(message)) {
     return resolved('COVERAGE_GAPS', 0.96);

@@ -59,6 +59,7 @@ import {
   type AskAudienceApplicabilityDecision,
 } from './askAudiencePolicy';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
+import { getOrCreateCoverageComparison } from '../coverageComparison.service';
 import { answerGroundedAsk } from '../groundedAsk.service';
 import {
   buildCapabilityCatalog,
@@ -1720,6 +1721,157 @@ async function coverageResult(userId: string, propertyId: string, message: strin
     captureRequests,
     blocks,
     suggestions: ['Which gaps have the largest exposure?', 'Show warranties expiring soon', 'Which items are missing coverage evidence?'],
+  };
+}
+
+// Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31
+// coverage/insurance candidate). Distinct from COVERAGE_GAPS above --
+// per-inventory-item coverage confirmation -- this reads the per-policy
+// CoverageComparison (current verified policy vs. alternative options/
+// quotes, equivalence status, and any recorded KEEP/CHANGE/SHOP/DEFER/
+// PROFESSIONAL_REVIEW decision), the same getOrCreateCoverageComparison
+// call getCoverageComparisonWorkspace's own GET route already makes.
+// Deliberately read-only: addCoverageComparisonOption (attach a quote/
+// term) and recordCoverageDecision are both document/quote-dependent,
+// stateful, multi-step writes, out of scope for this first slice.
+//
+// authorizeProperty inside coverageComparison.service.ts is a raw
+// homeownerProfile.userId===userId check -- NOT resolvePropertyAccess,
+// so it has no household-role gradient (verified by reading the service
+// directly, not assumed equivalent to PropertySaleCaseService.getCase's
+// own requireAccess, which Seller Prep's handler relies on to skip a
+// redundant check). ensurePropertyAccess is therefore called first here,
+// exactly like coverageResult above, to enforce this operation's own
+// VIEWER role floor for the household; a legitimate non-owner household
+// member who clears that check but is then rejected by the narrower
+// authorizeProperty gets a disclosed BLOCKED result below, not a raw 404.
+const COVERAGE_COMPARISON_EQUIVALENCE_LABELS: Record<string, string> = {
+  BASELINE: 'Current policy',
+  EQUIVALENT: 'Equivalent protection',
+  NON_EQUIVALENT: 'Different protection',
+  INDETERMINATE: 'Not enough confirmed facts to tell',
+  MIXED: 'Mixed across options',
+};
+
+const COVERAGE_COMPARISON_DECISION_LABELS: Record<string, string> = {
+  KEEP: 'Keep current policy',
+  CHANGE: 'Switch policy',
+  SHOP: 'Keep shopping',
+  DEFER: 'Deferred decision',
+  PROFESSIONAL_REVIEW: 'Requested professional review',
+};
+
+function coverageComparisonPremiumMeta(option: { annualPremium: unknown; currency: string }): string | null {
+  if (option.annualPremium == null) return null;
+  const amount = typeof option.annualPremium === 'number' ? option.annualPremium : Number(option.annualPremium);
+  if (!Number.isFinite(amount)) return null;
+  return option.currency === 'USD' ? `${money(amount)}/yr` : `${amount.toFixed(0)} ${option.currency}/yr`;
+}
+
+async function coverageComparisonStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/coverage-options`;
+
+  let result: Awaited<ReturnType<typeof getOrCreateCoverageComparison>>;
+  try {
+    result = await getOrCreateCoverageComparison(propertyId, userId);
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'PROPERTY_NOT_FOUND') {
+      return {
+        status: 'BLOCKED',
+        reasonCode: 'COVERAGE_COMPARISON_OWNER_ONLY',
+        blocks: [{
+          type: 'BOUNDARY',
+          id: 'coverage-comparison-owner-only',
+          title: 'Coverage comparison is owner-only for now',
+          body: 'Coverage comparison currently only works for the property’s primary homeowner account, not shared household access. Ask a household owner to check this for you.',
+          severity: 'CAUTION',
+          suggestions: [],
+        }],
+        suggestions: ['Which items have missing coverage?'],
+      };
+    }
+    throw error;
+  }
+
+  if (result.state === 'BASELINE_REQUIRED') {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'COVERAGE_COMPARISON_BASELINE_REQUIRED',
+      blocks: [{
+        type: 'SUMMARY',
+        id: 'coverage-comparison-baseline-required',
+        title: 'No verified policy on file yet',
+        body: 'Coverage comparison needs a verified current insurance policy term before it can compare anything against it. Add and verify your policy first.',
+        tone: 'DEFAULT',
+        actions: [{ id: 'open-coverage-comparison', label: 'Open coverage comparison', href, style: 'PRIMARY' }],
+      }],
+      suggestions: ['Which items have missing coverage?'],
+    };
+  }
+
+  const comparison = result.comparison;
+  const currentOption = comparison.options.find((option) => option.optionType === 'CURRENT_POLICY') ?? null;
+  const alternativeOptions = comparison.options.filter((option) => option.optionType !== 'CURRENT_POLICY');
+  const latestDecision = comparison.decisions[0] ?? null;
+
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'coverage-comparison-summary',
+    title: latestDecision
+      ? `Decision recorded: ${COVERAGE_COMPARISON_DECISION_LABELS[latestDecision.decision] ?? latestDecision.decision}`
+      : alternativeOptions.length
+        ? `${alternativeOptions.length} option${alternativeOptions.length === 1 ? '' : 's'} compared against your current policy`
+        : 'Only your current policy is on file',
+    body: latestDecision
+      ? `Decided ${humanDate(latestDecision.decidedAt)}${latestDecision.rationale ? `: “${latestDecision.rationale}”` : '.'}`
+      : alternativeOptions.length
+        ? `Overall status: ${COVERAGE_COMPARISON_EQUIVALENCE_LABELS[comparison.equivalenceStatus] ?? comparison.equivalenceStatus}.`
+        : 'Add a quote or another verified policy term to compare against your current coverage, or open the workspace to record a keep/shop decision.',
+    tone: latestDecision ? 'POSITIVE' : alternativeOptions.length ? 'DEFAULT' : 'DEFAULT',
+    actions: [{ id: 'open-coverage-comparison', label: 'Open coverage comparison', href, style: 'SECONDARY' }],
+  }];
+
+  const allOptions = currentOption ? [currentOption, ...alternativeOptions] : alternativeOptions;
+  if (allOptions.length) {
+    blocks.push({
+      type: 'GROUPED_LIST',
+      id: 'coverage-comparison-options',
+      title: 'Options',
+      description: 'Your current verified policy alongside any alternative quotes or policy terms compared against it.',
+      sections: [{
+        id: 'coverage-comparison-options-all',
+        title: 'Options',
+        count: allOptions.length,
+        items: allOptions.slice(0, 20).map((option) => ({
+          id: option.id,
+          title: option.label,
+          description: option.carrierName ?? null,
+          meta: [
+            COVERAGE_COMPARISON_EQUIVALENCE_LABELS[option.equivalenceStatus] ?? option.equivalenceStatus,
+            coverageComparisonPremiumMeta(option),
+          ].filter((value): value is string => Boolean(value)),
+          status: option.equivalenceStatus,
+          href,
+        })),
+      }],
+      actions: [],
+    });
+  }
+
+  return {
+    status: 'ANSWERED',
+    reasonCode: latestDecision
+      ? 'COVERAGE_COMPARISON_DECIDED'
+      : alternativeOptions.length ? 'COVERAGE_COMPARISON_HAS_OPTIONS' : 'COVERAGE_COMPARISON_BASELINE_ONLY',
+    contextVersion: createHash('sha256').update(JSON.stringify({
+      id: comparison.id, status: comparison.status, equivalenceStatus: comparison.equivalenceStatus,
+      optionIds: comparison.options.map((option) => option.id), decisionId: latestDecision?.id ?? null,
+    })).digest('hex'),
+    blocks,
+    suggestions: alternativeOptions.length
+      ? ['Open coverage comparison']
+      : ['Open coverage comparison', 'Which items have missing coverage?'],
   };
 }
 
@@ -6351,6 +6503,7 @@ registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   );
 });
 registerCapabilityHandler('coverage.review', async (envelope) => coverageResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('coverage.comparison-status', async (envelope) => coverageComparisonStatusResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('incident-claim.status', async (envelope) => incidentClaimStatusResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('incident-claim.file', async (envelope) => claimFileResult(envelope.propertyId!, envelope.message));
 registerCapabilityHandler('incident-claim.transition', async (envelope) => claimTransitionResult(envelope.propertyId!, envelope.message, envelope.launchContext));
@@ -6869,6 +7022,7 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'REPLACEMENT_GUIDANCE':
     case 'INVENTORY_LOOKUP':
     case 'COVERAGE_GAPS': return `${base}/inventory`;
+    case 'COVERAGE_COMPARISON_STATUS': return `${base}/tools/coverage-options`;
     case 'INCIDENT_CLAIM_STATUS':
     case 'CLAIM_FILE':
     case 'CLAIM_TRANSITION':

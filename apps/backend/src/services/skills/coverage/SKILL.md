@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Review recorded warranty and insurance coverage gaps and evidence readiness.
+Review recorded warranty and insurance coverage gaps and evidence readiness, and check how your current insurance policy compares to alternative quotes or terms.
 
 ## Select this Skill when
 
@@ -10,18 +10,23 @@ Review recorded warranty and insurance coverage gaps and evidence readiness.
 - Show coverage gaps for my appliances
 - What is uncovered in my home?
 - Show missing coverage for my applicances
+- What's my coverage comparison status?
+- Should I switch my home insurance?
+- Compare my current insurance policy against alternatives
 
 ## Do not select this Skill when
 
 - Confirm definitively that an insurance claim will be covered
+- Compare these contractor bids
 
 ## Operations
 
 - `COVERAGE_GAPS`
+- `COVERAGE_COMPARISON_STATUS`
 
 ## Consumers
 
-- ASK: COVERAGE_GAPS
+- ASK: COVERAGE_GAPS, COVERAGE_COMPARISON_STATUS
 
 ## Canonical ownership and boundaries
 

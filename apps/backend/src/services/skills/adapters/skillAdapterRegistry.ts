@@ -51,6 +51,7 @@ const DEFINITIONS = [
   adapter('intelligence-envelope.query', 'IntelligenceEnvelopeQueryService', 'INTELLIGENCE_ENVELOPE_QUERY'),
   adapter('inventory.lookup', 'InventoryService', 'INVENTORY_LOOKUP'),
   adapter('coverage.review', 'Coverage Intelligence', 'COVERAGE_GAPS'),
+  adapter('coverage.comparison-status', 'CoverageComparisonService', 'COVERAGE_COMPARISON_STATUS'),
   adapter('savings.opportunities', 'Savings and Benefits Intelligence', 'SAVINGS_OPPORTUNITIES'),
   adapter('ownership.costs', 'Ownership Cost Intelligence', 'OWNERSHIP_COSTS'),
   adapter('sale-case.analysis', 'Seller Preparation Decision Service', 'SELL_HOLD_RENT_ANALYSIS'),
