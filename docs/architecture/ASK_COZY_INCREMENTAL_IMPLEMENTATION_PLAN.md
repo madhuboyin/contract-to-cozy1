@@ -606,6 +606,89 @@ Verification: `tsc --noEmit` clean across `apps/backend` and `apps/workers`. New
 
 **Independently releasable:** yes — purely additive to existing responses.
 
+**Status (2026-09-13): shipped, `129cfaef`.** Before implementing, fresh code research (an Explore-agent pass, not taken on faith) found this section's own "confirmed to already exist" framing needed a real decision, not just confirmation — see the four corrections below, each checked against source before this pass wrote any code.
+
+**STAGE 2/FRD ASSUMPTION → NEW CODE EVIDENCE → IMPACT → RECOMMENDED ADJUSTMENT, four corrections:**
+
+```
+1. TWO PARALLEL RANKING SYSTEMS, NOT ONE
+ASSUMPTION: `capabilityCandidateMatcher`/`capabilityRanking` (this section's own
+  named machinery) is what Ask already uses for its existing partial
+  "related capabilities" append.
+NEW CODE EVIDENCE: Ask's existing append (`executeOperation()`, pre-Phase-4)
+  calls `getRelatedCapabilities` → `resolveRelatedCapabilities`
+  (`capabilityRelatedResolver.ts`) -- a lighter, manifest-relationship
+  scorer with no `baseScore` concept at all. `capabilityCandidateMatcher`/
+  `capabilityRanking` (which DOES use `baseScore` as its `expectedValue`
+  score component) is a separate system used only by a standalone Home
+  Actions REST endpoint (`getCapabilitySuggestions`,
+  `capabilityRecommendation.service.ts`), requiring a full
+  `CapabilityRecommendationContext` (home actions feed, journeys, projects,
+  personalization, completions, governance, dismissal lifecycle) that Ask's
+  response-building path does not assemble today.
+IMPACT: adopting the FRD-named system literally means wiring Ask into
+  substantially more of the Home Actions pipeline than "a dedicated
+  next-action module" suggests -- a real scope decision, not a
+  confirmation.
+RECOMMENDED ADJUSTMENT: put to the user directly (system-vs-system is a
+  genuine architecture fork, not an implementation detail) — decided:
+  adopt the FRD-named system (`getCapabilitySuggestions`) as directed,
+  accepting the larger footprint. `getRelatedCapabilities`/
+  `resolveRelatedCapabilities` is left untouched, still powering the
+  separate, deliberate `CAPABILITY_DISCOVERY` operation's own "what can
+  help me" feature (`capabilityResult()`) -- not a next-action append, so
+  out of this phase's scope.
+
+2. THE "MISSING FACT STATE" DOES NOT EXIST BY THAT NAME
+ASSUMPTION: a `MISSING` fact state drives READY vs NEEDS_INFO tiering.
+NEW CODE EVIDENCE: no enum/type literally named `MISSING` exists anywhere
+  in the property-context/capability stack (`PropertyFactState` is
+  `KNOWN|UNKNOWN|CONFLICTED|STALE`; `CapabilityReadinessState` is
+  `READY|NEEDS_CONTEXT|UNAVAILABLE`). The real, already-computed
+  distinction the FRD is describing is `CapabilitySuggestion.readiness.state`
+  (`READY|NEEDS_CONTEXT`, `capabilityExplanationBuilder.ts`) --
+  `getCapabilitySuggestions` already excludes `UNAVAILABLE` candidates from
+  its own output before this module ever sees them.
+IMPACT: none -- the tiering this phase needs is already fully computed
+  upstream; a corrected literal reading avoided building a redundant,
+  parallel tiering mechanism.
+RECOMMENDED ADJUSTMENT: `askNextActions.ts` reads `readiness.state` directly
+  off each `CapabilitySuggestion`; no new tiering logic written.
+
+3. THE 'RELATED' SUGGESTION SURFACE IS DECLARED BUT HAS ZERO CALLERS
+NEW FINDING (not previously flagged): `CAPABILITY_SUGGESTION_SURFACES`
+  includes `'RELATED'` and `'WORKFLOW'`, both accepted by the standalone
+  REST route's own Zod validation, but grep confirms neither is produced by
+  any caller anywhere in the codebase today.
+DECISION: adopt `surface: 'RELATED'` for Ask's next-actions call rather than
+  adding a new `'ASK'` surface member -- avoids touching the shared surface
+  enum, its schema, and the REST route's own validation, while still being
+  semantically accurate (Ask's next actions ARE "related to what was just
+  answered"). `selectionLimit()` (`capabilityRanking.ts`) only special-cases
+  `HOME`'s cap at 3; every other surface (including `RELATED`) respects
+  `context.limit` directly, so requesting `limit: 5` needed no ranking-side
+  change.
+
+4. "ACTIVE DECISIONTHREAD" IS NOT THIS CONTEXT'S "JOURNEYS" SOURCE
+NEW FINDING: `CapabilityRecommendationContext`'s `journeys` source
+  (`loadDefaultJourneys`) reads `GuidanceJourney` rows -- a materially
+  different model from `DecisionThread`, and `CAPABILITY_CONTEXT_SOURCE_KINDS`
+  (the enum gating `sourceContext.kind` for scoping suggestions to a specific
+  source) has no `DECISION_THREAD` member at all.
+IMPACT: the FRD's "consuming: ... active DecisionThread" input cannot be
+  wired through the existing `sourceContext` mechanism without a real,
+  separate design/schema change (a new source kind, a new context loader).
+RECOMMENDED ADJUSTMENT: not attempted in this slice -- `askNextActions.ts`
+  calls `getCapabilitySuggestions` with no `sourceContext`, giving broad,
+  property-relevant ranking rather than goal-scoped ranking. Documented
+  here as explicit, tracked follow-up (candidate for Phase 6, which is the
+  phase that generalizes `DecisionThread` itself), not silently dropped.
+```
+
+**What shipped:** new `apps/backend/src/services/ask/askNextActions.ts` (`buildAskNextActionsBlock` + the pure `selectAskNextActionCapabilities`), called from `executeOperation()`'s `finalize()` in place of the old `getRelatedCapabilities`-based append. The old gate additionally required an `ASK_OPERATION_CAPABILITY` entry (excluding `GROUNDED_GUIDANCE`, which has none) and exactly `ANSWERED`/`COMPLETED` status (excluding sell/hold/rent's own common `READY_WITH_LIMITATIONS` case whenever `recommendation.confidence !== 'HIGH'`) — both removed/widened, directly closing Stage 1's two named gaps. `CapabilityListBlockSchema.capabilities`'s max raised from 3 to 5 (this section's own max-5 convention); `capabilityResult()`'s separate `CAPABILITY_DISCOVERY` feature is untouched and still slices at 3.
+
+**Verification:** `tsc --noEmit` clean. 10 new tests in `askNextActions.test.js` — the pure selection/mapping function directly (self-exclusion of the just-answered capability, READY vs NEEDS_CONTEXT labeling, an unknown-capability-id drop, the 5-item cap) plus source-governance tests for the orchestrator's widened gate (matching this program's established convention for DB-touching functions with no mock harness — `getCapabilitySuggestions` itself is not unit-tested here for the same reason `persistCandidates`/`capturePropertyFact` aren't). A full `tests/ask/*.test.js` + `tests/unit/intelligenceRegistries.test.js` sweep (456 tests) was diffed against a `git stash`-isolated baseline run on unmodified `main`: the same 7 pre-existing failures reproduce on both (confirmed via stash-and-rerun, not assumed) — zero new regressions. **Not live-verified:** no reachable database in this environment to confirm `GROUNDED_GUIDANCE`/sell-hold-rent responses actually surface a populated, non-empty next-actions block end-to-end against a real property's data — only that the gate and mapping logic are correct by direct inspection and unit test.
+
 ---
 
 ## 11. Phase 5 — Proactive Cozy
