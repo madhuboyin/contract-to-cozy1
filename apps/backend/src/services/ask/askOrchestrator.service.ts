@@ -9390,6 +9390,28 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
       if (error instanceof APIError && error.code === 'HOME_EVENT_NOT_FOUND') {
         throw Object.assign(new Error('The event to correct is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
       }
+      // Code review finding (2026-09-12): the pre-check above (`alreadyCorrected`)
+      // is not itself atomic with the write below it -- two overlapping
+      // attempts for this same execution.id (e.g. a lease-reclaim retry
+      // racing the still-running original, per confirmAskExecution's own
+      // "Timeout / stale lease" reclaim pattern, which does not verify the
+      // original actually crashed) can both pass it and then both reach
+      // updateHomeEvent's create, which shares this one correctionIdempotencyKey.
+      // Whichever commits second hits @@unique([propertyId, idempotencyKey])
+      // as a P2002 here. Recover exactly like capturePropertyFact/
+      // capturePropertyFinancingFact's own outer-catch pattern: re-read the
+      // winner's already-committed row and return it, rather than letting a
+      // raw P2002 propagate up to confirmAskExecution's shared catch block,
+      // which would otherwise mark this (losing) attempt's execution EXPIRED
+      // -- even after the winner already completed successfully.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const winner = await prisma.homeEvent.findFirst({
+          where: { propertyId: execution.propertyId, idempotencyKey: correctionIdempotencyKey },
+        });
+        if (winner) {
+          return { result: captureEventResult(execution.propertyId, winner, true), artifactType: command.artifactType, artifactId: winner.id };
+        }
+      }
       throw error;
     }
     return { result: captureEventResult(execution.propertyId, replacement, true), artifactType: command.artifactType, artifactId: replacement.id };
@@ -9667,9 +9689,22 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     const description = error instanceof Error && error.message
       ? error.message
       : 'This could not be completed because the underlying record changed. No action was performed.';
-    const reverted = await prisma.$transaction(async (tx) => {
-      const updated = await tx.askExecution.update({
-        where: { id: execution.id },
+    // Code review finding (2026-09-12): this used to be an unconditional
+    // tx.askExecution.update(...) -- if a CONCURRENT confirm attempt for
+    // this same execution.id (a lease-reclaim retry, per the "Timeout /
+    // stale lease" pattern above, which does not verify the original
+    // actually crashed before reclaiming) already committed successfully
+    // between this attempt's own claim and this catch block running, that
+    // unconditional update would clobber the winner's terminal COMPLETED
+    // state back to EXPIRED. Guarded to only touch the execution while it is
+    // still RUNNING -- exactly what the claim transaction above set it to,
+    // and the only state a losing/conflicting attempt should ever be
+    // allowed to overwrite. If the guard doesn't match, a concurrent winner
+    // already moved this execution past RUNNING; re-read and return its
+    // actual current state instead of fabricating an EXPIRED one.
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.askExecution.updateMany({
+        where: { id: execution.id, status: 'RUNNING' },
         data: {
           status: 'EXPIRED', reasonCode: errorCode ?? 'ASK_CONFIRMATION_CONFLICT', completedAt: new Date(),
           resultJson: asInputJson({
@@ -9679,6 +9714,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
           }),
         },
       });
+      if (updated.count !== 1) return;
       await tx.askConfirmationReceipt.updateMany({
         where: { executionId, status: 'CLAIMED' },
         data: { status: 'FAILED', lastErrorCode: errorCode ?? 'ASK_CONFIRMATION_CONFLICT' },
@@ -9686,9 +9722,9 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       await tx.askExecutionEvent.create({
         data: { executionId, eventType: 'CONFIRMATION_CONFLICT_RELEASED', metadataJson: asInputJson({ errorCode: errorCode ?? null }) },
       });
-      return updated;
     });
-    return mapPersistedExecution(reverted, await propertySummary(execution.propertyId));
+    const current = await prisma.askExecution.findFirstOrThrow({ where: { id: execution.id, userId } });
+    return mapPersistedExecution(current, await propertySummary(execution.propertyId));
   }
   let saved: typeof execution;
   const confirmedOperationId = execution.operationId as AskOperationId;
@@ -9712,6 +9748,32 @@ export async function confirmAskExecution(userId: string, executionId: string, i
         where: { executionId },
         data: { status: 'COMPLETED', artifactType, artifactId, completedAt: new Date(), lastErrorCode: null },
       });
+      // Code review finding (2026-09-12): captureLinkReconciliation.ts's
+      // ASK_CAPTURE_LINK_RECONCILE worker consumer existed with no
+      // production emitter anywhere -- a linked pair's completion could
+      // never actually trigger reconciliation through confirmation, only
+      // through a test calling reconcileCaptureLink(executionId) directly.
+      // Emit it here, generically, for ANY confirmation-required operation
+      // that completes with a linkedExecutionId set (not capture-specific),
+      // so the mechanism is actually reachable once a producer sets that
+      // field. Idempotency-keyed per execution so a retried completion
+      // (the P2002 recovery path below) never queues a duplicate; the
+      // consumer itself is also idempotent (guarded by warrantyId: null).
+      if (execution.linkedExecutionId) {
+        const reconcileIdempotencyKey = `ask-capture-link-reconcile:${execution.id}`;
+        await tx.domainEvent.upsert({
+          where: { idempotencyKey: reconcileIdempotencyKey },
+          create: {
+            type: 'ASK_CAPTURE_LINK_RECONCILE',
+            status: 'PENDING',
+            propertyId: execution.propertyId,
+            userId,
+            idempotencyKey: reconcileIdempotencyKey,
+            payload: { executionId: execution.id },
+          },
+          update: {},
+        });
+      }
       await tx.askExecutionEvent.create({ data: { executionId, eventType: 'CONFIRMED', metadataJson: asInputJson({ artifactType, artifactId }) } });
       await tx.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...confirmedValidation.trust, semantic: null, repaired: confirmedValidation.repaired, stage: 'CONFIRMATION_COMPLETION' }) } });
       return updated;

@@ -140,3 +140,78 @@ test('confirmCaptureEvent\'s correction branch guards updateHomeEvent (which has
   // actually findable by the pre-check on a retry.
   assert.match(body, /\{ idempotencyKey: correctionIdempotencyKey \}/);
 });
+
+// Code review findings (2026-09-12), verified against source before fixing:
+// four real gaps in the Phase 2 correction/completion paths this file
+// already covers. Each test below pins the fix, not just documents intent.
+
+test('updateHomeEvent does not clear the superseded row\'s own idempotencyKey -- a replay of the ORIGINAL capture must still resolve to it regardless of a later correction', () => {
+  const txIdx = homeEventsServiceSource.indexOf('const updated = await prisma.$transaction(async (tx) => {');
+  assert.ok(txIdx > 0);
+  const supersedeIdx = homeEventsServiceSource.indexOf('await tx.homeEvent.update({', txIdx);
+  const supersedeBlock = homeEventsServiceSource.slice(supersedeIdx, homeEventsServiceSource.indexOf('const replacement = await tx.homeEvent.create(', supersedeIdx));
+  assert.match(supersedeBlock, /isCurrent: false/);
+  assert.doesNotMatch(supersedeBlock, /idempotencyKey: null/, 'the superseded row\'s idempotencyKey must be left untouched, not nulled -- createHomeEvent\'s own idempotency lookup has no isCurrent filter and depends on this value surviving a correction');
+});
+
+test('updateHomeEvent\'s replacement preserves warrantyId/providerName/captureChannel/attribution/extractionConfidence when not explicitly patched', () => {
+  const createIdx = homeEventsServiceSource.indexOf('const replacement = await tx.homeEvent.create({');
+  assert.ok(createIdx > 0);
+  const createBlock = homeEventsServiceSource.slice(createIdx, homeEventsServiceSource.indexOf('include: {', createIdx));
+  for (const field of ['warrantyId', 'providerName', 'captureChannel', 'attribution', 'extractionConfidence']) {
+    assert.match(
+      createBlock,
+      new RegExp(`${field}: patch\\.${field} !== undefined \\? patch\\.${field} : existing\\.${field}`),
+      `replacement is missing fallback-to-existing for ${field} -- any correction that omits it would silently reset it to null`,
+    );
+  }
+});
+
+test('updateHomeEvent validates an explicitly-changed warrantyId for property scope, matching createHomeEvent\'s own validation', () => {
+  const idx = homeEventsServiceSource.indexOf('async updateHomeEvent(');
+  assert.ok(idx > 0);
+  const body = homeEventsServiceSource.slice(idx, homeEventsServiceSource.indexOf('const updated = await prisma.$transaction', idx));
+  assert.match(body, /if \(patch\.warrantyId !== undefined\) \{\s*await this\.assertWarrantyBelongs\(propertyId, patch\.warrantyId \?\? null\);/);
+});
+
+test('confirmCaptureEvent\'s correction branch recovers from a concurrent P2002 on its own correctionIdempotencyKey by re-reading the winner, instead of letting the error propagate to the shared expire-on-conflict catch', () => {
+  const eventIdx = orchestratorSource.indexOf('async function confirmCaptureEvent(');
+  assert.ok(eventIdx > 0);
+  const body = orchestratorSource.slice(eventIdx, orchestratorSource.indexOf('registerConfirmCapabilityHandler(\'capture.event.confirm\'', eventIdx));
+  const catchIdx = body.indexOf('} catch (error) {');
+  assert.ok(catchIdx > 0);
+  const catchBlock = body.slice(catchIdx, body.indexOf('return { result: captureEventResult(execution.propertyId, replacement, true)', catchIdx));
+  assert.match(catchBlock, /error instanceof Prisma\.PrismaClientKnownRequestError && error\.code === 'P2002'/);
+  assert.match(catchBlock, /prisma\.homeEvent\.findFirst\(\{\s*where: \{ propertyId: execution\.propertyId, idempotencyKey: correctionIdempotencyKey \}/);
+  // Must return the winner's row (marked corrected: true), not throw.
+  assert.match(catchBlock, /return \{ result: captureEventResult\(execution\.propertyId, winner, true\)/);
+});
+
+test('confirmAskExecution\'s shared expire-on-conflict catch only overwrites an execution still in RUNNING, and re-reads current state instead of assuming its own EXPIRED write won', () => {
+  const idx = orchestratorSource.indexOf('export async function confirmAskExecution(');
+  assert.ok(idx > 0);
+  const conflictCatchIdx = orchestratorSource.indexOf('This changed before it could be confirmed', idx);
+  assert.ok(conflictCatchIdx > 0);
+  const block = orchestratorSource.slice(conflictCatchIdx - 800, conflictCatchIdx + 900);
+  // The EXPIRED write must be conditioned on status still being RUNNING --
+  // an unconditional tx.askExecution.update(...) here would clobber a
+  // concurrent winner's already-COMPLETED state.
+  assert.match(block, /tx\.askExecution\.updateMany\(\{\s*where: \{ id: execution\.id, status: 'RUNNING' \}/);
+  assert.match(block, /if \(updated\.count !== 1\) return;/);
+  // Must re-read the execution's actual current row afterward rather than
+  // trusting its own local variable, so a concurrent winner's state is what
+  // gets returned to the caller.
+  assert.match(block, /const current = await prisma\.askExecution\.findFirstOrThrow\(\{ where: \{ id: execution\.id, userId \} \}\);/);
+});
+
+test('the confirmation-completion transaction emits ASK_CAPTURE_LINK_RECONCILE when the completing execution has a linkedExecutionId, so the existing worker consumer is actually reachable', () => {
+  const completionIdx = orchestratorSource.indexOf("data: { status: 'COMPLETED', artifactType, artifactId, completedAt: new Date(), lastErrorCode: null },");
+  assert.ok(completionIdx > 0, 'expected the confirmation receipt completion write');
+  const afterCompletion = orchestratorSource.slice(completionIdx, completionIdx + 1600);
+  assert.match(afterCompletion, /if \(execution\.linkedExecutionId\) \{/);
+  assert.match(afterCompletion, /type: 'ASK_CAPTURE_LINK_RECONCILE'/);
+  assert.match(afterCompletion, /payload: \{ executionId: execution\.id \}/);
+  // Idempotency-keyed per execution via upsert, not a bare create, so a
+  // retried completion (the P2002 recovery path) never queues a duplicate.
+  assert.match(afterCompletion, /tx\.domainEvent\.upsert\(\{\s*where: \{ idempotencyKey: reconcileIdempotencyKey \}/);
+});

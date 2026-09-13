@@ -657,6 +657,13 @@ export class HomeEventsService {
     await this.assertClaimBelongs(propertyId, patch.claimId ?? undefined);
     await this.assertExpenseBelongs(propertyId, patch.expenseId ?? undefined);
     await this.assertParentEventBelongs(propertyId, patch.parentEventId ?? undefined);
+    // Code review finding (2026-09-12): a correction that explicitly changes
+    // warrantyId was never validated for property scope -- createHomeEvent
+    // already does this for the initial write; a correction deserves the
+    // same check, not just a bare carry-forward/overwrite.
+    if (patch.warrantyId !== undefined) {
+      await this.assertWarrantyBelongs(propertyId, patch.warrantyId ?? null);
+    }
     if (patch.parentEventId !== undefined) {
       await this.assertNoParentCycle(propertyId, existing.id, patch.parentEventId);
     }
@@ -666,8 +673,23 @@ export class HomeEventsService {
         where: { id: existing.id },
         data: {
           isCurrent: false,
-          projectId: null,
-          idempotencyKey: null,
+          // projectId is cleared (not idempotencyKey) because it alone is
+          // @@unique([...]) with the replacement carrying the SAME value
+          // forward (below) -- freeing it here is what avoids that
+          // collision. idempotencyKey must NOT be cleared here (code review
+          // finding, 2026-09-12): the replacement never reuses the
+          // superseded row's own key (it defaults to null, or gets a
+          // distinct explicit one from the caller -- see below), so there
+          // is no collision to avoid, and clearing it breaks a replay of
+          // the ORIGINAL capture that produced this row: createHomeEvent's
+          // own idempotency lookup (line ~554) has no isCurrent filter,
+          // deliberately, so a retried original confirmation still resolves
+          // to this row regardless of later supersession -- exactly the
+          // same "resolve to the original write regardless of current
+          // supersession state" invariant capturePropertyFact.ts already
+          // enforces for PropertyFactEvidence.captureExecutionId. Nulling
+          // this out here would silently defeat that guarantee and let a
+          // stale replay create a second, duplicate event.
         },
       });
       const replacement = await tx.homeEvent.create({
@@ -679,6 +701,18 @@ export class HomeEventsService {
             ? patch.inventoryItemId : existing.inventoryItemId,
           claimId: patch.claimId !== undefined ? patch.claimId : existing.claimId,
           expenseId: patch.expenseId !== undefined ? patch.expenseId : existing.expenseId,
+          // Code review finding (2026-09-12): these five fields were
+          // omitted entirely from the replacement, so ANY correction (even
+          // one that only changes, say, amount) silently reset them to
+          // null/default -- discarding conversational-capture metadata
+          // (captureChannel/attribution/extractionConfidence) and the
+          // warranty link every prior correction round. warrantyId is
+          // validated above (assertWarrantyBelongs) when explicitly changed.
+          warrantyId: patch.warrantyId !== undefined ? patch.warrantyId : existing.warrantyId,
+          providerName: patch.providerName !== undefined ? patch.providerName : existing.providerName,
+          captureChannel: patch.captureChannel !== undefined ? patch.captureChannel : existing.captureChannel,
+          attribution: patch.attribution !== undefined ? patch.attribution : existing.attribution,
+          extractionConfidence: patch.extractionConfidence !== undefined ? patch.extractionConfidence : existing.extractionConfidence,
           projectId: existing.projectId,
           type: patch.type ?? existing.type,
           subtype: patch.subtype !== undefined ? patch.subtype : existing.subtype,
