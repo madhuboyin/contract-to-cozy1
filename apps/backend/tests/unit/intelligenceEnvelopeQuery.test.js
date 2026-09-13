@@ -246,3 +246,154 @@ test('coverage query preserves exact internal adapter capabilities without widen
   }]);
   assert.equal('observedCapabilities' in publicPage, false);
 });
+
+// Implementation plan §4.6/§31 Scenario 8.4 ("is my roof at risk because of
+// the storms?"). PropertyRadarMatch/PropertyRadarCompoundInsight never set
+// entityRef until this fix, so no Radar-sourced item could ever satisfy a
+// component-scoped query (matchesEntityScope returns false when `actual`
+// is absent) -- regardless of domain-list breadth.
+
+function radarMatchRow(overrides = {}) {
+  return {
+    id: 'match-1',
+    propertyId: 'property-1',
+    radarEventId: 'event-1',
+    eventType: 'heavy_rain',
+    provider: 'test-provider',
+    eventObservedAt: NOW,
+    eventExpiresAt: null,
+    impactLevel: 'high',
+    confidenceScore: 0.9,
+    lifecycleStatus: 'now',
+    sourceFreshnessStatus: 'fresh',
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides,
+  };
+}
+
+function radarMatchResult(overrides = {}) {
+  return envelope.propertyRadarMatchEnvelopeAdapter.map(radarMatchRow(overrides), {
+    propertyId: 'property-1',
+    userId: 'user-1',
+    evidence: [],
+  });
+}
+
+function radarCompoundRow(overrides = {}) {
+  return {
+    id: 'compound-1',
+    propertyId: 'property-1',
+    ruleCode: 'SEVERE_WEATHER_OPEN_ROOF_ISSUE',
+    ruleVersion: 'compound-v1',
+    correlationKey: 'corr-1',
+    status: 'active',
+    evaluatedAt: NOW,
+    resolvedAt: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides,
+  };
+}
+
+function radarCompoundResult(overrides = {}) {
+  return envelope.propertyRadarCompoundInsightEnvelopeAdapter.map(radarCompoundRow(overrides), {
+    propertyId: 'property-1',
+    userId: 'user-1',
+    evidence: [],
+  });
+}
+
+test('radarMatchEntityRef derives a componentKind from the highest-relevance mappable matched system, and leaves it unset when none is mappable', () => {
+  assert.deepEqual(
+    envelope.radarMatchEntityRef('property-1', { systems: [{ type: 'roof', relevance: 'high' }] }),
+    { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' },
+  );
+  assert.deepEqual(
+    envelope.radarMatchEntityRef('property-1', { systems: [{ type: 'foundation', relevance: 'medium' }] }),
+    { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'FOUNDATION' },
+  );
+  assert.deepEqual(
+    envelope.radarMatchEntityRef('property-1', { systems: [{ type: 'drainage', relevance: 'high' }] }),
+    { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'SITE' },
+  );
+  // Highest relevance wins when multiple mappable systems are present.
+  assert.deepEqual(
+    envelope.radarMatchEntityRef('property-1', { systems: [
+      { type: 'foundation', relevance: 'medium' },
+      { type: 'roof', relevance: 'high' },
+    ] }),
+    { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' },
+  );
+  // Appliance/system-level types (hvac, plumbing, electrical, water_heater,
+  // sump_pump, insurance) have no PropertyComponentKind equivalent --
+  // deliberately left unset rather than guessing.
+  assert.equal(envelope.radarMatchEntityRef('property-1', { systems: [{ type: 'hvac', relevance: 'high' }] }), undefined);
+  assert.equal(envelope.radarMatchEntityRef('property-1', { systems: [] }), undefined);
+  assert.equal(envelope.radarMatchEntityRef('property-1', null), undefined);
+  assert.equal(envelope.radarMatchEntityRef('property-1', 'not-an-object'), undefined);
+});
+
+test('radarCompoundEntityRef derives a componentKind for the three attributable compound rules, and leaves the two HVAC-only rules unset', () => {
+  assert.deepEqual(
+    envelope.radarCompoundEntityRef('property-1', 'SEVERE_WEATHER_OPEN_ROOF_ISSUE'),
+    { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' },
+  );
+  assert.deepEqual(
+    envelope.radarCompoundEntityRef('property-1', 'HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE'),
+    { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'SITE' },
+  );
+  assert.deepEqual(
+    envelope.radarCompoundEntityRef('property-1', 'HEAVY_RAIN_OUTAGE_SUMP_BACKUP'),
+    { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'FOUNDATION' },
+  );
+  assert.equal(envelope.radarCompoundEntityRef('property-1', 'SMOKE_HVAC_FILTER'), undefined);
+  assert.equal(envelope.radarCompoundEntityRef('property-1', 'FREEZE_OUTAGE_ELECTRIC_HEAT'), undefined);
+});
+
+test('propertyRadarMatchEnvelopeAdapter and propertyRadarCompoundInsightEnvelopeAdapter forward an explicit entityRef onto the mapped item subject', () => {
+  const withRef = radarMatchResult({ entityRef: { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' } });
+  assert.deepEqual(withRef.item.subject.entityRef, { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' });
+  const withoutRef = radarMatchResult();
+  assert.equal('entityRef' in withoutRef.item.subject, false);
+
+  const compoundWithRef = radarCompoundResult({ entityRef: { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' } });
+  assert.deepEqual(compoundWithRef.item.subject.entityRef, { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' });
+});
+
+test('a WEATHER-domain ROOF-scoped query matches a Radar match carrying a roof entityRef but not one with no entityRef', async () => {
+  const roofMatch = radarMatchResult({ id: 'match-roof', entityRef: { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' } });
+  const unattributedMatch = radarMatchResult({ id: 'match-unattributed' });
+  const queryReaders = readers({ PropertyRadarMatch: {
+    producerModel: 'PropertyRadarMatch',
+    read: async () => [roofMatch, unattributedMatch],
+  } });
+  const page = await envelope.queryIntelligenceEnvelope({
+    propertyId: 'property-1',
+    principal: { kind: 'HOMEOWNER_SESSION', userId: 'user-1' },
+    sourceModels: ['PropertyRadarMatch'],
+    domains: ['ASSET_LIFECYCLE', 'WEATHER'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' }],
+  }, dependencies({ readers: queryReaders }));
+
+  assert.equal(page.items.length, 1);
+  assert.equal(page.items[0].source.sourceRecordId, 'match-roof');
+});
+
+test('a ROOF-scoped query matches a Radar compound insight carrying a roof entityRef', async () => {
+  const roofInsight = radarCompoundResult({ entityRef: { entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' } });
+  const queryReaders = readers({ PropertyRadarCompoundInsight: {
+    producerModel: 'PropertyRadarCompoundInsight',
+    read: async () => [roofInsight],
+  } });
+  const page = await envelope.queryIntelligenceEnvelope({
+    propertyId: 'property-1',
+    principal: { kind: 'HOMEOWNER_SESSION', userId: 'user-1' },
+    sourceModels: ['PropertyRadarCompoundInsight'],
+    domains: ['ASSET_LIFECYCLE', 'WEATHER'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' }],
+  }, dependencies({ readers: queryReaders }));
+
+  assert.equal(page.items.length, 1);
+  assert.equal(page.items[0].source.sourceRecordId, 'compound-1');
+});

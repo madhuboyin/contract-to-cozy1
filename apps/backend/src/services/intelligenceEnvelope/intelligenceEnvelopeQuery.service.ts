@@ -241,6 +241,63 @@ function createdAtWhere(input: EnvelopeProducerReadInput): { gt?: Date; lt?: Dat
   return Object.keys(where).length ? where : undefined;
 }
 
+// Implementation plan §4.6/§31 Scenario 8.4 ("is my roof at risk because of
+// the storms?"): PropertyRadarMatch/PropertyRadarCompoundInsight never set
+// entityRef, so no Radar-sourced item could ever satisfy a component-scoped
+// query (matchesEntityScope returns false when `actual` is absent) --
+// regardless of the domain-list fix in askEnvelopeQueryScope.ts. Fixed here
+// by deriving a real entityRef where the underlying data actually supports
+// one, not by guessing: PropertyRadarMatch.matchedSystemsJson is the same
+// per-event system attribution radarImpactRules.ts already computes and
+// persists on every row (radarImpactRules.ts's own `systems` output,
+// stored at homeEventRadarMatcher.service.ts:454,480) -- 'roof'/'foundation'/
+// 'drainage' map onto this program's PropertyComponentKind taxonomy;
+// 'hvac'/'plumbing'/'electrical'/'water_heater'/'sump_pump'/'insurance' do
+// not (they're appliance/system-level, not one of ROOF/FOUNDATION/EXTERIOR/
+// INTERIOR/SITE) and are deliberately left without an entityRef rather than
+// guessing one. PropertyRadarCompoundInsight's ruleCode is even more
+// directly attributable for the two rules that are genuinely single-
+// component (SEVERE_WEATHER_OPEN_ROOF_ISSUE, HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE)
+// and HEAVY_RAIN_OUTAGE_SUMP_BACKUP (basement/foundation water intrusion);
+// SMOKE_HVAC_FILTER and FREEZE_OUTAGE_ELECTRIC_HEAT are HVAC-system rules
+// with no PropertyComponentKind equivalent, so they stay unset too.
+const RADAR_SYSTEM_TYPE_COMPONENT_KIND: Readonly<Partial<Record<string, PropertyComponentKind>>> = Object.freeze({
+  roof: 'ROOF',
+  foundation: 'FOUNDATION',
+  drainage: 'SITE',
+});
+
+const RADAR_SYSTEM_RELEVANCE_RANK: Readonly<Record<string, number>> = Object.freeze({ high: 3, medium: 2, low: 1 });
+
+function storedRadarMatchedSystems(value: unknown): Array<{ type: string; relevance: string }> {
+  const systems = value && typeof value === 'object' ? (value as Record<string, unknown>).systems : null;
+  if (!Array.isArray(systems)) return [];
+  return systems.filter((system): system is { type: string; relevance: string } => (
+    Boolean(system) && typeof system === 'object'
+    && typeof (system as Record<string, unknown>).type === 'string'
+    && typeof (system as Record<string, unknown>).relevance === 'string'
+  ));
+}
+
+export function radarMatchEntityRef(propertyId: string, matchedSystemsJson: unknown): EnvelopeEntityRef | undefined {
+  const [best] = storedRadarMatchedSystems(matchedSystemsJson)
+    .filter((system) => system.type in RADAR_SYSTEM_TYPE_COMPONENT_KIND)
+    .sort((left, right) => (RADAR_SYSTEM_RELEVANCE_RANK[right.relevance] ?? 0) - (RADAR_SYSTEM_RELEVANCE_RANK[left.relevance] ?? 0));
+  const componentKind = best ? RADAR_SYSTEM_TYPE_COMPONENT_KIND[best.type] : undefined;
+  return componentKind ? { entityType: 'PROPERTY', entityId: propertyId, componentKind } : undefined;
+}
+
+const RADAR_COMPOUND_RULE_COMPONENT_KIND: Readonly<Partial<Record<string, PropertyComponentKind>>> = Object.freeze({
+  SEVERE_WEATHER_OPEN_ROOF_ISSUE: 'ROOF',
+  HEAVY_RAIN_UNRESOLVED_GUTTER_DRAINAGE: 'SITE',
+  HEAVY_RAIN_OUTAGE_SUMP_BACKUP: 'FOUNDATION',
+});
+
+export function radarCompoundEntityRef(propertyId: string, ruleCode: string): EnvelopeEntityRef | undefined {
+  const componentKind = RADAR_COMPOUND_RULE_COMPONENT_KIND[ruleCode];
+  return componentKind ? { entityType: 'PROPERTY', entityId: propertyId, componentKind } : undefined;
+}
+
 export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducerModel, EnvelopeProducerReader>> = Object.freeze({
   Signal: {
     producerModel: 'Signal',
@@ -411,32 +468,36 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
         skip: input.offset,
         take: input.rowLimit,
       });
-      return rows.map((row) => propertyRadarMatchEnvelopeAdapter.map({
-        ...row,
-        eventType: row.radarEvent.eventType,
-        provider: row.radarEvent.sourceDefinition?.provider ?? row.radarEvent.sourceType,
-        eventRevisionId: row.lastEventRevisionId ?? row.radarEvent.revisions[0]?.id ?? null,
-        eventObservedAt: row.radarEvent.observedAt,
-        eventExpiresAt: row.radarEvent.revisions[0]?.expiresAt ?? row.radarEvent.expiredAt,
-      }, {
-        propertyId: input.propertyId,
-        userId: input.userId,
-        evidence: dedupeEvidence([{
-          id: `RadarEventRevision:${row.lastEventRevisionId ?? row.radarEvent.revisions[0]?.id ?? row.radarEvent.id}`.slice(0, 120),
-          type: 'EXTERNAL_SOURCE',
-          label: `Global Radar event ${row.radarEvent.eventType.replace(/_/g, ' ')}`,
-          source: String(row.radarEvent.sourceDefinition?.provider ?? row.radarEvent.sourceType).slice(0, 300),
-          observedAt: row.radarEvent.observedAt.toISOString(),
-          freshness: row.sourceFreshnessStatus === 'fresh' ? 'CURRENT' : row.sourceFreshnessStatus === 'stale' ? 'STALE' : 'UNKNOWN',
-          confidence: normalizeConfidenceRatio(row.confidenceScore == null ? null : Number(row.confidenceScore)),
-        }], sourceEvidence({
-            producerModel: 'PropertyRadarMatch',
-            sourceRecordId: row.id,
-            observedAt: row.createdAt,
-            source: 'HomeEventRadar property match',
-            confidence: row.confidenceScore == null ? null : Number(row.confidenceScore),
-          })),
-      }));
+      return rows.map((row) => {
+        const entityRef = radarMatchEntityRef(input.propertyId, row.matchedSystemsJson);
+        return propertyRadarMatchEnvelopeAdapter.map({
+          ...row,
+          eventType: row.radarEvent.eventType,
+          provider: row.radarEvent.sourceDefinition?.provider ?? row.radarEvent.sourceType,
+          eventRevisionId: row.lastEventRevisionId ?? row.radarEvent.revisions[0]?.id ?? null,
+          eventObservedAt: row.radarEvent.observedAt,
+          eventExpiresAt: row.radarEvent.revisions[0]?.expiresAt ?? row.radarEvent.expiredAt,
+          ...(entityRef ? { entityRef } : {}),
+        }, {
+          propertyId: input.propertyId,
+          userId: input.userId,
+          evidence: dedupeEvidence([{
+            id: `RadarEventRevision:${row.lastEventRevisionId ?? row.radarEvent.revisions[0]?.id ?? row.radarEvent.id}`.slice(0, 120),
+            type: 'EXTERNAL_SOURCE',
+            label: `Global Radar event ${row.radarEvent.eventType.replace(/_/g, ' ')}`,
+            source: String(row.radarEvent.sourceDefinition?.provider ?? row.radarEvent.sourceType).slice(0, 300),
+            observedAt: row.radarEvent.observedAt.toISOString(),
+            freshness: row.sourceFreshnessStatus === 'fresh' ? 'CURRENT' : row.sourceFreshnessStatus === 'stale' ? 'STALE' : 'UNKNOWN',
+            confidence: normalizeConfidenceRatio(row.confidenceScore == null ? null : Number(row.confidenceScore)),
+          }], sourceEvidence({
+              producerModel: 'PropertyRadarMatch',
+              sourceRecordId: row.id,
+              observedAt: row.createdAt,
+              source: 'HomeEventRadar property match',
+              confidence: row.confidenceScore == null ? null : Number(row.confidenceScore),
+            })),
+        });
+      });
     },
   },
   PropertyRadarCompoundInsight: {
@@ -448,14 +509,20 @@ export const DEFAULT_ENVELOPE_PRODUCER_READERS: Readonly<Record<EnvelopeProducer
         skip: input.offset,
         take: input.rowLimit,
       });
-      return rows.map((row) => propertyRadarCompoundInsightEnvelopeAdapter.map(row, {
-        propertyId: input.propertyId,
-        userId: input.userId,
-        evidence: dedupeEvidence(
-          compoundEvidence(row),
-          sourceEvidence({ producerModel: 'PropertyRadarCompoundInsight', sourceRecordId: row.id, observedAt: row.evaluatedAt }),
-        ),
-      }));
+      return rows.map((row) => {
+        const entityRef = radarCompoundEntityRef(input.propertyId, row.ruleCode);
+        return propertyRadarCompoundInsightEnvelopeAdapter.map({
+          ...row,
+          ...(entityRef ? { entityRef } : {}),
+        }, {
+          propertyId: input.propertyId,
+          userId: input.userId,
+          evidence: dedupeEvidence(
+            compoundEvidence(row),
+            sourceEvidence({ producerModel: 'PropertyRadarCompoundInsight', sourceRecordId: row.id, observedAt: row.evaluatedAt }),
+          ),
+        });
+      });
     },
   },
 });

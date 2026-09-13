@@ -29,10 +29,33 @@ test('non-actionable intelligence questions route to INTELLIGENCE_ENVELOPE_QUERY
   }
 });
 
+// Implementation plan §4.6 (Phase 0 decision, resolved this pass): roof/
+// foundation/exterior/site each have a plausible WEATHER-domain rule
+// (envelopeMappingRegistry.ts), so a component-scoped query for any of
+// them widens to ['ASSET_LIFECYCLE', 'WEATHER'] -- the per-component
+// allowlist option, adopted because entity-ref scoping is confirmed not
+// to compensate for an overly broad domain list (matchesQuery ANDs both
+// independently). INTERIOR has no WEATHER-domain rule and stays narrow.
 test('natural component questions compile to a typed, property-bound Envelope scope', () => {
   assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'What do you know about my roof?'), {
-    domains: ['ASSET_LIFECYCLE'],
+    domains: ['ASSET_LIFECYCLE', 'WEATHER'],
     entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'ROOF' }],
+  });
+  assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'What do you know about the foundation?'), {
+    domains: ['ASSET_LIFECYCLE', 'WEATHER'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'FOUNDATION' }],
+  });
+  assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'What do you know about the exterior?'), {
+    domains: ['ASSET_LIFECYCLE', 'WEATHER'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'EXTERIOR' }],
+  });
+  assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'What do you know about the site?'), {
+    domains: ['ASSET_LIFECYCLE', 'WEATHER'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'SITE' }],
+  });
+  assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'What do you know about the interior?'), {
+    domains: ['ASSET_LIFECYCLE'],
+    entityRefs: [{ entityType: 'PROPERTY', entityId: 'property-1', componentKind: 'INTERIOR' }],
   });
   assert.deepEqual(resolveAskEnvelopeQueryScope('property-1', 'Show my intelligence envelope'), {});
 });

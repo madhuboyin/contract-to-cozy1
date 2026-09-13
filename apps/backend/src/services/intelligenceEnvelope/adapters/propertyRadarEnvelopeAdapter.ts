@@ -1,4 +1,4 @@
-import { normalizeConfidenceRatio } from '../../../productFramework/intelligence';
+import { normalizeConfidenceRatio, type EnvelopeEntityRef } from '../../../productFramework/intelligence';
 import type { EnvelopeAdapter } from '../envelopeAdapter.contract';
 import type { EnvelopeCurrentness, EnvelopeSeverity } from '../intelligenceEnvelope.contract';
 import { buildMappedItem, descriptorFor } from './adapterSupport';
@@ -33,6 +33,7 @@ export type PropertyRadarMatchEnvelopeRow = {
   matcherVersion?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+  entityRef?: EnvelopeEntityRef;
 };
 
 export const propertyRadarMatchEnvelopeAdapter: EnvelopeAdapter<PropertyRadarMatchEnvelopeRow> = {
@@ -65,6 +66,7 @@ export const propertyRadarMatchEnvelopeAdapter: EnvelopeAdapter<PropertyRadarMat
       nativeStatus: row.lifecycleStatus,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      ...(row.entityRef ? { entityRef: row.entityRef } : {}),
     });
   },
 };
@@ -80,6 +82,7 @@ export type PropertyRadarCompoundInsightEnvelopeRow = {
   resolvedAt?: Date | string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+  entityRef?: EnvelopeEntityRef;
 };
 
 export const propertyRadarCompoundInsightEnvelopeAdapter: EnvelopeAdapter<PropertyRadarCompoundInsightEnvelopeRow> = {
@@ -109,6 +112,7 @@ export const propertyRadarCompoundInsightEnvelopeAdapter: EnvelopeAdapter<Proper
       nativeStatus: row.status,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      ...(row.entityRef ? { entityRef: row.entityRef } : {}),
     });
   },
 };

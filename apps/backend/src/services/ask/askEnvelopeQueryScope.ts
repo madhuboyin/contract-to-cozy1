@@ -9,6 +9,18 @@ const COMPONENT_PATTERNS: ReadonlyArray<readonly [PropertyComponentKind, RegExp]
   ['SITE', /\b(?:site|lot|grounds)\b/i],
 ];
 
+// Implementation plan §4.6 (Phase 0 decision, resolved this pass): roof/
+// foundation/exterior/site signals are legitimately split across both
+// ASSET_LIFECYCLE (e.g. aging_roof_condition_review) and WEATHER (e.g.
+// SEVERE_WEATHER_OPEN_ROOF_ISSUE, envelopeMappingRegistry.ts) domains --
+// an unconditional widen would be simpler but less precise now that
+// entity-ref scoping is confirmed NOT to compensate for an overly broad
+// domain list (matchesQuery ANDs domains and entityRefs independently).
+// Per-component allowlist adopted instead: WEATHER only for components
+// with a plausible WEATHER-domain rule (ROOF/FOUNDATION/EXTERIOR/SITE),
+// excluding INTERIOR.
+const WEATHER_ELIGIBLE_COMPONENTS = new Set<PropertyComponentKind>(['ROOF', 'FOUNDATION', 'EXTERIOR', 'SITE']);
+
 /**
  * Phase 3 §24.5: translate a natural component-scoped observation question
  * into the typed Envelope query shape. Ordinary inventory/detail requests are
@@ -22,5 +34,8 @@ export function resolveAskEnvelopeQueryScope(
   const componentKind = COMPONENT_PATTERNS.find(([, pattern]) => pattern.test(message))?.[0];
   if (!componentKind) return {};
   const entityRef: EnvelopeEntityRef = { entityType: 'PROPERTY', entityId: propertyId, componentKind };
-  return { domains: ['ASSET_LIFECYCLE'], entityRefs: [entityRef] };
+  const domains = WEATHER_ELIGIBLE_COMPONENTS.has(componentKind)
+    ? ['ASSET_LIFECYCLE', 'WEATHER'] as const
+    : ['ASSET_LIFECYCLE'] as const;
+  return { domains: [...domains], entityRefs: [entityRef] };
 }
