@@ -16,6 +16,9 @@ import {
 import {
   reconcileCaptureLink,
 } from '@worker-shared/services/ask/captureLinkReconciliation';
+import {
+  processAskExtractionRequestedEvent,
+} from '@worker-shared/services/ask/conversationalUnderstanding/conversationalCapture';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
 // Ask Cozy Stage 3, Phase 2 (implementation plan §4.4/§8; FRD §17).
@@ -38,6 +41,7 @@ export interface ProcessDomainEventsDeps {
   recomputeRequested?: typeof processRecomputeRequestedEvent;
   recomputeRetryRequested?: typeof processRecomputeRetryRequestedEvent;
   captureLinkReconcile?: typeof reconcileCaptureLink;
+  askExtractionRequested?: typeof processAskExtractionRequestedEvent;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -48,6 +52,7 @@ const defaultDeps: ProcessDomainEventsDeps = {
   recomputeRequested: processRecomputeRequestedEvent,
   recomputeRetryRequested: processRecomputeRetryRequestedEvent,
   captureLinkReconcile: reconcileCaptureLink,
+  askExtractionRequested: processAskExtractionRequestedEvent,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -310,6 +315,28 @@ function handleAskCaptureLinkReconcile(ev: any, deps: ProcessDomainEventsDeps) {
   return (deps.captureLinkReconcile ?? reconcileCaptureLink)(executionId);
 }
 
+// Ask Cozy Stage 3, Phase 3 (implementation plan §9/§21; FRD §9/§14/§22's
+// async-fallback path). The common case (extraction finishes within its
+// ~1.5s inline budget, or shortly after in the background -- JS has no true
+// promise cancellation) never reaches this consumer at all; this only fires
+// when the backend process that started an attempt crashed/restarted before
+// it could finish, so this event's lease genuinely expired. `ev` here is the
+// PRE-claim row this loop read before its own updateMany above incremented
+// attempts -- ev.attempts + 1 is this worker's own post-claim value, the
+// same "claimedAttempts" contract domainEventClaimToken.ts documents.
+// conversationalCapture.ts's own transaction re-verifies that value before
+// persisting anything, so a nested race (this worker's own attempt somehow
+// outlives its 15-minute lease and gets reclaimed by a third attempt) fails
+// safely via that same check rather than double-writing -- rare enough
+// (needs a >15-minute extraction call) not to warrant its own error class
+// here.
+function handleAskExtractionRequested(ev: any, deps: ProcessDomainEventsDeps) {
+  return (deps.askExtractionRequested ?? processAskExtractionRequestedEvent)(
+    { id: ev.id, propertyId: ev.propertyId ?? null, userId: ev.userId ?? null, payload: ev.payload },
+    (ev.attempts ?? 0) + 1,
+  );
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -427,6 +454,9 @@ export async function processDomainEventsJob(
           break;
         case 'ASK_CAPTURE_LINK_RECONCILE':
           await handleAskCaptureLinkReconcile(ev, deps);
+          break;
+        case 'ASK_EXTRACTION_REQUESTED':
+          processingOutcome = await handleAskExtractionRequested(ev, deps);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

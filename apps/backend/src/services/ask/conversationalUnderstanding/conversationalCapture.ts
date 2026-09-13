@@ -208,12 +208,24 @@ async function persistCandidates(
   claimedAttempts: number,
   candidates: ExtractionCandidate[],
   input: ConversationalCaptureInput,
+  // The inline (backend, same-process) path is the only caller of this
+  // event; nothing else marks it PROCESSED, so it must do so itself. The
+  // worker-driven path (processAskExtractionRequestedEvent, called from
+  // processDomainEvents.job.ts's generic dispatch loop) passes false --
+  // that loop already marks every event type PROCESSED generically after
+  // its handler returns, using its own (pre-processing) payload snapshot;
+  // marking it here too would just be overwritten by that less-accurate
+  // write immediately after, not a correctness issue but a wasted/confusing
+  // second write.
+  markProcessed: boolean,
 ): Promise<PersistedCaptureExecution[]> {
   if (candidates.length === 0) {
-    await prisma.domainEvent.update({
-      where: { id: domainEventId },
-      data: { status: 'PROCESSED', processedAt: new Date(), processingStartedAt: null, leaseExpiresAt: null },
-    });
+    if (markProcessed) {
+      await prisma.domainEvent.update({
+        where: { id: domainEventId },
+        data: { status: 'PROCESSED', processedAt: new Date(), processingStartedAt: null, leaseExpiresAt: null },
+      });
+    }
     return [];
   }
   const now = new Date();
@@ -230,16 +242,18 @@ async function persistCandidates(
       });
       created.push(existing ?? await tx.askExecution.create({ data }));
     }
-    await tx.domainEvent.update({
-      where: { id: domainEventId },
-      data: {
-        status: 'PROCESSED',
-        processedAt: new Date(),
-        processingStartedAt: null,
-        leaseExpiresAt: null,
-        payload: { processingOutcome: { candidateCount: created.length } },
-      },
-    });
+    if (markProcessed) {
+      await tx.domainEvent.update({
+        where: { id: domainEventId },
+        data: {
+          status: 'PROCESSED',
+          processedAt: new Date(),
+          processingStartedAt: null,
+          leaseExpiresAt: null,
+          payload: { processingOutcome: { candidateCount: created.length } },
+        },
+      });
+    }
     return created;
   });
 }
@@ -309,7 +323,7 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   const attempt = (async () => {
     try {
       const { candidates } = await runStructuredExtraction(input.message);
-      return await persistCandidates(domainEventId, claimedAttempts, candidates, input);
+      return await persistCandidates(domainEventId, claimedAttempts, candidates, input, true);
     } catch (error) {
       logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] extraction attempt failed');
       // Release the claim promptly (rather than holding a 15-minute lease
@@ -360,6 +374,6 @@ export async function processAskExtractionRequestedEvent(
     message,
     contextVersion: parent.contextVersion,
     skipDueToRoutedCapture: false,
-  });
+  }, false);
   return { candidateCount: created.length };
 }

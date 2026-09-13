@@ -47,6 +47,8 @@ function fakeDeps({
   recomputeRetryRequestedResult = { status: 'SUCCEEDED' },
   recomputeRetryRequestedShouldFail = false,
   captureLinkReconcileShouldFail = false,
+  askExtractionRequestedResult = { candidateCount: 0 },
+  askExtractionRequestedShouldFail = false,
 }) {
   const calls = {
     updates: [],
@@ -57,6 +59,7 @@ function fakeDeps({
     recomputeRequested: [],
     recomputeRetryRequested: [],
     captureLinkReconcile: [],
+    askExtractionRequested: [],
   };
 
   const deps = {
@@ -115,6 +118,11 @@ function fakeDeps({
     captureLinkReconcile: async (executionId) => {
       calls.captureLinkReconcile.push(executionId);
       if (captureLinkReconcileShouldFail) throw new Error('capture link reconcile failed');
+    },
+    askExtractionRequested: async (event, claimedAttempts) => {
+      calls.askExtractionRequested.push({ event, claimedAttempts });
+      if (askExtractionRequestedShouldFail) throw new Error('ask extraction requested handling failed');
+      return askExtractionRequestedResult;
     },
   };
   return { deps, calls };
@@ -385,6 +393,46 @@ test('ASK_CAPTURE_LINK_RECONCILE reconciler failures use the shared retry/dead-l
   const terminal = calls.updates.find((u) => u.kind === 'terminal');
   assert.equal(terminal.args.data.status, 'FAILED');
   assert.match(terminal.args.data.lastError, /capture link reconcile failed/);
+});
+
+test('processes an ASK_EXTRACTION_REQUESTED event, passing the pre-claim attempts + 1 as claimedAttempts', async () => {
+  const extractionEvent = eventFixture({
+    id: 'event-extraction-1',
+    type: 'ASK_EXTRACTION_REQUESTED',
+    attempts: 0,
+    userId: 'user-1',
+    propertyId: 'property-1',
+    payload: { executionId: 'execution-1', message: 'I replaced the roof last summer for $14,500.' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [extractionEvent], askExtractionRequestedResult: { candidateCount: 1 } });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.askExtractionRequested.length, 1);
+  assert.equal(calls.askExtractionRequested[0].claimedAttempts, 1);
+  assert.deepEqual(calls.askExtractionRequested[0].event, {
+    id: 'event-extraction-1', propertyId: 'property-1', userId: 'user-1',
+    payload: { executionId: 'execution-1', message: 'I replaced the roof last summer for $14,500.' },
+  });
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+  assert.deepEqual(terminal.args.data.payload.processingOutcome, { candidateCount: 1 });
+});
+
+test('ASK_EXTRACTION_REQUESTED handler failures (e.g. a claim reclaimed by a later attempt) use the shared retry/dead-letter path', async () => {
+  const extractionEvent = eventFixture({
+    type: 'ASK_EXTRACTION_REQUESTED',
+    payload: { executionId: 'execution-1', message: 'I replaced the roof last summer for $14,500.' },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [extractionEvent], askExtractionRequestedShouldFail: true });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /ask extraction requested handling failed/);
 });
 
 test('a malformed refinance transition is retried as FAILED', async () => {
