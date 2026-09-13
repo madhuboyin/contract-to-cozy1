@@ -101,6 +101,7 @@ import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../
 import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
 import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate } from './conversationalUnderstanding/conversationalCapture';
+import { buildAskNextActionsBlock } from './askNextActions';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
 import { getFinancialContextDecisions } from '../financialContext/context';
@@ -164,7 +165,6 @@ import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecution
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
 import {
-  ASK_OPERATION_CAPABILITY,
   ASK_CAPABILITY_UNIQUE_OPERATION,
 } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../skills/skillRouter';
@@ -6561,59 +6561,30 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
     if (!input.deferSemanticValidation) recordAskAnswerTrustMetrics(input.operation.operationId, validation);
     return validation.result;
   };
-  const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operation.operationId];
+  // Ask Cozy Stage 3, Phase 4 (implementation plan §10; FRD §27). Widened
+  // from the pre-Phase-4 gate, which additionally required an
+  // `ASK_OPERATION_CAPABILITY` entry (excluding GROUNDED_GUIDANCE, which
+  // has none) and exactly `ANSWERED`/`COMPLETED` status (excluding
+  // sell/hold/rent's own `READY_WITH_LIMITATIONS` common case whenever
+  // confidence is not `HIGH`) -- both were Stage 1's two named next-action
+  // gaps this phase's acceptance criterion exists to close. The remaining
+  // conditions (no outstanding captures, no pending confirmation, no
+  // CAPABILITY_LIST block already present) are unchanged.
   if (
     !input.propertyId
-    || !currentCapabilityId
-    || !['ANSWERED', 'COMPLETED'].includes(result.status)
+    || !['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(result.status)
     || (result.captureRequests?.length ?? 0) > 0
     || result.confirmation
     || result.blocks.some((block) => block.type === 'CAPABILITY_LIST')
   ) return finalize();
 
   try {
-    const [related, catalog] = await Promise.all([
-      getRelatedCapabilities({
-        propertyId: input.propertyId,
-        userId: input.userId,
-        currentCapabilityId,
-        limit: 3,
-      }),
-      Promise.resolve(buildCapabilityCatalog({
-        registry: canonicalCapabilityRegistry,
-        availability: createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry),
-        userId: input.userId,
-        propertyId: input.propertyId,
-        includeWorkflowContext: false,
-      })),
-    ]);
-    const catalogById = new Map(catalog.capabilities.map((capability) => [capability.id, capability]));
-    const capabilities = related.suggestions.slice(0, 3).flatMap((suggestion) => {
-      const capability = catalogById.get(suggestion.capabilityId);
-      if (!capability) return [];
-      return [{
-        id: capability.id,
-        label: capability.label,
-        description: capability.shortDescription,
-        expectedOutput: capability.expectedOutput,
-        href: capability.href,
-        readiness: suggestion.readiness,
-        readinessLabel: suggestion.readiness === 'READY'
-          ? 'Ready for this home'
-          : 'More home details will improve the result',
-        readinessReasons: [],
-        releaseStage: capability.releaseStage,
-      }];
+    const nextActionsBlock = await buildAskNextActionsBlock({
+      propertyId: input.propertyId,
+      userId: input.userId,
+      operationId: input.operation.operationId,
     });
-    if (capabilities.length) {
-      result.blocks.push({
-        type: 'CAPABILITY_LIST',
-        id: 'related-capabilities',
-        title: 'Related tools for what comes next',
-        description: 'Suggested from the completed answer and filtered through the live capability registry.',
-        capabilities,
-      });
-    }
+    if (nextActionsBlock) result.blocks.push(nextActionsBlock);
   } catch {
     // Optional continuity must never turn a successful primary answer into a failure.
   }

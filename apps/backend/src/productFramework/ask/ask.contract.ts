@@ -98,7 +98,7 @@ const CapabilityListBlockSchema = z.object({
     readinessLabel: z.string().max(240).nullable().default(null),
     readinessReasons: z.array(z.string().max(600)).max(5).default([]),
     releaseStage: z.enum(['ACTIVE', 'BETA']),
-  })).min(1).max(3),
+  })).min(1).max(5),
 });
 
 const EvidenceBlockSchema = z.object({
