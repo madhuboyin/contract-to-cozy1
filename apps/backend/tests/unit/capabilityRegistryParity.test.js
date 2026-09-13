@@ -83,7 +83,7 @@ test('workflow-only capabilities never enter the general catalog projection', ()
 });
 
 test('golden fixtures cover every contextual definition and its readiness references', () => {
-  assert.equal(CAPABILITY_GOLDEN_FIXTURES.length, 9);
+  assert.equal(CAPABILITY_GOLDEN_FIXTURES.length, 10);
   const covered = new Set(
     CAPABILITY_GOLDEN_FIXTURES.flatMap((fixture) => fixture.contextualCapabilityIds),
   );

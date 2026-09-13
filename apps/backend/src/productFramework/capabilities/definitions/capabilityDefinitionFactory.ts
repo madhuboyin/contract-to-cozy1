@@ -4,6 +4,16 @@ import {
   type CapabilityRecommendationMode,
   type ToolCapabilityDefinition,
 } from '../capability.contract';
+import { PERSONALIZATION_DEFINITIONS } from '../../../modules/personalization/catalog/personalizationDefinitions';
+
+// Ask Cozy Stage 3 §23 ("Personalization — expose later... wire once the
+// capability layer exists so it's one clean registration, not a bespoke
+// branch"). Derived, not hardcoded, so a future addition/removal of a
+// MAINTENANCE-module personalization definition doesn't silently drift out
+// of sync with this registration.
+const MAINTENANCE_PERSONALIZATION_DEFINITION_CODES = PERSONALIZATION_DEFINITIONS
+  .filter((definition) => definition.modules.includes('MAINTENANCE'))
+  .map((definition) => definition.code);
 
 type CapabilitySeed = {
   id: string;
@@ -214,6 +224,13 @@ const OUTPUT_ENTITY_TYPES: Record<
 };
 
 const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
+  maintenance: {
+    sourceKinds: ['PERSONALIZATION'],
+    triggerFamily: 'PERSONALIZED_MAINTENANCE_DUE',
+    reason: 'A reviewed personalized maintenance recommendation for this property is due.',
+    requiresExplicitTrigger: true,
+    recommendationDefinitionCodes: MAINTENANCE_PERSONALIZATION_DEFINITION_CODES,
+  },
   'buyer-closing': {
     sourceKinds: ['PROJECT', 'GUIDANCE'],
     triggerFamily: 'BUYER_JOURNEY_ACTIVE',

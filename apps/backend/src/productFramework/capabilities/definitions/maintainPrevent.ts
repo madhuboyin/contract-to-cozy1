@@ -30,7 +30,7 @@ export const MAINTAIN_PREVENT_CAPABILITIES = buildCapabilityDefinitions([
     releaseStage: 'ACTIVE',
     safetyTier: 'LOW_CONSEQUENCE',
     completionKind: 'ACTION_COMPLETED',
-    mode: 'CATALOG_ONLY',
+    mode: 'CONTEXTUAL',
     acceptedContext: ['PROPERTY', 'HOME_ACTION', 'WORK_ITEM', 'INVENTORY_ITEM', 'FINDING'],
     livingHomeRecordReads: ['property-context', 'maintenance-task', 'seasonal-checklist-item', 'property-habit'],
     livingHomeRecordWrites: ['maintenance-task', 'operational-work-item', 'home-event'],

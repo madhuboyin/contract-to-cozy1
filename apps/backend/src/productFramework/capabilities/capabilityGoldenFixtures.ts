@@ -79,6 +79,12 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
     contextualCapabilityIds: ['material-specs'],
     needsContextCapabilityIds: ['material-specs'],
   },
+  {
+    id: 'personalized-maintenance-recommendation',
+    description: 'An active personalized maintenance recommendation makes routine maintenance timely.',
+    contextualCapabilityIds: ['maintenance'],
+    needsContextCapabilityIds: [],
+  },
 ];
 
 export type CapabilityGoldenRankingExpectation = {
@@ -248,6 +254,15 @@ readonly CapabilityGoldenRankingExpectation[] = [
       'material-specs': [
         'Choose a project, room, or repair context before recording materials.',
       ],
+    },
+  }),
+  expectation({
+    fixtureId: 'personalized-maintenance-recommendation',
+    ineligibleCapabilityId: 'seller-prep',
+    duplicateCapabilityId: 'maintenance',
+    expectedTopCapabilityIds: ['maintenance'],
+    expectedReasonCodes: {
+      maintenance: 'PERSONALIZED_MAINTENANCE_DUE',
     },
   }),
 ];

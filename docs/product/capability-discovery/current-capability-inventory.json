@@ -519,7 +519,7 @@
       "completionKind": "ACTION_COMPLETED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "material-specs",
