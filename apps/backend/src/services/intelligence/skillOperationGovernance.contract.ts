@@ -21,11 +21,32 @@ import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../ask/askOperat
  * domain operations, so they are structurally exempt rather than carved
  * out by name.
  *
- * The exception list is intentionally empty: every property-scoped Ask
- * operation is now owned by exactly one Skill. The second check below also
- * prevents a future temporary exception from becoming stale documentation.
+ * The exception list was intentionally empty as of this Phase 6 work item:
+ * every property-scoped Ask operation was owned by exactly one Skill at
+ * that time. The second check below also prevents a future temporary
+ * exception from becoming stale documentation.
+ *
+ * PRODUCTION INCIDENT (2026-09-13): this check went fatal at boot for
+ * CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM/CAPTURE_WARRANTY_CONFIRM
+ * (Ask Cozy Stage 3, Phase 2/3) -- none of the three ever got an owning
+ * Skill, and this Phase 6 check apparently never ran against the full,
+ * current operation set in production until this deploy (crashloop, total
+ * backend outage). Carved out here as an IMMEDIATE, explicit, documented
+ * gap to restore service; a proper owning Skill (or a structural exemption
+ * alongside the five null-floor operations above, if these three really
+ * are never Skill-routable by design -- they are only ever created
+ * programmatically by conversationalCapture.ts, never proposed from a raw
+ * homeowner message, mirroring the null-floor boundary operations'
+ * "not Skill-executed" shape more than a typical mutation operation's) is
+ * real follow-up work, not attempted under incident pressure. Do not let
+ * this become stale: the second check below fires the moment any of these
+ * three IS given a Skill, forcing this carve-out to be removed then.
  */
-export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [];
+export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
+  'CAPTURE_FACT_CONFIRM',
+  'CAPTURE_EVENT_CONFIRM',
+  'CAPTURE_WARRANTY_CONFIRM',
+];
 
 export interface SkillOperationGovernanceContext {
   skillCoversOperation: (operationId: AskOperationId) => boolean;
