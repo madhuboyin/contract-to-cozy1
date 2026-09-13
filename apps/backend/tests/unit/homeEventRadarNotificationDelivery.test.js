@@ -3,6 +3,27 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register/transpile-only');
 
+// Ask Cozy Stage 3, Phase 5: the service now also calls
+// createAskNotificationContinuation, which hits the real prisma/property-
+// access layer -- mock it here the same way maintenanceReminderService.test.js
+// and refinanceRateMonitorCooldown.test.js do, so this stays a real unit test
+// against no live database.
+let continuationCalls = [];
+let continuationReturnValue = { executionId: 'execution-1', sessionId: 'session-1', actionUrl: '/dashboard/ask?executionId=execution-1' };
+const continuationPath = require.resolve('../../src/services/ask/askNotificationContinuation.service.ts');
+require.cache[continuationPath] = {
+  id: continuationPath,
+  filename: continuationPath,
+  loaded: true,
+  exports: {
+    createAskNotificationContinuation: async (input) => {
+      continuationCalls.push(input);
+      if (continuationReturnValue === 'THROW') throw new Error('continuation unavailable');
+      return continuationReturnValue;
+    },
+  },
+};
+
 const {
   RadarNotificationDeliveryService,
 } = require('../../src/modules/homeEventRadar/services/radarNotificationDelivery.service.ts');
@@ -80,6 +101,11 @@ function database() {
   };
 }
 
+test.beforeEach(() => {
+  continuationCalls = [];
+  continuationReturnValue = { executionId: 'execution-1', sessionId: 'session-1', actionUrl: '/dashboard/ask?executionId=execution-1' };
+});
+
 test('eligible decision creates one canonical notification and exact delivery rows', async () => {
   const state = database();
   const service = new RadarNotificationDeliveryService(state.db);
@@ -93,8 +119,13 @@ test('eligible decision creates one canonical notification and exact delivery ro
   const notification = state.notifications[0];
   assert.equal(notification.deduplicationKey, 'home-event-radar:decision-1');
   assert.equal(notification.entityType, 'PROPERTY_RADAR_MATCH');
+  // Ask Cozy Stage 3, Phase 5: actionUrl now prefers the Ask continuation's
+  // deep link over the plain domain URL when a continuation was created.
+  assert.equal(notification.actionUrl, '/dashboard/ask?executionId=execution-1');
+  assert.equal(notification.metadata.askExecutionId, 'execution-1');
+  assert.equal(notification.metadata.askSessionId, 'session-1');
   assert.equal(
-    notification.actionUrl,
+    notification.metadata.domainActionUrl,
     '/dashboard/properties/property-1/tools/home-event-radar?matchId=match-1&launchSurface=notification',
   );
   assert.deepEqual(
@@ -107,6 +138,24 @@ test('eligible decision creates one canonical notification and exact delivery ro
   );
   assert.equal(notification.deliveries[0].sentAt.toISOString(), '2026-07-26T16:00:00.000Z');
   assert.equal(state.links[0].data.notificationId, 'notification-1');
+  assert.equal(continuationCalls.length, 1);
+  assert.equal(continuationCalls[0].operationId, 'INTELLIGENCE_ENVELOPE_QUERY');
+  assert.equal(continuationCalls[0].triggerKey, 'home-event-radar:decision-1');
+});
+
+test('falls back to the plain domain URL when the Ask continuation fails', async () => {
+  const state = database();
+  continuationReturnValue = 'THROW';
+  const service = new RadarNotificationDeliveryService(state.db);
+  const result = await service.materialize(input());
+
+  assert.equal(result.outcome, 'created');
+  const notification = state.notifications[0];
+  assert.equal(
+    notification.actionUrl,
+    '/dashboard/properties/property-1/tools/home-event-radar?matchId=match-1&launchSurface=notification',
+  );
+  assert.equal(notification.metadata.askExecutionId, undefined);
 });
 
 test('materialization retries converge on the deterministic notification key', async () => {
@@ -116,6 +165,9 @@ test('materialization retries converge on the deterministic notification key', a
   assert.equal((await service.materialize(input())).outcome, 'deduped');
   assert.equal(state.notifications.length, 1);
   assert.equal(state.links.length, 2);
+  // The continuation is only created on the initial materialization, not on
+  // a dedup hit against the already-persisted notification.
+  assert.equal(continuationCalls.length, 1);
 });
 
 test('suppressed decisions never create notifications or delivery rows', async () => {

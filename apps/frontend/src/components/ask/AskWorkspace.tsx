@@ -382,6 +382,32 @@ function BlockView({ block, executionId }: { block: AskPresentationBlock; execut
     );
   }
 
+  // Ask Cozy Stage 3, Phase 5 (implementation plan §11; FRD §28). The one
+  // new block type this phase adds -- structurally identical to SUMMARY
+  // plus a "Cozy noticed this" badge naming triggerSource, so a
+  // proactively-created turn is visually distinguishable from an ordinary
+  // homeowner-initiated one, not just conventionally recognizable by
+  // reasonCode.
+  if (block.type === 'PROACTIVE_INSIGHT') {
+    return (
+      <section className={cn(
+        'rounded-2xl border p-4',
+        block.tone === 'CAUTION' && 'border-amber-200 bg-amber-50/70',
+        block.tone === 'CRITICAL' && 'border-red-200 bg-red-50/70',
+        block.tone === 'POSITIVE' && 'border-emerald-200 bg-emerald-50/70',
+        block.tone === 'DEFAULT' && 'border-violet-200 bg-violet-50/70',
+      )}>
+        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">
+          <Sparkles className="h-3.5 w-3.5" />
+          <span>Cozy noticed this</span>
+        </div>
+        <h3 className="mt-1 font-semibold text-slate-950">{block.title}</h3>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+        {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+      </section>
+    );
+  }
+
   if (block.type === 'GROUPED_LIST') {
     return (
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

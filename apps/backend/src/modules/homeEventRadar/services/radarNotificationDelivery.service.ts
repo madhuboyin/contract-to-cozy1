@@ -1,5 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { homeEventRadarNotificationUrl } from '../../../lib/notificationDeepLinks';
+import { createAskNotificationContinuation } from '../../../services/ask/askNotificationContinuation.service';
+import { logger } from '../../../lib/logger';
 
 type RadarNotificationDeliveryDatabase = {
   notification: {
@@ -126,6 +128,45 @@ export class RadarNotificationDeliveryService {
       );
       const urgency = notificationUrgency(decision);
       const cadence = decision.outcome === 'digest' ? 'DAILY_DIGEST' : 'IMMEDIATE';
+      const domainActionUrl = homeEventRadarNotificationUrl(input.propertyId, input.match.id);
+      // Ask Cozy Stage 3, Phase 5 (implementation plan §11; FRD §29): thread a
+      // proactive Ask continuation onto Radar's own notification, using the
+      // lower-level primitive rather than `notifyWithAskContinuation` --
+      // Radar already owns its own dedup (the deduplicationKey above) and
+      // builds its own `notification.create` payload through an injected,
+      // narrowly-typed `db` (see `RadarNotificationDeliveryDatabase`), which
+      // doesn't fit the wrapper's `NotificationService.create` call shape.
+      let continuation: Awaited<ReturnType<typeof createAskNotificationContinuation>> | null = null;
+      try {
+        continuation = await createAskNotificationContinuation({
+          userId: decision.userId,
+          propertyId: input.propertyId,
+          triggerKey: deduplicationKey,
+          operationId: 'INTELLIGENCE_ENVELOPE_QUERY',
+          question: `A monitored event ("${input.event.title ?? input.event.eventType ?? 'home event'}") may affect this property. What changed, why does it matter, and what should I do next?`,
+          reasonCode: 'HOME_EVENT_RADAR_MATCH_NOTIFIED',
+          title: boundedText(input.event.title, 180) ?? 'Home Event Radar update',
+          body: notificationMessage(input),
+          tone: urgency === 'CRITICAL' ? 'CRITICAL' : urgency === 'URGENT' ? 'CAUTION' : 'DEFAULT',
+          triggerSource: 'HOME_EVENT_RADAR',
+          details: [
+            { label: 'Event', value: boundedText(input.event.title, 180) ?? input.event.eventType ?? 'Monitored event' },
+            { label: 'Impact', value: input.match.impactLevel },
+            { label: 'Severity', value: input.event.severity },
+          ],
+          domainAction: { id: 'open-home-event-radar', label: 'Open Home Event Radar', href: domainActionUrl },
+          parameters: {
+            radarEventId: input.event.id,
+            radarMatchId: input.match.id,
+            radarNotificationDecisionId: decision.id,
+            impact: input.match.impactLevel,
+            severity: input.event.severity,
+          },
+          suggestions: ['What should I do about this?', 'How urgent is this?'],
+        });
+      } catch (error) {
+        logger.error({ err: error, decisionId: decision.id, matchId: input.match.id }, '[home-event-radar] Failed to create Ask continuation');
+      }
       try {
         notification = await this.db.notification.create({
           data: {
@@ -134,7 +175,7 @@ export class RadarNotificationDeliveryService {
             type: 'HOME_EVENT_RADAR_ALERT',
             title: boundedText(input.event.title, 180) ?? 'Home Event Radar update',
             message: notificationMessage(input),
-            actionUrl: homeEventRadarNotificationUrl(input.propertyId, input.match.id),
+            actionUrl: continuation?.actionUrl ?? domainActionUrl,
             entityType: 'PROPERTY_RADAR_MATCH',
             entityId: input.match.id,
             metadata: {
@@ -159,6 +200,9 @@ export class RadarNotificationDeliveryService {
               policyVersion: decision.policyVersion,
               priority: decision.outcome === 'immediate' ? 'HIGH' : 'LOW',
               attentionPriority: urgency === 'CRITICAL' ? 'NOW' : 'SOON',
+              askExecutionId: continuation?.executionId,
+              askSessionId: continuation?.sessionId,
+              domainActionUrl,
               notificationPolicy: {
                 category: notificationCategory(family),
                 urgency,

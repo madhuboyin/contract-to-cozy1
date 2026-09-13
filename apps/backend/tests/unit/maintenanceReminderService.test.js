@@ -63,12 +63,32 @@ function loadService({ tasks, existingUpdateShouldFail = false, createImpl, reco
     },
   };
 
+  const notificationServiceExports = require.cache[notificationServicePath].exports;
   const askContinuationPath = require.resolve('../../src/services/ask/askNotificationContinuation.service.ts');
   require.cache[askContinuationPath] = {
     id: askContinuationPath,
     filename: askContinuationPath,
     loaded: true,
-    exports: { createAskNotificationContinuation: async () => null },
+    exports: {
+      // Ask-continuation creation itself isn't the focus of these tests --
+      // mirror the real wrapper's fallback-to-domainAction shape (continuation
+      // always null here) while still routing through the mocked
+      // NotificationService.create so existing assertions on createCalls hold.
+      notifyWithAskContinuation: async (input) => notificationServiceExports.NotificationService.create({
+        userId: input.userId,
+        deduplicationKey: input.deduplicationKey,
+        type: input.notificationType,
+        title: input.title,
+        message: input.notificationMessage,
+        actionUrl: input.domainAction.href,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        category: input.category,
+        urgency: input.urgency,
+        transportEnabled: input.transportEnabled,
+        metadata: { ...input.metadata, propertyId: input.propertyId, domainActionUrl: input.domainAction.href },
+      }),
+    },
   };
 
   const servicePath = require.resolve('../../src/services/maintenanceReminder.service.ts');

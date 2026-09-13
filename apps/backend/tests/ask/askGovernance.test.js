@@ -158,11 +158,15 @@ test('material monitor notifications link to durable Ask continuations', () => {
   const maintenance = readFileSync(resolve(__dirname, '../../src/services/maintenanceReminder.service.ts'), 'utf8');
   assert.match(continuation, /MONITOR_NOTIFICATION_CREATED/);
   assert.match(continuation, /\/dashboard\/ask\?propertyId=/);
-  assert.match(refinance, /createAskNotificationContinuation/);
-  assert.match(maintenance, /createAskNotificationContinuation/);
+  // Phase 5 consolidated both callers' previously copy-pasted
+  // createAskNotificationContinuation + NotificationService.create pairing
+  // into the shared notifyWithAskContinuation wrapper -- the durable-link
+  // guarantee (askExecutionId threading) now lives once in the wrapper
+  // itself rather than being duplicated per caller.
+  assert.match(refinance, /notifyWithAskContinuation/);
+  assert.match(maintenance, /notifyWithAskContinuation/);
   assert.doesNotMatch(refinance, /askQuestion:/);
-  assert.match(refinance, /askExecutionId:/);
-  assert.match(maintenance, /askExecutionId:/);
+  assert.match(continuation, /askExecutionId: continuation\?\.executionId/);
 });
 
 test('notification continuation execution creation is a true atomic upsert, not findUnique-then-create', () => {

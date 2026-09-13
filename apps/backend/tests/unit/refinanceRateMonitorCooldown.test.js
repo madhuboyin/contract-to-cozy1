@@ -38,7 +38,28 @@ require.cache[notificationServicePath] = {
 const continuationPath = require.resolve('../../src/services/ask/askNotificationContinuation.service.ts');
 require.cache[continuationPath] = {
   id: continuationPath, filename: continuationPath, loaded: true,
-  exports: { createAskNotificationContinuation: async () => null },
+  exports: {
+    // Ask-continuation creation itself isn't under test here -- mirror the
+    // real wrapper's fallback-to-domainAction shape (continuation always
+    // null) while still routing through the mocked NotificationService.create
+    // so existing assertions on `notifications` hold.
+    notifyWithAskContinuation: async (input) => {
+      await require(notificationServicePath).NotificationService.create({
+        userId: input.userId,
+        deduplicationKey: input.deduplicationKey,
+        type: input.notificationType,
+        title: input.title,
+        message: input.notificationMessage,
+        actionUrl: input.domainAction.href,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        category: input.category,
+        urgency: input.urgency,
+        transportEnabled: input.transportEnabled,
+        metadata: { ...input.metadata, propertyId: input.propertyId, domainActionUrl: input.domainAction.href },
+      });
+    },
+  },
 };
 
 const { evaluateRefinanceRateMonitors } = require('../../src/refinanceRadar/refinanceRateMonitor.service.ts');

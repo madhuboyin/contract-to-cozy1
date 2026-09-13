@@ -43,6 +43,27 @@ const SummaryBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 
+// Ask Cozy Stage 3, Phase 5 (implementation plan §11; FRD §28/§29). The one
+// new block type this phase adds -- per FRD §28's own explicit "no existing
+// field distinguishes a Cozy-initiated execution" gap. Structurally a
+// SUMMARY block plus `triggerSource` (which background producer created
+// this turn -- e.g. `REFINANCE_RATE_MONITOR`, `MAINTENANCE_DEADLINE_MONITOR`,
+// `HOME_EVENT_RADAR` -- lets the frontend render "Cozy noticed via X"
+// distinctly from an ordinary homeowner-initiated SUMMARY). Replaces the
+// SUMMARY block `createAskNotificationContinuation` previously built for
+// every proactive turn, rather than being added alongside it, so a
+// proactive turn is now structurally distinguishable, not just
+// conventionally recognizable by reasonCode.
+const ProactiveInsightBlockSchema = z.object({
+  type: z.literal('PROACTIVE_INSIGHT'),
+  id: z.string(),
+  title: z.string(),
+  body: z.string(),
+  tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT'),
+  triggerSource: z.string().trim().min(1).max(80),
+  actions: z.array(AskActionSchema).max(3).default([]),
+});
+
 const GroupedListItemSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -337,6 +358,7 @@ const ErrorStateBlockSchema = z.object({ type: z.literal('ERROR_STATE'), id: z.s
 
 export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   SummaryBlockSchema,
+  ProactiveInsightBlockSchema,
   GroupedListBlockSchema,
   TableBlockSchema,
   CapabilityListBlockSchema,

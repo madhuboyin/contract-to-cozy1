@@ -45,7 +45,7 @@ export const QUERY_ENVELOPE_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['raw-domain-records'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['BOUNDARY', 'EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'SUMMARY'],
+  expectedBlockTypes: ['BOUNDARY', 'EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'PROACTIVE_INSIGHT', 'SUMMARY'],
   expectedCanonicalCalls: [{ id: 'intelligence-envelope.query', version: '1.0' }],
   prohibitedCanonicalCalls: ['inspection-findings.review', 'home-actions.feed'],
   modelDisabledCase: { message: 'Query the intelligence envelope for my home', expectedOperationId: 'INTELLIGENCE_ENVELOPE_QUERY' },

@@ -67,7 +67,7 @@ export const MAINTENANCE_SKILL = Object.freeze({
     reversibility: 'PARTIALLY_REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST', 'BOUNDARY'],
   dependencies: [
     ...[PROPERTY_IDENTITY_CONTEXT_PROVIDER, MAINTENANCE_TASK_CONTEXT_PROVIDER].map((provider) => ({
       type: 'CONTEXT_PROVIDER' as const,
