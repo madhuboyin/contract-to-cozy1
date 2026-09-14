@@ -18,6 +18,7 @@ const {
   editCaptureEventCandidate,
   editCaptureWarrantyCandidate,
   GoalCandidateAttachPayloadSchema,
+  CaptureNotificationRequestPayloadSchema,
 } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
 
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger call
@@ -225,6 +226,109 @@ test('isValidGoalCandidate enforces MIN_GOAL_EXTRACTION_CONFIDENCE -- a confiden
   assert.equal(isValidGoalCandidate(goal(MIN_GOAL_EXTRACTION_CONFIDENCE - 0.01)), false);
   assert.equal(isValidGoalCandidate(goal(MIN_GOAL_EXTRACTION_CONFIDENCE)), true);
   assert.equal(isValidGoalCandidate(goal(1)), true);
+});
+
+// External review, 2026-09-14 (FRD §10/§29): persistCandidates's own
+// transaction marked the triggering ASK_EXTRACTION_REQUESTED event PROCESSED
+// atomically with the FACT/EVENT/WARRANTY/EVIDENCE rows it creates, but the
+// proactive notification pointing the homeowner at them ran as a plain,
+// non-durable call AFTER that transaction committed -- a crash between the
+// two, or the notification's own previously-swallowed send failure, left the
+// candidates safely saved but the homeowner's nudge permanently lost, with
+// no retry path. Fixed with the exact same durable-DomainEvent pattern as
+// ASK_GOAL_CANDIDATE_ATTACH_REQUESTED above -- these tests cover that
+// ordering and the new event's own claim/complete/fail/cancel lifecycle.
+test('requestCaptureNotification is called inside the transaction, before the PROCESSED marking, and only for NEEDS_CONFIRMATION rows', () => {
+  const idx = captureSource.indexOf('async function persistCandidates(');
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  const txIdx = body.indexOf('await prisma.$transaction(async (tx) => {');
+  const requestIdx = body.indexOf('await requestCaptureNotification(', txIdx);
+  const processedIdx = body.indexOf("status: 'PROCESSED'", txIdx);
+  assert.ok(requestIdx > txIdx, 'the capture-notification event must be requested inside the transaction');
+  assert.ok(processedIdx > requestIdx, 'the triggering event is marked PROCESSED only after the notification intent is durably requested');
+  const requestCallBlock = body.slice(requestIdx, body.indexOf(');', requestIdx));
+  assert.match(requestCallBlock, /status === 'NEEDS_CONFIRMATION'/);
+});
+
+test('runConversationalCaptureForTurn delivers the capture-notification event when timedOut, and cancels it as redundant when the turn finished within budget', () => {
+  const idx = captureSource.indexOf('export async function runConversationalCaptureForTurn(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /if \(timedOut\) \{\s*await claimAndProcessCaptureNotificationEvent\(notificationEventId\);/);
+  assert.match(body, /\} else \{\s*await cancelRedundantCaptureNotification\(notificationEventId\);/);
+});
+
+test('processAskExtractionRequestedEvent (the always-delayed worker path) always attempts delivery, never cancellation', () => {
+  const idx = captureSource.indexOf('export async function processAskExtractionRequestedEvent(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /await claimAndProcessCaptureNotificationEvent\(notificationEventId\)/);
+  assert.doesNotMatch(body, /cancelRedundantCaptureNotification/);
+});
+
+test('processCaptureNotificationEvent re-resolves current NEEDS_CONFIRMATION status rather than trusting the stored payload blindly, sends, then marks its own event PROCESSED guarded on claimedAttempts', () => {
+  const idx = captureSource.indexOf('export async function processCaptureNotificationEvent(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /CaptureNotificationRequestPayloadSchema\.parse\(event\.payload\)/);
+  assert.match(body, /status: 'NEEDS_CONFIRMATION'/);
+  assert.match(body, /await notifyDelayedCaptureCandidatesReady\(/);
+  assert.match(body, /where: \{ id: event\.id, attempts: claimedAttempts \}/);
+  assert.match(body, /status: 'PROCESSED'/);
+});
+
+test('claimAndProcessCaptureNotificationEvent claims PENDING -> PROCESSING before processing, and marks FAILED with backoff on failure -- never silently drops the event', () => {
+  const idx = captureSource.indexOf('async function claimAndProcessCaptureNotificationEvent(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /status: 'PENDING', availableAt: \{ lte: now \}/);
+  assert.match(body, /status: 'PROCESSING', attempts: \{ increment: 1 \}/);
+  assert.match(body, /status: 'FAILED'/);
+  assert.match(body, /availableAt: new Date\(Date\.now\(\) \+ 60_000\)/);
+});
+
+test('cancelRedundantCaptureNotification marks a still-PENDING event PROCESSED as a compare-and-swap, without ever calling the actual notification send', () => {
+  const idx = captureSource.indexOf('async function cancelRedundantCaptureNotification(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /where: \{ id: eventId, status: 'PENDING' \}/);
+  assert.match(body, /status: 'PROCESSED'/);
+  assert.doesNotMatch(body, /notifyDelayedCaptureCandidatesReady/);
+});
+
+test('the new ASK_CAPTURE_NOTIFICATION_REQUESTED event is idempotent per triggering event id, the same deterministic-identity convention every other candidate-derived row uses', () => {
+  const idx = captureSource.indexOf('async function requestCaptureNotification(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /const idempotencyKey = `ask-capture-notify-request:\$\{triggerKey\}`;/);
+  assert.match(body, /type: 'ASK_CAPTURE_NOTIFICATION_REQUESTED' as any/);
+  assert.match(body, /status: 'PENDING'/);
+});
+
+test('CaptureNotificationRequestPayloadSchema accepts a well-formed payload and rejects a malformed one, rather than trusting a stored DomainEvent.payload blindly', () => {
+  const valid = {
+    payloadVersion: 1,
+    userId: 'user-1',
+    propertyId: 'property-1',
+    sessionId: 'session-1',
+    triggerKey: 'domain-event-1',
+    executionIds: ['execution-1'],
+  };
+  assert.deepEqual(CaptureNotificationRequestPayloadSchema.parse(valid), valid);
+  assert.deepEqual(CaptureNotificationRequestPayloadSchema.parse({ ...valid, executionIds: ['a', 'b', 'c'] }).executionIds, ['a', 'b', 'c']);
+  assert.throws(() => CaptureNotificationRequestPayloadSchema.parse({ ...valid, executionIds: [] }));
+  assert.throws(() => CaptureNotificationRequestPayloadSchema.parse({ ...valid, executionIds: ['a', 'b', 'c', 'd'] }));
+  assert.throws(() => CaptureNotificationRequestPayloadSchema.parse({ ...valid, userId: '' }));
+});
+
+test('notifyDelayedCaptureCandidatesReady throws on failure instead of swallowing it, so processCaptureNotificationEvent can leave its own event retryable', () => {
+  const notificationSource = readFileSync(resolve(__dirname, '../../src/services/ask/askNotificationContinuation.service.ts'), 'utf8');
+  const idx = notificationSource.indexOf('export async function notifyDelayedCaptureCandidatesReady(');
+  assert.ok(idx > 0);
+  const body = notificationSource.slice(idx, notificationSource.indexOf('\n}\n', idx));
+  const catchIdx = body.indexOf('} catch (error) {');
+  assert.ok(catchIdx > 0);
+  assert.match(body.slice(catchIdx), /throw error;/);
 });
 
 test('filterValidCandidates drops a low-confidence GOAL candidate but keeps a valid one alongside it, preserving a later WARRANTY\'s linkedEventCandidateIndex', () => {

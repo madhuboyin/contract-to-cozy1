@@ -9430,6 +9430,20 @@ enum DomainEventType {
   // triggering event PROCESSED. See conversationalCapture.ts's
   // processGoalCandidateAttachEvent.
   ASK_GOAL_CANDIDATE_ATTACH_REQUESTED
+  // External review, 2026-09-14 (FRD §10/§29): persistCandidates's own
+  // transaction marks the triggering ASK_EXTRACTION_REQUESTED event
+  // PROCESSED atomically with the FACT/EVENT/WARRANTY/EVIDENCE rows it
+  // creates, but the proactive notification pointing the homeowner at them
+  // (notifyDelayedCaptureCandidatesReady) used to run as a plain, non-
+  // durable call AFTER that transaction committed -- a crash between the
+  // two, or a swallowed notification failure, left the candidates safely
+  // saved but the homeowner's nudge permanently lost, with no retry path.
+  // Same durability fix as ASK_GOAL_CANDIDATE_ATTACH_REQUESTED above: the
+  // durable INTENT to notify is created inside persistCandidates's own
+  // transaction; the actual notification send is a separate, retryable
+  // DomainEvent. See conversationalCapture.ts's requestCaptureNotification/
+  // processCaptureNotificationEvent.
+  ASK_CAPTURE_NOTIFICATION_REQUESTED
 }
 
 enum DomainEventStatus {

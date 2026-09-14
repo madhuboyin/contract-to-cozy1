@@ -1435,6 +1435,167 @@ async function claimAndProcessGoalAttachEvent(eventId: string): Promise<Persiste
   }
 }
 
+// External review, 2026-09-14 (FRD §10/§29): the durable payload for
+// ASK_CAPTURE_NOTIFICATION_REQUESTED -- same shape/rationale as
+// GoalCandidateAttachPayloadSchema above (a plain, already-resolved copy of
+// exactly what notifyDelayedCaptureCandidatesReady needs, not a live object
+// that can't survive a JSON round-trip through DomainEvent.payload).
+// `triggerKey` is the SAME value the pre-durable-event version of this
+// notification already used as its deduplicationKey (the triggering
+// ASK_EXTRACTION_REQUESTED event's own id) -- preserved here so switching to
+// this durable mechanism doesn't change the notification's own dedup
+// identity for anything already sent under the old, non-durable call.
+export const CaptureNotificationRequestPayloadSchema = z.object({
+  payloadVersion: z.literal(1),
+  userId: z.string().trim().min(1),
+  propertyId: z.string().trim().min(1),
+  sessionId: z.string().trim().min(1),
+  triggerKey: z.string().trim().min(1),
+  // Bounded to MAX_EXTRACTION_CANDIDATES_PER_TURN (3) -- the same per-turn
+  // cap the candidates array these ids are drawn from already enforces.
+  executionIds: z.array(z.string().trim().min(1)).min(1).max(3),
+});
+
+/**
+ * Creates the durable ASK_CAPTURE_NOTIFICATION_REQUESTED event, inside the
+ * caller's own transaction -- called from persistCandidates's transaction,
+ * so this event's existence is committed atomically with the FACT/EVENT/
+ * WARRANTY/EVIDENCE rows and the triggering ASK_EXTRACTION_REQUESTED
+ * completion write. Idempotent on the triggering event's own id (one
+ * notification-intent per extraction attempt, matching every other
+ * candidate-derived row in this file's own deterministic-identity
+ * convention). Returns null without creating anything when there is nothing
+ * to notify about (no NEEDS_CONFIRMATION rows this turn) -- a GOAL-only or
+ * empty extraction has no pending confirmation for the homeowner to miss.
+ */
+async function requestCaptureNotification(
+  tx: Prisma.TransactionClient,
+  input: ConversationalCaptureInput,
+  triggerKey: string,
+  executionIds: readonly string[],
+): Promise<{ id: string } | null> {
+  if (executionIds.length === 0) return null;
+  const idempotencyKey = `ask-capture-notify-request:${triggerKey}`;
+  const payload: z.infer<typeof CaptureNotificationRequestPayloadSchema> = {
+    payloadVersion: 1,
+    userId: input.userId,
+    propertyId: input.propertyId,
+    sessionId: input.sessionId,
+    triggerKey,
+    executionIds: [...executionIds],
+  };
+  return tx.domainEvent.upsert({
+    where: { idempotencyKey },
+    create: {
+      type: 'ASK_CAPTURE_NOTIFICATION_REQUESTED' as any,
+      status: 'PENDING',
+      propertyId: input.propertyId,
+      userId: input.userId,
+      idempotencyKey,
+      payload: payload as unknown as Prisma.InputJsonValue,
+    },
+    update: {},
+  });
+}
+
+/**
+ * The actual notification-send work for one ASK_CAPTURE_NOTIFICATION_REQUESTED
+ * event -- exported for the workers app's own consumer
+ * (processDomainEvents.job.ts). Self-completing (marks its own event
+ * PROCESSED), mirroring processGoalCandidateAttachEvent's own shape exactly.
+ * Re-resolves current execution status rather than trusting the payload's
+ * own executionIds blindly -- a homeowner may have already confirmed (or a
+ * concurrent request already resolved) one of these between persistCandidates
+ * committing and this event being processed, and an already-resolved
+ * execution should not get a "come confirm this" nudge. Never throws when
+ * there is nothing left to notify about (correctly marks PROCESSED, not an
+ * error); DOES throw (leaving the event PENDING/FAILED for retry) when the
+ * actual send fails, per notifyDelayedCaptureCandidatesReady's own updated
+ * contract.
+ */
+export async function processCaptureNotificationEvent(
+  event: { id: string; payload: unknown },
+  claimedAttempts: number,
+): Promise<void> {
+  const payload = CaptureNotificationRequestPayloadSchema.parse(event.payload);
+  const executions = await prisma.askExecution.findMany({
+    where: { id: { in: payload.executionIds }, status: 'NEEDS_CONFIRMATION' },
+    select: { id: true },
+  });
+  await notifyDelayedCaptureCandidatesReady({
+    userId: payload.userId,
+    propertyId: payload.propertyId,
+    sessionId: payload.sessionId,
+    triggerKey: payload.triggerKey,
+    executions,
+  });
+  await prisma.domainEvent.updateMany({
+    where: { id: event.id, attempts: claimedAttempts },
+    data: { status: 'PROCESSED', processedAt: new Date(), processingStartedAt: null, leaseExpiresAt: null },
+  });
+}
+
+/**
+ * The inline half of the notification-durability fix: claims and attempts
+ * one ASK_CAPTURE_NOTIFICATION_REQUESTED event right after persistCandidates's
+ * own transaction commits, for the async-fallback tail ONLY (a slow
+ * extraction attempt past its inline budget, or the worker's own
+ * crash-recovery consumer) -- mirrors claimAndProcessGoalAttachEvent's own
+ * shape exactly. A lost claim race, a send failure, or a crash here all
+ * leave the event PENDING/FAILED for the worker's own poller to retry via
+ * the standard backoff/dead-letter contract -- never silently dropped, which
+ * is precisely the gap this whole mechanism exists to close. Never throws,
+ * so one notification event's failure can never affect the turn it came
+ * from.
+ */
+async function claimAndProcessCaptureNotificationEvent(eventId: string): Promise<void> {
+  const now = new Date();
+  const claimed = await prisma.domainEvent.updateMany({
+    where: { id: eventId, status: 'PENDING', availableAt: { lte: now } },
+    data: { status: 'PROCESSING', attempts: { increment: 1 }, processingStartedAt: now, leaseExpiresAt: new Date(now.getTime() + DOMAIN_EVENT_LEASE_MS) },
+  });
+  if (claimed.count !== 1) return;
+  const claimedRow = await prisma.domainEvent.findUnique({ where: { id: eventId }, select: { attempts: true, payload: true } });
+  if (!claimedRow) return;
+  const claimedAttempts = claimedRow.attempts;
+  try {
+    await processCaptureNotificationEvent({ id: eventId, payload: claimedRow.payload }, claimedAttempts);
+  } catch (error) {
+    logger.warn({ error, eventId }, '[ask-conversational-capture] inline capture-notification attempt failed; leaving for worker retry');
+    await prisma.domainEvent.updateMany({
+      where: { id: eventId, attempts: claimedAttempts },
+      data: {
+        status: 'FAILED',
+        lastError: error instanceof Error ? error.message.slice(0, 2000) : 'Unknown error',
+        availableAt: new Date(Date.now() + 60_000),
+        processingStartedAt: null,
+        leaseExpiresAt: null,
+      },
+    }).catch(() => undefined);
+  }
+}
+
+/**
+ * The fast, within-budget path's counterpart to claimAndProcessCaptureNotificationEvent:
+ * this turn's capture candidates were already delivered inline via the
+ * response's own childExecutions field, so the separately-requested
+ * proactive notification would be pure noise -- cancels it as a no-op
+ * rather than leaving it PENDING for the worker's poller to eventually fire
+ * a redundant "come confirm this" nudge for something the homeowner already
+ * saw this same turn. Guarded on the event still being PENDING (a
+ * compare-and-swap, not an unconditional write) so this can never race a
+ * genuine in-flight claim/send -- if something else already claimed it, this
+ * is a harmless no-op and that attempt's own outcome stands.
+ */
+async function cancelRedundantCaptureNotification(eventId: string): Promise<void> {
+  await prisma.domainEvent.updateMany({
+    where: { id: eventId, status: 'PENDING' },
+    data: { status: 'PROCESSED', processedAt: new Date(), processingStartedAt: null, leaseExpiresAt: null },
+  }).catch((error) => {
+    logger.warn({ error, eventId }, '[ask-conversational-capture] failed to cancel a redundant, already-delivered-inline capture notification');
+  });
+}
+
 /**
  * Code review finding (2026-09-13): this used to take a markProcessed flag
  * and, for the worker path, rely on processDomainEvents.job.ts's own
@@ -1459,7 +1620,7 @@ async function persistCandidates(
   rawCandidates: ExtractionCandidate[],
   input: ConversationalCaptureInput,
   recentDocuments: readonly RecentDocumentContext[] = [],
-): Promise<PersistedCaptureExecution[]> {
+): Promise<{ executions: PersistedCaptureExecution[]; notificationEventId: string | null }> {
   const validCandidates = filterValidCandidates(rawCandidates);
   // Ask Cozy Stage 3, Phase 6: GOAL candidates are split out here, before
   // the transaction below, and given their own durable
@@ -1486,7 +1647,7 @@ async function persistCandidates(
   // at either call site individually.
   const goalCandidates = readAskOperationalControls().askGoalCaptureEnabled ? rawGoalCandidates : [];
   const now = new Date();
-  const { created, goalAttachEvents } = await prisma.$transaction(async (tx) => {
+  const { created, goalAttachEvents, notificationEvent } = await prisma.$transaction(async (tx) => {
     // Applied even for zero candidates (code review finding, 2026-09-13):
     // a stale attempt whose claim was already reclaimed must not mark the
     // event PROCESSED out from under the attempt that reclaimed it.
@@ -1565,6 +1726,21 @@ async function persistCandidates(
       goalAttachEvents.push(await requestGoalCandidateAttachment(tx, candidate, index, input));
     }
 
+    // External review, 2026-09-14 (FRD §10/§29): the durable INTENT to
+    // proactively notify is created here, inside this same transaction --
+    // committed atomically with the FACT/EVENT/WARRANTY/EVIDENCE rows above
+    // and the triggering event's own PROCESSED marking below, so a crash
+    // after this transaction commits can never lose the notification outright
+    // (see requestCaptureNotification's own header comment). Only for rows
+    // that actually need a homeowner nudge -- NEEDS_CONFIRMATION only, same
+    // filter the old, non-durable notifyCaptureCandidatesDelivered used.
+    const notificationEvent = await requestCaptureNotification(
+      tx,
+      input,
+      domainEventId,
+      created.filter((execution) => execution.status === 'NEEDS_CONFIRMATION').map((execution) => execution.id),
+    );
+
     await tx.domainEvent.update({
       where: { id: domainEventId },
       data: {
@@ -1575,7 +1751,7 @@ async function persistCandidates(
         payload: { processingOutcome: { candidateCount: created.length + goalAttachEvents.length } },
       },
     });
-    return { created, goalAttachEvents };
+    return { created, goalAttachEvents, notificationEvent };
   });
 
   // Outside the transaction above, deliberately (see processGoalCandidate's
@@ -1594,34 +1770,7 @@ async function persistCandidates(
     const execution = await claimAndProcessGoalAttachEvent(event.id);
     if (execution) goalExecutions.push(execution);
   }
-  return [...created, ...goalExecutions];
-}
-
-// External review, 2026-09-13 (FRD §10/§29; implementation plan §9's
-// unclosed dependency on Phase 5 -- see notifyDelayedCaptureCandidatesReady's
-// own header comment for the full finding). Only ever called for the
-// async-fallback tail (never for a synchronous, within-budget attempt --
-// that case is already delivered inline via the turn response's own
-// childExecutions field, and a second notification would be redundant, not
-// merely harmless duplication of a real signal). Filters to NEEDS_CONFIRMATION
-// rows only: GOAL candidates (Phase 6) complete silently by design (the
-// materiality carve-out means there is nothing to confirm), and a replayed
-// worker attempt could see an `existing` row already resolved by the
-// homeowner between attempts -- neither should trigger a "come confirm
-// this" nudge.
-async function notifyCaptureCandidatesDelivered(
-  input: Pick<ConversationalCaptureInput, 'userId' | 'propertyId' | 'sessionId'>,
-  triggerKey: string,
-  executions: readonly PersistedCaptureExecution[],
-): Promise<void> {
-  const pending = executions.filter((execution) => execution.status === 'NEEDS_CONFIRMATION');
-  await notifyDelayedCaptureCandidatesReady({
-    userId: input.userId,
-    propertyId: input.propertyId,
-    sessionId: input.sessionId,
-    triggerKey,
-    executions: pending,
-  });
+  return { executions: [...created, ...goalExecutions], notificationEventId: notificationEvent?.id ?? null };
 }
 
 /**
@@ -1704,11 +1853,31 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
         fetchActiveDecisionThreadContext(input.propertyId),
       ]);
       const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments, activeDecisionThread);
-      const created = await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
-      if (timedOut) {
-        await notifyCaptureCandidatesDelivered(input, domainEventId, created).catch((error) => {
-          logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] delayed capture-ready notification failed');
-        });
+      const { executions: created, notificationEventId } = await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
+      // External review, 2026-09-14: the durable notification-intent event
+      // (requestCaptureNotification, inside persistCandidates's own
+      // transaction) always exists now if there's anything to notify about --
+      // `timedOut` decides only whether THIS turn actually delivers it
+      // (the async-fallback tail) or cancels it as redundant (the fast,
+      // within-budget case already covered by this same response's own
+      // childExecutions). Either way the event is resolved here-and-now on
+      // the happy path; the worker's own poller remains the backstop if this
+      // attempt itself fails or the process crashes before reaching here.
+      // Disclosed, narrow residual race, same class already accepted for
+      // `timedOut` itself: if this attempt finishes juuust inside budget,
+      // reads `timedOut === false` (decides "cancel"), and the timeout THEN
+      // fires while cancelRedundantCaptureNotification is still in flight
+      // (Promise.race hasn't resolved yet, since this async body hasn't
+      // returned), the race resolves to `[]` for the turn's own response
+      // while the real notification was just cancelled -- a millisecond-
+      // scale window, not the unconditional, guaranteed loss this whole
+      // mechanism exists to close.
+      if (notificationEventId) {
+        if (timedOut) {
+          await claimAndProcessCaptureNotificationEvent(notificationEventId);
+        } else {
+          await cancelRedundantCaptureNotification(notificationEventId);
+        }
       }
       return created;
     } catch (error) {
@@ -1767,16 +1936,20 @@ export async function processAskExtractionRequestedEvent(
     contextVersion: parent.contextVersion,
     skipDueToRoutedCapture: false,
   };
-  const created = await persistCandidates(event.id, claimedAttempts, candidates, captureInput, recentDocuments);
-  // External review, 2026-09-13: this function only ever runs on the
-  // async-fallback tail by construction (the workers app's own consumer
+  const { executions: created, notificationEventId } = await persistCandidates(event.id, claimedAttempts, candidates, captureInput, recentDocuments);
+  // External review, 2026-09-13/2026-09-14: this function only ever runs on
+  // the async-fallback tail by construction (the workers app's own consumer
   // calls it after ITS claim loop already won the event -- see this
   // function's own header comment) -- unlike runConversationalCaptureForTurn's
   // inline attempt, there is no "delivered via this turn's response" case to
-  // distinguish here, so this always notifies rather than checking a
-  // timed-out flag.
-  await notifyCaptureCandidatesDelivered(captureInput, event.id, created).catch((error) => {
-    logger.warn({ error, parentExecutionId }, '[ask-conversational-capture] delayed capture-ready notification failed');
-  });
+  // distinguish here, so this always attempts delivery rather than checking
+  // a timed-out flag. The durable notification-intent event (created inside
+  // persistCandidates's own transaction) means a failure here is no longer a
+  // permanent loss -- it leaves the event PENDING/FAILED for the worker's
+  // own generic poller to retry via the standard backoff/dead-letter
+  // contract, same as every other DomainEvent type.
+  if (notificationEventId) {
+    await claimAndProcessCaptureNotificationEvent(notificationEventId);
+  }
   return { candidateCount: created.length };
 }

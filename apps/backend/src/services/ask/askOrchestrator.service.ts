@@ -8120,8 +8120,9 @@ async function submitNextActionMissingFactCapture(
     throw error;
   }
   askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'SUBMITTED' });
+  let capture: Awaited<ReturnType<typeof capturePropertyFact>>;
   try {
-    await capturePropertyFact(propertyId, userId, factKey, {
+    capture = await capturePropertyFact(propertyId, userId, factKey, {
       value: answer.value,
       sourceType: 'USER_REPORTED',
       attribution: 'FIRSTHAND',
@@ -8134,17 +8135,71 @@ async function submitNextActionMissingFactCapture(
     }
     throw error;
   }
+  // External review, 2026-09-14: this used to keep the turn's ORIGINAL
+  // blocks verbatim -- the next-actions CAPABILITY_LIST block's own
+  // NEEDS_CONTEXT readiness label for this capability would still read
+  // "more home details will improve the result" even though the homeowner
+  // just supplied exactly that detail. Recompute the next-actions block
+  // against the property context capturePropertyFact just wrote (its own
+  // returned contextVersion, not the stale pre-capture one), the same way
+  // executeOperation's finalize() builds it for a routed turn. Never lets a
+  // recompute failure turn an already-successful, already-durable capture
+  // into a failure -- falls back to the stale blocks/captureRequests exactly
+  // as before this fix if anything here throws.
+  let refreshedBlocks = stored.blocks ?? [];
+  let refreshedCaptureRequests = (stored.captureRequests ?? []).filter((request) => request.requirementId !== input.requirementId);
+  try {
+    if (execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS) {
+      const recent = await prisma.askExecution.findMany({
+        where: { sessionId: execution.sessionId, userId, id: { not: execution.id }, status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        select: { operationId: true },
+      });
+      const recentCompletedCapabilityIds = new Set(
+        recent
+          .map((item) => (item.operationId ? ASK_OPERATION_CAPABILITY[item.operationId as AskOperationId] : undefined))
+          .filter((capabilityId): capabilityId is string => Boolean(capabilityId)),
+      );
+      const launchContextRaw = execution.launchContextJson && typeof execution.launchContextJson === 'object' && !Array.isArray(execution.launchContextJson)
+        ? execution.launchContextJson as { actionId?: unknown; journeyId?: unknown; entityType?: unknown; entityId?: unknown }
+        : null;
+      const nextActions = await buildAskNextActionsBlock({
+        propertyId,
+        userId,
+        operationId: execution.operationId as AskOperationId,
+        recentCompletedCapabilityIds,
+        launchContext: launchContextRaw ? {
+          actionId: typeof launchContextRaw.actionId === 'string' ? launchContextRaw.actionId : null,
+          journeyId: typeof launchContextRaw.journeyId === 'string' ? launchContextRaw.journeyId : null,
+          entityType: typeof launchContextRaw.entityType === 'string' ? launchContextRaw.entityType : null,
+          entityId: typeof launchContextRaw.entityId === 'string' ? launchContextRaw.entityId : null,
+        } : null,
+        contextVersion: capture.contextVersion,
+      });
+      refreshedBlocks = (stored.blocks ?? []).filter((block) => !(block && typeof block === 'object' && (block as { type?: unknown; id?: unknown }).type === 'CAPABILITY_LIST' && (block as { type?: unknown; id?: unknown }).id === 'ask-next-actions'));
+      if (nextActions.block) refreshedBlocks.push(nextActions.block);
+      // nextActions.captureRequests is at most one (buildAskNextActionsBlock's
+      // own bound) -- refreshedCaptureRequests is otherwise already empty at
+      // this point (the one requirement this function handles is always
+      // filtered above), so this never risks exceeding the shared 3-item cap.
+      refreshedCaptureRequests = [...refreshedCaptureRequests, ...nextActions.captureRequests];
+    }
+  } catch (error) {
+    logger.warn({ error, executionId: execution.id }, '[submitNextActionMissingFactCapture] next-actions recompute failed; keeping the pre-capture blocks');
+  }
   const saved = await prisma.askExecution.update({
     where: { id: execution.id },
     data: {
+      contextVersion: capture.contextVersion,
       resultJson: asInputJson({
         schemaVersion: stored.schemaVersion ?? ASK_RESPONSE_SCHEMA_VERSION,
-        blocks: stored.blocks ?? [],
+        blocks: refreshedBlocks,
         // The fulfilled requirement is removed rather than kept around
         // answered -- this captureRequest is a one-shot prompt, not a
         // form the homeowner can revisit, matching allowNotSure's own
         // "dismiss, don't re-ask" framing on the frontend.
-        captureRequests: (stored.captureRequests ?? []).filter((request) => request.requirementId !== input.requirementId),
+        captureRequests: refreshedCaptureRequests,
         confirmation: stored.confirmation ?? null,
         clarification: stored.clarification ?? null,
         suggestions: stored.suggestions ?? [],

@@ -19,6 +19,7 @@ import {
 import {
   processAskExtractionRequestedEvent,
   processGoalCandidateAttachEvent,
+  processCaptureNotificationEvent,
 } from '@worker-shared/services/ask/conversationalUnderstanding/conversationalCapture';
 import {
   processRadarNotificationMaterializeEvent,
@@ -48,6 +49,7 @@ export interface ProcessDomainEventsDeps {
   askExtractionRequested?: typeof processAskExtractionRequestedEvent;
   radarNotificationMaterialize?: typeof processRadarNotificationMaterializeEvent;
   goalCandidateAttach?: typeof processGoalCandidateAttachEvent;
+  captureNotification?: typeof processCaptureNotificationEvent;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -61,6 +63,7 @@ const defaultDeps: ProcessDomainEventsDeps = {
   askExtractionRequested: processAskExtractionRequestedEvent,
   radarNotificationMaterialize: processRadarNotificationMaterializeEvent,
   goalCandidateAttach: processGoalCandidateAttachEvent,
+  captureNotification: processCaptureNotificationEvent,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -375,6 +378,23 @@ function handleGoalCandidateAttach(ev: any, deps: ProcessDomainEventsDeps) {
   );
 }
 
+// External review, 2026-09-14 (FRD §10/§29): the proactive notification
+// pointing a homeowner at their pending capture-confirmation candidates is
+// now its own durable, retryable DomainEvent instead of a plain call made
+// after the triggering ASK_EXTRACTION_REQUESTED event was already marked
+// PROCESSED -- see conversationalCapture.ts's processCaptureNotificationEvent
+// header comment for the full rationale. Self-completing (marks its own
+// event PROCESSED only on a real successful send), same shape as
+// ASK_GOAL_CANDIDATE_ATTACH_REQUESTED's own handler above -- this file's own
+// generic completion write below is guarded on status still being
+// PROCESSING, so it naturally no-ops here too.
+function handleCaptureNotification(ev: any, deps: ProcessDomainEventsDeps) {
+  return (deps.captureNotification ?? processCaptureNotificationEvent)(
+    { id: ev.id, payload: ev.payload },
+    (ev.attempts ?? 0) + 1,
+  );
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -501,6 +521,9 @@ export async function processDomainEventsJob(
           break;
         case 'ASK_GOAL_CANDIDATE_ATTACH_REQUESTED':
           processingOutcome = await handleGoalCandidateAttach(ev, deps);
+          break;
+        case 'ASK_CAPTURE_NOTIFICATION_REQUESTED':
+          await handleCaptureNotification(ev, deps);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

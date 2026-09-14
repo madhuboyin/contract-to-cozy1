@@ -59,6 +59,7 @@ function fakeDeps({
   radarNotificationMaterializeShouldFail = false,
   goalCandidateAttachResult = { id: 'goal-execution-1' },
   goalCandidateAttachShouldFail = false,
+  captureNotificationShouldFail = false,
   // Code review finding (2026-09-13): simulate the redundant success
   // completion write itself failing (successCompletionShouldThrow) and/or
   // the row having already moved past PROCESSING by the time either write
@@ -78,6 +79,7 @@ function fakeDeps({
     askExtractionRequested: [],
     radarNotificationMaterialize: [],
     goalCandidateAttach: [],
+    captureNotification: [],
   };
 
   const deps = {
@@ -171,6 +173,10 @@ function fakeDeps({
       calls.goalCandidateAttach.push({ event, claimedAttempts });
       if (goalCandidateAttachShouldFail) throw new Error('goal candidate attach handling failed');
       return goalCandidateAttachResult;
+    },
+    captureNotification: async (event, claimedAttempts) => {
+      calls.captureNotification.push({ event, claimedAttempts });
+      if (captureNotificationShouldFail) throw new Error('capture notification handling failed');
     },
   };
   return { deps, calls };
@@ -537,6 +543,64 @@ test('ASK_GOAL_CANDIDATE_ATTACH_REQUESTED handler failures use the shared retry/
   const terminal = calls.updates.find((u) => u.kind === 'terminal');
   assert.equal(terminal.args.data.status, 'FAILED');
   assert.match(terminal.args.data.lastError, /goal candidate attach handling failed/);
+});
+
+// External review, 2026-09-14 (FRD §10/§29): the proactive notification for
+// pending capture-confirmation candidates is now its own durable, retryable
+// DomainEvent (created atomically inside persistCandidates's own
+// transaction) instead of a plain call made after the triggering
+// ASK_EXTRACTION_REQUESTED event was already marked PROCESSED -- see
+// conversationalCapture.ts's processCaptureNotificationEvent.
+test('processes an ASK_CAPTURE_NOTIFICATION_REQUESTED event, passing the pre-claim attempts + 1 as claimedAttempts, mirroring ASK_GOAL_CANDIDATE_ATTACH_REQUESTED\'s own contract', async () => {
+  const captureNotificationEvent = eventFixture({
+    id: 'event-capture-notify-1',
+    type: 'ASK_CAPTURE_NOTIFICATION_REQUESTED',
+    attempts: 0,
+    payload: {
+      payloadVersion: 1,
+      userId: 'user-1',
+      propertyId: 'property-1',
+      sessionId: 'session-1',
+      triggerKey: 'domain-event-1',
+      executionIds: ['execution-child-1'],
+    },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [captureNotificationEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.captureNotification.length, 1);
+  assert.equal(calls.captureNotification[0].claimedAttempts, 1);
+  assert.deepEqual(calls.captureNotification[0].event, { id: 'event-capture-notify-1', payload: captureNotificationEvent.payload });
+  // processCaptureNotificationEvent self-completes in real Prisma, exactly
+  // like processGoalCandidateAttachEvent -- this fake harness doesn't model
+  // that guard, so the generic completion write below still records,
+  // matching every other self-completing handler's own test shape here.
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+});
+
+test('ASK_CAPTURE_NOTIFICATION_REQUESTED handler failures use the shared retry/dead-letter path', async () => {
+  const captureNotificationEvent = eventFixture({
+    type: 'ASK_CAPTURE_NOTIFICATION_REQUESTED',
+    payload: {
+      payloadVersion: 1,
+      userId: 'user-1',
+      propertyId: 'property-1',
+      sessionId: 'session-1',
+      triggerKey: 'domain-event-1',
+      executionIds: ['execution-child-1'],
+    },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [captureNotificationEvent], captureNotificationShouldFail: true });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((u) => u.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /capture notification handling failed/);
 });
 
 test('processes an ASK_EXTRACTION_REQUESTED event, passing the pre-claim attempts + 1 as claimedAttempts', async () => {

@@ -276,6 +276,19 @@ export async function notifyWithAskContinuation(input: NotifyWithAskContinuation
 // invoking any notification mechanism -- confirmed by grep before writing
 // this.
 //
+// External review, 2026-09-14: this function used to catch and swallow its
+// own failure here (see the old comment on the catch block below), which
+// meant a real notification-send failure looked identical to success to any
+// caller -- there was no way to distinguish "delivered" from "silently
+// dropped." Fixed by moving the durability contract to the CALLER
+// (conversationalCapture.ts's ASK_CAPTURE_NOTIFICATION_REQUESTED DomainEvent
+// -- see requestCaptureNotification's own header comment): this function now
+// THROWS on failure, and its one caller, processCaptureNotificationEvent,
+// only marks that event PROCESSED when this call actually succeeds, leaving
+// it PENDING/FAILED for the standard worker backoff/dead-letter retry
+// otherwise -- the same "self-completing on real success only" contract
+// every other DomainEvent handler in this codebase already follows.
+//
 // Deliberately NOT built on `notifyWithAskContinuation`/
 // `createAskNotificationContinuation` above: those synthesize a brand-new
 // AskExecution from a template for a background producer that has no
@@ -328,10 +341,14 @@ export async function notifyDelayedCaptureCandidatesReady(input: {
       },
     });
   } catch (error) {
-    // Never let this delivery signal turn an already-durable, already-
-    // idempotent capture into a failure -- the fact/event/warranty/evidence
-    // row this points at is safe and correctly persisted regardless; only
-    // the homeowner's proactive nudge toward it is at risk here.
+    // External review, 2026-09-14: this used to log and swallow here,
+    // meaning a real send failure was indistinguishable from success to the
+    // caller. Re-thrown now -- the fact/event/warranty/evidence row this
+    // points at is still safe and correctly persisted regardless of what
+    // happens here, but the caller (processCaptureNotificationEvent) needs
+    // to see this failure to leave its own DomainEvent retryable rather than
+    // marking a failed send PROCESSED.
     logger.error({ err: error, triggerKey: input.triggerKey }, '[notifyDelayedCaptureCandidatesReady] Failed to create capture-ready notification');
+    throw error;
   }
 }
