@@ -1241,8 +1241,17 @@ async function maintenanceTaskUpdateResult(userId: string, propertyId: string, m
     confirmation: {
       confirmationId: `maintenance-update-${match.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${match.title}?`,
       description: 'This command writes through the canonical Maintenance service and preserves downstream reconciliation.',
+      // MAINT-006: reschedule must show current vs. proposed date, plus any
+      // recurrence consequence -- a task holds one mutable nextDueDate (no
+      // separate occurrence record, see FRD §18's MAINT-007 resolution), so
+      // the only consequence to disclose is that the recurring pattern
+      // itself is unaffected; only this next occurrence's date changes.
       fields: [{ label: 'Task', value: match.title }, { label: 'Action', value: actionLabel },
+        ...(action === 'RESCHEDULE' ? [{ label: 'Current due date', value: humanDate(match.nextDueDate) ?? 'Not scheduled' }] : []),
         ...(dueDate ? [{ label: 'New due date', value: dueDate }] : []), ...(priority ? [{ label: 'New priority', value: priority }] : []),
+        ...(action === 'RESCHEDULE' && match.isRecurring && match.frequency
+          ? [{ label: 'Recurrence', value: `Repeats ${match.frequency.toLowerCase().replace(/_/g, ' ')}; only this next due date changes` }]
+          : []),
         ...(assignee ? [{ label: 'Assignee', value: assignee.user.email }] : [])],
       confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Maintenance record.`, expiresAt: expiresAt.toISOString(),
     }, suggestions: [],
@@ -7302,7 +7311,7 @@ function mapPersistedExecution(execution: {
       ? { id: currentSkill.id, version: currentSkill.version, domain: currentSkill.domain }
       : null;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown }
     : {};
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
   const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;
@@ -7326,6 +7335,7 @@ function mapPersistedExecution(execution: {
     skill,
     skillHandoff: stored.skillHandoff ?? null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
+    continuesExecutionId: typeof stored.continuesExecutionId === 'string' ? stored.continuesExecutionId : null,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
     captureRequests: Array.isArray(stored.captureRequests)
@@ -7757,7 +7767,11 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
+        // RES-003/MAINT-003: only a bare filter refinement (not entity/
+        // pagination/specialist/monitor continuations, which are legitimate
+        // separate answers) is marked so the frontend can update the prior
+        // card's surface instead of appending a duplicate list.
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null }),
         completedAt,
       },
     });

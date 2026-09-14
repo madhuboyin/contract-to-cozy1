@@ -323,3 +323,47 @@ Shipped and typecheck/unit-test verified, **not yet browser/E2E-verified**:
 Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean), plus targeted backend unit tests (`askMaintenancePresentation`, `askMaintenanceTaskInput`, `askMaintenanceSuggestedPrompt`, `askSeasonalMaintenance`, `askGovernance`, `askEnvelopeAndRankingBoundary` — 48/48 passing, one test's source-matching regex updated to the new registration line). No browser/Playwright run performed against this change.
 
 **Not yet started:** CONF-003 edit-versioning verification, FRESH-001/002 revalidation-at-confirmation verification, RES-003 filter-refinement-without-duplicate-list (whether `askFollowUpContext.ts`'s existing rewrite path already avoids appending a duplicate card, or needs frontend rendering changes), and the full A01–A18/A21/A23–A24 acceptance-scenario walk.
+
+## 19. Implementation status, round 2 (2026-09-14)
+
+Traced the four items §18 left open. Two turned out to already exist (built generically for every Ask confirmation, not maintenance-specific, predating this FRD); two were real gaps, now fixed.
+
+**Already correct — verified by reading the code, not built this round:**
+
+- **FRESH-001/002 (revalidate before write, invalidate a stale proposal).** `confirmMaintenanceTaskComplete`/`confirmMaintenanceTaskUpdate` (`askOrchestrator.service.ts`) both re-fetch the task at confirm-time and compare `maintenanceTaskVersion(current)` against the version captured when the proposal was shown, throwing `ASK_CONTEXT_VERSION_CONFLICT` on a mismatch. The generic `confirmAskExecution` wrapper catches that and lands the execution on a distinct "This changed before it could be confirmed" terminal state (never a false success).
+- **CONF-004/CONF-005 (no accidental double-write, distinct completed/changed states).** `confirmMaintenanceTaskComplete` distinguishes "already completed by this exact execution" (via a `completionIdempotencyKey` stored on the task, replayed idempotently) from "completed or cancelled by someone else" (version-conflict path) — satisfies A06 (recurring completes once), A10 (stale write blocked), and A11 (double-click/lost-response reconciles to one effect) without any change needed.
+
+**Real gaps found and fixed this round:**
+
+- **MAINT-006 (reschedule must show current vs. proposed date and recurrence consequence).** The reschedule confirmation only ever showed the *new* due date. Added a "Current due date" field and, for a recurring task, a "Recurrence" field disclosing that only the next due date changes (consistent with §18's MAINT-007 finding: one mutable `nextDueDate`, no series concept to preserve or break). `askOrchestrator.service.ts`, `maintenanceTaskUpdateResult()`.
+- **RES-003/MAINT-003 (filter refinement must not duplicate the list).** Confirmed the gap was real: every message — including "only show urgent" — always created a brand-new `AskExecution` and thus a brand-new full response card; `askFollowUpContext.ts`'s existing rewrite only affected internal routing, never signaled the frontend. Fixed by: (1) a new `isFilterRefinement` flag on `AskFollowUpResolution`, true only for the existing `isFilterContinuation` branch — never for entity/pagination/specialist/monitor continuations, which are legitimately separate answers; (2) a new `continuesExecutionId` field on the response contract (`ask.contract.ts`, mirrored in frontend `types.ts`), populated from that flag; (3) `AskWorkspace.tsx` now drops a superseded execution's card from the live view (nothing is deleted server-side — a session-history reload sees the same collapsed view) and labels the continuation "Updated view" instead of "Cozy response". This is a live-rendering collapse, not literal single-result-identity reuse (RES-001's three-layer model would need a real "current view mutates in place against one persisted result" mechanism to go further — flagged, not built).
+
+**Flagged, not built — needs a scope decision:** CONF-002/CONF-003 (editable confirmation proposals — "Edit" a field, invalidating the old version, before confirming). Checked every confirmation type in the app, not just maintenance: none has an edit affordance today (`ConfirmationCard` in `AskWorkspace.tsx` renders fields as read-only `<dd>` text). Building this is a generic, cross-cutting feature affecting every confirmable command, not a maintenance-only fix, and A09 in the acceptance table depends on it existing at all. Left unbuilt pending an explicit decision on whether it belongs in this slice.
+
+**Acceptance-scenario walk (§15), code-traced this round — no browser/E2E run:**
+
+| ID | Status | Basis |
+| --- | --- | --- |
+| A01 | Pass (pre-existing) | `maintenanceResult()` already returns one scoped, counted result |
+| A02 | Pass | Server-side full-collection filtering pre-existing; duplicate-list issue fixed this round |
+| A03 | Pass | "Updated view" label + card collapse, this round |
+| A04 | Pass (pre-existing) | `askFollowUpContext.test.js`: entity continuation refuses multi-candidate guesses |
+| A05 | Pass (pre-existing) | `confirmMaintenanceTaskComplete` |
+| A06 | Pass (pre-existing) | Idempotency key + recurring next-due-date in receipt |
+| A07 | Pass | Current/new date shown, this round |
+| A08 | Not re-verified | `cancelAskExecution` exists; not re-traced this round |
+| A09 | **Gap** | No editable-proposal UI exists anywhere (see above) |
+| A10 | Pass (pre-existing) | Version-conflict check in both confirm handlers |
+| A11 | Pass (pre-existing) | Confirmation-receipt claim/lease + idempotency key |
+| A12 | Not re-verified | Plausible via generic error handling; not specifically traced |
+| A13 | Pass (pre-existing) | VIEWER-role rejection in both confirm handler and `confirmAskExecution`'s role-floor check |
+| A14 | Not re-verified | Property scoping exists per-execution; not explicitly walked this round |
+| A15 | **Unverified gap** | No explicit out-of-order-response guard found in `AskWorkspace.tsx`; likely a real gap (FRESH-003) |
+| A16 | Partial | Filter forwarding fixed this round; return scroll/selection position not verified |
+| A17 | Not re-verified | Not specifically traced this round |
+| A18 | **Unverified gap** | No focus-management code traced for row completion (ACCESS-003); needs a dedicated pass |
+| A21 | Plausible pass | Suggestion arrays can be empty; not specifically traced |
+| A23 | Partial | Reload-consistent view collapse (this round); no staleness/age indicator on a historical result |
+| A24 | Pass (pre-existing) | Both confirm handlers explicitly error when the task is missing |
+
+Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean), plus 35/35 targeted backend unit tests (`askFollowUpContext`, `askEnvelopeAndRankingBoundary`, `capabilityInvokePolicyEnforcement`, `askMaintenancePresentation`, `askMaintenanceTaskInput`). No browser/Playwright run performed.

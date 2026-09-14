@@ -70,6 +70,13 @@ export interface AskFollowUpResolution {
   // read, confirmed by grep before wiring this). `null` when no structured
   // context applies -- the overwhelming majority of turns.
   suppliedInput: Record<string, unknown> | null;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: true only for the
+  // isFilterContinuation branch below -- a bare filter refinement of the
+  // active read result. Distinct from sourceExecutionId (set for every
+  // continuation kind, including entity/pagination/specialist/monitor
+  // turns, which are legitimately separate answers and must not collapse
+  // into the prior card).
+  isFilterRefinement: boolean;
 }
 
 interface PriorExecutionRow {
@@ -172,7 +179,7 @@ export async function resolveAskFollowUpMessage(input: {
   propertyId: string | null | undefined;
   message: string;
 }): Promise<AskFollowUpResolution> {
-  const fallback: AskFollowUpResolution = { effectiveMessage: input.message, forcedOperationId: null, sourceExecutionId: null, continuationCursor: null, suppliedInput: null };
+  const fallback: AskFollowUpResolution = { effectiveMessage: input.message, forcedOperationId: null, sourceExecutionId: null, continuationCursor: null, suppliedInput: null, isFilterRefinement: false };
   const entityMatch = ENTITY_CONTINUATION_PATTERN.exec(input.message);
   const isFilterContinuation = FILTER_CONTINUATION_PATTERN.test(input.message);
   const isEnvelopePagination = ENVELOPE_PAGINATION_PATTERN.test(input.message);
@@ -197,7 +204,7 @@ export async function resolveAskFollowUpMessage(input: {
       const groupStart = entityMatch.index + entityMatch[0].length - pronounSpan.length;
       const groupEnd = groupStart + pronounSpan.length;
       const rewritten = `${input.message.slice(0, groupStart)}${entityTitle}${input.message.slice(groupEnd)}`;
-      return { effectiveMessage: rewritten, forcedOperationId: null, sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: null };
+      return { effectiveMessage: rewritten, forcedOperationId: null, sourceExecutionId: prior.id, continuationCursor: null, suppliedInput: null, isFilterRefinement: false };
     }
 
     // External review [P1]: a proactive Maintenance continuation card
@@ -224,6 +231,7 @@ export async function resolveAskFollowUpMessage(input: {
           sourceExecutionId: prior.id,
           continuationCursor: null,
           suppliedInput: { taskId },
+          isFilterRefinement: false,
         };
       }
     }
@@ -240,6 +248,7 @@ export async function resolveAskFollowUpMessage(input: {
         sourceExecutionId: prior.id,
         continuationCursor: cursor,
         suppliedInput: null,
+        isFilterRefinement: false,
       };
     }
   }
@@ -251,6 +260,7 @@ export async function resolveAskFollowUpMessage(input: {
       sourceExecutionId: prior.id,
       continuationCursor: null,
       suppliedInput: null,
+      isFilterRefinement: false,
     };
   }
 
@@ -261,6 +271,7 @@ export async function resolveAskFollowUpMessage(input: {
       sourceExecutionId: prior.id,
       continuationCursor: null,
       suppliedInput: null,
+      isFilterRefinement: true,
     };
   }
 
@@ -285,6 +296,7 @@ export async function resolveAskFollowUpMessage(input: {
       sourceExecutionId: prior.id,
       continuationCursor: null,
       suppliedInput: (radarMatchId || radarEventId) ? { radarMatchId, radarEventId } : null,
+      isFilterRefinement: false,
     };
   }
 

@@ -1720,14 +1720,25 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           <div className="mx-auto max-w-3xl space-y-7">
             <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} />
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
-            {executions.map((execution) => {
+            {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: a bare
+                filter refinement ("only show urgent") creates its own
+                execution row (a fresh authoritative query is unavoidable --
+                MAINT-003 requires querying the full matching collection, not
+                re-filtering already-truncated client data), but it must
+                update the same surface rather than stack a second full list
+                under the first. The superseded execution's card is dropped
+                from the live view; nothing is deleted server-side, so a
+                session-history reload reflects the same collapsed view. */}
+            {executions
+              .filter((execution) => !executions.some((other) => other.continuesExecutionId === execution.executionId))
+              .map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
               const visibleSuggestions = execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
               return <AskActionReturnContext.Provider key={execution.executionId} value={askReturnHref}>
               <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
                 <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
-                  <h2 className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</h2>
+                  <h2 className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} onItemAction={(entityType, entityId, message) => void ask(message, undefined, { entityType: entityType ?? undefined, entityId })} />)}
                   {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
                   {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}

@@ -561,6 +561,15 @@ const AskExecutionResponseBaseSchema = z.object({
     }).default({ propertyId: null, sourceEntityType: null, sourceEntityId: null, sourceHomeActionId: null, decisionThreadId: null, workItemId: null, journeyId: null, contextVersion: null, returnDestination: null }),
   }).nullable().default(null),
   operation: z.object({ id: z.string(), version: z.string(), family: z.string() }).nullable(),
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: set only when this
+  // execution is a bare filter refinement of an existing read result (e.g.
+  // "only show urgent") -- askFollowUpContext.ts's isFilterContinuation
+  // branch already resolves the prior execution id for routing but never
+  // exposed it, so the frontend had no way to distinguish "new question"
+  // from "refine the surface I'm already looking at" and always rendered a
+  // second full response. Never set for a mutation, entity-pronoun, or
+  // pagination continuation -- those are legitimately separate turns.
+  continuesExecutionId: z.string().nullable().default(null),
   contextVersion: z.string().nullable(),
   blocks: z.array(AskPresentationBlockSchema),
   captureRequests: z.array(AskCaptureRequestSchema).max(3).default([]),
