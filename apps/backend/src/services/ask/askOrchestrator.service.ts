@@ -20,6 +20,7 @@ import {
   type SubmitAskCaptureRequest,
   type SubmitAskClarification,
   type SubmitAskConfirmation,
+  type EditAskConfirmation,
   type SubmitAskFeedback,
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
@@ -705,7 +706,7 @@ async function householdInvitationResult(
         { label: 'Role', value: invitationRoleCopy(parsed.data.role) },
         { label: 'Legal ownership', value: 'Not changed by this invitation' },
       ],
-      confirmLabel: 'Send invitation',
+      editableFields: [], confirmLabel: 'Send invitation',
       consentText: 'I confirm this recipient and access role are correct and authorize ContractToCozy to create the invitation.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -982,7 +983,7 @@ async function maintenanceTaskCreateResult(
         { label: 'Estimated cost', value: parsed.data.estimatedCostUsd == null ? 'Not recorded' : maintenanceMoney(parsed.data.estimatedCostUsd) ?? 'Not recorded' },
         { label: 'Recurrence', value: parsed.data.isRecurring && parsed.data.frequency ? parsed.data.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
       ],
-      confirmLabel: 'Create task',
+      editableFields: [], confirmLabel: 'Create task',
       consentText: 'I confirm these task details are correct and authorize adding them to this home’s shared Maintenance record.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -1153,7 +1154,7 @@ async function maintenanceTaskCompleteResult(
         { label: 'Recurrence', value: selected.isRecurring && selected.frequency ? `${selected.frequency.toLowerCase().replace(/_/g, ' ')} · next date recalculated` : 'One-time' },
         ...(projectOutcomeRequired ? [{ label: 'Project outcome', value: String(parsed.data.outcomeHealth).toLowerCase().replace(/_/g, ' ') }] : []),
       ],
-      confirmLabel: 'Mark complete',
+      editableFields: [], confirmLabel: 'Mark complete',
       consentText: 'I confirm this task was completed and authorize updating the shared Maintenance record and its related home workflows.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -1246,13 +1247,21 @@ async function maintenanceTaskUpdateResult(userId: string, propertyId: string, m
       // separate occurrence record, see FRD §18's MAINT-007 resolution), so
       // the only consequence to disclose is that the recurring pattern
       // itself is unaffected; only this next occurrence's date changes.
+      // The proposed due date for a RESCHEDULE is represented only via
+      // editableFields below (not duplicated here as read-only text) -- see
+      // CONF-002/CONF-003.
       fields: [{ label: 'Task', value: match.title }, { label: 'Action', value: actionLabel },
         ...(action === 'RESCHEDULE' ? [{ label: 'Current due date', value: humanDate(match.nextDueDate) ?? 'Not scheduled' }] : []),
-        ...(dueDate ? [{ label: 'New due date', value: dueDate }] : []), ...(priority ? [{ label: 'New priority', value: priority }] : []),
+        ...(action !== 'RESCHEDULE' && dueDate ? [{ label: 'New due date', value: dueDate }] : []),
+        ...(priority ? [{ label: 'New priority', value: priority }] : []),
         ...(action === 'RESCHEDULE' && match.isRecurring && match.frequency
           ? [{ label: 'Recurrence', value: `Repeats ${match.frequency.toLowerCase().replace(/_/g, ' ')}; only this next due date changes` }]
           : []),
         ...(assignee ? [{ label: 'Assignee', value: assignee.user.email }] : [])],
+      // CONF-002/CONF-003: the only editable-field case maintenance v1
+      // needs. `editAskConfirmation` below is the only place that ever
+      // rebuilds this into a new version.
+      editableFields: action === 'RESCHEDULE' && dueDate ? [{ key: 'nextDueDate', label: 'New due date', type: 'DATE' as const, value: dueDate }] : [],
       confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Maintenance record.`, expiresAt: expiresAt.toISOString(),
     }, suggestions: [],
   };
@@ -1293,7 +1302,7 @@ async function quoteComparisonCreateResult(propertyId: string, message: string):
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_COMPARISON_CONFIRMATION_REQUIRED', contextVersion, parameters: { quoteWorkspace: input, quoteWorkspaceContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'quote-workspace-review', title: 'Review this comparison workspace', body: 'No workspace or quote has been created yet.', tone: 'DEFAULT', actions: [] }],
-    confirmation: { confirmationId: `quote-workspace-${propertyId}-1`, version: 1, title: 'Create this quote comparison?', description: 'This creates one canonical draft workspace; it does not select a provider or accept a quote.', fields: [{ label: 'Service', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Scope', value: input.scopeSummary }], confirmLabel: 'Create workspace', consentText: 'I authorize creating this draft comparison workspace for the selected home.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `quote-workspace-${propertyId}-1`, version: 1, title: 'Create this quote comparison?', description: 'This creates one canonical draft workspace; it does not select a provider or accept a quote.', fields: [{ label: 'Service', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Scope', value: input.scopeSummary }], editableFields: [], confirmLabel: 'Create workspace', consentText: 'I authorize creating this draft comparison workspace for the selected home.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -1352,7 +1361,7 @@ async function guidanceJourneyCreateResult(userId: string, propertyId: string, m
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_CONFIRMATION_REQUIRED', contextVersion, parameters: { guidanceJourney: input, guidanceJourneyContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'journey-review', title: 'Review this guided plan', body: 'No journey has been started yet.', tone: 'DEFAULT', actions: [] }],
-    confirmation: { confirmationId: `guidance-journey-${propertyId}-1`, version: 1, title: `Start a guided plan for ${input.label}?`, description: 'This creates a canonical, resumable guidance journey for the selected home.', fields: [{ label: 'Scope', value: input.label }, { label: 'Plan type', value: input.issueType.replace(/_/g, ' ') }], confirmLabel: 'Start guided plan', consentText: 'I authorize creating this guided plan in the shared home record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `guidance-journey-${propertyId}-1`, version: 1, title: `Start a guided plan for ${input.label}?`, description: 'This creates a canonical, resumable guidance journey for the selected home.', fields: [{ label: 'Scope', value: input.label }, { label: 'Plan type', value: input.issueType.replace(/_/g, ' ') }], editableFields: [], confirmLabel: 'Start guided plan', consentText: 'I authorize creating this guided plan in the shared home record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -1390,7 +1399,7 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
       status: 'NEEDS_CONFIRMATION', reasonCode: 'MAINTENANCE_MONITOR_CONFIRMATION_REQUIRED', contextVersion: maintenanceTaskVersion(selected),
       parameters: { homeDeadlineMonitor: input, maintenanceTaskVersion: maintenanceTaskVersion(selected), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
       blocks: [{ type: 'SUMMARY', id: 'maintenance-monitor-review', title: 'Review maintenance reminders', body: 'The existing dated task already drives in-app reminders. Confirming enables scoped email delivery; it does not create a duplicate task.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(selected.id)}`, style: 'SECONDARY' }] }],
-      confirmation: { confirmationId: `maintenance-monitor-${selected.id}-1`, version: 1, title: `Enable reminders for ${selected.title}?`, description: 'The governed reminder worker checks dated maintenance tasks inside its seven-day horizon.', fields: [{ label: 'Task', value: selected.title }, { label: 'Due', value: humanDate(selected.nextDueDate) ?? input.dueDate }, { label: 'Delivery', value: 'In-app plus email' }, { label: 'Reminder window', value: 'Within 7 days of the due date' }], confirmLabel: 'Enable reminders', consentText: 'I consent to receive maintenance deadline reminders by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+      confirmation: { confirmationId: `maintenance-monitor-${selected.id}-1`, version: 1, title: `Enable reminders for ${selected.title}?`, description: 'The governed reminder worker checks dated maintenance tasks inside its seven-day horizon.', fields: [{ label: 'Task', value: selected.title }, { label: 'Due', value: humanDate(selected.nextDueDate) ?? input.dueDate }, { label: 'Delivery', value: 'In-app plus email' }, { label: 'Reminder window', value: 'Within 7 days of the due date' }], editableFields: [], confirmLabel: 'Enable reminders', consentText: 'I consent to receive maintenance deadline reminders by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
     };
   }
   const [warranty, policy, policiesMissingExpiry] = await Promise.all([
@@ -1451,7 +1460,7 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_DEADLINE_MONITOR_CONFIRMATION_REQUIRED', parameters: { homeDeadlineMonitor: input, homeDeadlineSourceVersion: homeDeadlineSourceVersion(source), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'deadline-monitor-review', title: 'Review this expiration reminder', body: 'Ask will create a dated canonical Maintenance obligation so the existing governed reminder worker can notify you.', tone: 'DEFAULT', actions: [] }],
-    confirmation: { confirmationId: `home-deadline-${source.id}-1`, version: 1, title: `Monitor this ${warranty ? 'warranty' : 'policy'} expiration?`, description: 'This creates one deduplicated reminder task and enables expiration-deadline email preferences for this home. It does not change maintenance-task email preferences.', fields: [{ label: 'Provider', value: provider }, { label: 'Expires', value: expiry.toISOString().slice(0, 10) }, { label: 'Reminder date', value: input.dueDate }, { label: 'Channel', value: 'In-app plus email' }], confirmLabel: 'Activate reminder', consentText: 'I consent to receive this expiration-deadline reminder by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `home-deadline-${source.id}-1`, version: 1, title: `Monitor this ${warranty ? 'warranty' : 'policy'} expiration?`, description: 'This creates one deduplicated reminder task and enables expiration-deadline email preferences for this home. It does not change maintenance-task email preferences.', fields: [{ label: 'Provider', value: provider }, { label: 'Expires', value: expiry.toISOString().slice(0, 10) }, { label: 'Reminder date', value: input.dueDate }, { label: 'Channel', value: 'In-app plus email' }], editableFields: [], confirmLabel: 'Activate reminder', consentText: 'I consent to receive this expiration-deadline reminder by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -2276,7 +2285,7 @@ async function hvacDecisionStartResult(userId: string, propertyId: string, messa
       confirmationId: `hvac-decision-start-${item.id}-1`, version: 1, title: `Start a decision thread for ${item.name}?`,
       description: 'Ask will evaluate the recorded condition, age, repair history, and warranty for this system and produce an explainable repair-or-replace recommendation you can resume across sessions.',
       fields: [{ label: 'System', value: item.name }],
-      confirmLabel: 'Start decision thread', consentText: 'I authorize creating this decision thread in the shared home record.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Start decision thread', consentText: 'I authorize creating this decision thread in the shared home record.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -2425,7 +2434,7 @@ async function hvacDecisionScenarioResult(userId: string, propertyId: string, me
       confirmationId: `hvac-decision-scenario-${selection.thread.id}-1`, version: 1, title: `Compare this ${vendorLabel} quote?`,
       description: 'Ask will run the registered HVAC engine against this quote as an isolated scenario. It never overwrites the recorded decision.',
       fields: [{ label: 'Vendor', value: vendorLabel }, { label: 'Amount', value: `$${(quoteAmountCents / 100).toFixed(2)}` }],
-      confirmLabel: 'Compare scenario', consentText: 'I authorize evaluating this scenario against the recorded decision.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Compare scenario', consentText: 'I authorize evaluating this scenario against the recorded decision.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -2461,7 +2470,7 @@ async function hvacDecisionAbandonResult(userId: string, propertyId: string, mes
       confirmationId: `hvac-decision-abandon-${selection.thread.id}-1`, version: 1, title: 'Abandon this decision?',
       description: 'You can start a new decision for this system at any time.',
       fields: [{ label: 'System', value: item.name }],
-      confirmLabel: 'Abandon decision', consentText: 'I authorize abandoning this decision thread.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Abandon decision', consentText: 'I authorize abandoning this decision thread.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -2518,7 +2527,7 @@ async function hvacDecisionOutcomeReportResult(userId: string, propertyId: strin
         { label: 'System', value: item.name }, { label: 'Status', value: actionLabel },
         ...(costCents != null ? [{ label: 'Cost', value: formatOutcomeCents(costCents)! }] : []),
       ],
-      confirmLabel: 'Record outcome', consentText: 'I confirm this reported outcome is accurate to the best of my knowledge.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Record outcome', consentText: 'I confirm this reported outcome is accurate to the best of my knowledge.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -2598,7 +2607,7 @@ async function hvacDecisionOutcomeUnlinkResult(userId: string, propertyId: strin
       confirmationId: `hvac-decision-outcome-unlink-${disputable.observation.id}-1`, version: 1, title: 'Dispute this outcome?',
       description: 'The disputed outcome remains visible with its status changed; it is never permanently deleted.',
       fields: [{ label: 'System', value: item.name }],
-      confirmLabel: 'Dispute outcome', consentText: 'I confirm this reported outcome is incorrect.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Dispute outcome', consentText: 'I confirm this reported outcome is incorrect.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -2642,7 +2651,7 @@ async function hvacPreferenceSaveResult(userId: string, propertyId: string, mess
       confirmationId: `hvac-preference-save-${propertyId}-1`, version: 1, title: 'Save this for future HVAC decisions?',
       description: 'Ask will reuse this confirmed preference for repair-vs-replace recommendations on this home until it expires or you change it.',
       fields,
-      confirmLabel: 'Save', consentText: 'I confirm this is accurate and authorize saving it for future HVAC decisions.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Save', consentText: 'I confirm this is accurate and authorize saving it for future HVAC decisions.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -2691,7 +2700,7 @@ async function hvacPreferenceForgetResult(userId: string, propertyId: string, me
       confirmationId: `hvac-preference-forget-${target.preferenceValueId}-1`, version: 1, title: `Forget ${target.label}?`,
       description: 'This does not delete any decision history — it only stops this preference from being reused.',
       fields: [{ label: 'Preference', value: target.label }],
-      confirmLabel: 'Forget it', consentText: 'I authorize forgetting this preference.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Forget it', consentText: 'I authorize forgetting this preference.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -2756,7 +2765,7 @@ async function claimFileResult(propertyId: string, message: string): Promise<Ask
     status: 'NEEDS_CONFIRMATION', reasonCode: 'CLAIM_FILE_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { claimTitle: title, claimType: type, claimDescription: message, claimSourceType: /warranty/i.test(message) ? 'HOME_WARRANTY' : /insurance/i.test(message) ? 'INSURANCE' : 'UNKNOWN', confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'claim-file-review', title: 'Review the draft claim', body: 'Confirming creates a draft claim, its checklist, timeline event, and linked Operational Work Item. It does not transmit the claim to an insurer or warranty provider.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims instead', href, style: 'SECONDARY' }] }],
-    confirmation: { confirmationId: `claim-file-${contextVersion.slice(0, 16)}`, version: 1, title: 'Create this draft claim?', description: 'The claim stays in ContractToCozy until you separately submit it through the appropriate provider channel.', fields: [{ label: 'Title', value: title }, { label: 'Incident type', value: type.toLowerCase().replace(/_/g, ' ') }, { label: 'Initial status', value: 'Draft' }], confirmLabel: 'Create draft claim', consentText: 'I confirm this incident record is accurate and authorize creating the draft claim and linked home work.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `claim-file-${contextVersion.slice(0, 16)}`, version: 1, title: 'Create this draft claim?', description: 'The claim stays in ContractToCozy until you separately submit it through the appropriate provider channel.', fields: [{ label: 'Title', value: title }, { label: 'Incident type', value: type.toLowerCase().replace(/_/g, ' ') }, { label: 'Initial status', value: 'Draft' }], editableFields: [], confirmLabel: 'Create draft claim', consentText: 'I confirm this incident record is accurate and authorize creating the draft claim and linked home work.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -2780,7 +2789,7 @@ async function claimTransitionResult(propertyId: string, message: string, launch
     status: 'NEEDS_CONFIRMATION', reasonCode: 'CLAIM_TRANSITION_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { claimId: selected.id, claimTitle: selected.title, claimFromStatus: selected.status, claimToStatus: nextStatus, claimContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle and reconcile the linked Operational Work Item and outcome.', tone: ['APPROVED', 'DENIED', 'CLOSED'].includes(nextStatus) ? 'CAUTION' : 'DEFAULT', actions: [{ id: 'open-claim', label: 'Open claim', href: `${href}/${selected.id}`, style: 'SECONDARY' }] }],
-    confirmation: { confirmationId: `claim-transition-${selected.id}-1`, version: 1, title: `Change ${selected.title} to ${nextStatus.toLowerCase().replace(/_/g, ' ')}?`, description: 'This changes the shared claim record and its downstream work/outcome reconciliation.', fields: [{ label: 'Current status', value: String(selected.status).toLowerCase().replace(/_/g, ' ') }, { label: 'New status', value: nextStatus.toLowerCase().replace(/_/g, ' ') }], confirmLabel: 'Change claim status', consentText: 'I confirm this status reflects the provider or claim process and authorize updating the shared record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `claim-transition-${selected.id}-1`, version: 1, title: `Change ${selected.title} to ${nextStatus.toLowerCase().replace(/_/g, ' ')}?`, description: 'This changes the shared claim record and its downstream work/outcome reconciliation.', fields: [{ label: 'Current status', value: String(selected.status).toLowerCase().replace(/_/g, ' ') }, { label: 'New status', value: nextStatus.toLowerCase().replace(/_/g, ' ') }], editableFields: [], confirmLabel: 'Change claim status', consentText: 'I confirm this status reflects the provider or claim process and authorize updating the shared record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -2839,7 +2848,7 @@ async function inspectionFindingUpdateResult(propertyId: string, message: string
     status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { inspectionFindingId: selected.id, inspectionReportId: selected.reportId, inspectionFindingAction: action, inspectionFindingContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'inspection-finding-review', title: `Review ${action.toLowerCase()} action`, body: action === 'ACCEPT' ? 'Accepting creates or reuses canonical Operational Work and routes it to the appropriate maintenance, guidance, or project workflow.' : action === 'DISMISS' ? 'Dismissing marks this canonical finding not active and reconciles linked work.' : 'Resolving records a homeowner-confirmed outcome on this canonical finding.', tone: 'CAUTION', actions: [{ id: 'open-finding', label: 'Review in Inspection Hub', href, style: 'SECONDARY' }] }],
-    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: selected.inspectorDescription, fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: selected.inspectorDescription, fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], editableFields: [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -2877,7 +2886,7 @@ async function documentPromotionConfirmResult(propertyId: string, message: strin
   if (selected.kind === 'INSPECTION_REPORT' && decision === 'REJECT') return { status: 'BLOCKED', reasonCode: 'INSPECTION_REPORT_REJECTION_REQUIRES_REVIEW_UI', blocks: [{ type: 'BOUNDARY', id: 'inspection-report-rejection-boundary', title: 'Review corrections in Inspection Hub', severity: 'INFO', body: 'Ask can confirm the reviewed report, but rejecting or correcting individual extracted findings requires the report review screen so the exact edits and evidence remain visible.', suggestions: [] }], suggestions: [] };
   const contextVersion = createHash('sha256').update(`${selected.kind}:${selected.id}:${selected.updatedAt.toISOString()}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
-  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [{ id: 'open-documents', label: 'Review source', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [{ id: 'open-documents', label: 'Review source', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], editableFields: [], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
 }
 
 // Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "documents"
@@ -3017,7 +3026,7 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
       : observedResult === 'FAILED'
         ? 'Failed again'
         : null;
-  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'OPERATIONAL_WORK_CONFIRMATION_REQUIRED', contextVersion, parameters: { operationalWorkItemId: selected.id, operationalWorkAction: action, operationalWorkUntil: ['DEFER', 'SNOOZE'].includes(action) ? until.toISOString() : null, operationalWorkObservedResult: observedResult, operationalWorkContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'operational-work-review', title: `Review ${action.toLowerCase()} action`, body: action === 'SNOOZE' ? `Reminders will be suppressed until ${humanDate(until)} without changing the work state or due date.` : action === 'DEFER' ? `The work will move to deferred until ${humanDate(until)}.` : action === 'COMPLETE' ? 'The linked canonical maintenance task and Operational Work outcome will be completed together using the observed result shown below.' : 'The proposed work will become accepted homeowner work.', tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `operational-work-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} ${selected.title}?`, description: 'Ask will recheck the current work state before applying this governed command.', fields: [{ label: 'Work', value: selected.title }, { label: 'Current state', value: String(selected.state).toLowerCase().replace(/_/g, ' ') }, { label: 'Action', value: action.toLowerCase() }, ...(observedResultLabel ? [{ label: 'Observed result', value: observedResultLabel }] : [])], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} work`, consentText: action === 'COMPLETE' ? 'I authorize this update to the shared Operational Work record and confirm the observed result shown above is accurate.' : 'I authorize this update to the shared Operational Work record.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'OPERATIONAL_WORK_CONFIRMATION_REQUIRED', contextVersion, parameters: { operationalWorkItemId: selected.id, operationalWorkAction: action, operationalWorkUntil: ['DEFER', 'SNOOZE'].includes(action) ? until.toISOString() : null, operationalWorkObservedResult: observedResult, operationalWorkContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'operational-work-review', title: `Review ${action.toLowerCase()} action`, body: action === 'SNOOZE' ? `Reminders will be suppressed until ${humanDate(until)} without changing the work state or due date.` : action === 'DEFER' ? `The work will move to deferred until ${humanDate(until)}.` : action === 'COMPLETE' ? 'The linked canonical maintenance task and Operational Work outcome will be completed together using the observed result shown below.' : 'The proposed work will become accepted homeowner work.', tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `operational-work-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} ${selected.title}?`, description: 'Ask will recheck the current work state before applying this governed command.', fields: [{ label: 'Work', value: selected.title }, { label: 'Current state', value: String(selected.state).toLowerCase().replace(/_/g, ' ') }, { label: 'Action', value: action.toLowerCase() }, ...(observedResultLabel ? [{ label: 'Observed result', value: observedResultLabel }] : [])], editableFields: [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} work`, consentText: action === 'COMPLETE' ? 'I authorize this update to the shared Operational Work record and confirm the observed result shown above is accurate.' : 'I authorize this update to the shared Operational Work record.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
 }
 
 async function incidentClaimStatusResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -4587,7 +4596,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
         { label: 'Current status', value: matched.status.toLowerCase().replace(/_/g, ' ') },
         { label: 'Completion method', value: 'User attestation' },
       ],
-      confirmLabel: 'Mark complete',
+      editableFields: [], confirmLabel: 'Mark complete',
       consentText: 'I confirm this task was completed and authorize updating the shared Buyer Plan.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -4657,7 +4666,7 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
         { label: 'Task', value: title },
         { label: 'Due', value: dueAt ?? 'Not scheduled' },
       ],
-      confirmLabel: 'Add task',
+      editableFields: [], confirmLabel: 'Add task',
       consentText: 'I confirm these details are correct and authorize adding this task to the shared Buyer Plan.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -4736,7 +4745,7 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
       fields: [{ label: 'Task', value: matched.title }, { label: 'Action', value: actionLabel },
         ...(dueDate ? [{ label: 'New due date', value: dueDate }] : []),
         ...(assignee ? [{ label: 'Assignee', value: assignee.user.email }] : [])],
-      confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Buyer Plan.`, expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Buyer Plan.`, expiresAt: expiresAt.toISOString(),
     }, suggestions: [],
   };
 }
@@ -5202,7 +5211,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
         { label: 'Finding', value: matched.title },
         { label: 'New disposition', value: dispositionLabel },
       ],
-      confirmLabel: 'Classify finding', consentText: 'I confirm this classification and authorize updating the shared inspection and closing record.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Classify finding', consentText: 'I confirm this classification and authorize updating the shared inspection and closing record.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -5241,7 +5250,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
         confirmationId: `buyer-lifecycle-${isResume ? 'resume' : 'pause'}-${propertyId}-${confirmationVersion}`, version: confirmationVersion,
         title: isResume ? 'Resume this purchase?' : 'Pause this purchase?',
         description: isResume ? 'This reactivates deadline reminders for this purchase.' : 'This stops deadline reminders for this purchase without cancelling it. Recorded work, documents, findings, and evidence are preserved.',
-        fields: [], confirmLabel: isResume ? 'Resume purchase' : 'Pause purchase',
+        fields: [], editableFields: [], confirmLabel: isResume ? 'Resume purchase' : 'Pause purchase',
         consentText: `I confirm this purchase is being ${isResume ? 'resumed' : 'paused'}.`, expiresAt: expiresAt.toISOString(),
       },
       suggestions: [],
@@ -5275,7 +5284,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
         confirmationId: `buyer-lifecycle-cancel-${propertyId}-${confirmationVersion}`, version: confirmationVersion,
         title: 'Cancel this purchase?', description: 'This stops deadline reminders, cancels open tasks and milestones, and preserves completed work, documents, findings, and evidence.',
         fields: [{ label: 'Reason', value: reason }],
-        confirmLabel: 'Cancel purchase', consentText: 'I confirm this purchase is being cancelled and authorize stopping its active reminders and tasks.', expiresAt: expiresAt.toISOString(),
+        editableFields: [], confirmLabel: 'Cancel purchase', consentText: 'I confirm this purchase is being cancelled and authorize stopping its active reminders and tasks.', expiresAt: expiresAt.toISOString(),
       },
       suggestions: [],
     };
@@ -5302,7 +5311,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
       title: `Update the ${isMoveIn ? 'move-in' : 'target closing'} date to ${newDate}?`,
       description: 'This updates the recorded date and recalculates unedited task due dates from it.',
       fields: [{ label: isMoveIn ? 'New move-in date' : 'New target closing date', value: newDate }],
-      confirmLabel: 'Update date', consentText: 'I confirm this date change and authorize updating the shared Buyer Plan.', expiresAt: expiresAt.toISOString(),
+      editableFields: [], confirmLabel: 'Update date', consentText: 'I confirm this date change and authorize updating the shared Buyer Plan.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -5674,7 +5683,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
         { label: 'Decision', value: action.toLowerCase() },
         ...(reason ? [{ label: 'Reason', value: reason }] : []),
       ],
-      confirmLabel: `${actionLabel} item`,
+      editableFields: [], confirmLabel: `${actionLabel} item`,
       consentText: 'I authorize this update to the shared seller-prep checklist.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -5832,7 +5841,7 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
         { label: 'Quiet hours', value: `${quietStart}–${quietEnd} (${preference.timezone || 'UTC'})` },
         { label: 'Source boundary', value: 'Governed national benchmark—not a personalized lender quote' },
       ],
-      confirmLabel: 'Start monitor',
+      editableFields: [], confirmLabel: 'Start monitor',
       consentText: 'I consent to receive refinance threshold notifications by email using these settings.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -10848,6 +10857,100 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     if (!completed) throw error;
     saved = completed;
   }
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
+// ASK_COZY_INTERACTION_MODEL_UI_FRD §8 (CONF-002/CONF-003): edits a
+// declared field on an open confirmation, bumping its version rather than
+// mutating in place -- a stale confirmationVersion (already superseded by
+// a prior edit, or already claimed by confirmAskExecution's own claim
+// transaction) is rejected exactly like an out-of-date confirm attempt is.
+// This never performs the domain write itself; confirmAskExecution's own
+// freshness re-check (confirmMaintenanceTaskUpdate's task-version compare)
+// still runs when the edited proposal is actually confirmed. Scoped to the
+// one editable-field case that exists (maintenance reschedule) rather than
+// a generic per-operation registry -- extend this when a second case is
+// actually implemented.
+export async function editAskConfirmation(userId: string, executionId: string, input: EditAskConfirmation): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution || !execution.propertyId) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  const access = await ensurePropertyAccess(userId, execution.propertyId);
+  const command = getAskDomainCommandByOperation(execution.operationId ?? '');
+  if (!command || execution.status !== 'NEEDS_CONFIRMATION') {
+    const error = new Error('This confirmation is no longer active.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
+  const roleRank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
+  if (roleRank[access.role] < roleRank[command.roleFloor]) {
+    const error = new Error(`${command.roleFloor.toLowerCase()} access is required for this command.`);
+    (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+    throw error;
+  }
+  const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+    ? execution.parametersJson as Record<string, unknown>
+    : {};
+  if (parameters.confirmationVersion !== input.confirmationVersion) {
+    const error = new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
+  if (execution.operationId !== 'MAINTENANCE_TASK_UPDATE') {
+    const error = new Error('Editing is not available for this action yet.');
+    (error as Error & { code?: string }).code = 'ASK_EDIT_NOT_SUPPORTED';
+    throw error;
+  }
+  const existingUpdate = MaintenanceTaskUpdateInputSchema.safeParse(parameters.maintenanceUpdate);
+  if (!existingUpdate.success || existingUpdate.data.action !== 'RESCHEDULE') {
+    const error = new Error('Editing is only available for a reschedule proposal.');
+    (error as Error & { code?: string }).code = 'ASK_EDIT_NOT_SUPPORTED';
+    throw error;
+  }
+  const nextDueDateEdit = input.edits.nextDueDate;
+  if (typeof nextDueDateEdit !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextDueDateEdit) || Number.isNaN(new Date(`${nextDueDateEdit}T00:00:00Z`).getTime())) {
+    const error = new Error('Enter a valid date.');
+    (error as Error & { code?: string }).code = 'ASK_INVALID_CONFIRMATION_EDIT';
+    throw error;
+  }
+  const task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: existingUpdate.data.taskId, propertyId: execution.propertyId } });
+  if (!task) {
+    const error = new Error('The selected maintenance task is no longer available.');
+    (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+    throw error;
+  }
+  const updatedInput = MaintenanceTaskUpdateInputSchema.parse({ ...existingUpdate.data, nextDueDate: nextDueDateEdit });
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const taskHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}`;
+  const newConfirmation = {
+    confirmationId: `maintenance-update-${task.id}-${nextVersion}`, version: nextVersion, title: `Reschedule ${task.title}?`,
+    description: 'This command writes through the canonical Maintenance service and preserves downstream reconciliation.',
+    fields: [
+      { label: 'Task', value: task.title }, { label: 'Action', value: 'reschedule' },
+      { label: 'Current due date', value: humanDate(task.nextDueDate) ?? 'Not scheduled' },
+      ...(task.isRecurring && task.frequency ? [{ label: 'Recurrence', value: `Repeats ${task.frequency.toLowerCase().replace(/_/g, ' ')}; only this next due date changes` }] : []),
+    ],
+    editableFields: [{ key: 'nextDueDate', label: 'New due date', type: 'DATE' as const, value: nextDueDateEdit }],
+    confirmLabel: 'Confirm reschedule', consentText: 'I authorize this reschedule of the shared Maintenance record.', expiresAt: expiresAt.toISOString(),
+  };
+  const saved = await prisma.askExecution.update({
+    where: { id: execution.id },
+    data: {
+      parametersJson: asInputJson({ ...parameters, maintenanceUpdate: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+        blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: taskHref, style: 'SECONDARY' }] }],
+        captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+      }),
+    },
+  });
+  await prisma.askExecutionEvent.create({
+    data: { executionId, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 

@@ -1104,6 +1104,9 @@ class APIClient {
   async confirmAskExecution(executionId: string, payload: { confirmationVersion: number; idempotencyKey: string; consentConfirmed: true }): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/confirm`, { method: 'POST', body: payload });
   }
+  async editAskConfirmation(executionId: string, payload: import('@/features/ask/types').EditAskConfirmationPayload): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/confirm/edit`, { method: 'POST', body: payload });
+  }
   async cancelAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/cancel`, { method: 'POST' });
   }

@@ -359,7 +359,7 @@ function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expir
         { label: 'Fact', value: candidate.factKey },
         { label: 'Value', value: String(candidate.value) },
       ],
-      confirmLabel: 'Save to property record',
+      editableFields: [], confirmLabel: 'Save to property record',
       consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -411,7 +411,7 @@ function eventConfirmationBlocksAndCard(candidate: EventExtractionCandidate, exp
         ? `Cozy noticed you mentioned: "${candidate.sourceSentence}". This replaces the existing entry with a corrected revision; the original is kept as history. No change is saved until you confirm.`
         : `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
       fields,
-      confirmLabel: isCorrection ? 'Update timeline entry' : 'Add to timeline',
+      editableFields: [], confirmLabel: isCorrection ? 'Update timeline entry' : 'Add to timeline',
       consentText: isCorrection
         ? 'I confirm this correction is accurate and authorize ContractToCozy to update my home timeline.'
         : 'I confirm this is accurate and authorize ContractToCozy to add it to my home timeline.',
@@ -460,7 +460,7 @@ function warrantyConfirmationBlocksAndCard(
       title: 'Save this warranty to your property record?',
       description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
       fields,
-      confirmLabel: 'Save warranty',
+      editableFields: [], confirmLabel: 'Save warranty',
       consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -504,7 +504,7 @@ function evidenceConfirmationBlocksAndCard(
       title: 'Attach this document as evidence?',
       description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
       fields,
-      confirmLabel: 'Attach document',
+      editableFields: [], confirmLabel: 'Attach document',
       consentText: 'I confirm this document is evidence for this home record entry.',
       expiresAt: expiresAt.toISOString(),
     },
@@ -546,7 +546,7 @@ function eventEditConfirmationBlocksAndCard(mergedParameters: Record<string, unk
         ? `Cozy noticed you mentioned: "${sourceSentence}". This replaces the existing entry with a corrected revision; the original is kept as history. No change is saved until you confirm.`
         : `Cozy noticed you mentioned: "${sourceSentence}". No change is saved until you confirm.`,
       fields,
-      confirmLabel: isCorrection ? 'Update timeline entry' : 'Add to timeline',
+      editableFields: [], confirmLabel: isCorrection ? 'Update timeline entry' : 'Add to timeline',
       consentText: isCorrection
         ? 'I confirm this correction is accurate and authorize ContractToCozy to update my home timeline.'
         : 'I confirm this is accurate and authorize ContractToCozy to add it to my home timeline.',
@@ -588,7 +588,7 @@ function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, 
       title: 'Save this warranty to your property record?',
       description: `Cozy noticed you mentioned: "${sourceSentence}". No change is saved until you confirm.`,
       fields,
-      confirmLabel: 'Save warranty',
+      editableFields: [], confirmLabel: 'Save warranty',
       consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.',
       expiresAt: expiresAt.toISOString(),
     },

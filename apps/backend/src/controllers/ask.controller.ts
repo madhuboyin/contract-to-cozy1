@@ -1,8 +1,8 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
-import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
+import { ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
   PropertyContextCaptureValidationError,
@@ -51,6 +51,24 @@ export async function postAskConfirmation(req: AuthRequest, res: Response, next:
     if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot perform this action.' } });
     if (code === 'ASK_CONTEXT_VERSION_CONFLICT') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'The workflow context changed.' } });
     if (code === 'ASK_CONFIRMATION_EXPIRED' || code === 'ASK_CONFIRMATION_NOT_ACTIVE' || code === 'ASK_CONFIRMATION_IDEMPOTENCY_CONFLICT' || code === 'ASK_CONFIRMATION_IN_PROGRESS') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Confirmation is unavailable.' } });
+    return next(error);
+  }
+}
+
+export async function postAskConfirmationEdit(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = EditAskConfirmationSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_CONFIRMATION_EDIT', message: 'The edit is invalid.', details: input.error.flatten() } });
+    return res.json({ success: true, data: await editAskConfirmation(userId, req.params.executionId, input.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask execution not found.' } });
+    if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot perform this action.' } });
+    if (code === 'ASK_CONTEXT_VERSION_CONFLICT') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'The workflow context changed.' } });
+    if (code === 'ASK_INVALID_CONFIRMATION_EDIT') return res.status(400).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Enter a valid value.' } });
+    if (code === 'ASK_CONFIRMATION_NOT_ACTIVE' || code === 'ASK_EDIT_NOT_SUPPORTED') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'This edit is unavailable.' } });
     return next(error);
   }
 }

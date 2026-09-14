@@ -404,12 +404,26 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   ErrorStateBlockSchema,
 ]);
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD §8 (CONF-002/CONF-003): a declared,
+// typed field the homeowner may change before confirming, distinct from
+// `fields` (read-only display). Deliberately just DATE for now -- the only
+// case maintenance v1 needs (rescheduling) -- rather than building a
+// generic form-field type system speculatively; extend this enum when a
+// second editable-field case is actually implemented.
+const AskConfirmationEditableFieldSchema = z.object({
+  key: z.string().trim().min(1).max(60),
+  label: z.string().trim().min(1).max(160),
+  type: z.enum(['DATE']),
+  value: z.string(),
+});
+
 export const AskConfirmationSchema = z.object({
   confirmationId: z.string(),
   version: z.number().int().positive(),
   title: z.string(),
   description: z.string(),
   fields: z.array(z.object({ label: z.string(), value: z.string() })).max(12),
+  editableFields: z.array(AskConfirmationEditableFieldSchema).max(3).default([]),
   confirmLabel: z.string(),
   consentText: z.string(),
   expiresAt: z.string().datetime(),
@@ -419,6 +433,19 @@ export const SubmitAskConfirmationSchema = z.object({
   confirmationVersion: z.number().int().positive(),
   idempotencyKey: z.string().trim().min(8).max(128),
   consentConfirmed: z.literal(true),
+}).strict();
+
+// ASK_COZY_INTERACTION_MODEL_UI_FRD CONF-003: editing invalidates the
+// version being edited and returns a newly validated proposal -- it never
+// applies a write itself, so unlike SubmitAskConfirmationSchema it carries
+// no consent/idempotency key. `confirmationVersion` must match the
+// confirmation currently open, exactly like confirming does.
+export const EditAskConfirmationSchema = z.object({
+  confirmationVersion: z.number().int().positive(),
+  edits: z.record(z.string().trim().min(1).max(60), z.string().trim().min(1).max(500)).refine(
+    (value) => Object.keys(value).length > 0 && Object.keys(value).length <= 3,
+    { message: 'Provide at least one edited field.' },
+  ),
 }).strict();
 
 // Home Intelligence Functional Completeness FRD Phase 7 (HI-FBK-003):
@@ -619,6 +646,7 @@ export type CreateAskExecutionRequest = z.infer<typeof CreateAskExecutionRequest
 export type SubmitAskCaptureRequest = z.infer<typeof SubmitAskCaptureRequestSchema>;
 export type RecordAskCaptureEvent = z.infer<typeof RecordAskCaptureEventSchema>;
 export type SubmitAskConfirmation = z.infer<typeof SubmitAskConfirmationSchema>;
+export type EditAskConfirmation = z.infer<typeof EditAskConfirmationSchema>;
 export type SubmitAskFeedback = z.infer<typeof SubmitAskFeedbackSchema>;
 export type SubmitHomeActionUsefulnessFeedback = z.infer<typeof SubmitHomeActionUsefulnessFeedbackSchema>;
 export type RequestAskCorrection = z.infer<typeof RequestAskCorrectionSchema>;

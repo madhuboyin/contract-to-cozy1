@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskFeedback, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskFeedback, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
@@ -13,6 +13,7 @@ router.post('/ask/executions/:executionId/captures/events', postAskCaptureEvent)
 router.post('/ask/executions/:executionId/clarifications', postAskClarification);
 router.post('/ask/executions/:executionId/property', postAskExecutionProperty);
 router.post('/ask/executions/:executionId/confirm', postAskConfirmation);
+router.post('/ask/executions/:executionId/confirm/edit', postAskConfirmationEdit);
 router.post('/ask/executions/:executionId/cancel', postAskCancellation);
 router.post('/ask/executions/:executionId/feedback', postAskFeedback);
 router.post('/ask/executions/:executionId/priority-list/:homeActionId/feedback', postHomeActionUsefulnessFeedback);

@@ -140,15 +140,31 @@ export interface AskFeedbackResponse {
   rating: 'UP' | 'DOWN';
 }
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD §8 (CONF-002/CONF-003): a declared,
+// typed field the homeowner may change before confirming. DATE only for
+// now -- the one case maintenance v1 needs (rescheduling).
+export interface AskConfirmationEditableField {
+  key: string;
+  label: string;
+  type: 'DATE';
+  value: string;
+}
+
 export interface AskConfirmation {
   confirmationId: string;
   version: number;
   title: string;
   description: string;
   fields: Array<{ label: string; value: string }>;
+  editableFields: AskConfirmationEditableField[];
   confirmLabel: string;
   consentText: string;
   expiresAt: string;
+}
+
+export interface EditAskConfirmationPayload {
+  confirmationVersion: number;
+  edits: Record<string, string>;
 }
 
 export interface AskCaptureRequest {
