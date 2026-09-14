@@ -9185,7 +9185,16 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
     throw error;
   }
   const operation = { ...getAskOperationDefinition(execution.operationId as AskOperationId), confidence: execution.intentConfidence ?? 1 };
-  const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
+  // External review finding: this call omitted launchContext entirely, so
+  // maintenance.status's capability handler (which only loads the stored
+  // viewState when envelope.launchContext?.sourceExecutionId is present)
+  // never saw it here -- every refresh re-derived a fresh viewState from
+  // scratch, discarding domain/date scope and minting a new resultId and
+  // revision. Self-referencing this row (it is its own view-state source)
+  // fixes this for all three callers of this function: the explicit
+  // Refresh button, the automatic post-mutation refresh (MAINT-005), and
+  // the Ask-workspace return-trip revalidation after a Maintenance edit.
+  const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation, launchContext: { surface: 'ASK_REFRESH', sourceExecutionId: execution.id } });
   // RES-001/RES-003/MAINT-003: refreshing a result does not change which
   // result it continues, nor what it originally answered -- both are
   // preserved from whatever this row already had via the one shared

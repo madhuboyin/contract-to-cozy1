@@ -1378,7 +1378,7 @@ function RecentAskSessions({ items, loading, openingId, onOpen }: {
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, initialRefreshIssue,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1394,6 +1394,11 @@ function ExecutionCard({
   // property/session switch. The explicit Refresh button needs the
   // identical guard -- it was calling updateExecution unconditionally.
   activeSessionRef: MutableRefObject<string>;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-001/HAND-003: seeds this card's
+  // refresh-error state when the parent's own return-trip revalidation
+  // (on landing back from Maintenance) already failed before this card
+  // ever mounted, so that failure isn't silently invisible.
+  initialRefreshIssue?: { message: string; accessLost: boolean } | null;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1402,9 +1407,12 @@ function ExecutionCard({
   // an explicit, homeowner-initiated revalidation, distinct from the
   // implicit refresh MAINT-005 triggers automatically after a mutation.
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(initialRefreshIssue?.message ?? null);
+  // Once access is confirmed lost, retrying will just fail the same way --
+  // the Refresh button is disabled rather than inviting a pointless retry.
+  const [refreshAccessLost, setRefreshAccessLost] = useState(initialRefreshIssue?.accessLost ?? false);
   const refresh = async () => {
-    if (refreshing) return;
+    if (refreshing || refreshAccessLost) return;
     // External review finding (FRESH-003/CTX-002): unlike ask(), this had
     // no guard against the homeowner switching property/session while the
     // request was in flight -- a stale refresh response could still land
@@ -1417,7 +1425,12 @@ function ExecutionCard({
       if (activeSessionRef.current !== requestedSessionId) return;
       updateExecution(response.data);
     } catch (caught) {
-      setRefreshError(caught instanceof Error ? caught.message : 'Could not refresh this result.');
+      const code = askFailureCode(caught);
+      const accessLost = code === 'ASK_EXECUTION_NOT_FOUND' || code === 'ASK_PERMISSION_REQUIRED' || code === 'ASK_PROPERTY_NOT_FOUND';
+      setRefreshAccessLost(accessLost);
+      setRefreshError(accessLost
+        ? 'This result could not be confirmed as current — it may have been removed, or your access to this home may have changed.'
+        : (caught instanceof Error ? caught.message : 'Could not refresh this result.'));
     } finally { setRefreshing(false); }
   };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is
@@ -1465,7 +1478,7 @@ function ExecutionCard({
       <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
-          <button type="button" disabled={refreshing || loading} onClick={() => void refresh()} className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50" aria-label="Refresh this result">
+          <button type="button" disabled={refreshing || loading || refreshAccessLost} onClick={() => void refresh()} className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50" aria-label="Refresh this result">
             <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />{refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
@@ -1553,6 +1566,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // read -- so restoring old conversation state on page load doesn't yank
   // focus away from wherever the user actually is.
   const [justUpdatedExecutionId, setJustUpdatedExecutionId] = useState<string | null>(null);
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-001/HAND-003: the return-trip
+  // revalidation below used to catch failures with `.catch(() => undefined)`,
+  // leaving the pre-edit view visible with no indication revalidation ever
+  // failed (external review finding). Surfaced instead through the same
+  // refreshError/retry affordance ExecutionCard's own Refresh button has.
+  const [returnRevalidationIssue, setReturnRevalidationIssue] = useState<{ executionId: string; message: string; accessLost: boolean } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionRef = useRef('');
@@ -1640,15 +1659,32 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           // to a specific execution (e.g. after rescheduling a task in
           // Maintenance) must revalidate it -- the loaded conversation
           // history reflects whatever was true when this execution last
-          // ran, not necessarily current task data. Best-effort: on
-          // failure the pre-edit view stays usable rather than blocking.
+          // ran, not necessarily current task data. On failure, the pre-edit
+          // view stays usable (best-effort, not blocking), but the failure
+          // itself must be visible rather than silently swallowed.
+          setReturnRevalidationIssue(null);
           void api.refreshAskExecution(initialExecutionId)
             .then((refreshed) => {
               if (refreshed.success && refreshed.data) {
                 setExecutions((current) => current.map((item) => item.executionId === initialExecutionId ? refreshed.data! : item));
               }
             })
-            .catch(() => undefined);
+            .catch((caught) => {
+              // ASK_EXECUTION_NOT_FOUND/ASK_PERMISSION_REQUIRED/
+              // ASK_PROPERTY_NOT_FOUND mean access to this result or its
+              // home was lost between leaving and returning to Ask -- a
+              // retry will just fail again the same way, so this is
+              // surfaced distinctly from an ordinary transient failure.
+              const code = askFailureCode(caught);
+              const accessLost = code === 'ASK_EXECUTION_NOT_FOUND' || code === 'ASK_PERMISSION_REQUIRED' || code === 'ASK_PROPERTY_NOT_FOUND';
+              setReturnRevalidationIssue({
+                executionId: initialExecutionId,
+                message: accessLost
+                  ? 'This result could not be confirmed as current — it may have been removed, or your access to this home may have changed.'
+                  : (caught instanceof Error ? caught.message : 'Could not confirm this result is current. Showing the last known view.'),
+                accessLost,
+              });
+            });
         }
       })
       .catch((caught) => {
@@ -2019,6 +2055,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   setInput={setInput}
                   visibleSuggestions={visibleSuggestions}
                   activeSessionRef={activeSessionRef}
+                  initialRefreshIssue={returnRevalidationIssue?.executionId === execution.executionId ? returnRevalidationIssue : null}
                 />
               </AskActionReturnContext.Provider>;
             })}
