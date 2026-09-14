@@ -1569,8 +1569,8 @@ async function maintenanceResult(
       // this exact task (bypassing free-text fuzzy matching entirely).
       entityType: kind === 'OPEN' ? 'MAINTENANCE_TASK' : null,
       actions: kind === 'OPEN' && canManage ? [
-        { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY' as const },
-        { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY' as const },
+        { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_COMPLETE' },
+        { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' },
       ] : [],
     };
   };
@@ -8995,6 +8995,18 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   }
   const operation = { ...getAskOperationDefinition(execution.operationId as AskOperationId), confidence: execution.intentConfidence ?? 1 };
   const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
+  // External review finding (RES-003/MAINT-003): this overwrite dropped
+  // continuesExecutionId, since it was never read from the row being
+  // overwritten. Refreshing a filter-continuation execution (e.g. "only
+  // show urgent") would silently clear the field that marks it as
+  // superseding an earlier card, so the frontend's duplicate-card
+  // suppression would then treat the earlier, now-stale card as visible
+  // again. Preserve whatever this row already had -- refreshing a result
+  // does not change which result it continues.
+  const priorStoredResult = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
+    ? execution.resultJson as { continuesExecutionId?: unknown }
+    : {};
+  const preservedContinuesExecutionId = typeof priorStoredResult.continuesExecutionId === 'string' ? priorStoredResult.continuesExecutionId : null;
   const saved = await prisma.askExecution.update({
     where: { id: execution.id },
     data: {
@@ -9002,7 +9014,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       reasonCode: result.reasonCode,
       contextVersion: result.contextVersion,
       parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
+      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: preservedContinuesExecutionId }),
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });
@@ -9218,13 +9230,25 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
 // CONF-005: a refresh failure must never fail the mutation that already
 // succeeded, so any error here is swallowed and simply yields no refreshed
 // card.
-async function refreshMaintenanceSourceExecution(userId: string, currentExecutionId: string, parameters: Record<string, unknown>): Promise<AskExecutionResponse[]> {
+interface MaintenanceSourceRefreshOutcome {
+  refreshedExecutions: AskExecutionResponse[];
+  // External review finding: a failed refresh used to be indistinguishable
+  // from "nothing to refresh" -- the caller got an empty array either way,
+  // so CONF-005's "Saved; list could not refresh" recovery text could never
+  // actually be shown. This flag lets the caller add that disclosure only
+  // when a refresh was actually attempted and actually failed.
+  attemptedAndFailed: boolean;
+}
+
+async function refreshMaintenanceSourceExecution(userId: string, currentExecutionId: string, parameters: Record<string, unknown>): Promise<MaintenanceSourceRefreshOutcome> {
   const sourceExecutionId = parameters.sourceExecutionId;
-  if (typeof sourceExecutionId !== 'string' || !sourceExecutionId || sourceExecutionId === currentExecutionId) return [];
+  if (typeof sourceExecutionId !== 'string' || !sourceExecutionId || sourceExecutionId === currentExecutionId) {
+    return { refreshedExecutions: [], attemptedAndFailed: false };
+  }
   try {
-    return [await refreshAskExecutionAfterConflict(userId, sourceExecutionId)];
+    return { refreshedExecutions: [await refreshAskExecutionAfterConflict(userId, sourceExecutionId)], attemptedAndFailed: false };
   } catch {
-    return [];
+    return { refreshedExecutions: [], attemptedAndFailed: true };
   }
 }
 
@@ -9308,7 +9332,21 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK_COMPLETION';
     artifactId = updated.id;
-  return { result, artifactType, artifactId, refreshedExecutions: await refreshMaintenanceSourceExecution(userId, execution.id, parameters) };
+    const refresh = await refreshMaintenanceSourceExecution(userId, execution.id, parameters);
+    // CONF-005: a refresh failure must never look like the mutation itself
+    // failed or invite a repeat -- the completion above already succeeded
+    // and is not touched. Disclose the stale list honestly with a concrete,
+    // non-repeating way to see current state, exactly the required
+    // "Saved; list could not refresh" shape.
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `maintenance-list-refresh-failed-${updated.id}`, title: 'Saved; list could not refresh',
+        body: 'This completion was saved to the canonical Maintenance record. The pending list you were viewing could not refresh automatically -- ask "What maintenance is pending?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'What maintenance is pending?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -9727,7 +9765,16 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
     };
     artifactType = command.artifactType;
     artifactId = updated.id;
-  return { result, artifactType, artifactId, refreshedExecutions: await refreshMaintenanceSourceExecution(userId, execution.id, parameters) };
+    const refresh = await refreshMaintenanceSourceExecution(userId, execution.id, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `maintenance-list-refresh-failed-${updated.id}`, title: 'Saved; list could not refresh',
+        body: 'This change was saved to the canonical Maintenance record. The list you were viewing could not refresh automatically -- ask "What maintenance is pending?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'What maintenance is pending?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmGuidanceJourneyCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -10726,8 +10773,19 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   } else {
     try {
       await prisma.$transaction(async (tx) => {
+        // External review finding: expectedVersion above was compared
+        // against `execution`, a snapshot read at the very top of this
+        // function -- a concurrent edit (editAskConfirmation) could commit
+        // a version bump between that read and this claim without ever
+        // being detected, since the claim itself only checked `status`.
+        // The claim would then succeed and the domain write would run
+        // against the STALE, already-edited-away `parameters` captured
+        // earlier -- confirming input the homeowner never actually
+        // reviewed (CONF-003). Re-checking the version here, atomically
+        // with the claim, closes that window: a concurrent edit now makes
+        // this claim fail exactly like an already-inactive confirmation.
         const claimed = await tx.askExecution.updateMany({
-          where: { id: execution.id, userId, status: 'NEEDS_CONFIRMATION' },
+          where: { id: execution.id, userId, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
           data: { status: 'RUNNING', reasonCode: 'ASK_CONFIRMATION_CLAIMED', completedAt: null },
         });
         if (claimed.count !== 1) {
@@ -10981,8 +11039,16 @@ export async function editAskConfirmation(userId: string, executionId: string, i
     editableFields: [{ key: 'nextDueDate', label: 'New due date', type: 'DATE' as const, value: nextDueDateEdit }],
     confirmLabel: 'Confirm reschedule', consentText: 'I authorize this reschedule of the shared Maintenance record.', expiresAt: expiresAt.toISOString(),
   };
-  const saved = await prisma.askExecution.update({
-    where: { id: execution.id },
+  // External review finding: this was an unconditional update-by-id. Two
+  // concurrent edits (a double-click, two tabs) could both read version N,
+  // both compute nextVersion N+1, and both write -- the loser's response
+  // would then claim "saved as version N+1" while the winner's edit is what
+  // actually persisted. Guard the write itself on the version still
+  // matching (same JSON-path pattern already used elsewhere in this
+  // codebase, e.g. adminWorkerJobs.service.ts's metadataJson filter), so a
+  // losing concurrent edit fails loudly instead of silently.
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
     data: {
       parametersJson: asInputJson({ ...parameters, maintenanceUpdate: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
       resultJson: asInputJson({
@@ -10992,9 +11058,15 @@ export async function editAskConfirmation(userId: string, executionId: string, i
       }),
     },
   });
+  if (editWrite.count !== 1) {
+    const error = new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
   await prisma.askExecutionEvent.create({
     data: { executionId, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
   });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 

@@ -1353,9 +1353,10 @@ function RecentAskSessions({ items, loading, openingId, onOpen }: {
 }
 
 function ExecutionCard({
-  execution, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions,
 }: {
   execution: AskExecutionResponse;
+  isSuperseded: boolean;
   justUpdatedExecutionId: string | null;
   updateExecution: (updated: AskExecutionResponse) => void;
   loading: boolean;
@@ -1385,6 +1386,26 @@ function ExecutionCard({
     // enclosing closure each time this fires.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [execution.status, execution.updatedAt]);
+
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/RES-003/RES-004: a superseded
+  // filter-refinement result must not disappear (RES-001: "refresh must not
+  // silently overwrite its meaning") but must not duplicate a full list
+  // either (MAINT-003). The question stays visible as ordinary conversation
+  // history; the response collapses behind a disclosure instead of
+  // rendering live, actionable content for data that is no longer current.
+  if (isSuperseded) {
+    return (
+      <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
+        <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
+        <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-500">Superseded by a refinement below · view original response</summary>
+          <div className="mt-3 space-y-3 opacity-75">
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => {}} />)}
+          </div>
+        </details>
+      </article>
+    );
+  }
 
   return (
     <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
@@ -1872,23 +1893,26 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           <div className="mx-auto max-w-3xl space-y-7">
             <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} />
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
-            {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: a bare
-                filter refinement ("only show urgent") creates its own
+            {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/RES-003/MAINT-003: a
+                bare filter refinement ("only show urgent") creates its own
                 execution row (a fresh authoritative query is unavoidable --
                 MAINT-003 requires querying the full matching collection, not
-                re-filtering already-truncated client data), but it must
+                re-filtering already-truncated client data), and it must
                 update the same surface rather than stack a second full list
-                under the first. The superseded execution's card is dropped
-                from the live view; nothing is deleted server-side, so a
-                session-history reload reflects the same collapsed view. */}
-            {executions
-              .filter((execution) => !executions.some((other) => other.continuesExecutionId === execution.executionId))
-              .map((execution) => {
+                under the first. But RES-001 requires the original response
+                to remain retained, not silently erased -- external review
+                finding: dropping the whole superseded execution used to also
+                delete its own question bubble, losing conversation history.
+                Its response content is collapsed (no duplicate list); its
+                question stays visible. */}
+            {executions.map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
               const visibleSuggestions = execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
+              const isSuperseded = executions.some((other) => other.continuesExecutionId === execution.executionId);
               return <AskActionReturnContext.Provider key={execution.executionId} value={askReturnHref}>
                 <ExecutionCard
                   execution={execution}
+                  isSuperseded={isSuperseded}
                   justUpdatedExecutionId={justUpdatedExecutionId}
                   updateExecution={updateExecution}
                   loading={loading}

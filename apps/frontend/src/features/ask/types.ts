@@ -17,11 +17,17 @@ export interface AskAction {
 // navigation link -- `message` is sent back through the normal ask() path
 // with the item's own id/entityType as launchContext, so the server (not a
 // client-guessed href) resolves and authorizes the actual write.
+// ACT-001/ACT-003: declared interaction semantics and registered operation,
+// distinct from the label/message a human reads.
+export type AskItemActionInteractionType = 'CONVERSATION_CONTINUE' | 'FILTER_RESULT' | 'MUTATE_RECORD' | 'NAVIGATE' | 'CONFIRM' | 'EDIT_PROPOSAL' | 'REFRESH' | 'DISMISS' | 'REMIND_LATER';
+
 export interface AskGroupedListItemAction {
   id: string;
   label: string;
   message: string;
   style: 'PRIMARY' | 'SECONDARY' | 'QUIET';
+  interactionType: AskItemActionInteractionType;
+  operationId: string;
 }
 
 export type AskPresentationBlock =

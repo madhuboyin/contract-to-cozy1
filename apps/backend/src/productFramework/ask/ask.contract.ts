@@ -64,6 +64,15 @@ const ProactiveInsightBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD §7's own interaction taxonomy (ACT-001).
+// Not every value has an implemented item action yet -- declaring the full
+// enum here (rather than a single literal) means a future FILTER_RESULT or
+// REMIND_LATER item action validates against the same contract without a
+// schema change.
+const ASK_ITEM_ACTION_INTERACTION_TYPES = [
+  'CONVERSATION_CONTINUE', 'FILTER_RESULT', 'MUTATE_RECORD', 'NAVIGATE', 'CONFIRM', 'EDIT_PROPOSAL', 'REFRESH', 'DISMISS', 'REMIND_LATER',
+] as const;
+
 // ASK_COZY_INTERACTION_MODEL_UI_FRD §7 (ACT-001/ACT-003): a declared item
 // command, not a navigation link -- entityType/the item's own id identify
 // the canonical target, and `message` is the exact natural-language command
@@ -73,11 +82,20 @@ const ProactiveInsightBlockSchema = z.object({
 // Deliberately not reusing AskActionSchema: that schema is href-only
 // (navigation), and ACT-002 requires the server -- not a client-guessed
 // href -- to own the resulting write.
+// External review finding: this shape originally carried only a label and
+// a canned message string, with no declared interaction type or registered
+// operation at all -- ACT-001 requires separating interaction type, domain
+// operation and target, and ACT-003 requires the contract to carry the
+// registered operation explicitly. `operationId` is deliberately typed as a
+// plain string (not the AskOperationId union from services/ask) to avoid
+// this contract module importing from the services layer.
 const GroupedListItemActionSchema = z.object({
   id: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(160),
   message: z.string().trim().min(1).max(300),
   style: z.enum(['PRIMARY', 'SECONDARY', 'QUIET']).default('SECONDARY'),
+  interactionType: z.enum(ASK_ITEM_ACTION_INTERACTION_TYPES),
+  operationId: z.string().trim().min(1).max(120),
 });
 
 const GroupedListItemSchema = z.object({
