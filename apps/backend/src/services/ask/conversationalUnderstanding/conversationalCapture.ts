@@ -1242,8 +1242,9 @@ async function processGoalCandidate(
   });
 
   const timeframeNote = candidate.timeframeLabel ? ` (${candidate.timeframeLabel})` : '';
-  return prisma.askExecution.create({
-    data: {
+  return prisma.$transaction(async (tx) => {
+    const execution = await tx.askExecution.create({
+      data: {
       session: { connect: { id: input.sessionId } },
       user: { connect: { id: input.userId } },
       property: { connect: { id: input.propertyId } },
@@ -1272,7 +1273,17 @@ async function processGoalCandidate(
         clarification: null,
         suggestions: ['Open Sell / Hold / Rent', 'What would help me get ready to sell?'],
       } as unknown as Prisma.InputJsonValue,
-    },
+      },
+    });
+    await tx.decisionThreadExecutionLink.createMany({
+      data: [{
+        decisionThreadId: lineage.decisionThreadId,
+        askExecutionId: execution.id,
+        linkRole: 'CREATED',
+      }],
+      skipDuplicates: true,
+    });
+    return execution;
   });
 }
 

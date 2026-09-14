@@ -1,8 +1,8 @@
 # Ask Cozy — Interaction Model & UI FRD
 
-**Version:** 1.0  
-**Date:** September 13, 2026  
-**Status:** Specification draft based on the agreed product direction; implementation not performed.  
+**Version:** 1.1
+**Date:** September 13, 2026 (implementation status added September 14, 2026)
+**Status:** Maintenance slice partially implemented — see §18. Remaining requirements are still specification only.
 **Scope:** Ask Cozy inline interactions. Maintenance is the first implementation slice.
 
 ## 1. Purpose and authority
@@ -302,3 +302,24 @@ Before code changes, trace maintenance read → typed action → proposal → co
 Validate implementation primarily through domain/contract review and available lightweight static checks. Use focused environment-independent tests for filter targeting, stale-response ordering, proposal invalidation and reconciliation where available. Do not provision services or browser infrastructure to satisfy this FRD. Record unexecuted runtime/accessibility scenarios honestly, without treating an unavailable environment as a blocker.
 
 Document-review checks: internal links resolve, requirement identifiers are unique, accepted scope is represented, maintenance has an end-to-end acceptance set, and subsequent capabilities are not silently included in its delivery scope.
+
+## 18. Implementation status (2026-09-14)
+
+Two §16 open items were resolved by tracing the code, not by product decision, and neither needs revisiting:
+
+- **Reschedule recurrence scope (MAINT-007).** `PropertyMaintenanceTaskService.updateTask` holds one mutable `nextDueDate` per task row — there is no separate occurrence record. Rescheduling can only mean "change when it's next due"; there is no series-vs-occurrence ambiguity to resolve.
+- **"Urgent" filter semantics (MAINT-004).** `highPriorityOnly` in `maintenanceResult()` (`askOrchestrator.service.ts`) matches `URGENT` **and** `HIGH` priority, not `URGENT` alone. Per MAINT-004 this is disclosed, not silently redefined (see below).
+
+Shipped and typecheck/unit-test verified, **not yet browser/E2E-verified**:
+
+| Requirement | What shipped | Where |
+| --- | --- | --- |
+| MAINT-003 (counts, clear-filter access) | GROUPED_LIST description now labels the priority filter when applied ("Priority filter: urgent and high priority"); "+N more" now links a dedicated "View all in Maintenance" action instead of the unrelated "Create a task" action (previously the only actions[0] candidate, silently wrong for overflow) | `askOrchestrator.service.ts` `maintenanceResult()` |
+| MAINT-004 (label filters honestly) | Same description change as above | `askOrchestrator.service.ts` `maintenanceResult()` |
+| HAND-001/002 (handoff carries filter state) | "Open Maintenance" / "View all in Maintenance" hrefs now carry `priority=true` / `filter=overdue` — params `MaintenancePageClient.tsx` already read but Ask never sent. `dueSoonOnly`/date/system/room filters still have no destination-page equivalent and remain description-only (acknowledged, not silently dropped) | `askOrchestrator.service.ts` `maintenanceResult()` |
+| RES-001/ACT-001/ACT-003 (item-level declared actions, canonical identity) | New `GroupedListItemActionSchema` (`id`, `label`, `message`, `style`) + `entityType` on `GroupedListItemSchema`, mirrored in frontend `types.ts` as `AskGroupedListItemAction`. Maintenance rows carry Complete/Reschedule item actions for open tasks when the viewer can manage them. Buttons call the existing `ask()` path with `launchContext.entityType`/`entityId` set to the exact task — this is the same declared-action shape ACT-001/ACT-003 called out as missing contract work, scoped to maintenance only per §3's delivery boundary (not a generic cross-domain action system) | `ask.contract.ts`, `apps/frontend/src/features/ask/types.ts`, `AskWorkspace.tsx` |
+| RES-001 (canonical ID resolution, not fuzzy match) | `maintenanceTaskCompleteResult`/`maintenanceTaskUpdateResult` now resolve `launchContext.entityId` (when `entityType === 'MAINTENANCE_TASK'`) directly against the task list before falling back to fuzzy title matching — previously `launchContext.entityId` reached `resolveAskEntityState`'s confidence scoring but never the handler itself, so a button click with only a canned message ("Complete this task") would have failed to resolve any task via `maintenanceCompletionMatch`'s fuzzy subject-token matching | `askOrchestrator.service.ts` (`launchMaintenanceTaskId`, `maintenanceTaskUpdateResult`, the `maintenance.complete`/`maintenance.update` registrations) |
+
+Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean), plus targeted backend unit tests (`askMaintenancePresentation`, `askMaintenanceTaskInput`, `askMaintenanceSuggestedPrompt`, `askSeasonalMaintenance`, `askGovernance`, `askEnvelopeAndRankingBoundary` — 48/48 passing, one test's source-matching regex updated to the new registration line). No browser/Playwright run performed against this change.
+
+**Not yet started:** CONF-003 edit-versioning verification, FRESH-001/002 revalidation-at-confirmation verification, RES-003 filter-refinement-without-duplicate-list (whether `askFollowUpContext.ts`'s existing rewrite path already avoids appending a duplicate card, or needs frontend rendering changes), and the full A01–A18/A21/A23–A24 acceptance-scenario walk.

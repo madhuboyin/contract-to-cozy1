@@ -79,6 +79,7 @@ function behavioralHarness() {
   const snapshots = [];
   const factRefs = [];
   const origins = [];
+  const executionLinks = [];
   const emissions = [];
   let sequence = 0;
   let source = {
@@ -116,8 +117,9 @@ function behavioralHarness() {
     loadRecommendationChange: async () => null,
     emitRecommendationChange: async (event) => { emissions.push(event); },
     recordOriginLink: async (threadId, origin) => { if (origin) origins.push({ threadId, ...origin }); },
+    recordExecutionLink: async (threadId, askExecutionId, linkRole) => executionLinks.push({ threadId, askExecutionId, linkRole }),
   });
-  return { adapter, threads, snapshots, factRefs, origins, emissions, setSource: (next) => { source = next; } };
+  return { adapter, threads, snapshots, factRefs, origins, executionLinks, emissions, setSource: (next) => { source = next; } };
 }
 
 test('adapter creates once, resumes idempotently, preserves origin provenance, and supersedes on source change', async () => {
@@ -127,7 +129,7 @@ test('adapter creates once, resumes idempotently, preserves origin provenance, a
     sourceVersion: 'v1', contextVersion: null,
   };
   const first = await harness.adapter.createOrResumeThread({
-    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', homeActionOrigin: origin,
+    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', askExecutionId: 'execution-1', homeActionOrigin: origin,
   });
   assert.equal(harness.threads.length, 1);
   assert.equal(harness.snapshots.length, 1);
@@ -137,7 +139,7 @@ test('adapter creates once, resumes idempotently, preserves origin provenance, a
   assert.equal(harness.factRefs[0].canonicalEntityId, 'analysis-1');
 
   const unchanged = await harness.adapter.createOrResumeThread({
-    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', homeActionOrigin: { ...origin, sourceVersion: 'v2' },
+    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', askExecutionId: 'execution-2', homeActionOrigin: { ...origin, sourceVersion: 'v2' },
   });
   assert.equal(unchanged.decisionThreadId, first.decisionThreadId);
   assert.equal(harness.threads.length, 1);
@@ -150,13 +152,18 @@ test('adapter creates once, resumes idempotently, preserves origin provenance, a
     canonicalFactReferences: [{ entityType: 'REPLACE_REPAIR_ANALYSIS', entityId: 'analysis-2' }],
   });
   const changed = await harness.adapter.createOrResumeThread({
-    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', homeActionOrigin: { ...origin, sourceEntityId: 'analysis-2', sourceVersion: 'v3' },
+    propertyId: 'property-1', userId: 'user-1', primaryEntityId: 'item-1', askExecutionId: 'execution-3', homeActionOrigin: { ...origin, sourceEntityId: 'analysis-2', sourceVersion: 'v3' },
   });
   assert.equal(changed.decisionThreadId, first.decisionThreadId);
   assert.equal(harness.snapshots.length, 2);
   assert.equal(harness.snapshots[1].supersedesSnapshotId, harness.snapshots[0].id);
   assert.equal(harness.snapshots[1].verdictCode, 'REPLACE');
   assert.equal(harness.origins.length, 3, 'creation and every resume retain durable origin attribution');
+  assert.deepEqual(harness.executionLinks.map(({ askExecutionId, linkRole }) => ({ askExecutionId, linkRole })), [
+    { askExecutionId: 'execution-1', linkRole: 'CREATED' },
+    { askExecutionId: 'execution-2', linkRole: 'CONTINUED' },
+    { askExecutionId: 'execution-3', linkRole: 'CONTINUED' },
+  ]);
   assert.equal(harness.emissions.length, 2, 'first snapshot and superseding snapshot emit changes');
 });
 

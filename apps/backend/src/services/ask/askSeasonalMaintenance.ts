@@ -179,6 +179,7 @@ export function buildSeasonalMaintenanceResult(input: {
               item.maintenanceTask ? 'Linked to Maintenance' : 'Seasonal checklist',
             ].filter((value): value is string => Boolean(value)),
             href: `${seasonalHref}&checklistId=${encodeURIComponent(checklist.id)}&itemId=${encodeURIComponent(item.id)}`,
+            actions: [],
           };
         }),
       };

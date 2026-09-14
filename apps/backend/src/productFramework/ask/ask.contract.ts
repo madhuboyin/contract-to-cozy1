@@ -64,6 +64,22 @@ const ProactiveInsightBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD §7 (ACT-001/ACT-003): a declared item
+// command, not a navigation link -- entityType/the item's own id identify
+// the canonical target, and `message` is the exact natural-language command
+// the frontend sends back through the normal ask() path (launchContext
+// carries entityType/entityId so the operation resolves the target
+// directly; see launchMaintenanceTaskId in askOrchestrator.service.ts).
+// Deliberately not reusing AskActionSchema: that schema is href-only
+// (navigation), and ACT-002 requires the server -- not a client-guessed
+// href -- to own the resulting write.
+const GroupedListItemActionSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  label: z.string().trim().min(1).max(160),
+  message: z.string().trim().min(1).max(300),
+  style: z.enum(['PRIMARY', 'SECONDARY', 'QUIET']).default('SECONDARY'),
+});
+
 const GroupedListItemSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -71,6 +87,10 @@ const GroupedListItemSchema = z.object({
   meta: z.array(z.string()).max(6).default([]),
   status: z.string().nullable().optional(),
   href: z.string().nullable().optional(),
+  entityType: z.string().trim().min(1).max(60).nullable().optional(),
+  // Additive for existing grouped-list producers: actionable rows opt in;
+  // historical/non-actionable rows remain valid without emitting an empty list.
+  actions: z.array(GroupedListItemActionSchema).max(3).optional(),
 });
 
 const GroupedListBlockSchema = z.object({

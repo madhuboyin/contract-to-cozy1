@@ -125,9 +125,14 @@ test('intelligenceEnvelopeQueryResult accepts suppliedInput and scopes items to 
 
 test('the maintenance.complete and intelligence-envelope.query registrations both read envelope.suppliedInput', () => {
   const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/ACT-003: maintenance.complete
+  // now also falls back to launchContext.entityId (a fresh execution's
+  // canonical target, e.g. a "Complete" row action) when suppliedInput is
+  // absent -- suppliedInput (the same-session follow-up path) still takes
+  // priority when both are present.
   assert.match(
     source,
-    /registerCapabilityHandler\('maintenance\.complete', async \(envelope\) => maintenanceTaskCompleteResult\(envelope\.userId, envelope\.propertyId!, envelope\.message, envelope\.suppliedInput as MaintenanceCompletionWorkflowInput \| undefined\)\);/,
+    /registerCapabilityHandler\('maintenance\.complete', async \(envelope\) => maintenanceTaskCompleteResult\(envelope\.userId, envelope\.propertyId!, envelope\.message, \(envelope\.suppliedInput as MaintenanceCompletionWorkflowInput \| undefined\) \?\? \(launchMaintenanceTaskId\(envelope\) \? \{ taskId: launchMaintenanceTaskId\(envelope\)! \} : undefined\)\)\);/,
   );
   assert.match(
     source,

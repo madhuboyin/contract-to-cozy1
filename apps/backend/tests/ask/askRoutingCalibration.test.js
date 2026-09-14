@@ -105,7 +105,10 @@ test('routing quality reports are broken out by operation with reliability bins'
   assert.equal(report.aggregate.incorrectHighConfidence, 0);
   assert.ok(report.aggregate.top1Correct / report.aggregate.samples >= 0.95);
   assert.ok(report.aggregate.top3Recall / report.aggregate.samples >= 0.95);
-  assert.deepEqual(new Set(report.byOperation.map((row) => row.operationId)), new Set(Object.keys(ASK_OPERATION_DEFINITIONS)));
+  assert.deepEqual(
+    new Set(report.byOperation.map((row) => row.operationId)),
+    new Set(Object.values(ASK_OPERATION_DEFINITIONS).filter((definition) => definition.messageRoutable).map((definition) => definition.operationId)),
+  );
   for (const row of report.byOperation) {
     assert.ok(row.samples > 0);
     assert.ok(ASK_OPERATION_DEFINITIONS[row.operationId]);

@@ -115,7 +115,17 @@ test('recordHomeActionOriginLink is called from createThread (including its P200
   assert.match(factorySource, /import \{ recordHomeActionOriginLink \} from '\.\/decisionThreadHomeActionLink';/);
   const calls = [...factorySource.matchAll(/recordHomeActionOriginLink\(/g)];
   assert.ok(calls.length >= 2, `expected at least 2 recordHomeActionOriginLink calls (createThread, resumeThread), found ${calls.length}`);
-  assert.match(factorySource, /resumeThread\(resumeSelection\.thread\.decisionThreadId, input\.source, input\.homeActionOrigin\)/, 'the P2002 catch-and-resume fallback must forward homeActionOrigin, not drop it');
+  assert.match(factorySource, /resumeThread\(resumeSelection\.thread\.decisionThreadId, input\.source, input\.homeActionOrigin, input\.askExecutionId\)/, 'the P2002 catch-and-resume fallback must forward homeActionOrigin, not drop it');
+});
+
+test('askExecutionId is preserved as retry-safe CREATED or CONTINUED DecisionThread lineage', () => {
+  assert.match(factorySource, /async createOrResumeThread\(\{ propertyId, userId, primaryEntityId, askExecutionId, homeActionOrigin \}\)/);
+  assert.doesNotMatch(factorySource, /decisionThreadExecutionLink\.create\(/);
+  assert.match(factorySource, /decisionThreadExecutionLink\.createMany\(\{/);
+  assert.match(factorySource, /skipDuplicates:\s*true/);
+  assert.match(factorySource, /recordExecutionLink\(result\.thread\.id, input\.askExecutionId, 'CREATED'\)/);
+  assert.match(factorySource, /recordExecutionLink\(threadId, askExecutionId, 'CONTINUED'\)/);
+  assert.match(factorySource, /resumeThread\(resumeSelection\.thread\.decisionThreadId, input\.source, input\.homeActionOrigin, input\.askExecutionId\)/);
 });
 
 // Phase 3 review finding 4: the read-only selectThread path must not

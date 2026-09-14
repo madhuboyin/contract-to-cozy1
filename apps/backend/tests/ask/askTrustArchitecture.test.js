@@ -40,6 +40,21 @@ test('every operation exposes a valid English semantic contract', () => {
   }
 });
 
+test('orchestration-only capture operations are absent from raw-message retrieval', () => {
+  const internalOperations = Object.values(ASK_OPERATION_DEFINITIONS)
+    .filter((definition) => !definition.messageRoutable)
+    .map((definition) => definition.operationId);
+  assert.deepEqual(new Set(internalOperations), new Set([
+    'CAPTURE_FACT_CONFIRM',
+    'CAPTURE_EVENT_CONFIRM',
+    'CAPTURE_WARRANTY_CONFIRM',
+    'CAPTURE_EVIDENCE_CONFIRM',
+    'SELL_HOLD_RENT_GOAL_CAPTURE',
+  ]));
+  const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
+  assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);
+});
+
 test('normalization preserves the original and semantic retrieval handles property completeness paraphrases', () => {
   const message = "What information does this house still need?";
   const normalized = normalizeAskMessage(message);

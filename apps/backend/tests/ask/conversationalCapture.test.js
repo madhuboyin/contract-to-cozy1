@@ -172,6 +172,20 @@ test('processGoalCandidateAttachEvent parses the durable payload, calls processG
   assert.match(body, /status: 'PROCESSED'/);
 });
 
+test('goal capture persists its AskExecution and DecisionThreadExecutionLink atomically', () => {
+  const start = captureSource.indexOf('async function processGoalCandidate(');
+  const end = captureSource.indexOf('\n}\n\n// External review, Phase 6 [P2]', start);
+  const body = captureSource.slice(start, end);
+  const transaction = body.indexOf('return prisma.$transaction(async (tx) => {');
+  const execution = body.indexOf('await tx.askExecution.create({', transaction);
+  const link = body.indexOf('await tx.decisionThreadExecutionLink.createMany({', execution);
+  assert.ok(transaction > 0);
+  assert.ok(execution > transaction);
+  assert.ok(link > execution);
+  assert.match(body.slice(link), /askExecutionId:\s*execution\.id/);
+  assert.match(body.slice(link), /skipDuplicates:\s*true/);
+});
+
 test('claimAndProcessGoalAttachEvent claims PENDING -> PROCESSING before processing, and marks FAILED with backoff on failure -- never silently drops the event', () => {
   const idx = captureSource.indexOf('async function claimAndProcessGoalAttachEvent(');
   assert.ok(idx > 0);

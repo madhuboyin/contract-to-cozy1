@@ -156,7 +156,7 @@ export function askOperationSemanticIndexVersion(language: AskLanguageCode): str
   return askEmbeddingIndexVersion([
       registration.semanticIndexNamespace,
       ...Object.values(ASK_OPERATION_DEFINITIONS)
-        .filter((entry) => entry.semantic.supportedLanguages.includes(language))
+        .filter((entry) => entry.messageRoutable && entry.semantic.supportedLanguages.includes(language))
         .map((entry) => `${entry.operationId}@${entry.semantic.languagePacks[language]?.semanticVersion ?? 'missing'}`)
         .sort(),
     ]);
@@ -178,7 +178,7 @@ function operationEmbeddingIndex(language: AskLanguageCode): IndexedOperationDoc
   const existing = embeddingIndexCache.get(version);
   if (existing) return existing;
   const index = Object.values(ASK_OPERATION_DEFINITIONS)
-    .filter((definition) => definition.semantic.supportedLanguages.includes(language))
+    .filter((definition) => definition.messageRoutable && definition.semantic.supportedLanguages.includes(language))
     .map((definition) => {
       const semantic = definition.semantic.languagePacks[language]!;
       const documents = [semantic.intentDescription, ...semantic.supportedJobs, ...semantic.positiveExamples];
@@ -213,6 +213,7 @@ export function retrieveAskOperationCandidates(message: string, options: {
     : new Map<AskOperationId, IndexedOperationDocuments>();
   const eligible = options.eligibleOperationIds ? new Set(options.eligibleOperationIds) : null;
   return Object.values(ASK_OPERATION_DEFINITIONS)
+    .filter((definition) => definition.messageRoutable)
     .filter((definition) => !eligible || eligible.has(definition.operationId))
     .filter((definition) => definition.semantic.supportedLanguages.includes(language))
     .map((definition): AskSemanticCandidate => {

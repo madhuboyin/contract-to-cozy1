@@ -8,16 +8,16 @@ This section supersedes historical status notes and interim-gap descriptions bel
 | --- | --- |
 | 0 — decisions and blockers | Resolved in code for the approved scope, including Radar domain/entity matching. Live Radar data remains unverified. |
 | 1 — invocation | Shared capability invocation is wired into Ask. |
-| 2 — confirmation | The legacy proposal system is retired. New confirmation covers all seven kinds through canonical writers. Event and warranty link both ways; evidence independently points to that same event and attaches after event confirmation. |
+| 2 — confirmation | The legacy proposal system is retired. New confirmation covers all seven kinds through canonical writers or the two approved successor scopes: event-paired evidence and property-scoped notes. Event and warranty link both ways; evidence independently points to that same event and attaches after event confirmation. |
 | 3 — extraction | Structured extraction, correction validation, editable confirmation candidates, and the quality-scoring harness are implemented. Relative dates use the parent message timestamp and property timezone, persisted for retries. Live model-quality acceptance has not been demonstrated by these code checks. |
 | 4 — next actions | Plain questions contribute topic relevance alongside capability relationships and active goals. Missing facts use the canonical capture catalog and schemas, including enums and structured inputs. Recommendations with no usable capture contract are omitted; saves refresh readiness and remove stale recommendations if refresh fails. |
 | 5 — continuation | Delayed candidates have durable notification intent committed with persistence, plus worker retry and existing-session deep links. |
-| 6 — goals | The approved selling-decision slice loads property-scoped thread context before filtering. Brief follow-ups reach extraction; the prompt requires unambiguous interpretation and permits no candidate. Goal timeframe context is stored with its thread-linked execution. Additional goal families remain outside this slice. |
+| 6 — goals | The approved selling-decision slice loads property-scoped thread context before filtering. Brief follow-ups reach extraction; the prompt requires unambiguous interpretation and permits no candidate. Goal timeframe context is stored with its thread-linked execution, and shared snapshot adapters preserve retry-safe `CREATED`/`CONTINUED` execution lineage. Additional goal families remain outside this slice. |
 | 7 — exposure | The approved capability slices are implemented. Previously approved read-only boundaries and the HomeRenovationAdvisor exclusion remain explicit scope decisions. |
 
 Cross-phase recall now carries event titles, date precision and attribution through context selection into deterministic grounded-answer rendering. Ordinary recorded scalar facts are also renderable. Event relevance is selected before the prompt-size bound; older events captured through Ask remain eligible for the bounded context read.
 
-Validation for this fix: backend `tsc --noEmit --pretty false` passed; 178 focused environment-independent checks passed across Ask next actions, conversational capture, pre-filtering, typed grounded claims, extraction schema/evaluation scoring, and Property Context assemblers. Source/contract tracing covered the corresponding save, retry, confirmation and rendering paths. No database, browser session, worker deployment, or live extraction-provider evaluation was started. This is an implementation status, not evidence that every phase has executed seamlessly in a running environment.
+Latest validation (2026-09-14): backend and frontend `tsc --noEmit --pretty false` passed; 148 focused environment-independent checks passed across the seven Ask files interrupted by a concurrent grouped-list contract edit plus the snapshot-adapter behavior/governance suites. The full Ask sweep reached 471 passing tests and one expected live-provider skip, but seven test workers had loaded the temporarily inconsistent contract before its compatibility fix and failed TypeScript compilation; all seven affected files subsequently passed in the focused rerun. Routing performance remained within its 100 ms objective (98.085 ms p95 in the full sweep). No database, browser session, worker deployment, populated live Radar dataset, or live extraction-provider evaluation was available. This is implementation/static certification, not a claim that the external runtime gates have executed.
 
 ---
 
@@ -886,16 +886,12 @@ module both files can import.
    program's own Phase 4 precedent (System-A-vs-B), though not separately put to the user this
    session given the prior pass's own research had already narrowed it to a clear proportionate
    default.
-2. **The generic snapshot adapter factory silently drops `askExecutionId`** (`createOrResumeThread`'s
-   own interface declares the param; `snapshotDecisionFamilyAdapter.ts`'s actual implementation
-   never destructures or uses it, so no `DecisionThreadExecutionLink` audit row is ever created from
-   this path — confirmed by reading the function, not assumed from the interface). Decided
-   explicitly: **left as-is, not fixed this phase.** `DecisionThreadExecutionLink` is confirmed
-   (schema read directly) to be supplementary audit lineage only — `activeIdentityKey` is what makes
-   resumption correct, independent of this link. Fixing it would mean changing a shared factory used
-   by six decision families (refinance/capital-timeline/ownership-cost/savings-benefit/
-   coverage-question/sell-hold-rent), a cross-cutting change out of proportion to one vertical
-   slice's own scope. Real, named, undone follow-up — not silently ignored.
+2. **[Fixed 2026-09-14] The generic snapshot adapter factory silently dropped `askExecutionId`.**
+   `snapshotDecisionFamilyAdapter.ts` now preserves it on create, resume, and the P2002 race-loser
+   recovery path, writing retry-safe `DecisionThreadExecutionLink` rows with the correct `CREATED`
+   or `CONTINUED` role. The sell/hold/rent goal child execution and its execution link are persisted
+   in one transaction, so a completed goal-capture execution can no longer exist without its durable
+   cross-turn audit lineage. Source-governance tests cover both the shared factory and goal path.
 3. **Whether the routed `SELL_HOLD_RENT_ANALYSIS` operation itself (a direct question like "should I
    sell, hold, or rent?") should also attach a DecisionThread on every invocation**, not just the
    GOAL-statement path. Deliberately NOT done this phase: the acceptance criterion (this section's
@@ -1184,7 +1180,7 @@ Two new `DomainEventType` members and their consumer handlers in `processDomainE
 | Flag | Gates | Removal criterion |
 |---|---|---|
 | `askCapabilityInvocationV2` | Phase 1's registry-based dispatch (per-operation, can be enabled incrementally per §5's migration order) | Remove once every operation (the confirmed complete set per §4.8) is migrated and the old switch is deleted |
-| `askConfirmationConvergence` | Phase 2's new operation family + `GroundedAskProposal` retirement | Remove once all 7 kinds have parity and the old proposal path is deleted |
+| `askConfirmationConvergence` | Phase 2's new operation family + `GroundedAskProposal` retirement | Remove once all 7 kinds have a tested parity successor or approved successor scope and the old proposal path is deleted |
 | `askConversationalCapture` | Phase 3's pre-filter/extraction | Remove once pilot thresholds (FRD §15) are cleared in production and the flag has been at 100% for one full release cycle |
 | `askContextualNextActions` | Phase 4 | Remove once next-action generation is the only path (no fallback to static strings remains) |
 | `askProactiveContinuation` (implemented as `ASK_PROACTIVE_CONTINUATION_ENABLED` / `_KILL_SWITCH`, defaults **on**) | Phase 5, all three producers at once (`createAskNotificationContinuation` itself, not per-caller) | Not a migration gate to retire — this is a standing kill switch, kept indefinitely, for instantly stopping Ask continuations without a redeploy |
@@ -1205,7 +1201,7 @@ No flags for trivial internal refactors (e.g., the `DomainEventType` widening in
 2. "Should I refinance?"
 3. "I replaced my roof last summer for $14,500."
 4. "I serviced the HVAC yesterday for $275. Was that fair?"
-5. "Is my roof at risk because of the storms?" (blocked on §4.5/§4.6)
+5. "Is my roof at risk because of the storms?" (implementation complete; runtime acceptance requires populated live Radar data)
 6. "I'm thinking about selling next year."
 7. Correction scenario (§8.7 of the FRD)
 8. Duplicate retry scenario (the lease-reclaim race, FRD §22)
@@ -1246,7 +1242,7 @@ The program is complete when all seven tests from the request pass together, plu
 - **Test F:** Background signal → one contextual proactive Ask continuation.
 - **Test G:** New capability added → registry/shim registration → no new orchestrator domain branch, **covering both dispatch surfaces (corrected this revision, §4.9)**: neither the propose-time registry (Phase 1) nor the confirm-time registry (Phase 2) gains a new `askOrchestrator.service.ts` branch when a new confirmation-required capability is added.
 - **Test H (added this pass, relabeled this revision):** the `DomainEvent`-backed **extraction job's** candidate-set persistence — not the `AskConfirmationReceipt` confirmation saga, which is a separate mechanism with its own, already-correct lease pattern — whose claim is reclaimed mid-flight while the original attempt is still running does not persist the stale attempt's result once its claim token has moved on (FRD §22, Stage 2's fourth-round correction — this is the one race condition subtle enough to deserve its own named acceptance test, not just inclusion in "idempotency works").
-- **Test I (added this pass):** All 7 `GroundedAskProposal` kinds — including `UPLOAD_EVIDENCE` and `ADD_NOTE`, whose target representations this pass found were not yet decided — have passing parity tests before the old mechanism is deleted.
+- **Test I (amended by the approved retirement decision):** All 7 `GroundedAskProposal` kinds have either a passing canonical-parity successor or an explicitly approved and tested successor scope before the old mechanism is deleted. `UPLOAD_EVIDENCE` is limited to same-batch event evidence and `ADD_NOTE` is property-scoped; retirement tests prove no legacy model, route, service, or client call remains.
 
 ---
 

@@ -89,7 +89,10 @@ export function resolveAskRoutingCascade(message: string, options: {
     : new Set((Object.values(ASK_OPERATION_DEFINITIONS)
       .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
       .map((definition) => definition.operationId)));
-  const retrievedPool = retrieveAskOperationCandidates(normalized.normalized, {
+  // Retrieval owns normalization. Passing the already-normalized string here
+  // changed concept features for punctuation-bearing phrases and meant the
+  // runtime was not using the same input as its calibration evidence.
+  const retrievedPool = retrieveAskOperationCandidates(message, {
     eligibleOperationIds: eligibleSet,
     topK: ambiguityOperationIds.length ? 8 : 3,
     language,
@@ -98,7 +101,7 @@ export function resolveAskRoutingCascade(message: string, options: {
     ambiguityMargin: options.ambiguityMargin,
   });
   const focusedAmbiguityCandidates = ambiguityOperationIds.length
-    ? retrieveAskOperationCandidates(normalized.normalized, {
+    ? retrieveAskOperationCandidates(message, {
       eligibleOperationIds: ambiguityOperationIds.filter((operationId) => eligibleSet.has(operationId)),
       topK: 3,
       language,

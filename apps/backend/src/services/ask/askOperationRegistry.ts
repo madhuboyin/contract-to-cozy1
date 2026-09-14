@@ -177,6 +177,8 @@ export type AskSafetyClass = 'STANDARD' | 'MATERIAL_DECISION' | 'EMERGENCY_BOUND
 export type AskPropertyRoleFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
 
 export interface AskOperationDefinition extends AskOperationResolution {
+  /** False for orchestration-only operations created by trusted internal flows, never from raw message routing. */
+  messageRoutable: boolean;
   executionMode: AskExecutionMode;
   safetyClass: AskSafetyClass;
   propertyRoleFloor: AskPropertyRoleFloor;
@@ -184,6 +186,18 @@ export interface AskOperationDefinition extends AskOperationResolution {
   allowedBlockTypes: AskPresentationBlock['type'][];
   evalSuite: string;
   semantic: AskOperationSemanticContract;
+}
+
+export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
+  'CAPTURE_FACT_CONFIRM',
+  'CAPTURE_EVENT_CONFIRM',
+  'CAPTURE_WARRANTY_CONFIRM',
+  'CAPTURE_EVIDENCE_CONFIRM',
+  'SELL_HOLD_RENT_GOAL_CAPTURE',
+]);
+
+export function isAskMessageRoutableOperation(operationId: AskOperationId): boolean {
+  return !ASK_INTERNAL_OPERATION_IDS.has(operationId);
 }
 
 export interface AskOperationResult {
@@ -224,6 +238,7 @@ const definition = (
     family,
     confidence: 1,
     requiresProperty,
+    messageRoutable: isAskMessageRoutableOperation(operationId),
     executionMode,
     safetyClass,
     propertyRoleFloor,

@@ -1178,13 +1178,18 @@ function maintenanceUpdateSubject(message: string): string {
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null): Promise<AskOperationResult> {
   const [tasks, members] = await Promise.all([
     PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
     prisma.householdMember.findMany({ where: { propertyId }, include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } }),
   ]);
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/ACT-003: an inline row action
+  // (e.g. "Reschedule" on a maintenance card) carries a canonical taskId via
+  // launchContext, not a fuzzy title guess -- resolve it directly rather
+  // than making maintenanceCompletionMatch re-derive the same task from a
+  // synthesized message subject, which can fail to match at all.
   const subject = maintenanceUpdateSubject(message);
-  const match = maintenanceCompletionMatch(subject, tasks);
+  const match = (launchTaskId ? tasks.find((task) => task.id === launchTaskId) ?? null : null) ?? maintenanceCompletionMatch(subject, tasks);
   const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
   if (!match) {
     return {
@@ -1499,7 +1504,17 @@ async function maintenanceResult(
     .filter((task) => !highPriorityOnly || ['URGENT', 'HIGH'].includes(task.priority));
   const showCompleted = !cancelledOnly && (wantsCompleted || (!wantsOpen && !creationFocus));
   const showOpen = !cancelledOnly && (wantsOpen || (!wantsCompleted && !creationFocus) || (wantsCompleted && wantsOpen));
-  const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
+  // FRD ASK_COZY_INTERACTION_MODEL_UI_FRD §9.3/§11 (HAND-001/002): the
+  // Maintenance page already reads `priority=true` and `filter=overdue`
+  // (MaintenancePageClient.tsx) -- forward the filters this result actually
+  // applied so "Open Maintenance" lands on the same view instead of losing
+  // the homeowner's filter on handoff. dueSoonOnly/timeframe/scope/room
+  // have no destination-page equivalent yet and are disclosed in the block
+  // description below instead (HAND-002: acknowledge, don't silently drop).
+  const maintenanceHrefParams = new URLSearchParams({ propertyId });
+  if (highPriorityOnly) maintenanceHrefParams.set('priority', 'true');
+  if (overdueOnly) maintenanceHrefParams.set('filter', 'overdue');
+  const maintenanceHref = `/dashboard/maintenance?${maintenanceHrefParams.toString()}`;
   const canManage = access.role !== HouseholdRole.VIEWER;
 
   const recordItem = (task: typeof tasks[number], kind: 'OPEN' | 'COMPLETED' | 'CANCELLED') => {
@@ -1522,6 +1537,15 @@ async function maintenanceResult(
         task.isRecurring && task.frequency ? `Repeats ${task.frequency.toLowerCase().replace(/_/g, ' ')}` : null,
       ].filter((value): value is string => Boolean(value)),
       href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}&from=ask`,
+      // ASK_COZY_INTERACTION_MODEL_UI_FRD §9.2 (MAINT-005/006): item-level
+      // Complete/Reschedule -- entityType/id let the frontend send these
+      // back as launchContext, which launchMaintenanceTaskId resolves to
+      // this exact task (bypassing free-text fuzzy matching entirely).
+      entityType: kind === 'OPEN' ? 'MAINTENANCE_TASK' : null,
+      actions: kind === 'OPEN' && canManage ? [
+        { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY' as const },
+        { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY' as const },
+      ] : [],
     };
   };
 
@@ -1558,8 +1582,21 @@ async function maintenanceResult(
   }];
   if (!creationFocus) blocks.push({
     type: 'GROUPED_LIST', id: 'maintenance-groups', title: 'Maintenance record',
-    description: `${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing up to ${MAX_RESULT_ITEMS} items per section.`,
-    sections, actions: canManage ? [{ id: 'create-maintenance', label: 'Create a task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' }] : [],
+    // MAINT-003/MAINT-004: label every applied filter, including priority --
+    // "urgent" here is the existing canonical interpretation (URGENT or HIGH
+    // priority, not URGENT alone), so it is labeled accurately rather than
+    // implying a narrower or newly-invented urgency score.
+    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing up to ${MAX_RESULT_ITEMS} items per section.`,
+    // MAINT-003: "+N more" (AskWorkspace's GROUPED_LIST renderer) always
+    // links off actions[0] -- previously that was the conditional
+    // "Create a task" action (or nothing for a VIEWER), so any section past
+    // MAX_RESULT_ITEMS had no real full-result access. A dedicated
+    // view-all-in-filter link is always first now; "Create a task" (when
+    // permitted) stays available as a secondary action.
+    sections, actions: [
+      { id: 'view-all-maintenance', label: 'View all in Maintenance', href: maintenanceHref, style: 'SECONDARY' },
+      ...(canManage ? [{ id: 'create-maintenance', label: 'Create a task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' as const }] : []),
+    ],
   });
   const evidenceTasks = [...new Map([...filteredActive, ...filteredCompleted, ...(includeCancelled ? cancelled : [])].map((task) => [task.id, task])).values()];
   if (evidenceTasks.length) blocks.push({
@@ -6661,9 +6698,18 @@ registerCapabilityHandler('boundary.out-of-scope', async () => outOfScopeResult(
 // bypassing this registration entirely. Reading it here is what lets a
 // resolved Maintenance monitor-continuation (askFollowUpContext.ts's
 // suppliedInput.taskId) reach this handler at all.
-registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined));
+// ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/ACT-003: a fresh execution
+// launched from an inline row action (not a same-session follow-up, which
+// already reaches suppliedInput via askFollowUpContext.ts) carries its
+// canonical target as launchContext.entityId/entityType, e.g. a
+// "Complete"/"Reschedule" button on a maintenance card. Falling back to it
+// here is what lets that button resolve the exact task instead of the
+// generic message-text fuzzy match.
+const launchMaintenanceTaskId = (envelope: CapabilityInvocationEnvelope): string | null =>
+  envelope.launchContext?.entityType === 'MAINTENANCE_TASK' ? envelope.launchContext.entityId ?? null : null;
+registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, (envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined) ?? (launchMaintenanceTaskId(envelope) ? { taskId: launchMaintenanceTaskId(envelope)! } : undefined)));
 registerCapabilityHandler('maintenance.create', async (envelope) => maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, launchMaintenanceTaskId(envelope)));
 registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   const composedContext = deps.composedContext!;
   const seasonalEntry = composedContext.entries.find(

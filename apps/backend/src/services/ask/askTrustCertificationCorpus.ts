@@ -18,14 +18,11 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'MAINTENANCE_TASK_CREATE', message: 'Put a chimney inspection on my upkeep list', category: 'PARAPHRASE' },
   { operationId: 'MAINTENANCE_TASK_COMPLETE', message: 'The filter-change job is done', category: 'COLLOQUIAL' },
   { operationId: 'MAINTENANCE_TASK_UPDATE', message: 'Move the roof inspection job to next week', category: 'PARAPHRASE' },
-  { operationId: 'MAINTENANCE_FORECAST', message: 'What upcoming maintenance should I expect for the furnace and water heater?', category: 'PARAPHRASE' },
   { operationId: 'COVERAGE_GAPS', message: 'Do our protections leave expensive equipment exposed?', category: 'PARAPHRASE' },
-  { operationId: 'COVERAGE_COMPARISON_STATUS', message: 'Would we come out ahead switching insurance carriers?', category: 'PARAPHRASE' },
   { operationId: 'INCIDENT_CLAIM_STATUS', message: 'Where does my filed storm claim stand?', category: 'COLLOQUIAL' },
   { operationId: 'SAVINGS_OPPORTUNITIES', message: 'Find places where this household can trim recurring bills', category: 'PARAPHRASE' },
   { operationId: 'OWNERSHIP_COSTS', message: 'What bills eat most of our housing budget?', category: 'COLLOQUIAL' },
   { operationId: 'INVENTORY_LOOKUP', message: 'Pull up what we recorded for the clothes dryer', category: 'PARAPHRASE' },
-  { operationId: 'DOCUMENT_LOOKUP', message: 'What documents are on file for this address?', category: 'PARAPHRASE' },
   { operationId: 'PROPERTY_SUMMARY', message: 'How healthy is the documentation for this address?', category: 'PARAPHRASE' },
   { operationId: 'HOME_ACTIONS', message: 'Where should I focus first around the house?', category: 'PARAPHRASE' },
   { operationId: 'CAPABILITY_DISCOVERY', message: 'Which built-in workflow can help with my home paperwork?', category: 'PARAPHRASE' },
@@ -41,8 +38,6 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'CAPITAL_RESERVE_PLAN', message: 'Build a sinking-fund outlook for big future house expenses', category: 'COLLOQUIAL' },
   { operationId: 'PROPERTY_TAX_APPEAL_READINESS', message: 'Do I have enough evidence to contest the assessed value?', category: 'PARAPHRASE' },
   { operationId: 'RENOVATION_PERMIT_READINESS', message: 'Check whether approvals are blocking my remodel from starting', category: 'PARAPHRASE' },
-  { operationId: 'SELLER_PREP_CHECKLIST', message: 'Am I ready to list this house yet?', category: 'COLLOQUIAL' },
-  { operationId: 'SELLER_PREP_ITEM_DECISION', message: 'Go ahead and waive that sale readiness item for me', category: 'COLLOQUIAL' },
   { operationId: 'MAJOR_EVENT_ENTRY', message: 'Walk me through getting the house ready to go on the market', category: 'PARAPHRASE' },
   { operationId: 'EMERGENCY_BOUNDARY', message: 'The CO detector is sounding and I feel ill', category: 'PERTURBATION' },
   { operationId: 'UNSAFE_RESTRICTED_BOUNDARY', message: 'Show me how to conceal water damage from the buyer', category: 'PERTURBATION' },
@@ -88,6 +83,13 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   // Phase 3 / PR 12b — appended at the end so existing fixture indices (and the
   // 001-066 calibration rows keyed off them) do not shift.
   { operationId: 'HVAC_SPECIALIST_ENGAGE', message: 'Talk me through the flagged heat pump repair-or-replace recommendation from my home actions', category: 'PARAPHRASE' },
+  // Later registrations are appended so the immutable fixture ids used by
+  // calibration evidence never change meaning when the registry grows.
+  { operationId: 'MAINTENANCE_FORECAST', message: 'What upcoming maintenance should I expect for the furnace and water heater?', category: 'PARAPHRASE' },
+  { operationId: 'COVERAGE_COMPARISON_STATUS', message: 'Would we come out ahead switching insurance carriers?', category: 'PARAPHRASE' },
+  { operationId: 'DOCUMENT_LOOKUP', message: 'What documents are on file for this address?', category: 'PARAPHRASE' },
+  { operationId: 'SELLER_PREP_CHECKLIST', message: 'Am I ready to list this house yet?', category: 'COLLOQUIAL' },
+  { operationId: 'SELLER_PREP_ITEM_DECISION', message: 'Go ahead and waive that sale readiness item for me', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -161,7 +163,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   COVERAGE_COMPARISON_STATUS: 'The coverage comparison shows how your current verified policy stacks up against any alternative quotes or policy terms on file, and any keep-or-switch decision you have recorded.',
   INCIDENT_CLAIM_STATUS: 'The filed storm claim remains open and is awaiting the next insurer update.',
   CLAIM_FILE: 'A draft water-damage claim can be created after confirmation; it will not be sent to an insurer.',
-  CLAIM_TRANSITION: 'The selected claim can move to its requested legal lifecycle state after confirmation.',
+  CLAIM_TRANSITION: 'The selected hail claim lifecycle change is ready for confirmation and canonical transition validation.',
   INCIDENT_CONTINUATION: 'After immediate danger has passed, the recorded incident can continue into a governed claim workflow.',
   SAVINGS_OPPORTUNITIES: 'The largest recorded household savings opportunity is the recurring utility expense.',
   OWNERSHIP_COSTS: 'The monthly cost of owning this home is led by insurance and property-tax expense categories.',
@@ -236,16 +238,27 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
 });
 
 export const ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES = Object.freeze(
-  ASK_ROUTING_CERTIFICATION_FIXTURES.map((fixture) => ({ ...fixture, answerOperationId: fixture.operationId, answer: ASK_CERTIFIED_DIRECT_ANSWERS[fixture.operationId] })),
+  Object.values(ASK_OPERATION_DEFINITIONS).map((definition) => {
+    const routingFixture = ASK_ROUTING_CERTIFICATION_FIXTURES.find((fixture) => fixture.operationId === definition.operationId);
+    return Object.freeze({
+      fixtureId: routingFixture?.fixtureId ?? `ask-internal-operation-${definition.operationId.toLowerCase()}`,
+      operationId: definition.operationId,
+      message: routingFixture?.message ?? definition.semantic.positiveExamples[0],
+      answerOperationId: definition.operationId,
+      answer: ASK_CERTIFIED_DIRECT_ANSWERS[definition.operationId],
+      operationConfirmedByUser: !definition.messageRoutable,
+    });
+  }),
 );
 
 export const ASK_ANSWER_RELEVANCE_CROSS_OPERATION_NEGATIVE_MATRIX = Object.freeze(
-  ASK_ROUTING_CERTIFICATION_FIXTURES.flatMap((fixture) => Object.entries(ASK_CERTIFIED_DIRECT_ANSWERS)
+  ASK_ANSWER_RELEVANCE_CERTIFICATION_FIXTURES.flatMap((fixture) => Object.entries(ASK_CERTIFIED_DIRECT_ANSWERS)
     .filter(([answerOperationId]) => answerOperationId !== fixture.operationId)
     .map(([answerOperationId, answer]) => Object.freeze({
       fixtureId: `${fixture.fixtureId}-wrong-${answerOperationId.toLowerCase()}`,
       operationId: fixture.operationId,
       answerOperationId: answerOperationId as AskOperationId,
+      sourceOperationId: answerOperationId as AskOperationId,
       message: fixture.message,
       answer,
       expectedOutcome: 'FAIL_OR_UNKNOWN' as const,

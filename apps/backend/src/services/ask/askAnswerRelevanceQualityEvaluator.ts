@@ -5,6 +5,7 @@ export interface AskAnswerRelevanceFixture {
   operationId: AskOperationId;
   answerOperationId?: AskOperationId;
   sourceOperationId?: AskOperationId;
+  operationConfirmedByUser?: boolean;
   message: string;
   answer: string;
 }
@@ -29,6 +30,7 @@ export function evaluateAskAnswerRelevanceQuality(
     result: validateAskSemanticAnswerRelevance({
       question: fixture.message,
       operationId: fixture.operationId,
+      operationConfirmedByUser: fixture.operationConfirmedByUser,
       result: {
         status: 'ANSWERED', suggestions: [],
         blocks: [{ type: 'SUMMARY', id: 'certified-direct-answer', title: 'Direct answer', body: fixture.answer, tone: 'DEFAULT', actions: [] }],

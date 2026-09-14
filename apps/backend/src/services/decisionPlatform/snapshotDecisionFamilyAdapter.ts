@@ -78,6 +78,7 @@ export interface SnapshotDecisionFamilyAdapterDependencies {
   loadRecommendationChange?: typeof loadUnacknowledgedRecommendationChange;
   emitRecommendationChange?: typeof emitDecisionRecommendationChange;
   recordOriginLink?: typeof recordHomeActionOriginLink;
+  recordExecutionLink?: (threadId: string, askExecutionId: string, linkRole: 'CREATED' | 'CONTINUED') => Promise<unknown>;
 }
 
 export function hashSourceState(value: unknown): string {
@@ -107,6 +108,17 @@ export function createSnapshotDecisionFamilyAdapter(
 ): DecisionFamilyAdapter {
   const db = dependencies.db ?? prisma;
   const emitRecommendationChange = dependencies.emitRecommendationChange ?? emitDecisionRecommendationChange;
+  async function recordExecutionLink(threadId: string, askExecutionId: string | undefined, linkRole: 'CREATED' | 'CONTINUED') {
+    if (!askExecutionId) return;
+    if (dependencies.recordExecutionLink) {
+      await dependencies.recordExecutionLink(threadId, askExecutionId, linkRole);
+      return;
+    }
+    await db.decisionThreadExecutionLink.createMany({
+      data: [{ decisionThreadId: threadId, askExecutionId, linkRole }],
+      skipDuplicates: true,
+    });
+  }
   function buildSnapshotData(
     decisionThreadId: string,
     propertyId: string,
@@ -199,6 +211,7 @@ export function createSnapshotDecisionFamilyAdapter(
     threadId: string,
     source: SnapshotSourceState,
     homeActionOrigin?: HomeActionOriginRef,
+    askExecutionId?: string,
   ): Promise<DecisionFamilyThreadLineage> {
     const result = await db.$transaction(async (tx) => {
       const current = await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
@@ -247,6 +260,7 @@ export function createSnapshotDecisionFamilyAdapter(
     // thread" event worth attributing later.
     if (dependencies.recordOriginLink) await dependencies.recordOriginLink(threadId, homeActionOrigin);
     else await recordHomeActionOriginLink(threadId, homeActionOrigin);
+    await recordExecutionLink(threadId, askExecutionId, 'CONTINUED');
     // The Home interaction navigates immediately and does not render this
     // response. Keep a recomputed change unread until the persisted Home
     // notice is explicitly acknowledged by the homeowner.
@@ -258,6 +272,7 @@ export function createSnapshotDecisionFamilyAdapter(
     userId: string;
     primaryEntityId: string;
     homeActionOrigin?: HomeActionOriginRef;
+    askExecutionId?: string;
     source: SnapshotSourceState;
   }): Promise<DecisionFamilyThreadLineage> {
     const identityKey = activeDecisionThreadIdentityKey(input.propertyId, config.decisionDefinitionId, config.primaryEntityType, input.primaryEntityId);
@@ -318,7 +333,7 @@ export function createSnapshotDecisionFamilyAdapter(
       if (error?.code === 'P2002' && (error?.meta?.target as string[] | undefined)?.includes('activeIdentityKey')) {
         const resumeSelection = await selectThread(input.propertyId, input.primaryEntityId);
         if (resumeSelection.kind === 'UNIQUE') {
-          return resumeThread(resumeSelection.thread.decisionThreadId, input.source, input.homeActionOrigin);
+          return resumeThread(resumeSelection.thread.decisionThreadId, input.source, input.homeActionOrigin, input.askExecutionId);
         }
       }
       throw error;
@@ -330,6 +345,7 @@ export function createSnapshotDecisionFamilyAdapter(
     // every downstream consumer can query without re-parsing snapshot JSON.
     if (dependencies.recordOriginLink) await dependencies.recordOriginLink(result.thread.id, input.homeActionOrigin);
     else await recordHomeActionOriginLink(result.thread.id, input.homeActionOrigin);
+    await recordExecutionLink(result.thread.id, input.askExecutionId, 'CREATED');
     return toLineage(result.thread, null);
   }
 
@@ -347,7 +363,7 @@ export function createSnapshotDecisionFamilyAdapter(
 
     selectThread,
 
-    async createOrResumeThread({ propertyId, userId, primaryEntityId, homeActionOrigin }) {
+    async createOrResumeThread({ propertyId, userId, primaryEntityId, askExecutionId, homeActionOrigin }) {
       const selection = await selectThread(propertyId, primaryEntityId);
       if (selection.kind === 'AMBIGUOUS') {
         throw new DecisionFamilyAmbiguousThreadError(config.decisionDefinitionId, primaryEntityId);
@@ -356,9 +372,9 @@ export function createSnapshotDecisionFamilyAdapter(
       if (!source) throw new Error(`No current recommendation available for ${config.decisionDefinitionId}/${primaryEntityId}.`);
 
       if (selection.kind === 'UNIQUE') {
-        return resumeThread(selection.thread.decisionThreadId, source, homeActionOrigin);
+        return resumeThread(selection.thread.decisionThreadId, source, homeActionOrigin, askExecutionId);
       }
-      return createThread({ propertyId, userId, primaryEntityId, homeActionOrigin, source });
+      return createThread({ propertyId, userId, primaryEntityId, askExecutionId, homeActionOrigin, source });
     },
   };
 }

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { ASK_CAPABILITY_UNIQUE_OPERATION } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { ASK_CAPABILITY_UNIQUE_OPERATION } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 
 test('a capabilityId mapped to exactly one operation resolves to that operation', () => {
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['coverage-intelligence'], 'COVERAGE_GAPS');
