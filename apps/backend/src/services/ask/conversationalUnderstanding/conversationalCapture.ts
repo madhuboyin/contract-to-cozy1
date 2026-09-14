@@ -1863,21 +1863,34 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
       // childExecutions). Either way the event is resolved here-and-now on
       // the happy path; the worker's own poller remains the backstop if this
       // attempt itself fails or the process crashes before reaching here.
-      // Disclosed, narrow residual race, same class already accepted for
-      // `timedOut` itself: if this attempt finishes juuust inside budget,
-      // reads `timedOut === false` (decides "cancel"), and the timeout THEN
-      // fires while cancelRedundantCaptureNotification is still in flight
-      // (Promise.race hasn't resolved yet, since this async body hasn't
-      // returned), the race resolves to `[]` for the turn's own response
-      // while the real notification was just cancelled -- a millisecond-
-      // scale window, not the unconditional, guaranteed loss this whole
-      // mechanism exists to close.
+      //
+      // External review, 2026-09-14 (second round): a prior version of this
+      // code AWAITED the deliver/cancel call before returning `created` --
+      // that await gave the sibling `timeout` promise below a real window to
+      // fire while this attempt was still busy (Promise.race had not yet
+      // resolved, since this async body had not yet reached its own return
+      // statement), so a response that should have won the race could still
+      // lose it to the timeout, while cancelRedundantCaptureNotification had
+      // ALREADY marked the notification resolved -- neither inline delivery
+      // nor a notification. Fixed by reading `timedOut` and dispatching the
+      // deliver/cancel call WITHOUT awaiting it, then returning `created`
+      // immediately: `attempt`'s own promise now resolves on the very next
+      // microtask after persistCandidates settles, with no further `await`
+      // in between for the timeout's macrotask-queued callback to preempt --
+      // microtask callbacks (including this function's own resolution) are
+      // always drained before the next pending macrotask (`setTimeout`) can
+      // run, so `timedOut`'s value at the point it's read here is exactly
+      // the value `Promise.race` itself will honor. The dispatched call is
+      // still tracked to completion (errors logged, never left as an
+      // unhandled rejection) -- it simply no longer gates this turn's own
+      // response.
       if (notificationEventId) {
-        if (timedOut) {
-          await claimAndProcessCaptureNotificationEvent(notificationEventId);
-        } else {
-          await cancelRedundantCaptureNotification(notificationEventId);
-        }
+        const resolveNotification = timedOut
+          ? claimAndProcessCaptureNotificationEvent(notificationEventId)
+          : cancelRedundantCaptureNotification(notificationEventId);
+        resolveNotification.catch((error) => {
+          logger.warn({ error, parentExecutionId: input.parentExecutionId, notificationEventId }, '[ask-conversational-capture] capture-notification resolution failed');
+        });
       }
       return created;
     } catch (error) {

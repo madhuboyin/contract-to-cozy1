@@ -254,8 +254,33 @@ test('runConversationalCaptureForTurn delivers the capture-notification event wh
   const idx = captureSource.indexOf('export async function runConversationalCaptureForTurn(');
   assert.ok(idx > 0);
   const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
-  assert.match(body, /if \(timedOut\) \{\s*await claimAndProcessCaptureNotificationEvent\(notificationEventId\);/);
-  assert.match(body, /\} else \{\s*await cancelRedundantCaptureNotification\(notificationEventId\);/);
+  assert.match(body, /const resolveNotification = timedOut\s*\? claimAndProcessCaptureNotificationEvent\(notificationEventId\)\s*: cancelRedundantCaptureNotification\(notificationEventId\);/);
+});
+
+// External review, 2026-09-14 (second round): a prior version of this
+// dispatch AWAITED claimAndProcessCaptureNotificationEvent/
+// cancelRedundantCaptureNotification before returning `created` -- that
+// await gave the sibling `timeout` promise a real window to fire while this
+// attempt was still busy, so a response that should have won Promise.race
+// could still lose it (returning `[]`, no inline delivery) while the
+// notification had ALREADY been cancelled as "redundant" -- neither inline
+// delivery nor a notification. Fixed by dispatching without awaiting, then
+// returning immediately: `attempt`'s own promise now resolves on the very
+// next microtask after persistCandidates settles, with no further `await`
+// for the timeout's macrotask-queued callback to preempt.
+test('the capture-notification dispatch is NOT awaited before returning -- this is the actual race fix, not just which branch runs', () => {
+  const idx = captureSource.indexOf('export async function runConversationalCaptureForTurn(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  const dispatchIdx = body.indexOf('const resolveNotification = timedOut');
+  assert.ok(dispatchIdx > 0);
+  const returnIdx = body.indexOf('return created;', dispatchIdx);
+  assert.ok(returnIdx > dispatchIdx);
+  const between = body.slice(dispatchIdx, returnIdx);
+  // The dispatch itself must not be `await`ed -- only `.catch(...)` may
+  // follow it (tracking the promise to completion without blocking on it).
+  assert.doesNotMatch(between, /await (claimAndProcessCaptureNotificationEvent|cancelRedundantCaptureNotification|resolveNotification)/);
+  assert.match(between, /resolveNotification\.catch\(/);
 });
 
 test('processAskExtractionRequestedEvent (the always-delayed worker path) always attempts delivery, never cancellation', () => {
