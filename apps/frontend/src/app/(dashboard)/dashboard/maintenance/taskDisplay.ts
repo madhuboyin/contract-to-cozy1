@@ -96,12 +96,23 @@ export type TaskSplitOptions = {
   completedRange: CompletedRange;
   priorityOnly?: boolean;
   overdueOnly?: boolean;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD HAND-001-003: Ask's due-soon filter
+  // (nextDueDate within 30 days) forwarded via `filter=due-soon`, matching
+  // askOrchestrator.service.ts's own dueSoonBoundary definition exactly so
+  // "due soon" means the same 30-day window on both sides of the handoff.
+  dueSoonOnly?: boolean;
+  // Ask's domain-scope phrase (e.g. "hvac"), forwarded via `system=`.
+  // Matched as a case-insensitive substring against title/description/
+  // assetType/serviceCategory -- an approximation, not a canonical
+  // category match, since Ask's own scope terms are keyword aliases, not
+  // a structured category enum.
+  systemScope?: string | null;
   now?: Date;
 };
 
 export function splitAndSortTasks(
   tasks: PropertyMaintenanceTask[],
-  { completedRange, priorityOnly = false, overdueOnly = false, now = new Date() }: TaskSplitOptions
+  { completedRange, priorityOnly = false, overdueOnly = false, dueSoonOnly = false, systemScope = null, now = new Date() }: TaskSplitOptions
 ): { openTasks: PropertyMaintenanceTask[]; completedTasks: PropertyMaintenanceTask[] } {
   const cutoff = cutoffForCompletedRange(completedRange, now);
 
@@ -112,6 +123,21 @@ export function splitAndSortTasks(
       const dueDate = parseMaintenanceDate(t.nextDueDate);
       return dueDate ? dueDate < now : false;
     });
+  }
+
+  if (dueSoonOnly) {
+    const dueSoonBoundary = new Date(now.getTime() + 30 * 86_400_000);
+    open = open.filter((t) => {
+      const dueDate = parseMaintenanceDate(t.nextDueDate);
+      return dueDate ? dueDate >= now && dueDate <= dueSoonBoundary : false;
+    });
+  }
+
+  if (systemScope) {
+    const needle = systemScope.toLowerCase();
+    open = open.filter((t) => [t.title, t.description, t.assetType, t.serviceCategory]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(needle)));
   }
 
   if (priorityOnly) {

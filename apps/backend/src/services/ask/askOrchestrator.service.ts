@@ -1,6 +1,6 @@
 import { getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
 import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory, WarrantyCategory } from '@prisma/client';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
@@ -1472,10 +1472,67 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
   };
 }
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/FRESH-001: an explicit
+// representation of "what the homeowner is currently looking at," separate
+// from any single conversational turn. `resultId` is minted once (the
+// first time a distinct maintenance query is asked) and carried forward
+// unchanged across every filter-chip click and refresh of that SAME
+// interactive result -- it is NOT the executionId, which is a new row per
+// turn. Stored inside the execution's own parametersJson (no new table);
+// looked up by launchContext.sourceExecutionId, which a declared filter
+// chip already carries per round 9's fix.
+interface MaintenanceViewState {
+  resultId: string;
+  // The raw matched phrase behind each still-applied dimension (e.g.
+  // "hvac", "this month") -- not the derived boolean/label -- so it can be
+  // re-fed into the same regex-based parsing a fresh query already uses,
+  // rather than requiring a second, parallel parsing path.
+  domainScopePhrase: string | null;
+  dateScopePhrase: string | null;
+  statusFilter: 'ALL_OPEN' | 'OVERDUE' | 'DUE_SOON' | 'URGENT';
+  selectedTaskId: string | null;
+  revision: number;
+}
+
+async function loadMaintenanceViewState(executionId: string, userId: string): Promise<MaintenanceViewState | null> {
+  const row = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { parametersJson: true } });
+  const parameters = row?.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson)
+    ? row.parametersJson as { viewState?: unknown }
+    : null;
+  const viewState = parameters?.viewState;
+  if (!viewState || typeof viewState !== 'object' || Array.isArray(viewState) || typeof (viewState as { resultId?: unknown }).resultId !== 'string') return null;
+  return viewState as MaintenanceViewState;
+}
+
+// ASK_COZY_INTERACTION_MODEL_UI_FRD item 2 (view-state continuity): a
+// declared filter chip's own message only conveys the NEW status/priority
+// selection ("Only show overdue tasks") -- round 9's fix deliberately
+// stopped concatenating the prior turn's raw text (that was the mechanism
+// that kept a cleared status filter stuck). Re-inject only the PRIOR
+// turn's own previously-parsed domain/date phrases here instead --
+// reconstructing parser input from structured state, not concatenating
+// conversation text -- so a status chip replaces only the status dimension
+// while an established domain/date scope (e.g. HVAC, "this month")
+// survives. "Clear all filters" explicitly opts out. Exported standalone
+// (not inlined into maintenanceResult, which needs a live DB context to
+// exercise at all) so this specific merge behavior is directly unit
+// -testable.
+export function mergeMaintenanceViewContinuation(
+  priorViewState: Pick<MaintenanceViewState, 'domainScopePhrase' | 'dateScopePhrase'> | null | undefined,
+  message: string,
+): { effectiveMessage: string; isClearAllFilters: boolean } {
+  const isClearAllFilters = /\bclear all filters\b/i.test(message);
+  const effectiveMessage = (priorViewState && !isClearAllFilters)
+    ? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, message].filter(Boolean).join(' ')
+    : message;
+  return { effectiveMessage, isClearAllFilters };
+}
+
 async function maintenanceResult(
   userId: string,
   propertyId: string,
   message: string,
+  priorViewState: MaintenanceViewState | null | undefined,
   context: MaintenanceTaskContext,
   seasonalContext: SeasonalChecklistContext | null,
   seasonalContextAvailable: boolean,
@@ -1493,18 +1550,19 @@ async function maintenanceResult(
     now,
   });
   if (seasonalResult) return seasonalResult;
-  const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(message, now, timeZone, context.purchaseDate);
-  const wantsCompleted = /\b(?:completed|finished|done|completion|service history|what did (?:i|we) complete)\b/i.test(message);
-  const wantsOpen = /\b(?:pending|remaining|still|open|overdue|due|upcoming|coming up|needs review|in progress|high priority|highest priority|priority tasks?|before (?:winter|spring|summer|fall|autumn))\b/i.test(message);
-  const includeCancelled = /\b(?:cancelled|canceled|archived|dismissed|all records|including cancelled|including canceled)\b/i.test(message);
-  const cancelledOnly = /\b(?:cancelled|canceled|archived|dismissed)\b/i.test(message)
-    && !/\b(?:including cancelled|including canceled|all records)\b/i.test(message);
-  const overdueOnly = /\boverdue|past due\b/i.test(message);
-  const dueSoonOnly = /\bdue soon|coming up|upcoming|what(?:'s| is) due\b/i.test(message);
-  const highPriorityOnly = /\b(?:urgent|high priority|highest priority|priority tasks?)\b/i.test(message);
-  const creationFocus = /\b(?:create|add|schedule|set up)\b.{0,30}\b(?:maintenance(?: task)?|tasks?)\b/i.test(message);
-  const scopeTerms = maintenanceScopeTerms(message);
-  const normalizedMessage = message.toLowerCase();
+  const { effectiveMessage, isClearAllFilters } = mergeMaintenanceViewContinuation(priorViewState, message);
+  const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(effectiveMessage, now, timeZone, context.purchaseDate);
+  const wantsCompleted = /\b(?:completed|finished|done|completion|service history|what did (?:i|we) complete)\b/i.test(effectiveMessage);
+  const wantsOpen = /\b(?:pending|remaining|still|open|overdue|due|upcoming|coming up|needs review|in progress|high priority|highest priority|priority tasks?|before (?:winter|spring|summer|fall|autumn))\b/i.test(effectiveMessage);
+  const includeCancelled = /\b(?:cancelled|canceled|archived|dismissed|all records|including cancelled|including canceled)\b/i.test(effectiveMessage);
+  const cancelledOnly = /\b(?:cancelled|canceled|archived|dismissed)\b/i.test(effectiveMessage)
+    && !/\b(?:including cancelled|including canceled|all records)\b/i.test(effectiveMessage);
+  const overdueOnly = /\boverdue|past due\b/i.test(effectiveMessage);
+  const dueSoonOnly = /\bdue soon|coming up|upcoming|what(?:'s| is) due\b/i.test(effectiveMessage);
+  const highPriorityOnly = /\b(?:urgent|high priority|highest priority|priority tasks?)\b/i.test(effectiveMessage);
+  const creationFocus = /\b(?:create|add|schedule|set up)\b.{0,30}\b(?:maintenance(?: task)?|tasks?)\b/i.test(effectiveMessage);
+  const scopeTerms = maintenanceScopeTerms(effectiveMessage);
+  const normalizedMessage = effectiveMessage.toLowerCase();
   const roomScope = [...new Set(tasks.map((task) => task.room?.name?.trim()).filter((value): value is string => Boolean(value)))]
     .sort((left, right) => right.length - left.length)
     .find((roomName) => normalizedMessage.includes(roomName.toLowerCase())) ?? null;
@@ -1531,15 +1589,17 @@ async function maintenanceResult(
   const showCompleted = !cancelledOnly && (wantsCompleted || (!wantsOpen && !creationFocus));
   const showOpen = !cancelledOnly && (wantsOpen || (!wantsCompleted && !creationFocus) || (wantsCompleted && wantsOpen));
   // FRD ASK_COZY_INTERACTION_MODEL_UI_FRD §9.3/§11 (HAND-001/002): the
-  // Maintenance page already reads `priority=true` and `filter=overdue`
-  // (MaintenancePageClient.tsx) -- forward the filters this result actually
-  // applied so "Open Maintenance" lands on the same view instead of losing
-  // the homeowner's filter on handoff. dueSoonOnly/timeframe/scope/room
-  // have no destination-page equivalent yet and are disclosed in the block
-  // description below instead (HAND-002: acknowledge, don't silently drop).
+  // Maintenance page reads `priority=true`, `filter=overdue`, and now also
+  // `filter=due-soon` and `system=<phrase>` (MaintenancePageClient.tsx /
+  // taskDisplay.ts, added for this handoff). Date-range ("this month") and
+  // room scope still have no destination-page equivalent and are disclosed
+  // in the block description below instead (HAND-002: acknowledge, don't
+  // silently drop) rather than silently ignored on arrival.
   const maintenanceHrefParams = new URLSearchParams({ propertyId });
   if (highPriorityOnly) maintenanceHrefParams.set('priority', 'true');
   if (overdueOnly) maintenanceHrefParams.set('filter', 'overdue');
+  else if (dueSoonOnly) maintenanceHrefParams.set('filter', 'due-soon');
+  if (scopeTerms[0]) maintenanceHrefParams.set('system', scopeTerms[0]);
   const maintenanceHref = `/dashboard/maintenance?${maintenanceHrefParams.toString()}`;
   const canManage = access.role !== HouseholdRole.VIEWER;
 
@@ -1622,18 +1682,31 @@ async function maintenanceResult(
     // already recognizes, so a click reuses the existing filter-refinement
     // pipeline (server-side full-collection re-query, RES-003 duplicate-card
     // suppression) rather than a new dispatch path.
+    // ASK_COZY_INTERACTION_MODEL_UI_FRD item 2: All open/Overdue/Due soon/
+    // Urgent replace only the status/priority dimension, retaining any
+    // established domain/date scope (see effectiveMessage above) --
+    // "Clear all filters" is the one control that resets everything,
+    // offered only when there is a domain/date scope actually worth
+    // clearing (otherwise it would be redundant with "All open").
     filters: [
       { id: 'all', label: 'All open', message: 'Now show all open maintenance tasks', active: !overdueOnly && !dueSoonOnly && !highPriorityOnly },
       { id: 'overdue', label: 'Overdue', message: 'Only show overdue tasks', active: overdueOnly },
       { id: 'due-soon', label: 'Due soon', message: 'Only show tasks due soon', active: dueSoonOnly },
       { id: 'urgent', label: 'Urgent', message: 'Only show urgent tasks', active: highPriorityOnly },
+      ...(scopeTerms.length || timeframe ? [{ id: 'clear-all', label: 'Clear all filters', message: 'Clear all filters and show all open maintenance tasks', active: false }] : []),
     ],
     id: 'maintenance-groups', title: 'Maintenance record',
     // MAINT-003/MAINT-004: label every applied filter, including priority --
     // "urgent" here is the existing canonical interpretation (URGENT or HIGH
     // priority, not URGENT alone), so it is labeled accurately rather than
     // implying a narrower or newly-invented urgency score.
-    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing up to ${MAX_RESULT_ITEMS} items per section.`,
+    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing up to ${MAX_RESULT_ITEMS} items per section.${
+      // ASK_COZY_INTERACTION_MODEL_UI_FRD HAND-002: the Maintenance page
+      // now receives priority/overdue/due-soon/system, but has no
+      // date-range or room filter UI at all -- disclose that explicitly
+      // rather than letting "Open Maintenance" silently drop them.
+      (timeframe || roomScope) ? ` ${[timeframe && 'the date filter', roomScope && 'the room filter'].filter(Boolean).join(' and ')} will not carry over to the Maintenance page.` : ''
+    }`,
     // MAINT-003: "+N more" (AskWorkspace's GROUPED_LIST renderer) always
     // links off actions[0] -- previously that was the conditional
     // "Create a task" action (or nothing for a VIEWER), so any section past
@@ -1671,10 +1744,28 @@ async function maintenanceResult(
   // something useful; an empty array is a legitimate outcome (A21).
   const hasOverdueTask = active.some((task) => task.nextDueDate && task.nextDueDate < now);
   const hasDueSoonTask = active.some((task) => task.nextDueDate && task.nextDueDate >= now && task.nextDueDate <= dueSoonBoundary);
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/FRESH-001: stamp this
+  // turn's view state -- resultId carried forward unchanged (or minted
+  // fresh for a genuinely new query, including an explicit "clear all"),
+  // domain/date phrases taken from what actually matched in effectiveMessage
+  // (so they reflect this turn's real, current scope, ready to carry into
+  // the next), statusFilter derived in the same precedence the chips
+  // display, selectedTaskId untouched by a filter change, revision bumped
+  // so a stale response can be detected by comparing against it.
+  const statusFilter: MaintenanceViewState['statusFilter'] = overdueOnly ? 'OVERDUE' : dueSoonOnly ? 'DUE_SOON' : highPriorityOnly ? 'URGENT' : 'ALL_OPEN';
+  const viewState: MaintenanceViewState = {
+    resultId: (priorViewState && !isClearAllFilters) ? priorViewState.resultId : randomUUID(),
+    domainScopePhrase: scopeTerms[0] ?? null,
+    dateScopePhrase: timeframe?.label ?? null,
+    statusFilter,
+    selectedTaskId: isClearAllFilters ? null : priorViewState?.selectedTaskId ?? null,
+    revision: (priorViewState?.revision ?? 0) + 1,
+  };
   return {
     status: missingPurchaseDate ? 'READY_WITH_LIMITATIONS' : creationFocus ? (canManage ? 'READY_WITH_LIMITATIONS' : 'BLOCKED') : 'ANSWERED',
     reasonCode: missingPurchaseDate ? 'MAINTENANCE_PURCHASE_DATE_MISSING' : creationFocus ? (canManage ? 'MAINTENANCE_WORKFLOW_REQUIRED' : 'ASK_PERMISSION_REQUIRED') : undefined,
     contextVersion: createHash('sha256').update(JSON.stringify(tasks.map((task) => ({ id: task.id, status: task.status, updatedAt: task.updatedAt })))).digest('hex'),
+    parameters: { viewState },
     blocks,
     suggestions: [
       ...(hasOverdueTask && !overdueOnly ? ['Show overdue tasks only'] : []),
@@ -6774,10 +6865,18 @@ registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   const seasonalEntry = composedContext.entries.find(
     (entry) => entry.key === skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER),
   );
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005: a declared filter chip
+  // names the exact execution it was rendered on (round 9) -- look up its
+  // stored view state so maintenanceResult can merge the carried-over
+  // domain/date scope with the chip's own status change.
+  const priorViewState = envelope.launchContext?.sourceExecutionId
+    ? await loadMaintenanceViewState(envelope.launchContext.sourceExecutionId, envelope.userId)
+    : null;
   return maintenanceResult(
     envelope.userId,
     envelope.propertyId!,
     envelope.message,
+    priorViewState,
     composedContext.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
     (composedContext.values[skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER)] as SeasonalChecklistContext | undefined) ?? null,
     seasonalEntry?.status === 'AVAILABLE',
@@ -7340,26 +7439,43 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
   }
 }
 
-// ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: computes what to store as this
-// write's originalResponse -- reused from the row's existing resultJson if
-// one was already stamped (a refresh/confirm/edit write must never replace
-// it), or stamped fresh from this write's own blocks if this is the row's
-// first-ever result. Every write site below reads `execution.resultJson`
-// (a snapshot from before this write) and passes it here rather than each
-// reimplementing this preserve-or-stamp logic.
-function preservedOriginalResponse(existingResultJson: unknown, freshBlocks: AskPresentationBlock[]): { blocks: AskPresentationBlock[]; observedAt: string } {
+// ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: the ONE shared history-
+// preservation policy for every write that replaces an execution's
+// resultJson -- success, failure, expiry, conflict, cancellation and
+// recovery alike. External review finding: a prior, narrower version of
+// this only ran on 4 of this file's 24 resultJson write sites (confirm
+// success, edit, refresh, creation); every expiry/conflict/cancellation
+// path silently dropped both the original snapshot and continuation
+// identity. It also mislabeled a fresh error/expiry/conflict blocks
+// payload as "the original response" whenever a row had no formal
+// snapshot yet -- fixed here: when no valid originalResponse exists but
+// the row DID hold some previously stored answer (a row predating this
+// policy, or from a write site not yet covered), that previous answer
+// becomes the original, never this write's own blocks.
+export function preservedExecutionHistory(existingResultJson: unknown, freshBlocks: AskPresentationBlock[]): {
+  originalResponse: { blocks: AskPresentationBlock[]; observedAt: string };
+  continuesExecutionId: string | null;
+} {
   const existing = existingResultJson && typeof existingResultJson === 'object' && !Array.isArray(existingResultJson)
-    ? (existingResultJson as { originalResponse?: unknown }).originalResponse
+    ? existingResultJson as { originalResponse?: unknown; blocks?: unknown; continuesExecutionId?: unknown }
     : null;
-  if (existing && typeof existing === 'object' && !Array.isArray(existing) && Array.isArray((existing as { blocks?: unknown }).blocks) && typeof (existing as { observedAt?: unknown }).observedAt === 'string') {
-    return existing as { blocks: AskPresentationBlock[]; observedAt: string };
+  const continuesExecutionId = typeof existing?.continuesExecutionId === 'string' ? existing.continuesExecutionId : null;
+  const validExisting = existing?.originalResponse && typeof existing.originalResponse === 'object' && !Array.isArray(existing.originalResponse)
+    && Array.isArray((existing.originalResponse as { blocks?: unknown }).blocks)
+    && typeof (existing.originalResponse as { observedAt?: unknown }).observedAt === 'string'
+    ? existing.originalResponse as { blocks: AskPresentationBlock[]; observedAt: string }
+    : null;
+  if (validExisting) return { originalResponse: validExisting, continuesExecutionId };
+  if (Array.isArray(existing?.blocks) && existing.blocks.length > 0) {
+    return { originalResponse: { blocks: existing.blocks as AskPresentationBlock[], observedAt: new Date().toISOString() }, continuesExecutionId };
   }
-  return { blocks: freshBlocks, observedAt: new Date().toISOString() };
+  return { originalResponse: { blocks: freshBlocks, observedAt: new Date().toISOString() }, continuesExecutionId };
 }
 
 function mapPersistedExecution(execution: {
   id: string; sessionId: string; message: string; status: AskExecutionStatus; reasonCode?: string | null; propertyId: string | null; operationId: string | null;
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
+  parametersJson?: Prisma.JsonValue | null;
   skillId?: string | null; skillVersion?: string | null; skillDomain?: string | null;
   createdAt: Date; updatedAt: Date;
 }, property: { id: string; label: string } | null, childExecutions: AskExecutionResponse[] = []): AskExecutionResponse {
@@ -7380,6 +7496,15 @@ function mapPersistedExecution(execution: {
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
     ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown; originalResponse?: unknown }
     : {};
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005: viewState lives in
+  // parametersJson (stamped by maintenanceResult), not resultJson.
+  const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+    ? execution.parametersJson as { viewState?: unknown }
+    : null;
+  const rawViewState = storedParameters?.viewState;
+  const viewState = rawViewState && typeof rawViewState === 'object' && !Array.isArray(rawViewState) && typeof (rawViewState as { resultId?: unknown }).resultId === 'string'
+    ? rawViewState as { resultId: string; domainScopePhrase: string | null; dateScopePhrase: string | null; statusFilter: string; selectedTaskId: string | null; revision: number }
+    : null;
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
   const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;
   const successfulAnswer = ['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(execution.status);
@@ -7406,6 +7531,7 @@ function mapPersistedExecution(execution: {
     originalResponse: stored.originalResponse && typeof stored.originalResponse === 'object' && !Array.isArray(stored.originalResponse)
       ? stored.originalResponse
       : null,
+    viewState,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
     captureRequests: Array.isArray(stored.captureRequests)
@@ -7501,6 +7627,7 @@ async function expireIfSkillBindingChanged(execution: AskExecution): Promise<Ask
           actions: [],
         }],
         captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+        ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY' as const, id: 'ask-skill-binding-expired', title: 'This request is no longer available', body: 'No action was performed.', tone: 'CAUTION' as const, actions: [] }]),
       }),
     },
   });
@@ -7852,7 +7979,11 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         // pagination/specialist/monitor continuations, which are legitimate
         // separate answers) is marked so the frontend can update the prior
         // card's surface instead of appending a duplicate list.
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedOriginalResponse(execution.resultJson, result.blocks) }),
+        // This is a brand-new execution row (execution.resultJson is null
+        // at this point), so continuesExecutionId is a fresh assignment
+        // from this turn's own follow-up resolution, not a preserved value
+        // -- only originalResponse comes from the shared history policy.
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedExecutionHistory(execution.resultJson, result.blocks).originalResponse }),
         completedAt,
       },
     });
@@ -7928,6 +8059,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
           blocks: askFailureBlocks(caught, retryable),
           captureRequests: [], confirmation: null, clarification: null,
           suggestions: retryable ? ['Ask this question again'] : [],
+          ...preservedExecutionHistory(execution.resultJson, askFailureBlocks(caught, retryable)),
         }),
       },
     });
@@ -7994,6 +8126,7 @@ export async function submitAskClarification(userId: string, executionId: string
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
           blocks: [{ type: 'SUMMARY', id: 'clarification-expired', title: 'This clarification expired', body: 'Ask the question again so the answer uses current home records and routing rules.', tone: 'CAUTION', actions: [] }],
           captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+          ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY' as const, id: 'clarification-expired', title: 'This clarification expired', body: 'No action was performed.', tone: 'CAUTION' as const, actions: [] }]),
         }),
       },
     });
@@ -8109,7 +8242,7 @@ export async function submitAskClarification(userId: string, executionId: string
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: asInputJson(nextParameters),
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -8119,6 +8252,7 @@ export async function submitAskClarification(userId: string, executionId: string
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';
+    const failureBlocks = askFailureBlocks(caught, retryable);
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {
@@ -8127,9 +8261,10 @@ export async function submitAskClarification(userId: string, executionId: string
         completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null,
         resultJson: asInputJson({
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
-          blocks: askFailureBlocks(caught, retryable),
+          blocks: failureBlocks,
           captureRequests: [], confirmation: null, clarification: null,
           suggestions: retryable ? ['Ask this question again'] : [],
+          ...preservedExecutionHistory(execution.resultJson, failureBlocks),
         }),
       },
     });
@@ -8193,7 +8328,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -8203,6 +8338,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';
+    const failureBlocks = askFailureBlocks(caught, retryable);
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {
@@ -8211,9 +8347,10 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
         completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null,
         resultJson: asInputJson({
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
-          blocks: askFailureBlocks(caught, retryable),
+          blocks: failureBlocks,
           captureRequests: [], confirmation: null, clarification: null,
           suggestions: retryable ? ['Ask this question again'] : [],
+          ...preservedExecutionHistory(execution.resultJson, failureBlocks),
         }),
       },
     });
@@ -8349,6 +8486,7 @@ async function submitNextActionMissingFactCapture(
         clarification: stored.clarification ?? null,
         suggestions: stored.suggestions ?? [],
         skillHandoff: stored.skillHandoff ?? null,
+        ...preservedExecutionHistory(execution.resultJson, refreshedBlocks as AskPresentationBlock[]),
       }),
     },
   });
@@ -8405,6 +8543,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
             confirmation: null,
             clarification: null,
             suggestions: unavailable.suggestions,
+            ...preservedExecutionHistory(execution.resultJson, unavailable.blocks),
           }),
           completedAt: new Date(),
         },
@@ -8453,7 +8592,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: replayed.reasonCode,
         contextVersion: replayed.contextVersion ?? previousCapture.contextVersion,
         parametersJson: replayed.parameters ? asInputJson(replayed.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions, skillHandoff: replayed.skillHandoff ?? null }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions, skillHandoff: replayed.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, replayed.blocks) }),
         completedAt: terminalStatus(replayed.status) ? new Date() : null,
       },
     });
@@ -8973,7 +9112,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion ?? capturedContextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -9047,18 +9186,11 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   }
   const operation = { ...getAskOperationDefinition(execution.operationId as AskOperationId), confidence: execution.intentConfidence ?? 1 };
   const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
-  // External review finding (RES-003/MAINT-003): this overwrite dropped
-  // continuesExecutionId, since it was never read from the row being
-  // overwritten. Refreshing a filter-continuation execution (e.g. "only
-  // show urgent") would silently clear the field that marks it as
-  // superseding an earlier card, so the frontend's duplicate-card
-  // suppression would then treat the earlier, now-stale card as visible
-  // again. Preserve whatever this row already had -- refreshing a result
-  // does not change which result it continues.
-  const priorStoredResult = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { continuesExecutionId?: unknown }
-    : {};
-  const preservedContinuesExecutionId = typeof priorStoredResult.continuesExecutionId === 'string' ? priorStoredResult.continuesExecutionId : null;
+  // RES-001/RES-003/MAINT-003: refreshing a result does not change which
+  // result it continues, nor what it originally answered -- both are
+  // preserved from whatever this row already had via the one shared
+  // history policy.
+  const history = preservedExecutionHistory(execution.resultJson, result.blocks);
   const saved = await prisma.askExecution.update({
     where: { id: execution.id },
     data: {
@@ -9066,7 +9198,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       reasonCode: result.reasonCode,
       contextVersion: result.contextVersion,
       parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: preservedContinuesExecutionId, originalResponse: preservedOriginalResponse(execution.resultJson, result.blocks) }),
+      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: history.continuesExecutionId, originalResponse: history.originalResponse }),
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });
@@ -10678,6 +10810,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
           confirmation: null,
           clarification: null,
           suggestions: unavailable.suggestions,
+          ...preservedExecutionHistory(execution.resultJson, unavailable.blocks),
         }),
         completedAt: new Date(),
       },
@@ -10754,6 +10887,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
             blocks: inapplicable.blocks,
             captureRequests: [], confirmation: null, clarification: null,
             suggestions: inapplicable.suggestions,
+            ...preservedExecutionHistory(execution.resultJson, inapplicable.blocks),
           }),
           completedAt: terminalStatus(inapplicable.status) ? new Date() : null,
         },
@@ -10792,7 +10926,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       where: { id: execution.id },
       data: {
         status: 'EXPIRED', reasonCode: 'ASK_CONFIRMATION_EXPIRED', completedAt: new Date(),
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed. Ask again to review current home records and settings.', details: [], actions: [] }], captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'] }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed. Ask again to review current home records and settings.', details: [], actions: [] }], captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'], ...preservedExecutionHistory(execution.resultJson, [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed.', details: [], actions: [] }]) }),
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'EXPIRED', metadataJson: asInputJson({ reason: 'CONFIRMATION_EXPIRED' }) } });
@@ -10936,6 +11070,11 @@ export async function confirmAskExecution(userId: string, executionId: string, i
             schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
             blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-conflict', title: 'This changed before it could be confirmed', status: 'EXPIRED', description, details: [], actions: [] }],
             captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+            // External review's specific example: the conflict handling
+            // correctly blocks the stale write, but was replacing resultJson
+            // wholesale, discarding the original response and continuation
+            // identity the homeowner had already been looking at.
+            ...preservedExecutionHistory(execution.resultJson, [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-conflict', title: 'This changed before it could be confirmed', status: 'EXPIRED', description: 'No action was performed.', details: [], actions: [] }]),
           }),
         },
       });
@@ -10967,7 +11106,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(result.parameters) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, originalResponse: preservedOriginalResponse(execution.resultJson, result.blocks) }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(result.parameters) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }), completedAt: new Date() },
       });
       await tx.askConfirmationReceipt.update({
         where: { executionId },
@@ -11118,7 +11257,7 @@ export async function editAskConfirmation(userId: string, executionId: string, i
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
         blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: taskHref, style: 'SECONDARY' }] }],
         captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
-        originalResponse: preservedOriginalResponse(execution.resultJson, [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [] }]),
+        ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [] }]),
       }),
     },
   });
@@ -11156,6 +11295,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
             body: 'No action was performed. You can ask the question again whenever you are ready.', tone: 'DEFAULT', actions: [],
           }],
           captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask a new question'],
+          ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed', body: 'No action was performed.', tone: 'DEFAULT', actions: [] }]),
         }),
         completedAt: new Date(),
       },
@@ -11191,6 +11331,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
         confirmation: null,
         clarification: null,
         suggestions: [command.cancellation.suggestion],
+        ...preservedExecutionHistory(execution.resultJson, blocks),
       }),
       completedAt: new Date(),
     },
@@ -11342,6 +11483,7 @@ async function reclaimOrphanedRunningExecution(execution: AskExecution): Promise
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
         blocks: [{ type: 'ERROR_STATE', id: 'execution-interrupted', title: 'This got interrupted', body: 'The system restarted while this was running. No action was performed — try asking again.', retryable: true, actions: [] }],
         captureRequests: [], clarification: null, confirmation: null, suggestions: ['Ask this question again'],
+        ...preservedExecutionHistory(execution.resultJson, [{ type: 'ERROR_STATE', id: 'execution-interrupted', title: 'This got interrupted', body: 'No action was performed.', retryable: true, actions: [] }]),
       }),
     },
   });
@@ -11363,6 +11505,7 @@ async function expirePendingInteraction(execution: AskExecution): Promise<AskExe
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
         blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'pending-work-expired', title: 'This pending request expired', status: 'EXPIRED', description: 'No action was performed. Ask the question again to use current home records and settings.', details: [], actions: [] }],
         captureRequests: [], clarification: null, confirmation: null, suggestions: ['Ask this question again'],
+        ...preservedExecutionHistory(execution.resultJson, [{ type: 'WORKFLOW_PROGRESS', id: 'pending-work-expired', title: 'This pending request expired', status: 'EXPIRED', description: 'No action was performed.', details: [], actions: [] }]),
       }),
     },
   });
@@ -11495,6 +11638,10 @@ export async function requestAskCorrection(userId: string, executionId: string, 
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
           blocks: [{ type: 'SUMMARY', id: 'ask-correction', title: 'Let’s correct that', body: input.kind === 'ENTITY' ? 'Tell me which item or record you meant. I’ll keep the selected home and check access again.' : 'Choose the home job you meant. I’ll keep this conversation and re-run the correct canonical workflow.', tone: 'DEFAULT', actions: [] }],
           captureRequests: [], confirmation: null, clarification, suggestions: [], skillHandoff: null,
+          // A genuinely new, separate execution row (its own correction
+          // turn) -- stamps its own fresh original snapshot rather than
+          // inheriting anything from the execution it corrects.
+          ...preservedExecutionHistory(null, [{ type: 'SUMMARY' as const, id: 'ask-correction', title: 'Let’s correct that', body: 'Correction requested.', tone: 'DEFAULT' as const, actions: [] }]),
         }),
         expiresAt: execution.expiresAt ?? new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000),
       },

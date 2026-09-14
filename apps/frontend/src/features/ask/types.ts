@@ -97,6 +97,10 @@ export interface AskExecutionResponse {
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: frozen the first time this
   // execution's result was computed; `blocks` above is always current data.
   originalResponse?: { blocks: AskPresentationBlock[]; observedAt: string } | null;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/HAND-001-003: "what the
+  // homeowner is currently viewing," stable across chip clicks/refreshes
+  // of the SAME interactive result (resultId), separate from executionId.
+  viewState?: { resultId: string; domainScopePhrase: string | null; dateScopePhrase: string | null; statusFilter: string; selectedTaskId: string | null; revision: number } | null;
   contextVersion: string | null;
   blocks: AskPresentationBlock[];
   captureRequests: AskCaptureRequest[];

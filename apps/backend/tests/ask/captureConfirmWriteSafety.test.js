@@ -192,7 +192,11 @@ test('confirmAskExecution\'s shared expire-on-conflict catch only overwrites an 
   assert.ok(idx > 0);
   const conflictCatchIdx = orchestratorSource.indexOf('This changed before it could be confirmed', idx);
   assert.ok(conflictCatchIdx > 0);
-  const block = orchestratorSource.slice(conflictCatchIdx - 800, conflictCatchIdx + 900);
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: widened from +900 after
+  // preservedExecutionHistory(...) (history-preservation policy applied to
+  // this write) added real lines between the resultJson literal and the
+  // re-read below.
+  const block = orchestratorSource.slice(conflictCatchIdx - 800, conflictCatchIdx + 1700);
   // The EXPIRED write must be conditioned on status still being RUNNING --
   // an unconditional tx.askExecution.update(...) here would clobber a
   // concurrent winner's already-COMPLETED state.

@@ -657,6 +657,21 @@ const AskExecutionResponseBaseSchema = z.object({
     blocks: z.array(AskPresentationBlockSchema),
     observedAt: z.string().datetime(),
   }).nullable().default(null),
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/FRESH-001/HAND-001-003: an
+  // explicit representation of "what the homeowner is currently viewing,"
+  // separate from any one conversational turn -- resultId is stable across
+  // every filter-chip click and refresh of the SAME interactive result.
+  // Deliberately generic (not maintenance-only) in shape, though only
+  // maintenance populates it today; a domain-specific consumer reads its
+  // own known fields and ignores the rest.
+  viewState: z.object({
+    resultId: z.string(),
+    domainScopePhrase: z.string().nullable(),
+    dateScopePhrase: z.string().nullable(),
+    statusFilter: z.string(),
+    selectedTaskId: z.string().nullable(),
+    revision: z.number().int().nonnegative(),
+  }).nullable().default(null),
   contextVersion: z.string().nullable(),
   blocks: z.array(AskPresentationBlockSchema),
   captureRequests: z.array(AskCaptureRequestSchema).max(3).default([]),

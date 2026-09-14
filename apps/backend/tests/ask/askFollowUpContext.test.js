@@ -10,9 +10,21 @@ const prismaMock = {
     findFirst: async (args) => {
       lastWhere = args.where;
       if (!mockRow) return null;
-      // Sanity-check the caller is actually scoping the lookback, not
-      // reaching across the whole session unbounded.
-      assert.ok(args.where.createdAt.gte instanceof Date);
+      // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/ACT-001: a pinned lookup
+      // (a declared filter chip naming its exact source execution) queries
+      // by id instead of the recency window -- only the unpinned,
+      // "most recent in session" path needs the lookback bound. A pinned
+      // id that does not match anything must behave like a real DB query
+      // that found no row (null), not silently return the mock's row
+      // regardless of id -- this is what lets the "stale pin fails closed"
+      // test actually exercise a miss.
+      if (args.where.id) {
+        if (args.where.id !== mockRow.id) return null;
+      } else {
+        // Sanity-check the caller is actually scoping the lookback, not
+        // reaching across the whole session unbounded.
+        assert.ok(args.where.createdAt.gte instanceof Date);
+      }
       assert.equal(args.where.sessionId, mockRow.sessionId);
       return mockRow;
     },
@@ -143,6 +155,37 @@ test('filter continuation does not force a non-continuable (command/analysis) op
   mockRow = priorRow({ operationId: 'REFINANCE_ANALYSIS', message: 'Is refinancing worth it now?' });
   const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'Only show the urgent ones.' });
   assert.equal(result.forcedOperationId, null, 'refinance analysis is a scenario-bound analysis, not a bare filter refinement target');
+});
+
+// External review finding (round 9, findings 1 & 2 combined): a declared
+// filter chip must resolve against the EXACT execution it was rendered on,
+// not "the most recent execution in this session" -- after an intervening
+// turn, that heuristic could silently target the wrong prior result.
+test('a declared source execution id resolves against that exact row, and does not concatenate its message (it is self-sufficient)', async () => {
+  mockRow = priorRow({ id: 'the-exact-card', operationId: 'MAINTENANCE_STATUS', message: 'Show HVAC maintenance due this month' });
+  const result = await resolveAskFollowUpMessage({
+    sessionId: 'session-1', propertyId: 'property-1', message: 'Only show urgent tasks',
+    declaredSourceExecutionId: 'the-exact-card',
+  });
+  assert.equal(result.sourceExecutionId, 'the-exact-card');
+  assert.equal(result.isFilterRefinement, true);
+  assert.equal(result.effectiveMessage, 'Only show urgent tasks', 'a declared chip is self-sufficient -- concatenation is for organic typed follow-ups only');
+});
+
+test('a declared source execution id that does not resolve fails closed (no continuation), rather than silently falling back to "most recent in session"', async () => {
+  // Simulates the exact bug this exists to prevent: the homeowner is
+  // looking at an OLDER maintenance card (mockRow), but the chip click
+  // names a DIFFERENT execution id (e.g. stale client state, or the wrong
+  // session) that this lookup cannot find.
+  mockRow = priorRow({ id: 'some-other-recent-execution', operationId: 'MAINTENANCE_STATUS', message: 'Show plumbing maintenance' });
+  const result = await resolveAskFollowUpMessage({
+    sessionId: 'session-1', propertyId: 'property-1', message: 'Only show urgent tasks',
+    declaredSourceExecutionId: 'a-stale-or-wrong-execution-id',
+  });
+  assert.equal(result.sourceExecutionId, null);
+  assert.equal(result.forcedOperationId, null);
+  assert.equal(result.isFilterRefinement, false);
+  assert.equal(result.effectiveMessage, 'Only show urgent tasks', 'falls back to the unmodified message, never silently borrows the unrelated recent execution\'s context');
 });
 
 test('an operationId-less prior execution (boundary/grounded) is not treated as reusable context', async () => {

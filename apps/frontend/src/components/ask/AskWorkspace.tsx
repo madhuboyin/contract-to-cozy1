@@ -1636,6 +1636,19 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         setExecutions(loaded);
         if (initialExecutionId && loaded.some((execution) => execution.executionId === initialExecutionId)) {
           window.setTimeout(() => document.getElementById(`ask-execution-${initialExecutionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+          // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-001/HAND-003: returning
+          // to a specific execution (e.g. after rescheduling a task in
+          // Maintenance) must revalidate it -- the loaded conversation
+          // history reflects whatever was true when this execution last
+          // ran, not necessarily current task data. Best-effort: on
+          // failure the pre-edit view stays usable rather than blocking.
+          void api.refreshAskExecution(initialExecutionId)
+            .then((refreshed) => {
+              if (refreshed.success && refreshed.data) {
+                setExecutions((current) => current.map((item) => item.executionId === initialExecutionId ? refreshed.data! : item));
+              }
+            })
+            .catch(() => undefined);
         }
       })
       .catch((caught) => {

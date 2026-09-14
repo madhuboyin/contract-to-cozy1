@@ -96,6 +96,13 @@ export default function MaintenancePage() {
   const priorityOnly = searchParams.get('priority') === 'true';
   const filterOverdue = searchParams.get('filter') === 'overdue';
   const filterSeasonal = searchParams.get('filter') === 'seasonal';
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD HAND-001-003: previously only
+  // overdue/priority forwarded from Ask -- due-soon and a domain/system
+  // scope now do too. Date-range ("this month") and room scope have no
+  // equivalent here and remain unsupported; Ask discloses that itself
+  // rather than this page silently ignoring them.
+  const filterDueSoon = searchParams.get('filter') === 'due-soon';
+  const systemScope = searchParams.get('system');
   const from = searchParams.get('from');
 
   const view: ViewMode = normalizeView(searchParams.get('view'));
@@ -233,8 +240,10 @@ export default function MaintenancePage() {
         completedRange,
         priorityOnly,
         overdueOnly: filterOverdue,
+        dueSoonOnly: filterDueSoon,
+        systemScope,
       }),
-    [allMaintenanceTasks, completedRange, priorityOnly, filterOverdue]
+    [allMaintenanceTasks, completedRange, priorityOnly, filterOverdue, filterDueSoon, systemScope]
   );
 
   const hasEverCompleted = useMemo(
