@@ -1,8 +1,8 @@
 # Ask Cozy — Interaction Model & UI FRD
 
-**Version:** 1.1
+**Version:** 1.2
 **Date:** September 13, 2026 (implementation status added September 14, 2026)
-**Status:** Maintenance slice partially implemented — see §18. Remaining requirements are still specification only.
+**Status:** Maintenance interaction corrections implemented — see §29 for scope and verification. Later-domain requirements remain separate; runtime validation is not claimed.
 **Scope:** Ask Cozy inline interactions. Maintenance is the first implementation slice.
 
 ## 1. Purpose and authority
@@ -510,3 +510,36 @@ A follow-up external review of §27 found the new view-state mechanism was not a
 Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean); the complete `apps/backend/tests/ask/*.test.js` suite (unchanged pass count from §27, since the two fixes here reuse `mergeMaintenanceViewContinuation` and `askFailureCode` exactly as already tested, without new branches inside either). **Not added**: a dedicated test exercising `refreshAskExecutionAfterConflict`'s self-referencing `launchContext` end-to-end — doing so would require building new Prisma-mocking test infrastructure for a function no existing test file touches, which was judged disproportionate to a one-field fix; verified instead by code reading and by the existing `mergeMaintenanceViewContinuation`/`loadMaintenanceViewState` unit coverage of the logic it now actually reaches. No browser/Playwright run performed; the disabled-Refresh-button-on-access-loss state and the return-trip error message are both unverified live.
 
 Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean); `apps/frontend` Jest for the touched Maintenance-page files (34/34 passing); the complete `apps/backend/tests/ask/*.test.js` suite run twice — once mid-round (597/598 passing, 1 pre-existing skip, one confirmed-flaky unrelated test in a from-scratch full run that passed cleanly in isolation) and once as a final combined check after all of this section's changes. No browser/Playwright run performed against any of this; the chip-click merge behavior, the Clear-all-filters control, the due-soon/system Maintenance filters, and the return-trip revalidation are all unverified live.
+
+
+## 29. Completed review corrections: refresh lifecycle and local view continuity (September 14, 2026)
+
+This section supersedes the remaining-fix disclosures in §§27–28 for the four issues raised in the latest review. It describes implemented behavior, not a claim that later-domain portions of this FRD or live runtime acceptance have been completed.
+
+### Refresh outcomes and access loss
+
+Refresh issues are controlled by `AskWorkspace` and rendered through `ResultRevalidationBoundary`; they are not copied into mount-only component state. An asynchronous return-refresh failure is therefore visible after the result card has mounted. Starting a retry clears the previous transient error, and successful revalidation leaves no stale error message. Pending revalidation disables conflicting item actions and filters.
+
+Access-loss failures remove affected property results, original snapshots, proposal inputs and actions from the active transcript state, clear the session's local view metadata, and remove affected pending-work entries. Cards show an unavailable notice with no record content or actionable controls. In-flight responses for that denied property cannot repopulate it. Existing server authorization remains authoritative; browser state grants no permissions.
+
+The manual, return and source-result refresh paths share the same backend read mechanism. Frontend request tokens cover session switches and newer result requests; tokens cannot become valid again after resetting a session. Revision-aware merges reject older result revisions, including child executions returned after a mutation. The backend refresh write uses conditional timestamp/status/revision checks so a slower read cannot replace a newer saved result or command transition.
+
+### Stable identity and explicit refresh intent
+
+Maintenance continuation now distinguishes `FILTER` from `REFRESH`. Refreshing a stored “Clear all filters” message does not replay a new filter command. Clearing filters and refreshing both retain the existing result identity; only a genuinely new result receives a new identity. Stored domain/date scope continues to drive the read, and successful refresh advances the revision.
+
+### Local view state and handoff
+
+`resultViewState.ts` and `useResultView.ts` keep selection, expanded task details, visible item counts per section and the return offset separate from server query/data state. Only identifiers and UI preferences are stored in browser session storage, keyed by session, property and stable result identity; response content is never copied into that store. Cross-device synchronization is not required.
+
+The Maintenance result now provides Select task, Show/Hide details and Show more controls. Pagination here exposes more of the already-returned section; backend truncation still has an honest full-result Maintenance link. Filtering is still performed against the canonical full collection, not this displayed page. Restoring a session or replacing an execution with a refinement of the same result restores the local controls. Reconciliation clears a selected task or expanded detail when it leaves the returned result instead of selecting a substitute. The canonical server sort is retained; no new user sort policy is introduced.
+
+Maintenance links carry supported source filters and the explicit selected task (a row-specific task link takes precedence over selection). Return anchors restore the selected row/focus when it remains present, otherwise the saved response position, and revalidate the source result. The last active session/result can also resume on ordinary same-tab reload after an authorized history load. Deleting a conversation clears its local result metadata; authorized history loads prune metadata for results no longer returned. Existing disclosed limitations for destination date/room filters remain visible at handoff rather than silently changing their meaning.
+
+The previous server `selectedTaskId` field is not the authority for local selection: the implemented local `ResultView.selectedTaskId` owns it and supplies exact task identity for handoff and unambiguous selected-task continuations. This avoids turning transient browser selection into domain knowledge or requiring a new database schema.
+
+### Validation
+
+Focused environment-independent tests cover error props arriving after mount, access-loss redaction, restoration of selection/expanded details/page, selection removal after filtering, session cleanup, stale revision rejection, request invalidation, original-response preservation, filter merging, and refresh after Clear all filters. Validation completed: backend and frontend `tsc --noEmit --incremental false` passed; 30 focused backend tests passed; 16 frontend tests across four suites passed (including the seven new result-continuity component/helper tests); `git diff --check` passed. Existing domain authentication, confirmation and mutation paths remain in place; no migration or service setup is introduced.
+
+Browser navigation against a running application and live-database race execution were not performed. These limitations must remain distinguished from the component tests and static/code-path checks recorded for this change.

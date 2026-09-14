@@ -14,6 +14,10 @@ import { addAskReturnContext, buildAskWorkspaceHref } from '@/lib/navigation/ask
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import { resolveConciergeLandingSpotlight, visibleConciergeFeaturedPrompts } from '@/features/ask/conciergeLandingPolicy';
 import { formatLegacyAskCurrency, formatLegacyAskMaintenanceItem, workflowProgressStatusLabel } from '@/features/ask/presentationCompatibility';
+import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
+import { MaintenanceResultList } from './MaintenanceResultList';
+import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
+import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
 
 const fallbackPrompts: AskFeaturedPrompt[] = [
@@ -59,6 +63,8 @@ const ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED = 'ASK_ACCOUNT_ROLE_ELIGIBILITY_DISA
 
 function askFailureCode(error: unknown): string | null {
   if (!error || typeof error !== 'object') return null;
+  const directCode = (error as { code?: unknown }).code;
+  if (typeof directCode === 'string') return directCode;
   const payload = (error as { payload?: unknown }).payload;
   if (!payload || typeof payload !== 'object') return null;
   const apiError = (payload as { error?: unknown }).error;
@@ -97,7 +103,21 @@ const AskActionReturnContext = createContext('');
 
 function AskContextLink({ href, ...props }: Omit<ComponentProps<typeof Link>, 'href'> & { href: string }) {
   const askReturnHref = useContext(AskActionReturnContext);
-  const contextualHref = askReturnHref ? addAskReturnContext(href, askReturnHref) : href;
+  const controls = useContext(ResultViewContext);
+  let destination = href;
+  if (controls && href.startsWith('/dashboard/maintenance?')) {
+    const url = new URL(href, 'https://contracttocozy.local');
+    if (controls.maintenanceHref) {
+      const source = new URL(controls.maintenanceHref, 'https://contracttocozy.local');
+      for (const key of ['propertyId', 'priority', 'filter', 'system']) {
+        const value = source.searchParams.get(key);
+        if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
+      }
+    }
+    if (controls.view.selectedTaskId && !url.searchParams.has('taskId')) url.searchParams.set('taskId', controls.view.selectedTaskId);
+    destination = `${url.pathname}${url.search}${url.hash}`;
+  }
+  const contextualHref = askReturnHref ? addAskReturnContext(destination, askReturnHref) : destination;
   return <Link href={contextualHref} {...props} />;
 }
 
@@ -408,6 +428,10 @@ function BlockView({ block, executionId, onItemAction, itemActionsDisabled, onFi
     );
   }
 
+  if (block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups') {
+    return <MaintenanceResultList block={block} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
   if (block.type === 'GROUPED_LIST') {
     return (
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -1378,7 +1402,7 @@ function RecentAskSessions({ items, loading, openingId, onOpen }: {
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, initialRefreshIssue,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1398,7 +1422,9 @@ function ExecutionCard({
   // refresh-error state when the parent's own return-trip revalidation
   // (on landing back from Maintenance) already failed before this card
   // ever mounted, so that failure isn't silently invisible.
-  initialRefreshIssue?: { message: string; accessLost: boolean } | null;
+  refreshIssue?: { message: string; accessLost: boolean } | null;
+  refreshResult: (execution: AskExecutionResponse) => Promise<void>;
+  refreshPending: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1407,31 +1433,14 @@ function ExecutionCard({
   // an explicit, homeowner-initiated revalidation, distinct from the
   // implicit refresh MAINT-005 triggers automatically after a mutation.
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(initialRefreshIssue?.message ?? null);
-  // Once access is confirmed lost, retrying will just fail the same way --
-  // the Refresh button is disabled rather than inviting a pointless retry.
-  const [refreshAccessLost, setRefreshAccessLost] = useState(initialRefreshIssue?.accessLost ?? false);
+  // Controlled error state: return revalidation normally finishes AFTER this card mounts.
+  const refreshError = refreshIssue?.message ?? null;
+  const refreshAccessLost = Boolean(refreshIssue?.accessLost);
+  const controls = useResultView(execution, !isSuperseded && !refreshAccessLost);
   const refresh = async () => {
     if (refreshing || refreshAccessLost) return;
-    // External review finding (FRESH-003/CTX-002): unlike ask(), this had
-    // no guard against the homeowner switching property/session while the
-    // request was in flight -- a stale refresh response could still land
-    // and get merged into a transcript that has since moved on.
-    const requestedSessionId = execution.sessionId;
-    setRefreshing(true); setRefreshError(null);
-    try {
-      const response = await api.refreshAskExecution(execution.executionId);
-      if (!response.success || !response.data) throw new Error(response.message || 'Could not refresh this result.');
-      if (activeSessionRef.current !== requestedSessionId) return;
-      updateExecution(response.data);
-    } catch (caught) {
-      const code = askFailureCode(caught);
-      const accessLost = code === 'ASK_EXECUTION_NOT_FOUND' || code === 'ASK_PERMISSION_REQUIRED' || code === 'ASK_PROPERTY_NOT_FOUND';
-      setRefreshAccessLost(accessLost);
-      setRefreshError(accessLost
-        ? 'This result could not be confirmed as current — it may have been removed, or your access to this home may have changed.'
-        : (caught instanceof Error ? caught.message : 'Could not refresh this result.'));
-    } finally { setRefreshing(false); }
+    setRefreshing(true);
+    try { await refreshResult(execution); } finally { setRefreshing(false); }
   };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is
   // claiming focus for this turn (no pending property selection, capture,
@@ -1458,6 +1467,8 @@ function ExecutionCard({
   // either (MAINT-003). The question stays visible as ordinary conversation
   // history; the response collapses behind a disclosure instead of
   // rendering live, actionable content for data that is no longer current.
+  if (refreshAccessLost) return <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}>{null}</ResultRevalidationBoundary>;
+
   if (isSuperseded) {
     return (
       <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
@@ -1473,16 +1484,27 @@ function ExecutionCard({
   }
 
   return (
-    <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
+    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32" onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
+      const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
+      if (!link) return;
+      const url = new URL(link.href, window.location.origin);
+      if (url.origin !== window.location.origin || !url.pathname.startsWith('/dashboard/')) return;
+      const scrollOffset = event.currentTarget.getBoundingClientRect().top;
+      controls.change((view) => ({ ...view, scrollOffset, selectedTaskId: url.searchParams.get('taskId') ?? view.selectedTaskId }));
+    }}>
       <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
       <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
-          <button type="button" disabled={refreshing || loading || refreshAccessLost} onClick={() => void refresh()} className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50" aria-label="Refresh this result">
-            <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />{refreshing ? 'Refreshing…' : 'Refresh'}
+          <button type="button" disabled={refreshing || refreshPending || loading || refreshAccessLost} onClick={() => void refresh()} className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50" aria-label="Refresh this result">
+            <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />{refreshing || refreshPending ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
-        {refreshError && <p className="text-xs text-red-700" role="alert">{refreshError}</p>}
+
+        <p className="text-xs text-slate-500" role="status" aria-live="polite">
+          Updated {new Date(execution.updatedAt).toLocaleString()}
+          {execution.viewState && ` · ${execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups' ? block.sections : []).reduce((count, section) => count + section.count, 0)} matching tasks`}
+        </p>
         {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: `execution.blocks` is
             always current data; this discloses what Cozy originally
             answered whenever the two have actually diverged (this result
@@ -1492,12 +1514,12 @@ function ExecutionCard({
           <details className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">Originally answered {new Date(execution.originalResponse.observedAt).toLocaleString()} · view original response</summary>
             <div className="mt-3 space-y-3 opacity-75">
-              {execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}
+              <ResultViewContext.Provider value={null}>{execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}</ResultViewContext.Provider>
             </div>
           </details>
         )}
         <div ref={bodyRef} className="space-y-3">
-          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading} onItemAction={(entityType, entityId, message, operationId) => void ask(message, undefined, {
+          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={(entityType, entityId, message, operationId) => void ask(message, undefined, {
             entityType: entityType ?? undefined, entityId, sourceExecutionId: execution.executionId,
             // ACT-001/ACT-003: every declared item action forces its own
             // operationId, regardless of interactionType. The declaring
@@ -1525,7 +1547,7 @@ function ExecutionCard({
         {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
         <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} />
       </div>
-    </article>
+    </article></ResultViewContext.Provider></ResultRevalidationBoundary>
   );
 }
 
@@ -1571,7 +1593,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // leaving the pre-edit view visible with no indication revalidation ever
   // failed (external review finding). Surfaced instead through the same
   // refreshError/retry affordance ExecutionCard's own Refresh button has.
-  const [returnRevalidationIssue, setReturnRevalidationIssue] = useState<{ executionId: string; message: string; accessLost: boolean } | null>(null);
+  const [refreshIssues, setRefreshIssues] = useState<Record<string, { message: string; accessLost: boolean }>>({});
+  const requests = useRef(createResultRequestTracker());
+  const deniedProperties = useRef(new Set<string>());
+  const [refreshRequests, setRefreshRequests] = useState<Record<string, number>>({});
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionRef = useRef('');
@@ -1594,7 +1619,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 
-  useEffect(() => { activeSessionRef.current = sessionId; }, [sessionId]);
+  useEffect(() => {
+    activeSessionRef.current = sessionId;
+    if (sessionId && activeSessionPropertyRef.current === selectedPropertyId) {
+      window.sessionStorage.setItem(`ctc:ask-active-session:${selectedPropertyId ?? 'general'}`, sessionId);
+    }
+  }, [sessionId, selectedPropertyId]);
 
   useEffect(() => {
     if (propertyMismatch) return;
@@ -1634,7 +1664,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => {
     if (propertyMismatch) return;
     const controller = new AbortController();
-    const explicitSession = initialSessionId.trim();
+    const explicitSession = initialSessionId.trim() || window.sessionStorage.getItem(`ctc:ask-active-session:${selectedPropertyId ?? 'general'}`) || '';
     const continuingActiveSession = !explicitSession
       && Boolean(activeSessionRef.current)
       && activeSessionPropertyRef.current === selectedPropertyId;
@@ -1644,6 +1674,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setSessionId(nextSession);
     setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
     setExecutions([]);
+    setRefreshIssues({});
+    requests.current.clear();
+    setRefreshRequests({});
+    deniedProperties.current.clear();
     setHistoryLoading(Boolean(explicitSession || continuingActiveSession));
     if (!explicitSession && !continuingActiveSession) {
       setHistoryLoading(false);
@@ -1651,45 +1685,28 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     }
     api.getAskSession(nextSession, { signal: controller.signal })
       .then((response) => {
+        if (controller.signal.aborted || activeSessionRef.current !== nextSession) return;
         const loaded = 'data' in response ? response.data?.executions ?? [] : [];
+        clearResultViews(window.sessionStorage, nextSession, new Set(loaded.map((item) => resultViewKey(nextSession, item.property?.id ?? 'general', item.viewState?.resultId ?? item.executionId))));
         setExecutions(loaded);
-        if (initialExecutionId && loaded.some((execution) => execution.executionId === initialExecutionId)) {
-          window.setTimeout(() => document.getElementById(`ask-execution-${initialExecutionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-          // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-001/HAND-003: returning
-          // to a specific execution (e.g. after rescheduling a task in
-          // Maintenance) must revalidate it -- the loaded conversation
-          // history reflects whatever was true when this execution last
-          // ran, not necessarily current task data. On failure, the pre-edit
-          // view stays usable (best-effort, not blocking), but the failure
-          // itself must be visible rather than silently swallowed.
-          setReturnRevalidationIssue(null);
-          void api.refreshAskExecution(initialExecutionId)
-            .then((refreshed) => {
-              if (refreshed.success && refreshed.data) {
-                setExecutions((current) => current.map((item) => item.executionId === initialExecutionId ? refreshed.data! : item));
-              }
-            })
-            .catch((caught) => {
-              // ASK_EXECUTION_NOT_FOUND/ASK_PERMISSION_REQUIRED/
-              // ASK_PROPERTY_NOT_FOUND mean access to this result or its
-              // home was lost between leaving and returning to Ask -- a
-              // retry will just fail again the same way, so this is
-              // surfaced distinctly from an ordinary transient failure.
-              const code = askFailureCode(caught);
-              const accessLost = code === 'ASK_EXECUTION_NOT_FOUND' || code === 'ASK_PERMISSION_REQUIRED' || code === 'ASK_PROPERTY_NOT_FOUND';
-              setReturnRevalidationIssue({
-                executionId: initialExecutionId,
-                message: accessLost
-                  ? 'This result could not be confirmed as current — it may have been removed, or your access to this home may have changed.'
-                  : (caught instanceof Error ? caught.message : 'Could not confirm this result is current. Showing the last known view.'),
-                accessLost,
-              });
-            });
+        const returnId = initialExecutionId || window.sessionStorage.getItem(`ctc:ask-return-execution:${nextSession}`);
+        if (returnId && loaded.some((execution) => execution.executionId === returnId)) {
+          window.setTimeout(() => {
+            if (!controller.signal.aborted && activeSessionRef.current === nextSession) restoreResultPosition(loaded.find((item) => item.executionId === returnId)!);
+          }, 50);
+          const target = loaded.find((item) => item.executionId === returnId)!;
+          void refreshResult(target);
+
         }
       })
       .catch((caught) => {
         if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+          if (controller.signal.aborted || activeSessionRef.current !== nextSession) return;
           setExecutions([]);
+          if (['ASK_SESSION_NOT_FOUND', 'ASK_PERMISSION_REQUIRED', 'ASK_PROPERTY_NOT_FOUND'].includes(askFailureCode(caught) ?? '')) {
+            clearResultViews(window.sessionStorage, nextSession);
+            window.sessionStorage.removeItem(`ctc:ask-active-session:${selectedPropertyId ?? 'general'}`);
+          }
           if (askServiceIsPaused(caught)) setServiceUnavailable(true);
         }
       })
@@ -1731,6 +1748,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     // already tracks "the current live session" for exactly this kind of
     // check elsewhere in this component.
     const requestedSessionId = sessionId;
+    if (!promptContext && /\b(?:this|that|selected) task\b/i.test(message)) {
+      const selected = executions.filter((item) => item.viewState && !executions.some((other) => other.continuesExecutionId === item.executionId))
+        .map((item) => ({ item, view: readResultView(window.sessionStorage, resultViewKey(item.sessionId, item.property?.id ?? 'general', item.viewState!.resultId)) }))
+        .filter(({ view }) => view.selectedTaskId);
+      if (selected.length === 1) promptContext = { sourceExecutionId: selected[0].item.executionId, entityType: 'MAINTENANCE_TASK', entityId: selected[0].view.selectedTaskId! };
+    }
+    const source = executions.find((item) => item.executionId === promptContext?.sourceExecutionId);
+    const requestKey = source ? resultRequestKey(source) : `${sessionId}:question`;
+    const requestToken = requests.current.begin(requestKey);
     setInput('');
     window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
     setError(null);
@@ -1758,7 +1784,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
-      if (activeSessionRef.current !== requestedSessionId) {
+      if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken) || deniedProperties.current.has(`${requestedSessionId}:${selectedPropertyId}`)) {
         // The homeowner switched property/session while this was in
         // flight -- that already reset the visible transcript and started
         // a new session. Appending this answer now would leak an old
@@ -1775,7 +1801,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       // field) exactly like any other execution. No new rendering code:
       // ConfirmationCard/BlockView already operate per-executionId,
       // agnostic to whether it arrived as the "main" response or here.
-      setExecutions((current) => [...current, response.data!, ...(response.data!.childExecutions ?? [])]);
+      setExecutions((current) => mergeResultExecutions(current, [response.data!, ...(response.data!.childExecutions ?? [])]));
       setJustUpdatedExecutionId(response.data.executionId);
       if (attribution) track('ask_prompt_outcome', {
         propertyId: selectedPropertyId ?? null,
@@ -1786,6 +1812,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         succeeded: !response.data.status.startsWith('FAILED'),
       });
     } catch (caught) {
+      if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
       setInput(message);
       window.localStorage.setItem(draftStorageKey(selectedPropertyId), message);
       if (askServiceIsPaused(caught)) {
@@ -1821,6 +1848,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     try {
       const response = await api.deleteAskSession(sessionId);
       if (!response.success) throw new Error(response.message || 'Could not clear Ask history.');
+      clearResultViews(window.sessionStorage, sessionId);
       const nextSession = newId();
       activeSessionRef.current = nextSession;
       activeSessionPropertyRef.current = selectedPropertyId;
@@ -1872,24 +1900,59 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     }
   };
 
+  function restoreResultPosition(execution: AskExecutionResponse) {
+    const article = document.getElementById(`ask-execution-${execution.executionId}`);
+    if (!article) return;
+    const view = readResultView(window.sessionStorage, resultViewKey(execution.sessionId, execution.property?.id ?? 'general', execution.viewState?.resultId ?? execution.executionId));
+    const selected = Array.from(article.querySelectorAll<HTMLElement>('[data-ask-task-id]')).find((row) => row.dataset.askTaskId === view.selectedTaskId);
+    if (selected) {
+      selected.scrollIntoView({ block: 'center' });
+      selected.focus({ preventScroll: true });
+    } else if (view.scrollOffset !== null) {
+      window.scrollBy({ top: article.getBoundingClientRect().top - view.scrollOffset });
+    } else article.scrollIntoView({ block: 'start' });
+  }
+
+  async function refreshResult(execution: AskExecutionResponse) {
+    const key = resultRequestKey(execution);
+    const token = requests.current.begin(key);
+    setRefreshRequests((current) => ({ ...current, [key]: token }));
+    const deniedKey = `${execution.sessionId}:${execution.property?.id}`;
+    const isCurrent = () => activeSessionRef.current === execution.sessionId && requests.current.current(key, token) && !deniedProperties.current.has(deniedKey);
+    setRefreshIssues((current) => { const next = { ...current }; delete next[execution.executionId]; return next; });
+    try {
+      const response = await api.refreshAskExecution(execution.executionId);
+      if (!isCurrent()) return;
+      if (!response.success || !response.data) throw Object.assign(new Error(response.message || 'Could not refresh this result.'), { payload: response });
+      setExecutions((current) => mergeResultExecutions(current, [response.data!, ...(response.data!.childExecutions ?? [])]));
+    } catch (caught) {
+      if (!isCurrent()) return;
+      const code = askFailureCode(caught);
+      const accessLost = ['ASK_EXECUTION_NOT_FOUND', 'ASK_PERMISSION_REQUIRED', 'ASK_PROPERTY_NOT_FOUND', 'AUTH_REQUIRED'].includes(code ?? '');
+      const issue = { accessLost, message: accessLost ? 'This result is no longer available, or your access to this home has changed.' : `Could not refresh this result. Showing the last known view. ${caught instanceof Error ? caught.message : ''}` };
+      if (accessLost) {
+        deniedProperties.current.add(deniedKey);
+        clearResultViews(window.sessionStorage, execution.sessionId);
+        setExecutions((current) => current.map((item) => item.property?.id === execution.property?.id ? {
+          ...item, question: 'Unavailable result', blocks: [], originalResponse: null, confirmation: null, clarification: null, captureRequests: [], suggestions: [], skillHandoff: null, viewState: null,
+        } : item));
+        setPendingWork((current) => current.filter((item) => item.execution.property?.id !== execution.property?.id));
+      }
+      setRefreshIssues((current) => ({ ...current, ...Object.fromEntries(
+        (accessLost ? executions.filter((item) => item.property?.id === execution.property?.id).map((item) => item.executionId) : [execution.executionId])
+          .concat(execution.executionId).map((id) => [id, issue]),
+      ) }));
+    } finally {
+      setRefreshRequests((current) => {
+        if (current[key] !== token) return current;
+        const next = { ...current }; delete next[key]; return next;
+      });
+    }
+  }
+
   const updateExecution = (updated: AskExecutionResponse) => {
-    activeSessionRef.current = updated.sessionId;
-    activeSessionPropertyRef.current = updated.property?.id ?? selectedPropertyId;
-    setExecutions((current) => {
-      const next = current.map((item) => item.executionId === updated.executionId ? updated : item);
-      // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: a confirm response
-      // can carry a refreshed *other* execution (the list this row action
-      // came from) as a childExecution sharing that list's own executionId
-      // -- merge it into that existing card in place rather than appending
-      // a duplicate. A genuinely new child (e.g. a conversational-capture
-      // candidate) has no existing match and is appended, same as before.
-      return (updated.childExecutions ?? []).reduce(
-        (acc, child) => acc.some((item) => item.executionId === child.executionId)
-          ? acc.map((item) => item.executionId === child.executionId ? child : item)
-          : [...acc, child],
-        next,
-      );
-    });
+    if (activeSessionRef.current !== updated.sessionId || deniedProperties.current.has(`${updated.sessionId}:${updated.property?.id}`)) return;
+    setExecutions((current) => mergeResultExecutions(current, [updated, ...(updated.childExecutions ?? [])].filter((item) => !deniedProperties.current.has(`${item.sessionId}:${item.property?.id}`))));
     setJustUpdatedExecutionId(updated.executionId);
     if (!['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'].includes(updated.status)) {
       setPendingWork((current) => current.filter((item) => item.execution.executionId !== updated.executionId));
@@ -2042,7 +2105,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {executions.map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
               const visibleSuggestions = execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
-              const isSuperseded = executions.some((other) => other.continuesExecutionId === execution.executionId);
+              const isSuperseded = executions.some((other) => other.continuesExecutionId === execution.executionId || (other.viewState && execution.viewState && other.viewState.resultId === execution.viewState.resultId && other.viewState.revision > execution.viewState.revision));
               return <AskActionReturnContext.Provider key={execution.executionId} value={askReturnHref}>
                 <ExecutionCard
                   execution={execution}
@@ -2055,7 +2118,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   setInput={setInput}
                   visibleSuggestions={visibleSuggestions}
                   activeSessionRef={activeSessionRef}
-                  initialRefreshIssue={returnRevalidationIssue?.executionId === execution.executionId ? returnRevalidationIssue : null}
+                  refreshIssue={deniedProperties.current.has(`${execution.sessionId}:${execution.property?.id}`) ? { accessLost: true, message: 'Access to this result is no longer available.' } : refreshIssues[execution.executionId] ?? null}
+                  refreshResult={refreshResult}
+                  refreshPending={Boolean(refreshRequests[resultRequestKey(execution)])}
                 />
               </AskActionReturnContext.Provider>;
             })}

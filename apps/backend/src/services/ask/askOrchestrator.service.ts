@@ -1520,8 +1520,10 @@ async function loadMaintenanceViewState(executionId: string, userId: string): Pr
 export function mergeMaintenanceViewContinuation(
   priorViewState: Pick<MaintenanceViewState, 'domainScopePhrase' | 'dateScopePhrase'> | null | undefined,
   message: string,
+  intent: 'FILTER' | 'REFRESH' = 'FILTER',
 ): { effectiveMessage: string; isClearAllFilters: boolean } {
-  const isClearAllFilters = /\bclear all filters\b/i.test(message);
+  // A refresh reads an existing view; it must not replay a historical UI command.
+  const isClearAllFilters = intent === 'FILTER' && /\bclear all filters\b/i.test(message);
   const effectiveMessage = (priorViewState && !isClearAllFilters)
     ? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, message].filter(Boolean).join(' ')
     : message;
@@ -1536,6 +1538,7 @@ async function maintenanceResult(
   context: MaintenanceTaskContext,
   seasonalContext: SeasonalChecklistContext | null,
   seasonalContextAvailable: boolean,
+  viewIntent: 'FILTER' | 'REFRESH' = 'FILTER',
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const now = new Date();
@@ -1550,7 +1553,7 @@ async function maintenanceResult(
     now,
   });
   if (seasonalResult) return seasonalResult;
-  const { effectiveMessage, isClearAllFilters } = mergeMaintenanceViewContinuation(priorViewState, message);
+  const { effectiveMessage, isClearAllFilters } = mergeMaintenanceViewContinuation(priorViewState, message, viewIntent);
   const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(effectiveMessage, now, timeZone, context.purchaseDate);
   const wantsCompleted = /\b(?:completed|finished|done|completion|service history|what did (?:i|we) complete)\b/i.test(effectiveMessage);
   const wantsOpen = /\b(?:pending|remaining|still|open|overdue|due|upcoming|coming up|needs review|in progress|high priority|highest priority|priority tasks?|before (?:winter|spring|summer|fall|autumn))\b/i.test(effectiveMessage);
@@ -1754,7 +1757,7 @@ async function maintenanceResult(
   // so a stale response can be detected by comparing against it.
   const statusFilter: MaintenanceViewState['statusFilter'] = overdueOnly ? 'OVERDUE' : dueSoonOnly ? 'DUE_SOON' : highPriorityOnly ? 'URGENT' : 'ALL_OPEN';
   const viewState: MaintenanceViewState = {
-    resultId: (priorViewState && !isClearAllFilters) ? priorViewState.resultId : randomUUID(),
+    resultId: priorViewState?.resultId ?? randomUUID(),
     domainScopePhrase: scopeTerms[0] ?? null,
     dateScopePhrase: timeframe?.label ?? null,
     statusFilter,
@@ -6880,6 +6883,7 @@ registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
     composedContext.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
     (composedContext.values[skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER)] as SeasonalChecklistContext | undefined) ?? null,
     seasonalEntry?.status === 'AVAILABLE',
+    envelope.launchContext?.surface === 'ASK_REFRESH' ? 'REFRESH' : 'FILTER',
   );
 });
 registerCapabilityHandler('maintenance.forecast', async (envelope) => maintenanceForecastResult(envelope.userId, envelope.propertyId!));
@@ -9200,8 +9204,13 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   // preserved from whatever this row already had via the one shared
   // history policy.
   const history = preservedExecutionHistory(execution.resultJson, result.blocks);
-  const saved = await prisma.askExecution.update({
-    where: { id: execution.id },
+  const priorParameters = execution.parametersJson as { viewState?: { revision?: number } } | null;
+  const priorRevision = priorParameters?.viewState?.revision;
+  const write = await prisma.askExecution.updateMany({
+    // The revision guard also covers two reads that share a millisecond timestamp.
+    where: { id: execution.id, updatedAt: execution.updatedAt, status: execution.status,
+      ...(typeof priorRevision === 'number' ? { parametersJson: { path: ['viewState', 'revision'], equals: priorRevision } } : {}),
+    },
     data: {
       status: result.status,
       reasonCode: result.reasonCode,
@@ -9211,6 +9220,8 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });
+  const saved = await prisma.askExecution.findFirstOrThrow({ where: { id: execution.id, userId } });
+  if (write.count !== 1) return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
   await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CONTEXT_CONFLICT_REFRESHED', metadataJson: asInputJson({ contextVersion: result.contextVersion }) } });
   if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));

@@ -87,3 +87,15 @@ test('mergeMaintenanceViewContinuation "Clear all filters" opts out of merging e
   assert.doesNotMatch(effectiveMessage, /hvac/i);
   assert.doesNotMatch(effectiveMessage, /this month/i);
 });
+
+test('refreshing a Clear all filters result does not replay the clear command', () => {
+  const prior = { domainScopePhrase: null, dateScopePhrase: null };
+  const result = mergeMaintenanceViewContinuation(prior, 'Clear all filters and show all open maintenance tasks', 'REFRESH');
+  assert.equal(result.isClearAllFilters, false);
+});
+
+test('refresh retains the stored scope after a status refinement', () => {
+  const result = mergeMaintenanceViewContinuation({ domainScopePhrase: 'hvac', dateScopePhrase: 'this month' }, 'Only show urgent tasks', 'REFRESH');
+  assert.equal(result.effectiveMessage, 'hvac this month Only show urgent tasks');
+  assert.equal(result.isClearAllFilters, false);
+});
