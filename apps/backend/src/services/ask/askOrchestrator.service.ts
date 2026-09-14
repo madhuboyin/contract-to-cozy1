@@ -1202,7 +1202,7 @@ async function maintenanceTaskUpdateResult(userId: string, propertyId: string, m
       status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_TASK_SELECTION_REQUIRED',
       ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', 'Which maintenance task should Ask update? Use its exact title.'),
       blocks: [{
-        type: 'GROUPED_LIST', id: 'maintenance-update-options', title: 'Choose the task to change',
+        type: 'GROUPED_LIST', filters: [], id: 'maintenance-update-options', title: 'Choose the task to change',
         description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
         sections: [{ id: 'tasks', title: 'Maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({
           id: task.id, title: task.title, description: task.nextDueDate ? `Due ${humanDate(task.nextDueDate)}` : 'No due date',
@@ -1342,7 +1342,7 @@ async function quoteComparisonReviewResult(propertyId: string): Promise<AskOpera
     columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }],
     rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed' } })), actions: [],
   });
-  blocks.push({ type: 'GROUPED_LIST', id: 'quote-review-gaps', title: 'Comparison controls', description: 'Resolve scope or fact gaps in the canonical workspace before making a decision.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: workspaceHref })) }], actions: [] });
+  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'Resolve scope or fact gaps in the canonical workspace before making a decision.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: workspaceHref })) }], actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'quote-review-evidence', title: 'Proposal freshness', items: quotes.slice(0, 20).map((quote) => ({ label: quote.vendorName, source: quote.sourceType ? `Quote · ${String(quote.sourceType).toLowerCase()}` : 'Recorded quote', observedAt: quote.updatedAt?.toISOString?.() ?? quote.createdAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.', severity: 'INFO', suggestions: [] });
   return { status: comparability.status === 'COMPARABLE' ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: comparability.status === 'COMPARABLE' ? undefined : `QUOTE_${comparability.status}`, contextVersion: workspace.updatedAt?.toISOString?.() ?? null, blocks, suggestions: ['What makes these quotes incomparable?', 'Open quote comparison'] };
@@ -1398,7 +1398,7 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
     if (!selected) return {
       status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_MONITOR_TASK_REQUIRED',
       ...durableFreeTextClarification('HOME_DEADLINE_MONITOR', 'Which dated maintenance task should Ask monitor?'),
-      blocks: [{ type: 'GROUPED_LIST', id: 'maintenance-monitor-options', title: 'Choose a dated maintenance task', description: tasks.length ? 'Use the exact task title in your next message. No notification preference has changed.' : 'No open maintenance task with a due date is recorded yet. Add or schedule the task first.', sections: [{ id: 'tasks', title: 'Dated maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({ id: task.id, title: task.title, description: `Due ${humanDate(task.nextDueDate)}`, meta: [task.priority], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}` })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'maintenance-monitor-options', title: 'Choose a dated maintenance task', description: tasks.length ? 'Use the exact task title in your next message. No notification preference has changed.' : 'No open maintenance task with a due date is recorded yet. Add or schedule the task first.', sections: [{ id: 'tasks', title: 'Dated maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({ id: task.id, title: task.title, description: `Due ${humanDate(task.nextDueDate)}`, meta: [task.priority], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}` })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'PRIMARY' }] }],
       suggestions: tasks.slice(0, 3).map((task) => `Remind me when ${task.title} is due`),
     };
     const input = HomeDeadlineMonitorInputSchema.parse({ sourceType: 'MAINTENANCE', sourceId: selected.id, title: selected.title, dueDate: selected.nextDueDate!.toISOString().slice(0, 10), leadDays: 7 });
@@ -1568,9 +1568,17 @@ async function maintenanceResult(
       // back as launchContext, which launchMaintenanceTaskId resolves to
       // this exact task (bypassing free-text fuzzy matching entirely).
       entityType: kind === 'OPEN' ? 'MAINTENANCE_TASK' : null,
-      actions: kind === 'OPEN' && canManage ? [
-        { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_COMPLETE' },
-        { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' },
+      // MAINT-008: "Why is this important?" is a read-only grounded
+      // continuation, not a mutation -- available to a VIEWER too, unlike
+      // Complete/Reschedule. Left unforced (no MUTATE_RECORD-style
+      // operationId pinning) so it goes through ordinary grounded-guidance
+      // routing, which needs to actually reason about the question.
+      actions: kind === 'OPEN' ? [
+        { id: 'why-important', label: 'Why is this important?', message: `Why is "${formatAskMaintenanceTitle(task.title)}" important?`, style: 'QUIET' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'GROUNDED_GUIDANCE' },
+        ...(canManage ? [
+          { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_COMPLETE' },
+          { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' },
+        ] : []),
       ] : [],
     };
   };
@@ -1607,7 +1615,20 @@ async function maintenanceResult(
       ],
   }];
   if (!creationFocus) blocks.push({
-    type: 'GROUPED_LIST', id: 'maintenance-groups', title: 'Maintenance record',
+    type: 'GROUPED_LIST',
+    // ASK_COZY_INTERACTION_MODEL_UI_FRD §7 (ACT-001 FILTER_RESULT): declared
+    // filter chips, not text the homeowner has to type. Each message is
+    // exactly a phrasing askFollowUpContext.ts's FILTER_CONTINUATION_PATTERN
+    // already recognizes, so a click reuses the existing filter-refinement
+    // pipeline (server-side full-collection re-query, RES-003 duplicate-card
+    // suppression) rather than a new dispatch path.
+    filters: [
+      { id: 'all', label: 'All open', message: 'Now show all open maintenance tasks', active: !overdueOnly && !dueSoonOnly && !highPriorityOnly },
+      { id: 'overdue', label: 'Overdue', message: 'Only show overdue tasks', active: overdueOnly },
+      { id: 'due-soon', label: 'Due soon', message: 'Only show tasks due soon', active: dueSoonOnly },
+      { id: 'urgent', label: 'Urgent', message: 'Only show urgent tasks', active: highPriorityOnly },
+    ],
+    id: 'maintenance-groups', title: 'Maintenance record',
     // MAINT-003/MAINT-004: label every applied filter, including priority --
     // "urgent" here is the existing canonical interpretation (URGENT or HIGH
     // priority, not URGENT alone), so it is labeled accurately rather than
@@ -1722,7 +1743,7 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
     tone: overdueCount ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href, style: 'SECONDARY' }],
   }, {
-    type: 'GROUPED_LIST',
+    type: 'GROUPED_LIST', filters: [],
     id: 'maintenance-forecast-items',
     title: 'Predicted maintenance',
     description: 'A rule-based forecast for verified HVAC, roof, and water-heater inventory items -- not a substitute for a professional inspection.',
@@ -1863,7 +1884,7 @@ async function coverageResult(userId: string, propertyId: string, message: strin
     actions: [{ id: 'open-coverage', label: 'Review or correct coverage', href: reviewHref, style: 'PRIMARY' }],
   }];
   if (sections.length) blocks.push({
-    type: 'GROUPED_LIST', id: 'coverage-groups', title: 'Coverage review',
+    type: 'GROUPED_LIST', filters: [], id: 'coverage-groups', title: 'Coverage review',
     description: `${expiryFocus ? 'Showing expired and soon-to-expire records. ' : evidenceFocus ? 'Showing unclear records and missing evidence. ' : ''}Managed-elsewhere and coverage-not-required items are excluded.`,
     sections, actions: [],
   });
@@ -2011,7 +2032,7 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
   const allOptions = currentOption ? [currentOption, ...alternativeOptions] : alternativeOptions;
   if (allOptions.length) {
     blocks.push({
-      type: 'GROUPED_LIST',
+      type: 'GROUPED_LIST', filters: [],
       id: 'coverage-comparison-options',
       title: 'Options',
       description: 'Your current verified policy alongside any alternative quotes or policy terms compared against it.',
@@ -2093,7 +2114,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
       reasonCode: 'MULTIPLE_REPAIR_REPLACE_ITEMS',
       ...durableFreeTextClarification('REPLACEMENT_GUIDANCE', 'Which recorded appliance or home system should Ask analyze?'),
       blocks: [{
-        type: 'GROUPED_LIST', id: 'repair-replace-selection', title: 'Which item should I analyze?',
+        type: 'GROUPED_LIST', filters: [], id: 'repair-replace-selection', title: 'Which item should I analyze?',
         description: 'Use the item’s exact name, room, brand, or model. Ask will not combine separate systems into one verdict.',
         sections: [{ id: 'matches', title: 'Possible matches', count: items.length, items: items.map((item) => ({
           id: item.id, title: item.name, description: [item.brand, item.model].filter(Boolean).join(' ') || null, status: item.condition, meta: [item.category.toLowerCase().replace(/_/g, ' ')],
@@ -2146,7 +2167,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
       tone: ['REPLACE_NOW', 'REPLACE_SOON'].includes(analysis.verdict) ? 'CAUTION' : 'DEFAULT',
       actions: [{ id: 'open-repair-replace', label: 'Open Repair vs Replace', href: `/dashboard/replace-repair?propertyId=${encodeURIComponent(propertyId)}&inventoryItemId=${encodeURIComponent(item.id)}`, style: 'PRIMARY' }],
     }, { type: 'TABLE', id: 'repair-replace-costs', title: 'Modeled decision inputs', description: 'Amounts are planning estimates from the canonical Repair vs Replace engine.', columns: [{ key: 'path', label: 'Measure' }, { key: 'amount', label: 'Amount' }, { key: 'meaning', label: 'How to interpret it' }], rows, actions: [] },
-    { type: 'GROUPED_LIST', id: 'repair-replace-trace', title: 'Why the model reached this result', description: 'Decision factors are bounded to the item and its recorded history.', sections: [{ id: 'factors', title: 'Decision factors', count: analysis.decisionTrace.length, items: analysis.decisionTrace.slice(0, 12).map((factor, index) => ({ id: `factor-${index}`, title: factor.label, description: factor.detail, meta: [factor.impact], status: null, href: null })) }], actions: [] },
+    { type: 'GROUPED_LIST', filters: [], id: 'repair-replace-trace', title: 'Why the model reached this result', description: 'Decision factors are bounded to the item and its recorded history.', sections: [{ id: 'factors', title: 'Decision factors', count: analysis.decisionTrace.length, items: analysis.decisionTrace.slice(0, 12).map((factor, index) => ({ id: `factor-${index}`, title: factor.label, description: factor.detail, meta: [factor.impact], status: null, href: null })) }], actions: [] },
     { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
     { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
     suggestions: ['How much should I reserve for this item?', 'Show my capital timeline'],
@@ -2248,7 +2269,7 @@ function hvacDecisionThreadAmbiguousResult(operationId: AskOperationId, candidat
     status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_THREAD_AMBIGUOUS',
     ...durableFreeTextClarification(operationId, 'Multiple decision threads are active for this HVAC system. Which one should Ask continue?'),
     blocks: [{
-      type: 'GROUPED_LIST', id: 'hvac-decision-thread-candidates', title: 'Active decision threads',
+      type: 'GROUPED_LIST', filters: [], id: 'hvac-decision-thread-candidates', title: 'Active decision threads',
       description: 'This should not normally happen; contact support if it persists.',
       sections: [{ id: 'threads', title: 'Threads', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.lifecycleStatus, meta: [], status: candidate.lifecycleStatus, href: null })) }],
       actions: [],
@@ -2271,7 +2292,7 @@ async function hvacDecisionStartResult(userId: string, propertyId: string, messa
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_AMBIGUOUS',
       ...durableFreeTextClarification('HVAC_DECISION_START', 'Which recorded HVAC system should Ask evaluate?'),
-      blocks: [{ type: 'GROUPED_LIST', id: 'hvac-decision-items', title: 'Choose an HVAC system', description: 'Use the exact name in your next message.', sections: [{ id: 'items', title: 'Recorded HVAC systems', count: items.length, items: items.map((candidate) => ({ id: candidate.id, title: candidate.name, description: null, meta: [], status: null, href: null })) }], actions: [] }],
+      blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'hvac-decision-items', title: 'Choose an HVAC system', description: 'Use the exact name in your next message.', sections: [{ id: 'items', title: 'Recorded HVAC systems', count: items.length, items: items.map((candidate) => ({ id: candidate.id, title: candidate.name, description: null, meta: [], status: null, href: null })) }], actions: [] }],
       suggestions: items.slice(0, 3).map((candidate) => `Should I repair or replace my ${candidate.name}?`),
     };
   }
@@ -2704,7 +2725,7 @@ async function hvacPreferenceForgetResult(userId: string, propertyId: string, me
       return {
         status: 'NEEDS_ENTITY', reasonCode: 'HVAC_PREFERENCE_FORGET_AMBIGUOUS',
         ...durableFreeTextClarification('HVAC_PREFERENCE_FORGET', 'Which saved preference should Ask forget — the ownership horizon or the repair/replace approach?'),
-        blocks: [{ type: 'GROUPED_LIST', id: 'hvac-preference-forget-candidates', title: 'Saved preferences', description: 'Use the exact name in your next message.', sections: [{ id: 'preferences', title: 'Active', count: active.length, items: active.map((candidate) => ({ id: candidate.key, title: candidate.label, description: null, meta: [], status: null, href: null })) }], actions: [] }],
+        blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'hvac-preference-forget-candidates', title: 'Saved preferences', description: 'Use the exact name in your next message.', sections: [{ id: 'preferences', title: 'Active', count: active.length, items: active.map((candidate) => ({ id: candidate.key, title: candidate.label, description: null, meta: [], status: null, href: null })) }], actions: [] }],
         suggestions: ['Forget my ownership horizon', 'Forget my repair/replace approach'],
       };
     }
@@ -2796,7 +2817,7 @@ async function claimTransitionResult(propertyId: string, message: string, launch
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
   if (!selected || !nextStatus) return {
     status: 'NEEDS_ENTITY', reasonCode: 'CLAIM_TRANSITION_TARGET_REQUIRED',
-    blocks: [{ type: 'GROUPED_LIST', id: 'claim-transition-targets', title: 'Choose a claim and valid next status', description: 'Use the exact claim title and say submit, move to under review, approve, deny, or close. Ask will recheck the legal transition before saving.', sections: [{ id: 'claims', title: 'Recorded claims', count: claims.length, items: claims.map((claim) => ({ id: claim.id, title: claim.title, description: `Current status: ${String(claim.status).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(claim.status), href: `${href}/${claim.id}` })) }], actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }], suggestions: [],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'claim-transition-targets', title: 'Choose a claim and valid next status', description: 'Use the exact claim title and say submit, move to under review, approve, deny, or close. Ask will recheck the legal transition before saving.', sections: [{ id: 'claims', title: 'Recorded claims', count: claims.length, items: claims.map((claim) => ({ id: claim.id, title: claim.title, description: `Current status: ${String(claim.status).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(claim.status), href: `${href}/${claim.id}` })) }], actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }], suggestions: [],
   };
   if (!isValidClaimTransition(selected.status as ClaimStatus, nextStatus)) return {
     status: 'BLOCKED', reasonCode: 'CLAIM_TRANSITION_NOT_ALLOWED',
@@ -2821,7 +2842,7 @@ async function incidentContinuationResult(propertyId: string): Promise<AskOperat
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
   return { status: 'ANSWERED', reasonCode: 'INCIDENT_CONTINUATION_READY', blocks: [
     { type: 'BOUNDARY', id: 'incident-continuation-boundary', title: 'Continue only after immediate danger has passed', severity: 'CAUTION', body: 'If anyone may still be in danger, contact emergency responders or the appropriate utility first. This workflow records what happened; it is not emergency response.', suggestions: [] },
-    { type: 'GROUPED_LIST', id: 'incident-continuation-records', title: 'Recorded incident and claim follow-up', description: 'Use an existing record or start a draft claim. Filing with an insurer remains a separate provider action.', sections: [
+    { type: 'GROUPED_LIST', filters: [], id: 'incident-continuation-records', title: 'Recorded incident and claim follow-up', description: 'Use an existing record or start a draft claim. Filing with an insurer remains a separate provider action.', sections: [
       { id: 'incidents', title: 'Incidents', count: incidents.length, items: incidents.map((row) => ({ id: row.id, title: row.title, description: String(row.status), meta: [], status: String(row.status), href })) },
       { id: 'claims', title: 'Claims', count: claims.length, items: claims.map((row) => ({ id: row.id, title: row.title, description: String(row.status), meta: [], status: String(row.status), href: `${href}/${row.id}` })) },
     ], actions: [{ id: 'open-claims', label: 'Open incident and claims records', href, style: 'PRIMARY' }] },
@@ -2841,7 +2862,7 @@ async function inspectionFindingsResult(propertyId: string): Promise<AskOperatio
   };
   return {
     status: 'ANSWERED', reasonCode: 'INSPECTION_FINDINGS_FOUND',
-    blocks: [{ type: 'GROUPED_LIST', id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Use the exact system or finding id to accept, dismiss, or resolve one.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Use the exact system or finding id to accept, dismiss, or resolve one.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }],
     suggestions: findings.slice(0, 2).map((finding) => `Accept ${finding.homeSystem} finding ${finding.id} as work`),
   };
 }
@@ -2860,7 +2881,7 @@ async function inspectionFindingUpdateResult(propertyId: string, message: string
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection`;
   if (!selected || !action) return {
     status: 'NEEDS_ENTITY', reasonCode: 'INSPECTION_FINDING_TARGET_REQUIRED',
-    blocks: [{ type: 'GROUPED_LIST', id: 'inspection-finding-targets', title: 'Choose a finding and action', description: 'Use the finding id or exact system/description and say accept, dismiss, or resolve.', sections: [{ id: 'findings', title: 'Open confirmed findings', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: String(finding.severity).toLowerCase(), meta: [], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }], suggestions: [],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-finding-targets', title: 'Choose a finding and action', description: 'Use the finding id or exact system/description and say accept, dismiss, or resolve.', sections: [{ id: 'findings', title: 'Open confirmed findings', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: String(finding.severity).toLowerCase(), meta: [], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }], suggestions: [],
   };
   const contextVersion = createHash('sha256').update(`${selected.id}:${selected.status}:${selected.workDisposition}:${selected.updatedAt.toISOString()}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
@@ -2894,7 +2915,7 @@ async function documentPromotionReviewResult(propertyId: string): Promise<AskOpe
   const candidates = await pendingDocumentPromotionCandidates(propertyId);
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
   if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }], suggestions: [] };
-  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: candidates.slice(0, 2).map((candidate) => `Confirm document candidate ${candidate.id}`) };
+  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: candidates.slice(0, 2).map((candidate) => `Confirm document candidate ${candidate.id}`) };
 }
 
 async function documentPromotionConfirmResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
@@ -2902,7 +2923,7 @@ async function documentPromotionConfirmResult(propertyId: string, message: strin
   const selected = exactEntityMatch(candidates, message, launchContext);
   const decision = /\breject|discard\b/i.test(message) ? 'REJECT' : /\bconfirm|promote|apply\b/i.test(message) ? 'CONFIRM' : null;
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
-  if (!selected || !decision) return { status: 'NEEDS_ENTITY', reasonCode: 'DOCUMENT_PROMOTION_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', id: 'document-promotion-targets', title: 'Choose an exact candidate and decision', description: 'Use the candidate id or exact title and say confirm or reject.', sections: [{ id: 'pending', title: 'Pending candidates', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Review Documents', href, style: 'SECONDARY' }] }], suggestions: [] };
+  if (!selected || !decision) return { status: 'NEEDS_ENTITY', reasonCode: 'DOCUMENT_PROMOTION_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotion-targets', title: 'Choose an exact candidate and decision', description: 'Use the candidate id or exact title and say confirm or reject.', sections: [{ id: 'pending', title: 'Pending candidates', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Review Documents', href, style: 'SECONDARY' }] }], suggestions: [] };
   if (selected.kind === 'INSPECTION_REPORT' && decision === 'REJECT') return { status: 'BLOCKED', reasonCode: 'INSPECTION_REPORT_REJECTION_REQUIRES_REVIEW_UI', blocks: [{ type: 'BOUNDARY', id: 'inspection-report-rejection-boundary', title: 'Review corrections in Inspection Hub', severity: 'INFO', body: 'Ask can confirm the reviewed report, but rejecting or correcting individual extracted findings requires the report review screen so the exact edits and evidence remain visible.', suggestions: [] }], suggestions: [] };
   const contextVersion = createHash('sha256').update(`${selected.kind}:${selected.id}:${selected.updatedAt.toISOString()}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
@@ -2955,7 +2976,7 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
     tone: unverifiedCount ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }],
   }, {
-    type: 'GROUPED_LIST',
+    type: 'GROUPED_LIST', filters: [],
     id: 'document-lookup-groups',
     title: 'Documents by type',
     description: 'Uploaded documents recorded for this property, grouped by type.',
@@ -3003,7 +3024,7 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
   const selected = exactEntityMatch(items, message, launchContext);
   const action = operationalWorkAction(message);
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/home-actions`;
-  if (!selected || !action) return { status: 'NEEDS_ENTITY', reasonCode: 'OPERATIONAL_WORK_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', id: 'operational-work-targets', title: 'Choose tracked work and an action', description: 'Use the exact title or work-item id and say accept, defer, snooze, or complete.', sections: [{ id: 'work', title: 'Tracked Operational Work', count: items.length, items: items.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: `${String(item.state).toLowerCase().replace(/_/g, ' ')} · ${String(item.safetyTier).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(item.state), href })) }], actions: [{ id: 'open-work', label: 'Manage Home Actions', href, style: 'SECONDARY' }] }], suggestions: [] };
+  if (!selected || !action) return { status: 'NEEDS_ENTITY', reasonCode: 'OPERATIONAL_WORK_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'operational-work-targets', title: 'Choose tracked work and an action', description: 'Use the exact title or work-item id and say accept, defer, snooze, or complete.', sections: [{ id: 'work', title: 'Tracked Operational Work', count: items.length, items: items.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: `${String(item.state).toLowerCase().replace(/_/g, ' ')} · ${String(item.safetyTier).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(item.state), href })) }], actions: [{ id: 'open-work', label: 'Manage Home Actions', href, style: 'SECONDARY' }] }], suggestions: [] };
   const execution = selected.executions.find((candidate) => candidate.role === 'PRIMARY');
   if (action === 'COMPLETE' && (selected.state !== 'ACCEPTED' || execution?.executionType !== 'MAINTENANCE_TASK')) return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_COMPLETION_REQUIRES_DOMAIN_WORKFLOW', blocks: [{ type: 'BOUNDARY', id: 'operational-work-completion-boundary', title: 'Complete this in its linked workflow', severity: 'INFO', body: 'Quick completion is available only for accepted maintenance-backed work. Project, guidance, booking, safety, and regulated work must record evidence and completion in the linked workflow.', suggestions: [] }, { type: 'SUMMARY', id: 'operational-work-manage', title: selected.title, body: `Current state: ${String(selected.state).toLowerCase().replace(/_/g, ' ')}. No change was made.`, tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'PRIMARY' }] }], suggestions: [] };
   const observedResult = action === 'COMPLETE'
@@ -3155,7 +3176,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
           ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'PRIMARY' as const }]),
         ],
       },
-      { type: 'GROUPED_LIST', id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections, actions: [] },
+      { type: 'GROUPED_LIST', filters: [], id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections, actions: [] },
       {
         type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness',
         items: [
@@ -3393,7 +3414,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
 
   if (hasAnyResult) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'savings-opportunity-groups', title: 'Savings and benefits',
+      type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: 'Savings and benefits',
       description: 'Available estimates are planning signals. Realized value appears only from recorded RECEIVED outcomes.',
       sections: [
         { id: 'recurring', title: 'Recurring-cost opportunities', count: recurring.length, items: recurring },
@@ -3541,7 +3562,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
 
   if (missing.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'ownership-cost-missing', title: 'Information that could improve this total',
+      type: 'GROUPED_LIST', filters: [], id: 'ownership-cost-missing', title: 'Information that could improve this total',
       description: 'These categories are applicable or unresolved, but no amount is currently included.',
       sections: [{
         id: 'missing', title: 'Missing from the selected lens', count: missing.length,
@@ -3627,7 +3648,7 @@ async function capitalReservePlanResult(userId: string, propertyId: string): Pro
     body: `The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}. The canonical reserve plan currently suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} shortfall.`,
     tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }, { id: 'open-reserve', label: 'Open reserve fund', href: reserveHref, style: 'SECONDARY' }],
   }, { type: 'TABLE', id: 'capital-timeline-table', title: 'Upcoming capital windows', description: 'Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Planning window' }, { key: 'cost', label: 'Estimated range' }, { key: 'confidence', label: 'Confidence' }], rows: upcoming.map((item) => ({ id: item.id, values: { item: item.inventoryItem?.name ?? String(item.category).toLowerCase().replace(/_/g, ' '), window: `${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`, cost: item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null ? 'Not available' : `${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`, confidence: String(item.confidence).toLowerCase() } })), totalCount: items.length, actions: items.length > upcoming.length ? [{ id: 'open-timeline-table', label: 'Open capital timeline', href, style: 'SECONDARY' }] : [] },
-  { type: 'GROUPED_LIST', id: 'reserve-allocations', title: 'Active reserve allocations', description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.', sections: [{ id: 'allocations', title: 'Funding plan', count: lineItems.length, items: lineItems.slice(0, 20).map((line) => ({ id: line.id, title: line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' '), description: `${money(line.allocatedMonthlyCents / 100)}/month toward ${money(line.targetCostCents / 100)}`, meta: [String(line.status).toLowerCase()], status: line.status, href: reserveHref })) }], actions: [] },
+  { type: 'GROUPED_LIST', filters: [], id: 'reserve-allocations', title: 'Active reserve allocations', description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.', sections: [{ id: 'allocations', title: 'Funding plan', count: lineItems.length, items: lineItems.slice(0, 20).map((line) => ({ id: line.id, title: line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' '), description: `${money(line.allocatedMonthlyCents / 100)}/month toward ${money(line.targetCostCents / 100)}`, meta: [String(line.status).toLowerCase()], status: line.status, href: reserveHref })) }], actions: [] },
   { type: 'EVIDENCE', id: 'capital-plan-evidence', title: 'Planning sources and freshness', items: upcoming.map((item) => ({ label: item.inventoryItem?.name ?? String(item.category), source: `Home Capital Timeline · ${String(item.confidence).toLowerCase()} confidence`, observedAt: analysis.computedAt?.toISOString?.() ?? String(analysis.computedAt) })) },
   { type: 'BOUNDARY', id: 'capital-plan-boundary', title: 'Planning range—not a guaranteed expense schedule', body: 'Actual condition, inspections, maintenance, local labor and material prices, financing, insurance, and homeowner choices can move timing and cost. Keep emergency savings and capital reserves conceptually separate.', severity: 'INFO', suggestions: [] }];
   return { status: captureRequests.length || analysis.confidence === 'LOW' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: captureRequests.length ? 'CAPITAL_PLAN_CONTEXT_OPTIONAL' : analysis.confidence === 'LOW' ? 'CAPITAL_PLAN_LOW_CONFIDENCE' : undefined, contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests, blocks, suggestions: ['Which expense is coming first?', 'Should I repair or replace my oldest system?'] };
@@ -3655,7 +3676,7 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
   if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [
     ['Tax year', readiness.canonical.taxYear], ['Classification', readiness.canonical.classification], ['Assessed value', readiness.canonical.totalAssessedValue == null ? null : money(readiness.canonical.totalAssessedValue)], ['Taxable value', readiness.canonical.taxableValue == null ? null : money(readiness.canonical.taxableValue)], ['Effective tax rate', readiness.canonical.effectiveTaxRate == null ? null : `${(readiness.canonical.effectiveTaxRate * 100).toFixed(3)}%`],
   ].map(([fact, value], index) => ({ id: `tax-fact-${index}`, values: { fact: String(fact), value: value == null ? 'Not confirmed' : String(value) } })), actions: [] });
-  blocks.push({ type: 'GROUPED_LIST', id: 'tax-readiness-gaps', title: readiness.gaps.length ? 'What is still needed' : 'Evidence package', description: `Estimated preparation effort: ${String(readiness.effort).toLowerCase()}.`, sections: [{ id: 'gaps', title: readiness.gaps.length ? 'Readiness gaps' : 'Confirmed evidence', count: readiness.gaps.length || readiness.evidence.length, items: readiness.gaps.length ? readiness.gaps.map((gap: string, index: number) => ({ id: `tax-gap-${index}`, title: gap, description: null, meta: [], status: 'OPEN', href })) : readiness.evidence.map((evidence: any) => ({ id: evidence.id, title: evidence.title, description: evidence.description ?? null, meta: [String(evidence.type).toLowerCase().replace(/_/g, ' ')], status: 'CONFIRMED', href })) }], actions: [] });
+  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'tax-readiness-gaps', title: readiness.gaps.length ? 'What is still needed' : 'Evidence package', description: `Estimated preparation effort: ${String(readiness.effort).toLowerCase()}.`, sections: [{ id: 'gaps', title: readiness.gaps.length ? 'Readiness gaps' : 'Confirmed evidence', count: readiness.gaps.length || readiness.evidence.length, items: readiness.gaps.length ? readiness.gaps.map((gap: string, index: number) => ({ id: `tax-gap-${index}`, title: gap, description: null, meta: [], status: 'OPEN', href })) : readiness.evidence.map((evidence: any) => ({ id: evidence.id, title: evidence.title, description: evidence.description ?? null, meta: [String(evidence.type).toLowerCase().replace(/_/g, ' ')], status: 'CONFIRMED', href })) }], actions: [] });
   if (readiness.evidence.length || readiness.ruleProfile) blocks.push({ type: 'EVIDENCE', id: 'tax-readiness-evidence', title: 'Rule and evidence provenance', items: [{ label: readiness.ruleProfile?.title ?? 'Reviewed appeal rule', source: readiness.ruleProfile ? `Rule ${readiness.ruleProfile.version}` : 'Property Tax Center', observedAt: readiness.ruleProfile?.reviewedAt?.toISOString?.() ?? readiness.ruleProfile?.reviewedAt ?? readiness.evaluatedAt }, ...readiness.evidence.slice(0, 15).map((evidence: any) => ({ label: evidence.title, source: evidence.sourceUrl ? 'Sourced appeal evidence' : 'Vault-supported appeal evidence', observedAt: evidence.confirmedAt }))] });
   blocks.push({ type: 'BOUNDARY', id: 'tax-readiness-boundary', title: 'Preparation support—not tax, appraisal, or legal advice', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] });
   return { status: readiness.status === 'READY' && !captureRequests.length ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: readiness.status === 'READY' ? (captureRequests.length ? 'PROPERTY_TAX_CONTEXT_OPTIONAL' : undefined) : `PROPERTY_TAX_${readiness.status}`, contextVersion: context.contextVersion, captureRequests, blocks, suggestions: ['Which tax facts are missing?', 'Open Property Tax Center'] };
@@ -3679,7 +3700,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   const open = items.filter((item) => item.status !== 'SATISFIED');
   const caseHref = `${href}?renovationCaseId=${encodeURIComponent(selected.id)}`;
   const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-case', label: 'Open renovation case', href: caseHref, style: 'PRIMARY' }, { id: 'open-permits', label: 'Open Permit Tracker', href: permitsHref, style: 'SECONDARY' }] }];
-  if (items.length) blocks.push({ type: 'GROUPED_LIST', id: 'renovation-readiness-items', title: 'Readiness checklist', description: 'Blocking state is owned by the canonical renovation scope, requirement, compliance, quote, schedule, and evidence records.', sections: [{ id: 'blocking', title: 'Blocking', count: blockers.length, items: blockers.slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction, item.evidenceRequired].filter(Boolean), status: item.status, href: caseHref })) }, { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), items: open.filter((item) => !item.isBlocking).slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction].filter(Boolean), status: item.status, href: caseHref })) }].filter((section) => section.count > 0), actions: [] });
+  if (items.length) blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'renovation-readiness-items', title: 'Readiness checklist', description: 'Blocking state is owned by the canonical renovation scope, requirement, compliance, quote, schedule, and evidence records.', sections: [{ id: 'blocking', title: 'Blocking', count: blockers.length, items: blockers.slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction, item.evidenceRequired].filter(Boolean), status: item.status, href: caseHref })) }, { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), items: open.filter((item) => !item.isBlocking).slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction].filter(Boolean), status: item.status, href: caseHref })) }].filter((section) => section.count > 0), actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization—not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A “ready” app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
   return { status: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: summary.state === 'READY' ? (permitSummary.openFlags ? 'PERMIT_FLAGS_OPEN' : undefined) : `RENOVATION_${summary.state ?? 'NOT_READY'}`, contextVersion: selected.updatedAt.toISOString(), blocks, suggestions: cases.length > 1 ? cases.slice(1, 4).map((candidate) => `Is ${candidate.name} ready to start?`) : ['What is blocking this renovation?'] };
@@ -3819,7 +3840,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
       status: 'NEEDS_ENTITY', reasonCode: 'MULTIPLE_INVENTORY_MATCHES', contextVersion: recordVersion,
       ...durableFreeTextClarification('INVENTORY_LOOKUP', 'Which inventory item do you mean? Add its room, brand, model, or exact name.'),
       blocks: [{
-        type: 'GROUPED_LIST', id: 'inventory-entity-selection', title: 'Which inventory item do you mean?',
+        type: 'GROUPED_LIST', filters: [], id: 'inventory-entity-selection', title: 'Which inventory item do you mean?',
         description: 'More than one Living Home Record matches this question. Open the intended item, or ask again using its room, brand, or model.',
         sections: [{
           id: 'matches', title: 'Matching records', count: matches.length,
@@ -3873,7 +3894,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     tone: selectedItem && inventoryMissingFacts(selectedItem).length ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'PRIMARY' }],
   }, {
-    type: 'GROUPED_LIST', id: 'inventory-results', title: incompleteFocus ? 'Incomplete inventory records' : lifecycleFocus ? 'Recorded lifecycle dates approaching' : 'Inventory details',
+    type: 'GROUPED_LIST', filters: [], id: 'inventory-results', title: incompleteFocus ? 'Incomplete inventory records' : lifecycleFocus ? 'Recorded lifecycle dates approaching' : 'Inventory details',
     description: lifecycleFocus ? 'Only items with a recorded expected-expiry date within the next three years are included.' : null,
     sections: [{
       id: 'items', title: 'Living Home Record', count: matches.length,
@@ -3909,7 +3930,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
       select: { id: true, type: true, title: true, summary: true, occurredAt: true, datePrecision: true, verificationStatus: true, sourceBadge: true },
     });
     blocks.push({
-      type: 'GROUPED_LIST', id: 'inventory-history', title: `${selectedItem.name} history`,
+      type: 'GROUPED_LIST', filters: [], id: 'inventory-history', title: `${selectedItem.name} history`,
       description: events.length ? 'Current, non-deleted Home Timeline events visible to you.' : 'No visible Home Timeline events are linked to this item yet.',
       sections: [{
         id: 'events', title: 'Timeline', count: events.length,
@@ -4058,7 +4079,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ],
       actions: [],
     }, {
-      type: 'GROUPED_LIST', id: 'property-record-sections', title: 'What the record contains',
+      type: 'GROUPED_LIST', filters: [], id: 'property-record-sections', title: 'What the record contains',
       description: 'Counts describe canonical records available to this household member.',
       sections: [{
         id: 'record-sections', title: 'Living Home Record', count: 4,
@@ -4075,7 +4096,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
 
   if (incompleteScopes.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'property-completeness', title: 'Areas that can improve',
+      type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve',
       description: 'Internal fact keys are intentionally hidden. Open the property record or answer the inline prompt to add canonical information.',
       sections: [{
         id: 'incomplete-scopes', title: 'Property Context completeness', count: incompleteScopes.length,
@@ -4092,7 +4113,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
 
   if (!completenessFocus && timeline?.recent.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'property-recent-events', title: 'Recent verified home activity',
+      type: 'GROUPED_LIST', filters: [], id: 'property-recent-events', title: 'Recent verified home activity',
       description: `${timeline.confirmedCount} current confirmed or evidence-verified event${timeline.confirmedCount === 1 ? '' : 's'} are visible to you. Showing the most recent records.`,
       sections: [{
         id: 'recent-events', title: 'Home Timeline', count: timeline.recent.length,
@@ -4277,7 +4298,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
   if (selectedActions.length) {
     const priorities = ['NOW', 'SOON', 'PLAN', 'CONSIDER'] as const;
     blocks.push({
-      type: 'GROUPED_LIST', id: 'home-actions-list', title: 'Prioritized actions',
+      type: 'GROUPED_LIST', filters: [], id: 'home-actions-list', title: 'Prioritized actions',
       description: 'Priority and order come from the canonical Home Action feed. Ask does not independently rerank them.',
       sections: priorities.map((priority) => {
         const actions = selectedActions.filter((action) => action.priority === priority);
@@ -4457,7 +4478,7 @@ async function buyerDeadlinesResult(userId: string, propertyId: string): Promise
     actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
   }];
   if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', id: 'buyer-deadlines-list', title: 'Deadlines and blockers', description: 'From the canonical Buyer Plan.', sections, actions: [] });
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'buyer-deadlines-list', title: 'Deadlines and blockers', description: 'From the canonical Buyer Plan.', sections, actions: [] });
   }
   blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
   return {
@@ -4720,7 +4741,7 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
       status: 'NEEDS_ENTITY', reasonCode: 'BUYER_TASK_SELECTION_REQUIRED',
       ...durableFreeTextClarification('BUYER_TASK_UPDATE', 'Which Buyer Plan task should Ask update? Use its exact title.'),
       blocks: [{
-        type: 'GROUPED_LIST', id: 'buyer-task-update-options', title: 'Choose the task to change',
+        type: 'GROUPED_LIST', filters: [], id: 'buyer-task-update-options', title: 'Choose the task to change',
         description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
         sections: [{ id: 'tasks', title: 'Buyer Plan tasks', count: openTasks.length, items: openTasks.slice(0, 20).map((task) => ({
           id: task.id, title: task.title, description: task.dueAt ? `Due ${humanDate(task.dueAt)}` : 'No due date',
@@ -4794,7 +4815,7 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
   }];
   if (open.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-move-status-tasks', title: 'Open move tasks',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-move-status-tasks', title: 'Open move tasks',
       description: 'From the canonical Buyer Plan, filtered to move tasks.',
       sections: [{ id: 'move-tasks', title: 'Move', count: open.length, items: open.slice(0, 10).map((task) => ({
         id: task.id, title: task.title, description: task.description,
@@ -4854,7 +4875,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
   }];
   if (blockingConditions.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-financing-conditions', title: 'Blocking lender conditions', description: 'From the recorded lender readiness.',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-financing-conditions', title: 'Blocking lender conditions', description: 'From the recorded lender readiness.',
       sections: [{ id: 'conditions', title: 'Conditions', count: blockingConditions.length, items: blockingConditions.slice(0, 10).map((condition) => ({
         id: condition.id, title: condition.title, description: condition.notes,
         meta: [condition.dueAt ? `Due ${humanDate(new Date(condition.dueAt))}` : null].filter((value): value is string => Boolean(value)),
@@ -4899,7 +4920,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
   }];
   if (openBlockingIssues.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-title-issues', title: 'Blocking title/escrow issues', description: 'From the recorded title and escrow workspace.',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-title-issues', title: 'Blocking title/escrow issues', description: 'From the recorded title and escrow workspace.',
       sections: [{ id: 'issues', title: 'Issues', count: openBlockingIssues.length, items: openBlockingIssues.slice(0, 10).map((issue) => ({
         id: issue.id, title: issue.title, description: null,
         meta: [issue.dueAt ? `Due ${humanDate(new Date(issue.dueAt))}` : null].filter((value): value is string => Boolean(value)),
@@ -4944,7 +4965,7 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
   }];
   if (openIssues.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-walkthrough-issues', title: 'Unresolved walkthrough issues', description: 'From the recorded walkthrough.',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-walkthrough-issues', title: 'Unresolved walkthrough issues', description: 'From the recorded walkthrough.',
       sections: [{ id: 'issues', title: 'Issues', count: openIssues.length, items: openIssues.slice(0, 10).map((issue) => ({
         id: issue.id, title: issue.title, description: null, meta: issue.blocking ? ['Blocking'] : [], status: issue.status, href: planHref,
       })) }], actions: [],
@@ -5022,7 +5043,7 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
   }];
   if (blockers.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-closing-day-blockers', title: 'Blockers before closing day', description: 'Open or blocking tasks recorded on the Buyer Plan.',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-closing-day-blockers', title: 'Blockers before closing day', description: 'Open or blocking tasks recorded on the Buyer Plan.',
       sections: [{ id: 'blockers', title: 'Blockers', count: blockers.length, items: blockers.slice(0, 10).map((blocker) => ({
         id: blocker.id, title: blocker.title, description: null, meta: [], status: blocker.status, href: planHref,
       })) }], actions: [],
@@ -5067,7 +5088,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   }];
   if (openContingencies.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-contract-contingencies', title: 'Open contingencies', description: 'From the confirmed contract revision.',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-contract-contingencies', title: 'Open contingencies', description: 'From the confirmed contract revision.',
       sections: [{ id: 'contingencies', title: 'Contingencies', count: openContingencies.length, items: openContingencies.slice(0, 10).map((item) => ({
         id: item.id, title: item.label, description: null,
         meta: [item.dueAt ? `Due ${humanDate(new Date(item.dueAt))}` : null].filter((value): value is string => Boolean(value)),
@@ -5113,7 +5134,7 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
   }];
   if (findings.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-negotiation-findings', title: 'Findings in negotiation', description: 'From confirmed inspection findings classified for seller negotiation.',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-negotiation-findings', title: 'Findings in negotiation', description: 'From confirmed inspection findings classified for seller negotiation.',
       sections: [{ id: 'findings', title: 'Findings', count: findings.length, items: findings.slice(0, 10).map((finding) => ({
         id: finding.id, title: finding.homeSystem, description: finding.inspectorDescription?.slice(0, 140) ?? null,
         meta: [finding.severity], status: finding.negotiationCaseLinks[0]?.sellerResponse ?? 'PENDING', href: inspectionHref,
@@ -5151,7 +5172,7 @@ async function buyerCostReadinessResult(userId: string, propertyId: string): Pro
   }];
   if (costedTasks.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'buyer-cost-items', title: 'Recorded cost items', description: 'Estimated costs from open Buyer Plan tasks.',
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-cost-items', title: 'Recorded cost items', description: 'Estimated costs from open Buyer Plan tasks.',
       sections: [{ id: 'costs', title: 'Costs', count: costedTasks.length, items: costedTasks.slice(0, 10).map((task) => ({
         id: task.id, title: task.title, description: null, meta: [money(task.estimatedCostCents ?? 0)], status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
       })) }], actions: [],
@@ -5202,7 +5223,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
     return {
       status: 'NEEDS_ENTITY', reasonCode: !matched ? 'BUYER_FINDING_SELECTION_REQUIRED' : 'BUYER_FINDING_DISPOSITION_REQUIRED',
       blocks: [{
-        type: 'GROUPED_LIST', id: 'buyer-finding-disposition-select', title: matched ? `How should ${matched.title} be classified?` : 'Choose the finding to classify',
+        type: 'GROUPED_LIST', filters: [], id: 'buyer-finding-disposition-select', title: matched ? `How should ${matched.title} be classified?` : 'Choose the finding to classify',
         description: matched ? 'Say negotiation, post-close, verified fact, or dismissed.' : 'Name the finding and the decision: negotiation, post-close, verified fact, or dismissed.',
         sections: [{ id: 'findings', title: 'Open findings', count: findings.length, items: findings.slice(0, 20).map((finding) => ({
           id: finding.id, title: [finding.homeSystem, finding.subsystem].filter(Boolean).join(' '), description: finding.inspectorDescription?.slice(0, 140) ?? null,
@@ -5427,7 +5448,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     rows,
     actions: [],
   }, {
-    type: 'GROUPED_LIST',
+    type: 'GROUPED_LIST', filters: [],
     id: 'sell-hold-rent-assumptions',
     title: 'Assumptions that materially affect the answer',
     description: 'Adjust these in Sell / Hold / Rent before relying on the comparison for a major decision.',
@@ -5549,7 +5570,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
 
   if (openItems.length) {
     blocks.push({
-      type: 'GROUPED_LIST',
+      type: 'GROUPED_LIST', filters: [],
       id: 'seller-prep-open-items',
       title: 'Open items',
       description: 'Repairs, records, and presentation work recommended before listing, grouped by category.',
@@ -5653,7 +5674,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
       status: 'NEEDS_ENTITY',
       reasonCode: 'SELLER_PREP_ITEM_TARGET_REQUIRED',
       blocks: [{
-        type: 'GROUPED_LIST',
+        type: 'GROUPED_LIST', filters: [],
         id: 'seller-prep-item-targets',
         title: 'Choose an item and a decision',
         description: 'Use the exact item title and say waive, pursue, reopen, or unpursue.',
@@ -6278,7 +6299,7 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
   }];
   if (items.length) {
     blocks.push({
-      type: 'GROUPED_LIST',
+      type: 'GROUPED_LIST', filters: [],
       id: 'intelligence-envelope-items',
       title: 'Derived intelligence by domain',
       description: 'This is a normalized read of registered Envelope producers, not every Home Action or ordinary domain record.',
@@ -6435,7 +6456,7 @@ function specialistProjectionBlocks(
     });
     if (projection.outstanding.length) {
       blocks.push({
-        type: 'GROUPED_LIST', id: 'hvac-specialist-outstanding',
+        type: 'GROUPED_LIST', filters: [], id: 'hvac-specialist-outstanding',
         title: 'Still needed', description: 'Correct these on the home record.',
         sections: [{
           id: 'outstanding', title: 'Outstanding items', count: projection.outstanding.length,
@@ -6547,7 +6568,7 @@ export async function hvacSpecialistEngageResult(
         return {
           status: 'NEEDS_ENTITY', reasonCode: 'HVAC_SPECIALIST_ACTION_AMBIGUOUS',
           blocks: [{
-            type: 'GROUPED_LIST', id: 'hvac-specialist-action-candidates',
+            type: 'GROUPED_LIST', filters: [], id: 'hvac-specialist-action-candidates',
             title: 'Which HVAC decision do you mean?',
             description: 'More than one HVAC repair-or-replace action is on your Home feed. Name the system in your next message.',
             sections: [{
@@ -7319,6 +7340,23 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
   }
 }
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: computes what to store as this
+// write's originalResponse -- reused from the row's existing resultJson if
+// one was already stamped (a refresh/confirm/edit write must never replace
+// it), or stamped fresh from this write's own blocks if this is the row's
+// first-ever result. Every write site below reads `execution.resultJson`
+// (a snapshot from before this write) and passes it here rather than each
+// reimplementing this preserve-or-stamp logic.
+function preservedOriginalResponse(existingResultJson: unknown, freshBlocks: AskPresentationBlock[]): { blocks: AskPresentationBlock[]; observedAt: string } {
+  const existing = existingResultJson && typeof existingResultJson === 'object' && !Array.isArray(existingResultJson)
+    ? (existingResultJson as { originalResponse?: unknown }).originalResponse
+    : null;
+  if (existing && typeof existing === 'object' && !Array.isArray(existing) && Array.isArray((existing as { blocks?: unknown }).blocks) && typeof (existing as { observedAt?: unknown }).observedAt === 'string') {
+    return existing as { blocks: AskPresentationBlock[]; observedAt: string };
+  }
+  return { blocks: freshBlocks, observedAt: new Date().toISOString() };
+}
+
 function mapPersistedExecution(execution: {
   id: string; sessionId: string; message: string; status: AskExecutionStatus; reasonCode?: string | null; propertyId: string | null; operationId: string | null;
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
@@ -7340,7 +7378,7 @@ function mapPersistedExecution(execution: {
       ? { id: currentSkill.id, version: currentSkill.version, domain: currentSkill.domain }
       : null;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown; originalResponse?: unknown }
     : {};
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
   const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;
@@ -7365,6 +7403,9 @@ function mapPersistedExecution(execution: {
     skillHandoff: stored.skillHandoff ?? null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     continuesExecutionId: typeof stored.continuesExecutionId === 'string' ? stored.continuesExecutionId : null,
+    originalResponse: stored.originalResponse && typeof stored.originalResponse === 'object' && !Array.isArray(stored.originalResponse)
+      ? stored.originalResponse
+      : null,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
     captureRequests: Array.isArray(stored.captureRequests)
@@ -7611,7 +7652,18 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
     : undefined;
   const contextualOperationId = focusedOperationForLaunchContext(input.launchContext);
-  const forcedOperationId = followUp.forcedOperationId ?? contextualOperationId ?? launchCapabilityOperationId ?? null;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD ACT-001/ACT-003: a declared item
+  // action (GroupedListItemActionSchema.operationId) names its own
+  // registered operation explicitly -- the highest-priority source here,
+  // since it is server-declared authoritative identity from a prior
+  // response, not an inference from free text or a launch surface.
+  // Validated against the operation registry before use; an unrecognized
+  // or stale value is silently ignored rather than trusted, falling back
+  // to the same NLU/entity-based resolution every other turn uses.
+  const declaredItemActionOperationId = input.launchContext?.operationId && input.launchContext.operationId in ASK_OPERATION_DEFINITIONS
+    ? input.launchContext.operationId as AskOperationId
+    : null;
+  const forcedOperationId = declaredItemActionOperationId ?? followUp.forcedOperationId ?? contextualOperationId ?? launchCapabilityOperationId ?? null;
   const skillRoutingDecision = resolveHierarchicalSkillRouting(routingMessage, routingDecision, {
     consumer: 'ASK',
     consumerEnabled: controls.consumerEnabled,
@@ -7800,7 +7852,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         // pagination/specialist/monitor continuations, which are legitimate
         // separate answers) is marked so the frontend can update the prior
         // card's surface instead of appending a duplicate list.
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedOriginalResponse(execution.resultJson, result.blocks) }),
         completedAt,
       },
     });
@@ -9014,7 +9066,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       reasonCode: result.reasonCode,
       contextVersion: result.contextVersion,
       parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: preservedContinuesExecutionId }),
+      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: preservedContinuesExecutionId, originalResponse: preservedOriginalResponse(execution.resultJson, result.blocks) }),
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });
@@ -10915,7 +10967,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(result.parameters) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(result.parameters) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, originalResponse: preservedOriginalResponse(execution.resultJson, result.blocks) }), completedAt: new Date() },
       });
       await tx.askConfirmationReceipt.update({
         where: { executionId },
@@ -11047,14 +11099,26 @@ export async function editAskConfirmation(userId: string, executionId: string, i
   // matching (same JSON-path pattern already used elsewhere in this
   // codebase, e.g. adminWorkerJobs.service.ts's metadataJson filter), so a
   // losing concurrent edit fails loudly instead of silently.
+  //
+  // External review finding (2nd pass): guarding on version alone was
+  // still not enough. confirmAskExecution's claim transaction moves status
+  // to RUNNING without touching parametersJson.confirmationVersion at all
+  // -- so once a confirm has claimed this execution, this edit's version
+  // guard would still match (the version genuinely hasn't changed) and
+  // silently overwrite parametersJson/resultJson out from under a
+  // confirmation that is actively executing or has already completed.
+  // Guarding on status too closes that: any status transition away from
+  // NEEDS_CONFIRMATION (claimed, completed, expired) now makes this write
+  // match nothing, exactly like an already-superseded version does.
   const editWrite = await prisma.askExecution.updateMany({
-    where: { id: execution.id, parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
     data: {
       parametersJson: asInputJson({ ...parameters, maintenanceUpdate: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
       resultJson: asInputJson({
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
         blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: taskHref, style: 'SECONDARY' }] }],
         captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        originalResponse: preservedOriginalResponse(execution.resultJson, [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [] }]),
       }),
     },
   });

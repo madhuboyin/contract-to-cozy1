@@ -92,7 +92,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
   }];
   if (sections.length) {
     blocks.push({
-      type: 'GROUPED_LIST',
+      type: 'GROUPED_LIST', filters: [],
       id: 'buyer-plan-actions',
       title: 'Buyer Plan guidance',
       description: 'Task order, status, and deadlines come from the selected property’s canonical Buyer Plan.',

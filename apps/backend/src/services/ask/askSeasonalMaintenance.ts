@@ -185,7 +185,7 @@ export function buildSeasonalMaintenanceResult(input: {
       };
     }).filter((section) => section.count > 0);
     blocks.push({
-      type: 'GROUPED_LIST', id: 'seasonal-maintenance-items', title: `${explicitLabel} checklist`,
+      type: 'GROUPED_LIST', filters: [], id: 'seasonal-maintenance-items', title: `${explicitLabel} checklist`,
       description: 'Checklist status is used first; a linked canonical Maintenance completion takes precedence when the two sources differ.',
       sections, actions: [],
     });

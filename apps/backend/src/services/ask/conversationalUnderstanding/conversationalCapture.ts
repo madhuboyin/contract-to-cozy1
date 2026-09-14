@@ -1137,7 +1137,7 @@ async function buildSellerPrepInlineBlock(userId: string, propertyId: string): P
     const href = SELLER_PREP_HREF(propertyId);
     if (!overview.saleCase) {
       return {
-        type: 'GROUPED_LIST',
+        type: 'GROUPED_LIST', filters: [],
         id: 'sell-hold-rent-goal-seller-prep',
         title: 'Getting ready to sell',
         description: 'A seller-prep checklist can personalize which repairs, records, and cosmetic work to prioritize whenever you are ready to start.',
@@ -1147,7 +1147,7 @@ async function buildSellerPrepInlineBlock(userId: string, propertyId: string): P
     }
     const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN' && !item.waivedAt).slice(0, 5);
     return {
-      type: 'GROUPED_LIST',
+      type: 'GROUPED_LIST', filters: [],
       id: 'sell-hold-rent-goal-seller-prep',
       title: 'Seller prep checklist',
       description: openItems.length

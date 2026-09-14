@@ -1110,6 +1110,9 @@ class APIClient {
   async cancelAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/cancel`, { method: 'POST' });
   }
+  async refreshAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/refresh`, { method: 'POST' });
+  }
   async submitAskFeedback(executionId: string, payload: { rating: 'UP' | 'DOWN'; comment?: string }): Promise<APIResponse<import('@/features/ask/types').AskFeedbackResponse>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/feedback`, { method: 'POST', body: payload });
   }

@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2,
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskFeaturedPrompt, AskPendingWorkItem, AskPresentationBlock, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
+import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskPresentationBlock, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { track } from '@/lib/analytics/events';
@@ -365,7 +365,7 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
   );
 }
 
-function BlockView({ block, executionId, onItemAction, itemActionsDisabled }: { block: AskPresentationBlock; executionId: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string) => void; itemActionsDisabled: boolean }) {
+function BlockView({ block, executionId, onItemAction, itemActionsDisabled, onFilterClick }: { block: AskPresentationBlock; executionId: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void }) {
   if (block.type === 'SUMMARY') {
     return (
       <section className={cn(
@@ -414,6 +414,25 @@ function BlockView({ block, executionId, onItemAction, itemActionsDisabled }: { 
         <div className="border-b border-slate-100 px-4 py-3">
           <h3 className="font-semibold text-slate-950">{block.title}</h3>
           {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+          {block.filters.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter">
+              {block.filters.map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  aria-pressed={filter.active}
+                  disabled={itemActionsDisabled || filter.active}
+                  onClick={() => onFilterClick(filter.message)}
+                  className={cn(
+                    'min-h-8 rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-default',
+                    filter.active ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-teal-300 hover:text-teal-800 disabled:opacity-50',
+                  )}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="divide-y divide-slate-100">
           {block.sections.map((section) => (
@@ -442,7 +461,7 @@ function BlockView({ block, executionId, onItemAction, itemActionsDisabled }: { 
                               key={itemAction.id}
                               type="button"
                               disabled={itemActionsDisabled}
-                              onClick={() => onItemAction(item.entityType, item.id, itemAction.message)}
+                              onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)}
                               className={cn(
                                 'min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
                                 itemAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
@@ -943,6 +962,12 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
   useEffect(() => {
     setEditValues(Object.fromEntries(confirmation.editableFields.map((field) => [field.key, field.value])));
     setEditingKey(null); setEditError(null);
+    // External review finding (CONF-003): editing must invalidate the
+    // previous confirmation's consent, not just its version/idempotency
+    // key. Without this, a homeowner who had already checked the consent
+    // box could edit the proposed date and immediately click Confirm
+    // against the NEW proposal without ever re-affirming consent for it.
+    setConsent(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirmation.version]);
   const saveEdit = async (key: string) => {
@@ -1368,6 +1393,22 @@ function ExecutionCard({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const isJustUpdated = execution.executionId === justUpdatedExecutionId;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-001/RES-004 (ACT-001 REFRESH):
+  // an explicit, homeowner-initiated revalidation, distinct from the
+  // implicit refresh MAINT-005 triggers automatically after a mutation.
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true); setRefreshError(null);
+    try {
+      const response = await api.refreshAskExecution(execution.executionId);
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not refresh this result.');
+      updateExecution(response.data);
+    } catch (caught) {
+      setRefreshError(caught instanceof Error ? caught.message : 'Could not refresh this result.');
+    } finally { setRefreshing(false); }
+  };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is
   // claiming focus for this turn (no pending property selection, capture,
   // clarification or confirmation), the result just settled. Without this,
@@ -1400,7 +1441,7 @@ function ExecutionCard({
         <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
           <summary className="cursor-pointer text-xs font-semibold text-slate-500">Superseded by a refinement below · view original response</summary>
           <div className="mt-3 space-y-3 opacity-75">
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => {}} />)}
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}
           </div>
         </details>
       </article>
@@ -1411,9 +1452,41 @@ function ExecutionCard({
     <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
       <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
       <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
-        <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
+          <button type="button" disabled={refreshing || loading} onClick={() => void refresh()} className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50" aria-label="Refresh this result">
+            <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />{refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+        {refreshError && <p className="text-xs text-red-700" role="alert">{refreshError}</p>}
+        {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: `execution.blocks` is
+            always current data; this discloses what Cozy originally
+            answered whenever the two have actually diverged (this result
+            was refreshed, completed, or edited at least once since it was
+            first created), without cluttering the common one-shot case. */}
+        {execution.originalResponse && execution.updatedAt !== execution.createdAt && (
+          <details className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">Originally answered {new Date(execution.originalResponse.observedAt).toLocaleString()} · view original response</summary>
+            <div className="mt-3 space-y-3 opacity-75">
+              {execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}
+            </div>
+          </details>
+        )}
         <div ref={bodyRef} className="space-y-3">
-          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading} onItemAction={(entityType, entityId, message) => void ask(message, undefined, { entityType: entityType ?? undefined, entityId, sourceExecutionId: execution.executionId })} />)}
+          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading} onItemAction={(entityType, entityId, message, operationId) => void ask(message, undefined, {
+            entityType: entityType ?? undefined, entityId, sourceExecutionId: execution.executionId,
+            // ACT-001/ACT-003: every declared item action forces its own
+            // operationId, regardless of interactionType. The declaring
+            // server code already knows exactly which operation applies --
+            // forcing it doesn't skip reasoning for a CONVERSATION_CONTINUE
+            // explanation (GROUNDED_GUIDANCE still generates a real answer),
+            // it only skips the operation-*selection* step, which free-text
+            // pattern matching could otherwise get wrong (e.g. a task titled
+            // "Annual maintenance inspection" would make "Why is ... this
+            // important?" accidentally match the generic maintenance
+            // pattern and misroute away from grounded guidance).
+            operationId,
+          })} onFilterClick={(message) => void ask(message)} />)}
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
@@ -1621,6 +1694,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           contextVersion: promptContext?.contextVersion,
           returnTo: promptContext?.returnTo ?? (safeBackTo || null),
           sourceExecutionId: promptContext?.sourceExecutionId,
+          operationId: promptContext?.operationId,
         },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');

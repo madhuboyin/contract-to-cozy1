@@ -104,7 +104,7 @@ export function buildFocusedHomeActionGuidance(
     tone: action.governance.safetyTier === 'SAFETY_EMERGENCY' ? 'CRITICAL' : action.priority === 'NOW' ? 'CAUTION' : 'DEFAULT',
     actions: [],
   }, {
-    type: 'GROUPED_LIST',
+    type: 'GROUPED_LIST', filters: [],
     id: 'focused-home-action-guidance',
     title: isPreparation ? 'Prepare this home' : 'What to do next',
     description: isPreparation

@@ -30,10 +30,18 @@ export interface AskGroupedListItemAction {
   operationId: string;
 }
 
+// ACT-001 FILTER_RESULT: a declared, clickable filter chip.
+export interface AskGroupedListFilter {
+  id: string;
+  label: string;
+  message: string;
+  active: boolean;
+}
+
 export type AskPresentationBlock =
   | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[] }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
-  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; sections: Array<{ id: string; title: string; count: number; items: Array<{ id: string; title: string; description?: string | null; meta: string[]; status?: string | null; href?: string | null; entityType?: string | null; actions?: AskGroupedListItemAction[] }> }>; actions: AskAction[] }
+  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; sections: Array<{ id: string; title: string; count: number; items: Array<{ id: string; title: string; description?: string | null; meta: string[]; status?: string | null; href?: string | null; entityType?: string | null; actions?: AskGroupedListItemAction[] }> }>; actions: AskAction[]; filters: AskGroupedListFilter[] }
   | { type: 'TABLE'; id: string; title: string; description?: string | null; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; totalCount?: number; actions: AskAction[] }
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE' | 'AVAILABLE'; readinessLabel: string | null; readinessReasons: string[]; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null }> }
@@ -86,6 +94,9 @@ export interface AskExecutionResponse {
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: set only for a bare
   // filter refinement of an existing read result (e.g. "only show urgent").
   continuesExecutionId?: string | null;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: frozen the first time this
+  // execution's result was computed; `blocks` above is always current data.
+  originalResponse?: { blocks: AskPresentationBlock[]; observedAt: string } | null;
   contextVersion: string | null;
   blocks: AskPresentationBlock[];
   captureRequests: AskCaptureRequest[];
@@ -217,6 +228,7 @@ export interface CreateAskExecutionPayload {
     contextVersion?: string | null;
     returnTo?: string | null;
     sourceExecutionId?: string | null;
+    operationId?: string | null;
   };
 }
 // Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" — a dedicated
@@ -307,6 +319,9 @@ export interface AskCapabilityPrompt {
     // action (e.g. "Complete") was clicked from, so its confirm handler can
     // refresh that still-visible list once the mutation succeeds.
     sourceExecutionId?: string;
+    // ACT-001/ACT-003: a declared item action's own registered operation,
+    // routing directly instead of relying on free-text pattern matching.
+    operationId?: string;
   };
 }
 

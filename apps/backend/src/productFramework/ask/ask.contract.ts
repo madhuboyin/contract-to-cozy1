@@ -111,6 +111,20 @@ const GroupedListItemSchema = z.object({
   actions: z.array(GroupedListItemActionSchema).max(3).optional(),
 });
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD §7 (ACT-001 FILTER_RESULT): a declared,
+// clickable filter -- `message` is the exact canned phrasing the existing
+// askFollowUpContext.ts filter-continuation matcher already recognizes
+// (e.g. "Only show overdue tasks"), so a chip click reuses that mechanism
+// (and RES-003's duplicate-card suppression) instead of a new dispatch
+// path. `active` reflects the currently-applied filter so the UI can show
+// which chip is selected.
+const GroupedListFilterSchema = z.object({
+  id: z.string().trim().min(1).max(60),
+  label: z.string().trim().min(1).max(80),
+  message: z.string().trim().min(1).max(300),
+  active: z.boolean(),
+});
+
 const GroupedListBlockSchema = z.object({
   type: z.literal('GROUPED_LIST'),
   id: z.string(),
@@ -123,6 +137,7 @@ const GroupedListBlockSchema = z.object({
     items: z.array(GroupedListItemSchema).max(100),
   })).max(12),
   actions: z.array(AskActionSchema).max(3).default([]),
+  filters: z.array(GroupedListFilterSchema).max(6).default([]),
 });
 
 const TableBlockSchema = z.object({
@@ -582,6 +597,16 @@ export const CreateAskExecutionRequestSchema = z.object({
     // that still-visible result in place once its mutation succeeds,
     // instead of leaving it showing stale pending/complete state.
     sourceExecutionId: z.string().trim().max(160).nullable().optional(),
+    // ASK_COZY_INTERACTION_MODEL_UI_FRD ACT-001/ACT-003: a declared item
+    // action's own registered operation (GroupedListItemActionSchema.operationId
+    // above), threaded through so the server can route directly to it
+    // instead of re-deriving the operation from free-text pattern matching
+    // on a canned message. Only ever a routing HINT, not a bypass of
+    // authorization -- createAskExecution validates it against
+    // ASK_OPERATION_DEFINITIONS before honoring it, and every downstream
+    // role/target/confirmation check still runs exactly as it does for any
+    // other route to that same operation (ACT-002).
+    operationId: z.string().trim().max(120).nullable().optional(),
   }).optional(),
 }).strict();
 
@@ -621,6 +646,17 @@ const AskExecutionResponseBaseSchema = z.object({
   // second full response. Never set for a mutation, entity-pronoun, or
   // pagination continuation -- those are legitimately separate turns.
   continuesExecutionId: z.string().nullable().default(null),
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: the three-layer model's
+  // "original response" -- frozen the first time this execution's result
+  // was ever computed, and never overwritten by a later refresh/confirm/
+  // edit write (each of those preserves whatever was already stored here).
+  // `blocks` above is always "current data"; this is what Cozy originally
+  // answered. Stored inside resultJson itself (not a new column) so no
+  // database migration is required for this to take effect.
+  originalResponse: z.object({
+    blocks: z.array(AskPresentationBlockSchema),
+    observedAt: z.string().datetime(),
+  }).nullable().default(null),
   contextVersion: z.string().nullable(),
   blocks: z.array(AskPresentationBlockSchema),
   captureRequests: z.array(AskCaptureRequestSchema).max(3).default([]),

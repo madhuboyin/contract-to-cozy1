@@ -133,6 +133,25 @@ export async function postAskCancellation(req: AuthRequest, res: Response, next:
   }
 }
 
+// ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-001/RES-004: an explicit,
+// homeowner-initiated "refresh this result" control. Reuses
+// refreshAskExecutionAfterConflict as-is -- it already re-runs the
+// execution's own operation/message and revalidates current authorization,
+// previously reachable only from a capture-conflict error path.
+export async function postAskExecutionRefresh(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    return res.json({ success: true, data: await refreshAskExecutionAfterConflict(userId, req.params.executionId) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask execution not found.' } });
+    if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot access this home.' } });
+    if (code === 'ASK_SKILL_VERSION_UNAVAILABLE') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'This result can no longer be refreshed automatically.' } });
+    return next(error);
+  }
+}
+
 export async function patchAskMonitor(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const userId = req.user?.userId;
