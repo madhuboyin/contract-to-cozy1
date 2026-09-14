@@ -1,5 +1,7 @@
 # Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)
 
+**Implementation clarification (2026-09-14):** A missing-context next action asks through the canonical capture contract; an unsupported capture is omitted from Ask's recommendations rather than presented as an unanswerable question or link-only substitute. Saving refreshes recommendation readiness. Brief replies within an active selling decision are eligible for contextual extraction, but ambiguity never authorizes inferred material writes. Recorded event recall preserves date precision and reported attribution. See the implementation plan's current status for scope and validation limits.
+
 **Type:** Functional/technical requirements. No implementation, no schema edits, no migrations in this document.
 **Baseline:** `docs/architecture/ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md` (Stage 1) and `docs/architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` (Stage 2, four external-review-corrected revisions, `main@9f667ecb`). Stage 2's decisions are treated as approved baseline per this stage's brief — **not re-litigated** except where fresh code verification in this pass produced evidence Stage 2 didn't have, flagged inline as:
 ```

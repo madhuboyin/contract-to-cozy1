@@ -62,21 +62,9 @@ export interface RecentDocumentContext {
 
 // External review, 2026-09-13 (FRD §26: "extraction and any conversational
 // reasoning consume the current message, bounded aggregation context, and
-// (when active) the DecisionThread's already-structured state
-// (factReferences, assumptions, options, questions) -- never a raw list of
-// prior messages"). Same bounded-context shape as RecentHomeEventContext/
-// RecentDocumentContext above -- read-only, structured, never the prior
-// conversation transcript. This is informational context ONLY: it helps
-// the model correctly interpret a follow-up statement made in the middle of
-// an active sell/hold/rent conversation (e.g. a stated fact that answers an
-// open question or updates a listed assumption), and does not change what
-// the extraction schema can produce, add any new candidate category, or
-// bias GOAL-shaped classification. Two materially larger, still-deferred
-// changes named in this program's own Phase 6 status remain genuinely out
-// of scope: biasing what counts as a GOAL-shaped follow-up, and resolving a
-// vague reply against the active thread without repeating the goal
-// statement -- both are pre-filter/routing-layer changes, not extraction-
-// prompt-context ones, and are not attempted here.
+// The active property-scoped decision supplies bounded structured context.
+// Brief replies reach extraction, but ambiguous replies produce no candidate.
+// This context never authorizes consequential actions or material fact writes.
 export interface ActiveDecisionThreadContext {
   goalCode: string;
   factReferences: string[];
@@ -125,7 +113,7 @@ const SYSTEM_PROMPT_TEMPLATE = (
   timezone: string,
 ) => `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
 
-TODAY'S DATE is ${formatReferenceDate(referenceDate, timezone)} (${referenceDate.slice(0, 10)}, timezone: ${timezone}). Use this as the ONLY anchor for resolving relative time references -- "yesterday" is exactly one calendar day before this date, "last summer" is the most recent June-August period entirely before this date, "a few years ago" is UNKNOWN precision (never compute a specific year from a vague phrase like this). Never use any other date as "today."
+TODAY'S DATE is ${formatReferenceDate(referenceDate, timezone)} (timezone: ${timezone}). Use this as the ONLY anchor for resolving relative time references -- "yesterday" is exactly one calendar day before this date, "last summer" is the most recent June-August period entirely before this date, "a few years ago" is UNKNOWN precision (never compute a specific year from a vague phrase like this). Never use any other date as "today."
 
 Return a JSON object: { "candidates": [...] }, an array of at most ${MAX_EXTRACTION_CANDIDATES_PER_TURN} candidates (empty array if nothing qualifies).
 
@@ -211,6 +199,7 @@ ${recentDocuments.length
 ACTIVE DECISION CONTEXT (for interpreting this message ONLY, in case it continues an ongoing conversation -- never treat any of this as new information to extract, and never emit a GOAL candidate just because one is already active here):
 ${activeDecisionThread
     ? `This property has an ongoing "${activeDecisionThread.goalCode}" decision conversation.
+Resolve short follow-ups only when these recorded options or open questions identify their meaning unambiguously. A timeframe-only reply may resume this goal. Do not invent missing context, interpret an ambiguous yes/no, or turn hypothetical options into confirmed facts. Return no candidate when the meaning is ambiguous.
 - Facts already recorded for it: ${activeDecisionThread.factReferences.length ? activeDecisionThread.factReferences.join(', ') : '(none)'}
 - Assumptions on file: ${activeDecisionThread.assumptions.length ? activeDecisionThread.assumptions.map((assumption) => `${assumption.key}=${JSON.stringify(assumption.value)}`).join(', ') : '(none)'}
 - Options being weighed: ${activeDecisionThread.options.length ? activeDecisionThread.options.join(', ') : '(none)'}

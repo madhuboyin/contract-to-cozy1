@@ -160,17 +160,24 @@ async function fetchActiveDecisionThreadContext(propertyId: string): Promise<Act
       where: { id: selection.thread.decisionThreadId },
       select: {
         goalCode: true,
-        factReferences: { select: { canonicalEntityType: true, canonicalFieldPath: true } },
-        assumptions: { select: { assumptionKey: true, valueJson: true } },
-        options: { select: { label: true } },
-        questions: { where: { status: 'OPEN' }, select: { questionCode: true } },
+        factReferences: { take: 20, select: { canonicalEntityType: true, canonicalFieldPath: true } },
+        assumptions: { take: 20, select: { assumptionKey: true, valueJson: true } },
+        options: { take: 10, select: { label: true } },
+        questions: { take: 10, where: { status: 'OPEN' }, select: { questionCode: true } },
       },
     });
     if (!thread) return null;
+    const recentGoal = await prisma.askExecution.findFirst({
+      where: { propertyId, operationId: 'SELL_HOLD_RENT_GOAL_CAPTURE', status: 'COMPLETED',
+        parametersJson: { path: ['decisionThreadId'], equals: selection.thread.decisionThreadId } },
+      orderBy: { createdAt: 'desc' }, select: { parametersJson: true },
+    });
+    const goalParameters = recentGoal?.parametersJson as { timeframeLabel?: unknown } | null;
     return {
       goalCode: thread.goalCode,
       factReferences: thread.factReferences.map((reference) => reference.canonicalFieldPath ?? reference.canonicalEntityType),
-      assumptions: thread.assumptions.map((assumption) => ({ key: assumption.assumptionKey, value: assumption.valueJson })),
+      assumptions: [...thread.assumptions.map((assumption) => ({ key: assumption.assumptionKey, value: assumption.valueJson })),
+        ...(typeof goalParameters?.timeframeLabel === 'string' ? [{ key: 'homeownerGoalTimeframe', value: goalParameters.timeframeLabel.slice(0, 60) }] : [])],
       options: thread.options.map((option) => option.label),
       openQuestions: thread.questions.map((question) => question.questionCode),
     };
@@ -1244,6 +1251,7 @@ async function processGoalCandidate(
       message: candidate.sourceSentence,
       parentExecution: { connect: { id: input.parentExecutionId } },
       operationId: 'SELL_HOLD_RENT_GOAL_CAPTURE',
+      parametersJson: { decisionThreadId: lineage.decisionThreadId, timeframeLabel: candidate.timeframeLabel },
       operationVersion: '1.0',
       intentFamily: 'COMMAND',
       status: 'COMPLETED' as AskExecutionStatus,
@@ -1596,6 +1604,27 @@ async function cancelRedundantCaptureNotification(eventId: string): Promise<void
   });
 }
 
+// Evidence points to its event independently; the event reverse link belongs
+// to warranty reconciliation, which supports either confirmation order.
+export async function linkCaptureDependencies(
+  tx: Pick<Prisma.TransactionClient, 'askExecution'>,
+  candidates: readonly ExtractionCandidate[],
+  created: PersistedCaptureExecution[],
+): Promise<void> {
+  for (const [index, candidate] of candidates.entries()) {
+    if (candidate.category !== 'WARRANTY' && candidate.category !== 'EVIDENCE') continue;
+    const dependent = created[index];
+    const event = created[candidate.linkedEventCandidateIndex];
+    if (!dependent || !event) continue;
+    await tx.askExecution.update({ where: { id: dependent.id }, data: { linkedExecutionId: event.id } });
+    dependent.linkedExecutionId = event.id;
+    if (candidate.category === 'WARRANTY') {
+      await tx.askExecution.update({ where: { id: event.id }, data: { linkedExecutionId: dependent.id } });
+      event.linkedExecutionId = dependent.id;
+    }
+  }
+}
+
 /**
  * Code review finding (2026-09-13): this used to take a markProcessed flag
  * and, for the worker path, rely on processDomainEvents.job.ts's own
@@ -1614,6 +1643,7 @@ async function cancelRedundantCaptureNotification(eventId: string): Promise<void
  * generic post-handler write still runs afterward for the worker path and
  * is now a harmless no-op re-write of the same already-PROCESSED status.
  */
+
 async function persistCandidates(
   domainEventId: string,
   claimedAttempts: number,
@@ -1672,48 +1702,7 @@ async function persistCandidates(
       created.push(existing ?? await tx.askExecution.create({ data }));
     }
 
-    // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
-    // §9/§22, closing the "paired-confirmation scenario has no producer"
-    // gap Phase 2's review left open), extended for the Phase 2 external
-    // review's EVIDENCE category (same pairing shape exactly). Wires each
-    // WARRANTY/EVIDENCE child's linkedExecutionId to its paired EVENT
-    // child's, bidirectionally, in the SAME transaction that created both
-    // rows -- captureLinkReconciliation.ts's own linkSiblingCaptureExecutions
-    // can't be called here directly (it opens its own top-level
-    // prisma.$transaction), so the two updates are inlined against this
-    // transaction's own `tx` instead. Guarded on linkedExecutionId still
-    // being unset so a replay (both children resolved via the `existing`
-    // branch above) is a harmless no-op rather than clobbering an
-    // already-reconciled pair. Unlike WARRANTY, EVIDENCE's own confirm
-    // handler reads this link SYNCHRONOUSLY at confirm time (it needs the
-    // sibling's real HomeEvent id, and HomeEventEvidence.eventId is a
-    // required column with no reconciliation-friendly nullable slot the way
-    // HomeEvent.warrantyId has) -- captureLinkReconciliation.ts's own
-    // ASK_CAPTURE_LINK_RECONCILE path is not used for this pairing.
-    //
-    // Known, disclosed scope limitation: linkedExecutionId is a single
-    // scalar field, a strict 1:1 pairing. If one message states BOTH a
-    // warranty AND evidence for the SAME new event (rare, not the shape
-    // either the WARRANTY or EVIDENCE Phase 0 decision was scoped around),
-    // only the first candidate encountered here links to the event -- the
-    // second is still created as its own confirmable execution, just
-    // without an automatic cross-reference (confirmCaptureEvidence's own
-    // missing-link branch surfaces this as a clear, recoverable message
-    // rather than failing unexplained). The `created` array is mutated
-    // in-memory after each link, not just written to the DB, so a third
-    // candidate later in this same loop correctly sees an already-linked
-    // event and also skips, instead of racing against stale in-memory state.
-    for (const [index, candidate] of candidates.entries()) {
-      if (candidate.category !== 'WARRANTY' && candidate.category !== 'EVIDENCE') continue;
-      const pairedExecution = created[index];
-      const eventExecution = created[candidate.linkedEventCandidateIndex];
-      if (!pairedExecution || !eventExecution) continue;
-      if (pairedExecution.linkedExecutionId || eventExecution.linkedExecutionId) continue;
-      await tx.askExecution.update({ where: { id: eventExecution.id }, data: { linkedExecutionId: pairedExecution.id } });
-      await tx.askExecution.update({ where: { id: pairedExecution.id }, data: { linkedExecutionId: eventExecution.id } });
-      eventExecution.linkedExecutionId = pairedExecution.id;
-      pairedExecution.linkedExecutionId = eventExecution.id;
-    }
+    await linkCaptureDependencies(tx, candidates, created);
 
     // External review, Phase 6 [P2]: each GOAL candidate's own durable
     // attachment intent is created HERE, inside this same transaction --
@@ -1790,7 +1779,8 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   if (!controls.askConversationalCaptureEnabled) return [];
   if (input.skipDueToRoutedCapture) return [];
 
-  const preFilter = evaluateExtractionPreFilter(input.message);
+  const activeDecisionThread = await fetchActiveDecisionThreadContext(input.propertyId);
+  const preFilter = evaluateExtractionPreFilter(input.message, activeDecisionThread !== null);
   if (!preFilter.shouldExtract) return [];
 
   const idempotencyKey = `ask-extraction:${input.parentExecutionId}`;
@@ -1801,9 +1791,11 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   // moment a worker retry happens to run, which would silently shift what
   // "yesterday"/"last summer" mean for a message that was actually sent
   // hours or days earlier. See runStructuredExtraction's own header comment.
-  const referenceDate = now.toISOString();
+  const parentMessage = await prisma.askExecution.findUnique({ where: { id: input.parentExecutionId }, select: { createdAt: true } });
+  if (!parentMessage) return [];
+  let referenceDate = parentMessage.createdAt.toISOString();
   const property = await prisma.property.findUnique({ where: { id: input.propertyId }, select: { timezone: true } });
-  const referenceTimezone = property?.timezone || 'UTC';
+  let referenceTimezone = property?.timezone || 'UTC';
   let domainEventId: string;
   try {
     const event = await prisma.domainEvent.upsert({
@@ -1820,6 +1812,9 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
       update: {},
     });
     domainEventId = event.id;
+    const persisted = event.payload as Record<string, unknown>;
+    if (typeof persisted.referenceDate === 'string') referenceDate = persisted.referenceDate;
+    if (typeof persisted.timezone === 'string') referenceTimezone = persisted.timezone;
   } catch (error) {
     logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] failed to persist durable extraction intent; skipping this turn');
     return [];
@@ -1856,10 +1851,9 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   let timedOut = false;
   const attempt = (async () => {
     try {
-      const [recentHomeEvents, recentDocuments, activeDecisionThread] = await Promise.all([
+      const [recentHomeEvents, recentDocuments] = await Promise.all([
         fetchRecentHomeEventContext(input.propertyId),
         fetchRecentDocumentContext(input.propertyId),
-        fetchActiveDecisionThreadContext(input.propertyId),
       ]);
       const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone);
       const { executions: created, notificationEventId } = await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
@@ -1945,12 +1939,12 @@ export async function processAskExtractionRequestedEvent(
   // moment this message actually arrived -- never recompute `new Date()`
   // here, which would silently shift what "yesterday"/"last summer" mean
   // for a retry that may run hours or days after the original turn. Falls
-  // back to "now"/UTC only for an event somehow missing them (e.g. one
+  // back to the parent message timestamp/UTC for an event missing them (e.g. one
   // created before this fix shipped), never a hard failure.
-  const referenceDate = typeof payload.referenceDate === 'string' ? payload.referenceDate : new Date().toISOString();
   const referenceTimezone = typeof payload.timezone === 'string' ? payload.timezone : 'UTC';
-  const parent = await prisma.askExecution.findUnique({ where: { id: parentExecutionId }, select: { sessionId: true, contextVersion: true } });
+  const parent = await prisma.askExecution.findUnique({ where: { id: parentExecutionId }, select: { sessionId: true, contextVersion: true, createdAt: true } });
   if (!parent) throw new Error(`ASK_EXTRACTION_REQUESTED event's parent execution ${parentExecutionId} no longer exists`);
+  const referenceDate = typeof payload.referenceDate === 'string' ? payload.referenceDate : parent.createdAt.toISOString();
 
   const [recentHomeEvents, recentDocuments, activeDecisionThread] = await Promise.all([
     fetchRecentHomeEventContext(event.propertyId),

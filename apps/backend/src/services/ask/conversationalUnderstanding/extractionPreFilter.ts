@@ -17,7 +17,8 @@ export type ExtractionPreFilterReason =
   | 'CORRECTION_MARKER'
   | 'HEDGE_MARKER'
   | 'COST_MENTION'
-  | 'GOAL_STATEMENT';
+  | 'GOAL_STATEMENT'
+  | 'ACTIVE_GOAL_FOLLOW_UP';
 
 export interface ExtractionPreFilterDecision {
   shouldExtract: boolean;
@@ -66,11 +67,16 @@ function splitSentences(message: string): string[] {
     .filter((sentence) => sentence.length > 0);
 }
 
-export function evaluateExtractionPreFilter(message: string): ExtractionPreFilterDecision {
+export function evaluateExtractionPreFilter(message: string, hasActiveGoal = false): ExtractionPreFilterDecision {
   const trimmed = message.trim();
   if (!trimmed) return { shouldExtract: false, matchedReasons: [] };
 
   const reasons = new Set<ExtractionPreFilterReason>();
+  // A short reply may depend entirely on the active decision. Extraction
+  // resolves it against that context; the filter does not infer or save facts.
+  if (hasActiveGoal && trimmed.length <= 240 && !/^(thanks?|thank you|ok(?:ay)?|got it|bye)[.! ]*$/i.test(trimmed)) {
+    reasons.add('ACTIVE_GOAL_FOLLOW_UP');
+  }
   for (const sentence of splitSentences(trimmed)) {
     if (HYPOTHETICAL_ONLY_SENTENCE.test(sentence)) continue;
     if (RETROSPECTIVE_ACTION.test(sentence)) reasons.add('RETROSPECTIVE_ACTION');

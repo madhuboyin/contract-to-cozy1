@@ -304,8 +304,8 @@ test('runConversationalCaptureForTurn captures referenceDate/timezone once and p
   const idx = captureSource.indexOf('export async function runConversationalCaptureForTurn(');
   assert.ok(idx > 0);
   const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
-  assert.match(body, /const referenceDate = now\.toISOString\(\);/);
-  assert.match(body, /const referenceTimezone = property\?\.timezone \|\| 'UTC';/);
+  assert.match(body, /let referenceDate = parentMessage.createdAt\.toISOString\(\);/);
+  assert.match(body, /let referenceTimezone = property\?\.timezone \|\| 'UTC';/);
   assert.match(body, /payload: \{ executionId: input\.parentExecutionId, message: input\.message, referenceDate, timezone: referenceTimezone \}/);
   assert.match(body, /runStructuredExtraction\(input\.message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone\)/);
 });
@@ -314,7 +314,7 @@ test('processAskExtractionRequestedEvent reuses the stored referenceDate/timezon
   const idx = captureSource.indexOf('export async function processAskExtractionRequestedEvent(');
   assert.ok(idx > 0);
   const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
-  assert.match(body, /const referenceDate = typeof payload\.referenceDate === 'string' \? payload\.referenceDate : new Date\(\)\.toISOString\(\);/);
+  assert.match(body, /const referenceDate = typeof payload\.referenceDate === 'string' \? payload\.referenceDate : parent.createdAt\.toISOString\(\);/);
   assert.match(body, /const referenceTimezone = typeof payload\.timezone === 'string' \? payload\.timezone : 'UTC';/);
   assert.match(body, /runStructuredExtraction\(message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone\)/);
 });
@@ -617,14 +617,19 @@ test('buildChildExecutionData: a WARRANTY candidate produces a CAPTURE_WARRANTY_
 // coverage): persistCandidates has no runtime DB-mock harness, so the
 // sibling-linking wiring this warranty writer needs is verified against the
 // source directly, matching this file's own established convention.
-test('persistCandidates wires a WARRANTY or EVIDENCE child\'s linkedExecutionId to its paired EVENT child\'s, bidirectionally, inside the same transaction, and only when neither side is already linked', () => {
-  const idx = captureSource.indexOf('async function persistCandidates(');
-  assert.ok(idx > 0);
-  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
-  assert.match(body, /candidate\.category !== 'WARRANTY' && candidate\.category !== 'EVIDENCE'/);
-  assert.match(body, /if \(pairedExecution\.linkedExecutionId \|\| eventExecution\.linkedExecutionId\) continue;/);
-  assert.match(body, /data: \{ linkedExecutionId: pairedExecution\.id \}/);
-  assert.match(body, /data: \{ linkedExecutionId: eventExecution\.id \}/);
+test('event, warranty and evidence retain all dependencies in either candidate order', async () => {
+  const { linkCaptureDependencies } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
+  for (const order of [['EVENT', 'WARRANTY', 'EVIDENCE'], ['EVIDENCE', 'WARRANTY', 'EVENT'], ['WARRANTY', 'EVENT', 'EVIDENCE']]) {
+    const eventIndex = order.indexOf('EVENT');
+    const rows = order.map((id) => ({ id, linkedExecutionId: null }));
+    const persisted = new Map(rows.map((row) => [row.id, { ...row }]));
+    const tx = { askExecution: { update: async ({ where, data }) => Object.assign(persisted.get(where.id), data) } };
+    await linkCaptureDependencies(tx, order.map((category) => ({ category, linkedEventCandidateIndex: eventIndex })), rows);
+    assert.equal(persisted.get('EVENT').linkedExecutionId, 'WARRANTY');
+    assert.equal(persisted.get('WARRANTY').linkedExecutionId, 'EVENT');
+    assert.equal(persisted.get('EVIDENCE').linkedExecutionId, 'EVENT');
+    assert.deepEqual(rows, [...persisted.values()]);
+  }
 });
 
 // Ask Cozy Stage 3, Phase 3 edit-before-confirm (FRD §22: "candidate payload

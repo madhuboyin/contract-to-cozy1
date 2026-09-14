@@ -1,5 +1,26 @@
 # Ask Cozy — Incremental Implementation Plan (Stage 3, Part B)
 
+## Current implementation status — 2026-09-14
+
+This section supersedes historical status notes and interim-gap descriptions below. Those notes preserve implementation history; “shipped” there is not a claim of live-runtime verification.
+
+| Phase | Current implementation |
+| --- | --- |
+| 0 — decisions and blockers | Resolved in code for the approved scope, including Radar domain/entity matching. Live Radar data remains unverified. |
+| 1 — invocation | Shared capability invocation is wired into Ask. |
+| 2 — confirmation | The legacy proposal system is retired. New confirmation covers all seven kinds through canonical writers. Event and warranty link both ways; evidence independently points to that same event and attaches after event confirmation. |
+| 3 — extraction | Structured extraction, correction validation, editable confirmation candidates, and the quality-scoring harness are implemented. Relative dates use the parent message timestamp and property timezone, persisted for retries. Live model-quality acceptance has not been demonstrated by these code checks. |
+| 4 — next actions | Plain questions contribute topic relevance alongside capability relationships and active goals. Missing facts use the canonical capture catalog and schemas, including enums and structured inputs. Recommendations with no usable capture contract are omitted; saves refresh readiness and remove stale recommendations if refresh fails. |
+| 5 — continuation | Delayed candidates have durable notification intent committed with persistence, plus worker retry and existing-session deep links. |
+| 6 — goals | The approved selling-decision slice loads property-scoped thread context before filtering. Brief follow-ups reach extraction; the prompt requires unambiguous interpretation and permits no candidate. Goal timeframe context is stored with its thread-linked execution. Additional goal families remain outside this slice. |
+| 7 — exposure | The approved capability slices are implemented. Previously approved read-only boundaries and the HomeRenovationAdvisor exclusion remain explicit scope decisions. |
+
+Cross-phase recall now carries event titles, date precision and attribution through context selection into deterministic grounded-answer rendering. Ordinary recorded scalar facts are also renderable. Event relevance is selected before the prompt-size bound; older events captured through Ask remain eligible for the bounded context read.
+
+Validation for this fix: backend `tsc --noEmit --pretty false` passed; 178 focused environment-independent checks passed across Ask next actions, conversational capture, pre-filtering, typed grounded claims, extraction schema/evaluation scoring, and Property Context assemblers. Source/contract tracing covered the corresponding save, retry, confirmation and rendering paths. No database, browser session, worker deployment, or live extraction-provider evaluation was started. This is an implementation status, not evidence that every phase has executed seamlessly in a running environment.
+
+---
+
 **Type:** Phased execution plan. No implementation, no schema edits, no migrations in this document.
 **Baseline:** `docs/product/ASK_COZY_MESSAGE_FIRST_FRD.md` (Part A — defines *what*) and `docs/architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` (Stage 2 — architecture decisions, treated as approved baseline per this stage's brief). This document defines *how to get there incrementally*.
 **Evidence discipline:** every claim about current implementation is cited `path:line` and was verified fresh during this stage's research (five parallel verification passes into correction-mode dispatch, schema representations, Home Event Radar runtime state, the handler inventory (67 operations documented, confirmed complete against the registry per §4.8), and existing UI/eval infrastructure) — not copied from Stage 2 without re-checking where implementation detail matters, per this stage's explicit instruction.

@@ -27,7 +27,7 @@ export function validateAskLlmPurposeContracts(): string[] {
 
 const TypedFactRefSchema = z.object({ id: z.string().trim().min(1) }).strict();
 export const AskRemoteFallbackTypedClaimSchema = z.object({
-  claimType: z.enum(['SEVERITY_STATEMENT', 'DEADLINE_STATEMENT', 'COST_COMPARISON']),
+  claimType: z.enum(['SEVERITY_STATEMENT', 'DEADLINE_STATEMENT', 'COST_COMPARISON', 'FACT_STATEMENT', 'HOME_EVENT_STATEMENT']),
   factRefs: z.array(TypedFactRefSchema).min(1).max(2),
   comparisonOperator: z.enum(['GREATER_THAN', 'LESS_THAN', 'APPROXIMATELY_EQUAL']).optional(),
 }).strict().superRefine((claim, ctx) => {
@@ -132,12 +132,35 @@ function comparisonOperator(left: number, right: number): AskRemoteFallbackTyped
   return left > right ? 'GREATER_THAN' : 'LESS_THAN';
 }
 
+// Render recorded precision and attribution, never promote an approximate
+// date to an exact day or a third-party report to a firsthand fact.
+function homeEventText(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const entries = value.slice(0, 5).flatMap((row) => {
+    if (!row || typeof row !== 'object' || typeof row.title !== 'string') return [];
+    const date = typeof row.occurredAt === 'string' ? row.occurredAt : '';
+    const when = row.datePrecision === 'YEAR' ? date.slice(0, 4)
+      : row.datePrecision === 'MONTH' ? date.slice(0, 7)
+      : row.datePrecision === 'EXACT_DATE' ? date.slice(0, 10)
+      : row.datePrecision === 'RANGE' ? `${String(row.dateRangeStart ?? '').slice(0, 10)} to ${String(row.dateRangeEnd ?? '').slice(0, 10)}`
+      : 'date unknown';
+    const attribution = row.attribution === 'THIRD_PARTY_RELAYED' ? 'third-party report'
+      : row.attribution === 'INFERRED' ? 'inferred report' : 'recorded';
+    return [`${row.title.slice(0, 160)} (${when}; ${attribution})`];
+  });
+  return entries.length ? `Your home record includes: ${entries.join('; ')}.` : null;
+}
+
 export function buildAskRemoteFallbackClaimCandidates(
   facts: readonly AskRemoteFallbackFact[],
 ): AskRemoteFallbackTypedClaim[] {
   const candidates: AskRemoteFallbackTypedClaim[] = [];
   for (const fact of facts) {
+    if (fact.key === 'events.recentHomeEvents' && homeEventText(fact.value)) {
+      candidates.push({ claimType: 'HOME_EVENT_STATEMENT', factRefs: [{ id: fact.key }] });
+    }
     if (scalar(fact.value) === null) continue;
+    if (!severityKey.test(fact.key) && !deadlineKey.test(fact.key)) candidates.push({ claimType: 'FACT_STATEMENT', factRefs: [{ id: fact.key }] });
     if (severityKey.test(fact.key)) candidates.push({ claimType: 'SEVERITY_STATEMENT', factRefs: [{ id: fact.key }] });
     if (deadlineKey.test(fact.key)) candidates.push({ claimType: 'DEADLINE_STATEMENT', factRefs: [{ id: fact.key }] });
   }
@@ -167,7 +190,11 @@ function signature(claim: AskRemoteFallbackTypedClaim): string {
 function renderClaim(claim: AskRemoteFallbackTypedClaim, factsByKey: ReadonlyMap<string, AskRemoteFallbackFact>): RenderedAskRemoteFallbackClaim | null {
   const facts = claim.factRefs.map((ref) => factsByKey.get(ref.id)).filter((fact): fact is AskRemoteFallbackFact => Boolean(fact));
   if (facts.length !== claim.factRefs.length) return null;
-  if (claim.claimType === 'SEVERITY_STATEMENT') {
+  if (claim.claimType === 'HOME_EVENT_STATEMENT') {
+    const text = homeEventText(facts[0].value);
+    return text ? { claim, facts, text } : null;
+  }
+  if (claim.claimType === 'SEVERITY_STATEMENT' || claim.claimType === 'FACT_STATEMENT') {
     const value = scalar(facts[0].value);
     return value === null ? null : { claim, facts, text: `${labelFor(facts[0].key)} is recorded as ${value}.` };
   }

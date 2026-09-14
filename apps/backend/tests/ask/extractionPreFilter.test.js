@@ -99,3 +99,11 @@ test('every corpus row declares one of FRD §15\'s eleven required categories', 
     assert.ok(presentCategories.has(category), `corpus is missing FRD §15's required category: ${category}`);
   }
 });
+
+test('short goal follow-ups reach extraction only with an active decision', () => {
+  for (const message of ['Next year', 'What about renting?', 'The second option', 'Yes']) {
+    assert.equal(evaluateExtractionPreFilter(message, true).shouldExtract, true);
+    assert.equal(evaluateExtractionPreFilter(message, false).shouldExtract, false);
+  }
+  assert.equal(evaluateExtractionPreFilter('Thanks!', true).shouldExtract, false);
+});

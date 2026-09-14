@@ -740,11 +740,17 @@ export const eventsAssembler: PropertyContextAssembler = {
         take: 100,
       }),
       prisma.homeEvent.findMany({
-        where: { propertyId, occurredAt: { gte: lookback, lte: now } },
+        where: { propertyId, occurredAt: { lte: now }, OR: [{ occurredAt: { gte: lookback } }, { captureChannel: 'ASK_CONVERSATIONAL_CAPTURE' }] },
         select: {
           id: true,
           type: true,
           importance: true,
+          title: true,
+          summary: true,
+          datePrecision: true,
+          dateRangeStart: true,
+          dateRangeEnd: true,
+          attribution: true,
           occurredAt: true,
           inventoryItemId: true,
           claimId: true,

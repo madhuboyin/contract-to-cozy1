@@ -52,7 +52,7 @@ test('selectAskNextActionCapabilities maps a READY suggestion onto the CAPABILIT
 
 test('selectAskNextActionCapabilities labels a NEEDS_CONTEXT suggestion distinctly and carries through its explanations', () => {
   const result = selectAskNextActionCapabilities(
-    [suggestion({ readiness: { state: 'NEEDS_CONTEXT', explanations: ['Roof type is not yet recorded.'] } })],
+    [suggestion({ readiness: { state: 'NEEDS_CONTEXT', missingFactKeys: ['structure.roofType'], explanations: ['Roof type is not yet recorded.'] } })],
     undefined,
   );
   assert.equal(result[0].readiness, 'NEEDS_CONTEXT');
@@ -354,7 +354,7 @@ test('buildAskNextActionsBlock fetches suggestions, currentCapabilityId relation
   const fnBody = askNextActionsSource.slice(fnStart);
   assert.match(fnBody, /const \[response, currentCapabilityRelatedIds, activeGoalRelatedIds\] = await Promise\.all\(\[/);
   assert.match(fnBody, /activeSellHoldRentGoalRelatedCapabilityIds\(input\.propertyId\)/);
-  assert.match(fnBody, /const relatedCapabilityIds = new Set\(\[\.\.\.currentCapabilityRelatedIds, \.\.\.activeGoalRelatedIds\]\);/);
+  assert.match(fnBody, /conversationRelatedCapabilityIds\(input.message \?\? '', response.suggestions\)/);
   assert.match(fnBody, /relatedCapabilityIds,\s*\n\s*\);/);
 });
 
@@ -366,4 +366,13 @@ test('the active-goal promotion does not depend on AskSession.activeDecisionThre
   const fnStart = askNextActionsSource.indexOf('async function activeSellHoldRentGoalRelatedCapabilityIds(');
   const fnBody = askNextActionsSource.slice(fnStart, askNextActionsSource.indexOf('\n}\n', fnStart) + 2);
   assert.doesNotMatch(fnBody, /activeDecisionThreadId/);
+});
+
+const { conversationRelatedCapabilityIds } = require('../../src/services/ask/askNextActions.ts');
+test('plain questions promote their own topic without launch context', () => {
+  const choices = [suggestion(), suggestion({ capabilityId: 'refinance', label: 'Compare mortgage loans', shortDescription: 'Review interest rates', expectedOutcome: 'Financing options' })];
+  assert.deepEqual([...conversationRelatedCapabilityIds('What is my mortgage interest rate?', choices)], ['refinance']);
+});
+test('missing facts without a usable capture contract do not produce dead-end cards', () => {
+  assert.deepEqual(selectAskNextActionCapabilities([suggestion({ readiness: { state: 'NEEDS_CONTEXT', missingFactKeys: ['unsupported.fact'], explanations: [] } })]), []);
 });

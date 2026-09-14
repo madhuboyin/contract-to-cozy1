@@ -1,6 +1,6 @@
 import type { ContextRequirementClassification } from '../domain/contracts';
-import { getCaptureDefinition, validateCaptureRegistry } from './captureRegistry';
-import { getFactDefinition } from './factCatalog';
+import { getCaptureDefinition, getCaptureDefinitionForFact, validateCaptureRegistry } from './captureRegistry';
+import { PROPERTY_FACT_CATALOG, getFactDefinition } from './factCatalog';
 
 export interface DeclarativeCondition {
   factKey: string;
@@ -114,6 +114,18 @@ function financialAccuracyContract(
 }
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  // Each missing fact uses the existing canonical capture/evaluation contract.
+  ...PROPERTY_FACT_CATALOG.flatMap((fact): FeatureContextRequirementDefinition[] => {
+    const capture = getCaptureDefinitionForFact(fact.key);
+    if (!capture || capture.inputSchema.type === 'RELATIONAL_UPDATE') return [];
+    return [{
+      featureKey: 'ASK_NEXT_ACTION', operationKey: fact.key.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase(),
+      policyVersion: '1.0', adoption: adopted('Ask Cozy', 'CAPTURE_ONLY'), promptStrategy: 'ONE_AT_A_TIME', required: [],
+      enhancements: [{ factKey: fact.key, classification: 'ENHANCEMENT_ACCURACY',
+        captureKey: capture.captureKey, acceptableStates: ['KNOWN'], reasonCode: 'ASK_NEXT_ACTION_MISSING_CONTEXT', priority: 1,
+        ...(capture.mode === 'RELATIONAL' ? { minimumItems: 1 } : {}) }],
+    }];
+  }),
   financialAccuracyContract('PROPERTY_RECORD_SUMMARY', 'VIEW_SUMMARY', ['propertyUse', 'occupancy', 'dwelling', 'yearBuilt', 'state', 'zip'], 'Property Record', 'SHARED_GATE'),
   financialAccuracyContract('HOME_ACTIONS', 'VIEW_FEED', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip'], 'Unified Home', 'SHARED_GATE'),
   financialAccuracyContract('DO_NOTHING', 'RUN_SIMULATION', ['propertyUse', 'occupancy', 'inventory']),

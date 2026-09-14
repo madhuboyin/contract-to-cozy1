@@ -1,121 +1,57 @@
-// Ask Cozy Stage 3, Phase 4 (implementation plan §10; FRD §27 "Next Actions").
-//
-// A dedicated, deterministic next-action module -- moved OUT of the
-// orchestrator per the FRD's own explicit requirement -- that replaces the
-// narrow "related capabilities" append `executeOperation()` used to do
-// inline (askOrchestrator.service.ts's own `currentCapabilityId`-gated
-// block, pre-Phase-4). Deliberately reuses `getCapabilitySuggestions`
-// (`capabilityRecommendation.service.ts`) -- the FULL candidate-generation
-// → governance → suppression → `capabilityCandidateMatcher`/
-// `capabilityRanking` (`baseScore`, `recommendation.triggerFamilies`) →
-// explanation pipeline the FRD names -- rather than the lighter
-// `resolveRelatedCapabilities` System A already wired into
-// `capabilityResult()`'s own, separate CAPABILITY_DISCOVERY feature (left
-// untouched: that is a deliberate, different UX for an explicit "what can
-// help me" ask, not a next-action append).
-//
-// Corrections against the FRD's own text, verified against source before
-// building this (same discipline as this program's Phase 0 corrections):
-// - The FRD's "MISSING fact state" does not exist by that name anywhere in
-//   this codebase. The real, already-computed distinction is
-//   `CapabilitySuggestion.readiness.state: 'READY' | 'NEEDS_CONTEXT'`
-//   (`capabilityExplanationBuilder.ts`) -- `getCapabilitySuggestions`
-//   already excludes `UNAVAILABLE` candidates from its own output, so no
-//   separate UNAVAILABLE-filtering step is needed here.
-// - `CAPABILITY_SUGGESTION_SURFACES` includes a `'RELATED'` surface that is
-//   declared in the enum/schema/route but has ZERO other callers anywhere
-//   in the codebase today (verified by grep) -- adopted here rather than
-//   adding a new `'ASK'` surface member, avoiding any change to the shared
-//   surface enum, its Zod schema, or the standalone REST route that also
-//   validates against it.
-// - The FRD's "active DecisionThread" input is NOT `CapabilityRecommendationContext`'s
-//   "journeys" source (`loadDefaultJourneys` reads `GuidanceJourney` rows,
-//   a different model from `DecisionThread`) -- there is no existing
-//   DecisionThread-aware `sourceContext` kind (`CAPABILITY_CONTEXT_SOURCE_KINDS`
-//   has no `DECISION_THREAD` member). Wiring an active DecisionThread into
-//   `sourceContext` remains real, separate follow-up work, not attempted
-//   here. UPDATED (external review [P1]): this module now DOES derive a
-//   `sourceContext` from `launchContext.actionId`/`journeyId` when present
-//   (`deriveAskNextActionsSourceContext` below) -- HOME_ACTION/JOURNEY are
-//   both real, already-supported `sourceContext` kinds, distinct from the
-//   still-unsupported DECISION_THREAD case above.
-//
-// External review, second round: the sourceContext fix above only reaches
-// turns launched from a Home Action or Journey card -- a plain typed
-// question (no launchContext at all) still got fully property-wide
-// ranking, so two unrelated questions about the same property ("Should I
-// sell or rent?" vs. "What's my HVAC status?") produced near-identical
-// next-action lists, contradicting FRD §27's "current request, current
-// response... logical decision path" inputs. Threading the literal
-// question/answer TEXT into `capabilityCandidateMatcher` was already
-// scoped out above (no free-text scoring mechanism exists there, and
-// building one is separate, much larger work). What FRD §27 actually asks
-// this module to reuse is the matcher's existing STRUCTURED relationship
-// data, not literal text -- and `currentCapabilityId` (derived from
-// `ASK_OPERATION_CAPABILITY[operationId]`, already computed on every turn
-// for exclusion) already names, in structured form, exactly what the
-// current response was about, independent of whether a launchContext
-// exists. `capability.recommendation.explicitRelatedCapabilityIds` is a
-// real, populated, registry-validated relationship table (`RELATED_CAPABILITIES`,
-// `capabilityDefinitionFactory.ts`; every id round-trips through
-// `createToolCapabilityRegistry`'s own no-self-reference/no-unknown-id
-// validation, `capabilityRegistry.ts:82-92`) -- the same data the matcher's
-// own `COMPLETION_OUTPUT_RELATIONSHIP` match kind reads
-// (`capabilityCandidateMatcher.ts:361-365`) and that the sibling "System A"
-// related-capabilities feature (`capabilityRelatedResolver.ts`) also reads
-// directly. Reusing it here (`explicitlyRelatedCapabilityIds` below) to
-// stable-promote already-eligible, already-ranked suggestions that the
-// just-answered capability explicitly names as related closes this for
-// EVERY turn with an `ASK_OPERATION_CAPABILITY` entry, not only
-// launch-context turns -- without inventing new free-text NLP scoring or a
-// new `sourceContext` kind, and without touching the shared
-// `capabilityRecommendation.service.ts` pipeline (this is a local,
-// post-fetch reordering of an already-governed/ranked list, same
-// `baseScore`-respecting order preserved within each partition). A turn
-// whose operation has no `ASK_OPERATION_CAPABILITY` entry (GROUNDED_GUIDANCE)
-// still falls back to unpromoted, property-wide ranking -- that residual
-// case is a real, separate gap (no capability-of-record for that turn at
-// all), not silently absorbed into this fix.
+// Ask next actions reuse governed capability recommendations and canonical
+// context capture. Turn topics and active goals promote relevant candidates.
 import { getCapabilitySuggestions } from '../capabilityRecommendation.service';
 import { canonicalCapabilityRegistry, type CapabilityExplicitSourceContext, type CapabilitySuggestion } from '../../productFramework/capabilities';
 import type { AskCaptureRequest, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import { ASK_OPERATION_CAPABILITY } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import type { AskOperationId } from './askOperationRegistry';
 import { sellHoldRentDecisionFamilyAdapter } from '../decisionPlatform/domainSnapshotAdapters';
+import { getCaptureDefinitionForFact, CONTEXT_CAPTURE_DEFINITIONS } from '../../modules/propertyContext/catalog/captureRegistry';
+import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
+import { askTopicTokens } from './askPromptMinimization';
 import { logger } from '../../lib/logger';
 
-// External review, 2026-09-13 (FRD §27: "partially-satisfiable (gap is
-// MISSING, not UNAVAILABLE) -> conversational 'tell me about X' prompt via
-// existing captureRequests" -- the NEEDS_CONTEXT tier this module already
-// computes was previously surfaced as a plain label+link only, never this
-// conversational prompt the FRD's own text calls for). Hand-authored,
-// deliberately bounded to a subset of `propertyFacts` (capturePropertyFact
-// Catalog.ts) that is safe to ask about with a plain DECIMAL/BOOLEAN input
-// with no enum-option catalog to also hand-author -- the same reason
-// extractionContract.ts's own ILLUSTRATIVE_FACT_KEYS is a curated subset,
-// not the full ~50-key catalog. A NEEDS_CONTEXT capability whose
-// `missingFactKeys` names a key outside this set still falls back to a
-// plain link (no regression from before this fix), never a broken or
-// mislabeled prompt for a key this module doesn't actually know how to ask
-// about safely.
+// Existing scalar capture payloads remain readable; new cards use canonical schemas.
 export const NEXT_ACTION_MISSING_FACT_CAPTURE_KEY = 'NEXT_ACTION_MISSING_FACT';
 
-interface NextActionFactQuestion {
-  question: string;
-  inputSchema: { type: 'DECIMAL' } | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string };
+export const NEXT_ACTION_FACT_QUESTIONS = Object.fromEntries(
+  CONTEXT_CAPTURE_DEFINITIONS.filter((definition) => definition.mode === 'SCALAR')
+    .flatMap((definition) => definition.factKeys.map((key) => [key, { question: definition.question, inputSchema: definition.inputSchema }]))
+);
+
+export const NEXT_ACTION_CONTEXT_PREFIX = 'NEXT_ACTION_CONTEXT:';
+export const nextActionContextOperation = (factKey: string) => factKey.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+
+export async function buildNextActionContextCapture(propertyId: string, userId: string, factKey: string): Promise<AskCaptureRequest | null> {
+  const definition = getCaptureDefinitionForFact(factKey);
+  if (!definition || definition.inputSchema.type === 'RELATIONAL_UPDATE') return null;
+  const evaluation = await evaluateFeatureContext(propertyId, userId, {
+    featureKey: 'ASK_NEXT_ACTION', operationKey: nextActionContextOperation(factKey),
+  });
+  const requirement = evaluation.requirements[0];
+  if (!requirement) return null;
+  return {
+    requirementId: requirement.requirementId,
+    captureKey: NEXT_ACTION_CONTEXT_PREFIX + factKey,
+    classification: requirement.classification, state: requirement.state,
+    title: requirement.capture.title, question: requirement.capture.question,
+    helpText: requirement.capture.helpText ?? null,
+    inputSchema: requirement.capture.inputSchema, currentAnswer: requirement.currentAnswer,
+    allowNotSure: requirement.capture.allowNotSure, sensitivity: requirement.capture.sensitivity,
+    destinationLabel: 'Saved to this property’s Home Record', confirmationText: null,
+    expectedContextVersion: evaluation.contextVersion,
+  };
 }
 
-export const NEXT_ACTION_FACT_QUESTIONS: Readonly<Record<string, NextActionFactQuestion>> = {
-  'core.yearBuilt': { question: 'What year was this home built?', inputSchema: { type: 'DECIMAL' } },
-  'core.bedrooms': { question: 'How many bedrooms does this home have?', inputSchema: { type: 'DECIMAL' } },
-  'core.bathrooms': { question: 'How many bathrooms does this home have?', inputSchema: { type: 'DECIMAL' } },
-  'structure.roofReplacementYear': { question: 'What year was the roof last replaced?', inputSchema: { type: 'DECIMAL' } },
-  'systems.hvacInstallYear': { question: 'What year was the HVAC system installed?', inputSchema: { type: 'DECIMAL' } },
-  'systems.waterHeaterInstallYear': { question: 'What year was the water heater installed?', inputSchema: { type: 'DECIMAL' } },
-  'safety.hasSmokeDetectors': { question: 'Does this home have smoke detectors?', inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
-  'safety.hasCoDetectors': { question: 'Does this home have carbon monoxide detectors?', inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
-  'safety.hasSumpPump': { question: 'Does this home have a sump pump?', inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
-};
+// A lexical relevance signal supplements governed ranking for unclassified
+// questions; it never manufactures eligibility or bypasses suppression.
+export function conversationRelatedCapabilityIds(message: string, suggestions: readonly CapabilitySuggestion[]): ReadonlySet<string> {
+  const question = askTopicTokens(message);
+  return new Set(suggestions.filter((suggestion) => {
+    const terms = askTopicTokens([suggestion.capabilityId, suggestion.label, suggestion.shortDescription, suggestion.expectedOutcome].join(' '));
+    return [...question].some((token) => terms.has(token));
+  }).map((suggestion) => suggestion.capabilityId));
+}
 
 function firstSupportedMissingFactKey(missingFactKeys: readonly string[]): string | null {
   return missingFactKeys.find((factKey) => factKey in NEXT_ACTION_FACT_QUESTIONS) ?? null;
@@ -223,13 +159,6 @@ export function explicitlyRelatedCapabilityIds(
 // long-lived goal is exactly the kind of standing context that should bias
 // ranking on ANY turn, not only a sell/hold/rent-routed one.
 //
-// Left explicitly out of scope, not silently dropped: this closes the
-// next-action-ranking half of "Extraction and next-action ranking also
-// receive no active thread state" -- the EXTRACTION half (biasing what
-// counts as a GOAL-shaped follow-up, or resolving a vague reply against the
-// active thread without repeating the goal statement) is a materially
-// different, larger change to the pre-filter/routing layer, not attempted
-// here.
 const SELL_HOLD_RENT_GOAL_RELATED_CAPABILITY_IDS = ['sell-hold-rent', 'seller-prep'] as const;
 
 async function activeSellHoldRentGoalRelatedCapabilityIds(propertyId: string): Promise<ReadonlySet<string>> {
@@ -291,7 +220,14 @@ export function selectAskNextActionCapabilities(
   recentCompletedCapabilityIds: ReadonlySet<string> = new Set(),
   relatedCapabilityIds: ReadonlySet<string> = new Set(),
 ): AskNextActionCapability[] {
-  const eligible = suggestions.filter((suggestion) => suggestion.capabilityId !== currentCapabilityId && !recentCompletedCapabilityIds.has(suggestion.capabilityId));
+  const eligible = suggestions.filter((suggestion) => {
+    if (suggestion.capabilityId === currentCapabilityId || recentCompletedCapabilityIds.has(suggestion.capabilityId)) return false;
+    if (suggestion.readiness.state === 'READY') return true;
+    return (suggestion.readiness.missingFactKeys ?? []).some((key) => {
+      const capture = getCaptureDefinitionForFact(key);
+      return capture && capture.inputSchema.type !== 'RELATIONAL_UPDATE';
+    });
+  });
   return prioritizeExplicitlyRelated(eligible, relatedCapabilityIds)
     .slice(0, MAX_ASK_NEXT_ACTIONS)
     .flatMap((suggestion) => {
@@ -398,6 +334,7 @@ export async function buildAskNextActionsBlock(input: {
   // Optional (a turn with no contextVersion simply never gets this prompt,
   // same as any other capture requirement that needs one to guard staleness).
   contextVersion?: string | null;
+  message?: string;
 }): Promise<AskNextActionsResult> {
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operationId];
   const sourceContext = deriveAskNextActionsSourceContext(input.launchContext);
@@ -412,7 +349,7 @@ export async function buildAskNextActionsBlock(input: {
     Promise.resolve(explicitlyRelatedCapabilityIds(currentCapabilityId)),
     activeSellHoldRentGoalRelatedCapabilityIds(input.propertyId),
   ]);
-  const relatedCapabilityIds = new Set([...currentCapabilityRelatedIds, ...activeGoalRelatedIds]);
+  const relatedCapabilityIds = new Set([...currentCapabilityRelatedIds, ...activeGoalRelatedIds, ...conversationRelatedCapabilityIds(input.message ?? '', response.suggestions)]);
   const capabilities = selectAskNextActionCapabilities(
     response.suggestions,
     currentCapabilityId,
@@ -422,15 +359,15 @@ export async function buildAskNextActionsBlock(input: {
   if (!capabilities.length) return { block: null, captureRequests: [] };
 
   const captureRequests: AskCaptureRequest[] = [];
-  if (input.contextVersion) {
+  {
     const suggestionsById = new Map(response.suggestions.map((suggestion) => [suggestion.capabilityId, suggestion]));
     for (const capability of capabilities) {
       if (capability.readiness !== 'NEEDS_CONTEXT') continue;
-      const factKey = firstSupportedMissingFactKey(suggestionsById.get(capability.id)?.readiness.missingFactKeys ?? []);
-      if (factKey) {
-        captureRequests.push(nextActionMissingFactCaptureRequest(factKey, input.contextVersion));
-        break;
+      for (const factKey of suggestionsById.get(capability.id)?.readiness.missingFactKeys ?? []) {
+        const request = await buildNextActionContextCapture(input.propertyId, input.userId, factKey);
+        if (request) { captureRequests.push(request); break; }
       }
+      if (captureRequests.length) break;
     }
   }
 

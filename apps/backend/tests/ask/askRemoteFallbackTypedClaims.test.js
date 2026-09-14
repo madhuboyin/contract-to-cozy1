@@ -70,3 +70,23 @@ test('property-less questions resolve only through bounded approved guidance', (
   assert.equal(gutters.id, 'gutter-inspection-frequency');
   assert.equal(selectAskGeneralGuidance('Explain quantum field theory'), null);
 });
+
+test('captured scalar facts and event titles survive relevance selection and safe rendering', async () => {
+  const { selectRelevantAskFacts } = require('../../src/services/ask/askPromptMinimization.ts');
+  const selected = selectRelevantAskFacts('When was my roof replaced and what is the roof type?', [
+    { key: 'structure.roofType', state: 'KNOWN', value: 'ASPHALT_SHINGLE' },
+    { key: 'events.recentHomeEvents', state: 'KNOWN', value: [
+      { title: 'Roof replaced', occurredAt: '2025-01-01T00:00:00Z', datePrecision: 'YEAR', attribution: 'THIRD_PARTY_RELAYED' },
+      { title: 'Dishwasher installed', occurredAt: '2026-01-01T00:00:00Z', datePrecision: 'EXACT_DATE' },
+    ] },
+  ]);
+  const rendered = await selectAndRenderAskRemoteFallbackClaims({
+    question: 'When was my roof replaced and what is the roof type?',
+    facts: selected.map((fact) => ({ ...fact, source: 'USER_REPORTED', observedAt: null, confidence: 0.8 })),
+    provider: { select: async ({ candidates }) => ({ claims: candidates }) },
+  });
+  const text = rendered.map((claim) => claim.text).join(' ');
+  assert.match(text, /ASPHALT_SHINGLE/);
+  assert.match(text, /Roof replaced \(2025; third-party report\)/);
+  assert.doesNotMatch(text, /2025-01-01|Dishwasher/);
+});

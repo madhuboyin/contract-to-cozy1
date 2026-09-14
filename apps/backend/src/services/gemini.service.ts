@@ -206,7 +206,7 @@ class GeminiService {
                     items: {
                       type: 'object',
                       properties: {
-                        claimType: { type: 'string', enum: ['SEVERITY_STATEMENT', 'DEADLINE_STATEMENT', 'COST_COMPARISON'] },
+                        claimType: { type: 'string', enum: ['SEVERITY_STATEMENT', 'DEADLINE_STATEMENT', 'COST_COMPARISON', 'FACT_STATEMENT', 'HOME_EVENT_STATEMENT'] },
                         factRefs: {
                           type: 'array', minItems: 1, maxItems: 2,
                           items: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },

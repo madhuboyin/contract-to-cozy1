@@ -22,7 +22,7 @@ const DOMAIN_EQUIVALENTS: Record<string, string[]> = {
   cost: ['price', 'amount', 'expense', 'estimate', 'quote', 'payment', 'premium'],
 };
 
-function tokens(value: string): Set<string> {
+export function askTopicTokens(value: string): Set<string> {
   const expanded = value.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
   const result = new Set(expanded.split(/[^a-z0-9]+/).filter((token) => token.length > 2 && !STOP_WORDS.has(token)));
   if (result.has('heat') && result.has('pump')) result.add('heatpump');
@@ -54,10 +54,16 @@ export interface AskPromptFact {
 }
 
 export function selectRelevantAskFacts(message: string, facts: AskPromptFact[]): AskPromptFact[] {
-  const questionTokens = tokens(message);
+  const questionTokens = askTopicTokens(message);
   const ranked = facts
-    .map((fact) => {
-      const factTokens = tokens(fact.key);
+    .map((original) => {
+      const fact = original.key === 'events.recentHomeEvents' && Array.isArray(original.value)
+        ? { ...original, value: original.value.filter((row) => {
+          if (!row || typeof row !== 'object') return false;
+          const terms = askTopicTokens([row.title, row.summary, row.type].join(' '));
+          return [...questionTokens].some((token) => terms.has(token));
+        }).slice(0, 5) } : original;
+      const factTokens = askTopicTokens(fact.key + (fact.key.startsWith('events.') && fact.state === 'KNOWN' ? ' ' + JSON.stringify(fact.value) : ''));
       const overlap = [...factTokens].filter((token) => questionTokens.has(token)).length;
       return { fact, overlap };
     })
@@ -69,7 +75,8 @@ export function selectRelevantAskFacts(message: string, facts: AskPromptFact[]):
   for (const { fact } of ranked) {
     const candidate = { key: fact.key, state: fact.state, ...(fact.state === 'KNOWN' ? { value: fact.value } : {}) };
     const size = JSON.stringify(candidate).length;
-    if (selected.length >= MAX_FACTS || characters + size > MAX_CONTEXT_CHARACTERS) break;
+    if (selected.length >= MAX_FACTS) break;
+    if (characters + size > MAX_CONTEXT_CHARACTERS) continue;
     selected.push(candidate);
     characters += size;
   }

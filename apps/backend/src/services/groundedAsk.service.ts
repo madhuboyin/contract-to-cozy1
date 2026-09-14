@@ -87,7 +87,7 @@ export async function answerGroundedAsk(input: { userId: string; sessionId: stri
     const fact = context?.facts[selected.key];
     return fact?.state === 'KNOWN' && fact.value !== null ? [{
       key: fact.key,
-      value: fact.value,
+      value: selected.value,
       source: fact.source,
       observedAt: fact.observedAt,
       confidence: fact.confidence,

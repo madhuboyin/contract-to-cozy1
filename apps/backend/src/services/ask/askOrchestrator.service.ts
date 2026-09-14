@@ -1,3 +1,4 @@
+import { getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
 import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory, WarrantyCategory } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -103,7 +104,7 @@ import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../
 import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
 import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate } from './conversationalUnderstanding/conversationalCapture';
-import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY } from './askNextActions';
+import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX, nextActionContextOperation } from './askNextActions';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
 import { getFinancialContextDecisions } from '../financialContext/context';
@@ -7183,6 +7184,7 @@ async function executeOperation(input: { userId: string; sessionId: string; exec
       propertyId: input.propertyId,
       userId: input.userId,
       operationId: input.operation.operationId,
+      message: input.message,
       recentCompletedCapabilityIds,
       launchContext: input.launchContext,
       contextVersion: result.contextVersion ?? null,
@@ -8079,26 +8081,16 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
   }
 }
 
-// External review, 2026-09-13 (FRD §27's "tell me about X" requirement).
-// Deliberately reuses capturePropertyFact -- the same generic, idempotent
-// (via captureExecutionId) property-fact writer confirmCaptureFact above
-// already calls for the CAPTURE_FACT_CONFIRM operation family, and
-// propertyContext.controller.ts's own plain REST endpoint calls directly --
-// rather than inventing a new writer. This is simpler than every branch
-// inside submitAskCapture below: it never recomputes the routed operation
-// (the answer already given stays exactly as given; this fact is for a
-// DIFFERENT, not-yet-run capability), so it needs none of that shared
-// per-operation dispatch's AskCaptureReceipt/answerHash replay bookkeeping
-// either -- capturePropertyFact's own captureExecutionId-keyed idempotency
-// already makes a retried submission with the same executionId a safe
-// no-op that returns the original write's result.
+// Capture missing context through canonical validation and receipts, then
+// refresh the recommendation from the updated property record.
 async function submitNextActionMissingFactCapture(
   userId: string,
   execution: NonNullable<Awaited<ReturnType<typeof prisma.askExecution.findFirst>>>,
   input: SubmitAskCaptureRequest,
 ): Promise<AskExecutionResponse> {
   const propertyId = execution.propertyId!;
-  if (execution.contextVersion !== input.expectedContextVersion) {
+  const registryCapture = input.captureKey.startsWith(NEXT_ACTION_CONTEXT_PREFIX);
+  if (!registryCapture && execution.contextVersion !== input.expectedContextVersion) {
     const error = new Error('This property record changed since this prompt was shown. Ask again to see the current state.');
     (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
     throw error;
@@ -8106,23 +8098,44 @@ async function submitNextActionMissingFactCapture(
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
     ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown[]; captureRequests?: Array<{ requirementId?: unknown; captureKey?: unknown }>; confirmation?: unknown; clarification?: unknown; suggestions?: unknown[]; skillHandoff?: unknown }
     : {};
+  const captureIdempotencyKey = 'ask-next:' + createHash('sha256').update(JSON.stringify([execution.id, input.captureKey, input.idempotencyKey])).digest('hex');
+  const previous = registryCapture ? await prisma.propertyContextCaptureReceipt.findUnique({
+    where: { propertyId_userId_idempotencyKey: { propertyId, userId, idempotencyKey: captureIdempotencyKey } },
+  }) : null;
   const active = stored.captureRequests?.some((request) => request.requirementId === input.requirementId && request.captureKey === input.captureKey);
-  if (!active) {
+  if (!active && !previous) {
     const error = new Error('This capture requirement is no longer active.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
   }
   const answer = input.answer as { factKey?: unknown; value?: unknown };
-  const factKey = typeof answer.factKey === 'string' ? answer.factKey : null;
-  if (!factKey || !(factKey in NEXT_ACTION_FACT_QUESTIONS)) {
+  const factKey = registryCapture ? input.captureKey.slice(NEXT_ACTION_CONTEXT_PREFIX.length) : typeof answer.factKey === 'string' ? answer.factKey : null;
+  if (!factKey || (!registryCapture && !(factKey in NEXT_ACTION_FACT_QUESTIONS))) {
     const error = new Error('This fact is no longer eligible for this quick capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
   }
   askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'SUBMITTED' });
-  let capture: Awaited<ReturnType<typeof capturePropertyFact>>;
+  let capture: { contextVersion: string };
+  const definition = factKey ? getCaptureDefinitionForFact(factKey) : undefined;
+  if (definition && definition.sensitivity !== 'STANDARD' && !input.sensitiveDataConfirmed) {
+    throw Object.assign(new Error('Confirm that you want to save this sensitive home information.'), { code: 'ASK_CAPTURE_CONFIRMATION_REQUIRED' });
+  }
   try {
-    capture = await capturePropertyFact(propertyId, userId, factKey, {
+    if (registryCapture) {
+      if (!definition) throw new Error('No registered capture exists for this fact.');
+      const result = await captureFeatureContext(propertyId, userId, {
+        featureKey: 'ASK_NEXT_ACTION', operationKey: nextActionContextOperation(factKey),
+        captureKey: definition.captureKey, requirementId: input.requirementId,
+        expectedContextVersion: input.expectedContextVersion,
+        idempotencyKey: captureIdempotencyKey, answer: input.answer,
+      });
+      if (!result || typeof result !== 'object' || Array.isArray(result) || !('contextVersion' in result) || typeof result.contextVersion !== 'string') {
+        throw new Error('Canonical capture returned an invalid receipt.');
+      }
+      capture = { contextVersion: result.contextVersion };
+      if (!active && previous) return mapPersistedExecution(execution, await propertySummary(propertyId));
+    } else capture = await capturePropertyFact(propertyId, userId, factKey, {
       value: answer.value,
       sourceType: 'USER_REPORTED',
       attribution: 'FIRSTHAND',
@@ -8135,18 +8148,8 @@ async function submitNextActionMissingFactCapture(
     }
     throw error;
   }
-  // External review, 2026-09-14: this used to keep the turn's ORIGINAL
-  // blocks verbatim -- the next-actions CAPABILITY_LIST block's own
-  // NEEDS_CONTEXT readiness label for this capability would still read
-  // "more home details will improve the result" even though the homeowner
-  // just supplied exactly that detail. Recompute the next-actions block
-  // against the property context capturePropertyFact just wrote (its own
-  // returned contextVersion, not the stale pre-capture one), the same way
-  // executeOperation's finalize() builds it for a routed turn. Never lets a
-  // recompute failure turn an already-successful, already-durable capture
-  // into a failure -- falls back to the stale blocks/captureRequests exactly
-  // as before this fix if anything here throws.
-  let refreshedBlocks = stored.blocks ?? [];
+  // A refresh failure must not resurrect stale readiness after a durable save.
+  let refreshedBlocks = (stored.blocks ?? []).filter((block) => !(block && typeof block === 'object' && (block as { id?: unknown }).id === 'ask-next-actions'));
   let refreshedCaptureRequests = (stored.captureRequests ?? []).filter((request) => request.requirementId !== input.requirementId);
   try {
     if (execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS) {
@@ -8168,6 +8171,7 @@ async function submitNextActionMissingFactCapture(
         propertyId,
         userId,
         operationId: execution.operationId as AskOperationId,
+        message: execution.message,
         recentCompletedCapabilityIds,
         launchContext: launchContextRaw ? {
           actionId: typeof launchContextRaw.actionId === 'string' ? launchContextRaw.actionId : null,
@@ -8183,10 +8187,10 @@ async function submitNextActionMissingFactCapture(
       // own bound) -- refreshedCaptureRequests is otherwise already empty at
       // this point (the one requirement this function handles is always
       // filtered above), so this never risks exceeding the shared 3-item cap.
-      refreshedCaptureRequests = [...refreshedCaptureRequests, ...nextActions.captureRequests];
+      refreshedCaptureRequests = [...refreshedCaptureRequests, ...nextActions.captureRequests.filter((request) => !(answer.value === null && request.requirementId === input.requirementId))];
     }
   } catch (error) {
-    logger.warn({ error, executionId: execution.id }, '[submitNextActionMissingFactCapture] next-actions recompute failed; keeping the pre-capture blocks');
+    logger.warn({ error, executionId: execution.id }, '[submitNextActionMissingFactCapture] next-actions recompute failed; removed stale recommendations');
   }
   const saved = await prisma.askExecution.update({
     where: { id: execution.id },
@@ -8237,7 +8241,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
   // Bypasses that dispatch's own operationId allowlist entirely, since a
   // next-actions prompt can attach to ANY routed operation's turn, not just
   // the capture-capable subset that allowlist exists for.
-  if (input.captureKey === NEXT_ACTION_MISSING_FACT_CAPTURE_KEY) {
+  if (input.captureKey === NEXT_ACTION_MISSING_FACT_CAPTURE_KEY || input.captureKey.startsWith(NEXT_ACTION_CONTEXT_PREFIX)) {
     return submitNextActionMissingFactCapture(userId, execution, input);
   }
   const registeredOperationId = execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS
