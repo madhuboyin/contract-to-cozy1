@@ -46,6 +46,12 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'CAPTURE_FACT_CONFIRM',
   'CAPTURE_EVENT_CONFIRM',
   'CAPTURE_WARRANTY_CONFIRM',
+  // Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+  // FRD §23's UPLOAD_EVIDENCE resolution). Same non-Skill-executed shape as
+  // the three capture operations above -- carved out proactively before
+  // ever deploying, learning directly from the production incident
+  // documented above rather than repeating it.
+  'CAPTURE_EVIDENCE_CONFIRM',
   // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same shape
   // as the three capture operations above -- learned directly from the
   // production incident documented above, not repeated blind: carved out

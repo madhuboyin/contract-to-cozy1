@@ -15,7 +15,7 @@ require('ts-node/register');
 
 const { sourceRegistryEntry, validateIntelligenceSourceRegistry, AI_SOURCE_REGISTRY } = require('../../src/services/intelligence/sourceRegistry.ts');
 const { executeGovernedAIRequest } = require('../../src/services/ai/aiRequestGovernance.service.ts');
-const { withValidCorrectionReferences, withValidWarrantyLinks } = require('../../src/services/ask/conversationalUnderstanding/extractionContract.ts');
+const { withValidCorrectionReferences, withValidWarrantyLinks, withValidEvidenceLinks, withValidDocumentReferences } = require('../../src/services/ask/conversationalUnderstanding/extractionContract.ts');
 
 test('ai:ask-conversational-capture-extraction is registered in AI_SOURCE_REGISTRY', () => {
   const entry = sourceRegistryEntry('ai:ask-conversational-capture-extraction');
@@ -160,4 +160,60 @@ test('withValidWarrantyLinks keeps a FACT/EVENT candidate with no WARRANTY in th
   const { candidates, invalidLinkCount } = withValidWarrantyLinks([factCandidate(), eventCandidate()]);
   assert.equal(candidates.length, 2);
   assert.equal(invalidLinkCount, 0);
+});
+
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution).
+
+function evidenceCandidate(overrides = {}) {
+  return {
+    category: 'EVIDENCE', documentId: 'doc-1',
+    extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'irrelevant',
+    linkedEventCandidateIndex: 0,
+    ...overrides,
+  };
+}
+
+test('withValidEvidenceLinks keeps an EVIDENCE candidate whose linkedEventCandidateIndex points at a real EVENT in the same batch', () => {
+  const { candidates, invalidLinkCount } = withValidEvidenceLinks([eventCandidate(), evidenceCandidate({ linkedEventCandidateIndex: 0 })]);
+  assert.equal(candidates.length, 2);
+  assert.equal(invalidLinkCount, 0);
+});
+
+test('withValidEvidenceLinks DROPS an EVIDENCE candidate whose linkedEventCandidateIndex is out of bounds', () => {
+  const { candidates, invalidLinkCount } = withValidEvidenceLinks([eventCandidate(), evidenceCandidate({ linkedEventCandidateIndex: 5 })]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].category, 'EVENT');
+  assert.equal(invalidLinkCount, 1);
+});
+
+test('withValidEvidenceLinks DROPS an EVIDENCE candidate whose linkedEventCandidateIndex points at a FACT, not an EVENT', () => {
+  const { candidates, invalidLinkCount } = withValidEvidenceLinks([factCandidate(), evidenceCandidate({ linkedEventCandidateIndex: 0 })]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].category, 'FACT');
+  assert.equal(invalidLinkCount, 1);
+});
+
+test('withValidEvidenceLinks keeps a FACT/EVENT/WARRANTY candidate with no EVIDENCE in the batch unconditionally', () => {
+  const { candidates, invalidLinkCount } = withValidEvidenceLinks([factCandidate(), eventCandidate(), warrantyCandidate({ linkedEventCandidateIndex: 1 })]);
+  assert.equal(candidates.length, 3);
+  assert.equal(invalidLinkCount, 0);
+});
+
+test('withValidDocumentReferences keeps an EVIDENCE candidate whose documentId is in the allowed set', () => {
+  const { candidates, invalidReferenceCount } = withValidDocumentReferences([evidenceCandidate({ documentId: 'doc-1' })], new Set(['doc-1', 'doc-2']));
+  assert.equal(candidates.length, 1);
+  assert.equal(invalidReferenceCount, 0);
+});
+
+test('withValidDocumentReferences DROPS an EVIDENCE candidate whose documentId is not in the allowed set (the model must not invent an id it was never shown)', () => {
+  const { candidates, invalidReferenceCount } = withValidDocumentReferences([evidenceCandidate({ documentId: 'hallucinated-doc' })], new Set(['doc-1']));
+  assert.equal(candidates.length, 0);
+  assert.equal(invalidReferenceCount, 1);
+});
+
+test('withValidDocumentReferences keeps a FACT/EVENT candidate with no EVIDENCE in the batch unconditionally', () => {
+  const { candidates, invalidReferenceCount } = withValidDocumentReferences([factCandidate(), eventCandidate()], new Set());
+  assert.equal(candidates.length, 2);
+  assert.equal(invalidReferenceCount, 0);
 });

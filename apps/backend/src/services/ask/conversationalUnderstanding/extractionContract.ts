@@ -50,11 +50,21 @@ export interface RecentHomeEventContext {
   amount: number | null;
 }
 
-const SYSTEM_PROMPT_TEMPLATE = (recentHomeEvents: RecentHomeEventContext[]) => `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution). Same bounded-context shape as
+// RecentHomeEventContext -- an EVIDENCE candidate's documentId must name one
+// of these; withValidDocumentReferences drops a hallucinated id.
+export interface RecentDocumentContext {
+  id: string;
+  name: string;
+  documentType: string;
+}
+
+const SYSTEM_PROMPT_TEMPLATE = (recentHomeEvents: RecentHomeEventContext[], recentDocuments: RecentDocumentContext[]) => `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
 
 Return a JSON object: { "candidates": [...] }, an array of at most ${MAX_EXTRACTION_CANDIDATES_PER_TURN} candidates (empty array if nothing qualifies).
 
-Each candidate is a FACT, an EVENT, a WARRANTY, or a GOAL:
+Each candidate is a FACT, an EVENT, a WARRANTY, an EVIDENCE, or a GOAL:
 
 FACT -- a scalar attribute of the home itself (e.g. a mortgage rate, roof type, year built):
 {
@@ -103,6 +113,16 @@ WARRANTY -- ONLY when the homeowner's statement also describes a home event (a r
   "sourceSentence": the exact sentence this was extracted from
 }
 
+EVIDENCE -- ONLY when the homeowner refers to a document from the RECENT DOCUMENTS list below as proof/evidence for a home event ALSO described in this same response (e.g. "I uploaded the invoice for that roof replacement" alongside a roof-replacement EVENT candidate). NEVER emit an EVIDENCE candidate on its own with no accompanying EVENT candidate in this same response, and NEVER emit one referencing a document not in the list below -- if either condition isn't met, omit the evidence information entirely:
+{
+  "category": "EVIDENCE",
+  "documentId": the exact id of the document from the RECENT DOCUMENTS list below. NEVER invent an id that is not in the list below.
+  "linkedEventCandidateIndex": the zero-based index, within this SAME "candidates" array, of the EVENT candidate this document is evidence for. NEVER invent an index that does not point at an EVENT candidate in this same response.
+  "extractionConfidence": 0 to 1,
+  "attribution": "FIRSTHAND" | "THIRD_PARTY_RELAYED" | "INFERRED",
+  "sourceSentence": the exact sentence this was extracted from
+}
+
 GOAL -- ONLY a clear, forward-looking statement that the homeowner is considering selling this home, holding it, or renting it out at some future point (e.g. "I'm thinking about selling next year", "We might rent this place out once we move", "Starting to consider putting the house on the market"). Do NOT emit a GOAL candidate for a plan to refinance, renovate, or simply move without addressing what happens to THIS home, and do NOT emit one for a direct question asking for a sell/hold/rent comparison right now (that is a request for an answer, not a statement of a future intention) -- omit the candidate entirely in both cases:
 {
   "category": "GOAL",
@@ -116,6 +136,11 @@ GOAL -- ONLY a clear, forward-looking statement that the homeowner is considerin
 RECENT HOME EVENTS ON THIS PROPERTY (for correction matching ONLY -- never treat these as new information to extract, and never invent an id not listed here):
 ${recentHomeEvents.length
     ? recentHomeEvents.map((event) => `- id: ${event.id}, title: "${event.title}", date: ${event.occurredAt}${event.amount != null ? `, amount: $${event.amount}` : ''}`).join('\n')
+    : '(none)'}
+
+RECENT DOCUMENTS ON THIS PROPERTY (for EVIDENCE matching ONLY -- never treat these as new information to extract, and never invent an id not listed here):
+${recentDocuments.length
+    ? recentDocuments.map((document) => `- id: ${document.id}, name: "${document.name}", type: ${document.documentType}`).join('\n')
     : '(none)'}
 
 Rules:
@@ -197,6 +222,46 @@ export function withValidWarrantyLinks(
   return { candidates: filtered, invalidLinkCount };
 }
 
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution). Same shape as withValidWarrantyLinks
+// exactly -- a separate function (not a generalized withValidWarrantyLinks)
+// so that function's own existing tests, which import it by this exact
+// name, stay untouched.
+export function withValidEvidenceLinks(
+  candidates: ExtractionCandidate[],
+): { candidates: ExtractionCandidate[]; invalidLinkCount: number } {
+  let invalidLinkCount = 0;
+  const filtered = filterCandidatesPreservingWarrantyLinks(candidates, (candidate) => {
+    if (candidate.category !== 'EVIDENCE') return true;
+    const linked = candidates[candidate.linkedEventCandidateIndex];
+    if (!linked || linked.category !== 'EVENT') {
+      invalidLinkCount += 1;
+      return false;
+    }
+    return true;
+  });
+  return { candidates: filtered, invalidLinkCount };
+}
+
+// Ask Cozy Stage 3, Phase 2 external review. Mirrors withValidCorrectionReferences's
+// own bounded-context hallucination guard exactly, for EVIDENCE's documentId
+// instead of EVENT's correctingEventId.
+export function withValidDocumentReferences(
+  candidates: ExtractionCandidate[],
+  allowedDocumentIds: ReadonlySet<string>,
+): { candidates: ExtractionCandidate[]; invalidReferenceCount: number } {
+  let invalidReferenceCount = 0;
+  const filtered = filterCandidatesPreservingWarrantyLinks(candidates, (candidate) => {
+    if (candidate.category !== 'EVIDENCE') return true;
+    if (!allowedDocumentIds.has(candidate.documentId)) {
+      invalidReferenceCount += 1;
+      return false;
+    }
+    return true;
+  });
+  return { candidates: filtered, invalidReferenceCount };
+}
+
 /**
  * The one bounded, schema-constrained LLM call FRD §14 specifies. Never
  * throws for a malformed or unsupported individual candidate -- those are
@@ -207,15 +272,18 @@ export function withValidWarrantyLinks(
  * fail-safe requirement that a missed trigger never blocks the routed
  * answer. `recentHomeEvents` (code review finding, 2026-09-13) is the
  * bounded context a correction statement resolves against -- pass [] when
- * none exists or none is needed.
+ * none exists or none is needed. `recentDocuments` (Phase 2 external review)
+ * is the same kind of bounded context for an EVIDENCE candidate's documentId.
  */
 export async function runStructuredExtraction(
   message: string,
   recentHomeEvents: RecentHomeEventContext[] = [],
+  recentDocuments: RecentDocumentContext[] = [],
 ): Promise<RunStructuredExtractionResult> {
   const ai = getGeminiClient();
   const model = resolveGovernedAIModel('FAST');
   const allowedEventIds = new Set(recentHomeEvents.map((event) => event.id));
+  const allowedDocumentIds = new Set(recentDocuments.map((document) => document.id));
 
   const response = await executeGovernedAIRequest({
     routeId: 'ai:ask-conversational-capture-extraction',
@@ -224,7 +292,7 @@ export async function runStructuredExtraction(
     structuredOutputConfigured: true,
     work: () => ai.models.generateContent({
       model,
-      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT_TEMPLATE(recentHomeEvents)}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
+      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT_TEMPLATE(recentHomeEvents, recentDocuments)}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
       config: { responseMimeType: 'application/json' },
     }),
   });
@@ -261,18 +329,27 @@ export async function runStructuredExtraction(
 
   const validated = withValidCorrectionReferences(candidates, allowedEventIds);
   droppedCount += validated.invalidReferenceCount;
+  // Ask Cozy Stage 3, Phase 2 external review: same bounded-context guard
+  // for EVIDENCE's documentId, run alongside the correction-reference check
+  // above (order between the two doesn't matter -- dropping an EVIDENCE
+  // candidate here never invalidates anyone else's index, since nothing
+  // else links TO an EVIDENCE candidate).
+  const documentValidated = withValidDocumentReferences(validated.candidates, allowedDocumentIds);
+  droppedCount += documentValidated.invalidReferenceCount;
   // Runs AFTER correction-reference filtering, not before: this validates
   // linkedEventCandidateIndex against the array as it stands at this point
   // (the same one being returned to the caller) -- correction-filtering can
   // itself drop an EVENT candidate (an invalid correctingEventId), which
-  // would silently invalidate an already-checked warranty link if this ran
-  // first. Running last means no further compaction happens inside this
-  // function after this check, so the index it validates is the index the
-  // caller will actually see.
-  const warrantyValidated = withValidWarrantyLinks(validated.candidates);
+  // would silently invalidate an already-checked warranty/evidence link if
+  // this ran first. Running last means no further compaction happens inside
+  // this function after these two checks, so the index they validate is the
+  // index the caller will actually see.
+  const warrantyValidated = withValidWarrantyLinks(documentValidated.candidates);
   droppedCount += warrantyValidated.invalidLinkCount;
+  const evidenceValidated = withValidEvidenceLinks(warrantyValidated.candidates);
+  droppedCount += evidenceValidated.invalidLinkCount;
   if (droppedCount > 0) {
     logger.warn({ droppedCount }, '[ask-conversational-capture] dropped invalid extraction candidate(s)');
   }
-  return { candidates: warrantyValidated.candidates, droppedCount };
+  return { candidates: evidenceValidated.candidates, droppedCount };
 }

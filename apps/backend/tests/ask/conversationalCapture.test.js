@@ -460,13 +460,13 @@ test('buildChildExecutionData: a WARRANTY candidate produces a CAPTURE_WARRANTY_
 // coverage): persistCandidates has no runtime DB-mock harness, so the
 // sibling-linking wiring this warranty writer needs is verified against the
 // source directly, matching this file's own established convention.
-test('persistCandidates wires a WARRANTY child\'s linkedExecutionId to its paired EVENT child\'s, bidirectionally, inside the same transaction, and only when neither side is already linked', () => {
+test('persistCandidates wires a WARRANTY or EVIDENCE child\'s linkedExecutionId to its paired EVENT child\'s, bidirectionally, inside the same transaction, and only when neither side is already linked', () => {
   const idx = captureSource.indexOf('async function persistCandidates(');
   assert.ok(idx > 0);
   const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
-  assert.match(body, /candidate\.category !== 'WARRANTY'/);
-  assert.match(body, /if \(warrantyExecution\.linkedExecutionId \|\| eventExecution\.linkedExecutionId\) continue;/);
-  assert.match(body, /data: \{ linkedExecutionId: warrantyExecution\.id \}/);
+  assert.match(body, /candidate\.category !== 'WARRANTY' && candidate\.category !== 'EVIDENCE'/);
+  assert.match(body, /if \(pairedExecution\.linkedExecutionId \|\| eventExecution\.linkedExecutionId\) continue;/);
+  assert.match(body, /data: \{ linkedExecutionId: pairedExecution\.id \}/);
   assert.match(body, /data: \{ linkedExecutionId: eventExecution\.id \}/);
 });
 

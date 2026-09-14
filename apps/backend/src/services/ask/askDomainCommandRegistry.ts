@@ -35,6 +35,9 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
   // §9/§22).
   'CAPTURE_WARRANTY_CONFIRM',
+  // Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+  // FRD §23's UPLOAD_EVIDENCE resolution).
+  'CAPTURE_EVIDENCE_CONFIRM',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -116,6 +119,19 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   CAPTURE_FACT_CONFIRM: command('CAPTURE_FACT_CONFIRM', 'CAPTURE_FACT_CONFIRM', 'capture.fact.confirm', 'CONTRIBUTOR', 'PROPERTY_FACT_EVIDENCE', ['EDIT'], { title: 'Fact not recorded', body: 'No property fact or evidence record was changed.', suggestion: 'Show my property record' }),
   CAPTURE_EVENT_CONFIRM: command('CAPTURE_EVENT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'capture.event.confirm', 'CONTRIBUTOR', 'HOME_EVENT', ['EDIT'], { title: 'Event not recorded', body: 'No home timeline event was created.', suggestion: 'Show my home timeline' }),
   CAPTURE_WARRANTY_CONFIRM: command('CAPTURE_WARRANTY_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'capture.warranty.confirm', 'CONTRIBUTOR', 'WARRANTY', ['EDIT'], { title: 'Warranty not recorded', body: 'No warranty record was created.', suggestion: 'Show my property record' }),
+  // Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+  // FRD §23's UPLOAD_EVIDENCE resolution). correctionModes: ['EDIT'] is the
+  // SAME "describes intent, not a wired mechanism" placeholder
+  // CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM already use above (§4.1: this
+  // vocabulary is entirely unconsumed metadata, nothing reads it to drive
+  // dispatch) -- kept here only so this registry's own completeness
+  // invariant (every material command declares a correction affordance,
+  // enforced by askGovernance.test.js) stays satisfied. Unlike FACT/EVENT,
+  // there is genuinely no domain-level correction chain at all for a
+  // HomeEventEvidence row (no supersession/supersedesEventId equivalent) --
+  // the closest real "edit" is removing/re-attaching a document via the
+  // traditional property record UI, outside Ask entirely.
+  CAPTURE_EVIDENCE_CONFIRM: command('CAPTURE_EVIDENCE_CONFIRM', 'CAPTURE_EVIDENCE_CONFIRM', 'capture.evidence.confirm', 'CONTRIBUTOR', 'HOME_EVENT_EVIDENCE', ['EDIT'], { title: 'Evidence not attached', body: 'No document was attached as evidence to the home timeline event.', suggestion: 'Show my home timeline' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

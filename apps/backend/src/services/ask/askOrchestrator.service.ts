@@ -6778,7 +6778,7 @@ registerCapabilityHandler('buyer.lifecycle.update', async (envelope) => buyerLif
 // registry has no coverage gap for these two operations; the real
 // propose-time and confirm-time work is confirmAskExecution's job (the
 // confirm-time registry, below).
-function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty'): AskOperationResult {
+function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty' | 'evidence'): AskOperationResult {
   return {
     status: 'OUT_OF_SCOPE',
     reasonCode: 'ASK_CAPTURE_NOT_DIRECTLY_ROUTABLE',
@@ -6793,6 +6793,7 @@ function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty'): 
 registerCapabilityHandler('capture.fact.confirm', async () => captureNotDirectlyRoutableResult('fact'));
 registerCapabilityHandler('capture.event.confirm', async () => captureNotDirectlyRoutableResult('event'));
 registerCapabilityHandler('capture.warranty.confirm', async () => captureNotDirectlyRoutableResult('warranty'));
+registerCapabilityHandler('capture.evidence.confirm', async () => captureNotDirectlyRoutableResult('evidence'));
 
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same
 // defensive shape as the three capture operations above -- a
@@ -10221,6 +10222,68 @@ async function confirmCaptureWarranty(ctx: ConfirmCapabilityContext): Promise<Co
   return { result, artifactType: command.artifactType, artifactId: warranty.id };
 }
 registerConfirmCapabilityHandler('capture.warranty.confirm', confirmCaptureWarranty);
+
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution). Delegates the actual write to
+// HomeEventsService.attachDocument -- the same real, already-authorized,
+// already-idempotent (upsert on the [eventId, evidenceKey] unique
+// constraint) mechanism the traditional UI's own document-attach flow uses,
+// not a new writer. Unlike confirmCaptureWarranty, this cannot simply
+// create its own record standalone: HomeEventEvidence.eventId is a
+// required, non-nullable column, so this candidate's real domain write can
+// only happen once its paired EVENT sibling's HomeEvent already exists.
+// That sibling's linkedExecutionId was set by persistCandidates
+// (conversationalCapture.ts) at creation time; this handler reads it
+// SYNCHRONOUSLY here rather than through captureLinkReconciliation.ts's
+// async ASK_CAPTURE_LINK_RECONCILE path (which exists for exactly the
+// opposite case -- HomeEvent.warrantyId, a nullable column that CAN be
+// filled in later regardless of confirmation order). A deliberate,
+// disclosed scope limitation: confirming EVIDENCE before its sibling EVENT
+// is confirmed fails with a clear, recoverable message rather than
+// deferring the write -- see persistCandidates's own comment on this.
+async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, command } = ctx;
+  const documentId = parameters.documentId;
+  if (typeof documentId !== 'string' || !documentId.trim()) {
+    throw Object.assign(new Error('The document to attach is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  if (!execution.linkedExecutionId) {
+    throw Object.assign(new Error('Cozy could not find the home timeline event this evidence belongs to. Attach the document from the property record instead.'), { code: 'EVIDENCE_SIBLING_EVENT_MISSING' });
+  }
+  const sibling = await prisma.askConfirmationReceipt.findUnique({
+    where: { executionId: execution.linkedExecutionId },
+    select: { status: true, artifactType: true, artifactId: true },
+  });
+  if (sibling?.status !== 'COMPLETED' || sibling.artifactType !== 'HOME_EVENT' || !sibling.artifactId) {
+    throw Object.assign(new Error('Confirm the related home timeline event first, then attach this document.'), { code: 'EVIDENCE_SIBLING_EVENT_NOT_CONFIRMED' });
+  }
+  let link: Awaited<ReturnType<typeof homeEventsServiceForCapture.attachDocument>>;
+  try {
+    link = await homeEventsServiceForCapture.attachDocument({
+      propertyId: execution.propertyId,
+      eventId: sibling.artifactId,
+      documentId,
+      userId,
+    });
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw Object.assign(new Error(error.message), { code: error.code ?? 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    }
+    throw error;
+  }
+  const homeTimelineHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/timeline`;
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',
+    blocks: [{
+      type: 'SUMMARY', id: `evidence-attached-${link.id}`, title: 'Attached to your home timeline', tone: 'POSITIVE',
+      body: `${link.document?.name ?? 'The document'} is now attached as evidence on your home timeline.`,
+      actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: homeTimelineHref, style: 'PRIMARY' }],
+    }],
+    confirmation: null, suggestions: [],
+  };
+  return { result, artifactType: command.artifactType, artifactId: link.id };
+}
+registerConfirmCapabilityHandler('capture.evidence.confirm', confirmCaptureEvidence);
 
 export async function confirmAskExecution(userId: string, executionId: string, input: SubmitAskConfirmation): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });

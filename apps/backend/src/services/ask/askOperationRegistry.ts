@@ -151,6 +151,10 @@ export type AskOperationId =
   // ever created paired with a sibling CAPTURE_EVENT_CONFIRM candidate in
   // the same extraction batch (conversationalCapture.ts).
   | 'CAPTURE_WARRANTY_CONFIRM'
+  // Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+  // FRD §23's UPLOAD_EVIDENCE resolution). Same non-routable, paired-with-
+  // CAPTURE_EVENT_CONFIRM shape as CAPTURE_WARRANTY_CONFIRM above.
+  | 'CAPTURE_EVIDENCE_CONFIRM'
   // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same
   // non-routable shape as the three CAPTURE_* operations above, but not a
   // "capture" in their sense -- created directly in COMPLETED status (never
@@ -361,6 +365,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_WARRANTY_CONFIRM: definition('CAPTURE_WARRANTY_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.warranty.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  CAPTURE_EVIDENCE_CONFIRM: definition('CAPTURE_EVIDENCE_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.evidence.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). safetyClass
   // is STANDARD, not MATERIAL_DECISION, unlike the three CAPTURE_* operations
   // above -- this is the materiality carve-out's own point: attaching/

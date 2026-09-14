@@ -26,9 +26,9 @@ import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/app
 import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
-import { runStructuredExtraction, type RecentHomeEventContext } from './extractionContract';
+import { runStructuredExtraction, type RecentDocumentContext, type RecentHomeEventContext } from './extractionContract';
 import { ExtractionAttributionSchema, filterCandidatesPreservingWarrantyLinks, splitGoalCandidates } from './extractionCandidateSchema';
-import type { CaptureConfirmExtractionCandidate, EventExtractionCandidate, ExtractionCandidate, FactExtractionCandidate, GoalExtractionCandidate, WarrantyExtractionCandidate } from './extractionCandidateSchema';
+import type { CaptureConfirmExtractionCandidate, EventExtractionCandidate, EvidenceExtractionCandidate, ExtractionCandidate, FactExtractionCandidate, GoalExtractionCandidate, WarrantyExtractionCandidate } from './extractionCandidateSchema';
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). None of
 // these three create a circular import: SellHoldRentService,
 // sellHoldRentDecisionFamilyAdapter, and PropertySaleCaseService all live
@@ -112,6 +112,30 @@ async function fetchRecentHomeEventContext(propertyId: string): Promise<RecentHo
     title: event.title,
     occurredAt: event.occurredAt.toISOString(),
     amount: event.amount != null ? Number(event.amount) : null,
+  }));
+}
+
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution). Same bounded-context shape as
+// fetchRecentHomeEventContext above -- an EVIDENCE candidate's documentId
+// must name one of these, never an invented id (extractionContract.ts's
+// withValidDocumentReferences). Not filtered to "not yet attached to any
+// event": a document already used as evidence elsewhere is still a valid
+// thing to also cite for a newly-reported event (e.g. one invoice covering
+// two repairs mentioned in the same message).
+const RECENT_DOCUMENT_CONTEXT_LIMIT = 8;
+
+async function fetchRecentDocumentContext(propertyId: string): Promise<RecentDocumentContext[]> {
+  const documents = await prisma.document.findMany({
+    where: { propertyId, deletedAt: null },
+    orderBy: { createdAt: 'desc' },
+    take: RECENT_DOCUMENT_CONTEXT_LIMIT,
+    select: { id: true, name: true, type: true },
+  });
+  return documents.map((document) => ({
+    id: document.id,
+    name: document.name,
+    documentType: document.type,
   }));
 }
 
@@ -395,6 +419,50 @@ function warrantyConfirmationBlocksAndCard(
   };
 }
 
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution). documentName/linkedEventTitle are
+// passed in already resolved -- mirrors warrantyConfirmationBlocksAndCard's
+// own resolvedStartDate/resolvedExpiryDate pattern -- since describing what
+// the evidence attaches to needs the paired EVENT candidate's own title, not
+// just this candidate's fields. No edit support (deliberate, same scoping
+// as GOAL candidates): there is nothing meaningful to edit about which
+// already-uploaded document a stated fact refers to, only confirm or
+// decline it.
+function evidenceConfirmationBlocksAndCard(
+  candidate: EvidenceExtractionCandidate,
+  expiresAt: Date,
+  index: number,
+  documentName: string,
+  linkedEventTitle: string,
+  version: number,
+) {
+  const confirmationId = `capture-evidence-${index}-${expiresAt.getTime()}`;
+  const fields: Array<{ label: string; value: string }> = [
+    { label: 'Document', value: documentName },
+    { label: 'Attach to', value: linkedEventTitle },
+  ];
+  return {
+    blocks: [{
+      type: 'SUMMARY' as const,
+      id: `capture-evidence-preview-${index}`,
+      title: 'Attach this document as evidence?',
+      body: `Cozy noticed you mentioned: "${candidate.sourceSentence}"`,
+      tone: 'DEFAULT' as const,
+      actions: [],
+    }],
+    confirmation: {
+      confirmationId,
+      version,
+      title: 'Attach this document as evidence?',
+      description: `Cozy noticed you mentioned: "${candidate.sourceSentence}". No change is saved until you confirm.`,
+      fields,
+      confirmLabel: 'Attach document',
+      consentText: 'I confirm this document is evidence for this home record entry.',
+      expiresAt: expiresAt.toISOString(),
+    },
+  };
+}
+
 // Ask Cozy Stage 3, Phase 3 edit-before-confirm. Rebuilds the confirmation
 // card after an edit directly from the MERGED parameters object (not a
 // reconstructed ExtractionCandidate) -- an edited execution's original
@@ -590,21 +658,26 @@ export function buildEventContentParameters(candidate: EventExtractionCandidate,
 }
 
 // Exported for direct unit testing (pure, no I/O -- takes `now` as a param
-// rather than reading the clock itself). `linkedEventCandidate` is only
-// relevant for a WARRANTY candidate (its paired EVENT sibling, for
-// resolveWarrantyDates's startDate fallback) -- always undefined/omitted
-// for FACT/EVENT.
+// rather than reading the clock itself). `linkedEventCandidate` is relevant
+// for a WARRANTY candidate (its paired EVENT sibling, for
+// resolveWarrantyDates's startDate fallback) and for an EVIDENCE candidate
+// (its paired EVENT sibling's own title, for the confirmation card) --
+// always undefined/omitted for FACT/EVENT. `recentDocuments` is only read
+// for EVIDENCE, to resolve the confirmed document's own display name
+// (this function stays pure/no-I/O, so the caller resolves it from the same
+// bounded context already fetched for the extraction call itself).
 export function buildChildExecutionData(
   candidate: CaptureConfirmExtractionCandidate,
   index: number,
   input: ConversationalCaptureInput,
   now: Date,
   linkedEventCandidate?: EventExtractionCandidate | null,
+  recentDocuments?: readonly RecentDocumentContext[],
 ): Prisma.AskExecutionCreateInput {
   const expiresAt = confirmationExpiry(now);
   const confirmationVersion = 1;
 
-  let operationId: 'CAPTURE_FACT_CONFIRM' | 'CAPTURE_EVENT_CONFIRM' | 'CAPTURE_WARRANTY_CONFIRM';
+  let operationId: 'CAPTURE_FACT_CONFIRM' | 'CAPTURE_EVENT_CONFIRM' | 'CAPTURE_WARRANTY_CONFIRM' | 'CAPTURE_EVIDENCE_CONFIRM';
   let reasonCode: string;
   let cards: { blocks: unknown[]; confirmation: unknown };
   let parameters: Record<string, unknown>;
@@ -641,7 +714,7 @@ export function buildChildExecutionData(
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
     };
-  } else {
+  } else if (candidate.category === 'WARRANTY') {
     operationId = 'CAPTURE_WARRANTY_CONFIRM';
     reasonCode = 'WARRANTY_CAPTURE_CONFIRMATION_REQUIRED';
     const { startDate, expiryDate, startDateApproximate } = resolveWarrantyDates(candidate, linkedEventCandidate, now);
@@ -655,6 +728,20 @@ export function buildChildExecutionData(
       startDate: startDate.toISOString(),
       expiryDate: expiryDate.toISOString(),
       startDateApproximate,
+      attribution: candidate.attribution,
+      captureChannel: CAPTURE_CHANNEL,
+      extractionConfidence: candidate.extractionConfidence,
+      confirmationVersion,
+      confirmationExpiresAt: expiresAt.toISOString(),
+    };
+  } else {
+    operationId = 'CAPTURE_EVIDENCE_CONFIRM';
+    reasonCode = 'EVIDENCE_CAPTURE_CONFIRMATION_REQUIRED';
+    const documentName = recentDocuments?.find((document) => document.id === candidate.documentId)?.name ?? 'this document';
+    const linkedEventTitle = linkedEventCandidate?.title ?? 'the related home timeline event';
+    cards = evidenceConfirmationBlocksAndCard(candidate, expiresAt, index, documentName, linkedEventTitle, confirmationVersion);
+    parameters = {
+      documentId: candidate.documentId,
       attribution: candidate.attribution,
       captureChannel: CAPTURE_CHANNEL,
       extractionConfidence: candidate.extractionConfidence,
@@ -675,7 +762,12 @@ export function buildChildExecutionData(
     ? [factEditCaptureRequest(parameters, editContextVersion)]
     : candidate.category === 'EVENT'
       ? (() => { const request = eventEditCaptureRequest(parameters, editContextVersion); return request ? [request] : []; })()
-      : [warrantyEditCaptureRequest(parameters, editContextVersion)];
+      : candidate.category === 'WARRANTY'
+        ? [warrantyEditCaptureRequest(parameters, editContextVersion)]
+        // EVIDENCE deliberately has no edit affordance (same scoping as
+        // GOAL candidates): there is nothing meaningful to edit about which
+        // already-uploaded document a stated fact refers to.
+        : [];
 
   return {
     session: { connect: { id: input.sessionId } },
@@ -1325,6 +1417,7 @@ async function persistCandidates(
   claimedAttempts: number,
   rawCandidates: ExtractionCandidate[],
   input: ConversationalCaptureInput,
+  recentDocuments: readonly RecentDocumentContext[] = [],
 ): Promise<PersistedCaptureExecution[]> {
   const validCandidates = filterValidCandidates(rawCandidates);
   // Ask Cozy Stage 3, Phase 6: GOAL candidates are split out here, before
@@ -1364,10 +1457,10 @@ async function persistCandidates(
       // filterCandidatesPreservingWarrantyLinks), so this lookup is always
       // the correct sibling, and always a real EVENT candidate (the same
       // filter drops any WARRANTY whose target didn't survive).
-      const linkedEventCandidate = candidate.category === 'WARRANTY'
+      const linkedEventCandidate = candidate.category === 'WARRANTY' || candidate.category === 'EVIDENCE'
         ? candidates[candidate.linkedEventCandidateIndex] as EventExtractionCandidate
         : undefined;
-      const data = buildChildExecutionData(candidate, index, input, now, linkedEventCandidate);
+      const data = buildChildExecutionData(candidate, index, input, now, linkedEventCandidate, recentDocuments);
       // A retried attempt for the same parent turn resolves to the
       // already-created child via clientRequestId's own uniqueness rather
       // than erroring the whole batch.
@@ -1379,23 +1472,45 @@ async function persistCandidates(
 
     // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
     // §9/§22, closing the "paired-confirmation scenario has no producer"
-    // gap Phase 2's review left open). Wires each WARRANTY child's
-    // linkedExecutionId to its paired EVENT child's, bidirectionally, in
-    // the SAME transaction that created both rows -- captureLinkReconciliation.ts's
-    // own linkSiblingCaptureExecutions can't be called here directly (it
-    // opens its own top-level prisma.$transaction), so the two updates are
-    // inlined against this transaction's own `tx` instead. Guarded on
-    // linkedExecutionId still being unset so a replay (both children
-    // resolved via the `existing` branch above) is a harmless no-op rather
-    // than clobbering an already-reconciled pair.
+    // gap Phase 2's review left open), extended for the Phase 2 external
+    // review's EVIDENCE category (same pairing shape exactly). Wires each
+    // WARRANTY/EVIDENCE child's linkedExecutionId to its paired EVENT
+    // child's, bidirectionally, in the SAME transaction that created both
+    // rows -- captureLinkReconciliation.ts's own linkSiblingCaptureExecutions
+    // can't be called here directly (it opens its own top-level
+    // prisma.$transaction), so the two updates are inlined against this
+    // transaction's own `tx` instead. Guarded on linkedExecutionId still
+    // being unset so a replay (both children resolved via the `existing`
+    // branch above) is a harmless no-op rather than clobbering an
+    // already-reconciled pair. Unlike WARRANTY, EVIDENCE's own confirm
+    // handler reads this link SYNCHRONOUSLY at confirm time (it needs the
+    // sibling's real HomeEvent id, and HomeEventEvidence.eventId is a
+    // required column with no reconciliation-friendly nullable slot the way
+    // HomeEvent.warrantyId has) -- captureLinkReconciliation.ts's own
+    // ASK_CAPTURE_LINK_RECONCILE path is not used for this pairing.
+    //
+    // Known, disclosed scope limitation: linkedExecutionId is a single
+    // scalar field, a strict 1:1 pairing. If one message states BOTH a
+    // warranty AND evidence for the SAME new event (rare, not the shape
+    // either the WARRANTY or EVIDENCE Phase 0 decision was scoped around),
+    // only the first candidate encountered here links to the event -- the
+    // second is still created as its own confirmable execution, just
+    // without an automatic cross-reference (confirmCaptureEvidence's own
+    // missing-link branch surfaces this as a clear, recoverable message
+    // rather than failing unexplained). The `created` array is mutated
+    // in-memory after each link, not just written to the DB, so a third
+    // candidate later in this same loop correctly sees an already-linked
+    // event and also skips, instead of racing against stale in-memory state.
     for (const [index, candidate] of candidates.entries()) {
-      if (candidate.category !== 'WARRANTY') continue;
-      const warrantyExecution = created[index];
+      if (candidate.category !== 'WARRANTY' && candidate.category !== 'EVIDENCE') continue;
+      const pairedExecution = created[index];
       const eventExecution = created[candidate.linkedEventCandidateIndex];
-      if (!warrantyExecution || !eventExecution) continue;
-      if (warrantyExecution.linkedExecutionId || eventExecution.linkedExecutionId) continue;
-      await tx.askExecution.update({ where: { id: eventExecution.id }, data: { linkedExecutionId: warrantyExecution.id } });
-      await tx.askExecution.update({ where: { id: warrantyExecution.id }, data: { linkedExecutionId: eventExecution.id } });
+      if (!pairedExecution || !eventExecution) continue;
+      if (pairedExecution.linkedExecutionId || eventExecution.linkedExecutionId) continue;
+      await tx.askExecution.update({ where: { id: eventExecution.id }, data: { linkedExecutionId: pairedExecution.id } });
+      await tx.askExecution.update({ where: { id: pairedExecution.id }, data: { linkedExecutionId: eventExecution.id } });
+      eventExecution.linkedExecutionId = pairedExecution.id;
+      pairedExecution.linkedExecutionId = eventExecution.id;
     }
 
     // External review, Phase 6 [P2]: each GOAL candidate's own durable
@@ -1505,9 +1620,12 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   // becomes an unhandled rejection.
   const attempt = (async () => {
     try {
-      const recentHomeEvents = await fetchRecentHomeEventContext(input.propertyId);
-      const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents);
-      return await persistCandidates(domainEventId, claimedAttempts, candidates, input);
+      const [recentHomeEvents, recentDocuments] = await Promise.all([
+        fetchRecentHomeEventContext(input.propertyId),
+        fetchRecentDocumentContext(input.propertyId),
+      ]);
+      const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments);
+      return await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
     } catch (error) {
       logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] extraction attempt failed');
       // Release the claim promptly (rather than holding a 15-minute lease
@@ -1549,8 +1667,11 @@ export async function processAskExtractionRequestedEvent(
   const parent = await prisma.askExecution.findUnique({ where: { id: parentExecutionId }, select: { sessionId: true, contextVersion: true } });
   if (!parent) throw new Error(`ASK_EXTRACTION_REQUESTED event's parent execution ${parentExecutionId} no longer exists`);
 
-  const recentHomeEvents = await fetchRecentHomeEventContext(event.propertyId);
-  const { candidates } = await runStructuredExtraction(message, recentHomeEvents);
+  const [recentHomeEvents, recentDocuments] = await Promise.all([
+    fetchRecentHomeEventContext(event.propertyId),
+    fetchRecentDocumentContext(event.propertyId),
+  ]);
+  const { candidates } = await runStructuredExtraction(message, recentHomeEvents, recentDocuments);
   const created = await persistCandidates(event.id, claimedAttempts, candidates, {
     userId: event.userId,
     sessionId: parent.sessionId,
@@ -1559,6 +1680,6 @@ export async function processAskExtractionRequestedEvent(
     message,
     contextVersion: parent.contextVersion,
     skipDueToRoutedCapture: false,
-  });
+  }, recentDocuments);
   return { candidateCount: created.length };
 }

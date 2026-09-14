@@ -138,8 +138,33 @@ export const WarrantyExtractionCandidateSchema = z.object({
   { message: 'expiryDate or durationMonths is required', path: ['expiryDate'] },
 );
 
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution). A FIFTH candidate category --
+// linking an already-uploaded Document as evidence for a NEW home event
+// captured in the same turn. Scoped, per the Phase 0 decision this closes,
+// to only ever pair with an EVENT candidate in the same batch (exactly
+// WARRANTY's own "needs a sibling HomeEvent candidate" framing) -- a
+// standalone evidence statement with no accompanying event is dropped
+// entirely (extractionContract.ts's withValidEvidenceLinks), matching
+// WARRANTY's own precedent rather than inventing a new rule. `documentId`
+// must name a document from the bounded RECENT DOCUMENTS context the call
+// was actually given (extractionContract.ts's withValidDocumentReferences
+// drops a hallucinated id, mirroring correctingEventId's own bounded-context
+// guard) -- this schema only proves the envelope shape.
+export const EvidenceExtractionCandidateSchema = z.object({
+  category: z.literal('EVIDENCE'),
+  ...baseCandidateFields,
+  documentId: z.string().trim().min(1),
+  // Index into the SAME extraction batch's candidates array identifying the
+  // EVENT candidate this evidence attaches to once both sides confirm --
+  // same shape and same index-remap guarantees as WARRANTY's own
+  // linkedEventCandidateIndex (filterCandidatesPreservingWarrantyLinks
+  // handles both categories identically).
+  linkedEventCandidateIndex: z.number().int().nonnegative(),
+});
+
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21 "Goal
-// Capture"). A FOURTH candidate category -- durable workflow state (a
+// Capture"). A category for durable workflow state (a
 // DecisionThread), not a fact about the home, hence exempt from the
 // confirmation gate every other category requires (Stage 2's materiality
 // carve-out: "a thread is workflow state... reversible at zero cost").
@@ -175,28 +200,43 @@ export const ExtractionCandidateSchema = z.union([
   FactExtractionCandidateSchema,
   EventExtractionCandidateSchema,
   WarrantyExtractionCandidateSchema,
+  EvidenceExtractionCandidateSchema,
   GoalExtractionCandidateSchema,
 ]);
 
 export type FactExtractionCandidate = z.infer<typeof FactExtractionCandidateSchema>;
 export type EventExtractionCandidate = z.infer<typeof EventExtractionCandidateSchema>;
 export type WarrantyExtractionCandidate = z.infer<typeof WarrantyExtractionCandidateSchema>;
+export type EvidenceExtractionCandidate = z.infer<typeof EvidenceExtractionCandidateSchema>;
 export type GoalExtractionCandidate = z.infer<typeof GoalExtractionCandidateSchema>;
 export type ExtractionCandidate = z.infer<typeof ExtractionCandidateSchema>;
 
 // Ask Cozy Stage 3, Phase 6. buildChildExecutionData/persistCandidates's
-// existing FACT/EVENT/WARRANTY loop (conversationalCapture.ts) is typed
-// against this narrower union, not the full ExtractionCandidate, so the
-// compiler proves GOAL candidates (handled on a materially different path,
-// see splitGoalCandidates below) can never reach it -- an exhaustiveness
-// guarantee, not just a runtime convention.
+// existing FACT/EVENT/WARRANTY/EVIDENCE loop (conversationalCapture.ts) is
+// typed against this narrower union, not the full ExtractionCandidate, so
+// the compiler proves GOAL candidates (handled on a materially different
+// path, see splitGoalCandidates below) can never reach it -- an
+// exhaustiveness guarantee, not just a runtime convention.
 export type CaptureConfirmExtractionCandidate = Exclude<ExtractionCandidate, GoalExtractionCandidate>;
 
+// A candidate category whose own field is named linkedEventCandidateIndex
+// and must be remapped, not just WARRANTY -- Phase 2's external-review
+// EVIDENCE addition has the identical shape/requirement, so this constant
+// (rather than repeating the two-category check at each of the three call
+// sites below) is the single place a future third such category would need
+// to be added too.
+function hasLinkedEventCandidateIndex(
+  candidate: ExtractionCandidate,
+): candidate is WarrantyExtractionCandidate | EvidenceExtractionCandidate {
+  return candidate.category === 'WARRANTY' || candidate.category === 'EVIDENCE';
+}
+
 // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan
-// §9/§22). Shared by every filtering step across extractionContract.ts and
+// §9/§22), extended for Phase 2 external review's EVIDENCE category. Shared
+// by every filtering step across extractionContract.ts and
 // conversationalCapture.ts that can remove a candidate from the batch
-// (invalid correction reference, invalid FACT value, invalid warranty
-// link): removing ANY earlier element shifts every later element's array
+// (invalid correction reference, invalid FACT value, invalid warranty/
+// evidence link): removing ANY earlier element shifts every later element's array
 // position, which silently invalidates a surviving WARRANTY candidate's
 // linkedEventCandidateIndex if its paired EVENT (or anything before it)
 // gets removed by an unrelated filter. Plain `.filter()` compaction is
@@ -215,7 +255,7 @@ export function filterCandidatesPreservingWarrantyLinks(
   const oldToNewIndex = new Map(survivors.map(({ originalIndex }, newIndex) => [originalIndex, newIndex]));
   const result: ExtractionCandidate[] = [];
   for (const { candidate } of survivors) {
-    if (candidate.category !== 'WARRANTY') {
+    if (!hasLinkedEventCandidateIndex(candidate)) {
       result.push(candidate);
       continue;
     }

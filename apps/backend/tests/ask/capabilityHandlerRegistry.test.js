@@ -11,12 +11,12 @@ const {
   validateCapabilityHandlerRegistry,
 } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { AskCapabilityHandlerMissingError } = require('../../src/services/ask/capabilityInvocation.contract.ts');
-// Side-effect import: askOrchestrator.service.ts registers its 76 handlers
+// Side-effect import: askOrchestrator.service.ts registers its 77 handlers
 // against the capability registry at module load, exactly as index.ts's own
 // production bootstrap does before running validateCapabilityHandlerRegistry.
 require('../../src/services/ask/askOrchestrator.service.ts');
 
-test('every one of the 76 Ask operations resolves to a registered capability handler', () => {
+test('every one of the 77 Ask operations resolves to a registered capability handler', () => {
   const operationIds = Object.keys(ASK_OPERATION_DEFINITIONS);
   // 67 from Phase 1's original inventory + CAPTURE_FACT_CONFIRM/
   // CAPTURE_EVENT_CONFIRM (Phase 2, implementation plan §8; FRD §19/§20) +
@@ -24,8 +24,9 @@ test('every one of the 76 Ask operations resolves to a registered capability han
   // SELL_HOLD_RENT_GOAL_CAPTURE (Phase 6, implementation plan §12; FRD §21) +
   // SELLER_PREP_CHECKLIST + SELLER_PREP_ITEM_DECISION + COVERAGE_COMPARISON_STATUS
   // + DOCUMENT_LOOKUP + MAINTENANCE_FORECAST (Phase 7, implementation plan
-  // §13; FRD §31).
-  assert.equal(operationIds.length, 76);
+  // §13; FRD §31) + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review,
+  // §8/§4.2; FRD §23).
+  assert.equal(operationIds.length, 77);
   assert.deepEqual(validateCapabilityHandlerRegistry(), []);
 });
 

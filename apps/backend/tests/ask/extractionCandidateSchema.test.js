@@ -239,6 +239,62 @@ test('filterCandidatesPreservingWarrantyLinks: a no-op filter (nothing removed) 
   assert.deepEqual(result, [event, warranty]);
 });
 
+// Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
+// FRD §23's UPLOAD_EVIDENCE resolution).
+
+function evidenceCandidate(overrides = {}) {
+  return {
+    category: 'EVIDENCE', documentId: 'doc-1',
+    extractionConfidence: 0.85, attribution: 'FIRSTHAND', sourceSentence: 'irrelevant',
+    linkedEventCandidateIndex: 0,
+    ...overrides,
+  };
+}
+
+test('accepts a well-formed EVIDENCE candidate', () => {
+  const result = ExtractionCandidateSchema.safeParse(evidenceCandidate());
+  assert.equal(result.success, true);
+});
+
+test('rejects an EVIDENCE candidate with an empty documentId', () => {
+  const result = ExtractionCandidateSchema.safeParse(evidenceCandidate({ documentId: '' }));
+  assert.equal(result.success, false);
+});
+
+test('filterCandidatesPreservingWarrantyLinks: dropping an earlier candidate remaps a later EVIDENCE\'s linkedEventCandidateIndex to its EVENT\'s new position (same remap guarantee as WARRANTY)', () => {
+  const badFact = { category: 'FACT', factKey: 'core.yearBuilt', value: 'garbage', extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'x' };
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Roof replacement', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const evidence = evidenceCandidate({ linkedEventCandidateIndex: 1, sourceSentence: 'z' });
+  // Original positions: badFact@0, event@1, evidence@2 (linkedEventCandidateIndex points at 1).
+  const result = filterCandidatesPreservingWarrantyLinks([badFact, event, evidence], (c) => c !== badFact);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].category, 'EVENT');
+  assert.equal(result[1].category, 'EVIDENCE');
+  assert.equal(result[1].linkedEventCandidateIndex, 0);
+});
+
+test('filterCandidatesPreservingWarrantyLinks: drops an EVIDENCE candidate outright if its paired EVENT did not survive the filter', () => {
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Roof replacement', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const evidence = evidenceCandidate({ linkedEventCandidateIndex: 0 });
+  const result = filterCandidatesPreservingWarrantyLinks([event, evidence], (c) => c !== event);
+  assert.equal(result.length, 0);
+});
+
+test('filterCandidatesPreservingWarrantyLinks: a WARRANTY and an EVIDENCE candidate in the same batch each keep their own independent linkedEventCandidateIndex remap', () => {
+  const event = { category: 'EVENT', eventType: 'REPAIR', title: 'Water heater install', datePrecision: 'UNKNOWN', extractionConfidence: 0.8, attribution: 'FIRSTHAND', sourceSentence: 'y', correctingEventId: null };
+  const warranty = warrantyCandidate({ linkedEventCandidateIndex: 1, sourceSentence: 'w' });
+  const evidence = evidenceCandidate({ linkedEventCandidateIndex: 1, sourceSentence: 'e' });
+  const badFact = { category: 'FACT', factKey: 'core.yearBuilt', value: 'garbage', extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'x' };
+  // Original positions: badFact@0, event@1, warranty@2, evidence@3.
+  const result = filterCandidatesPreservingWarrantyLinks([badFact, event, warranty, evidence], (c) => c !== badFact);
+  assert.equal(result.length, 3);
+  assert.equal(result[0].category, 'EVENT');
+  assert.equal(result[1].category, 'WARRANTY');
+  assert.equal(result[1].linkedEventCandidateIndex, 0);
+  assert.equal(result[2].category, 'EVIDENCE');
+  assert.equal(result[2].linkedEventCandidateIndex, 0);
+});
+
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21 "Goal Capture").
 function goalCandidate(overrides = {}) {
   return {

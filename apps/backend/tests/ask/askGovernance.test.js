@@ -31,8 +31,9 @@ test('every Ask operation has a complete governed definition', () => {
   // SELL_HOLD_RENT_GOAL_CAPTURE (Phase 6, implementation plan §12; FRD §21) +
   // SELLER_PREP_CHECKLIST + SELLER_PREP_ITEM_DECISION + COVERAGE_COMPARISON_STATUS
   // + DOCUMENT_LOOKUP + MAINTENANCE_FORECAST (Phase 7, implementation plan
-  // §13; FRD §31).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 76);
+  // §13; FRD §31) + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review,
+  // §8/§4.2; FRD §23).
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 77);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -49,8 +50,9 @@ test('every material Ask command has governed confirmation, authorization, cance
   // 25 from Phase 2's original if/else-chain migration + CAPTURE_FACT_CONFIRM/
   // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20)
   // + CAPTURE_WARRANTY_CONFIRM (Phase 3 warranty capture writer, §9/§22)
-  // + SELLER_PREP_ITEM_DECISION (Phase 7 write-path slice, §13; FRD §31).
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 29);
+  // + SELLER_PREP_ITEM_DECISION (Phase 7 write-path slice, §13; FRD §31)
+  // + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review, §8/§4.2; FRD §23).
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 30);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

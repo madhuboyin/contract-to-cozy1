@@ -93,6 +93,7 @@ const jobs: Record<AskOperationId, string> = {
   CAPTURE_FACT_CONFIRM: 'record a fact about the home directly from conversation',
   CAPTURE_EVENT_CONFIRM: 'record something that happened at the home directly from conversation',
   CAPTURE_WARRANTY_CONFIRM: 'record a warranty for something at the home directly from conversation',
+  CAPTURE_EVIDENCE_CONFIRM: 'attach an already-uploaded document as evidence for something reported directly from conversation',
   SELL_HOLD_RENT_GOAL_CAPTURE: 'attach a durable sell/hold/rent decision thread from a stated intention to sell, directly from conversation',
 };
 
@@ -172,6 +173,7 @@ const positives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_FACT_CONFIRM: ['Record that my roof was replaced in 2020', 'Please note my foundation is a poured concrete slab', 'Save that my water heater was installed last year'],
   CAPTURE_EVENT_CONFIRM: ['I had the chimney swept last week', 'We had a small kitchen fire in March, nothing serious', 'The plumber fixed a leak under the sink yesterday'],
   CAPTURE_WARRANTY_CONFIRM: ['We installed a new furnace last month, it has a 10 year warranty from Carrier', 'The water heater we replaced in June came with a 6 year manufacturer warranty'],
+  CAPTURE_EVIDENCE_CONFIRM: ['I uploaded the invoice for that roof replacement', 'Here is the receipt for the water heater install I just mentioned'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ["I'm thinking about selling next year", 'We might rent this place out once we move', 'Starting to consider putting the house on the market'],
 };
 
@@ -251,6 +253,7 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_FACT_CONFIRM: ['What is my roof type?', 'Create a maintenance task for the roof'],
   CAPTURE_EVENT_CONFIRM: ['What maintenance is pending?', 'Show my home timeline'],
   CAPTURE_WARRANTY_CONFIRM: ['What is my roof type?', 'Show my home timeline'],
+  CAPTURE_EVIDENCE_CONFIRM: ['Show my home timeline', 'What is my roof type?'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['What is my roof type?', 'Should I sell, hold, or rent this home?'],
 };
 
@@ -330,6 +333,7 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_FACT_CONFIRM: ['The stated property fact is ready to be saved to the canonical Living Home Record after confirmation.'],
   CAPTURE_EVENT_CONFIRM: ['The described event is ready to be added to the canonical home timeline after confirmation.'],
   CAPTURE_WARRANTY_CONFIRM: ['The described warranty is ready to be saved to the canonical Living Home Record after confirmation.'],
+  CAPTURE_EVIDENCE_CONFIRM: ['The referenced document is ready to be attached as evidence to the canonical home timeline entry after confirmation.'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['A sell, hold, or rent decision thread for this home is attached and will resume automatically next time.'],
 };
 
@@ -409,6 +413,7 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   CAPTURE_FACT_CONFIRM: ['The described event is added to the canonical home timeline'],
   CAPTURE_EVENT_CONFIRM: ['The stated property fact is saved to the canonical Living Home Record'],
   CAPTURE_WARRANTY_CONFIRM: ['The described event is added to the canonical home timeline', 'The stated property fact is saved to the canonical Living Home Record'],
+  CAPTURE_EVIDENCE_CONFIRM: ['The described event is added to the canonical home timeline', 'The described warranty is ready to be saved to the canonical Living Home Record after confirmation.'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['The described warranty is ready to be saved to the canonical Living Home Record after confirmation.'],
 };
 

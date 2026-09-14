@@ -229,6 +229,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   CAPTURE_EVENT_CONFIRM: 'The described event is ready to be added to the canonical home timeline after confirmation.',
   // Ask Cozy Stage 3, Phase 3 warranty capture writer (implementation plan §9/§22).
   CAPTURE_WARRANTY_CONFIRM: 'The described warranty is ready to be saved to the canonical Living Home Record after confirmation.',
+  // Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2; FRD §23's UPLOAD_EVIDENCE resolution).
+  CAPTURE_EVIDENCE_CONFIRM: 'The referenced document is ready to be attached as evidence to the canonical home timeline entry after confirmation.',
   // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21).
   SELL_HOLD_RENT_GOAL_CAPTURE: 'A sell, hold, or rent decision thread for this home is attached and will resume automatically next time.',
 });
