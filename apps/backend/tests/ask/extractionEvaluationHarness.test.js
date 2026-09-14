@@ -164,3 +164,33 @@ test('two duplicated candidates satisfying only one of two distinct expected ide
   assert.equal(report.duplicateRate, 1, 'the second identical candidate is a duplicate of the first');
   assert.equal(report.falsePersistenceProposalRate, 0.5, 'one of the two proposed candidates never matched a real expectation');
 });
+
+// External review, 2026-09-14: the harness's own default extractor always
+// called runStructuredExtraction(message, []) -- an empty prior-events list
+// regardless of what a fixture needed -- so the CORRECTION category's own
+// fixtures (which require a real event id to reference) could never
+// exercise real correction behavior; the model's own attempted
+// correctingEventId would always be dropped as unverifiable against an
+// empty list. This is the plumbing-level test for the fix: a fixture's own
+// `priorHomeEvents` must actually reach the injected extractor.
+test('evaluateExtractionQuality passes each fixture\'s own priorHomeEvents through to extract, defaulting to an empty array when unset', async () => {
+  const priorEvent = { id: 'prior-1', title: 'Roof replacement', occurredAt: '2024-06-01T00:00:00.000Z', amount: null };
+  const corpus = [
+    { fixtureId: 'with-context', message: 'a', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 's', expectedCandidates: [], priorHomeEvents: [priorEvent], provenance: 'ASK_COZY_STAGE3_PHASE3_V1' },
+    { fixtureId: 'without-context', message: 'b', category: 'POSITIVE_FACTUAL_STATEMENT', expectedPreFilterFire: true, expectedCandidateSummary: 's', expectedCandidates: [], provenance: 'ASK_COZY_STAGE3_PHASE3_V1' },
+  ];
+  const received = [];
+  await evaluateExtractionQuality(async (message, priorHomeEvents) => {
+    received.push({ message, priorHomeEvents });
+    return { candidates: [], droppedCount: 0 };
+  }, corpus);
+  assert.deepEqual(received[0], { message: 'a', priorHomeEvents: [priorEvent] });
+  assert.deepEqual(received[1], { message: 'b', priorHomeEvents: [] });
+});
+
+test('the default extractor forwards priorHomeEvents into runStructuredExtraction\'s own recentHomeEvents parameter', () => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/conversationalUnderstanding/extractionEvaluationHarness.ts'), 'utf8');
+  assert.match(source, /\(message, priorHomeEvents\) => runStructuredExtraction\(message, \[\.\.\.priorHomeEvents\]\)/);
+});

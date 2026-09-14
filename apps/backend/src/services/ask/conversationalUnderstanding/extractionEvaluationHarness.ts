@@ -24,10 +24,16 @@ import {
   type ExpectedExtractionCandidate,
   type ExtractionCorpusFixture,
 } from './extractionEvaluationCorpus';
-import { runStructuredExtraction, type RunStructuredExtractionResult } from './extractionContract';
+import { runStructuredExtraction, type RecentHomeEventContext, type RunStructuredExtractionResult } from './extractionContract';
 import type { ExtractionCandidate } from './extractionCandidateSchema';
 
-export type ExtractFn = (message: string) => Promise<RunStructuredExtractionResult>;
+// External review, 2026-09-14: previously took only `message`, so the
+// default extractor below always called runStructuredExtraction(message,
+// []) regardless of what a fixture actually needed -- the CORRECTION
+// category's own fixtures require a real prior event to reference, and none
+// was ever supplied. Now takes the fixture's own `priorHomeEvents` too, so
+// a fixture that needs correction context can actually get it.
+export type ExtractFn = (message: string, priorHomeEvents: ReadonlyArray<RecentHomeEventContext>) => Promise<RunStructuredExtractionResult>;
 
 export interface ExtractionEvaluationReport {
   schemaVersion: '1.0';
@@ -116,7 +122,7 @@ function rate(correct: number, total: number): number | null {
 }
 
 export async function evaluateExtractionQuality(
-  extract: ExtractFn = (message) => runStructuredExtraction(message, []),
+  extract: ExtractFn = (message, priorHomeEvents) => runStructuredExtraction(message, [...priorHomeEvents]),
   corpus: ReadonlyArray<ExtractionCorpusFixture> = EXTRACTION_EVALUATION_CORPUS,
 ): Promise<ExtractionEvaluationReport> {
   let categoryCorrect = 0;
@@ -133,7 +139,7 @@ export async function evaluateExtractionQuality(
   const perFixture: Array<ExtractionEvaluationReport['perFixture'][number]> = [];
 
   for (const fixture of corpus) {
-    const { candidates } = await extract(fixture.message);
+    const { candidates } = await extract(fixture.message, fixture.priorHomeEvents ?? []);
     const { pairs, unmatchedExpected, unmatchedActual } = matchCandidates(fixture.expectedCandidates, candidates);
 
     categoryTotal += fixture.expectedCandidates.length;

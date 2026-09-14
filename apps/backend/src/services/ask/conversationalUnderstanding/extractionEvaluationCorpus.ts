@@ -1,5 +1,20 @@
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9; FRD §15).
 //
+// External review, 2026-09-14: the harness's own default extractor called
+// runStructuredExtraction(message, []) for every fixture -- always an empty
+// prior-events list -- while the CORRECTION category's own fixtures expect
+// isCorrection: true, which the extraction prompt can only ever produce by
+// referencing a real event id from that same list ("NEVER invent an id that
+// is not in the list below"). With no prior events ever supplied, a
+// correction reference the model attempted would always be dropped by
+// withValidCorrectionReferences (extractionContract.ts) as unverifiable,
+// making corr-1/corr-2 structurally incapable of ever exercising real
+// correction behavior -- confirmed by reproducing the exact 0%-correction
+// result the review reported. Fixed with `priorHomeEvents` below: a
+// fixture-specific, hand-authored RecentHomeEventContext list (unset for
+// every fixture that doesn't need one), threaded through by the harness
+// into the SAME runStructuredExtraction call every other fixture already
+// gets, just with real context to correct against this time.
 // A dedicated, hand-labeled, frozen fixture corpus, following
 // askTrustCertificationCorpus.ts's own established template (categorized
 // rows, a provenance tag, a corpus-integrity test rather than a runtime
@@ -25,6 +40,8 @@
 // extractionEvaluationHarness.manual.test.js, gated on GEMINI_API_KEY and
 // not part of the default `npm test` run, matching this codebase's existing
 // convention for live-model checks.
+
+import type { RecentHomeEventContext } from './extractionContract';
 
 export type ExtractionCorpusCategory =
   | 'POSITIVE_FACTUAL_STATEMENT'
@@ -99,6 +116,13 @@ export interface ExtractionCorpusFixture {
   // Empty array means "no candidate should be proposed" -- itself a real,
   // scored expectation (false-persistence-proposal rate's own denominator).
   expectedCandidates: ReadonlyArray<ExpectedExtractionCandidate>;
+  // External review, 2026-09-14: bounded, fixture-specific prior-event
+  // context, mirroring the exact shape runStructuredExtraction's own
+  // `recentHomeEvents` parameter already takes. Unset (undefined, not an
+  // empty array -- the harness's own default treats the two identically via
+  // `?? []`) for every fixture that isn't specifically testing correction
+  // resolution. Only CORRECTION-category rows need this today.
+  priorHomeEvents?: ReadonlyArray<RecentHomeEventContext>;
   provenance: 'ASK_COZY_STAGE3_PHASE3_V1';
 }
 
@@ -126,8 +150,8 @@ const ROWS: ReadonlyArray<Omit<ExtractionCorpusFixture, 'provenance'>> = [
   { fixtureId: 'third-2', message: 'Our plumber told me the water heater is about 8 years old.', category: 'THIRD_PARTY_STATEMENT', expectedPreFilterFire: true, expectedCandidateSummary: 'FACT: systems.waterHeaterInstallYear (approximate), attribution THIRD_PARTY_RELAYED', expectedCandidates: [{ category: 'FACT', factKey: 'systems.waterHeaterInstallYear', attribution: 'THIRD_PARTY_RELAYED' }] },
 
   // Corrections (FRD §8.7)
-  { fixtureId: 'corr-1', message: 'Actually, the roof was replaced in 2023, not 2024.', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 'CORRECTION: roof replacement event, year 2023', expectedCandidates: [{ category: 'EVENT', datePrecision: 'YEAR', attribution: 'FIRSTHAND', isCorrection: true }] },
-  { fixtureId: 'corr-2', message: 'Correction -- it cost $9,200, not $8,000.', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 'CORRECTION: amount 9200', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND', isCorrection: true, hasAmount: true, expectedAmount: 9200 }] },
+  { fixtureId: 'corr-1', message: 'Actually, the roof was replaced in 2023, not 2024.', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 'CORRECTION: roof replacement event, year 2023', expectedCandidates: [{ category: 'EVENT', datePrecision: 'YEAR', attribution: 'FIRSTHAND', isCorrection: true }], priorHomeEvents: [{ id: 'prior-roof-2024', title: 'Roof replacement', occurredAt: '2024-06-01T00:00:00.000Z', amount: null }] },
+  { fixtureId: 'corr-2', message: 'Correction -- it cost $9,200, not $8,000.', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 'CORRECTION: amount 9200', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND', isCorrection: true, hasAmount: true, expectedAmount: 9200 }], priorHomeEvents: [{ id: 'prior-repair-8000', title: 'Home repair', occurredAt: '2026-06-01T00:00:00.000Z', amount: 8000 }] },
 
   // Ambiguous dates -- still a genuine statement, imprecise timing
   { fixtureId: 'amb-1', message: 'We had the roof redone a few years ago.', category: 'AMBIGUOUS_DATE', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: roof replacement, UNKNOWN/RANGE precision', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND' }] },
