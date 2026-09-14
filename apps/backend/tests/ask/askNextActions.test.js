@@ -294,7 +294,11 @@ test('executeOperation calls buildAskNextActionsBlock inside a try/catch so a ne
   assert.ok(callIdx > idx);
   const before = orchestratorSource.slice(orchestratorSource.lastIndexOf('try {', callIdx), callIdx);
   assert.ok(before.length < 200, 'expected the buildAskNextActionsBlock call to sit directly inside a nearby try block');
-  const after = orchestratorSource.slice(callIdx, callIdx + 400);
+  // External review, 2026-09-13 (FRD §27's "tell me about X" requirement):
+  // widened from 400 -- the call gained a 6th parameter (contextVersion)
+  // and the block now also carries next-actions' own captureRequests, both
+  // still inside this same try block.
+  const after = orchestratorSource.slice(callIdx, callIdx + 500);
   assert.match(after, /catch \{/);
   assert.match(after, /recentCompletedCapabilityIds,/);
 });

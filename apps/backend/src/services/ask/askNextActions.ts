@@ -78,11 +78,78 @@
 // all), not silently absorbed into this fix.
 import { getCapabilitySuggestions } from '../capabilityRecommendation.service';
 import { canonicalCapabilityRegistry, type CapabilityExplicitSourceContext, type CapabilitySuggestion } from '../../productFramework/capabilities';
-import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
+import type { AskCaptureRequest, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import { ASK_OPERATION_CAPABILITY } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import type { AskOperationId } from './askOperationRegistry';
 import { sellHoldRentDecisionFamilyAdapter } from '../decisionPlatform/domainSnapshotAdapters';
 import { logger } from '../../lib/logger';
+
+// External review, 2026-09-13 (FRD §27: "partially-satisfiable (gap is
+// MISSING, not UNAVAILABLE) -> conversational 'tell me about X' prompt via
+// existing captureRequests" -- the NEEDS_CONTEXT tier this module already
+// computes was previously surfaced as a plain label+link only, never this
+// conversational prompt the FRD's own text calls for). Hand-authored,
+// deliberately bounded to a subset of `propertyFacts` (capturePropertyFact
+// Catalog.ts) that is safe to ask about with a plain DECIMAL/BOOLEAN input
+// with no enum-option catalog to also hand-author -- the same reason
+// extractionContract.ts's own ILLUSTRATIVE_FACT_KEYS is a curated subset,
+// not the full ~50-key catalog. A NEEDS_CONTEXT capability whose
+// `missingFactKeys` names a key outside this set still falls back to a
+// plain link (no regression from before this fix), never a broken or
+// mislabeled prompt for a key this module doesn't actually know how to ask
+// about safely.
+export const NEXT_ACTION_MISSING_FACT_CAPTURE_KEY = 'NEXT_ACTION_MISSING_FACT';
+
+interface NextActionFactQuestion {
+  question: string;
+  inputSchema: { type: 'DECIMAL' } | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string };
+}
+
+export const NEXT_ACTION_FACT_QUESTIONS: Readonly<Record<string, NextActionFactQuestion>> = {
+  'core.yearBuilt': { question: 'What year was this home built?', inputSchema: { type: 'DECIMAL' } },
+  'core.bedrooms': { question: 'How many bedrooms does this home have?', inputSchema: { type: 'DECIMAL' } },
+  'core.bathrooms': { question: 'How many bathrooms does this home have?', inputSchema: { type: 'DECIMAL' } },
+  'structure.roofReplacementYear': { question: 'What year was the roof last replaced?', inputSchema: { type: 'DECIMAL' } },
+  'systems.hvacInstallYear': { question: 'What year was the HVAC system installed?', inputSchema: { type: 'DECIMAL' } },
+  'systems.waterHeaterInstallYear': { question: 'What year was the water heater installed?', inputSchema: { type: 'DECIMAL' } },
+  'safety.hasSmokeDetectors': { question: 'Does this home have smoke detectors?', inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
+  'safety.hasCoDetectors': { question: 'Does this home have carbon monoxide detectors?', inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
+  'safety.hasSumpPump': { question: 'Does this home have a sump pump?', inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
+};
+
+function firstSupportedMissingFactKey(missingFactKeys: readonly string[]): string | null {
+  return missingFactKeys.find((factKey) => factKey in NEXT_ACTION_FACT_QUESTIONS) ?? null;
+}
+
+/**
+ * Builds the "tell me about X" captureRequest FRD §27 asks for. Exported
+ * for direct unit testing (pure, no I/O). `contextVersion` is the routed
+ * turn's own execution's stored contextVersion -- submitNextActionMissingFactCapture
+ * (askOrchestrator.service.ts) re-checks it at submit time, the same
+ * staleness pattern every other capture branch in that file already uses.
+ */
+export function nextActionMissingFactCaptureRequest(factKey: string, contextVersion: string): AskCaptureRequest {
+  const definition = NEXT_ACTION_FACT_QUESTIONS[factKey];
+  return {
+    requirementId: `next-action-fact-${factKey}`,
+    captureKey: NEXT_ACTION_MISSING_FACT_CAPTURE_KEY,
+    classification: 'ENHANCEMENT_ACCURACY',
+    state: 'UNKNOWN',
+    title: 'Improve this answer',
+    question: definition.question,
+    helpText: 'Answering helps Cozy give a more complete recommendation for this home.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'factKey', label: 'Fact', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: factKey, value: factKey }] } },
+      { key: 'value', label: 'Answer', required: true, inputSchema: definition.inputSchema },
+    ] },
+    currentAnswer: { factKey },
+    allowNotSure: true,
+    sensitivity: 'STANDARD',
+    destinationLabel: 'Saved to this property\'s Home Record',
+    confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
 
 // FRD §27's own cited convention ("max shown: reuse the existing max-5
 // convention... askNotificationContinuation's resultJson.suggestions").
@@ -294,6 +361,19 @@ export function deriveAskNextActionsSourceContext(
   return null;
 }
 
+export interface AskNextActionsResult {
+  block: AskPresentationBlock | null;
+  // External review, 2026-09-13 (FRD §27's "tell me about X" requirement --
+  // see NEXT_ACTION_FACT_QUESTIONS's own header comment above). Bounded to
+  // at most one: the top-level response's own captureRequests array is
+  // capped at 3 for the whole turn, and this module only ever runs when
+  // that array is already empty (askOrchestrator.service.ts's own gate) --
+  // offering more than one here would spend that shared budget on
+  // next-actions alone rather than leaving room for whatever the routed
+  // operation itself needs on a later turn.
+  captureRequests: AskCaptureRequest[];
+}
+
 /**
  * Builds one `CAPABILITY_LIST` block of deterministic, ranked next-action
  * candidates for the property just answered against -- or `null` when
@@ -311,7 +391,14 @@ export async function buildAskNextActionsBlock(input: {
   operationId: AskOperationId;
   recentCompletedCapabilityIds?: ReadonlySet<string>;
   launchContext?: AskNextActionsLaunchContext | null;
-}): Promise<AskPresentationBlock | null> {
+  // External review, 2026-09-13: the routed turn's own contextVersion, used
+  // only to stamp the "tell me about X" captureRequest's expectedContextVersion
+  // -- submitNextActionMissingFactCapture (askOrchestrator.service.ts)
+  // re-checks it against the execution's own stored value at submit time.
+  // Optional (a turn with no contextVersion simply never gets this prompt,
+  // same as any other capture requirement that needs one to guard staleness).
+  contextVersion?: string | null;
+}): Promise<AskNextActionsResult> {
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operationId];
   const sourceContext = deriveAskNextActionsSourceContext(input.launchContext);
   const [response, currentCapabilityRelatedIds, activeGoalRelatedIds] = await Promise.all([
@@ -332,22 +419,39 @@ export async function buildAskNextActionsBlock(input: {
     input.recentCompletedCapabilityIds,
     relatedCapabilityIds,
   );
-  if (!capabilities.length) return null;
+  if (!capabilities.length) return { block: null, captureRequests: [] };
+
+  const captureRequests: AskCaptureRequest[] = [];
+  if (input.contextVersion) {
+    const suggestionsById = new Map(response.suggestions.map((suggestion) => [suggestion.capabilityId, suggestion]));
+    for (const capability of capabilities) {
+      if (capability.readiness !== 'NEEDS_CONTEXT') continue;
+      const factKey = firstSupportedMissingFactKey(suggestionsById.get(capability.id)?.readiness.missingFactKeys ?? []);
+      if (factKey) {
+        captureRequests.push(nextActionMissingFactCaptureRequest(factKey, input.contextVersion));
+        break;
+      }
+    }
+  }
+
   return {
-    type: 'CAPABILITY_LIST',
-    id: 'ask-next-actions',
-    title: 'What comes next',
-    // External review [P1]: this previously said "Ranked from this answer"
-    // unconditionally, which overstated the behavior even before that fix
-    // (no answer content ever fed ranking). External review, second round:
-    // widened to also cover the explicit-related-capability promotion
-    // above, which is genuinely "ranked for what you just did" even with
-    // no launch context. Phase 6 review: also true whenever an active
-    // long-lived goal thread biased the ranking, independent of the
-    // just-answered operation.
-    description: (sourceContext || relatedCapabilityIds.size > 0)
-      ? 'Ranked for what you just did, from your live capability registry.'
-      : 'From your live capability registry, prioritized for this property.',
-    capabilities,
+    block: {
+      type: 'CAPABILITY_LIST',
+      id: 'ask-next-actions',
+      title: 'What comes next',
+      // External review [P1]: this previously said "Ranked from this answer"
+      // unconditionally, which overstated the behavior even before that fix
+      // (no answer content ever fed ranking). External review, second round:
+      // widened to also cover the explicit-related-capability promotion
+      // above, which is genuinely "ranked for what you just did" even with
+      // no launch context. Phase 6 review: also true whenever an active
+      // long-lived goal thread biased the ranking, independent of the
+      // just-answered operation.
+      description: (sourceContext || relatedCapabilityIds.size > 0)
+        ? 'Ranked for what you just did, from your live capability registry.'
+        : 'From your live capability registry, prioritized for this property.',
+      capabilities,
+    },
+    captureRequests,
   };
 }

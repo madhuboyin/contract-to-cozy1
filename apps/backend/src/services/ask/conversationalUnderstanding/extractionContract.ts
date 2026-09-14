@@ -60,7 +60,36 @@ export interface RecentDocumentContext {
   documentType: string;
 }
 
-const SYSTEM_PROMPT_TEMPLATE = (recentHomeEvents: RecentHomeEventContext[], recentDocuments: RecentDocumentContext[]) => `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
+// External review, 2026-09-13 (FRD §26: "extraction and any conversational
+// reasoning consume the current message, bounded aggregation context, and
+// (when active) the DecisionThread's already-structured state
+// (factReferences, assumptions, options, questions) -- never a raw list of
+// prior messages"). Same bounded-context shape as RecentHomeEventContext/
+// RecentDocumentContext above -- read-only, structured, never the prior
+// conversation transcript. This is informational context ONLY: it helps
+// the model correctly interpret a follow-up statement made in the middle of
+// an active sell/hold/rent conversation (e.g. a stated fact that answers an
+// open question or updates a listed assumption), and does not change what
+// the extraction schema can produce, add any new candidate category, or
+// bias GOAL-shaped classification. Two materially larger, still-deferred
+// changes named in this program's own Phase 6 status remain genuinely out
+// of scope: biasing what counts as a GOAL-shaped follow-up, and resolving a
+// vague reply against the active thread without repeating the goal
+// statement -- both are pre-filter/routing-layer changes, not extraction-
+// prompt-context ones, and are not attempted here.
+export interface ActiveDecisionThreadContext {
+  goalCode: string;
+  factReferences: string[];
+  assumptions: Array<{ key: string; value: unknown }>;
+  options: string[];
+  openQuestions: string[];
+}
+
+const SYSTEM_PROMPT_TEMPLATE = (
+  recentHomeEvents: RecentHomeEventContext[],
+  recentDocuments: RecentDocumentContext[],
+  activeDecisionThread: ActiveDecisionThreadContext | null,
+) => `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
 
 Return a JSON object: { "candidates": [...] }, an array of at most ${MAX_EXTRACTION_CANDIDATES_PER_TURN} candidates (empty array if nothing qualifies).
 
@@ -141,6 +170,15 @@ ${recentHomeEvents.length
 RECENT DOCUMENTS ON THIS PROPERTY (for EVIDENCE matching ONLY -- never treat these as new information to extract, and never invent an id not listed here):
 ${recentDocuments.length
     ? recentDocuments.map((document) => `- id: ${document.id}, name: "${document.name}", type: ${document.documentType}`).join('\n')
+    : '(none)'}
+
+ACTIVE DECISION CONTEXT (for interpreting this message ONLY, in case it continues an ongoing conversation -- never treat any of this as new information to extract, and never emit a GOAL candidate just because one is already active here):
+${activeDecisionThread
+    ? `This property has an ongoing "${activeDecisionThread.goalCode}" decision conversation.
+- Facts already recorded for it: ${activeDecisionThread.factReferences.length ? activeDecisionThread.factReferences.join(', ') : '(none)'}
+- Assumptions on file: ${activeDecisionThread.assumptions.length ? activeDecisionThread.assumptions.map((assumption) => `${assumption.key}=${JSON.stringify(assumption.value)}`).join(', ') : '(none)'}
+- Options being weighed: ${activeDecisionThread.options.length ? activeDecisionThread.options.join(', ') : '(none)'}
+- Open questions still unanswered: ${activeDecisionThread.openQuestions.length ? activeDecisionThread.openQuestions.join(', ') : '(none)'}`
     : '(none)'}
 
 Rules:
@@ -274,11 +312,17 @@ export function withValidDocumentReferences(
  * bounded context a correction statement resolves against -- pass [] when
  * none exists or none is needed. `recentDocuments` (Phase 2 external review)
  * is the same kind of bounded context for an EVIDENCE candidate's documentId.
+ * `activeDecisionThread` (external review, 2026-09-13; FRD §26) is the same
+ * kind of bounded, structured context for a property with an ongoing
+ * sell-hold-rent conversation -- pass null when none is active. See
+ * ActiveDecisionThreadContext's own header comment for what this
+ * deliberately does and does not change.
  */
 export async function runStructuredExtraction(
   message: string,
   recentHomeEvents: RecentHomeEventContext[] = [],
   recentDocuments: RecentDocumentContext[] = [],
+  activeDecisionThread: ActiveDecisionThreadContext | null = null,
 ): Promise<RunStructuredExtractionResult> {
   const ai = getGeminiClient();
   const model = resolveGovernedAIModel('FAST');
@@ -292,7 +336,7 @@ export async function runStructuredExtraction(
     structuredOutputConfigured: true,
     work: () => ai.models.generateContent({
       model,
-      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT_TEMPLATE(recentHomeEvents, recentDocuments)}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
+      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT_TEMPLATE(recentHomeEvents, recentDocuments, activeDecisionThread)}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
       config: { responseMimeType: 'application/json' },
     }),
   });

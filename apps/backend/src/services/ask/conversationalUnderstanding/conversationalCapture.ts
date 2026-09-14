@@ -26,7 +26,7 @@ import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/app
 import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
-import { runStructuredExtraction, type RecentDocumentContext, type RecentHomeEventContext } from './extractionContract';
+import { runStructuredExtraction, type ActiveDecisionThreadContext, type RecentDocumentContext, type RecentHomeEventContext } from './extractionContract';
 import { ExtractionAttributionSchema, filterCandidatesPreservingWarrantyLinks, splitGoalCandidates } from './extractionCandidateSchema';
 import type { CaptureConfirmExtractionCandidate, EventExtractionCandidate, EvidenceExtractionCandidate, ExtractionCandidate, FactExtractionCandidate, GoalExtractionCandidate, WarrantyExtractionCandidate } from './extractionCandidateSchema';
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). None of
@@ -39,6 +39,7 @@ import { SellHoldRentService } from '../../sellHoldRent.service';
 import { sellHoldRentDecisionFamilyAdapter } from '../../decisionPlatform/domainSnapshotAdapters';
 import { PropertySaleCaseService } from '../../propertySaleCase.service';
 import { decisionProgressBlock, whyNowBlock } from '../decisionThreadPresentationBlocks';
+import { notifyDelayedCaptureCandidatesReady } from '../askNotificationContinuation.service';
 
 const DOMAIN_EVENT_LEASE_MS = 15 * 60_000;
 // FRD §10: "Step 8's synchronous portion has a strict timeout (~1.5s...)".
@@ -137,6 +138,46 @@ async function fetchRecentDocumentContext(propertyId: string): Promise<RecentDoc
     name: document.name,
     documentType: document.type,
   }));
+}
+
+// External review, 2026-09-13 (FRD §26; this file's own Phase 6 header
+// comment on activeSellHoldRentGoalRelatedCapabilityIds-equivalent lookups
+// -- see askNextActions.ts). Same bounded-context shape as
+// fetchRecentHomeEventContext/fetchRecentDocumentContext above, reusing the
+// SAME canonical, read-only, activeIdentityKey-backed lookup
+// askNextActions.ts's own active-thread ranking bias already relies on
+// (sellHoldRentDecisionFamilyAdapter.selectThread, confirmed read-only
+// there). Returns null (not an error) when no active thread exists for this
+// property, or on any lookup failure -- this is optional prompt context,
+// never load-bearing for extraction to function. Scoped to the
+// sell-hold-rent family only, matching every other Phase 6 GOAL-capture
+// mechanism today.
+async function fetchActiveDecisionThreadContext(propertyId: string): Promise<ActiveDecisionThreadContext | null> {
+  try {
+    const selection = await sellHoldRentDecisionFamilyAdapter.selectThread(propertyId, propertyId);
+    if (selection.kind !== 'UNIQUE') return null;
+    const thread = await prisma.decisionThread.findUnique({
+      where: { id: selection.thread.decisionThreadId },
+      select: {
+        goalCode: true,
+        factReferences: { select: { canonicalEntityType: true, canonicalFieldPath: true } },
+        assumptions: { select: { assumptionKey: true, valueJson: true } },
+        options: { select: { label: true } },
+        questions: { where: { status: 'OPEN' }, select: { questionCode: true } },
+      },
+    });
+    if (!thread) return null;
+    return {
+      goalCode: thread.goalCode,
+      factReferences: thread.factReferences.map((reference) => reference.canonicalFieldPath ?? reference.canonicalEntityType),
+      assumptions: thread.assumptions.map((assumption) => ({ key: assumption.assumptionKey, value: assumption.valueJson })),
+      options: thread.options.map((option) => option.label),
+      openQuestions: thread.questions.map((question) => question.questionCode),
+    };
+  } catch (error) {
+    logger.warn({ error, propertyId }, '[ask-conversational-capture] active decision thread context lookup failed');
+    return null;
+  }
 }
 
 // Code review finding (2026-09-13): a FACT candidate's value was never
@@ -1556,6 +1597,33 @@ async function persistCandidates(
   return [...created, ...goalExecutions];
 }
 
+// External review, 2026-09-13 (FRD §10/§29; implementation plan §9's
+// unclosed dependency on Phase 5 -- see notifyDelayedCaptureCandidatesReady's
+// own header comment for the full finding). Only ever called for the
+// async-fallback tail (never for a synchronous, within-budget attempt --
+// that case is already delivered inline via the turn response's own
+// childExecutions field, and a second notification would be redundant, not
+// merely harmless duplication of a real signal). Filters to NEEDS_CONFIRMATION
+// rows only: GOAL candidates (Phase 6) complete silently by design (the
+// materiality carve-out means there is nothing to confirm), and a replayed
+// worker attempt could see an `existing` row already resolved by the
+// homeowner between attempts -- neither should trigger a "come confirm
+// this" nudge.
+async function notifyCaptureCandidatesDelivered(
+  input: Pick<ConversationalCaptureInput, 'userId' | 'propertyId' | 'sessionId'>,
+  triggerKey: string,
+  executions: readonly PersistedCaptureExecution[],
+): Promise<void> {
+  const pending = executions.filter((execution) => execution.status === 'NEEDS_CONFIRMATION');
+  await notifyDelayedCaptureCandidatesReady({
+    userId: input.userId,
+    propertyId: input.propertyId,
+    sessionId: input.sessionId,
+    triggerKey,
+    executions: pending,
+  });
+}
+
 /**
  * The extraction-trigger call site's one entry point, called inline from
  * createAskExecution's success path (askOrchestrator.service.ts). Never
@@ -1618,14 +1686,31 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   // correctly no-op via verifyClaimStillOwned) once it finishes. Its own
   // rejection is always caught here so a slow-then-failing attempt never
   // becomes an unhandled rejection.
+  // External review, 2026-09-13: set only by the timeout below, the moment
+  // it actually fires first -- the one reliable signal that this turn's
+  // response has already gone out without whatever `attempt` eventually
+  // produces (Promise.race's own resolution doesn't tell either branch which
+  // one "won," and setting this after `await`ing the race would run too
+  // late to be read from inside `attempt`'s own still-pending body). If
+  // `attempt` instead finishes first, this stays false and no notification
+  // fires -- correct, since the caller's childExecutions field already
+  // delivers the result inline in that same case.
+  let timedOut = false;
   const attempt = (async () => {
     try {
-      const [recentHomeEvents, recentDocuments] = await Promise.all([
+      const [recentHomeEvents, recentDocuments, activeDecisionThread] = await Promise.all([
         fetchRecentHomeEventContext(input.propertyId),
         fetchRecentDocumentContext(input.propertyId),
+        fetchActiveDecisionThreadContext(input.propertyId),
       ]);
-      const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments);
-      return await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
+      const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments, activeDecisionThread);
+      const created = await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
+      if (timedOut) {
+        await notifyCaptureCandidatesDelivered(input, domainEventId, created).catch((error) => {
+          logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] delayed capture-ready notification failed');
+        });
+      }
+      return created;
     } catch (error) {
       logger.warn({ error, parentExecutionId: input.parentExecutionId }, '[ask-conversational-capture] extraction attempt failed');
       // Release the claim promptly (rather than holding a 15-minute lease
@@ -1640,7 +1725,7 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   })();
 
   const timeout = new Promise<PersistedCaptureExecution[]>((resolve) => {
-    setTimeout(() => resolve([]), INLINE_EXTRACTION_BUDGET_MS);
+    setTimeout(() => { timedOut = true; resolve([]); }, INLINE_EXTRACTION_BUDGET_MS);
   });
   return Promise.race([attempt, timeout]);
 }
@@ -1667,12 +1752,13 @@ export async function processAskExtractionRequestedEvent(
   const parent = await prisma.askExecution.findUnique({ where: { id: parentExecutionId }, select: { sessionId: true, contextVersion: true } });
   if (!parent) throw new Error(`ASK_EXTRACTION_REQUESTED event's parent execution ${parentExecutionId} no longer exists`);
 
-  const [recentHomeEvents, recentDocuments] = await Promise.all([
+  const [recentHomeEvents, recentDocuments, activeDecisionThread] = await Promise.all([
     fetchRecentHomeEventContext(event.propertyId),
     fetchRecentDocumentContext(event.propertyId),
+    fetchActiveDecisionThreadContext(event.propertyId),
   ]);
-  const { candidates } = await runStructuredExtraction(message, recentHomeEvents, recentDocuments);
-  const created = await persistCandidates(event.id, claimedAttempts, candidates, {
+  const { candidates } = await runStructuredExtraction(message, recentHomeEvents, recentDocuments, activeDecisionThread);
+  const captureInput: ConversationalCaptureInput = {
     userId: event.userId,
     sessionId: parent.sessionId,
     propertyId: event.propertyId,
@@ -1680,6 +1766,17 @@ export async function processAskExtractionRequestedEvent(
     message,
     contextVersion: parent.contextVersion,
     skipDueToRoutedCapture: false,
-  }, recentDocuments);
+  };
+  const created = await persistCandidates(event.id, claimedAttempts, candidates, captureInput, recentDocuments);
+  // External review, 2026-09-13: this function only ever runs on the
+  // async-fallback tail by construction (the workers app's own consumer
+  // calls it after ITS claim loop already won the event -- see this
+  // function's own header comment) -- unlike runConversationalCaptureForTurn's
+  // inline attempt, there is no "delivered via this turn's response" case to
+  // distinguish here, so this always notifies rather than checking a
+  // timed-out flag.
+  await notifyCaptureCandidatesDelivered(captureInput, event.id, created).catch((error) => {
+    logger.warn({ error, parentExecutionId }, '[ask-conversational-capture] delayed capture-ready notification failed');
+  });
   return { candidateCount: created.length };
 }

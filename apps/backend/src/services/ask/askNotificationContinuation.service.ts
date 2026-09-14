@@ -264,3 +264,74 @@ export async function notifyWithAskContinuation(input: NotifyWithAskContinuation
     },
   });
 }
+
+// External review, 2026-09-13 (FRD §10/§29; implementation plan §9's own
+// explicit dependency note: "Phase 3's async-fallback delivery... [is]
+// generalized in Phase 5" -- Phase 5 shipped notifyWithAskContinuation and
+// migrated the two pre-existing monitor producers plus Radar onto it, but
+// never actually closed this specific dependency: conversationalCapture.ts's
+// async-fallback tail (a slow extraction attempt that missed the ~1.5s
+// inline budget, or a worker-driven crash-recovery retry) persisted its
+// capture candidates and returned a bare count, with no caller anywhere
+// invoking any notification mechanism -- confirmed by grep before writing
+// this.
+//
+// Deliberately NOT built on `notifyWithAskContinuation`/
+// `createAskNotificationContinuation` above: those synthesize a brand-new
+// AskExecution from a template for a background producer that has no
+// natural Ask turn of its own (a rate-monitor tick, a maintenance
+// scheduler run). Here, the opposite is true -- persistCandidates has
+// already built a real, fully-formed NEEDS_CONFIRMATION AskExecution (with
+// its own confirmation card) inside the homeowner's own existing session.
+// Synthesizing a second, separate execution to announce the first would
+// create a confusing duplicate "turn" and point the homeowner at the wrong
+// place. This just points a Notification at the real session/execution
+// that already exists.
+export async function notifyDelayedCaptureCandidatesReady(input: {
+  userId: string;
+  propertyId: string;
+  sessionId: string;
+  // The triggering ASK_EXTRACTION_REQUESTED DomainEvent's own id -- already
+  // the natural per-attempt idempotency key conversationalCapture.ts uses
+  // for candidate persistence itself, reused here as the notification's
+  // deduplicationKey so a retried worker attempt for the same event can
+  // never double-notify (NotificationService.create's own upsert-on-
+  // deduplicationKey is a no-op update, never resurfacing an already-read
+  // notification).
+  triggerKey: string;
+  executions: readonly { id: string }[];
+}): Promise<void> {
+  if (input.executions.length === 0) return;
+  // Same redeploy-free kill switch every other proactive-continuation
+  // producer already respects (Phase 5) -- this is the same class of
+  // background-triggered delivery, not a fourth independent mechanism.
+  if (!readAskOperationalControls().askProactiveContinuationEnabled) return;
+  const firstExecutionId = input.executions[0].id;
+  const count = input.executions.length;
+  const actionUrl = `/dashboard/ask?propertyId=${encodeURIComponent(input.propertyId)}&sessionId=${encodeURIComponent(input.sessionId)}&executionId=${encodeURIComponent(firstExecutionId)}&from=notification`;
+  try {
+    await NotificationService.create({
+      userId: input.userId,
+      deduplicationKey: `ask-capture-notify:${input.triggerKey}`,
+      type: 'ASK_CAPTURE_CANDIDATE_READY',
+      title: count === 1 ? 'Cozy saved something from your message' : `Cozy saved ${count} details from your message`,
+      message: 'Review and confirm to add it to your home record.',
+      actionUrl,
+      entityType: 'ASK_EXECUTION',
+      entityId: firstExecutionId,
+      category: 'WORKFLOW',
+      urgency: 'ROUTINE',
+      metadata: {
+        propertyId: input.propertyId,
+        askSessionId: input.sessionId,
+        askExecutionIds: input.executions.map((execution) => execution.id),
+      },
+    });
+  } catch (error) {
+    // Never let this delivery signal turn an already-durable, already-
+    // idempotent capture into a failure -- the fact/event/warranty/evidence
+    // row this points at is safe and correctly persisted regardless; only
+    // the homeowner's proactive nudge toward it is at risk here.
+    logger.error({ err: error, triggerKey: input.triggerKey }, '[notifyDelayedCaptureCandidatesReady] Failed to create capture-ready notification');
+  }
+}
