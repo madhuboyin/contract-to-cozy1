@@ -365,7 +365,7 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
   );
 }
 
-function BlockView({ block, executionId, onItemAction }: { block: AskPresentationBlock; executionId: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string) => void }) {
+function BlockView({ block, executionId, onItemAction, itemActionsDisabled }: { block: AskPresentationBlock; executionId: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string) => void; itemActionsDisabled: boolean }) {
   if (block.type === 'SUMMARY') {
     return (
       <section className={cn(
@@ -441,9 +441,10 @@ function BlockView({ block, executionId, onItemAction }: { block: AskPresentatio
                             <button
                               key={itemAction.id}
                               type="button"
+                              disabled={itemActionsDisabled}
                               onClick={() => onItemAction(item.entityType, item.id, itemAction.message)}
                               className={cn(
-                                'min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors',
+                                'min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
                                 itemAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
                               )}
                             >
@@ -1351,6 +1352,65 @@ function RecentAskSessions({ items, loading, openingId, onOpen }: {
   );
 }
 
+function ExecutionCard({
+  execution, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions,
+}: {
+  execution: AskExecutionResponse;
+  justUpdatedExecutionId: string | null;
+  updateExecution: (updated: AskExecutionResponse) => void;
+  loading: boolean;
+  ask: (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => Promise<void>;
+  selectedPropertyId: string;
+  setInput: (value: string) => void;
+  visibleSuggestions: string[];
+}) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const isJustUpdated = execution.executionId === justUpdatedExecutionId;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is
+  // claiming focus for this turn (no pending property selection, capture,
+  // clarification or confirmation), the result just settled. Without this,
+  // a completed ConfirmationCard unmounts (its Confirm button removed from
+  // the DOM) and focus silently reverts to <body> -- a keyboard/screen-
+  // reader user loses their place entirely after completing a row action.
+  const resultSettled = execution.status !== 'NEEDS_PROPERTY'
+    && !execution.confirmation && !execution.clarification && execution.captureRequests.length === 0;
+  useEffect(() => {
+    if (!isJustUpdated || !resultSettled) return;
+    const target = bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? headingRef.current;
+    target?.focus({ preventScroll: true });
+    // Re-runs only when this execution's own settled content actually
+    // changes (a real status/result transition), not on every unrelated
+    // re-render -- isJustUpdated/resultSettled are read fresh from the
+    // enclosing closure each time this fires.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [execution.status, execution.updatedAt]);
+
+  return (
+    <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
+      <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
+      <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
+        <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
+        <div ref={bodyRef} className="space-y-3">
+          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading} onItemAction={(entityType, entityId, message) => void ask(message, undefined, { entityType: entityType ?? undefined, entityId })} />)}
+        </div>
+        {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
+        {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
+        {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} autoFocus={index === 0 && isJustUpdated} />)}
+        {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
+        {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
+        {execution.skillHandoff && (() => {
+          const handoffPrompt = execution.skillHandoff.suggestedGoal.replace(/[-_]+/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
+          const continuity = execution.skillHandoff.continuity;
+          return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(handoffPrompt, undefined, { propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
+        })()}
+        {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
+        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} />
+      </div>
+    </article>
+  );
+}
+
 export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; launchSurface?: string; launchCapabilityId?: string }) {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link (e.g. a monitor-fired reminder) carries the
@@ -1509,6 +1569,14 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => {
     const message = question.trim();
     if (!message || !sessionId || loading) return;
+    // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-003/CTX-002: capture which
+    // session this request belongs to. Switching property mid-flight resets
+    // `executions` and starts a new session (the effect above), but nothing
+    // previously stopped this request's response from landing afterward and
+    // being appended into that new, unrelated transcript. activeSessionRef
+    // already tracks "the current live session" for exactly this kind of
+    // check elsewhere in this component.
+    const requestedSessionId = sessionId;
     setInput('');
     window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
     setError(null);
@@ -1534,6 +1602,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
+      if (activeSessionRef.current !== requestedSessionId) {
+        // The homeowner switched property/session while this was in
+        // flight -- that already reset the visible transcript and started
+        // a new session. Appending this answer now would leak an old
+        // property's result into the new context (FRESH-003/CTX-002).
+        // Discard silently: the homeowner has already moved on, so
+        // restoring the typed message or showing an error here would be
+        // confusing, not helpful.
+        return;
+      }
       // Ask Cozy Stage 3, Phase 3 (implementation plan §19; FRD §16/§28).
       // A synchronous conversational-capture candidate arrives inline as a
       // full child execution on this same response -- spread it into the
@@ -1794,25 +1872,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
               const visibleSuggestions = execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
               return <AskActionReturnContext.Provider key={execution.executionId} value={askReturnHref}>
-              <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
-                <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
-                <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
-                  <h2 className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
-                  {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} onItemAction={(entityType, entityId, message) => void ask(message, undefined, { entityType: entityType ?? undefined, entityId })} />)}
-                  {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
-                  {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
-                  {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} autoFocus={index === 0 && execution.executionId === justUpdatedExecutionId} />)}
-                  {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
-                  {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={execution.executionId === justUpdatedExecutionId} />}
-                  {execution.skillHandoff && (() => {
-                    const handoffPrompt = execution.skillHandoff.suggestedGoal.replace(/[-_]+/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
-                    const continuity = execution.skillHandoff.continuity;
-                    return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(handoffPrompt, undefined, { propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
-                  })()}
-                  {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-                  <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} />
-                </div>
-              </article>
+                <ExecutionCard
+                  execution={execution}
+                  justUpdatedExecutionId={justUpdatedExecutionId}
+                  updateExecution={updateExecution}
+                  loading={loading}
+                  ask={ask}
+                  selectedPropertyId={selectedPropertyId ?? ''}
+                  setInput={setInput}
+                  visibleSuggestions={visibleSuggestions}
+                />
               </AskActionReturnContext.Provider>;
             })}
             {loading && <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin text-teal-700" />Checking your home record…</div>}

@@ -358,10 +358,10 @@ Traced the four items §18 left open. Two turned out to already exist (built gen
 | A12 | Not re-verified | Plausible via generic error handling; not specifically traced |
 | A13 | Pass (pre-existing) | VIEWER-role rejection in both confirm handler and `confirmAskExecution`'s role-floor check |
 | A14 | Not re-verified | Property scoping exists per-execution; not explicitly walked this round |
-| A15 | **Unverified gap** | No explicit out-of-order-response guard found in `AskWorkspace.tsx`; likely a real gap (FRESH-003) |
+| A15 | Pass (round 4) | Confirmed real (missing item-action disable + no session-staleness guard in `ask()`), both fixed — see §21 |
 | A16 | Partial | Filter forwarding fixed this round; return scroll/selection position not verified |
 | A17 | Not re-verified | Not specifically traced this round |
-| A18 | **Unverified gap** | No focus-management code traced for row completion (ACCESS-003); needs a dedicated pass |
+| A18 | Pass (round 4) | Confirmed real (no post-completion focus target); fixed via `ExecutionCard` extraction — see §21. Announcement was already correct pre-existing |
 | A21 | Plausible pass | Suggestion arrays can be empty; not specifically traced |
 | A23 | Partial | Reload-consistent view collapse (this round); no staleness/age indicator on a historical result |
 | A24 | Pass (pre-existing) | Both confirm handlers explicitly error when the task is missing |
@@ -378,3 +378,16 @@ Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean), pl
 - **A09 (acceptance table) is now Pass** for the maintenance-reschedule case specifically: editing the date bumps the version; attempting to confirm with the pre-edit version number is rejected as `ASK_CONFIRMATION_NOT_ACTIVE` (the same generic version-mismatch check `confirmAskExecution` already applied). Not yet true for any other confirmable command — none has editable fields declared.
 
 Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean), plus the complete `apps/backend/tests/ask/*.test.js` suite (597/598 passing, 1 pre-existing skip, 0 failures — confirms the ~34 confirmation object literals mechanically updated for the new required `editableFields` field didn't regress anything). No browser/Playwright run performed against the edit UI itself.
+
+## 21. Implementation status, round 4 (2026-09-14): A15 and A18 gaps closed
+
+§19 marked A15 (out-of-order responses) and A18 (keyboard focus after row completion) as unverified gaps. Traced both in `AskWorkspace.tsx`; both were real.
+
+**A15 — two distinct gaps found and fixed:**
+
+- The maintenance item-action buttons (Complete/Reschedule, added in round 1) call `ask()` directly but, unlike every other `ask()`-triggering control in the file (Send, "Try again", the skill-handoff suggestion), had no `disabled={loading}`. `BlockView` now takes an `itemActionsDisabled` prop wired to `loading`.
+- A genuine FRESH-003/CTX-002 violation: `ask()` had no guard against its own response landing after the homeowner switched property/session mid-flight. Switching property already resets `executions` and starts a new session (a separate `useEffect`), but the in-flight request's response, when it arrived, was appended into whatever the *current* array was at that moment — leaking an old property's answer into the new property's transcript. Fixed by capturing `requestedSessionId` at call time and comparing it against `activeSessionRef.current` (an existing ref this component already uses elsewhere to track "the current live session") before appending; a stale response is now silently discarded rather than shown.
+
+**A18 — real gap, fixed:** `useAutoFocusFirstControl` only ever fires on a sub-card's *mount* (ConfirmationCard, ClarificationCard, etc.). When a confirmation resolves to COMPLETED, that card unmounts — its focused Confirm button removed from the DOM — and nothing moved focus anywhere afterward, so a keyboard/screen-reader user's focus silently reverted to `<body>`. (Outcome *announcement* was already handled correctly by an existing generic `aria-live="polite"` region — only focus was missing.) Fixed by extracting the per-execution card into its own `ExecutionCard` component (previously inline JSX in a `.map()`, which cannot itself call hooks) with an effect that, once nothing else is claiming focus for that turn (no pending property selection/capture/clarification/confirmation) and this execution was the one just acted on, focuses the first focusable action in the settled result — falling back to the response heading (`tabIndex={-1}`) when a block has no action link.
+
+Verified via: `apps/frontend` full `tsc --noEmit` (clean). No dedicated component tests exist for `AskWorkspace.tsx` (frontend test coverage here is route-matching only); no browser/Playwright run performed against the actual focus behavior or the property-switch race.
