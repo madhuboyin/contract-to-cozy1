@@ -1795,6 +1795,15 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
 
   const idempotencyKey = `ask-extraction:${input.parentExecutionId}`;
   const now = new Date();
+  // External review, 2026-09-14: captured ONCE, right when the homeowner's
+  // message actually arrives, and persisted below in the durable event's
+  // own payload -- not recomputed from `new Date()` at whatever later
+  // moment a worker retry happens to run, which would silently shift what
+  // "yesterday"/"last summer" mean for a message that was actually sent
+  // hours or days earlier. See runStructuredExtraction's own header comment.
+  const referenceDate = now.toISOString();
+  const property = await prisma.property.findUnique({ where: { id: input.propertyId }, select: { timezone: true } });
+  const referenceTimezone = property?.timezone || 'UTC';
   let domainEventId: string;
   try {
     const event = await prisma.domainEvent.upsert({
@@ -1805,7 +1814,7 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
         propertyId: input.propertyId,
         userId: input.userId,
         idempotencyKey,
-        payload: { executionId: input.parentExecutionId, message: input.message },
+        payload: { executionId: input.parentExecutionId, message: input.message, referenceDate, timezone: referenceTimezone },
         availableAt: now,
       },
       update: {},
@@ -1852,7 +1861,7 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
         fetchRecentDocumentContext(input.propertyId),
         fetchActiveDecisionThreadContext(input.propertyId),
       ]);
-      const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments, activeDecisionThread);
+      const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone);
       const { executions: created, notificationEventId } = await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
       // External review, 2026-09-14: the durable notification-intent event
       // (requestCaptureNotification, inside persistCandidates's own
@@ -1931,6 +1940,15 @@ export async function processAskExtractionRequestedEvent(
   if (!parentExecutionId || !message || !event.propertyId || !event.userId) {
     throw new Error('ASK_EXTRACTION_REQUESTED event missing executionId/message/propertyId/userId');
   }
+  // External review, 2026-09-14: reuse the SAME reference date/timezone
+  // captured (and persisted) by runConversationalCaptureForTurn at the
+  // moment this message actually arrived -- never recompute `new Date()`
+  // here, which would silently shift what "yesterday"/"last summer" mean
+  // for a retry that may run hours or days after the original turn. Falls
+  // back to "now"/UTC only for an event somehow missing them (e.g. one
+  // created before this fix shipped), never a hard failure.
+  const referenceDate = typeof payload.referenceDate === 'string' ? payload.referenceDate : new Date().toISOString();
+  const referenceTimezone = typeof payload.timezone === 'string' ? payload.timezone : 'UTC';
   const parent = await prisma.askExecution.findUnique({ where: { id: parentExecutionId }, select: { sessionId: true, contextVersion: true } });
   if (!parent) throw new Error(`ASK_EXTRACTION_REQUESTED event's parent execution ${parentExecutionId} no longer exists`);
 
@@ -1939,7 +1957,7 @@ export async function processAskExtractionRequestedEvent(
     fetchRecentDocumentContext(event.propertyId),
     fetchActiveDecisionThreadContext(event.propertyId),
   ]);
-  const { candidates } = await runStructuredExtraction(message, recentHomeEvents, recentDocuments, activeDecisionThread);
+  const { candidates } = await runStructuredExtraction(message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone);
   const captureInput: ConversationalCaptureInput = {
     userId: event.userId,
     sessionId: parent.sessionId,

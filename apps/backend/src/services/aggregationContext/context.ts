@@ -23,7 +23,27 @@ export const AGGREGATION_FEATURE_SCOPES: Record<AggregationContextFeature, Prope
   HOME_GAZETTE: ['CORE', 'LOCATION', 'EVENTS', 'MAINTENANCE', 'GUIDANCE_STATE'],
   KNOWLEDGE_TARGETING: ['CORE', 'LOCATION', 'SYSTEMS'],
   NOTIFICATIONS: ['CORE', 'MAINTENANCE', 'RISK', 'EVENTS', 'GUIDANCE_STATE'],
-  SEARCH_ASSISTANT: ['CORE', 'LOCATION', 'PRODUCT_CONTEXT'],
+  // External review, 2026-09-14 (FRD §9's own [REQUIREMENT]; Stage 2 target-
+  // architecture [DECISION], ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md
+  // §9/§661): widened from ['CORE', 'LOCATION', 'PRODUCT_CONTEXT'] to add
+  // STRUCTURE/EVENTS -- this was an explicit, governing-doc requirement that
+  // was never actually implemented, confirmed by grep before this pass (no
+  // reference anywhere in the incremental implementation plan's own
+  // phase-by-phase tracking either). Without it, a homeowner-stated
+  // STRUCTURE fact (e.g. roofType, captured via capturePropertyFact) or a
+  // recent HomeEvent (captured via the conversational capture pipeline) was
+  // successfully saved but never actually reachable by a later
+  // answerGroundedAsk (GROUNDED_GUIDANCE) turn's own `context.facts` read --
+  // "Cozy remembers it next turn" never worked for exactly the two scopes
+  // the extraction pipeline's own writes target. Both scopes already have 7
+  // other features' worth of precedent (UNIFIED_HOME/PERSONALIZED_GUIDANCE
+  // for STRUCTURE; UNIFIED_HOME/HOME_GAZETTE/NOTIFICATIONS/REPORT_SUMMARIES/
+  // WORKER_BATCH for EVENTS) producing plain `context.facts` entries
+  // (`events.recentHomeEvents`/`events.activeRadarMatches` for EVENTS) that
+  // slot into the exact same `Object.values(context.facts)` read
+  // `answerGroundedAsk`/`gemini.service.ts` already do -- a genuine config
+  // change to an already-proven mechanism, not new data-shape risk.
+  SEARCH_ASSISTANT: ['CORE', 'LOCATION', 'STRUCTURE', 'EVENTS', 'PRODUCT_CONTEXT'],
   REPORT_SUMMARIES: ['CORE', 'EVENTS', 'GUIDANCE_STATE'],
   WORKER_BATCH: ['CORE', 'MAINTENANCE', 'RISK', 'EVENTS', 'GUIDANCE_STATE'],
 };

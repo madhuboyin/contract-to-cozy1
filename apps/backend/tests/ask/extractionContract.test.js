@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 
 require('ts-node/register');
 
@@ -15,7 +17,7 @@ require('ts-node/register');
 
 const { sourceRegistryEntry, validateIntelligenceSourceRegistry, AI_SOURCE_REGISTRY } = require('../../src/services/intelligence/sourceRegistry.ts');
 const { executeGovernedAIRequest } = require('../../src/services/ai/aiRequestGovernance.service.ts');
-const { withValidCorrectionReferences, withValidWarrantyLinks, withValidEvidenceLinks, withValidDocumentReferences } = require('../../src/services/ask/conversationalUnderstanding/extractionContract.ts');
+const { withValidCorrectionReferences, withValidWarrantyLinks, withValidEvidenceLinks, withValidDocumentReferences, formatReferenceDate } = require('../../src/services/ask/conversationalUnderstanding/extractionContract.ts');
 
 test('ai:ask-conversational-capture-extraction is registered in AI_SOURCE_REGISTRY', () => {
   const entry = sourceRegistryEntry('ai:ask-conversational-capture-extraction');
@@ -58,6 +60,31 @@ test('sanity: an UNregistered routeId still throws AI_SOURCE_UNREGISTERED withou
     (error) => error.code === 'AI_SOURCE_UNREGISTERED',
   );
   assert.equal(workWasCalled, false);
+});
+
+// External review, 2026-09-14: the extraction prompt asked the model to
+// turn relative time references ("yesterday," "last summer") into absolute
+// ISO 8601 dates but never told it what "today" actually is -- an LLM has
+// no reliable sense of the current wall-clock date on its own. Fixed with
+// formatReferenceDate + a "TODAY'S DATE is..." line in the prompt, anchored
+// to the property's own timezone (not UTC) so a relative date resolves to
+// the homeowner's own calendar day.
+test('formatReferenceDate formats a UTC instant in the given IANA timezone, not UTC', () => {
+  // 2026-09-14T02:00:00Z is still 2026-09-13 in America/New_York (UTC-4 in September).
+  assert.equal(formatReferenceDate('2026-09-14T02:00:00.000Z', 'America/New_York'), 'Sunday, September 13, 2026');
+});
+
+test('formatReferenceDate falls back to UTC for an invalid/unrecognized timezone rather than throwing', () => {
+  assert.doesNotThrow(() => formatReferenceDate('2026-09-14T12:00:00.000Z', 'Not/A/Real/Zone'));
+  assert.equal(formatReferenceDate('2026-09-14T12:00:00.000Z', 'Not/A/Real/Zone'), 'Monday, September 14, 2026');
+});
+
+test('runStructuredExtraction threads referenceDate/timezone into the prompt sent to the model, with real defaults for callers with no turn context', () => {
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/conversationalUnderstanding/extractionContract.ts'), 'utf8');
+  assert.match(source, /TODAY'S DATE is \$\{formatReferenceDate\(referenceDate, timezone\)\}/);
+  assert.match(source, /referenceDate: string = new Date\(\)\.toISOString\(\)/);
+  assert.match(source, /timezone: string = 'UTC'/);
+  assert.match(source, /SYSTEM_PROMPT_TEMPLATE\(recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, timezone\)/);
 });
 
 function factCandidate(overrides = {}) {

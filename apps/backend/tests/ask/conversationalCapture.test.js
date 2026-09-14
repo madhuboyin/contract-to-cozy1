@@ -291,6 +291,34 @@ test('processAskExtractionRequestedEvent (the always-delayed worker path) always
   assert.doesNotMatch(body, /cancelRedundantCaptureNotification/);
 });
 
+// External review, 2026-09-14: runStructuredExtraction had no reference
+// date/timezone at all, so a relative statement ("yesterday," "last
+// summer") was anchored to whatever the model happened to guess "today"
+// was. Fixed by capturing `referenceDate`/`timezone` ONCE, at the exact
+// moment the homeowner's message arrives, and persisting both in the
+// durable ASK_EXTRACTION_REQUESTED payload -- a worker retry, possibly
+// running much later, must reuse that SAME stored reference rather than
+// recomputing `new Date()` at retry time (which would silently shift what
+// "yesterday" means for a message actually sent hours or days earlier).
+test('runConversationalCaptureForTurn captures referenceDate/timezone once and persists both in the durable event payload', () => {
+  const idx = captureSource.indexOf('export async function runConversationalCaptureForTurn(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /const referenceDate = now\.toISOString\(\);/);
+  assert.match(body, /const referenceTimezone = property\?\.timezone \|\| 'UTC';/);
+  assert.match(body, /payload: \{ executionId: input\.parentExecutionId, message: input\.message, referenceDate, timezone: referenceTimezone \}/);
+  assert.match(body, /runStructuredExtraction\(input\.message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone\)/);
+});
+
+test('processAskExtractionRequestedEvent reuses the stored referenceDate/timezone from the payload, never recomputing "now" at retry time', () => {
+  const idx = captureSource.indexOf('export async function processAskExtractionRequestedEvent(');
+  assert.ok(idx > 0);
+  const body = captureSource.slice(idx, captureSource.indexOf('\n}\n', idx));
+  assert.match(body, /const referenceDate = typeof payload\.referenceDate === 'string' \? payload\.referenceDate : new Date\(\)\.toISOString\(\);/);
+  assert.match(body, /const referenceTimezone = typeof payload\.timezone === 'string' \? payload\.timezone : 'UTC';/);
+  assert.match(body, /runStructuredExtraction\(message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone\)/);
+});
+
 test('processCaptureNotificationEvent re-resolves current NEEDS_CONFIRMATION status rather than trusting the stored payload blindly, sends, then marks its own event PROCESSED guarded on claimedAttempts', () => {
   const idx = captureSource.indexOf('export async function processCaptureNotificationEvent(');
   assert.ok(idx > 0);

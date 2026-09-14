@@ -85,11 +85,47 @@ export interface ActiveDecisionThreadContext {
   openQuestions: string[];
 }
 
+// External review, 2026-09-14: the extraction prompt asks the model to turn
+// relative time references ("yesterday," "last summer") into absolute
+// ISO 8601 dates (EVENT's occurredAt/dateRangeStart/dateRangeEnd) but never
+// told it what "today" actually is -- an LLM has no reliable sense of the
+// current wall-clock date on its own, so every relative-date candidate was
+// anchored to whatever the model happened to guess, not the date the
+// homeowner actually sent the message. Formatted in the property's own
+// timezone (not UTC) so "yesterday" resolves to the homeowner's own
+// calendar day, not a day that may have already rolled over in UTC.
+export function formatReferenceDate(referenceDate: string, timezone: string): string {
+  const date = new Date(referenceDate);
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(date);
+  } catch {
+    // An invalid/unrecognized IANA timezone string must never break
+    // extraction outright -- fall back to UTC rather than throwing.
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(date);
+  }
+}
+
 const SYSTEM_PROMPT_TEMPLATE = (
   recentHomeEvents: RecentHomeEventContext[],
   recentDocuments: RecentDocumentContext[],
   activeDecisionThread: ActiveDecisionThreadContext | null,
+  referenceDate: string,
+  timezone: string,
 ) => `You are a conversational information-extraction module for a home-management assistant. A homeowner sent a message inside an ordinary chat conversation. Extract ONLY information they stated about their home that should become durable, structured home knowledge -- never information from a question they asked, a hypothetical, or small talk unrelated to their home.
+
+TODAY'S DATE is ${formatReferenceDate(referenceDate, timezone)} (${referenceDate.slice(0, 10)}, timezone: ${timezone}). Use this as the ONLY anchor for resolving relative time references -- "yesterday" is exactly one calendar day before this date, "last summer" is the most recent June-August period entirely before this date, "a few years ago" is UNKNOWN precision (never compute a specific year from a vague phrase like this). Never use any other date as "today."
 
 Return a JSON object: { "candidates": [...] }, an array of at most ${MAX_EXTRACTION_CANDIDATES_PER_TURN} candidates (empty array if nothing qualifies).
 
@@ -316,13 +352,25 @@ export function withValidDocumentReferences(
  * kind of bounded, structured context for a property with an ongoing
  * sell-hold-rent conversation -- pass null when none is active. See
  * ActiveDecisionThreadContext's own header comment for what this
- * deliberately does and does not change.
+ * deliberately does and does not change. `referenceDate`/`timezone`
+ * (external review, 2026-09-14) anchor relative-date resolution ("yesterday,"
+ * "last summer") to the actual moment the homeowner's message was sent, not
+ * whenever this call happens to run -- the caller (conversationalCapture.ts)
+ * captures both ONCE per turn and persists them in the durable
+ * ASK_EXTRACTION_REQUESTED payload specifically so a worker retry, possibly
+ * running much later, reuses the SAME reference rather than recomputing
+ * "now" at retry time (which would silently shift what "yesterday" means).
+ * Defaults exist only for callers that genuinely have no turn context (e.g.
+ * a future ad hoc caller) -- both real call sites always pass explicit
+ * values.
  */
 export async function runStructuredExtraction(
   message: string,
   recentHomeEvents: RecentHomeEventContext[] = [],
   recentDocuments: RecentDocumentContext[] = [],
   activeDecisionThread: ActiveDecisionThreadContext | null = null,
+  referenceDate: string = new Date().toISOString(),
+  timezone: string = 'UTC',
 ): Promise<RunStructuredExtractionResult> {
   const ai = getGeminiClient();
   const model = resolveGovernedAIModel('FAST');
@@ -336,7 +384,7 @@ export async function runStructuredExtraction(
     structuredOutputConfigured: true,
     work: () => ai.models.generateContent({
       model,
-      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT_TEMPLATE(recentHomeEvents, recentDocuments, activeDecisionThread)}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
+      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT_TEMPLATE(recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, timezone)}\n\nHOMEOWNER MESSAGE:\n${message}` }] }],
       config: { responseMimeType: 'application/json' },
     }),
   });

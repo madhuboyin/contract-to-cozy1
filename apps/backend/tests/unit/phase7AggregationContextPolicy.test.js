@@ -146,6 +146,26 @@ test('Phase 7 archetypes retain the same surface readiness when required facts a
   }
 });
 
+// External review, 2026-09-14 (FRD §9's own [REQUIREMENT]; Stage 2 target-
+// architecture [DECISION]): SEARCH_ASSISTANT's scope was still only
+// ['CORE', 'LOCATION', 'PRODUCT_CONTEXT'] -- a homeowner-stated STRUCTURE
+// fact (e.g. roofType) or a recent HomeEvent, successfully captured via the
+// conversational capture pipeline, was never actually reachable by a later
+// answerGroundedAsk (GROUNDED_GUIDANCE) turn's own context read. Both
+// STRUCTURE and EVENTS already have real precedent elsewhere in this same
+// map (UNIFIED_HOME/PERSONALIZED_GUIDANCE; UNIFIED_HOME/HOME_GAZETTE/
+// NOTIFICATIONS/REPORT_SUMMARIES/WORKER_BATCH respectively) -- a config
+// widening of an already-proven mechanism, not new data-shape risk.
+test('SEARCH_ASSISTANT scope includes STRUCTURE and EVENTS so captured facts/events are reachable by a later grounded answer', () => {
+  assert.ok(AGGREGATION_FEATURE_SCOPES.SEARCH_ASSISTANT.includes('STRUCTURE'));
+  assert.ok(AGGREGATION_FEATURE_SCOPES.SEARCH_ASSISTANT.includes('EVENTS'));
+  // CORE/LOCATION/PRODUCT_CONTEXT were already there -- confirms this is an
+  // addition, not an accidental full replacement of the existing scope.
+  assert.ok(AGGREGATION_FEATURE_SCOPES.SEARCH_ASSISTANT.includes('CORE'));
+  assert.ok(AGGREGATION_FEATURE_SCOPES.SEARCH_ASSISTANT.includes('LOCATION'));
+  assert.ok(AGGREGATION_FEATURE_SCOPES.SEARCH_ASSISTANT.includes('PRODUCT_CONTEXT'));
+});
+
 test('remaining Phase 7 API, UI, and worker consumers use shared contracts', () => {
   const gazetteArchive = read('../../src/modules/gazette/controllers/gazette.controller.ts');
   assert.ok(gazetteArchive.includes("'HOME_GAZETTE'"));
