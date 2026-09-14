@@ -7,53 +7,15 @@ export const GROUNDED_ASK_PROPOSAL_KINDS = [
 
 export const GroundedAskProposalKindSchema = z.enum(GROUNDED_ASK_PROPOSAL_KINDS);
 
-export const GroundedAskProposalInputSchema = z.object({
-  sessionId: z.string().trim().min(1).max(160),
-  propertyId: z.string().uuid().nullable().optional(),
-  kind: GroundedAskProposalKindSchema,
-  summary: z.string().trim().min(3).max(500),
-  payload: z.record(z.string(), z.unknown()),
-  evidence: z.array(z.object({ factKey: z.string().trim().min(1), source: z.string().nullable(), observedAt: z.string().datetime().nullable() })).max(30),
-}).strict().superRefine((value, ctx) => {
-  if (value.kind !== 'ADD_NOTE' && !value.propertyId) {
-    ctx.addIssue({ code: 'custom', path: ['propertyId'], message: 'This proposal requires a selected property.' });
-  }
-  if (value.kind === 'CREATE_TASK' && (typeof value.payload.title !== 'string' || value.payload.title.trim().length < 3)) {
-    ctx.addIssue({ code: 'custom', path: ['payload', 'title'], message: 'Task proposals require a title.' });
-  }
-  if ((value.kind === 'ADD_FACT' || value.kind === 'CORRECT_FACT') && (typeof value.payload.factKey !== 'string' || !('value' in value.payload))) {
-    ctx.addIssue({ code: 'custom', path: ['payload'], message: 'Fact proposals require factKey and value.' });
-  }
-  if (value.kind === 'START_JOURNEY') {
-    if (value.payload.scopeCategory !== 'ITEM' && value.payload.scopeCategory !== 'SERVICE') {
-      ctx.addIssue({ code: 'custom', path: ['payload', 'scopeCategory'], message: 'Journey proposals require an ITEM or SERVICE scope.' });
-    }
-    for (const key of ['scopeId', 'issueType'] as const) {
-      if (typeof value.payload[key] !== 'string' || !value.payload[key].trim()) {
-        ctx.addIssue({ code: 'custom', path: ['payload', key], message: `Journey proposals require ${key}.` });
-      }
-    }
-    for (const key of ['inventoryItemId'] as const) {
-      if (value.payload[key] !== undefined && !z.string().uuid().safeParse(value.payload[key]).success) {
-        ctx.addIssue({ code: 'custom', path: ['payload', key], message: `${key} must be a UUID.` });
-      }
-    }
-  }
-  if (value.kind === 'COMPARE_OPTIONS') {
-    if (typeof value.payload.scopeSummary !== 'string' || value.payload.scopeSummary.trim().length < 3) {
-      ctx.addIssue({ code: 'custom', path: ['payload', 'scopeSummary'], message: 'Comparison proposals require a scope summary.' });
-    }
-    if (value.payload.inventoryItemId !== undefined && !z.string().uuid().safeParse(value.payload.inventoryItemId).success) {
-      ctx.addIssue({ code: 'custom', path: ['payload', 'inventoryItemId'], message: 'inventoryItemId must be a UUID.' });
-    }
-  }
-  if (value.kind === 'UPLOAD_EVIDENCE' && !z.string().uuid().safeParse(value.payload.documentId).success) {
-    ctx.addIssue({ code: 'custom', path: ['payload', 'documentId'], message: 'Evidence proposals require an uploaded documentId.' });
-  }
-  if (value.kind === 'ADD_NOTE' && (typeof value.payload.note !== 'string' || value.payload.note.trim().length < 3)) {
-    ctx.addIssue({ code: 'custom', path: ['payload', 'note'], message: 'Note proposals require note text.' });
-  }
-});
+// Ask Cozy Stage 3 retirement, 2026-09-14. GroundedAskProposalInputSchema
+// (the proposal-creation contract) is removed along with the
+// create/confirm/reject service functions and routes it validated for --
+// see groundedAsk.service.ts's own header comment for the full retirement
+// record. GROUNDED_ASK_PROPOSAL_KINDS/GroundedAskProposalKindSchema above
+// are kept: they still type GroundedAskResponseSchema's own `proposals`
+// field below, which remains part of the live answerGroundedAsk response
+// contract (always an empty array in practice, but the field itself is not
+// part of this retirement).
 
 export const GroundedAskResponseSchema = z.object({
   text: z.string().min(1),
@@ -67,5 +29,3 @@ export const GroundedAskResponseSchema = z.object({
   nextAction: z.string().min(1),
   proposals: z.array(z.object({ id: z.string().uuid(), kind: GroundedAskProposalKindSchema, summary: z.string(), requiresConfirmation: z.literal(true) })),
 });
-
-export type GroundedAskProposalInput = z.infer<typeof GroundedAskProposalInputSchema>;

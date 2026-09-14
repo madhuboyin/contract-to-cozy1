@@ -1,13 +1,31 @@
-import { Prisma } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+// Ask Cozy Stage 3 retirement, 2026-09-14 (implementation plan §8/§9; FRD
+// §23). createGroundedAskProposal/confirmGroundedAskProposal/
+// rejectGroundedAskProposal (and the GroundedAskProposal/GroundedAskArtifact
+// Prisma models backing them) are removed: all 7 legacy proposal kinds have
+// had real, independent parity in the new AskExecution-based capture/confirm
+// system since the EVIDENCE capture writer shipped, and this repo-wide grep
+// confirmed zero current callers of the create/confirm/reject endpoints or
+// their frontend API-client methods before deletion. This is a retirement of
+// dead code, not a fix for a newly-discovered regression -- the legacy
+// UPLOAD_EVIDENCE gap this system always had was already disclosed, not new.
+//
+// The replacement is not a literal behavior mirror -- two differences are
+// intentional, approved scope changes, not gaps: ADD_NOTE's new-system
+// equivalent (a conversationally-extracted EVENT of type NOTE) is
+// necessarily property-scoped, where a legacy ADD_NOTE proposal could be
+// created with no property at all; and evidence attachment now requires a
+// same-batch, paired EVENT candidate (CAPTURE_EVIDENCE_CONFIRM), where the
+// legacy UPLOAD_EVIDENCE proposal was a standalone, unpaired reference with
+// no HomeEvent link. See groundedAskProposalRetirement.test.js for the
+// retirement-completeness checks and a pointer to where confirm/reject/
+// retry/evidence-attachment coverage for the replacement lives.
+//
+// answerGroundedAsk itself is NOT part of this retirement -- it remains the
+// live GROUNDED_GUIDANCE operation handler, called directly by
+// askOrchestrator.service.ts, and is untouched below.
 import { getAggregationPropertyContext } from './aggregationContext/context';
 import { geminiService } from './gemini.service';
-import { GroundedAskResponseSchema, type GroundedAskProposalInput } from '../productFramework/groundedAsk.contract';
-import { capturePropertyFact } from '../modules/propertyContext/application/capturePropertyFact';
-import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
-import { HomeEventsService } from './homeEvents.service';
-import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
-import { APIError } from '../middleware/error.middleware';
+import { GroundedAskResponseSchema } from '../productFramework/groundedAsk.contract';
 import { KnowledgeHubService, type KnowledgeHubArticleListItem } from './knowledgeHub.service';
 import { selectAskGeneralGuidance, type AskGeneralGuidanceEntry } from './ask/askGeneralGuidanceCatalog';
 import { selectRelevantAskFacts } from './ask/askPromptMinimization';
@@ -18,7 +36,6 @@ import {
 
 const humanize = (key: string) => key.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 const knowledgeHub = new KnowledgeHubService();
-const homeEventsServiceForCapture = new HomeEventsService();
 
 const GUIDANCE_STOP_WORDS = new Set(['about', 'after', 'and', 'are', 'can', 'does', 'for', 'from', 'home', 'how', 'should', 'that', 'the', 'this', 'what', 'when', 'with', 'your']);
 function guidanceTokens(value: string): Set<string> {
@@ -116,234 +133,4 @@ export async function answerGroundedAsk(input: { userId: string; sessionId: stri
       : generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? `Read “${generalTitle}” in the Knowledge Hub for the full published guidance.` : generalGuidance ? 'Use this as a general maintenance starting point and verify the equipment manufacturer guidance or consult a qualified professional when conditions are uncertain.' : 'Browse the Knowledge Hub or ask a record-specific question after selecting a property.',
     proposals: [],
   });
-}
-
-export async function createGroundedAskProposal(userId: string, input: GroundedAskProposalInput) {
-  if (input.propertyId) await getAggregationPropertyContext(input.propertyId, userId, 'SEARCH_ASSISTANT');
-  return prisma.groundedAskProposal.create({
-    data: {
-      userId, propertyId: input.propertyId ?? null, sessionId: input.sessionId, kind: input.kind,
-      summary: input.summary, payloadJson: input.payload as Prisma.InputJsonValue,
-      evidenceJson: input.evidence as Prisma.InputJsonValue,
-    },
-  });
-}
-
-export async function confirmGroundedAskProposal(userId: string, proposalId: string) {
-  const proposal = await prisma.groundedAskProposal.findFirst({ where: { id: proposalId, userId }, include: { artifact: true } });
-  if (!proposal) return null;
-  if (proposal.artifact) return proposal.artifact;
-  if (proposal.status === 'CONFIRMED') throw new Error('Confirmed proposal is missing its execution artifact.');
-  if (proposal.status !== 'PENDING') throw new Error('Only pending proposals can be confirmed.');
-  if (proposal.propertyId) await getAggregationPropertyContext(proposal.propertyId, userId, 'SEARCH_ASSISTANT');
-  if (proposal.propertyId && ['ADD_FACT', 'CORRECT_FACT', 'CREATE_TASK', 'START_JOURNEY', 'COMPARE_OPTIONS'].includes(proposal.kind)) {
-    const access = await resolvePropertyAccess(userId, proposal.propertyId);
-    if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
-      throw new APIError('Contributor access is required to confirm this Ask proposal.', 403, 'GROUNDED_ASK_CONTRIBUTOR_REQUIRED');
-    }
-  }
-  const payload = proposal.payloadJson as Record<string, unknown>;
-
-  if (proposal.kind === 'ADD_FACT' || proposal.kind === 'CORRECT_FACT') {
-    if (!proposal.propertyId) throw new Error('Fact proposal has no property context.');
-    const claimed = await prisma.groundedAskProposal.updateMany({
-      where: { id: proposal.id, userId, status: 'PENDING' },
-      data: { status: 'CONFIRMED', confirmedAt: new Date() },
-    });
-    if (claimed.count === 0) throw new Error('Proposal was already handled.');
-    try {
-      // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §23: "Full —
-      // this is exactly what §19 replaces it with, with the added
-      // attribution/idempotency correctness Stage 2 built in"). proposal.id
-      // is as stable and unique as a real AskExecution.id, so this legacy
-      // path gets the same replay-safe idempotency CAPTURE_FACT_CONFIRM has
-      // -- if a later step in this same confirm call fails after this write
-      // already committed, a retry resolves to the original write instead
-      // of superseding it a second time for no reason.
-      const captured = await capturePropertyFact(proposal.propertyId, userId, String(payload.factKey), {
-        value: payload.value,
-        sourceType: 'USER_REPORTED',
-        confidence: 0.9,
-        attribution: 'FIRSTHAND',
-        captureChannel: 'ASK_LEGACY_GROUNDED_PROPOSAL',
-        captureExecutionId: proposal.id,
-      });
-      return await prisma.groundedAskArtifact.create({
-        data: {
-          proposalId: proposal.id, userId, propertyId: proposal.propertyId,
-          artifactType: 'PropertyFact',
-          artifactJson: {
-            proposalSummary: proposal.summary,
-            factKey: payload.factKey,
-            operation: proposal.kind,
-            contextVersion: captured.contextVersion,
-            evidenceIds: captured.evidenceIds,
-            confirmedByUserId: userId,
-          } as Prisma.InputJsonValue,
-        },
-      });
-    } catch (error) {
-      await prisma.groundedAskProposal.updateMany({
-        where: { id: proposal.id, userId, status: 'CONFIRMED' },
-        data: { status: 'PENDING', confirmedAt: null },
-      });
-      throw error;
-    }
-  }
-
-  if (proposal.kind === 'START_JOURNEY') {
-    if (!proposal.propertyId) throw new Error('Journey proposal has no property context.');
-    const claimed = await prisma.groundedAskProposal.updateMany({
-      where: { id: proposal.id, userId, status: 'PENDING' },
-      data: { status: 'CONFIRMED', confirmedAt: new Date() },
-    });
-    if (claimed.count === 0) throw new Error('Proposal was already handled.');
-    try {
-      const journey = await guidanceJourneyService.createUserInitiatedJourney(proposal.propertyId, {
-        scopeCategory: payload.scopeCategory as 'ITEM' | 'SERVICE',
-        scopeId: String(payload.scopeId),
-        issueType: String(payload.issueType),
-        inventoryItemId: typeof payload.inventoryItemId === 'string' ? payload.inventoryItemId : null,
-        serviceKey: typeof payload.serviceKey === 'string' ? payload.serviceKey : null,
-      }, userId);
-      return await prisma.groundedAskArtifact.create({
-        data: {
-          proposalId: proposal.id, userId, propertyId: proposal.propertyId,
-          artifactType: 'GuidanceJourney',
-          artifactJson: { proposalSummary: proposal.summary, linkedEntity: { type: 'GuidanceJourney', id: journey.id }, confirmedByUserId: userId } as Prisma.InputJsonValue,
-        },
-      });
-    } catch (error) {
-      await prisma.groundedAskProposal.updateMany({
-        where: { id: proposal.id, userId, status: 'CONFIRMED' },
-        data: { status: 'PENDING', confirmedAt: null },
-      });
-      throw error;
-    }
-  }
-
-  // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §23, Phase 0's
-  // resolution). ADD_NOTE previously stored its text only in artifactJson --
-  // "not even a real domain write... not queryable outside its own
-  // proposal" per FRD §23's original finding. Now a real HomeEvent (type:
-  // NOTE, a precedented enum value already used elsewhere), matching
-  // CAPTURE_EVENT_CONFIRM's own Phase 0-decided target. Split into its own
-  // claim+write+catch-revert block (the established pattern this file
-  // already uses for ADD_FACT/CORRECT_FACT and START_JOURNEY) because
-  // HomeEventsService.createHomeEvent uses the global prisma client, not
-  // the catch-all block's tx, so it can't safely join that transaction.
-  // Scoped to proposals that HAVE a property: HomeEvent is inherently
-  // property-scoped and the schema still allows a property-less ADD_NOTE
-  // proposal (groundedAsk.contract.ts's superRefine), so that case falls
-  // through unchanged to the artifactJson-only path below rather than
-  // failing outright -- a deliberate, documented narrowing (Phase 0
-  // decision), not silently dropped, per Implementation Principle #6.
-  if (proposal.kind === 'ADD_NOTE' && proposal.propertyId) {
-    const claimed = await prisma.groundedAskProposal.updateMany({
-      where: { id: proposal.id, userId, status: 'PENDING' },
-      data: { status: 'CONFIRMED', confirmedAt: new Date() },
-    });
-    if (claimed.count === 0) throw new Error('Proposal was already handled.');
-    try {
-      const noteText = String(payload.note);
-      const event = await homeEventsServiceForCapture.createHomeEvent({
-        propertyId: proposal.propertyId,
-        userId,
-        body: {
-          type: 'NOTE',
-          title: noteText.length > 120 ? `${noteText.slice(0, 117)}...` : noteText,
-          summary: noteText,
-          occurredAt: new Date().toISOString(),
-          datePrecision: 'UNKNOWN',
-          idempotencyKey: proposal.id,
-        },
-      });
-      return await prisma.groundedAskArtifact.create({
-        data: {
-          proposalId: proposal.id, userId, propertyId: proposal.propertyId,
-          artifactType: 'HomeEvent',
-          artifactJson: {
-            proposalSummary: proposal.summary,
-            note: noteText,
-            linkedEntity: { type: 'HomeEvent', id: event.id },
-            confirmedByUserId: userId,
-          } as Prisma.InputJsonValue,
-        },
-      });
-    } catch (error) {
-      await prisma.groundedAskProposal.updateMany({
-        where: { id: proposal.id, userId, status: 'CONFIRMED' },
-        data: { status: 'PENDING', confirmedAt: null },
-      });
-      throw error;
-    }
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const existing = await tx.groundedAskArtifact.findUnique({ where: { proposalId } });
-    if (existing) return existing;
-    const claimed = await tx.groundedAskProposal.updateMany({ where: { id: proposal.id, userId, status: 'PENDING' }, data: { status: 'CONFIRMED', confirmedAt: new Date() } });
-    if (claimed.count === 0) throw new Error('Proposal was already handled.');
-    let linkedEntity: { type: string; id: string } | null = null;
-    if (proposal.kind === 'CREATE_TASK') {
-      if (!proposal.propertyId) throw new Error('Task proposal has no property context.');
-      const actionKey = `grounded-ask:${proposal.id}`;
-      const task = await tx.propertyMaintenanceTask.upsert({
-        where: { propertyId_actionKey: { propertyId: proposal.propertyId, actionKey } },
-        create: {
-          propertyId: proposal.propertyId, title: String(payload.title),
-          description: typeof payload.description === 'string' ? payload.description : null,
-          source: 'USER_CREATED', actionKey,
-          priority: payload.priority === 'HIGH' || payload.priority === 'LOW' || payload.priority === 'URGENT' ? payload.priority : 'MEDIUM',
-          nextDueDate: typeof payload.nextDueDate === 'string' ? new Date(payload.nextDueDate) : null,
-        },
-        update: {},
-      });
-      linkedEntity = { type: 'PropertyMaintenanceTask', id: task.id };
-    }
-    if (proposal.kind === 'COMPARE_OPTIONS') {
-      if (!proposal.propertyId) throw new Error('Comparison proposal has no property context.');
-      const inventoryItemId = typeof payload.inventoryItemId === 'string' ? payload.inventoryItemId : null;
-      if (inventoryItemId) {
-        const item = await tx.inventoryItem.findFirst({ where: { id: inventoryItemId, propertyId: proposal.propertyId }, select: { id: true } });
-        if (!item) throw new Error('Comparison inventory item does not belong to the selected property.');
-      }
-      const workspace = await tx.quoteComparisonWorkspace.create({
-        data: {
-          propertyId: proposal.propertyId,
-          createdByUserId: userId,
-          inventoryItemId,
-          scopeSummary: String(payload.scopeSummary),
-          notes: typeof payload.notes === 'string' ? payload.notes : `Created from Grounded Ask proposal ${proposal.id}`,
-        },
-      });
-      linkedEntity = { type: 'QuoteComparisonWorkspace', id: workspace.id };
-    }
-    if (proposal.kind === 'UPLOAD_EVIDENCE') {
-      if (!proposal.propertyId) throw new Error('Evidence proposal has no property context.');
-      const document = await tx.document.findFirst({
-        where: { id: String(payload.documentId), propertyId: proposal.propertyId, uploadedBy: userId },
-        select: { id: true },
-      });
-      if (!document) throw new Error('Uploaded evidence was not found for this user and property.');
-      linkedEntity = { type: 'Document', id: document.id };
-    }
-    return tx.groundedAskArtifact.create({
-      data: {
-        proposalId: proposal.id, userId, propertyId: proposal.propertyId,
-        artifactType: linkedEntity?.type ?? proposal.kind,
-        artifactJson: {
-          proposalSummary: proposal.summary,
-          payload,
-          linkedEntity,
-          note: proposal.kind === 'ADD_NOTE' ? String(payload.note) : undefined,
-          confirmedByUserId: userId,
-        } as Prisma.InputJsonValue,
-      },
-    });
-  });
-}
-
-export async function rejectGroundedAskProposal(userId: string, proposalId: string) {
-  return prisma.groundedAskProposal.updateMany({ where: { id: proposalId, userId, status: 'PENDING' }, data: { status: 'REJECTED', rejectedAt: new Date() } });
 }

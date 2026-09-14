@@ -50,6 +50,23 @@ export interface ExpectedExtractionCandidate {
   // Set only for FACT candidates whose target factKey this pass is
   // confident about.
   factKey?: string;
+  // External review, 2026-09-13: the harness's own factKey check previously
+  // never compared the actual VALUE, so a candidate with the right factKey
+  // but a fabricated value (e.g. mortgage rate 99% instead of 6.75%) scored
+  // 100% field accuracy. Set only when this pass is confident about the
+  // exact stated value, not just the target factKey.
+  expectedValue?: string | number | boolean;
+  // External review, 2026-09-13: an identity hint distinct from an
+  // exact-title match (which this file's own header comment already rejects
+  // as too brittle against a model's genuine phrasing variance) -- a
+  // case-insensitive substring the actual candidate's title must contain.
+  // Set only when a fixture has more than one expected EVENT candidate and
+  // needs a way to tell them apart (without this, the harness's matcher
+  // paired same-category candidates in corpus order regardless of content,
+  // so two duplicated "water heater" candidates could silently satisfy an
+  // expectation for a distinct "sump pump" candidate). Rows with a single
+  // expected EVENT keep matching on category alone, unchanged.
+  titleKeyword?: string;
   // Set only for EVENT candidates whose date precision this pass is
   // confident about.
   datePrecision?: 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
@@ -59,7 +76,18 @@ export interface ExpectedExtractionCandidate {
   // (a CORRECTION-category row's own re-derived target).
   isCorrection?: boolean;
   hasAmount?: boolean;
+  // External review, 2026-09-13: same value-blindness bug as expectedValue
+  // above, for EVENT's amount -- a $99,999 candidate previously satisfied
+  // "hasAmount: true" for a message that stated $450. Set only when this
+  // pass is confident about the exact stated amount.
+  expectedAmount?: number;
   hasProviderName?: boolean;
+  // External review, 2026-09-13: same value-blindness bug for EVENT's
+  // providerName -- "Wrong Company" previously satisfied "hasProviderName:
+  // true" for a message that named a specific provider. Case-insensitive,
+  // trimmed comparison. Set only when this pass is confident about the
+  // exact stated provider name.
+  expectedProviderName?: string;
 }
 
 export interface ExtractionCorpusFixture {
@@ -76,8 +104,8 @@ export interface ExtractionCorpusFixture {
 
 const ROWS: ReadonlyArray<Omit<ExtractionCorpusFixture, 'provenance'>> = [
   // Positive factual statements
-  { fixtureId: 'pos-1', message: 'I replaced the roof last summer for $14,500.', category: 'POSITIVE_FACTUAL_STATEMENT', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: roof replacement, RANGE precision, amount 14500', expectedCandidates: [{ category: 'EVENT', datePrecision: 'RANGE', attribution: 'FIRSTHAND', hasAmount: true }] },
-  { fixtureId: 'pos-2', message: 'My mortgage rate is 6.75%.', category: 'POSITIVE_FACTUAL_STATEMENT', expectedPreFilterFire: true, expectedCandidateSummary: 'FACT: financial.currentMortgage = 6.75', expectedCandidates: [{ category: 'FACT', factKey: 'financial.currentMortgage', attribution: 'FIRSTHAND' }] },
+  { fixtureId: 'pos-1', message: 'I replaced the roof last summer for $14,500.', category: 'POSITIVE_FACTUAL_STATEMENT', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: roof replacement, RANGE precision, amount 14500', expectedCandidates: [{ category: 'EVENT', titleKeyword: 'roof', datePrecision: 'RANGE', attribution: 'FIRSTHAND', hasAmount: true, expectedAmount: 14500 }] },
+  { fixtureId: 'pos-2', message: 'My mortgage rate is 6.75%.', category: 'POSITIVE_FACTUAL_STATEMENT', expectedPreFilterFire: true, expectedCandidateSummary: 'FACT: financial.currentMortgage = 6.75', expectedCandidates: [{ category: 'FACT', factKey: 'financial.currentMortgage', expectedValue: 6.75, attribution: 'FIRSTHAND' }] },
   { fixtureId: 'pos-3', message: 'We installed a new water heater in March.', category: 'POSITIVE_FACTUAL_STATEMENT', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: water heater install, MONTH precision', expectedCandidates: [{ category: 'EVENT', datePrecision: 'MONTH', attribution: 'FIRSTHAND' }] },
 
   // Negative questions -- pure hypothetical/interrogative, no reported fact.
@@ -86,7 +114,7 @@ const ROWS: ReadonlyArray<Omit<ExtractionCorpusFixture, 'provenance'>> = [
   { fixtureId: 'neg-3', message: 'Do I need to replace my HVAC system soon?', category: 'NEGATIVE_QUESTION', expectedPreFilterFire: false, expectedCandidateSummary: 'none', expectedCandidates: [] },
 
   // Mixed question + fact (FRD §8.3)
-  { fixtureId: 'mix-1', message: 'I serviced the HVAC yesterday for $275. Was that too expensive?', category: 'MIXED_QUESTION_AND_FACT', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: HVAC service, EXACT_DATE, amount 275', expectedCandidates: [{ category: 'EVENT', datePrecision: 'EXACT_DATE', attribution: 'FIRSTHAND', hasAmount: true }] },
+  { fixtureId: 'mix-1', message: 'I serviced the HVAC yesterday for $275. Was that too expensive?', category: 'MIXED_QUESTION_AND_FACT', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: HVAC service, EXACT_DATE, amount 275', expectedCandidates: [{ category: 'EVENT', titleKeyword: 'hvac', datePrecision: 'EXACT_DATE', attribution: 'FIRSTHAND', hasAmount: true, expectedAmount: 275 }] },
   { fixtureId: 'mix-2', message: 'We just repainted the exterior. Does that help with resale value?', category: 'MIXED_QUESTION_AND_FACT', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: exterior paint', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND' }] },
 
   // Hedged statements
@@ -99,18 +127,18 @@ const ROWS: ReadonlyArray<Omit<ExtractionCorpusFixture, 'provenance'>> = [
 
   // Corrections (FRD §8.7)
   { fixtureId: 'corr-1', message: 'Actually, the roof was replaced in 2023, not 2024.', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 'CORRECTION: roof replacement event, year 2023', expectedCandidates: [{ category: 'EVENT', datePrecision: 'YEAR', attribution: 'FIRSTHAND', isCorrection: true }] },
-  { fixtureId: 'corr-2', message: 'Correction -- it cost $9,200, not $8,000.', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 'CORRECTION: amount 9200', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND', isCorrection: true, hasAmount: true }] },
+  { fixtureId: 'corr-2', message: 'Correction -- it cost $9,200, not $8,000.', category: 'CORRECTION', expectedPreFilterFire: true, expectedCandidateSummary: 'CORRECTION: amount 9200', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND', isCorrection: true, hasAmount: true, expectedAmount: 9200 }] },
 
   // Ambiguous dates -- still a genuine statement, imprecise timing
   { fixtureId: 'amb-1', message: 'We had the roof redone a few years ago.', category: 'AMBIGUOUS_DATE', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: roof replacement, UNKNOWN/RANGE precision', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND' }] },
   { fixtureId: 'amb-2', message: 'The furnace was replaced sometime before we moved in.', category: 'AMBIGUOUS_DATE', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: furnace replacement, UNKNOWN precision', expectedCandidates: [{ category: 'EVENT', datePrecision: 'UNKNOWN', attribution: 'FIRSTHAND' }] },
 
   // Cost/provider combinations
-  { fixtureId: 'cost-1', message: "I paid Joe's Plumbing $450 to fix the leak under the sink.", category: 'COST_PROVIDER_COMBINATION', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: plumbing repair, providerName "Joe\'s Plumbing", amount 450', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND', hasAmount: true, hasProviderName: true }] },
-  { fixtureId: 'cost-2', message: 'Hired ABC Roofing for $12,000 to redo the whole roof.', category: 'COST_PROVIDER_COMBINATION', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: roof replacement, providerName "ABC Roofing", amount 12000', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND', hasAmount: true, hasProviderName: true }] },
+  { fixtureId: 'cost-1', message: "I paid Joe's Plumbing $450 to fix the leak under the sink.", category: 'COST_PROVIDER_COMBINATION', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: plumbing repair, providerName "Joe\'s Plumbing", amount 450', expectedCandidates: [{ category: 'EVENT', titleKeyword: 'leak', attribution: 'FIRSTHAND', hasAmount: true, expectedAmount: 450, hasProviderName: true, expectedProviderName: "Joe's Plumbing" }] },
+  { fixtureId: 'cost-2', message: 'Hired ABC Roofing for $12,000 to redo the whole roof.', category: 'COST_PROVIDER_COMBINATION', expectedPreFilterFire: true, expectedCandidateSummary: 'EVENT: roof replacement, providerName "ABC Roofing", amount 12000', expectedCandidates: [{ category: 'EVENT', titleKeyword: 'roof', attribution: 'FIRSTHAND', hasAmount: true, expectedAmount: 12000, hasProviderName: true, expectedProviderName: 'ABC Roofing' }] },
 
   // Multiple facts in one turn
-  { fixtureId: 'multi-1', message: 'I replaced the water heater last year and also added a sump pump backup in the basement.', category: 'MULTIPLE_FACTS', expectedPreFilterFire: true, expectedCandidateSummary: 'two EVENT candidates: water heater replacement, sump pump backup install', expectedCandidates: [{ category: 'EVENT', attribution: 'FIRSTHAND' }, { category: 'EVENT', attribution: 'FIRSTHAND' }] },
+  { fixtureId: 'multi-1', message: 'I replaced the water heater last year and also added a sump pump backup in the basement.', category: 'MULTIPLE_FACTS', expectedPreFilterFire: true, expectedCandidateSummary: 'two EVENT candidates: water heater replacement, sump pump backup install', expectedCandidates: [{ category: 'EVENT', titleKeyword: 'water heater', attribution: 'FIRSTHAND' }, { category: 'EVENT', titleKeyword: 'sump pump', attribution: 'FIRSTHAND' }] },
 
   // Unrelated household conversation -- should never fire
   { fixtureId: 'unrelated-1', message: 'Can you recommend a good recipe for dinner tonight?', category: 'UNRELATED_HOUSEHOLD_CONVERSATION', expectedPreFilterFire: false, expectedCandidateSummary: 'none', expectedCandidates: [] },

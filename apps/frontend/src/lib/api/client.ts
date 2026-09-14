@@ -1122,19 +1122,6 @@ class APIClient {
   async getAskMonitor(monitorId: string): Promise<APIResponse<{ id: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED' }>> {
     return this.request(`/api/ask/monitors/${encodeURIComponent(monitorId)}`);
   }
-  async createGroundedAskProposal(payload: {
-    sessionId: string; propertyId?: string | null; kind: string; summary: string;
-    payload: Record<string, unknown>;
-    evidence: Array<{ factKey: string; source: string | null; observedAt: string | null }>;
-  }): Promise<APIResponse<{ id: string; requiresConfirmation: true }>> {
-    return this.request('/api/gemini/proposals', { method: 'POST', body: payload });
-  }
-  async confirmGroundedAskProposal(id: string): Promise<APIResponse<{ id: string; artifactType: string }>> {
-    return this.request(`/api/gemini/proposals/${id}/confirm`, { method: 'POST' });
-  }
-  async rejectGroundedAskProposal(id: string): Promise<APIResponse<{ rejected: true }>> {
-    return this.request(`/api/gemini/proposals/${id}/reject`, { method: 'POST' });
-  }
   // ==========================================================================
   // PROVIDER ENDPOINTS 
   // ==========================================================================

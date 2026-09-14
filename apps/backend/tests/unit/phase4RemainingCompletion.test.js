@@ -7,7 +7,6 @@ require('ts-node/register');
 
 const {
   adaptHomeActionSource,
-  GroundedAskProposalInputSchema,
   NotificationPreferenceInputSchema,
   notificationScopeKey,
 } = require('../../src/productFramework/index.ts');
@@ -122,35 +121,14 @@ test('household notification controls use the canonical preference system only',
   assert.match(notificationPage, /propertyId,\s*\n\s*category:/);
 });
 
-test('Grounded Ask validates proposals and requires property context for material actions', () => {
-  const missingProperty = GroundedAskProposalInputSchema.safeParse({
-    sessionId: 'session-1', kind: 'CREATE_TASK', summary: 'Create a filter task',
-    payload: { title: 'Replace HVAC filter' }, evidence: [],
-  });
-  assert.equal(missingProperty.success, false);
-  const valid = GroundedAskProposalInputSchema.safeParse({
-    sessionId: 'session-1', propertyId: '11111111-1111-4111-8111-111111111111',
-    kind: 'CREATE_TASK', summary: 'Create a filter task', payload: { title: 'Replace HVAC filter' }, evidence: [],
-  });
-  assert.equal(valid.success, true);
-  const service = source('../../src/services/groundedAsk.service.ts');
-  const chat = source('../../../frontend/src/components/AIChat.tsx');
-  assert.match(service, /groundingMode/);
-  assert.match(service, /knownFacts/);
-  assert.match(service, /missingFacts/);
-  assert.match(service, /groundedAskArtifact\.create/);
-  assert.match(service, /capturePropertyFact/);
-  assert.match(service, /createUserInitiatedJourney/);
-  assert.match(service, /quoteComparisonWorkspace\.create/);
-  assert.match(service, /tx\.document\.findFirst/);
-  assert.match(service, /proposal\.kind === 'ADD_NOTE'/);
-  assert.match(service, /ROLE_RANK\[access\.role\] < ROLE_RANK\.CONTRIBUTOR/);
-  assert.match(chat, /Grounded in this home/);
-  assert.match(chat, /window\.confirm/);
-  for (const action of ['Create task', 'Add missing fact', 'Correct fact', 'Start guided plan', 'Compare options', 'Attach evidence', 'Save note']) {
-    assert.match(chat, new RegExp(action));
-  }
-});
+// Ask Cozy Stage 3 retirement, 2026-09-14: the "Grounded Ask validates
+// proposals..." and "every Grounded Ask proposal kind has a validated
+// execution payload" tests that used to live here asserted
+// GroundedAskProposalInputSchema and createGroundedAskProposal/
+// confirmGroundedAskProposal internals, both now deleted -- see
+// groundedAskProposalRetirement.test.js (tests/ask/) for the retirement-
+// completeness checks that replace them. answerGroundedAsk itself (the one
+// function from that service still live) is untouched and covered there too.
 
 test('Grounded Ask isolates model sessions by user, property, and context version', () => {
   const gemini = source('../../src/services/gemini.service.ts');
@@ -162,32 +140,10 @@ test('Grounded Ask isolates model sessions by user, property, and context versio
   assert.match(chat, /setSessionId\(createChatSessionId\(\)\)/);
 });
 
-test('every Grounded Ask proposal kind has a validated execution payload', () => {
-  const propertyId = '11111111-1111-4111-8111-111111111111';
-  const documentId = '22222222-2222-4222-8222-222222222222';
-  const common = { sessionId: 'session-1', propertyId, summary: 'Confirmed proposal', evidence: [] };
-  const validPayloads = {
-    ADD_FACT: { factKey: 'core.yearBuilt', value: 2004 },
-    CORRECT_FACT: { factKey: 'core.yearBuilt', value: 2005 },
-    CREATE_TASK: { title: 'Inspect the roof' },
-    START_JOURNEY: { scopeCategory: 'SERVICE', scopeId: 'general_inspection', issueType: 'general_inspection', serviceKey: 'general_inspection' },
-    COMPARE_OPTIONS: { scopeSummary: 'Compare roof repair quotes' },
-    UPLOAD_EVIDENCE: { documentId },
-    ADD_NOTE: { note: 'The homeowner wants to revisit this next month.' },
-  };
-  for (const [kind, payload] of Object.entries(validPayloads)) {
-    assert.equal(GroundedAskProposalInputSchema.safeParse({ ...common, kind, payload }).success, true, kind);
-  }
-  assert.equal(GroundedAskProposalInputSchema.safeParse({ ...common, kind: 'UPLOAD_EVIDENCE', payload: {} }).success, false);
-  assert.equal(GroundedAskProposalInputSchema.safeParse({ ...common, kind: 'START_JOURNEY', payload: { scopeCategory: 'OTHER' } }).success, false);
-});
-
 test('remaining Phase 4 schema is greenfield and introduces no migration script', () => {
   const schema = source('../../prisma/schema.prisma');
   assert.match(schema, /model NotificationPreference \{/);
   assert.match(schema, /model NotificationOutcome \{/);
-  assert.match(schema, /model GroundedAskProposal \{/);
-  assert.match(schema, /model GroundedAskArtifact \{/);
   const migrationsRoot = path.resolve(__dirname, '../../prisma/migrations');
   const sql = fs.existsSync(migrationsRoot)
     ? fs.readdirSync(migrationsRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())

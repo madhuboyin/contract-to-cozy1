@@ -17,8 +17,6 @@ test('owner-applied database contains the Phase 4 trust, notification, and Ask s
       'personalization_recommendation_incidents',
       'notification_preferences',
       'notification_outcomes',
-      'grounded_ask_proposals',
-      'grounded_ask_artifacts',
     ];
     const rows = await client.$queryRaw`
       SELECT table_name
@@ -32,7 +30,17 @@ test('owner-applied database contains the Phase 4 trust, notification, and Ask s
   }
 });
 
-test('Phase 4 pilot flow persists preferences, outcomes, and confirmed Ask actions idempotently', {
+// Ask Cozy Stage 3 retirement, 2026-09-14: this test used to also exercise
+// createGroundedAskProposal/confirmGroundedAskProposal across all 5 legacy
+// kinds (CREATE_TASK/ADD_FACT/COMPARE_OPTIONS/ADD_NOTE, idempotent replay),
+// now deleted -- see groundedAsk.service.ts's own header comment for the
+// full retirement record. Confirm/reject/retry/evidence-attachment coverage
+// for the replacement (CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM/
+// CAPTURE_WARRANTY_CONFIRM/CAPTURE_EVIDENCE_CONFIRM) already exists in
+// captureConfirmWriteSafety.test.js/conversationalCapture.test.js and is not
+// duplicated here; this test's remaining scope is purely the notification
+// preference/outcome persistence flow its own title now reflects.
+test('Phase 4 pilot flow persists preferences and outcomes idempotently', {
   skip: !databaseUrl,
   timeout: 120_000,
 }, async () => {
@@ -40,7 +48,6 @@ test('Phase 4 pilot flow persists preferences, outcomes, and confirmed Ask actio
   const { prisma } = require('../../src/lib/prisma.ts');
   const { upsertNotificationPreference, resolveNotificationPolicy, recordNotificationOutcome } = require('../../src/services/notificationPreference.service.ts');
   const { NotificationService } = require('../../src/services/notification.service.ts');
-  const { createGroundedAskProposal, confirmGroundedAskProposal } = require('../../src/services/groundedAsk.service.ts');
 
   const runId = `phase4-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let userId;
@@ -77,37 +84,6 @@ test('Phase 4 pilot flow persists preferences, outcomes, and confirmed Ask actio
     });
     await recordNotificationOutcome(user.id, notification.id, 'USEFUL');
     assert.equal(await prisma.notificationOutcome.count({ where: { notificationId: notification.id, userId: user.id, type: 'USEFUL' } }), 1);
-
-    const taskProposal = await createGroundedAskProposal(user.id, {
-      sessionId: runId, propertyId: property.id, kind: 'CREATE_TASK', summary: 'Create an acceptance task',
-      payload: { title: 'Inspect acceptance filter', priority: 'MEDIUM' }, evidence: [],
-    });
-    const firstArtifact = await confirmGroundedAskProposal(user.id, taskProposal.id);
-    const replayArtifact = await confirmGroundedAskProposal(user.id, taskProposal.id);
-    assert.equal(replayArtifact.id, firstArtifact.id);
-    assert.equal(await prisma.propertyMaintenanceTask.count({ where: { propertyId: property.id, actionKey: `grounded-ask:${taskProposal.id}` } }), 1);
-
-    const factProposal = await createGroundedAskProposal(user.id, {
-      sessionId: runId, propertyId: property.id, kind: 'ADD_FACT', summary: 'Record the build year',
-      payload: { factKey: 'core.yearBuilt', value: 2004 }, evidence: [],
-    });
-    const factArtifact = await confirmGroundedAskProposal(user.id, factProposal.id);
-    assert.equal(factArtifact.artifactType, 'PropertyFact');
-    assert.equal((await prisma.property.findUnique({ where: { id: property.id }, select: { yearBuilt: true } })).yearBuilt, 2004);
-
-    const comparisonProposal = await createGroundedAskProposal(user.id, {
-      sessionId: runId, propertyId: property.id, kind: 'COMPARE_OPTIONS', summary: 'Compare inspection options',
-      payload: { scopeSummary: 'Compare whole-home inspection quotes' }, evidence: [],
-    });
-    const comparisonArtifact = await confirmGroundedAskProposal(user.id, comparisonProposal.id);
-    assert.equal(comparisonArtifact.artifactType, 'QuoteComparisonWorkspace');
-
-    const noteProposal = await createGroundedAskProposal(user.id, {
-      sessionId: runId, propertyId: property.id, kind: 'ADD_NOTE', summary: 'Remember pilot preference',
-      payload: { note: 'Review this recommendation after the next inspection.' }, evidence: [],
-    });
-    const noteArtifact = await confirmGroundedAskProposal(user.id, noteProposal.id);
-    assert.equal(noteArtifact.artifactType, 'ADD_NOTE');
   } finally {
     if (userId) await prisma.user.delete({ where: { id: userId } }).catch(() => undefined);
     await prisma.$disconnect();

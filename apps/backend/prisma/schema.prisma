@@ -2492,8 +2492,6 @@ model User {
   personalizationHouseholds       Household[]
   recommendationGovernanceReviews RecommendationGovernanceReview[]
   capabilityGovernanceReviews     CapabilityGovernanceReview[]
-  groundedAskProposals            GroundedAskProposal[]
-  groundedAskArtifacts            GroundedAskArtifact[]
   askSessions                     AskSession[]
   askExecutions                   AskExecution[]
   refinanceRateMonitors           RefinanceRateMonitor[]
@@ -8151,61 +8149,13 @@ model AskConfirmationReceipt {
   @@map("ask_confirmation_receipts")
 }
 
-enum GroundedAskProposalKind {
-  ADD_FACT
-  CORRECT_FACT
-  CREATE_TASK
-  START_JOURNEY
-  COMPARE_OPTIONS
-  UPLOAD_EVIDENCE
-  ADD_NOTE
-}
-
-enum GroundedAskProposalStatus {
-  PENDING
-  CONFIRMED
-  REJECTED
-  EXPIRED
-}
-
-model GroundedAskProposal {
-  id           String                    @id @default(uuid())
-  userId       String
-  propertyId   String?
-  sessionId    String
-  kind         GroundedAskProposalKind
-  status       GroundedAskProposalStatus @default(PENDING)
-  summary      String
-  payloadJson  Json
-  evidenceJson Json
-  confirmedAt  DateTime?
-  rejectedAt   DateTime?
-  createdAt    DateTime                  @default(now())
-  updatedAt    DateTime                  @updatedAt
-
-  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  artifact GroundedAskArtifact?
-
-  @@index([userId, sessionId, createdAt])
-  @@index([propertyId, status])
-  @@map("grounded_ask_proposals")
-}
-
-model GroundedAskArtifact {
-  id           String   @id @default(uuid())
-  proposalId   String   @unique
-  userId       String
-  propertyId   String?
-  artifactType String
-  artifactJson Json
-  createdAt    DateTime @default(now())
-
-  proposal GroundedAskProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([propertyId, artifactType, createdAt])
-  @@map("grounded_ask_artifacts")
-}
+// Ask Cozy Stage 3 retirement, 2026-09-14: GroundedAskProposalKind/
+// GroundedAskProposalStatus enums and the GroundedAskProposal/
+// GroundedAskArtifact models (grounded_ask_proposals/grounded_ask_artifacts
+// tables) are removed -- see groundedAsk.service.ts's own header comment for
+// the full retirement record. Dropping the actual database tables is the
+// user's own manual migration step, per this repo's standing convention
+// (never write migration scripts here).
 
 // ============================================================================
 // DECISION PLATFORM (Ask Intelligence FRD Phase 7A — P0 contract closure)

@@ -119,3 +119,48 @@ test('runs the real frozen corpus end-to-end against an injected extractor witho
   assert.equal(report.sampleCount, 24);
   assert.equal(report.perFixture.length, 24);
 });
+
+// External review, 2026-09-13: three adversarial reproductions demonstrating
+// the harness scored a wrong VALUE (not just presence/category) as correct,
+// and couldn't tell two duplicated candidates from two genuinely distinct
+// ones. Each test below is the exact shape of one of those reproductions.
+
+test('a FACT with the right factKey but a fabricated value does NOT score full field accuracy', async () => {
+  const corpus = oneRowCorpus([{ category: 'FACT', factKey: 'financial.currentMortgage', expectedValue: 6.75 }]);
+  const report = await evaluateExtractionQuality(
+    async () => ({ candidates: [{ category: 'FACT', factKey: 'financial.currentMortgage', value: 99, extractionConfidence: 0.9, attribution: 'FIRSTHAND', sourceSentence: 'test' }], droppedCount: 0 }),
+    corpus,
+  );
+  assert.equal(report.candidateCategoryAccuracy, 1, 'the right fact was identified');
+  assert.equal(report.fieldAccuracy, 0, 'but the value was wrong');
+});
+
+test('an EVENT with a fabricated amount/providerName does NOT score full field accuracy', async () => {
+  const corpus = oneRowCorpus([{ category: 'EVENT', titleKeyword: 'leak', hasAmount: true, expectedAmount: 450, hasProviderName: true, expectedProviderName: "Joe's Plumbing" }]);
+  const report = await evaluateExtractionQuality(
+    async () => ({ candidates: [candidate({ title: 'Plumbing leak repair', amount: 99999, providerName: 'Wrong Company' })], droppedCount: 0 }),
+    corpus,
+  );
+  assert.equal(report.candidateCategoryAccuracy, 1, 'the right event was identified (titleKeyword matched)');
+  assert.equal(report.fieldAccuracy, 0, 'but the amount and provider name were both wrong');
+});
+
+test('two duplicated candidates satisfying only one of two distinct expected identities score as a real duplicate and real false persistence, not zero', async () => {
+  const corpus = oneRowCorpus([
+    { category: 'EVENT', titleKeyword: 'water heater' },
+    { category: 'EVENT', titleKeyword: 'sump pump' },
+  ]);
+  const report = await evaluateExtractionQuality(
+    async () => ({
+      candidates: [candidate({ title: 'Water heater replacement' }), candidate({ title: 'Water heater replacement' })],
+      droppedCount: 0,
+    }),
+    corpus,
+  );
+  // One expected identity (water heater) was genuinely matched; the other
+  // (sump pump) never appeared -- the second, duplicated water-heater
+  // candidate is an extra proposal for an identity already satisfied.
+  assert.equal(report.candidateCategoryAccuracy, 0.5, 'only one of the two distinct expected candidates was actually produced');
+  assert.equal(report.duplicateRate, 1, 'the second identical candidate is a duplicate of the first');
+  assert.equal(report.falsePersistenceProposalRate, 0.5, 'one of the two proposed candidates never matched a real expectation');
+});
