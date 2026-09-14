@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ComponentProps, createContext, FormEvent, KeyboardEvent, Ref, useContext, useEffect, useRef, useState } from 'react';
+import { ComponentProps, createContext, FormEvent, KeyboardEvent, MutableRefObject, Ref, useContext, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -1378,7 +1378,7 @@ function RecentAskSessions({ items, loading, openingId, onOpen }: {
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1389,6 +1389,11 @@ function ExecutionCard({
   selectedPropertyId: string;
   setInput: (value: string) => void;
   visibleSuggestions: string[];
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-003/CTX-002: the same ref ask()
+  // already compares against to discard a response that outlived a
+  // property/session switch. The explicit Refresh button needs the
+  // identical guard -- it was calling updateExecution unconditionally.
+  activeSessionRef: MutableRefObject<string>;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1400,10 +1405,16 @@ function ExecutionCard({
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const refresh = async () => {
     if (refreshing) return;
+    // External review finding (FRESH-003/CTX-002): unlike ask(), this had
+    // no guard against the homeowner switching property/session while the
+    // request was in flight -- a stale refresh response could still land
+    // and get merged into a transcript that has since moved on.
+    const requestedSessionId = execution.sessionId;
     setRefreshing(true); setRefreshError(null);
     try {
       const response = await api.refreshAskExecution(execution.executionId);
       if (!response.success || !response.data) throw new Error(response.message || 'Could not refresh this result.');
+      if (activeSessionRef.current !== requestedSessionId) return;
       updateExecution(response.data);
     } catch (caught) {
       setRefreshError(caught instanceof Error ? caught.message : 'Could not refresh this result.');
@@ -1486,7 +1497,7 @@ function ExecutionCard({
             // important?" accidentally match the generic maintenance
             // pattern and misroute away from grounded guidance).
             operationId,
-          })} onFilterClick={(message) => void ask(message)} />)}
+          })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} />)}
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
@@ -1994,6 +2005,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   selectedPropertyId={selectedPropertyId ?? ''}
                   setInput={setInput}
                   visibleSuggestions={visibleSuggestions}
+                  activeSessionRef={activeSessionRef}
                 />
               </AskActionReturnContext.Provider>;
             })}

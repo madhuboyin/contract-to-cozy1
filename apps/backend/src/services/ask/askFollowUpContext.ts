@@ -145,7 +145,19 @@ function extractSingularEntityTitle(resultJson: unknown): string | null {
   return null;
 }
 
-async function findRecentPriorExecution(sessionId: string, propertyId: string | null | undefined): Promise<PriorExecutionRow | null> {
+// External review finding (RES-003/ACT-001): a declared control (a filter
+// chip, an item action) renders on one specific execution's card, but this
+// previously always resolved against "the most recent execution in the
+// session" regardless. After any later, unrelated turn, that heuristic
+// would silently target the wrong prior result -- filtering a maintenance
+// list the homeowner scrolled back to, after asking an intervening
+// question about something else, could resolve against that intervening
+// turn instead. `pinnedExecutionId`, when provided, resolves against that
+// exact row (still scoped to this session/property and to reusable
+// statuses) instead of the recency heuristic; a pin that doesn't resolve
+// returns null rather than falling back to "most recent," so a stale or
+// cross-session id fails closed instead of silently matching the wrong turn.
+async function findRecentPriorExecution(sessionId: string, propertyId: string | null | undefined, pinnedExecutionId?: string | null): Promise<PriorExecutionRow | null> {
   const row = await prisma.askExecution.findFirst({
     where: {
       sessionId,
@@ -160,7 +172,7 @@ async function findRecentPriorExecution(sessionId: string, propertyId: string | 
       propertyId: propertyId ?? null,
       operationId: { not: null },
       status: { in: REUSABLE_PRIOR_STATUSES },
-      createdAt: { gte: new Date(Date.now() - FOLLOW_UP_LOOKBACK_MS) },
+      ...(pinnedExecutionId ? { id: pinnedExecutionId } : { createdAt: { gte: new Date(Date.now() - FOLLOW_UP_LOOKBACK_MS) } }),
     },
     orderBy: { createdAt: 'desc' },
     select: { id: true, operationId: true, message: true, resultJson: true, parametersJson: true, launchContextJson: true },
@@ -178,6 +190,14 @@ export async function resolveAskFollowUpMessage(input: {
   sessionId: string;
   propertyId: string | null | undefined;
   message: string;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/ACT-001: set only when the
+  // client dispatched this message from a declared control rendered on a
+  // specific prior execution (a filter chip, an item action) -- see
+  // findRecentPriorExecution's pinnedExecutionId. Also used below to skip
+  // concatenating with the prior turn's raw text: a declared filter chip's
+  // message is a complete, self-sufficient specification of the desired
+  // filter state, not an additive natural-language fragment.
+  declaredSourceExecutionId?: string | null;
 }): Promise<AskFollowUpResolution> {
   const fallback: AskFollowUpResolution = { effectiveMessage: input.message, forcedOperationId: null, sourceExecutionId: null, continuationCursor: null, suppliedInput: null, isFilterRefinement: false };
   const entityMatch = ENTITY_CONTINUATION_PATTERN.exec(input.message);
@@ -187,7 +207,7 @@ export async function resolveAskFollowUpMessage(input: {
   const isMonitorVagueFollowup = MONITOR_VAGUE_FOLLOWUP_PATTERN.test(input.message);
   if (!entityMatch && !isFilterContinuation && !isEnvelopePagination && !isSpecialistContinuation && !isMonitorVagueFollowup) return fallback;
 
-  const prior = await findRecentPriorExecution(input.sessionId, input.propertyId);
+  const prior = await findRecentPriorExecution(input.sessionId, input.propertyId, input.declaredSourceExecutionId);
   if (!prior || !prior.operationId) return fallback;
 
   if (entityMatch) {
@@ -266,7 +286,18 @@ export async function resolveAskFollowUpMessage(input: {
 
   if (isFilterContinuation && FILTER_CONTINUABLE_OPERATIONS.has(prior.operationId as AskOperationId)) {
     return {
-      effectiveMessage: `${prior.message}. ${input.message}`,
+      // External review finding: concatenating with the prior turn's raw
+      // text meant a status/priority filter could never actually be
+      // CLEARED or SWITCHED by a declared chip -- "Show overdue
+      // maintenance" + "Now show all open maintenance tasks" still
+      // contains "overdue", so the parser kept applying it even though the
+      // homeowner picked "All open" specifically to clear it. A declared
+      // chip's message is a complete specification on its own; only an
+      // organic typed follow-up ("only show urgent," with no declared
+      // source) still needs concatenation, since free text like that
+      // relies on the prior turn for context the new message doesn't
+      // repeat (e.g. an earlier scope/room word).
+      effectiveMessage: input.declaredSourceExecutionId ? input.message : `${prior.message}. ${input.message}`,
       forcedOperationId: prior.operationId as AskOperationId,
       sourceExecutionId: prior.id,
       continuationCursor: null,

@@ -7632,7 +7632,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   // deterministic routing/entity-matching regexes see enough context to
   // resolve correctly. The homeowner-visible/persisted question stays the
   // original input.message.
-  const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: executionPropertyId, message: input.message });
+  const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: executionPropertyId, message: input.message, declaredSourceExecutionId: input.launchContext?.sourceExecutionId ?? null });
   const routingMessage = followUp.effectiveMessage;
 
   const skillRoutingStartedAt = process.hrtime.bigint();
