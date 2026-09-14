@@ -1,4 +1,5 @@
 import type { AskExecution } from '@prisma/client';
+import type { AskExecutionResponse } from '../../productFramework/ask/ask.contract';
 import type { PropertyAccess } from '../propertyAccess.service';
 import type { AskDomainCommandDefinition } from './askDomainCommandRegistry';
 import { ASK_DOMAIN_COMMAND_REGISTRY } from './askDomainCommandRegistry';
@@ -40,6 +41,17 @@ export interface ConfirmCapabilityResult {
   result: AskOperationResult;
   artifactType: string;
   artifactId: string;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: when a mutation
+  // completes something an earlier, still-visible result depended on (e.g.
+  // completing a task shown in a "pending maintenance" list), a handler can
+  // refresh that other execution in place (refreshAskExecutionAfterConflict)
+  // and surface it here. confirmAskExecution's generic success path passes
+  // these through as mapPersistedExecution's childExecutions, the same slot
+  // conversationalCapture.ts already uses -- reused, not a new mechanism.
+  // Optional and best-effort: a refresh failure must never fail the
+  // mutation that already succeeded (CONF-005's "never invite the user to
+  // repeat a confirmed successful mutation").
+  refreshedExecutions?: AskExecutionResponse[];
 }
 
 export type ConfirmCapabilityHandler = (ctx: ConfirmCapabilityContext) => Promise<ConfirmCapabilityResult>;

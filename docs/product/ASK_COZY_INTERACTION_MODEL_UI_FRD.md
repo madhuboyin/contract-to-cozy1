@@ -351,18 +351,18 @@ Traced the four items §18 left open. Two turned out to already exist (built gen
 | A05 | Pass (pre-existing) | `confirmMaintenanceTaskComplete` |
 | A06 | Pass (pre-existing) | Idempotency key + recurring next-due-date in receipt |
 | A07 | Pass | Current/new date shown, this round |
-| A08 | Not re-verified | `cancelAskExecution` exists; not re-traced this round |
+| A08 | Pass (round 5) | `cancelAskExecution` uses a guarded conditional update (`status: 'NEEDS_CONFIRMATION'` in the WHERE), never touches the domain record; `supportsCancelBeforeExecution` is true for every command including both maintenance ones — see §22 |
 | A09 | **Gap** | No editable-proposal UI exists anywhere (see above) |
 | A10 | Pass (pre-existing) | Version-conflict check in both confirm handlers |
 | A11 | Pass (pre-existing) | Confirmation-receipt claim/lease + idempotency key |
-| A12 | Not re-verified | Plausible via generic error handling; not specifically traced |
+| A12 | Pass (round 5) | Confirmed the underlying gap was real (no list reconciliation existed at all); fixed via `refreshAskExecutionAfterConflict` + `childExecutions` merge — see §22 |
 | A13 | Pass (pre-existing) | VIEWER-role rejection in both confirm handler and `confirmAskExecution`'s role-floor check |
-| A14 | Not re-verified | Property scoping exists per-execution; not explicitly walked this round |
+| A14 | Pass (round 5) | Deep-link `propertyMismatch` auto-corrects the selected property before loading the exact historical session/execution; combined with round 4's session-staleness guard and confirm-time revalidation — see §22 |
 | A15 | Pass (round 4) | Confirmed real (missing item-action disable + no session-staleness guard in `ask()`), both fixed — see §21 |
 | A16 | Partial | Filter forwarding fixed this round; return scroll/selection position not verified |
-| A17 | Not re-verified | Not specifically traced this round |
+| A17 | Pass (round 5) | Traced the generic skill-context composer: a required-provider load failure sets composed-context status `BLOCKED`, which `askOrchestrator.service.ts` gates on before any presentation code runs — a false empty list cannot reach the homeowner. See §22 |
 | A18 | Pass (round 4) | Confirmed real (no post-completion focus target); fixed via `ExecutionCard` extraction — see §21. Announcement was already correct pre-existing |
-| A21 | Plausible pass | Suggestion arrays can be empty; not specifically traced |
+| A21 | Pass (round 5) | Confirmed real (unconditional suggestions offered even to a VIEWER, or with zero matching tasks); fixed with conditional gating — see §22 |
 | A23 | Partial | Reload-consistent view collapse (this round); no staleness/age indicator on a historical result |
 | A24 | Pass (pre-existing) | Both confirm handlers explicitly error when the task is missing |
 
@@ -391,3 +391,24 @@ Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean), pl
 **A18 — real gap, fixed:** `useAutoFocusFirstControl` only ever fires on a sub-card's *mount* (ConfirmationCard, ClarificationCard, etc.). When a confirmation resolves to COMPLETED, that card unmounts — its focused Confirm button removed from the DOM — and nothing moved focus anywhere afterward, so a keyboard/screen-reader user's focus silently reverted to `<body>`. (Outcome *announcement* was already handled correctly by an existing generic `aria-live="polite"` region — only focus was missing.) Fixed by extracting the per-execution card into its own `ExecutionCard` component (previously inline JSX in a `.map()`, which cannot itself call hooks) with an effect that, once nothing else is claiming focus for that turn (no pending property selection/capture/clarification/confirmation) and this execution was the one just acted on, focuses the first focusable action in the settled result — falling back to the response heading (`tabIndex={-1}`) when a block has no action link.
 
 Verified via: `apps/frontend` full `tsc --noEmit` (clean). No dedicated component tests exist for `AskWorkspace.tsx` (frontend test coverage here is route-matching only); no browser/Playwright run performed against the actual focus behavior or the property-switch race.
+
+## 22. Implementation status, round 5 (2026-09-14): A08, A12, A14, A17, A21 traced
+
+Traced the five remaining "not re-verified"/"plausible pass" rows. Three were genuine passes on inspection; two (A12, A21) were real gaps, now fixed.
+
+**A08 — pass, no change needed.** `cancelAskExecution` (`askOrchestrator.service.ts`) guards its update with `where: { status: 'NEEDS_CONFIRMATION' }` rather than an unconditional write, so it can never race a concurrent confirm into cancelling an already-applied mutation, and it never touches the domain record itself — only the Ask execution's own status. `supportsCancelBeforeExecution` is hardcoded `true` for every entry in `ASK_DOMAIN_COMMAND_REGISTRY`, including `MAINTENANCE_COMPLETE`/`MAINTENANCE_UPDATE`.
+
+**A14 — pass, no change needed.** A deep link whose `initialPropertyId` differs from the currently selected property sets `propertyMismatch`, which forces `selectedPropertyId` to the link's property *before* loading — so acting on an older property's result already requires (and gets) an explicit return to that property's context, matching CTX-002. Combined with round 4's session-staleness guard (no stale cross-property leakage) and the pre-existing confirm-time revalidation (round 2), this holds without new work.
+
+**A17 — pass, no change needed.** Traced `skillContextComposer.ts`: a required context provider's `load()` throwing (or timing out) is caught and sets the composed context's `terminalStatus` to `UNAVAILABLE`/`TIMED_OUT`, which rolls up to an overall `BLOCKED` composed-context status when the failed provider was required. `askOrchestrator.service.ts` checks `composedContext.status === 'BLOCKED'` and short-circuits into an `UNAVAILABLE`/`BLOCKED` operation result *before* any handler (including `maintenanceResult()`) ever runs — a context-load failure cannot reach presentation code that might render it as a false empty list.
+
+**A12 — real gap, fixed.** Confirmed the underlying premise was missing entirely: no mechanism refreshed a *different*, still-visible execution (e.g. the "pending maintenance" list) after a row action's mutation completed elsewhere — MAINT-005's "reconcile current view" step didn't exist, so a completed task kept showing as pending in its original list until the homeowner manually re-asked. Fixed by wiring together two mechanisms that already existed for other purposes rather than inventing new ones:
+- `ConfirmCapabilityResult` (confirm-handler return shape) gained an optional `refreshedExecutions?: AskExecutionResponse[]`.
+- `confirmMaintenanceTaskComplete`/`confirmMaintenanceTaskUpdate` now call a new small helper, `refreshMaintenanceSourceExecution`, which re-runs `refreshAskExecutionAfterConflict` (already existed, previously only reachable from a capture-conflict error path) against the list execution the row action was clicked from — best-effort: any failure is swallowed so it can never turn a successful mutation into an error (CONF-005).
+- The frontend threads a new `launchContext.sourceExecutionId` (the clicked-from execution's own id) through `ask()` when an item action fires, and `updateExecution` now merges `childExecutions` into the existing card with a matching `executionId` instead of ignoring them — the same `childExecutions` slot conversational-capture already populates, reused rather than duplicated. A12 acceptance is now literal: the original list updates in place; nothing is left in a stale pending state.
+
+**A21 — real gap, fixed.** `maintenanceResult()`'s suggestions were an unconditional, hardcoded three-item array — offered even to a VIEWER (who cannot create a task, an authorization the UI itself already enforces elsewhere) and even with zero overdue/due-soon tasks to actually show. Fixed by gating each suggestion on whether it would do something real: "Show overdue tasks only" only when an overdue task exists and the query isn't already overdue-filtered; "What maintenance is due soon?" only with a genuine due-soon task; "Create a maintenance task" only for a contributor/owner and not already mid-creation-flow. An empty array is now a legitimate, reachable outcome.
+
+One test broke and was fixed as part of this round: `askEnvelopeAndRankingBoundary.test.js` asserts an exact regex match against the `maintenance.complete` registration's literal source line — adding the new `sourceExecutionId` argument changed that line's text, so the regex was updated to match.
+
+Verified via: `apps/backend` and `apps/frontend` full `tsc --noEmit` (clean), plus the complete `apps/backend/tests/ask/*.test.js` suite (598 tests, 597 passing, 1 pre-existing skip, 0 failures). No browser/Playwright run performed against the actual list-reconciliation or suggestion behavior.

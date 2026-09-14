@@ -129,10 +129,12 @@ test('the maintenance.complete and intelligence-envelope.query registrations bot
   // now also falls back to launchContext.entityId (a fresh execution's
   // canonical target, e.g. a "Complete" row action) when suppliedInput is
   // absent -- suppliedInput (the same-session follow-up path) still takes
-  // priority when both are present.
+  // priority when both are present. Also threads launchContext.sourceExecutionId
+  // (MAINT-005/A12) so the confirm handler can refresh the list the row
+  // action came from once its mutation succeeds.
   assert.match(
     source,
-    /registerCapabilityHandler\('maintenance\.complete', async \(envelope\) => maintenanceTaskCompleteResult\(envelope\.userId, envelope\.propertyId!, envelope\.message, \(envelope\.suppliedInput as MaintenanceCompletionWorkflowInput \| undefined\) \?\? \(launchMaintenanceTaskId\(envelope\) \? \{ taskId: launchMaintenanceTaskId\(envelope\)! \} : undefined\)\)\);/,
+    /registerCapabilityHandler\('maintenance\.complete', async \(envelope\) => maintenanceTaskCompleteResult\(envelope\.userId, envelope\.propertyId!, envelope\.message, \(envelope\.suppliedInput as MaintenanceCompletionWorkflowInput \| undefined\) \?\? \(launchMaintenanceTaskId\(envelope\) \? \{ taskId: launchMaintenanceTaskId\(envelope\)! \} : undefined\), envelope\.launchContext\?\.sourceExecutionId \?\? null\)\);/,
   );
   assert.match(
     source,

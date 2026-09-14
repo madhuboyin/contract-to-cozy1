@@ -210,6 +210,7 @@ export interface CreateAskExecutionPayload {
     journeyId?: string | null;
     contextVersion?: string | null;
     returnTo?: string | null;
+    sourceExecutionId?: string | null;
   };
 }
 // Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" — a dedicated
@@ -296,6 +297,10 @@ export interface AskCapabilityPrompt {
     journeyId?: string;
     contextVersion?: string;
     returnTo?: string;
+    // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: the execution a row
+    // action (e.g. "Complete") was clicked from, so its confirm handler can
+    // refresh that still-visible list once the mutation succeeds.
+    sourceExecutionId?: string;
   };
 }
 

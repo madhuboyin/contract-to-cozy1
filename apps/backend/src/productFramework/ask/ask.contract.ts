@@ -558,6 +558,12 @@ export const CreateAskExecutionRequestSchema = z.object({
     journeyId: z.string().trim().max(160).nullable().optional(),
     contextVersion: z.string().trim().max(160).nullable().optional(),
     returnTo: z.string().trim().max(1000).nullable().optional(),
+    // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: the execution this
+    // turn's item action was clicked from (e.g. a "Complete" button on a
+    // pending-maintenance list row), if any. Lets a confirm handler refresh
+    // that still-visible result in place once its mutation succeeds,
+    // instead of leaving it showing stale pending/complete state.
+    sourceExecutionId: z.string().trim().max(160).nullable().optional(),
   }).optional(),
 }).strict();
 

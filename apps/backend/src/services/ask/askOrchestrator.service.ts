@@ -1048,6 +1048,7 @@ async function maintenanceTaskCompleteResult(
   propertyId: string,
   message: string,
   suppliedInput?: MaintenanceCompletionWorkflowInput,
+  sourceExecutionId?: string | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
@@ -1134,6 +1135,10 @@ async function maintenanceTaskCompleteResult(
       maintenanceTaskVersion: maintenanceTaskVersion(selected),
       maintenanceActualCostUsd: parsed.data.actualCostUsd ?? null,
       maintenanceOutcomeHealth: parsed.data.outcomeHealth ?? null,
+      // MAINT-005/A12: carried to confirm-time so the source list (if this
+      // came from a "Complete" row action) can be refreshed in place after
+      // the mutation succeeds -- see confirmMaintenanceTaskComplete.
+      sourceExecutionId: sourceExecutionId ?? null,
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
     },
@@ -1179,7 +1184,7 @@ function maintenanceUpdateSubject(message: string): string {
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null): Promise<AskOperationResult> {
+async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null, sourceExecutionId?: string | null): Promise<AskOperationResult> {
   const [tasks, members] = await Promise.all([
     PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
     prisma.householdMember.findMany({ where: { propertyId }, include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } }),
@@ -1237,7 +1242,10 @@ async function maintenanceTaskUpdateResult(userId: string, propertyId: string, m
   const actionLabel = { EDIT: 'update', RESCHEDULE: 'reschedule', ASSIGN: 'assign', UNASSIGN: 'unassign', ARCHIVE: 'archive', REOPEN: 'reopen' }[action];
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'MAINTENANCE_UPDATE_CONFIRMATION_REQUIRED', contextVersion: maintenanceTaskVersion(match),
-    parameters: { maintenanceUpdate: parsed, maintenanceTaskVersion: maintenanceTaskVersion(match), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    // MAINT-005/A12: carried to confirm-time so the source list (if this
+    // came from a "Reschedule" row action) can be refreshed in place after
+    // the mutation succeeds -- see confirmMaintenanceTaskUpdate.
+    parameters: { maintenanceUpdate: parsed, maintenanceTaskVersion: maintenanceTaskVersion(match), sourceExecutionId: sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: `Review this ${actionLabel}`, body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(match.id)}`, style: 'SECONDARY' }] }],
     confirmation: {
       confirmationId: `maintenance-update-${match.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${match.title}?`,
@@ -1634,12 +1642,24 @@ async function maintenanceResult(
     severity: 'INFO', suggestions: [],
   });
 
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD NEXT-001/NEXT-002/A21: these were
+  // unconditional -- offered even to a VIEWER who cannot create a task
+  // (unauthorized), even with zero overdue/due-soon tasks to show
+  // (unavailable), and even when the current query already applied that
+  // exact filter (redundant). Gate each on whether it would actually do
+  // something useful; an empty array is a legitimate outcome (A21).
+  const hasOverdueTask = active.some((task) => task.nextDueDate && task.nextDueDate < now);
+  const hasDueSoonTask = active.some((task) => task.nextDueDate && task.nextDueDate >= now && task.nextDueDate <= dueSoonBoundary);
   return {
     status: missingPurchaseDate ? 'READY_WITH_LIMITATIONS' : creationFocus ? (canManage ? 'READY_WITH_LIMITATIONS' : 'BLOCKED') : 'ANSWERED',
     reasonCode: missingPurchaseDate ? 'MAINTENANCE_PURCHASE_DATE_MISSING' : creationFocus ? (canManage ? 'MAINTENANCE_WORKFLOW_REQUIRED' : 'ASK_PERMISSION_REQUIRED') : undefined,
     contextVersion: createHash('sha256').update(JSON.stringify(tasks.map((task) => ({ id: task.id, status: task.status, updatedAt: task.updatedAt })))).digest('hex'),
     blocks,
-    suggestions: ['Show overdue tasks only', 'What maintenance is due soon?', 'Create a maintenance task'],
+    suggestions: [
+      ...(hasOverdueTask && !overdueOnly ? ['Show overdue tasks only'] : []),
+      ...(hasDueSoonTask && !dueSoonOnly ? ['What maintenance is due soon?'] : []),
+      ...(canManage && !creationFocus ? ['Create a maintenance task'] : []),
+    ],
   };
 }
 
@@ -6725,9 +6745,9 @@ registerCapabilityHandler('boundary.out-of-scope', async () => outOfScopeResult(
 // generic message-text fuzzy match.
 const launchMaintenanceTaskId = (envelope: CapabilityInvocationEnvelope): string | null =>
   envelope.launchContext?.entityType === 'MAINTENANCE_TASK' ? envelope.launchContext.entityId ?? null : null;
-registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, (envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined) ?? (launchMaintenanceTaskId(envelope) ? { taskId: launchMaintenanceTaskId(envelope)! } : undefined)));
+registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, (envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined) ?? (launchMaintenanceTaskId(envelope) ? { taskId: launchMaintenanceTaskId(envelope)! } : undefined), envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('maintenance.create', async (envelope) => maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, launchMaintenanceTaskId(envelope)));
+registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, launchMaintenanceTaskId(envelope), envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   const composedContext = deps.composedContext!;
   const seasonalEntry = composedContext.entries.find(
@@ -9189,6 +9209,25 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
     result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
   return { result, artifactType, artifactId };
 }
+// ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: after a maintenance
+// complete/reschedule mutation succeeds, refresh the list execution it was
+// clicked from (if any) so it stops showing stale pending/due state instead
+// of leaving that reconciliation to a manual re-ask. Reuses
+// refreshAskExecutionAfterConflict (already re-runs an execution's own
+// operation+message in place) rather than a new mechanism. Best-effort per
+// CONF-005: a refresh failure must never fail the mutation that already
+// succeeded, so any error here is swallowed and simply yields no refreshed
+// card.
+async function refreshMaintenanceSourceExecution(userId: string, currentExecutionId: string, parameters: Record<string, unknown>): Promise<AskExecutionResponse[]> {
+  const sourceExecutionId = parameters.sourceExecutionId;
+  if (typeof sourceExecutionId !== 'string' || !sourceExecutionId || sourceExecutionId === currentExecutionId) return [];
+  try {
+    return [await refreshAskExecutionAfterConflict(userId, sourceExecutionId)];
+  } catch {
+    return [];
+  }
+}
+
 async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
   let result: AskOperationResult;
@@ -9269,7 +9308,7 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK_COMPLETION';
     artifactId = updated.id;
-  return { result, artifactType, artifactId };
+  return { result, artifactType, artifactId, refreshedExecutions: await refreshMaintenanceSourceExecution(userId, execution.id, parameters) };
 }
 async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -9688,7 +9727,7 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
     };
     artifactType = command.artifactType;
     artifactId = updated.id;
-  return { result, artifactType, artifactId };
+  return { result, artifactType, artifactId, refreshedExecutions: await refreshMaintenanceSourceExecution(userId, execution.id, parameters) };
 }
 async function confirmGuidanceJourneyCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -10737,6 +10776,10 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   let result: AskOperationResult;
   let artifactType: string;
   let artifactId: string;
+  // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: populated only when a
+  // confirm handler explicitly refreshed another still-visible execution
+  // this mutation affected (see ConfirmCapabilityResult.refreshedExecutions).
+  let refreshedExecutions: AskExecutionResponse[] = [];
   try {
   {
     const confirmed = await confirmCapabilityInvoke(execution.operationId as AskOperationId, {
@@ -10744,6 +10787,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       userId, parameters, access, command,
     });
     result = confirmed.result; artifactType = confirmed.artifactType; artifactId = confirmed.artifactId;
+    refreshedExecutions = confirmed.refreshedExecutions ?? [];
   }
   } catch (error) {
     // The claim above (RUNNING + CLAIMED receipt) already committed before
@@ -10857,7 +10901,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     if (!completed) throw error;
     saved = completed;
   }
-  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId), refreshedExecutions);
 }
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD §8 (CONF-002/CONF-003): edits a
