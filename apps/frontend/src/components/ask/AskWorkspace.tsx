@@ -60,6 +60,11 @@ function askSuggestionKey(value: string): string {
 }
 
 const ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED = 'ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED';
+// External review [P1]: the set of error codes that mean "access to this
+// result or its home is gone," shared between refreshResult's own catch
+// and any other card (ConfirmationCard, etc.) that needs to trigger the
+// same access-lost redaction after a failed request of its own.
+const ACCESS_LOST_CODES = ['ASK_EXECUTION_NOT_FOUND', 'ASK_PERMISSION_REQUIRED', 'ASK_PROPERTY_NOT_FOUND', 'AUTH_REQUIRED'];
 
 function askFailureCode(error: unknown): string | null {
   if (!error || typeof error !== 'object') return null;
@@ -955,7 +960,7 @@ function ClarificationCard({ executionId, clarification, onCompleted, autoFocus 
   );
 }
 
-function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = false }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean }) {
+function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = false, onAccessLost }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean; onAccessLost: () => void }) {
   const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1001,6 +1006,12 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
       if (!response.success || !response.data) throw new Error(response.message || 'Could not save this edit.');
       onCompleted(response.data);
     } catch (caught) {
+      // External review [P1]: the backend correctly rejects this once
+      // access is revoked, but that alone leaves the old proposal/consent/
+      // controls fully rendered and usable -- redact via the same path
+      // refreshResult uses, rather than just showing an error message
+      // beside still-live controls.
+      if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) { onAccessLost(); return; }
       // Retain the homeowner's typed value (editValues is untouched here) so
       // they don't have to re-enter it after a validation error.
       setEditError(caught instanceof Error ? caught.message : 'Could not save this edit.');
@@ -1017,6 +1028,10 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
       window.sessionStorage.removeItem(confirmationAttemptStorageKey(executionId, confirmation.version));
       onCompleted(response.data);
     } catch (caught) {
+      // External review [P1]: same redaction as saveEdit/cancel below --
+      // an access-lost rejection must remove the stale proposal/consent/
+      // controls, not just display an error next to them.
+      if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) { onAccessLost(); return; }
       // A disconnected client cannot cancel a server-side mutation. Reconcile
       // the durable execution before inviting the homeowner to retry.
       try {
@@ -1038,7 +1053,10 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
       const response = await api.cancelAskExecution(executionId);
       if (!response.success || !response.data) throw new Error(response.message || 'Could not cancel this action.');
       onCompleted(response.data);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not cancel this action.'); }
+    } catch (caught) {
+      if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) { onAccessLost(); return; }
+      setError(caught instanceof Error ? caught.message : 'Could not cancel this action.');
+    }
     finally { setSaving(false); }
   };
   return (
@@ -1076,6 +1094,55 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
       <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-violet-200 bg-white p-3 text-sm text-slate-700"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4" /><span>{confirmation.consentText}</span></label>
       {expired && <p className="mt-3 text-sm text-amber-700">This review expired. Ask again to use current settings.</p>}{error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
       <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={!consent || saving || expired || Boolean(editingKey)} onClick={() => void confirm()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Working…' : confirmation.confirmLabel}</button><button type="button" disabled={saving} onClick={() => void cancel()} className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Cancel</button></div>
+    </section>
+  );
+}
+
+// External review [P2]: once a confirmation is claimed, the execution
+// transitions to RUNNING, but its resultJson.confirmation is left
+// populated (the claim transaction only touches status/reasonCode) --
+// so re-fetching the execution while a lease is stuck (a crashed request,
+// a slow domain write) still returned a confirmation object, and
+// ConfirmationCard doesn't check status before rendering "Confirmation
+// required" over it, inviting a resubmit of something that may already
+// be running or done. Rendered instead of ConfirmationCard whenever
+// status is RUNNING with a confirmation still present.
+//
+// "Check status" resubmits confirmAskExecution with the SAME
+// confirmationVersion (a fresh idempotencyKey is fine -- confirmAskExecution's
+// receipt-recovery match is keyed on inputHash, which is derived from
+// confirmationVersion/consent/binding/params, not the idempotencyKey), which
+// is the actual recovery path this execution already supports
+// (confirmAskExecution's recoveringClaim branch): if the original attempt's
+// lease already expired, this re-claims it and safely replays the confirm
+// through the domain command's own idempotency guard (e.g.
+// confirmMaintenanceTaskComplete's completedByThisExecution check) rather
+// than silently double-applying it; if the lease has not expired yet, the
+// backend returns an explicit "already being completed" message instead
+// of a duplicate action. Passively reading the execution instead (via
+// getAskExecution) cannot make progress here at all -- the previously
+// reported gap this review specifically named ("'Check action status' can
+// simply return the same RUNNING state").
+function PendingOutcomeCard({ executionId, confirmationVersion, onCompleted }: { executionId: string; confirmationVersion: number; onCompleted: (execution: AskExecutionResponse) => void }) {
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const check = async () => {
+    if (checking) return;
+    setChecking(true); setError(null);
+    try {
+      const response = await api.confirmAskExecution(executionId, { confirmationVersion, idempotencyKey: newId(), consentConfirmed: true });
+      if (!response.success || !response.data) throw new Error(response.message || "Could not check this action's status.");
+      onCompleted(response.data);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not check this action's status.");
+    } finally { setChecking(false); }
+  };
+  return (
+    <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">Outcome not yet known</p>
+      <p className="mt-1 text-sm leading-5 text-slate-700">This action is still being processed. Checking will safely pick up its result if it already finished, or resume it if the previous attempt was interrupted -- it will not apply the action twice.</p>
+      <button type="button" disabled={checking} onClick={() => void check()} className="mt-3 min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{checking ? 'Checking…' : 'Check status'}</button>
+      {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
     </section>
   );
 }
@@ -1402,7 +1469,7 @@ function RecentAskSessions({ items, loading, openingId, onOpen }: {
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1425,6 +1492,10 @@ function ExecutionCard({
   refreshIssue?: { message: string; accessLost: boolean } | null;
   refreshResult: (execution: AskExecutionResponse) => Promise<void>;
   refreshPending: boolean;
+  // External review [P1]: lets a child card (ConfirmationCard) trigger the
+  // same access-lost redaction refreshResult's own catch already performs,
+  // for its OWN failed request -- not only a refresh round trip.
+  onAccessLost: (execution: Pick<AskExecutionResponse, 'sessionId' | 'property' | 'executionId'>) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1538,7 +1609,13 @@ function ExecutionCard({
         {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
         {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} autoFocus={index === 0 && isJustUpdated} />)}
         {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
-        {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
+        {execution.confirmation && execution.status === 'NEEDS_CONFIRMATION' && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={isJustUpdated} onAccessLost={() => onAccessLost(execution)} />}
+        {/* External review [P2]: status RUNNING with confirmation still
+            populated means a claim was made but the domain write's outcome
+            isn't known yet -- render the outcome-unknown state instead of
+            ConfirmationCard's "Confirmation required," which would invite
+            a resubmit of something that may already be running or done. */}
+        {execution.confirmation && execution.status === 'RUNNING' && <PendingOutcomeCard executionId={execution.executionId} confirmationVersion={execution.confirmation.version} onCompleted={updateExecution} />}
         {execution.skillHandoff && (() => {
           const handoffPrompt = execution.skillHandoff.suggestedGoal.replace(/[-_]+/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
           const continuity = execution.skillHandoff.continuity;
@@ -1913,6 +1990,30 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } else article.scrollIntoView({ block: 'start' });
   }
 
+  // External review [P1]: previously inlined only inside refreshResult's
+  // catch block, so this redaction (blanking task details/proposal/
+  // consent/actions, clearing local view state, dropping pending-work
+  // entries for the denied property) ran only after an explicit refresh
+  // failed -- a confirmation submitted after access was revoked correctly
+  // failed on the backend, but ConfirmationCard had no way to trigger the
+  // same redaction, leaving its stale proposal/consent/Confirm button
+  // fully rendered and usable. Extracted so any card can call it directly
+  // on its own access-lost failure, not only via a refresh round trip.
+  function redactAccessLostResult(execution: Pick<AskExecutionResponse, 'sessionId' | 'property' | 'executionId'>) {
+    const deniedKey = `${execution.sessionId}:${execution.property?.id}`;
+    deniedProperties.current.add(deniedKey);
+    clearResultViews(window.sessionStorage, execution.sessionId);
+    setExecutions((current) => current.map((item) => item.property?.id === execution.property?.id ? {
+      ...item, question: 'Unavailable result', blocks: [], originalResponse: null, confirmation: null, clarification: null, captureRequests: [], suggestions: [], skillHandoff: null, viewState: null,
+    } : item));
+    setPendingWork((current) => current.filter((item) => item.execution.property?.id !== execution.property?.id));
+    const issue = { accessLost: true, message: 'This result is no longer available, or your access to this home has changed.' };
+    setRefreshIssues((current) => ({ ...current, ...Object.fromEntries(
+      executions.filter((item) => item.property?.id === execution.property?.id).map((item) => item.executionId)
+        .concat(execution.executionId).map((id) => [id, issue]),
+    ) }));
+  }
+
   async function refreshResult(execution: AskExecutionResponse) {
     const key = resultRequestKey(execution);
     const token = requests.current.begin(key);
@@ -1928,20 +2029,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } catch (caught) {
       if (!isCurrent()) return;
       const code = askFailureCode(caught);
-      const accessLost = ['ASK_EXECUTION_NOT_FOUND', 'ASK_PERMISSION_REQUIRED', 'ASK_PROPERTY_NOT_FOUND', 'AUTH_REQUIRED'].includes(code ?? '');
-      const issue = { accessLost, message: accessLost ? 'This result is no longer available, or your access to this home has changed.' : `Could not refresh this result. Showing the last known view. ${caught instanceof Error ? caught.message : ''}` };
+      const accessLost = ACCESS_LOST_CODES.includes(code ?? '');
       if (accessLost) {
-        deniedProperties.current.add(deniedKey);
-        clearResultViews(window.sessionStorage, execution.sessionId);
-        setExecutions((current) => current.map((item) => item.property?.id === execution.property?.id ? {
-          ...item, question: 'Unavailable result', blocks: [], originalResponse: null, confirmation: null, clarification: null, captureRequests: [], suggestions: [], skillHandoff: null, viewState: null,
-        } : item));
-        setPendingWork((current) => current.filter((item) => item.execution.property?.id !== execution.property?.id));
+        redactAccessLostResult(execution);
+      } else {
+        setRefreshIssues((current) => ({ ...current, [execution.executionId]: { accessLost: false, message: `Could not refresh this result. Showing the last known view. ${caught instanceof Error ? caught.message : ''}` } }));
       }
-      setRefreshIssues((current) => ({ ...current, ...Object.fromEntries(
-        (accessLost ? executions.filter((item) => item.property?.id === execution.property?.id).map((item) => item.executionId) : [execution.executionId])
-          .concat(execution.executionId).map((id) => [id, issue]),
-      ) }));
     } finally {
       setRefreshRequests((current) => {
         if (current[key] !== token) return current;
@@ -2121,6 +2214,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   refreshIssue={deniedProperties.current.has(`${execution.sessionId}:${execution.property?.id}`) ? { accessLost: true, message: 'Access to this result is no longer available.' } : refreshIssues[execution.executionId] ?? null}
                   refreshResult={refreshResult}
                   refreshPending={Boolean(refreshRequests[resultRequestKey(execution)])}
+                  onAccessLost={redactAccessLostResult}
                 />
               </AskActionReturnContext.Provider>;
             })}

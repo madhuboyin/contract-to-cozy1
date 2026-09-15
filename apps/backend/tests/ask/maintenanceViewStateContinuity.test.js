@@ -99,3 +99,26 @@ test('refresh retains the stored scope after a status refinement', () => {
   assert.equal(result.effectiveMessage, 'hvac this month Only show urgent tasks');
   assert.equal(result.isClearAllFilters, false);
 });
+
+test('mergeMaintenanceViewContinuation retains room scope through a status-chip continuation like domain and date', () => {
+  // External review [P2]: room scope was derived fresh every turn from
+  // the message text but never stored in MaintenanceViewState, so unlike
+  // domain/date it was silently dropped by any status chip -- "Show
+  // Kitchen maintenance" -> "Urgent" used to broaden the result to every
+  // room instead of staying scoped to the kitchen.
+  const priorViewState = { domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: 'kitchen' };
+  const { effectiveMessage, isClearAllFilters } = mergeMaintenanceViewContinuation(priorViewState, 'Only show urgent tasks');
+  assert.match(effectiveMessage, /kitchen/i);
+  assert.match(effectiveMessage, /urgent/i);
+  assert.equal(isClearAllFilters, false);
+});
+
+test('mergeMaintenanceViewContinuation treats a stored row with no roomScopePhrase field the same as none set', () => {
+  // A view state persisted before this field existed has no roomScopePhrase
+  // key at all (not even null) -- must not throw and must behave exactly
+  // like domain/date-only continuation.
+  const priorViewState = { domainScopePhrase: 'hvac', dateScopePhrase: null };
+  const { effectiveMessage } = mergeMaintenanceViewContinuation(priorViewState, 'Only show urgent tasks');
+  assert.match(effectiveMessage, /hvac/i);
+  assert.match(effectiveMessage, /urgent/i);
+});

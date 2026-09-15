@@ -81,12 +81,32 @@ export const MAINTENANCE_SKILL = Object.freeze({
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
     { type: 'CONTEXT_PROVIDER', id: SEASONAL_CHECKLIST_CONTEXT_PROVIDER.id, version: SEASONAL_CHECKLIST_CONTEXT_PROVIDER.version, required: false },
   ],
+  // External review [P1]: maxEntities/maxFacts/maxSerializedBytes were the
+  // generic scaffold defaults, not something sized for this domain --
+  // maintenanceTaskContext.provider.ts treats one maintenance task as one
+  // entity/fact, and includeCompleted: true means a property with a few
+  // years of history can genuinely have well over 60 total task rows. At
+  // the old maxEntities: 60, any property past that count hit
+  // BUDGET_EXCEEDED and had the entire (required, DETERMINISTIC -- never
+  // LLM-facing) MAINTENANCE_STATUS operation fail outright.
+  //
+  // Raised to skillRegistry.ts's own PLATFORM_CONTEXT_BUDGET_MAXIMUMS
+  // ceiling (maxEntities: 100, maxSerializedBytes: 256_000) -- a genuine
+  // platform-wide governance limit enforced across every Skill
+  // (skillPlatformFoundation.test.js asserts no Skill exceeds it), not
+  // something to override. maxFacts matched to maxEntities rather than
+  // raised to its own separate 250 ceiling, since one task is exactly one
+  // fact and one entity here; there is no reason for the two counts to
+  // diverge for this provider. maintenanceTaskContext.provider.ts's own
+  // byte/count bounding (PROVIDER_MAX_SERIALIZED_BYTES, MAX_CONTEXT_TASKS)
+  // stays under this skill total with headroom for the optional
+  // seasonal-checklist-context provider's own budget.
   contextBudget: {
-    maxFacts: 250,
-    maxEntities: 60,
+    maxFacts: 100,
+    maxEntities: 100,
     maxDocuments: 0,
     maxHistoryEvents: 100,
-    maxSerializedBytes: 192_000,
+    maxSerializedBytes: 256_000,
     maxProviderLatencyMs: 2_000,
     maxOverallLatencyMs: 15_000,
   },

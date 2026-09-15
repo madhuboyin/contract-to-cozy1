@@ -1235,29 +1235,46 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         ? this.buildStatusUpdateData(existingTask, data.status, userId, data.actualCost)
         : {};
 
-      const updatedTask = await prisma.propertyMaintenanceTask.update({
-        where: { id: taskId },
-        data: {
-          ...(data.title !== undefined && { title: data.title }),
-          ...(data.description !== undefined && { description: data.description }),
-          ...(data.priority !== undefined && { priority: data.priority }),
-          ...statusUpdateData,
-          ...(data.estimatedCost !== undefined && { estimatedCost: data.estimatedCost }),
-          ...(data.actualCost !== undefined && { actualCost: data.actualCost }),
-          ...(data.isRecurring !== undefined && {
-            isRecurring: data.isRecurring,
-            ...(data.isRecurring === false && { frequency: null }),
-          }),
-          ...(data.frequency !== undefined &&
-            data.isRecurring !== false && { frequency: data.frequency }),
-          ...(data.nextDueDate !== undefined && {
-            nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : null,
-          }),
-          ...(data.serviceCategory !== undefined && {
-            serviceCategory: data.serviceCategory,
-          }),
-        },
+      const updateData = {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.priority !== undefined && { priority: data.priority }),
+        ...statusUpdateData,
+        ...(data.estimatedCost !== undefined && { estimatedCost: data.estimatedCost }),
+        ...(data.actualCost !== undefined && { actualCost: data.actualCost }),
+        ...(data.isRecurring !== undefined && {
+          isRecurring: data.isRecurring,
+          ...(data.isRecurring === false && { frequency: null }),
+        }),
+        ...(data.frequency !== undefined &&
+          data.isRecurring !== false && { frequency: data.frequency }),
+        ...(data.nextDueDate !== undefined && {
+          nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : null,
+        }),
+        ...(data.serviceCategory !== undefined && {
+          serviceCategory: data.serviceCategory,
+        }),
+      };
+
+      // External review [P1]: this used to be an unconditional update() by
+      // id, unlike updateTaskStatus's guarded updateMany() below it. A
+      // caller (e.g. Ask's reschedule confirm) can check the task's
+      // version, then have another session's write land in the gap before
+      // this call actually runs -- the caller's version check passed, but
+      // this write would still silently overwrite the concurrent change
+      // (e.g. a newer due date). Same compare-and-swap as updateTaskStatus:
+      // guard on updatedAt (bumped by every prior write), and surface a
+      // genuine conflict instead of silently applying a stale write.
+      const claimed = await prisma.propertyMaintenanceTask.updateMany({
+        where: { id: taskId, updatedAt: existingTask.updatedAt },
+        data: updateData,
       });
+      if (claimed.count === 0) {
+        const error = new Error('This task was changed by a concurrent update. Reload it and try again.');
+        (error as Error & { code?: string }).code = 'CONCURRENT_TASK_UPDATE';
+        throw error;
+      }
+      const updatedTask = await prisma.propertyMaintenanceTask.findUniqueOrThrow({ where: { id: taskId } });
 
       if (data.status !== undefined) {
         const isNowCompleted = updatedTask.status === 'COMPLETED';

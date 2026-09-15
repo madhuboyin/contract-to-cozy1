@@ -999,6 +999,27 @@ function maintenanceTaskVersion(task: { id: string; status: MaintenanceTaskStatu
   return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, updatedAt: task.updatedAt })).digest('hex');
 }
 
+// External review [P1] FRESH-002/A10: a detected maintenance-task
+// confirmation conflict used to become a generic "This task changed
+// while the confirmation was open. Review its current state and try
+// again" message, regardless of what actually happened -- it never said
+// whether another session had already finished the job, cancelled it, or
+// just moved its date. Returning the CURRENT task's own state in the
+// message (rather than a fresh proposal, which would require a much
+// larger per-operation redesign across all 25 confirmation-capable
+// commands) at least tells the homeowner what to expect before they ask
+// again, and explicitly names the "someone else already completed this"
+// case the review specifically called out.
+function maintenanceConflictDescription(task: { title: string; status: MaintenanceTaskStatus; nextDueDate: Date | null }): string {
+  if (task.status === MaintenanceTaskStatus.COMPLETED) {
+    return `"${task.title}" was already completed in another session. No further action was taken here.`;
+  }
+  if (task.status === MaintenanceTaskStatus.CANCELLED) {
+    return `"${task.title}" was cancelled in another session before this change could be applied.`;
+  }
+  return `"${task.title}" changed in another session before this could be confirmed -- it is now ${task.nextDueDate ? `due ${humanDate(task.nextDueDate) ?? 'on an unrecorded date'}` : 'unscheduled'}. Review its current state and try again.`;
+}
+
 function maintenanceCompletionSubject(message: string): string {
   return message.toLowerCase()
     .replace(/^\s*(?:please\s+)?(?:mark|set|complete|finish)\s+/i, '')
@@ -1489,6 +1510,12 @@ interface MaintenanceViewState {
   // rather than requiring a second, parallel parsing path.
   domainScopePhrase: string | null;
   dateScopePhrase: string | null;
+  // External review [P2]: room scope was derived fresh every turn from
+  // the raw task list + message text, but never stored here -- so unlike
+  // domain/date, it was silently dropped by any status-chip continuation
+  // (missing from a plain object, `undefined` behaves like a stored row
+  // predating this field -- both correctly drop out of the merge below).
+  roomScopePhrase?: string | null;
   statusFilter: 'ALL_OPEN' | 'OVERDUE' | 'DUE_SOON' | 'URGENT';
   selectedTaskId: string | null;
   revision: number;
@@ -1518,14 +1545,17 @@ async function loadMaintenanceViewState(executionId: string, userId: string): Pr
 // exercise at all) so this specific merge behavior is directly unit
 // -testable.
 export function mergeMaintenanceViewContinuation(
-  priorViewState: Pick<MaintenanceViewState, 'domainScopePhrase' | 'dateScopePhrase'> | null | undefined,
+  priorViewState: Pick<MaintenanceViewState, 'domainScopePhrase' | 'dateScopePhrase' | 'roomScopePhrase'> | null | undefined,
   message: string,
   intent: 'FILTER' | 'REFRESH' = 'FILTER',
 ): { effectiveMessage: string; isClearAllFilters: boolean } {
   // A refresh reads an existing view; it must not replay a historical UI command.
   const isClearAllFilters = intent === 'FILTER' && /\bclear all filters\b/i.test(message);
+  // External review [P2]: roomScopePhrase joins domain/date here so a room
+  // scope survives a status-chip continuation the same way they do,
+  // instead of silently broadening to every room.
   const effectiveMessage = (priorViewState && !isClearAllFilters)
-    ? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, message].filter(Boolean).join(' ')
+    ? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, priorViewState.roomScopePhrase, message].filter(Boolean).join(' ')
     : message;
   return { effectiveMessage, isClearAllFilters };
 }
@@ -1671,13 +1701,30 @@ async function maintenanceResult(
   const unscheduledCount = active.filter((task) => !task.nextDueDate).length;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'maintenance-summary',
+    // External review [P2]: "No recorded maintenance tasks" and "tasks
+    // exist but none match these filters" both used to render as the same
+    // "No matching maintenance records were found," contrary to the
+    // required lifecycle distinction -- context.totalTaskCount (the true
+    // canonical total, independent of any provider-level truncation)
+    // distinguishes a property with zero tasks ever from one where the
+    // active filters simply matched nothing.
     title: creationFocus
       ? canManage ? 'Create the task in Maintenance' : 'A contributor or owner can create this task'
-      : displayed ? `${displayed} maintenance record${displayed === 1 ? '' : 's'} match this request` : 'No matching maintenance records were found',
+      : displayed
+        ? `${displayed} maintenance record${displayed === 1 ? '' : 's'} match this request`
+        : context.totalTaskCount === 0
+          ? 'No maintenance tasks are recorded for this home yet'
+          : 'No maintenance tasks match these filters',
     body: creationFocus
       ? 'Ask has not created anything. The Maintenance workflow collects the schedule, recurrence, priority, and any system link before saving.'
-      : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}`,
-    tone: overdueCount ? 'CAUTION' : 'DEFAULT',
+      // External review [P1]: context.wasTruncated means the canonical
+      // task list exceeded this operation's context budget and was
+      // bounded (active tasks kept whole; only completed/cancelled
+      // history was trimmed -- see maintenanceTaskContext.provider.ts).
+      // The totals/counts above are computed only from what was loaded,
+      // so that must be disclosed rather than presented as complete.
+      : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}${context.wasTruncated ? ` Only ${tasks.length} of ${context.totalTaskCount} total maintenance records could be loaded for this answer; totals and matches above may not reflect all older completed or cancelled history.` : ''}`,
+    tone: (overdueCount || context.wasTruncated) ? 'CAUTION' : 'DEFAULT',
     actions: creationFocus && canManage
       ? [{ id: 'create-maintenance', label: 'Create maintenance task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'PRIMARY' }]
       : [
@@ -1697,14 +1744,17 @@ async function maintenanceResult(
     // Urgent replace only the status/priority dimension, retaining any
     // established domain/date scope (see effectiveMessage above) --
     // "Clear all filters" is the one control that resets everything,
-    // offered only when there is a domain/date scope actually worth
+    // offered only when there is a domain/date/room scope actually worth
     // clearing (otherwise it would be redundant with "All open").
     filters: [
       { id: 'all', label: 'All open', message: 'Now show all open maintenance tasks', active: !overdueOnly && !dueSoonOnly && !highPriorityOnly },
       { id: 'overdue', label: 'Overdue', message: 'Only show overdue tasks', active: overdueOnly },
       { id: 'due-soon', label: 'Due soon', message: 'Only show tasks due soon', active: dueSoonOnly },
       { id: 'urgent', label: 'Urgent', message: 'Only show urgent tasks', active: highPriorityOnly },
-      ...(scopeTerms.length || timeframe ? [{ id: 'clear-all', label: 'Clear all filters', message: 'Clear all filters and show all open maintenance tasks', active: false }] : []),
+      // External review [P2]: a room-only result (no domain/date scope)
+      // used to omit this chip entirely, even though a real filter (room)
+      // was active and worth clearing.
+      ...(scopeTerms.length || timeframe || roomScope ? [{ id: 'clear-all', label: 'Clear all filters', message: 'Clear all filters and show all open maintenance tasks', active: false }] : []),
     ],
     id: 'maintenance-groups', title: 'Maintenance record',
     // MAINT-003/MAINT-004: label every applied filter, including priority --
@@ -1776,6 +1826,14 @@ async function maintenanceResult(
     resultId: priorViewState?.resultId ?? randomUUID(),
     domainScopePhrase: scopeTerms[0] ?? null,
     dateScopePhrase: timeframe?.label ?? null,
+    // External review [P2]: stored so a later status-chip continuation can
+    // carry it forward via mergeMaintenanceViewContinuation, matching
+    // domain/date. Derived from roomScope, which by this point reflects
+    // effectiveMessage (already including any merged-forward room phrase,
+    // same as domainScopePhrase/dateScopePhrase above), so it naturally
+    // resets on "Clear all filters" exactly like they do, with no separate
+    // special case needed.
+    roomScopePhrase: roomScope,
     statusFilter,
     selectedTaskId: isClearAllFilters ? null : priorViewState?.selectedTaskId ?? null,
     revision: (priorViewState?.revision ?? 0) + 1,
@@ -6310,16 +6368,24 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   // change answerGroundedAsk's Gemini-backed claim-selection pipeline at
   // all. A missing/inaccessible task (deleted, wrong property) falls back
   // to the prior message-only behavior rather than failing the turn.
-  let taskAnchor: { title: string; category: string | null; assetType: string | null; roomName: string | null } | null = null;
+  let taskAnchor: { title: string; description: string | null; category: string | null; assetType: string | null; roomName: string | null; updatedAt: Date } | null = null;
+  let taskAnchorMissing = false;
   if (input.propertyId && input.launchContext?.entityType === 'MAINTENANCE_TASK' && input.launchContext.entityId) {
     const task = await prisma.propertyMaintenanceTask.findFirst({
       where: { id: input.launchContext.entityId, propertyId: input.propertyId },
-      select: { title: true, category: true, assetType: true, room: { select: { name: true } } },
+      select: { title: true, description: true, category: true, assetType: true, updatedAt: true, room: { select: { name: true } } },
     });
-    if (task) taskAnchor = { title: task.title, category: task.category, assetType: task.assetType, roomName: task.room?.name ?? null };
+    // External review [P1] follow-up: folding only title/category/
+    // assetType/room into the question left this task's OWN description
+    // (task-specific rationale, homeowner or system-written) out of what
+    // the guidance engine sees; and a missing/inaccessible task (deleted,
+    // wrong property) used to fall back to an unscoped answer silently --
+    // taskAnchorMissing now discloses that instead.
+    if (task) taskAnchor = { title: task.title, description: task.description, category: task.category, assetType: task.assetType, roomName: task.room?.name ?? null, updatedAt: task.updatedAt };
+    else taskAnchorMissing = true;
   }
   const groundedMessage = taskAnchor
-    ? `${input.message} (Regarding the specific maintenance task "${taskAnchor.title}"${taskAnchor.category ? `, category ${taskAnchor.category}` : ''}${taskAnchor.assetType ? `, asset ${taskAnchor.assetType}` : ''}${taskAnchor.roomName ? `, in ${taskAnchor.roomName}` : ''}.)`
+    ? `${input.message} (Regarding the specific maintenance task "${taskAnchor.title}"${taskAnchor.category ? `, category ${taskAnchor.category}` : ''}${taskAnchor.assetType ? `, asset ${taskAnchor.assetType}` : ''}${taskAnchor.roomName ? `, in ${taskAnchor.roomName}` : ''}.${taskAnchor.description ? ` Task notes: ${taskAnchor.description.slice(0, 300)}` : ''})`
     : input.message;
   let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
   const modelStartedAt = process.hrtime.bigint();
@@ -6351,10 +6417,18 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'grounded-guidance', title: answer.groundingMode === 'PROPERTY' ? 'Guidance for this home' : 'General home guidance',
-    body: answer.text, tone: answer.confidence.label === 'LOW' ? 'CAUTION' : 'DEFAULT', actions: [],
+    // External review [P1]: a declared launch entity that no longer
+    // resolves (task deleted, or access to it changed) used to fall back
+    // to this same unscoped answer with no indication the specific task
+    // it was meant to be about was missing -- disclosed explicitly rather
+    // than silently presenting a property-wide answer as task-specific.
+    body: taskAnchorMissing ? `The specific maintenance task this question was about is no longer available, so this answer is not scoped to it. ${answer.text}` : answer.text,
+    tone: taskAnchorMissing || answer.confidence.label === 'LOW' ? 'CAUTION' : 'DEFAULT', actions: [],
   }];
   const evidenceItems = [
-    ...(taskAnchor ? [{ label: taskAnchor.title, source: 'Maintenance record (exact task)', observedAt: new Date().toISOString() }] : []),
+    // External review [P1] follow-up: this used to stamp the current
+    // request time rather than the task's own recorded observation time.
+    ...(taskAnchor ? [{ label: taskAnchor.title, source: 'Maintenance record (exact task)', observedAt: taskAnchor.updatedAt.toISOString() }] : []),
     ...answer.evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })),
   ];
   if (evidenceItems.length) {
@@ -9567,7 +9641,7 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
     if (!completedByThisExecution && (task.status === MaintenanceTaskStatus.COMPLETED
       || task.status === MaintenanceTaskStatus.CANCELLED
       || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(task))) {
-      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      const error = new Error(maintenanceConflictDescription(task));
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
@@ -10022,8 +10096,13 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       throw error;
     }
     const current = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.taskId, propertyId: execution.propertyId } });
-    if (!current || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(current)) {
-      const error = new Error('This task changed while the confirmation was open. Review its current state and try again.');
+    if (!current) {
+      const error = new Error('This task is no longer available. It may have been deleted.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    if (parameters.maintenanceTaskVersion !== maintenanceTaskVersion(current)) {
+      const error = new Error(maintenanceConflictDescription(current));
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
@@ -10034,11 +10113,27 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
     } else if (candidate.data.action === 'REOPEN') {
       await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.PENDING);
     } else {
-      await PropertyMaintenanceTaskService.updateTask(userId, current.id, {
-        ...(candidate.data.priority ? { priority: candidate.data.priority } : {}),
-        ...(candidate.data.nextDueDate !== undefined ? { nextDueDate: candidate.data.nextDueDate } : {}),
-        ...(candidate.data.title ? { title: candidate.data.title } : {}),
-      });
+      try {
+        await PropertyMaintenanceTaskService.updateTask(userId, current.id, {
+          ...(candidate.data.priority ? { priority: candidate.data.priority } : {}),
+          ...(candidate.data.nextDueDate !== undefined ? { nextDueDate: candidate.data.nextDueDate } : {}),
+          ...(candidate.data.title ? { title: candidate.data.title } : {}),
+        });
+      } catch (raceError) {
+        // External review [P1]: the version check above closes the gap
+        // for a change that already committed BEFORE this handler ran,
+        // but not one that lands in the gap between that check and this
+        // write -- updateTask's own compare-and-swap (CONCURRENT_TASK_UPDATE)
+        // catches that. Re-fetching current state gives the same rich
+        // conflict description rather than a raw "concurrent update" error.
+        if (raceError instanceof Error && (raceError as Error & { code?: string }).code === 'CONCURRENT_TASK_UPDATE') {
+          const raceCurrent = await prisma.propertyMaintenanceTask.findFirst({ where: { id: current.id, propertyId: execution.propertyId } });
+          const error = new Error(raceCurrent ? maintenanceConflictDescription(raceCurrent) : 'This task is no longer available. It may have been deleted.');
+          (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+          throw error;
+        }
+        throw raceError;
+      }
     }
     const updated = await prisma.propertyMaintenanceTask.findUniqueOrThrow({ where: { id: current.id }, include: { assignedTo: { select: { email: true } } } });
     const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(updated.id)}&from=ask`;
