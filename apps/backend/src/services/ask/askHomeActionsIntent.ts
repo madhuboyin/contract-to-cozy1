@@ -1,5 +1,11 @@
 import type { AskOperationResult } from './askOperationRegistry';
 
+// Same gap as askMaintenanceIntent.ts's identical whitelist (fixed
+// 2026-09-15): askNextActions.ts's buildAskNextActionsBlock() appends this
+// generic CAPABILITY_LIST block to any successful operation result,
+// including every Home Actions envelope below -- an unlisted id in any of
+// these three sets fails its fast path and forces a genuinely correct
+// answer through semantic-similarity scoring instead.
 const FEED_BLOCK_IDS = new Set([
   'home-actions-summary',
   'home-actions-priority-list',
@@ -7,6 +13,7 @@ const FEED_BLOCK_IDS = new Set([
   'home-actions-evidence',
   'home-actions-boundary',
   'related-capabilities',
+  'ask-next-actions',
 ]);
 
 const FOCUSED_BLOCK_IDS = new Set([
@@ -15,6 +22,7 @@ const FOCUSED_BLOCK_IDS = new Set([
   'focused-home-action-evidence',
   'focused-home-action-boundary',
   'related-capabilities',
+  'ask-next-actions',
 ]);
 
 const BUYER_PLAN_BLOCK_IDS = new Set([
@@ -23,6 +31,7 @@ const BUYER_PLAN_BLOCK_IDS = new Set([
   'buyer-plan-professional-boundary',
   'buyer-plan-not-active',
   'related-capabilities',
+  'ask-next-actions',
 ]);
 
 /**

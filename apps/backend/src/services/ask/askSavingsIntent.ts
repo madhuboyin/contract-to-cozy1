@@ -17,5 +17,12 @@ export function matchesSavingsOpportunitiesAnswerContract(result: AskOperationRe
     'savings-opportunity-groups',
     'savings-evidence',
     'related-capabilities',
+    // Same gap as askMaintenanceIntent.ts's identical whitelist (fixed
+    // 2026-09-15): askNextActions.ts's buildAskNextActionsBlock() appends
+    // this generic CAPABILITY_LIST block to any successful operation
+    // result, including SAVINGS_OPPORTUNITIES -- an unlisted id here fails
+    // this fast path and forces a genuinely correct answer through
+    // semantic-similarity scoring instead.
+    'ask-next-actions',
   ].includes(block.id));
 }
