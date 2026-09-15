@@ -14,6 +14,7 @@ import { addAskReturnContext, buildAskWorkspaceHref } from '@/lib/navigation/ask
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import { resolveConciergeLandingSpotlight, visibleConciergeFeaturedPrompts } from '@/features/ask/conciergeLandingPolicy';
 import { formatLegacyAskCurrency, formatLegacyAskMaintenanceItem, workflowProgressStatusLabel } from '@/features/ask/presentationCompatibility';
+import { resolveItemActionDispatch } from '@/features/ask/interactionDispatch';
 import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
 import { MaintenanceResultList } from './MaintenanceResultList';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
@@ -1513,6 +1514,38 @@ function ExecutionCard({
     setRefreshing(true);
     try { await refreshResult(execution); } finally { setRefreshing(false); }
   };
+  // ACT-003: "Unsupported actions fail visibly and safely." No item action
+  // declares an UNSUPPORTED interactionType today (see
+  // interactionDispatch.ts) -- this exists so the day one does (DISMISS/
+  // REMIND_LATER once their domain policy lands; NAVIGATE once item
+  // actions carry an href), it surfaces here instead of silently no-oping.
+  const [itemActionIssue, setItemActionIssue] = useState<string | null>(null);
+  const dispatchItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => {
+    setItemActionIssue(null);
+    const dispatch = resolveItemActionDispatch(interactionType);
+    if (dispatch.kind === 'ASK_WITH_ENTITY_CONTEXT') {
+      void ask(message, undefined, {
+        entityType: entityType ?? undefined, entityId, sourceExecutionId: execution.executionId,
+        // ACT-001/ACT-003: every declared item action forces its own
+        // operationId, regardless of interactionType. The declaring
+        // server code already knows exactly which operation applies --
+        // forcing it doesn't skip reasoning for a CONVERSATION_CONTINUE
+        // explanation (GROUNDED_GUIDANCE still generates a real answer),
+        // it only skips the operation-*selection* step, which free-text
+        // pattern matching could otherwise get wrong (e.g. a task titled
+        // "Annual maintenance inspection" would make "Why is ... this
+        // important?" accidentally match the generic maintenance
+        // pattern and misroute away from grounded guidance).
+        operationId,
+      });
+    } else if (dispatch.kind === 'ASK_FILTER_ONLY') {
+      void ask(message, undefined, { sourceExecutionId: execution.executionId });
+    } else if (dispatch.kind === 'REFRESH') {
+      void refresh();
+    } else {
+      setItemActionIssue(dispatch.reason);
+    }
+  };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is
   // claiming focus for this turn (no pending property selection, capture,
   // clarification or confirmation), the result just settled. Without this,
@@ -1590,20 +1623,8 @@ function ExecutionCard({
           </details>
         )}
         <div ref={bodyRef} className="space-y-3">
-          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={(entityType, entityId, message, operationId) => void ask(message, undefined, {
-            entityType: entityType ?? undefined, entityId, sourceExecutionId: execution.executionId,
-            // ACT-001/ACT-003: every declared item action forces its own
-            // operationId, regardless of interactionType. The declaring
-            // server code already knows exactly which operation applies --
-            // forcing it doesn't skip reasoning for a CONVERSATION_CONTINUE
-            // explanation (GROUNDED_GUIDANCE still generates a real answer),
-            // it only skips the operation-*selection* step, which free-text
-            // pattern matching could otherwise get wrong (e.g. a task titled
-            // "Annual maintenance inspection" would make "Why is ... this
-            // important?" accidentally match the generic maintenance
-            // pattern and misroute away from grounded guidance).
-            operationId,
-          })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} />)}
+          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} />)}
+          {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
