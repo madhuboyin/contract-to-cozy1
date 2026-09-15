@@ -1602,7 +1602,15 @@ async function maintenanceResult(
   if (highPriorityOnly) maintenanceHrefParams.set('priority', 'true');
   if (overdueOnly) maintenanceHrefParams.set('filter', 'overdue');
   else if (dueSoonOnly) maintenanceHrefParams.set('filter', 'due-soon');
-  if (scopeTerms[0]) maintenanceHrefParams.set('system', scopeTerms[0]);
+  // External review [P1]: sending only scopeTerms[0] ("hvac") meant a
+  // furnace/air-conditioner/heat-pump/boiler task that matched Ask's own
+  // OR-of-synonyms scope could vanish from the Maintenance page, which
+  // only checked the literal word "hvac". Sending the whole alias group
+  // lets splitAndSortTasks match on any of the same synonyms Ask itself
+  // used, closing most of the gap within the fields the Maintenance page
+  // actually has client-side (category/room/season are not among them --
+  // disclosed below, not silently dropped).
+  if (scopeTerms.length) maintenanceHrefParams.set('system', scopeTerms.join(','));
   const maintenanceHref = `/dashboard/maintenance?${maintenanceHrefParams.toString()}`;
   const canManage = access.role !== HouseholdRole.VIEWER;
 
@@ -1709,6 +1717,14 @@ async function maintenanceResult(
       // date-range or room filter UI at all -- disclose that explicitly
       // rather than letting "Open Maintenance" silently drop them.
       (timeframe || roomScope) ? ` ${[timeframe && 'the date filter', roomScope && 'the room filter'].filter(Boolean).join(' and ')} will not carry over to the Maintenance page.` : ''
+    }${
+      // External review [P1]/HAND-002/A16: the system/category filter DOES
+      // carry over (unlike date/room above), but as an approximate keyword
+      // match against different fields than Ask itself checks (category,
+      // room, and season aren't available to the Maintenance page's own
+      // filter) -- disclosed as an approximation rather than implying an
+      // exact, guaranteed-identical result set on both sides.
+      scopeTerms.length ? ' The system/category filter carries over as an approximate keyword match there, so a few tasks may appear or disappear.' : ''
     }`,
     // MAINT-003: "+N more" (AskWorkspace's GROUPED_LIST renderer) always
     // links off actions[0] -- previously that was the conditional
@@ -6280,20 +6296,44 @@ function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: Ask
   }
 }
 
-async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; launchContext?: { entityType?: string | null; entityId?: string | null } }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+  // External review [P1] CTX-001: a launch entity (e.g. "Why is this
+  // important?" clicked from an exact maintenance row) was previously
+  // dropped entirely -- answerGroundedAsk only ever saw free message text
+  // and selected facts from it across the WHOLE property, so two tasks
+  // sharing a near-identical title ("Annual maintenance inspection" on two
+  // different systems) were indistinguishable to it. Resolving the exact
+  // task record here and folding its own identifying fields into both the
+  // question text (so selectRelevantAskFacts's token-overlap scoring can
+  // actually favor facts about that system/asset) and a dedicated evidence
+  // line anchors the answer to the specific record without having to
+  // change answerGroundedAsk's Gemini-backed claim-selection pipeline at
+  // all. A missing/inaccessible task (deleted, wrong property) falls back
+  // to the prior message-only behavior rather than failing the turn.
+  let taskAnchor: { title: string; category: string | null; assetType: string | null; roomName: string | null } | null = null;
+  if (input.propertyId && input.launchContext?.entityType === 'MAINTENANCE_TASK' && input.launchContext.entityId) {
+    const task = await prisma.propertyMaintenanceTask.findFirst({
+      where: { id: input.launchContext.entityId, propertyId: input.propertyId },
+      select: { title: true, category: true, assetType: true, room: { select: { name: true } } },
+    });
+    if (task) taskAnchor = { title: task.title, category: task.category, assetType: task.assetType, roomName: task.room?.name ?? null };
+  }
+  const groundedMessage = taskAnchor
+    ? `${input.message} (Regarding the specific maintenance task "${taskAnchor.title}"${taskAnchor.category ? `, category ${taskAnchor.category}` : ''}${taskAnchor.assetType ? `, asset ${taskAnchor.assetType}` : ''}${taskAnchor.roomName ? `, in ${taskAnchor.roomName}` : ''}.)`
+    : input.message;
   let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
   const modelStartedAt = process.hrtime.bigint();
   if (trace) {
     trace.modelUsage = 'OPERATION_GENERATION';
-    trace.modelCharacters = input.message.length;
+    trace.modelCharacters = groundedMessage.length;
   }
   let modelOutcome = 'failure';
   try {
-    askRemoteGenerationCharactersTotal.inc({ direction: 'input' }, input.message.length);
+    askRemoteGenerationCharactersTotal.inc({ direction: 'input' }, groundedMessage.length);
     answer = await answerGroundedAsk({
       userId: input.userId,
       sessionId: input.sessionId,
-      message: input.message,
+      message: groundedMessage,
       propertyId: input.propertyId ?? undefined,
     });
     askRemoteGenerationCharactersTotal.inc({ direction: 'output' }, answer.text.length);
@@ -6313,8 +6353,12 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     type: 'SUMMARY', id: 'grounded-guidance', title: answer.groundingMode === 'PROPERTY' ? 'Guidance for this home' : 'General home guidance',
     body: answer.text, tone: answer.confidence.label === 'LOW' ? 'CAUTION' : 'DEFAULT', actions: [],
   }];
-  if (answer.evidence.length) {
-    blocks.push({ type: 'EVIDENCE', id: 'grounded-evidence', title: 'Sources used', items: answer.evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })) });
+  const evidenceItems = [
+    ...(taskAnchor ? [{ label: taskAnchor.title, source: 'Maintenance record (exact task)', observedAt: new Date().toISOString() }] : []),
+    ...answer.evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })),
+  ];
+  if (evidenceItems.length) {
+    blocks.push({ type: 'EVIDENCE', id: 'grounded-evidence', title: 'Sources used', items: evidenceItems });
   }
   blocks.push({ type: 'BOUNDARY', id: 'grounded-professional-boundary', title: 'Educational guidance—not a controlling determination', body: answer.safetyBoundary, severity: 'INFO', suggestions: [] });
   // The remote fallback's own confidence was previously used only to set a
@@ -7858,11 +7902,27 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   // Same conservative guard as the follow-up bias: only steps in when the
   // cascade found nothing confident on its own, and only when the
   // capability unambiguously names one operation.
+  //
+  // External review [P1]: this conservative gate was, until now, applied
+  // uniformly to every source of forcedOperationId -- including
+  // declaredItemActionOperationId, which the comment above it already
+  // documents as "the highest-priority source here, since it is
+  // server-declared authoritative identity from a prior response, not an
+  // inference from free text or a launch surface." A declared item action
+  // (e.g. "Why is this important?" pinned to GROUNDED_GUIDANCE) has no
+  // ambiguity left to resolve -- the UI already named the exact operation
+  // -- so gating it behind "the classifier found nothing confident" meant
+  // a confidently-but-wrongly-routed message (e.g. "Why is 'Annual
+  // maintenance inspection' important?" matching MAINTENANCE_STATUS's own
+  // keyword pattern) silently overrode the declared control. Only the two
+  // genuinely soft/contextual signals (contextualOperationId,
+  // launchCapabilityOperationId) keep the narrow "nudge" gate; an explicit
+  // declared control always forces, exactly as ACT-001/ACT-003 intend.
   const shouldForceOperation = Boolean(forcedOperationId)
     && routingDecision.stage !== 'SAFETY'
     && !routingDecision.requiresClarification
     && routingDecision.operation.operationId !== forcedOperationId
-    && (Boolean(contextualOperationId) || routingDecision.stage === 'REMOTE_FALLBACK');
+    && (Boolean(declaredItemActionOperationId) || Boolean(contextualOperationId) || routingDecision.stage === 'REMOTE_FALLBACK');
   const operation = shouldForceOperation
     ? { ...getAskOperationDefinition(forcedOperationId as AskOperationId), confidence: 1 }
     : routingDecision.operation;
@@ -7950,6 +8010,26 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       status: 'RUNNING',
     },
   });
+  // External review [P2]: an organically-typed filter refinement (no
+  // declared chip -- e.g. typing "only show urgent tasks" after a
+  // maintenance list) is resolved server-side via
+  // resolveAskFollowUpMessage/followUp.sourceExecutionId, but the call
+  // below only ever forwarded input.launchContext -- the CLIENT's own
+  // launch context, which carries no sourceExecutionId for a typed
+  // message. maintenance.status's handler only loads the stored viewState
+  // when launchContext.sourceExecutionId is present, so every organic
+  // refinement reset resultId/revision and lost local view state
+  // (selection/expansion/pagination) even though the identical refinement
+  // via a declared chip already worked (the client sets sourceExecutionId
+  // itself for those). Prefer an already-declared sourceExecutionId when
+  // present -- for a declared chip, resolveAskFollowUpMessage's pinned
+  // lookup found the SAME row by that id, so the two never actually
+  // disagree; this only fills the gap for organic follow-ups.
+  const effectiveLaunchContext = safetyFirstDecision.stage === 'SAFETY'
+    ? undefined
+    : (followUp.sourceExecutionId && !input.launchContext?.sourceExecutionId)
+      ? { ...(input.launchContext ?? { surface: 'ASK_FOLLOW_UP' }), sourceExecutionId: followUp.sourceExecutionId }
+      : input.launchContext;
   try {
     const rawResult = await withAskTimeout(
       routingDecision.requiresClarification
@@ -7959,7 +8039,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
             ? 'ASK_SKILL_AMBIGUOUS'
             : 'ASK_ROUTING_AMBIGUOUS',
         ))
-        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: safetyFirstDecision.stage === 'SAFETY' ? undefined : input.launchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
+        : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification

@@ -19,6 +19,7 @@ import {
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import {
   extractGuidanceContinuityContext,
   hasGuidanceContinuityContext,
@@ -152,9 +153,17 @@ export default function MaintenancePage() {
   );
 
   const getBackLink = () => {
-    if (returnTo) {
+    // External review [P1]/HAND-003: `returnTo` was rendered directly as
+    // the back-link href with no validation -- a crafted deep link could
+    // point it anywhere, in or outside the app. resolveDashboardBackHref
+    // (already used this way by every other tool page's back link)
+    // constrains it to an in-app /dashboard path; an invalid value falls
+    // back to '' here so this branch is skipped and the checks below still
+    // run, rather than silently substituting an unrelated destination.
+    const safeReturnTo = resolveDashboardBackHref(returnTo, '');
+    if (safeReturnTo) {
       return {
-        href: returnTo,
+        href: safeReturnTo,
         label: guidanceJourneyId ? 'Back to guidance' : 'Back to previous step',
       };
     }

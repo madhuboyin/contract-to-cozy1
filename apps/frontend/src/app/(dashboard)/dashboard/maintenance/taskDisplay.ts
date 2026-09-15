@@ -101,11 +101,16 @@ export type TaskSplitOptions = {
   // askOrchestrator.service.ts's own dueSoonBoundary definition exactly so
   // "due soon" means the same 30-day window on both sides of the handoff.
   dueSoonOnly?: boolean;
-  // Ask's domain-scope phrase (e.g. "hvac"), forwarded via `system=`.
-  // Matched as a case-insensitive substring against title/description/
-  // assetType/serviceCategory -- an approximation, not a canonical
-  // category match, since Ask's own scope terms are keyword aliases, not
-  // a structured category enum.
+  // Ask's domain-scope alias group (e.g. "hvac,furnace,air conditioner,heat
+  // pump,boiler"), forwarded via `system=` as a comma-joined list -- Ask's
+  // own scope matching treats these as synonyms, so sending only the first
+  // term ("hvac") used to make a furnace-only task match in Ask and then
+  // vanish here (external review [P1]). Matched as a case-insensitive
+  // substring of ANY term against title/description/assetType/
+  // serviceCategory -- still an approximation, not a canonical category
+  // match: Ask also checks category/room/season, which aren't available
+  // to this page's task list, so this stays disclosed at handoff rather
+  // than presented as an exact mirror of Ask's own result.
   systemScope?: string | null;
   now?: Date;
 };
@@ -134,10 +139,13 @@ export function splitAndSortTasks(
   }
 
   if (systemScope) {
-    const needle = systemScope.toLowerCase();
+    const needles = systemScope.toLowerCase().split(',').map((term) => term.trim()).filter(Boolean);
     open = open.filter((t) => [t.title, t.description, t.assetType, t.serviceCategory]
       .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(needle)));
+      .some((value) => {
+        const haystack = String(value).toLowerCase();
+        return needles.some((needle) => haystack.includes(needle));
+      }));
   }
 
   if (priorityOnly) {

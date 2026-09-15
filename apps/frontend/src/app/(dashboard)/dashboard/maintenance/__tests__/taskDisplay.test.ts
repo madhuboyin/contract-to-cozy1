@@ -182,6 +182,34 @@ describe('splitAndSortTasks', () => {
     const all = splitAndSortTasks([done, doneOld], { completedRange: 'all', now: NOW });
     expect(all.completedTasks).toHaveLength(2);
   });
+
+  // External review [P1]: Ask's HVAC scope matches any of hvac/furnace/air
+  // conditioner/heat pump/boiler, but the handoff used to send only the
+  // first term ("hvac") -- a furnace-only task matched in Ask and then
+  // silently vanished here. systemScope now carries the whole comma-joined
+  // alias group and matches on any of them.
+  it('systemScope matches any comma-joined alias term, not just the first', () => {
+    const furnaceTask = makeTask({ title: 'Replace furnace filter' });
+    const hvacTask = makeTask({ title: 'HVAC annual inspection' });
+    const unrelated = makeTask({ title: 'Clean the gutters' });
+    const { openTasks } = splitAndSortTasks([furnaceTask, hvacTask, unrelated], {
+      completedRange: 'all',
+      systemScope: 'hvac,furnace,air conditioner,heat pump,boiler',
+      now: NOW,
+    });
+    expect(openTasks.map((t) => t.id).sort()).toEqual([furnaceTask.id, hvacTask.id].sort());
+  });
+
+  it('systemScope still matches a single bare term (no comma) unchanged', () => {
+    const hvacTask = makeTask({ title: 'HVAC annual inspection' });
+    const unrelated = makeTask({ title: 'Clean the gutters' });
+    const { openTasks } = splitAndSortTasks([hvacTask, unrelated], {
+      completedRange: 'all',
+      systemScope: 'hvac',
+      now: NOW,
+    });
+    expect(openTasks.map((t) => t.id)).toEqual([hvacTask.id]);
+  });
 });
 
 describe('normalizers', () => {
