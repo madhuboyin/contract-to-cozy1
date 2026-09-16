@@ -38,7 +38,7 @@ import { BuyerContractService } from '../buyerContract.service';
 import { BuyerAcquisitionService } from '../buyerAcquisition.service';
 import { composeSkillContext } from '../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
-import type { MaintenanceTaskContext, MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
+import { loadCanonicalMaintenanceTaskSet, type MaintenanceTaskContext, type MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
 import type { SeasonalChecklistContext } from '../skills/context/seasonalChecklistContext.provider';
 import { buyerPlanContextProvider } from '../skills/context/buyerPlanContext.provider';
 import {
@@ -1587,7 +1587,16 @@ async function maintenanceResult(
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const now = new Date();
-  const { tasks } = context;
+  // External review [P1] follow-up (MAINT-003/A02): filter membership and
+  // totals must reflect the canonical FULL collection, with limits applied
+  // only to what's displayed -- the composed skill context's own task data
+  // cannot be that source (it's necessarily bounded to the platform's
+  // 100-entity ceiling; see maintenanceTaskContext.provider.ts). Fetching
+  // the canonical set directly here means a property with, say, 101
+  // matching urgent tasks reports 101 and can still surface any of them,
+  // not just whichever 100 happened to fit in the bounded context.
+  const canonicalTaskSet = await loadCanonicalMaintenanceTaskSet(userId, propertyId);
+  const tasks: MaintenanceTaskContextTask[] = [...canonicalTaskSet.active, ...canonicalTaskSet.historical];
   const timeZone = safeTimezone(context.propertyTimezone);
   const seasonalResult = buildSeasonalMaintenanceResult({
     message,
@@ -1714,43 +1723,34 @@ async function maintenanceResult(
   const displayed = sections.reduce((sum, section) => sum + section.count, 0);
   const overdueCount = active.filter((task) => task.nextDueDate && task.nextDueDate < now).length;
   const unscheduledCount = active.filter((task) => !task.nextDueDate).length;
-  // External review [P1] follow-up: context.wasTruncated alone can't tell
-  // this apart from the harmless case (only completed/cancelled history was
-  // trimmed) -- comparing how many active tasks actually made it into the
-  // loaded `tasks` against context.totalActiveTaskCount (the true canonical
-  // active count, from before the provider bounded anything) detects the
-  // severe case where the cut reached into open, possibly overdue/urgent
-  // tasks. The prior disclosure asserted the harmless case unconditionally,
-  // which was false whenever it fired for this reason.
-  const loadedActiveTaskCount = tasks.filter((task) => task.status !== MaintenanceTaskStatus.COMPLETED && task.status !== MaintenanceTaskStatus.CANCELLED).length;
-  const activeTasksTruncated = context.wasTruncated && loadedActiveTaskCount < context.totalActiveTaskCount;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'maintenance-summary',
     // External review [P2]: "No recorded maintenance tasks" and "tasks
     // exist but none match these filters" both used to render as the same
     // "No matching maintenance records were found," contrary to the
-    // required lifecycle distinction -- context.totalTaskCount (the true
-    // canonical total, independent of any provider-level truncation)
-    // distinguishes a property with zero tasks ever from one where the
-    // active filters simply matched nothing.
+    // required lifecycle distinction -- canonicalTaskSet.totalTaskCount (the
+    // true canonical total; tasks/active/completed/etc. above are now
+    // always the full collection, never a provider-bounded subset, per
+    // MAINT-003/A02) distinguishes a property with zero tasks ever from one
+    // where the active filters simply matched nothing.
     title: creationFocus
       ? canManage ? 'Create the task in Maintenance' : 'A contributor or owner can create this task'
       : displayed
         ? `${displayed} maintenance record${displayed === 1 ? '' : 's'} match this request`
-        : context.totalTaskCount === 0
+        : canonicalTaskSet.totalTaskCount === 0
           ? 'No maintenance tasks are recorded for this home yet'
           : 'No maintenance tasks match these filters',
     body: creationFocus
       ? 'Ask has not created anything. The Maintenance workflow collects the schedule, recurrence, priority, and any system link before saving.'
-      // External review [P1]: context.wasTruncated means the canonical
-      // task list exceeded this operation's context budget and was
-      // bounded. The totals/counts above are computed only from what was
-      // loaded, so that must be disclosed rather than presented as
-      // complete -- and honestly: activeTasksTruncated names the severe
-      // case (an open task itself may be missing) rather than always
-      // claiming the harmless one.
-      : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}${context.wasTruncated ? ` Only ${tasks.length} of ${context.totalTaskCount} total maintenance records could be loaded for this answer; ${activeTasksTruncated ? 'this property has more open maintenance tasks than could be loaded, so totals and matches above may be missing an open (possibly overdue or urgent) task, not just older history' : 'totals and matches above may not reflect all older completed or cancelled history'}.` : ''}`,
-    tone: (overdueCount || context.wasTruncated) ? 'CAUTION' : 'DEFAULT',
+      // External review [P1] follow-up (MAINT-003/A02): tasks/active/
+      // completed/overdueCount above are now computed from
+      // loadCanonicalMaintenanceTaskSet's full, uncapped fetch (not the
+      // composed skill context's necessarily-bounded task data), so these
+      // counts are always the true canonical totals for the selected
+      // scope -- no truncation caveat is needed or honest to add here
+      // anymore.
+      : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}`,
+    tone: overdueCount ? 'CAUTION' : 'DEFAULT',
     actions: creationFocus && canManage
       ? [{ id: 'create-maintenance', label: 'Create maintenance task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'PRIMARY' }]
       : [

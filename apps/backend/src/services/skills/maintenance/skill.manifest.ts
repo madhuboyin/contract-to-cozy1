@@ -97,10 +97,17 @@ export const MAINTENANCE_SKILL = Object.freeze({
   // something to override. maxFacts matched to maxEntities rather than
   // raised to its own separate 250 ceiling, since one task is exactly one
   // fact and one entity here; there is no reason for the two counts to
-  // diverge for this provider. maintenanceTaskContext.provider.ts's own
-  // byte/count bounding (PROVIDER_MAX_SERIALIZED_BYTES, MAX_CONTEXT_TASKS)
-  // stays under this skill total with headroom for the optional
-  // seasonal-checklist-context provider's own budget.
+  // diverge for this provider.
+  //
+  // External review [P1] follow-up (MAINT-003/A02): that platform ceiling
+  // is exactly why maintenanceTaskContext.provider.ts can no longer be the
+  // source maintenanceResult filters/counts over -- a genuine cut of the
+  // canonical task list at this ceiling silently dropped real matches for
+  // any property past 100 (active) tasks. The provider itself now only
+  // carries two small date facts through this budget; maintenanceResult
+  // fetches the canonical full collection directly via
+  // loadCanonicalMaintenanceTaskSet for its actual filtering/counting, so
+  // this contextBudget no longer bounds task data at all for this skill.
   contextBudget: {
     maxFacts: 100,
     maxEntities: 100,
