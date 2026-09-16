@@ -1216,10 +1216,37 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         frequency?: RecurrenceFrequency | null;
         nextDueDate?: string | null;
         serviceCategory?: ServiceCategory | null;
-      }
+      },
+      // External review [P1]: a caller that already validated a specific
+      // `updatedAt` against a homeowner-reviewed version (e.g. a confirmation
+      // flow's own version check) previously had no way to make THIS write's
+      // compare-and-swap honor that same version -- this function re-derived
+      // its own baseline from a fresh getTask() call a few lines below,
+      // so a write landing in the gap between the caller's check and this
+      // call was silently adopted as the new baseline and overwritten,
+      // rather than surfaced as the conflict the caller's check was meant to
+      // catch. When provided, expectedUpdatedAt is used as the CAS baseline
+      // instead of the freshly-read value, so a concurrent change since the
+      // caller's own check correctly fails this write instead of succeeding
+      // against a version nobody reviewed.
+      //
+      // External review [P2] follow-up: a retry recovering a claimed-but-
+      // unconfirmed confirmation receipt (the process crashed after this
+      // write committed but before the receipt was marked COMPLETED)
+      // re-derives expectedUpdatedAt from the ALREADY-updated task and fails
+      // the version check the caller re-runs before ever reaching here --
+      // this call never even happens on that retry, so expectedUpdatedAt
+      // alone cannot fix it. idempotencyKey, mirroring updateTaskStatus's
+      // completionIdempotencyKey, lets that same caller recognize its own
+      // prior success and short-circuit here without touching the CAS.
+      options?: { expectedUpdatedAt?: Date; idempotencyKey?: string }
     ): Promise<PropertyMaintenanceTask> {
       // Verify access (CONTRIBUTOR+ required to mutate tasks)
       const existingTask = await this.getTask(userId, taskId, 'CONTRIBUTOR');
+
+      if (options?.idempotencyKey && existingTask.lastUpdateIdempotencyKey === options.idempotencyKey) {
+        return existingTask;
+      }
 
       // Validate serviceCategory if provided
       if (data.serviceCategory) {
@@ -1254,6 +1281,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         ...(data.serviceCategory !== undefined && {
           serviceCategory: data.serviceCategory,
         }),
+        ...(options?.idempotencyKey !== undefined && { lastUpdateIdempotencyKey: options.idempotencyKey }),
       };
 
       // External review [P1]: this used to be an unconditional update() by
@@ -1265,8 +1293,18 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       // (e.g. a newer due date). Same compare-and-swap as updateTaskStatus:
       // guard on updatedAt (bumped by every prior write), and surface a
       // genuine conflict instead of silently applying a stale write.
+      //
+      // External review [P1] follow-up: guarding on existingTask.updatedAt
+      // alone only protects the sub-millisecond window between the getTask()
+      // call above and this updateMany -- it does NOT protect the (much
+      // larger) window between a caller's own pre-check of a homeowner-
+      // reviewed version and this call, because existingTask is re-read
+      // fresh right here and would silently adopt any intervening write as
+      // its own baseline. options.expectedUpdatedAt lets a caller that
+      // already validated a specific version pin the CAS to THAT version
+      // instead, so a write landing in its own outer gap is caught here too.
       const claimed = await prisma.propertyMaintenanceTask.updateMany({
-        where: { id: taskId, updatedAt: existingTask.updatedAt },
+        where: { id: taskId, updatedAt: options?.expectedUpdatedAt ?? existingTask.updatedAt },
         data: updateData,
       });
       if (claimed.count === 0) {

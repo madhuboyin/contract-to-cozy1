@@ -3922,6 +3922,18 @@ model PropertyMaintenanceTask {
   actualCost         Decimal? @db.Decimal(10, 2)
   completionMetadata Json?
 
+  // External review [P2] follow-up: Ask's reschedule/field-update confirm
+  // path had no equivalent of completionMetadata's completionIdempotencyKey
+  // -- a retry recovering a claimed-but-unconfirmed receipt (e.g. the
+  // process crashed after the write committed but before the receipt was
+  // marked COMPLETED) re-ran the same version check against a task this
+  // exact execution had already updated, and misreported its own prior
+  // success as "changed in another session." Records which Ask execution's
+  // idempotency key last applied a generic field update, so that exact
+  // retry can recognize its own prior write and short-circuit instead of
+  // re-deriving a stale conflict.
+  lastUpdateIdempotencyKey String?
+
   // Seasonal integration
   isSeasonal              Boolean                @default(false)
   season                  Season?

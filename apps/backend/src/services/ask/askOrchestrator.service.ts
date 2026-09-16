@@ -1010,14 +1010,29 @@ function maintenanceTaskVersion(task: { id: string; status: MaintenanceTaskStatu
 // commands) at least tells the homeowner what to expect before they ask
 // again, and explicitly names the "someone else already completed this"
 // case the review specifically called out.
-function maintenanceConflictDescription(task: { title: string; status: MaintenanceTaskStatus; nextDueDate: Date | null }): string {
+function maintenanceConflictDescription(task: { title: string; status: MaintenanceTaskStatus; priority: MaintenanceTaskPriority; nextDueDate: Date | null }): string {
   if (task.status === MaintenanceTaskStatus.COMPLETED) {
     return `"${task.title}" was already completed in another session. No further action was taken here.`;
   }
   if (task.status === MaintenanceTaskStatus.CANCELLED) {
     return `"${task.title}" was cancelled in another session before this change could be applied.`;
   }
-  return `"${task.title}" changed in another session before this could be confirmed -- it is now ${task.nextDueDate ? `due ${humanDate(task.nextDueDate) ?? 'on an unrecorded date'}` : 'unscheduled'}. Review its current state and try again.`;
+  // External review [P2] follow-up: this fallback used to describe ONLY the
+  // due date no matter what actually changed, so a conflict caused by a
+  // priority change or a PENDING -> IN_PROGRESS transition still produced
+  // the same due-date-only message -- correct but uninformative about the
+  // change that actually caused the conflict. Naming the current status
+  // (when not the ordinary PENDING) and priority alongside the due date
+  // means the homeowner sees what's actually different, not just whichever
+  // field this helper originally happened to describe.
+  const statusPhrase = task.status === MaintenanceTaskStatus.IN_PROGRESS
+    ? 'is now in progress'
+    : task.status === MaintenanceTaskStatus.NEEDS_REVIEW
+      ? 'now needs review'
+      : null;
+  const priorityPhrase = `${task.priority.toLowerCase()} priority`;
+  const duePhrase = task.nextDueDate ? `due ${humanDate(task.nextDueDate) ?? 'on an unrecorded date'}` : 'unscheduled';
+  return `"${task.title}" changed in another session before this could be confirmed -- it ${statusPhrase ? `${statusPhrase}, ` : ''}is now ${priorityPhrase} and ${duePhrase}. Review its current state and try again.`;
 }
 
 function maintenanceCompletionSubject(message: string): string {
@@ -6429,6 +6444,24 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     // External review [P1] follow-up: this used to stamp the current
     // request time rather than the task's own recorded observation time.
     ...(taskAnchor ? [{ label: taskAnchor.title, source: 'Maintenance record (exact task)', observedAt: taskAnchor.updatedAt.toISOString() }] : []),
+    // External review [P1] follow-up (MAINT-008): the task's own description
+    // was folded into groundedMessage above so it could nudge which existing
+    // Living Home Record facts get selected, but that's the only place it
+    // was used -- a task with real task-specific rationale in its notes but
+    // no matching property-aggregation fact still surfaced nothing of it,
+    // only the generic unsupported-answer fallback. Changing
+    // answerGroundedAsk's Gemini-backed claim-selection pipeline to treat
+    // free-text notes as a selectable typed claim remains out of scope (the
+    // same call made in §30/§31 of this FRD); this instead makes the notes
+    // themselves a distinct, citable evidence line -- so the homeowner can
+    // see and verify the actual task instruction the answer was informed
+    // by, distinguished from Gemini-inferred risk facts (the items below)
+    // and from a missing/unresolved task (taskAnchorMissing's disclosure).
+    ...(taskAnchor?.description ? [{
+      label: taskAnchor.description.length > 200 ? `${taskAnchor.description.slice(0, 200)}…` : taskAnchor.description,
+      source: 'Maintenance record (task notes)',
+      observedAt: taskAnchor.updatedAt.toISOString(),
+    }] : []),
     ...answer.evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })),
   ];
   if (evidenceItems.length) {
@@ -10101,7 +10134,22 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
-    if (parameters.maintenanceTaskVersion !== maintenanceTaskVersion(current)) {
+    const isFieldPatchAction = candidate.data.action !== 'ASSIGN' && candidate.data.action !== 'UNASSIGN'
+      && candidate.data.action !== 'ARCHIVE' && candidate.data.action !== 'REOPEN';
+    // External review [P2] follow-up: a recovery retry of THIS SAME
+    // execution (its confirmation receipt reclaimed after a crash between
+    // the write below committing and the receipt being marked COMPLETED)
+    // re-runs this whole handler with the ORIGINAL, pre-update
+    // maintenanceTaskVersion -- current now reflects that already-applied
+    // write, so the version check below would otherwise misreport the
+    // execution's own prior success as "changed in another session."
+    // Recognizing this execution's own idempotency key on the row (set by
+    // updateTask below on the write that already succeeded) short-circuits
+    // both the version check and the write itself, mirroring
+    // confirmMaintenanceTaskComplete's completedByThisExecution.
+    const updateIdempotencyKey = `ask:${execution.id}:maintenance-update`;
+    const appliedByThisExecution = isFieldPatchAction && current.lastUpdateIdempotencyKey === updateIdempotencyKey;
+    if (!appliedByThisExecution && parameters.maintenanceTaskVersion !== maintenanceTaskVersion(current)) {
       const error = new Error(maintenanceConflictDescription(current));
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
@@ -10112,20 +10160,28 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.CANCELLED);
     } else if (candidate.data.action === 'REOPEN') {
       await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.PENDING);
-    } else {
+    } else if (!appliedByThisExecution) {
       try {
+        // External review [P1] follow-up: passing current.updatedAt through
+        // as expectedUpdatedAt pins updateTask's own compare-and-swap to the
+        // version this handler already validated at the check above, instead
+        // of letting updateTask re-derive its own baseline from a fresh
+        // getTask() call. Without this, a write landing between the check
+        // above and updateTask's internal read was silently adopted as
+        // updateTask's own baseline and succeeded against it -- overwriting
+        // a version nobody actually reviewed instead of tripping the CAS.
         await PropertyMaintenanceTaskService.updateTask(userId, current.id, {
           ...(candidate.data.priority ? { priority: candidate.data.priority } : {}),
           ...(candidate.data.nextDueDate !== undefined ? { nextDueDate: candidate.data.nextDueDate } : {}),
           ...(candidate.data.title ? { title: candidate.data.title } : {}),
-        });
+        }, { expectedUpdatedAt: current.updatedAt, idempotencyKey: updateIdempotencyKey });
       } catch (raceError) {
-        // External review [P1]: the version check above closes the gap
-        // for a change that already committed BEFORE this handler ran,
-        // but not one that lands in the gap between that check and this
-        // write -- updateTask's own compare-and-swap (CONCURRENT_TASK_UPDATE)
-        // catches that. Re-fetching current state gives the same rich
-        // conflict description rather than a raw "concurrent update" error.
+        // The version check above rejects a change that already committed
+        // BEFORE this handler ran; updateTask's own compare-and-swap, now
+        // pinned to the same current.updatedAt via expectedUpdatedAt, catches
+        // one that lands in the gap between that check and this write.
+        // Re-fetching current state gives the same rich conflict description
+        // rather than a raw "concurrent update" error.
         if (raceError instanceof Error && (raceError as Error & { code?: string }).code === 'CONCURRENT_TASK_UPDATE') {
           const raceCurrent = await prisma.propertyMaintenanceTask.findFirst({ where: { id: current.id, propertyId: execution.propertyId } });
           const error = new Error(raceCurrent ? maintenanceConflictDescription(raceCurrent) : 'This task is no longer available. It may have been deleted.');

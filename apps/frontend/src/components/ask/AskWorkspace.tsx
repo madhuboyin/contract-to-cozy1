@@ -1042,7 +1042,15 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
           if (reconciled.data.status !== 'RUNNING') window.sessionStorage.removeItem(confirmationAttemptStorageKey(executionId, confirmation.version));
           return;
         }
-      } catch { /* retain the original actionable error */ }
+      } catch (reconcileError) {
+        // External review [P1] follow-up: this used to be a bare catch that
+        // swallowed a reconciliation failure entirely, including access
+        // having been revoked between the original confirm attempt and this
+        // GET -- leaving the stale proposal/consent/controls fully rendered
+        // under an unrelated error message instead of redacting them.
+        if (ACCESS_LOST_CODES.includes(askFailureCode(reconcileError) ?? '')) { onAccessLost(); return; }
+        /* otherwise retain the original actionable error below */
+      }
       setError(caught instanceof Error ? caught.message : 'Could not complete this action.');
     }
     finally { setSaving(false); }
@@ -1124,7 +1132,7 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
 // getAskExecution) cannot make progress here at all -- the previously
 // reported gap this review specifically named ("'Check action status' can
 // simply return the same RUNNING state").
-function PendingOutcomeCard({ executionId, confirmationVersion, onCompleted }: { executionId: string; confirmationVersion: number; onCompleted: (execution: AskExecutionResponse) => void }) {
+function PendingOutcomeCard({ executionId, confirmationVersion, onCompleted, onAccessLost }: { executionId: string; confirmationVersion: number; onCompleted: (execution: AskExecutionResponse) => void; onAccessLost: () => void }) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const check = async () => {
@@ -1135,6 +1143,11 @@ function PendingOutcomeCard({ executionId, confirmationVersion, onCompleted }: {
       if (!response.success || !response.data) throw new Error(response.message || "Could not check this action's status.");
       onCompleted(response.data);
     } catch (caught) {
+      // External review [P1] follow-up: this card had no access-loss
+      // handling at all, unlike ConfirmationCard's confirm/cancel/saveEdit --
+      // an access-revoked "Check status" click just showed a generic error
+      // beside the still-live, now-stale card instead of redacting it.
+      if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) { onAccessLost(); return; }
       setError(caught instanceof Error ? caught.message : "Could not check this action's status.");
     } finally { setChecking(false); }
   };
@@ -1636,7 +1649,7 @@ function ExecutionCard({
             isn't known yet -- render the outcome-unknown state instead of
             ConfirmationCard's "Confirmation required," which would invite
             a resubmit of something that may already be running or done. */}
-        {execution.confirmation && execution.status === 'RUNNING' && <PendingOutcomeCard executionId={execution.executionId} confirmationVersion={execution.confirmation.version} onCompleted={updateExecution} />}
+        {execution.confirmation && execution.status === 'RUNNING' && <PendingOutcomeCard executionId={execution.executionId} confirmationVersion={execution.confirmation.version} onCompleted={updateExecution} onAccessLost={() => onAccessLost(execution)} />}
         {execution.skillHandoff && (() => {
           const handoffPrompt = execution.skillHandoff.suggestedGoal.replace(/[-_]+/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
           const continuity = execution.skillHandoff.continuity;
