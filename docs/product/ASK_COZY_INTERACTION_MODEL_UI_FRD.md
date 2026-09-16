@@ -5,6 +5,8 @@
 **Status:** Maintenance interaction corrections implemented — see §29 for scope and verification. Later-domain requirements remain separate; runtime validation is not claimed.
 **Scope:** Ask Cozy inline interactions. Maintenance is the first implementation slice.
 
+**Follow-on:** Cross-domain rollout beyond the completed maintenance slice is specified in [ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md](ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md).
+
 ## 1. Purpose and authority
 
 Homeowners can ask naturally or act directly. Cozy presents the simplest useful interface, preserves context, and makes changes clear and reviewable.

@@ -15,6 +15,7 @@ Comprehensive project documentation.
 
 ## Current Feature References
 
+- [Ask Cozy Cross-Domain Interaction Rollout FRD](product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) — follow-on requirements for applying the completed maintenance interaction model across records, buyer, financial, protection, decision, proactive-attention, and persistent-goal domains.
 - [Environment Report FRD](functional/ENVIRONMENT_REPORT_FRD.md) — live
   environmental insights, inline context capture, Incident correlation, and
   time-bound weather-preparation checklists.
