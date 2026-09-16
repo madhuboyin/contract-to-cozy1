@@ -29,6 +29,7 @@ import { GroundedAskResponseSchema } from '../productFramework/groundedAsk.contr
 import { KnowledgeHubService, type KnowledgeHubArticleListItem } from './knowledgeHub.service';
 import { selectAskGeneralGuidance, type AskGeneralGuidanceEntry } from './ask/askGeneralGuidanceCatalog';
 import { selectRelevantAskFacts } from './ask/askPromptMinimization';
+import type { PropertyFact, PropertyFactSource } from '../modules/propertyContext';
 import {
   selectAndRenderAskRemoteFallbackClaims,
   type AskRemoteFallbackFact,
@@ -69,11 +70,44 @@ async function approvedGeneralGuidance(message: string): Promise<GeneralGuidance
   return entry ? { kind: 'CURATED_CATALOG', entry } : null;
 }
 
-export async function answerGroundedAsk(input: { userId: string; sessionId: string; message: string; propertyId?: string }) {
+export async function answerGroundedAsk(input: {
+  userId: string;
+  sessionId: string;
+  message: string;
+  propertyId?: string;
+  // External review [P1] follow-up (MAINT-008): a task's own notes/
+  // description can carry task-specific rationale ("unit is undersized,
+  // run more in summer") that no property-aggregation fact will ever
+  // capture. Previously the only way a caller could surface that was
+  // folding it into the free-text question, which this function's fact
+  // selection never actually reads (selectRelevantAskFacts scores fact
+  // KEYS against the question, not fact values) -- so a task with real
+  // notes but no matching aggregation fact still fell through to the
+  // generic unsupported-answer text below. anchorFact lets a caller
+  // (groundedGuidanceResult) supply exactly one pre-resolved, guaranteed-
+  // relevant fact from outside the aggregation snapshot; it flows through
+  // the SAME deterministic candidate-generation / Gemini-selection /
+  // deterministic-rendering pipeline as every other fact (the model still
+  // only ever selects a candidate, never originates text -- see
+  // askRemoteFallbackTypedClaims.ts's own documented invariant), so it can
+  // now actually appear in the answer, not just a decorative evidence line.
+  anchorFact?: { key: string; value: string; source: PropertyFactSource; observedAt: string; confidence: number };
+}) {
   const context = input.propertyId
     ? await getAggregationPropertyContext(input.propertyId, input.userId, 'SEARCH_ASSISTANT')
     : null;
-  const facts = context ? Object.values(context.facts) : [];
+  const anchorPropertyFact: PropertyFact | null = context && input.anchorFact ? {
+    key: input.anchorFact.key,
+    value: input.anchorFact.value,
+    state: 'KNOWN',
+    source: input.anchorFact.source,
+    verified: false,
+    confidence: input.anchorFact.confidence,
+    observedAt: input.anchorFact.observedAt,
+    validUntil: null,
+    correctionPath: null,
+  } : null;
+  const facts = context ? [...Object.values(context.facts), ...(anchorPropertyFact ? [anchorPropertyFact] : [])] : [];
   const generalGuidance = context ? null : await approvedGeneralGuidance(input.message);
   const generalId = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? generalGuidance.article.slug : generalGuidance?.entry.id;
   const generalTitle = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? generalGuidance.article.title : generalGuidance?.entry.title;
@@ -82,9 +116,17 @@ export async function answerGroundedAsk(input: { userId: string; sessionId: stri
     : generalGuidance?.entry.guidance;
   const generalObservedAt = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? generalGuidance.article.publishedAt : null;
   const generalSource = generalGuidance?.kind === 'PUBLISHED_ARTICLE' ? 'ContractToCozy Knowledge Hub' : 'ContractToCozy curated guidance v1';
-  const relevantFacts = selectRelevantAskFacts(input.message, facts);
+  const scoredRelevantFacts = selectRelevantAskFacts(input.message, facts);
+  // selectRelevantAskFacts ranks by token overlap between the QUESTION and
+  // each fact's KEY -- built for descriptive aggregation keys like
+  // "hvac.filterLastReplaced", not a fact we already know is relevant
+  // because we resolved the exact task the question is about. Force it in
+  // rather than leave its inclusion to a heuristic it wasn't designed for.
+  const relevantFacts = anchorPropertyFact && !scoredRelevantFacts.some((fact) => fact.key === anchorPropertyFact.key)
+    ? [{ key: anchorPropertyFact.key, state: anchorPropertyFact.state, value: anchorPropertyFact.value }, ...scoredRelevantFacts]
+    : scoredRelevantFacts;
   const knownCandidates: AskRemoteFallbackFact[] = relevantFacts.flatMap((selected) => {
-    const fact = context?.facts[selected.key];
+    const fact = anchorPropertyFact?.key === selected.key ? anchorPropertyFact : context?.facts[selected.key];
     return fact?.state === 'KNOWN' && fact.value !== null ? [{
       key: fact.key,
       value: selected.value,

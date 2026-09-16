@@ -1714,6 +1714,16 @@ async function maintenanceResult(
   const displayed = sections.reduce((sum, section) => sum + section.count, 0);
   const overdueCount = active.filter((task) => task.nextDueDate && task.nextDueDate < now).length;
   const unscheduledCount = active.filter((task) => !task.nextDueDate).length;
+  // External review [P1] follow-up: context.wasTruncated alone can't tell
+  // this apart from the harmless case (only completed/cancelled history was
+  // trimmed) -- comparing how many active tasks actually made it into the
+  // loaded `tasks` against context.totalActiveTaskCount (the true canonical
+  // active count, from before the provider bounded anything) detects the
+  // severe case where the cut reached into open, possibly overdue/urgent
+  // tasks. The prior disclosure asserted the harmless case unconditionally,
+  // which was false whenever it fired for this reason.
+  const loadedActiveTaskCount = tasks.filter((task) => task.status !== MaintenanceTaskStatus.COMPLETED && task.status !== MaintenanceTaskStatus.CANCELLED).length;
+  const activeTasksTruncated = context.wasTruncated && loadedActiveTaskCount < context.totalActiveTaskCount;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'maintenance-summary',
     // External review [P2]: "No recorded maintenance tasks" and "tasks
@@ -1734,11 +1744,12 @@ async function maintenanceResult(
       ? 'Ask has not created anything. The Maintenance workflow collects the schedule, recurrence, priority, and any system link before saving.'
       // External review [P1]: context.wasTruncated means the canonical
       // task list exceeded this operation's context budget and was
-      // bounded (active tasks kept whole; only completed/cancelled
-      // history was trimmed -- see maintenanceTaskContext.provider.ts).
-      // The totals/counts above are computed only from what was loaded,
-      // so that must be disclosed rather than presented as complete.
-      : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}${context.wasTruncated ? ` Only ${tasks.length} of ${context.totalTaskCount} total maintenance records could be loaded for this answer; totals and matches above may not reflect all older completed or cancelled history.` : ''}`,
+      // bounded. The totals/counts above are computed only from what was
+      // loaded, so that must be disclosed rather than presented as
+      // complete -- and honestly: activeTasksTruncated names the severe
+      // case (an open task itself may be missing) rather than always
+      // claiming the harmless one.
+      : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}${context.wasTruncated ? ` Only ${tasks.length} of ${context.totalTaskCount} total maintenance records could be loaded for this answer; ${activeTasksTruncated ? 'this property has more open maintenance tasks than could be loaded, so totals and matches above may be missing an open (possibly overdue or urgent) task, not just older history' : 'totals and matches above may not reflect all older completed or cancelled history'}.` : ''}`,
     tone: (overdueCount || context.wasTruncated) ? 'CAUTION' : 'DEFAULT',
     actions: creationFocus && canManage
       ? [{ id: 'create-maintenance', label: 'Create maintenance task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'PRIMARY' }]
@@ -6416,6 +6427,23 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
       sessionId: input.sessionId,
       message: groundedMessage,
       propertyId: input.propertyId ?? undefined,
+      // External review [P1] follow-up (MAINT-008): folding the task's
+      // description into groundedMessage only helps selectRelevantAskFacts
+      // favor OTHER aggregation facts about the same system -- it never
+      // makes the notes themselves usable by the answer. anchorFact routes
+      // them through the same deterministic fact-candidate/Gemini-selection
+      // pipeline as every other fact, so real task-specific rationale can
+      // actually appear in the answer instead of only the unrelated
+      // "Maintenance record (exact task)"/"task notes" evidence lines.
+      ...(taskAnchor?.description ? {
+        anchorFact: {
+          key: 'maintenanceTask.notes',
+          value: taskAnchor.description,
+          source: 'USER_REPORTED',
+          observedAt: taskAnchor.updatedAt.toISOString(),
+          confidence: 0.75,
+        },
+      } : {}),
     });
     askRemoteGenerationCharactersTotal.inc({ direction: 'output' }, answer.text.length);
     askRemoteGenerationTotal.inc({ outcome: 'success' });
@@ -6440,29 +6468,31 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     body: taskAnchorMissing ? `The specific maintenance task this question was about is no longer available, so this answer is not scoped to it. ${answer.text}` : answer.text,
     tone: taskAnchorMissing || answer.confidence.label === 'LOW' ? 'CAUTION' : 'DEFAULT', actions: [],
   }];
+  // External review [P1] follow-up (MAINT-008): the notes now flow through
+  // answerGroundedAsk as a real anchorFact candidate (see the call above),
+  // so when the model actually cites them, answer.evidence already carries
+  // a "maintenanceTask.notes" entry -- adding a second, always-present line
+  // here would just duplicate it. The standalone fallback line below only
+  // fires when the pipeline did NOT cite the notes (irrelevant to this
+  // specific question, or no property context at all), so the homeowner can
+  // still see and verify the actual task instruction that was available but
+  // not used, distinguished from Gemini-cited facts (the items below it)
+  // and from a missing/unresolved task (taskAnchorMissing's disclosure).
+  const notesCitedInAnswer = answer.evidence.some((item) => item.factKey === 'maintenanceTask.notes');
   const evidenceItems = [
     // External review [P1] follow-up: this used to stamp the current
     // request time rather than the task's own recorded observation time.
     ...(taskAnchor ? [{ label: taskAnchor.title, source: 'Maintenance record (exact task)', observedAt: taskAnchor.updatedAt.toISOString() }] : []),
-    // External review [P1] follow-up (MAINT-008): the task's own description
-    // was folded into groundedMessage above so it could nudge which existing
-    // Living Home Record facts get selected, but that's the only place it
-    // was used -- a task with real task-specific rationale in its notes but
-    // no matching property-aggregation fact still surfaced nothing of it,
-    // only the generic unsupported-answer fallback. Changing
-    // answerGroundedAsk's Gemini-backed claim-selection pipeline to treat
-    // free-text notes as a selectable typed claim remains out of scope (the
-    // same call made in §30/§31 of this FRD); this instead makes the notes
-    // themselves a distinct, citable evidence line -- so the homeowner can
-    // see and verify the actual task instruction the answer was informed
-    // by, distinguished from Gemini-inferred risk facts (the items below)
-    // and from a missing/unresolved task (taskAnchorMissing's disclosure).
-    ...(taskAnchor?.description ? [{
+    ...(taskAnchor?.description && !notesCitedInAnswer ? [{
       label: taskAnchor.description.length > 200 ? `${taskAnchor.description.slice(0, 200)}…` : taskAnchor.description,
-      source: 'Maintenance record (task notes)',
+      source: 'Maintenance record (task notes, not used in this answer)',
       observedAt: taskAnchor.updatedAt.toISOString(),
     }] : []),
-    ...answer.evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })),
+    ...answer.evidence.map((item) => ({
+      label: item.factKey === 'maintenanceTask.notes' ? 'Maintenance record (task notes)' : item.label,
+      source: item.factKey === 'maintenanceTask.notes' ? 'Cited in this answer' : item.source,
+      observedAt: item.observedAt,
+    })),
   ];
   if (evidenceItems.length) {
     blocks.push({ type: 'EVIDENCE', id: 'grounded-evidence', title: 'Sources used', items: evidenceItems });

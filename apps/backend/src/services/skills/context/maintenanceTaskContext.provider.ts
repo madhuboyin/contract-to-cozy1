@@ -35,6 +35,26 @@ const MAX_CONTEXT_TASKS = 100;
 const PROVIDER_MAX_SERIALIZED_BYTES = 110_000;
 const SERIALIZATION_SAFETY_MARGIN_BYTES = 8_000;
 const byteSizeOf = (value: unknown): number => Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8');
+// External review [P1] follow-up: when a property genuinely has more active
+// (non-completed/cancelled) tasks than either bound allows, SOME active
+// tasks must be dropped from this context load -- there is no way around
+// the platform-wide maxEntities ceiling. Previously that drop fell out of
+// whatever order getTasksForProperty happened to return, so a genuinely
+// overdue/urgent task could be the one silently cut while a low-priority,
+// far-future task survived. Sorting active tasks by urgency BEFORE bounding
+// means that if a cut is unavoidable, it takes the least urgent tasks, not
+// an arbitrary DB-order slice.
+const PRIORITY_URGENCY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+function compareActiveTaskUrgency(left: MaintenanceTaskContextTask, right: MaintenanceTaskContextTask, now: number): number {
+  const leftOverdue = left.nextDueDate ? left.nextDueDate.getTime() < now : false;
+  const rightOverdue = right.nextDueDate ? right.nextDueDate.getTime() < now : false;
+  if (leftOverdue !== rightOverdue) return leftOverdue ? -1 : 1;
+  const priorityDiff = (PRIORITY_URGENCY_RANK[left.priority] ?? 99) - (PRIORITY_URGENCY_RANK[right.priority] ?? 99);
+  if (priorityDiff !== 0) return priorityDiff;
+  const leftDue = left.nextDueDate ? left.nextDueDate.getTime() : Infinity;
+  const rightDue = right.nextDueDate ? right.nextDueDate.getTime() : Infinity;
+  return leftDue - rightDue;
+}
 
 export interface MaintenanceTaskContextTask {
   id: CanonicalMaintenanceTask['id'];
@@ -68,6 +88,17 @@ export interface MaintenanceTaskContext {
   // rather than presenting truncated data as the complete answer.
   wasTruncated: boolean;
   totalTaskCount: number;
+  // External review [P1] follow-up: wasTruncated alone can't distinguish
+  // "only older completed/cancelled history was trimmed" (harmless -- every
+  // active task is still present) from "the cut reached into active,
+  // non-terminal tasks" (severe -- an open, possibly overdue/urgent task can
+  // be silently missing from every count and match above). The prior fix's
+  // own disclosure text asserted the harmless case unconditionally, which
+  // was false whenever a property had more than MAX_CONTEXT_TASKS active
+  // tasks by itself. totalActiveTaskCount lets the caller detect the severe
+  // case by comparing against how many active tasks actually made it into
+  // `tasks`.
+  totalActiveTaskCount: number;
 }
 
 const maintenanceTaskContextProviderDefinition: SkillContextProviderDefinition<MaintenanceTaskContext> = {
@@ -106,8 +137,12 @@ const maintenanceTaskContextProviderDefinition: SkillContextProviderDefinition<M
       inventoryItem: task.inventoryItem ? { name: task.inventoryItem.name } : null,
       room: task.room ? { name: task.room.name } : null,
     });
-    const active = tasks.filter((task) => task.status !== 'COMPLETED' && task.status !== 'CANCELLED').map(toContextTask);
+    const now = Date.now();
+    const active = tasks.filter((task) => task.status !== 'COMPLETED' && task.status !== 'CANCELLED')
+      .map(toContextTask)
+      .sort((left, right) => compareActiveTaskUrgency(left, right, now));
     const historical = tasks.filter((task) => task.status === 'COMPLETED' || task.status === 'CANCELLED').map(toContextTask);
+    const totalActiveTaskCount = active.length;
     const byteBudget = PROVIDER_MAX_SERIALIZED_BYTES - SERIALIZATION_SAFETY_MARGIN_BYTES;
     let boundedTasks: MaintenanceTaskContextTask[];
     let wasTruncated: boolean;
@@ -125,6 +160,9 @@ const maintenanceTaskContextProviderDefinition: SkillContextProviderDefinition<M
       // Extreme edge case: hundreds of simultaneously OPEN tasks alone
       // exceed the budget. Still bounded by size rather than an arbitrary
       // count, and still disclosed -- never silently presented as complete.
+      // active is already sorted least-urgent-last, so this keeps the most
+      // urgent open tasks rather than whichever happened to sort first in
+      // the canonical query.
       boundedTasks = [];
       let runningBytes = 0;
       wasTruncated = true;
@@ -137,7 +175,9 @@ const maintenanceTaskContextProviderDefinition: SkillContextProviderDefinition<M
     }
     // The platform-wide maxEntities ceiling (see comment above) applies
     // regardless of byte size -- trimming from the end preserves the
-    // active-first ordering already established above.
+    // active-first, now urgency-sorted ordering already established above,
+    // so a forced cut drops the least urgent active tasks (or historical
+    // ones) rather than an arbitrary subset.
     if (boundedTasks.length > MAX_CONTEXT_TASKS) {
       boundedTasks = boundedTasks.slice(0, MAX_CONTEXT_TASKS);
       wasTruncated = true;
@@ -157,6 +197,7 @@ const maintenanceTaskContextProviderDefinition: SkillContextProviderDefinition<M
         purchaseDate: financing?.purchaseDate ?? null,
         wasTruncated,
         totalTaskCount: tasks.length,
+        totalActiveTaskCount,
       },
       observedAt: newestObservedAt?.toISOString() ?? null,
       sourceVersion,
