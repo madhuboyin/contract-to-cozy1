@@ -141,16 +141,20 @@ test('MAJOR_EVENT_ENTRY Stage 2 reclassification (NAVIGATION_HANDOFF, not the WO
 });
 
 // FRD Sec22: "whether direct SELL_HOLD_RENT_ANALYSIS attaches to an existing
-// family thread" is an open product decision gating Phase 4's exit -- per
-// the agreed process, Stage 2 tracing must record the evidence and stop,
-// never silently pick an answer. This test is a tripwire: if a future
-// change upgrades rollClass without that decision actually being made (and
-// this test updated deliberately alongside it), it fails loudly instead of
-// quietly resolving the open decision as a side effect of unrelated work.
-test('SELL_HOLD_RENT_ANALYSIS stays READ_RESULT pending the FRD Sec22 thread-attachment decision', () => {
+// family thread" was an open product decision gating Phase 4's exit. DECIDED
+// and IMPLEMENTED 2026-09-17: Option B (read-attach only) -- selectThread is
+// called and DECISION_PROGRESS/WHY_NOW surfaced when a thread exists, but
+// createOrResumeThread is never called from this operation. rollClass
+// correctly stays READ_RESULT even post-implementation: Option B never
+// creates/resumes a thread, so the operation's fundamental interaction type
+// doesn't change. This test is a tripwire: if a future change upgrades
+// rollClass to WORKFLOW_CONTINUATION, or the note stops recording that a
+// decision was actually made, it fails loudly instead of drifting silently.
+test('SELL_HOLD_RENT_ANALYSIS records the DECIDED FRD Sec22 outcome (Option B) and stays READ_RESULT', () => {
   const entry = ASK_INTERACTION_COVERAGE_MATRIX.SELL_HOLD_RENT_ANALYSIS;
   assert.equal(entry.rollClass, 'READ_RESULT');
-  assert.match(entry.note, /Sec22/);
+  assert.match(entry.note, /DECIDED/);
+  assert.match(entry.note, /Option B/);
   assert.match(entry.reconciliation.notes, /Sec22/);
 });
 

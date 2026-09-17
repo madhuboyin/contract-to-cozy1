@@ -152,6 +152,12 @@ import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
 import * as decisionPreferenceService from '../decisionPlatform/decisionPreferenceService';
 import { decisionProgressBlock, whyNowBlock, recommendationChangeBlock } from './decisionThreadPresentationBlocks';
+// FRD Sec22 decision (DECIDED 2026-09-17, Option B -- docs/architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md
+// SS4.8): sellHoldRentAnalysisResult reads an existing thread's progress via
+// the same read-only selectThread already used elsewhere (conversationalCapture.ts's
+// fetchActiveDecisionThreadContext) -- it never calls createOrResumeThread itself,
+// so thread creation stays exclusively SELL_HOLD_RENT_GOAL_CAPTURE's job (GOAL-003).
+import { sellHoldRentDecisionFamilyAdapter } from '../decisionPlatform/domainSnapshotAdapters';
 import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '../decisionPlatform/decisionPreferenceService';
 import * as outcomeObservationService from '../decisionPlatform/outcomeObservationService';
 import { sourceTypeLabel as outcomeSourceTypeLabel } from '../decisionPlatform/outcomeObservationService';
@@ -5554,11 +5560,23 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
 
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
-  const [access, context, analysis] = await Promise.all([
+  const [access, context, analysis, threadSelection] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'SELL_HOLD_RENT', operationKey: 'VIEW_ANALYSIS' }),
     sellHoldRentService.estimate(propertyId, { years: 5 }, userId),
+    // FRD Sec22 decision (Option B): read-only lookup, never creates or
+    // resumes a thread. AMBIGUOUS (multiple active threads for the same
+    // property, which createOrResumeThread's own dedup should prevent in
+    // practice) is treated the same as NONE here -- this analysis read
+    // degrades to its pre-decision behavior rather than picking one.
+    sellHoldRentDecisionFamilyAdapter.selectThread(propertyId, propertyId),
   ]);
+  const activeThread = threadSelection.kind === 'UNIQUE'
+    ? await prisma.decisionThread.findUniqueOrThrow({
+      where: { id: threadSelection.thread.decisionThreadId },
+      include: { currentRecommendationSnapshot: true },
+    })
+    : null;
 
   const activeRequirement = context.requirements[0];
   const canImproveContext = access.role !== HouseholdRole.VIEWER;
@@ -5632,7 +5650,10 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     title: `Here is the current ${years}-year sell, hold, and rent comparison`,
     body: `The model’s directional indicator currently points to ${winnerLabel}, but this is not a conclusion that now is the right time to sell. The sell figure is projected liquidity after selling costs and a mortgage payoff when known; hold and rent figures are modeled changes over the horizon, so the totals should not be treated as directly interchangeable investment returns. Confidence is ${analysis.recommendation.confidence.toLowerCase()}.`,
     tone: lowConfidence || contextLimited ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-sell-hold-rent', label: 'Explore and adjust scenarios', href: workspaceHref, style: 'PRIMARY' }],
+    // FRD Sec22 (Option B): reframed as continuing the tracked plan when one
+    // exists, rather than the generic prompt every homeowner without an
+    // active goal thread still sees.
+    actions: [{ id: 'open-sell-hold-rent', label: activeThread ? 'Continue your plan' : 'Explore and adjust scenarios', href: workspaceHref, style: 'PRIMARY' }],
   }, {
     type: 'TABLE',
     id: 'sell-hold-rent-comparison',
@@ -5668,6 +5689,24 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     severity: 'INFO',
     suggestions: [],
   }];
+
+  // FRD Sec22 (Option B): surface the tracked plan's own progress when one
+  // exists, right after the summary -- read-only, no recompute (selectThread
+  // above already applied read-time freshness projection). Never creates a
+  // thread; a property with no active goal sees the same blocks as before
+  // this decision was implemented.
+  if (activeThread) {
+    blocks.splice(1, 0, decisionProgressBlock(
+      'sell-hold-rent-analysis-progress',
+      'Your sell, hold, or rent plan',
+      activeThread,
+      activeThread.currentRecommendationSnapshot,
+      [{ id: 'open-sell-hold-rent-plan', label: 'Continue your plan', href: workspaceHref, style: 'PRIMARY' }],
+    ));
+    if (activeThread.currentRecommendationSnapshot) {
+      blocks.splice(2, 0, whyNowBlock('sell-hold-rent-analysis-why-now', activeThread.currentRecommendationSnapshot, []));
+    }
+  }
 
   return {
     status: contextLimited || lowConfidence || !debtKnown ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',

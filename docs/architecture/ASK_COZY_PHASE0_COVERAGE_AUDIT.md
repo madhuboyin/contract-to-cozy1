@@ -1,6 +1,6 @@
 # Ask Cozy Cross-Domain Interaction Rollout — Phase 0 Coverage Audit
 
-**Status: Stage 1 AND Stage 2 both complete — all 77 registered operations classified and traced, 0 `PENDING`.** Every track: Records and capture (10/10), Financial and ownership (6/6), Home intelligence and work's read-only Phase 5 scope (5/8 — the 3 mutating operations were traced too, see §4.15), Buyer journey (18/18), Decisions and projects (18/18), Protection and claims (6/6), Household utilities/Discovery/Boundaries (6/6), and the Completed-reference baseline (4/4). **One open product decision blocks further Phase 4 work — §4.8, awaiting the user's decision.** Everything else Stage 2 was scoped to trace is done; §6 lists the real engineering/product follow-ups the tracing surfaced.
+**Status: Stage 1 AND Stage 2 both complete — all 77 registered operations classified and traced, 0 `PENDING`.** Every track: Records and capture (10/10), Financial and ownership (6/6), Home intelligence and work's read-only Phase 5 scope (5/8 — the 3 mutating operations were traced too, see §4.15), Buyer journey (18/18), Decisions and projects (18/18), Protection and claims (6/6), Household utilities/Discovery/Boundaries (6/6), and the Completed-reference baseline (4/4). **The §4.8 decision is now decided AND implemented** (Option B, read-attach only, 2026-09-17) — statically verified only, not yet DB/browser-verified. Everything else Stage 2 was scoped to trace is done; §6 lists the real engineering/product follow-ups the tracing surfaced.
 **Governs:** [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) §21 Phases 0 and 2–8, and §22 (open decisions).
 **Generated artifact:** [`askInteractionCoverageMatrix.ts`](../../apps/backend/src/services/ask/askInteractionCoverageMatrix.ts), mechanically checked by [`askInteractionCoverageMatrix.test.js`](../../apps/backend/tests/ask/askInteractionCoverageMatrix.test.js) (11/11 green).
 **Verification level of everything in this document: STATIC.** Every claim below is derived from reading `askOperationRegistry.ts`, `askDomainCommandRegistry.ts`, `capabilityHandlerRegistry.ts`, `confirmCapabilityHandlerRegistry.ts`, `interactionDispatch.ts`, `askAnswerTrustPolicy.ts`, and the relevant handler bodies in `askOrchestrator.service.ts` directly, plus passing test runs (`node --test`) and a clean `tsc --noEmit` this session. Nothing here is database- or browser-verified, and nothing is inferred from a handler's mere existence (ROLL-010).
@@ -236,9 +236,9 @@ Traced ahead of the rest of Phase 4 specifically to answer §22's open question 
 
 **In one sentence: the two operations are DATA-linked (one feeds the other's snapshot) but RESPONSE-unlinked (the read never checks for or surfaces the thread it's quietly keeping fresh).**
 
-## 4.8 §22 decision package: does `SELL_HOLD_RENT_ANALYSIS` attach to an existing thread?
+## 4.8 §22 decision: does `SELL_HOLD_RENT_ANALYSIS` attach to an existing thread? — **DECIDED and IMPLEMENTED: Option B, 2026-09-17**
 
-Per the agreed process for FRD §22 gates: evidence above, options below, a recommendation, then this document (and the implementation) waits for an actual decision — nothing here is implemented pending that.
+Per the agreed process for FRD §22 gates: evidence, options, and a recommendation were prepared and presented; the user then explicitly directed the decision be made, then explicitly directed it be implemented. **Option B (read-attach only) is both decided and implemented.**
 
 **Option A — Leave as-is.** No response-side change. The data link (§4.7) continues invisibly; the Ask response for a plain analysis question stays identical whether or not an active goal thread exists.
 - *For:* zero implementation risk; doesn't touch `GOAL-003`'s "low-confidence statements do not create a thread silently" guardrail at all, since nothing changes.
@@ -252,9 +252,18 @@ Per the agreed process for FRD §22 gates: evidence above, options below, a reco
 - *For:* implementation-trivial (reuses the exact call `SELL_HOLD_RENT_GOAL_CAPTURE` already makes); maximally consistent — the two operations converge to always sharing one thread.
 - *Against:* directly conflicts with `GOAL-003` and the FRD's own Test E framing (a *stated* intention like "I'm thinking about selling next year" is what should create durable state — not an idle "what would I get if I sold?" question). Risks quietly turning a curiosity question into what looks, to the homeowner, like the start of a tracked plan they never asked to track.
 
-**Recommendation: Option B.** It is the only option that actually satisfies `DEC-001` without weakening `GOAL-003`'s silent-creation guardrail, and it reuses code that already exists for exactly this read-only purpose rather than inventing a new mechanism.
+**Decided and implemented: Option B.** It is the only option that actually satisfies `DEC-001` without weakening `GOAL-003`'s silent-creation guardrail, and it reuses code that already exists for exactly this read-only purpose rather than inventing a new mechanism.
 
-**What stays blocked until this is decided:** `SELL_HOLD_RENT_ANALYSIS`'s `rollClass` (stays `READ_RESULT`, not upgraded — enforced by a governance test tripwire so this can't silently drift), whether Phase 4's D01/D05/D07 and G02/G04/G07 acceptance scenarios can be called met for this operation, and any UI/registry work adding `DECISION_PROGRESS` to this operation's allowed blocks.
+**Implementation, 2026-09-17 (`apps/backend/src/services/ask/askOrchestrator.service.ts`, `apps/backend/src/services/ask/askOperationRegistry.ts`):**
+- `sellHoldRentAnalysisResult` now fetches `sellHoldRentDecisionFamilyAdapter.selectThread(propertyId, propertyId)` in parallel with its existing reads. On `UNIQUE`, it re-fetches the full `DecisionThread` + `currentRecommendationSnapshot` (the same two-query pattern `conversationalCapture.ts`'s `processGoalCandidate` already established, needed because the adapter's own lineage type only carries a snapshot id) and inserts a `decisionProgressBlock` right after the `SUMMARY` block, plus a `whyNowBlock` when a snapshot exists. `AMBIGUOUS` is treated the same as `NONE` — no progress block, rather than guessing which thread to show.
+- The `SUMMARY` block's own call-to-action is reframed from "Explore and adjust scenarios" to "Continue your plan" when an active thread exists.
+- `SELL_HOLD_RENT_ANALYSIS`'s `allowedBlockTypes` in the registry now includes `DECISION_PROGRESS`/`WHY_NOW`.
+- `sellHoldRentAnalysisResult` still never calls `createOrResumeThread` — creation stays exclusively `SELL_HOLD_RENT_GOAL_CAPTURE`'s job, unchanged.
+
+**Verification: STATIC only.** `tsc --noEmit` clean; 35 relevant tests green (`askGovernance.test.js`, `capabilityHandlerRegistry.test.js`, `askInteractionCoverageMatrix.test.js`), including the platform's own "every material Ask command has governed confirmation/authorization" and "every operation resolves to a registered capability handler" checks. **Not DB- or browser-verified this session** — a dedicated DB-gated certification test exists (`apps/backend/tests/integration/askSellHoldRentGoalCertification.db.test.js`) but requires `ASK_CAPTURE_CERTIFICATION_DATABASE_URL`, which wasn't configured/run here; no live property with an active sell/hold/rent thread was exercised end to end.
+
+- `SELL_HOLD_RENT_ANALYSIS`'s `rollClass` stays `READ_RESULT` — Option B never calls `createOrResumeThread`, so the operation's fundamental interaction type is unchanged even after implementation; it's a read that also surfaces thread progress when one exists, not a workflow continuation.
+- Phase 4's D01/D05/D07 and G02/G04/G07 acceptance scenarios can now be evaluated for this operation for the first time (statically) — DB/browser evidence for them is still open, tracked in §6.
 
 ## 4.9 Stage 2 — Phase 5 read-only attention MVP (Home intelligence and work, 5/8 operations)
 
@@ -380,7 +389,7 @@ These patterns recurred enough times, independently, across every track to be pl
 
 Stage 2 tracing itself is done (0/77 `PENDING` in the matrix, enforced by the governance test suite described in §1). What's still open is real work the tracing surfaced:
 
-1. **Decide and close the §4.8 decision** (`SELL_HOLD_RENT_ANALYSIS` thread attachment) — the one open §22 item this audit produced a full decision package for. Blocks the rest of Phase 4.
+1. ~~Decide and close the §4.8 decision~~ **Done 2026-09-17** — Option B decided and implemented (§4.8). What remains: DB/browser verification (no live property with an active thread was exercised this session) and evaluating Phase 4's D01/D05/D07/G02/G04/G07 scenarios against the live behavior.
 2. **XREC-001 reconciliation**: 28 of 30 confirmation-gated operations don't refresh other still-visible Ask results after a successful mutation. `refreshMaintenanceSourceExecution`/`refreshedExecutions` already exists and works (2 operations use it) — this is a rollout gap, not a missing mechanism.
 3. **The undisclosed-cap pattern**: essentially every list-shaped read caps its items with no "showing X of Y" disclosure. `CAPITAL_RESERVE_PLAN` and `INTELLIGENCE_ENVELOPE_QUERY` show the pattern already exists to fix this platform-wide.
 4. **Freshness gaps** on operations with no `contextVersion` at all (`HOME_CHANGE_SUMMARY`, `INSPECTION_FINDINGS`, `INCIDENT_CLAIM_STATUS`, `SELLER_PREP_CHECKLIST`) versus the reasoned exception (`HVAC_PREFERENCE_SAVE`) — worth a pass to add real versions to the former.
