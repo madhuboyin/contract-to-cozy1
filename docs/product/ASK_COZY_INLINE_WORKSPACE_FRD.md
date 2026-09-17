@@ -1,6 +1,6 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.0  
+**Version:** 1.1
 **Date:** September 17, 2026  
 **Status:** Approved product direction; implementation is not claimed  
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
@@ -326,6 +326,54 @@ The shared component set must cover:
 
 Components render server-declared, schema-validated data and actions. The model cannot select arbitrary components, inject code/markup, determine authorization, or construct unrestricted destinations.
 
+### 11.5 Adaptive presentation contract
+
+Ask Cozy must behave as a conversation canvas that can host the presentation best suited to the homeowner's current job. “Inline” does not prescribe one visual form. A response may use a compact answer, cards, a comparison strip, list, table, timeline, form, document view, or focused workspace as long as the same Ask session remains the interaction shell.
+
+The presentation decision is a product contract, not an unconstrained model styling choice. The server declares validated semantic content, permitted actions, presentation capabilities, and any required relationships. A deterministic client presentation resolver selects from registered components using the result shape, task, viewport, input method, accessibility needs, and homeowner preference. The resolver must produce a safe registered fallback when its preferred mode is unavailable.
+
+**IW-PRES-001 — Fit the job.** Select a presentation mode based on the information task rather than domain branding. Use cards for a small number of individually actionable or visually distinct options; tables for dense, repeated attributes where scanning across rows or columns matters; lists for ordered or grouped records; comparison views for a bounded set of alternatives; timelines for chronological relationships; forms for structured input; and detail/workspace views for inspection or multi-step work.
+
+**IW-PRES-002 — Prefer the simplest sufficient form.** Plain conversational text remains appropriate for a short explanation or single fact. Do not wrap every answer in a card, table, or workspace.
+
+**IW-PRES-003 — Preserve semantics across modes.** Switching or responsively transforming between table, card, list, or comparison modes must preserve record identity, values, units, labels, status, ranking rationale, actions, selection, source, freshness, limitations, and total/partial-result meaning.
+
+**IW-PRES-004 — Stable response frame.** Rich results appear in or immediately adjacent to the response that produced them. The originating prompt, Cozy explanation, result, sources/evidence, feedback controls, and composer remain visibly or navigationally connected.
+
+**IW-PRES-005 — Actionable result surfaces.** Each record or option exposes only its permitted contextual actions. An ordinary card, row, title, or option opens inline detail or selects the item; it does not implicitly navigate to a traditional page.
+
+**IW-PRES-006 — Bounded comparison strip.** A small set of visually comparable alternatives may use a horizontally arranged card strip with meaningful badges such as “Recommended,” “Lowest cost,” or “Soonest.” Every badge must derive from declared data and policy, explain its basis, avoid presenting several incompatible labels as one overall winner, and remain understandable without color or position alone.
+
+**IW-PRES-007 — Table fitness.** Use a table only when column comparison materially improves comprehension. Tables require meaningful headers, sensible default columns, sort/filter support where applicable, disclosed row count and truncation, and a responsive alternative that does not reduce the data to unlabeled values.
+
+**IW-PRES-008 — View choice.** When more than one mode is genuinely useful, Ask Cozy may offer a concise view switch such as “Cards” / “Table” / “List.” The homeowner's choice persists for that result and may be remembered as a non-sensitive display preference. Changing the view must not issue a new conversational request or duplicate the result.
+
+**IW-PRES-009 — Responsive adaptation.** The same semantic result may render differently by available width. A desktop comparison strip may become stacked or swipeable cards on mobile; a desktop table may become labeled record cards or a column-focused comparison. Adaptation must not hide a required action, comparison dimension, disclosure, or failure state.
+
+**IW-PRES-010 — Progressive density.** Show the decision-driving attributes first, with expandable detail for secondary data, evidence, assumptions, and provenance. Dense content may expand into the contextual workspace while remaining inside Ask Cozy.
+
+**IW-PRES-011 — User control over motion and overflow.** Horizontal carousels or strips require visible previous/next controls, keyboard operation, scroll-position cues, accessible item counts, and reduced-motion behavior. They must not be the only way to reach an item, and automatic rotation is prohibited.
+
+**IW-PRES-012 — Honest fallback.** If the preferred renderer fails, is unsupported, or receives a newer schema version, show a safe registered summary/list fallback with preserved identity and actions that remain valid. Never render raw payloads or silently replace an actionable result with prose.
+
+### 11.6 Presentation selection matrix
+
+The implementation must encode and test at least the following default rules. These are defaults, not permission to ignore accessibility, viewport, or explicit homeowner choice.
+
+| Result shape and homeowner job | Preferred presentation | Responsive/fallback presentation | Avoid |
+| --- | --- | --- | --- |
+| One answer or explanation with few attributes | Conversational summary | Same summary with expandable evidence | Decorative card with no added utility |
+| Two to four alternatives with shared decision attributes | Comparison cards or comparison grid | Stacked/swipeable labeled cards; column-focused comparison | Wide table requiring horizontal page scroll |
+| Five or more homogeneous records with few attributes | Grouped or ranked list | Stacked list/cards | Oversized individual cards that obscure scanning |
+| Dense homogeneous records with repeated columns | Table with sort/filter | Labeled record cards or selectable comparison columns | Unlabeled mobile table cells |
+| Chronological events, deadlines, or history | Timeline | Condensed vertical timeline/list | Cards that hide ordering |
+| One selected record needing inspection | Inline entity detail | Nested full-screen Ask view | Traditional-page navigation on title click |
+| Structured values required from the homeowner | Inline form/capture | Mobile-native stacked controls | Asking for every field through separate chat turns |
+| Multi-step or high-density work | Contextual workspace | Full-screen nested Ask workspace | Domain-page handoff solely for space |
+| Evidence, sources, assumptions, or limitations | Collapsible evidence/source region or contextual rail | Expandable section/sheet | Detached source links with unclear claim mapping |
+
+The first implementation may support fewer modes for a domain, but it cannot claim the domain is adaptively complete until its relevant matrix rows and transformations are covered.
+
 ## 12. Desktop experience
 
 **IW-DESK-001:** The full Ask page supports a conversation column and an expandable contextual workspace when structured work benefits from additional width.
@@ -590,6 +638,12 @@ A functionally correct journey fails quality review when it introduces unnecessa
 | IW-A20 | No useful next action exists | Journey ends cleanly without a forced link or suggestion |
 | IW-A21 | A desktop-only dense comparison is opened on mobile | Labeled responsive representation preserves meaning and supported actions |
 | IW-A22 | User voluntarily prefers traditional navigation | Existing sidebar/routes remain available and no preference is punished or blocked |
+| IW-A23 | Ask returns three meaningfully comparable options | A bounded comparison-card view highlights declared differences and keeps each option actionable inline |
+| IW-A24 | Ask returns many homogeneous records with sortable attributes | A table or compact list is selected instead of oversized cards; total/partial scope remains clear |
+| IW-A25 | Viewport changes or the user switches Cards/Table/List | Identity, values, actions, selection, filters, source, freshness, and scroll context are preserved without a new Ask execution |
+| IW-A26 | A comparison strip overflows horizontally | Visible controls, keyboard access, item position/count, and a non-carousel path make every option reachable |
+| IW-A27 | Preferred presentation type is unavailable or incompatible | A safe registered fallback renders meaningful content and still-valid actions without exposing raw payloads |
+| IW-A28 | A “Recommended,” “Lowest cost,” or similar badge appears | The label follows declared comparison policy, has an explainable basis, and is not conveyed by color or placement alone |
 
 ## 27. Delivery phases
 
@@ -607,6 +661,7 @@ A functionally correct journey fails quality review when it introduces unnecessa
 - Define backend and frontend action schemas for the §10 interaction types.
 - Build the workspace stack and state restoration contract.
 - Refactor presentation rendering toward a component registry.
+- Implement the deterministic adaptive-presentation resolver and §11.6 selection matrix with view-preserving transformations.
 - Build shared entity, collection, form, comparison, timeline, document, receipt, and error primitives.
 - Preserve existing confirmation and canonical write paths.
 
@@ -672,6 +727,7 @@ A domain phase cannot be marked complete until all applicable gates pass:
 | Reconciliation | Source/dependent results update or become honestly stale |
 | Traditional round trip | Context-preserving optional transition and safe return |
 | Responsive parity | Desktop and mobile reach the same supported outcome |
+| Presentation fitness | The chosen card/table/list/comparison/detail mode fits the task and preserves semantics through view changes |
 | Accessibility | Keyboard, names, focus, announcements, and responsive semantics |
 | Privacy | Access loss redacts; URLs/analytics exclude sensitive content |
 | Next action | Relevant bounded action or intentionally none |
@@ -683,6 +739,7 @@ A domain phase cannot be marked complete until all applicable gates pass:
 | --- | --- |
 | Ask becomes a second domain application | Reuse canonical services, schemas, and policies; no duplicated business logic |
 | Renderer becomes unmaintainable | Component/action registry with exhaustiveness and contract tests |
+| Adaptive presentation becomes unpredictable | Deterministic registered resolver, bounded server hints, selection matrix, safe fallback, and view-mode tests |
 | Inline UI overwhelms conversation | Progressive disclosure and contextual workspace layer |
 | Mobile experience becomes a compressed desktop layout | Mobile-native nested views with functional parity |
 | “Zero friction” weakens safety | Preserve required confirmation, clarification, consent, and revalidation |
@@ -700,6 +757,7 @@ The program is complete when:
 - every delivered homeowner domain supports its normal journey inline;
 - no ordinary record click or primary action implicitly navigates away from Ask;
 - every rendered control has a tested typed dispatch outcome;
+- presentation selection and responsive transformations satisfy IW-PRES-001–012 without losing semantics or actions;
 - desktop and mobile provide equivalent supported outcomes;
 - canonical authorization, validation, confirmation, idempotency, and reconciliation remain intact;
 - optional traditional navigation remains available and context-preserving;
@@ -712,15 +770,16 @@ Completion does not authorize progressive removal of traditional pages or naviga
 
 ## Appendix A — Coverage matrix template
 
-| Domain | Operation | Interaction class | Canonical owner | Inline component | Primary inline action | Optional traditional destination | Approved exception | Confirmation | Reconciliation | Desktop/mobile proof | Status |
+| Domain | Operation | Interaction class | Canonical owner | Eligible/selected presentation modes | Primary inline action | Optional traditional destination | Approved exception | Confirmation | Reconciliation | Desktop/mobile proof | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Maintenance | `MAINTENANCE_STATUS` | Read/collection | Maintenance service | Collection + entity detail | Open inline task | Maintenance | None | N/A | Refresh/current view | Required | Baseline to migrate |
+| Maintenance | `MAINTENANCE_STATUS` | Read/collection | Maintenance service | Grouped list / compact cards → entity detail | Open inline task | Maintenance | None | N/A | Refresh/current view | Required | Baseline to migrate |
 
 ## Appendix B — Requirement traceability
 
 | Concern | This FRD | Existing inherited requirements |
 | --- | --- | --- |
 | Stable results | §§11, 14 | RES-001–005 |
+| Adaptive presentation | §§11.3–11.6, 12–13 | New governing requirements |
 | Freshness | §15 | FRESH-001–004 |
 | Typed actions | §10 | ACT-001–006, ROLL-001–002 |
 | Confirmation | §§16–17 | CONF-001–006 |
