@@ -143,7 +143,9 @@ export const SELL_HOLD_RENT_SKILL_EVALUATION = deepFreezeSkillPackage({
     "TABLE",
     "EVIDENCE",
     "CAPABILITY_LIST",
-    "BOUNDARY"
+    "BOUNDARY",
+    "DECISION_PROGRESS",
+    "WHY_NOW"
   ],
   "expectedCanonicalCalls": [
     {

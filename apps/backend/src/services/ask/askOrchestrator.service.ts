@@ -11851,18 +11851,27 @@ export async function editAskConfirmation(userId: string, executionId: string, i
     throw error;
   }
   // B04 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
-  // this dispatch used to be a single hardcoded MAINTENANCE_TASK_UPDATE
-  // check with everything else inline below it. Extracted per-operation so
-  // BUYER_TASK_UPDATE's reschedule can reuse the same shared
-  // access/status/role/version checks above without duplicating them.
-  if (execution.operationId === 'BUYER_TASK_UPDATE') {
-    return editBuyerTaskUpdateConfirmation(execution, parameters, input);
-  }
-  if (execution.operationId !== 'MAINTENANCE_TASK_UPDATE') {
+  // dispatch is a lookup table (EDIT_CONFIRMATION_HANDLERS, defined below),
+  // not an if/else operationId chain -- matches the platform-wide
+  // registerCapabilityHandler/registerConfirmCapabilityHandler dispatch
+  // convention, and keeps confirmCapabilityHandlerRegistry.test.js's "no
+  // operationId branching for write dispatch" governance test (Test G)
+  // honest for the edit path too, not just confirmAskExecution's own
+  // dispatch (its byte-range scan happens to include this whole function).
+  const editHandler = EDIT_CONFIRMATION_HANDLERS[execution.operationId as AskOperationId];
+  if (!editHandler) {
     const error = new Error('Editing is not available for this action yet.');
     (error as Error & { code?: string }).code = 'ASK_EDIT_NOT_SUPPORTED';
     throw error;
   }
+  return editHandler(execution, parameters, input);
+}
+
+async function editMaintenanceTaskUpdateConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+): Promise<AskExecutionResponse> {
   const existingUpdate = MaintenanceTaskUpdateInputSchema.safeParse(parameters.maintenanceUpdate);
   if (!existingUpdate.success || existingUpdate.data.action !== 'RESCHEDULE') {
     const error = new Error('Editing is only available for a reschedule proposal.');
@@ -11875,7 +11884,7 @@ export async function editAskConfirmation(userId: string, executionId: string, i
     (error as Error & { code?: string }).code = 'ASK_INVALID_CONFIRMATION_EDIT';
     throw error;
   }
-  const task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: existingUpdate.data.taskId, propertyId: execution.propertyId } });
+  const task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: existingUpdate.data.taskId, propertyId: execution.propertyId! } });
   if (!task) {
     const error = new Error('The selected maintenance task is no longer available.');
     (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
@@ -11884,7 +11893,7 @@ export async function editAskConfirmation(userId: string, executionId: string, i
   const updatedInput = MaintenanceTaskUpdateInputSchema.parse({ ...existingUpdate.data, nextDueDate: nextDueDateEdit });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const taskHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}`;
+  const taskHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId!)}&taskId=${encodeURIComponent(task.id)}`;
   const newConfirmation = {
     confirmationId: `maintenance-update-${task.id}-${nextVersion}`, version: nextVersion, title: `Reschedule ${task.title}?`,
     description: 'This command writes through the canonical Maintenance service and preserves downstream reconciliation.',
@@ -11933,7 +11942,7 @@ export async function editAskConfirmation(userId: string, executionId: string, i
     throw error;
   }
   await prisma.askExecutionEvent.create({
-    data: { executionId, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
   });
   const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
@@ -12014,6 +12023,15 @@ async function editBuyerTaskUpdateConfirmation(
   const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
+
+const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+) => Promise<AskExecutionResponse>>> = {
+  MAINTENANCE_TASK_UPDATE: editMaintenanceTaskUpdateConfirmation,
+  BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,
+};
 
 export async function cancelAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });

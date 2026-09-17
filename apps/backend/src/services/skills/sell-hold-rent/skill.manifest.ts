@@ -66,7 +66,9 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
     "TABLE",
     "EVIDENCE",
     "CAPABILITY_LIST",
-    "BOUNDARY"
+    "BOUNDARY",
+    "DECISION_PROGRESS",
+    "WHY_NOW"
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
