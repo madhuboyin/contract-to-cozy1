@@ -1,5 +1,5 @@
 import { getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
-import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory, WarrantyCategory } from '@prisma/client';
+import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -5965,7 +5965,35 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
   };
 }
 
-async function refinanceAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+// FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md Phase 3 exit
+// criterion / F02 fix (docs/architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md):
+// REFINANCE_ANALYSIS previously had no way to edit a scenario assumption at
+// all -- the handler took no `message` parameter, so nothing a homeowner
+// typed could reach a what-if calculation, and the only writable input
+// (captureRequests) is a canonical-fact write, not a revisable assumption.
+// Gated on an explicit edit-intent framing ("what if"/"suppose"/"instead
+// of"/"if i refinanced") PLUS a parseable rate or term, deliberately
+// narrower than a bare number mention -- a homeowner asking "is refinancing
+// worth it at 6%" is asking a question about THIS number being relevant,
+// not necessarily requesting a recalculation, so an explicit hypothetical
+// framing is required before this reinterprets the turn as an edit.
+export function parseRefinanceScenarioEdit(message: string): { targetRatePct: number | null; targetTerm: RefinanceScenarioTerm | null } | null {
+  const isScenarioFraming = /\b(?:what if|suppose|hypothetically|instead of my (?:current|recorded) (?:rate|term|loan)|if i (?:refinanc(?:e|ed)?|got|get|took|take))\b/i.test(message);
+  if (!isScenarioFraming) return null;
+  const rateMatch = message.match(/(\d{1,2}(?:\.\d{1,3})?)\s*%/);
+  const targetRatePct = rateMatch ? Number(rateMatch[1]) : null;
+  const targetTerm = /\b(?:15|fifteen)[- ]?year\b/i.test(message)
+    ? RefinanceScenarioTerm.FIFTEEN_YEAR
+    : /\b(?:20|twenty)[- ]?year\b/i.test(message)
+      ? RefinanceScenarioTerm.TWENTY_YEAR
+      : /\b(?:30|thirty)[- ]?year\b/i.test(message)
+        ? RefinanceScenarioTerm.THIRTY_YEAR
+        : null;
+  if (targetRatePct == null && !targetTerm) return null;
+  return { targetRatePct, targetTerm };
+}
+
+async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
     getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR'),
@@ -6028,6 +6056,69 @@ async function refinanceAnalysisResult(userId: string, propertyId: string): Prom
   if (!result.available) {
     return { status: 'UNAVAILABLE', reasonCode: result.reason, contextVersion: financialContext.contextVersion, blocks: [{ type: 'SUMMARY', id: 'refinance-analysis-unavailable', title: 'The refinance analysis is not ready', body: 'The Mortgage Refinance Radar could not complete a property-specific comparison. Review the financing profile and try again.', tone: 'CAUTION', actions: [{ id: 'open-profile', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'PRIMARY' }] }], suggestions: [] };
   }
+
+  // F02 fix (see parseRefinanceScenarioEdit above): a real, isolated what-if
+  // recalculation -- RefinanceRadarService.runScenario with saveScenario:
+  // false, confirmed by direct read, never writes RefinanceScenarioSnapshot
+  // and never touches PropertyFinancingProfile; it only READS the canonical
+  // mortgage context. This branch returns entirely separately from the
+  // canonical comparison below -- nothing here is combined with or
+  // overwrites it, mirroring HVAC_DECISION_SCENARIO's own isolated-scenario
+  // shape (verified in the Phase 7 Decisions document, D02). The canonical
+  // analysis remains exactly as-is and is reproduced unchanged by simply
+  // asking again without the hypothetical framing.
+  const scenarioEdit = parseRefinanceScenarioEdit(message);
+  if (scenarioEdit) {
+    try {
+      const targetRatePct = scenarioEdit.targetRatePct ?? marketSnapshot.rate30yr;
+      const targetTerm = scenarioEdit.targetTerm ?? RefinanceScenarioTerm.THIRTY_YEAR;
+      const termLabel = targetTerm === RefinanceScenarioTerm.FIFTEEN_YEAR ? '15-year' : targetTerm === RefinanceScenarioTerm.TWENTY_YEAR ? '20-year' : '30-year';
+      const scenario = await refinanceRadarService.runScenario(propertyId, {
+        targetRate: targetRatePct,
+        targetTerm,
+        borrowerCreditBand: 'UNKNOWN',
+        objective: 'BALANCED',
+        saveScenario: false,
+        propertyContextVersion: financialContext.contextVersion,
+      });
+      return {
+        status: 'ANSWERED', contextVersion: financialContext.contextVersion,
+        blocks: [{
+          type: 'SUMMARY', id: 'refinance-scenario-summary',
+          title: `Illustrative ${termLabel} scenario at ${targetRatePct.toFixed(3)}%`,
+          body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. Ask "Is refinancing worth it?" to see the current comparison again.',
+          tone: 'DEFAULT',
+          actions: [{ id: 'open-radar', label: 'Explore in Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
+        }, {
+          type: 'TABLE', id: 'refinance-scenario-table', title: 'Illustrative scenario vs. your current loan',
+          description: 'A hypothetical revision, not a lender quote or a saved plan. Your recorded mortgage facts are not changed by asking this.',
+          columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }],
+          rows: [
+            { id: 'scenario-rate', values: { metric: 'Illustrative target rate', value: `${targetRatePct.toFixed(3)}%` } },
+            { id: 'scenario-term', values: { metric: 'Illustrative target term', value: termLabel } },
+            { id: 'scenario-monthly-savings', values: { metric: 'Modeled monthly savings', value: money(scenario.monthlySavings) } },
+            { id: 'scenario-lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(scenario.lifetimeSavings) } },
+            { id: 'scenario-closing-cost', values: { metric: 'Modeled closing costs', value: money(scenario.closingCostUsd) } },
+            { id: 'scenario-break-even', values: { metric: 'Estimated break-even', value: scenario.breakEvenMonths == null ? 'Not reached' : `${scenario.breakEvenMonths} months` } },
+          ],
+          actions: [],
+        }, {
+          type: 'EVIDENCE', id: 'refinance-scenario-evidence', title: 'Sources used',
+          items: [{ label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() }],
+        }, {
+          type: 'BOUNDARY', id: 'refinance-scenario-boundary', title: 'Illustrative scenario—not a lender quote or a saved plan',
+          body: 'This models a hypothetical rate and term only. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',
+          severity: 'INFO', suggestions: [],
+        }],
+        suggestions: ['Is refinancing worth it right now?', 'Notify me when rates reach this level'],
+      };
+    } catch (error) {
+      // Best-effort: a scenario computation failure must not break the
+      // ordinary canonical-analysis read this turn would otherwise return.
+      logger.warn({ error, propertyId }, '[ask-orchestrator] refinance scenario computation failed, falling back to the canonical analysis');
+    }
+  }
+
   const favorable = result.radarState === 'OPEN';
   const rows = [
     { id: 'current-rate', values: { metric: 'Your recorded mortgage rate', value: `${result.currentRatePct.toFixed(3)}%`, meaning: 'Existing loan note rate' } },
@@ -7139,7 +7230,7 @@ registerCapabilityHandler('inventory.replacement', async (envelope) => replaceme
   envelope.launchContext?.entityType === 'INVENTORY_ITEM' ? envelope.launchContext.entityId : null,
   envelope.executionId,
 ));
-registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
