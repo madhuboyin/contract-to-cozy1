@@ -5116,7 +5116,7 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
   };
 }
 
-async function buyerTaskUpdateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function buyerTaskUpdateResult(userId: string, propertyId: string, message: string, sourceExecutionId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const planHref = buyerPlanHref(propertyId);
   if (access.role === HouseholdRole.VIEWER) {
@@ -5178,16 +5178,32 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
       buyerTaskDueAt: dueDate ?? null,
       buyerTaskAssigneeUserId: action === 'ASSIGN' ? assignee!.userId : action === 'UNASSIGN' ? null : undefined,
       buyerTaskVersion: buyerTaskVersion(matched),
+      // B04 fix: carried to confirm-time so the source list (if this came
+      // from a row action, or the homeowner is viewing a filtered Buyer
+      // Plan list) can be refreshed in place after the mutation succeeds --
+      // see confirmBuyerTaskUpdate, mirroring MAINT-005/A12's own pattern.
+      sourceExecutionId: sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
     blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: `Review this ${actionLabel}`, body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${planHref}?${new URLSearchParams({ taskId: matched.id }).toString()}`, style: 'SECONDARY' }] }],
     confirmation: {
       confirmationId: `buyer-task-update-${matched.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${matched.title}?`,
       description: 'This command writes through the canonical Buyer Plan and preserves closing readiness.',
+      // B04 fix: RESCHEDULE previously showed only the new date, with no
+      // current-value disclosure at all, and an unconditional
+      // editableFields: [] -- weaker than MAINTENANCE_TASK_UPDATE's own
+      // reference implementation, confirmed by direct comparison of the two
+      // functions. Now mirrors it exactly: the current due date is shown as
+      // a plain field, and the proposed new date is represented only via
+      // editableFields (not duplicated here as read-only text), matching
+      // CONF-002/CONF-003's shape and the same "old/new date disclosed"
+      // standard Maintenance already meets.
       fields: [{ label: 'Task', value: matched.title }, { label: 'Action', value: actionLabel },
-        ...(dueDate ? [{ label: 'New due date', value: dueDate }] : []),
+        ...(action === 'RESCHEDULE' ? [{ label: 'Current due date', value: humanDate(matched.dueAt) ?? 'Not scheduled' }] : []),
+        ...(action !== 'RESCHEDULE' && dueDate ? [{ label: 'New due date', value: dueDate }] : []),
         ...(assignee ? [{ label: 'Assignee', value: assignee.user.email }] : [])],
-      editableFields: [], confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Buyer Plan.`, expiresAt: expiresAt.toISOString(),
+      editableFields: action === 'RESCHEDULE' && dueDate ? [{ key: 'dueAt', label: 'New due date', type: 'DATE' as const, value: dueDate }] : [],
+      confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Buyer Plan.`, expiresAt: expiresAt.toISOString(),
     }, suggestions: [],
   };
 }
@@ -7477,7 +7493,7 @@ registerCapabilityHandler('buyer.document-readiness', async (envelope) => buyerD
 registerCapabilityHandler('buyer.inspection-review', async (envelope) => buyerInspectionReviewResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.task.complete', async (envelope) => buyerTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('buyer.task.create', async (envelope) => buyerTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('buyer.task.update', async (envelope) => buyerTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('buyer.task.update', async (envelope) => buyerTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('buyer.move-status', async (envelope) => buyerMoveStatusResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.financing-readiness', async (envelope) => buyerFinancingReadinessResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.title-escrow-readiness', async (envelope) => buyerTitleEscrowReadinessResult(envelope.userId, envelope.propertyId!));
@@ -9973,16 +9989,21 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
     result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
   return { result, artifactType, artifactId };
 }
-// ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: after a maintenance
-// complete/reschedule mutation succeeds, refresh the list execution it was
-// clicked from (if any) so it stops showing stale pending/due state instead
-// of leaving that reconciliation to a manual re-ask. Reuses
+// ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: after a confirmation-
+// gated mutation succeeds, refresh the list execution it was clicked from
+// (if any) so it stops showing stale pending/due state instead of leaving
+// that reconciliation to a manual re-ask. Reuses
 // refreshAskExecutionAfterConflict (already re-runs an execution's own
 // operation+message in place) rather than a new mechanism. Best-effort per
 // CONF-005: a refresh failure must never fail the mutation that already
 // succeeded, so any error here is swallowed and simply yields no refreshed
-// card.
-interface MaintenanceSourceRefreshOutcome {
+// card. Originally Maintenance-only (hence the name this function and type
+// used to have); nothing about the implementation is actually
+// Maintenance-specific -- it just reads parameters.sourceExecutionId, which
+// any confirm handler can populate the same way. Generalized as part of the
+// B04 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md)
+// so confirmBuyerTaskUpdate can reuse it directly instead of duplicating it.
+interface AskSourceRefreshOutcome {
   refreshedExecutions: AskExecutionResponse[];
   // External review finding: a failed refresh used to be indistinguishable
   // from "nothing to refresh" -- the caller got an empty array either way,
@@ -9992,7 +10013,7 @@ interface MaintenanceSourceRefreshOutcome {
   attemptedAndFailed: boolean;
 }
 
-async function refreshMaintenanceSourceExecution(userId: string, currentExecutionId: string, parameters: Record<string, unknown>): Promise<MaintenanceSourceRefreshOutcome> {
+async function refreshAskSourceExecution(userId: string, currentExecutionId: string, parameters: Record<string, unknown>): Promise<AskSourceRefreshOutcome> {
   const sourceExecutionId = parameters.sourceExecutionId;
   if (typeof sourceExecutionId !== 'string' || !sourceExecutionId || sourceExecutionId === currentExecutionId) {
     return { refreshedExecutions: [], attemptedAndFailed: false };
@@ -10084,7 +10105,7 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK_COMPLETION';
     artifactId = updated.id;
-    const refresh = await refreshMaintenanceSourceExecution(userId, execution.id, parameters);
+    const refresh = await refreshAskSourceExecution(userId, execution.id, parameters);
     // CONF-005: a refresh failure must never look like the mutation itself
     // failed or invite a repeat -- the completion above already succeeded
     // and is not touched. Disclose the stale list honestly with a concrete,
@@ -10255,7 +10276,22 @@ async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<Co
     };
     artifactType = 'HOME_BUYER_TASK';
     artifactId = updated.id;
-  return { result, artifactType, artifactId };
+    // B04 fix: previously never reconciled any other visible Buyer result
+    // (e.g. BUYER_DEADLINES, which the rescheduled/reassigned task may
+    // appear in) after this write succeeded -- confirmed by direct read that
+    // this handler never populated refreshedExecutions at all. Reuses the
+    // same generalized mechanism Maintenance's own reference implementation
+    // uses, not a new one.
+    const refresh = await refreshAskSourceExecution(userId, execution.id, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `buyer-task-list-refresh-failed-${updated.id}`, title: 'Saved; list could not refresh',
+        body: 'This change was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -10561,7 +10597,7 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
     };
     artifactType = command.artifactType;
     artifactId = updated.id;
-    const refresh = await refreshMaintenanceSourceExecution(userId, execution.id, parameters);
+    const refresh = await refreshAskSourceExecution(userId, execution.id, parameters);
     if (refresh.attemptedAndFailed) {
       result.blocks.push({
         type: 'LIMITATION', id: `maintenance-list-refresh-failed-${updated.id}`, title: 'Saved; list could not refresh',
@@ -11776,6 +11812,16 @@ export async function confirmAskExecution(userId: string, executionId: string, i
 // one editable-field case that exists (maintenance reschedule) rather than
 // a generic per-operation registry -- extend this when a second case is
 // actually implemented.
+// Shared by both editAskConfirmation branches (Maintenance and, as of the
+// B04 fix, Buyer) -- extracted so the exact-yyyy-mm-dd-plus-real-calendar-
+// date validation is defined once and directly unit-testable, rather than
+// duplicated inline in each operation's own edit path.
+export function isValidDateEditInput(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
+}
+
 export async function editAskConfirmation(userId: string, executionId: string, input: EditAskConfirmation): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution || !execution.propertyId) {
@@ -11804,6 +11850,14 @@ export async function editAskConfirmation(userId: string, executionId: string, i
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
     throw error;
   }
+  // B04 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+  // this dispatch used to be a single hardcoded MAINTENANCE_TASK_UPDATE
+  // check with everything else inline below it. Extracted per-operation so
+  // BUYER_TASK_UPDATE's reschedule can reuse the same shared
+  // access/status/role/version checks above without duplicating them.
+  if (execution.operationId === 'BUYER_TASK_UPDATE') {
+    return editBuyerTaskUpdateConfirmation(execution, parameters, input);
+  }
   if (execution.operationId !== 'MAINTENANCE_TASK_UPDATE') {
     const error = new Error('Editing is not available for this action yet.');
     (error as Error & { code?: string }).code = 'ASK_EDIT_NOT_SUPPORTED';
@@ -11816,7 +11870,7 @@ export async function editAskConfirmation(userId: string, executionId: string, i
     throw error;
   }
   const nextDueDateEdit = input.edits.nextDueDate;
-  if (typeof nextDueDateEdit !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextDueDateEdit) || Number.isNaN(new Date(`${nextDueDateEdit}T00:00:00Z`).getTime())) {
+  if (!isValidDateEditInput(nextDueDateEdit)) {
     const error = new Error('Enter a valid date.');
     (error as Error & { code?: string }).code = 'ASK_INVALID_CONFIRMATION_EDIT';
     throw error;
@@ -11880,6 +11934,82 @@ export async function editAskConfirmation(userId: string, executionId: string, i
   }
   await prisma.askExecutionEvent.create({
     data: { executionId, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
+// B04 fix: BUYER_TASK_UPDATE's own reschedule-edit path, mirroring
+// MAINTENANCE_TASK_UPDATE's edit handling above exactly (same shared-caller
+// checks, same version-and-status-guarded optimistic write, same
+// CONFIRMATION_EDITED event) but against Buyer's own flat parameter shape
+// (parameters.buyerTaskAction/buyerTaskId/buyerTaskDueAt, not a single
+// nested maintenanceUpdate object) and its own canonical model
+// (prisma.homeBuyerTask, not propertyMaintenanceTask). Only RESCHEDULE is
+// editable, same restriction Maintenance's own edit path has.
+async function editBuyerTaskUpdateConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+): Promise<AskExecutionResponse> {
+  if (parameters.buyerTaskAction !== 'RESCHEDULE') {
+    const error = new Error('Editing is only available for a reschedule proposal.');
+    (error as Error & { code?: string }).code = 'ASK_EDIT_NOT_SUPPORTED';
+    throw error;
+  }
+  const taskId = parameters.buyerTaskId;
+  if (typeof taskId !== 'string') {
+    const error = new Error('The Buyer Plan task selection is invalid.');
+    (error as Error & { code?: string }).code = 'ASK_EDIT_NOT_SUPPORTED';
+    throw error;
+  }
+  const dueAtEdit = input.edits.dueAt;
+  if (!isValidDateEditInput(dueAtEdit)) {
+    const error = new Error('Enter a valid date.');
+    (error as Error & { code?: string }).code = 'ASK_INVALID_CONFIRMATION_EDIT';
+    throw error;
+  }
+  const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId! } } });
+  if (!task) {
+    const error = new Error('The selected Buyer Plan task is no longer available.');
+    (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+    throw error;
+  }
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const taskHref = `${buyerPlanHref(execution.propertyId!)}?${new URLSearchParams({ taskId: task.id }).toString()}`;
+  const newConfirmation = {
+    confirmationId: `buyer-task-update-${task.id}-${nextVersion}`, version: nextVersion, title: `Reschedule ${task.title}?`,
+    description: 'This command writes through the canonical Buyer Plan and preserves closing readiness.',
+    fields: [
+      { label: 'Task', value: task.title }, { label: 'Action', value: 'reschedule' },
+      { label: 'Current due date', value: task.dueAt ? (humanDate(task.dueAt) ?? 'Not scheduled') : 'Not scheduled' },
+    ],
+    editableFields: [{ key: 'dueAt', label: 'New due date', type: 'DATE' as const, value: dueAtEdit }],
+    confirmLabel: 'Confirm reschedule', consentText: 'I authorize this reschedule of the shared Buyer Plan.', expiresAt: expiresAt.toISOString(),
+  };
+  // Same optimistic status-and-version-guarded write as Maintenance's own
+  // edit path above -- see its comment for why both are required, not just
+  // the version.
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    data: {
+      parametersJson: asInputJson({ ...parameters, buyerTaskDueAt: dueAtEdit, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+        blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: 'Review this reschedule', body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: taskHref, style: 'SECONDARY' }] }],
+        captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: 'Review this reschedule', body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [] }]),
+      }),
+    },
+  });
+  if (editWrite.count !== 1) {
+    const error = new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
+  await prisma.askExecutionEvent.create({
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
   });
   const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
