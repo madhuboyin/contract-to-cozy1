@@ -6,6 +6,13 @@
 **Why this document exists:** every other verification in this series has repeatedly cited maintenance as the reference every other track is measured against (the only real `editableFields` implementation, the only 2-of-30 confirmation-gated operations that populate `refreshedExecutions`, the only operation-level view-state mechanism in the registry). None of those citations were themselves re-verified end to end against maintenance's own confirm-time code — they were read once, early, during Phase 0 tracing. ROLL-010 says explicitly: "Existing backend capability is recorded as baseline evidence, not treated as acceptance of the interactive experience." This document applies that same warning to maintenance itself rather than exempting it.
 **Verification level: STATIC.** Every claim below is derived from direct reads of `maintenanceResult`, `maintenanceTaskCreateResult`, `maintenanceTaskCompleteResult`, `maintenanceTaskUpdateResult`, `confirmMaintenanceTaskComplete`, `confirmMaintenanceTaskCreate`, `confirmMaintenanceTaskUpdate`, `refreshMaintenanceSourceExecution`, and `mergeMaintenanceViewContinuation` in `askOrchestrator.service.ts`. Nothing here is database- or browser-verified — consistent with every other document in this series, and itself an instance of the "unexecuted live scenarios distinguished from missing implementation" Phase 1's exit criterion asks for.
 
+| Field | Status |
+| --- | --- |
+| Audit coverage | Complete — all 8 requirement clusters (§8's shared cross-domain requirements, mapped onto the 4 Completed-reference operations) evaluated |
+| Static (code-read) acceptance | 6 pass, 2 partial, 0 fail |
+| Runtime/browser acceptance | Not evaluated this session — no live database or browser exercised |
+| Phase 1 exit criterion ("a recorded functional and interaction-quality baseline...") | **Met** — this document is that record; the 2 partials are the "unexecuted live scenarios distinguished from missing implementation" the criterion itself asks for |
+
 ## Methodology
 
 There is no dedicated acceptance-scenario table for maintenance — §6.2 explicitly excludes "reimplementing the completed maintenance slice" from this FRD's rollout scope, and §7's own table says "no new rollout; use as reference." So instead of scoring against a T/B/D/F/P-style list, this document scores maintenance against the shared cross-domain requirements (§8: XRES/XACT/XPROP/XREC/XSEC) it is meant to exemplify, plus the golden-journey shape Phase 1's own bullet names directly: "query → filter → select → prepare reschedule → edit → confirm → reconcile → exact-task explanation → handoff → return." Same PASS/PARTIAL/FAIL convention as the rest of the series.

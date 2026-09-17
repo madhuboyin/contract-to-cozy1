@@ -1,10 +1,17 @@
 # Ask Cozy Cross-Domain Interaction Rollout — Phase 7 Decisions and Projects Acceptance Scenario Verification
 
-**Status:** Complete — all 8 acceptance scenarios (D01–D08) evaluated.
-**Verdict: no outright failures, but only 3 of 8 scenarios pass fully.** The Decisions and projects track is more mature than Buyer's own verification found — real per-thread freshness, real scenario persistence, real staleness signaling all exist — but 5 of 8 scenarios pass only partially, each against a specific, named gap.
+**Status:** Complete — all 8 acceptance scenarios (D01–D08) evaluated. **D07 revised 2026-09-17 after external review found the same "generic conflict message ≠ current state shown" substitution already corrected in the Phase 8 document's P04.**
+**Verdict: no outright failures, but only 2 of 8 scenarios pass fully.** Originally scored 3 of 8 fully passing. D07 is corrected here from PASS to PARTIAL: `confirmSellerPrepItemDecision`'s stale-write guard is real, but its conflict message is static boilerplate with zero item-specific dynamic content, so "current disposition shown" isn't actually satisfied — the same defect independently confirmed in Phase 8's P04 (`CLAIM_TRANSITION`) and Buyer's B06. The Decisions and projects track is still more mature than Buyer's own verification found — real per-thread freshness, real scenario persistence, real staleness signaling all exist — but now 6 of 8 scenarios pass only partially, each against a specific, named gap.
 **Governs:** [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) §13.3 (D01–D08). Phase 7's own exit criterion also covers F01–F08 (Financial); this document covers D01–D08 only, per the specific request that produced it.
 **Builds on:** [Phase 0 Coverage Audit](ASK_COZY_PHASE0_COVERAGE_AUDIT.md) §4.7 (`SELL_HOLD_RENT_ANALYSIS`/`GOAL_CAPTURE`) and §4.11 (the other 17 Decisions-and-projects operations), which traced every operation to the handler level. This document re-reads the code against each specific acceptance scenario, including several confirm-time handler bodies not read in full during Phase 0.
 **Verification level: STATIC.** Every verdict below is derived from reading `askOrchestrator.service.ts`'s HVAC/seller-prep/renovation confirm and propose handlers, `decisionThreadService.ts`, and `askOperationRegistry.ts` directly. Nothing here is database- or browser-verified — no live decision thread was exercised end to end.
+
+| Field | Status |
+| --- | --- |
+| Audit coverage | Complete — all 8 acceptance scenarios (D01–D08) evaluated |
+| Static (code-read) acceptance | 2 pass, 6 partial, 0 fail |
+| Runtime/browser acceptance | Not evaluated this session — no live database or browser exercised |
+| Phase 7 exit criterion ("applicable F01–F08 and D01–D08 scenarios pass") | **Not met** — 6 of 8 D-scenarios are only partial |
 
 ## Methodology
 
@@ -79,9 +86,13 @@ None of these restore **position** (which scenario tab was open, which section o
 
 **Required:** "Stale item action blocked; current disposition shown."
 
-**Verdict: PASS.**
+**Verdict: PARTIAL — corrected from an original PASS after external review; the same defect independently found in Phase 8's P04 and Buyer's B06.**
 
-`confirmSellerPrepItemDecision` (`askOrchestrator.service.ts:9574`) is a precise, direct match: it re-fetches the item fresh from the database, recomputes `sellerPrepItemContextVersion(item)`, and throws `ASK_CONTEXT_VERSION_CONFLICT` ("This checklist item changed while confirmation was open. Review it and try again.") if it no longer matches the version captured at propose time. The stale action is genuinely blocked before `PropertySaleCaseService.setItemDecision` is ever called.
+*Stale item action blocked*: genuinely real. `confirmSellerPrepItemDecision` (`askOrchestrator.service.ts:9797`) re-fetches the item fresh from the database, recomputes `sellerPrepItemContextVersion(item)`, and throws `ASK_CONTEXT_VERSION_CONFLICT` if it no longer matches the version captured at propose time. The stale action is genuinely blocked before `PropertySaleCaseService.setItemDecision` is ever called.
+
+*Current disposition shown*: **not satisfied, confirmed by direct re-read.** The conflict is thrown as `new Error('This checklist item changed while confirmation was open. Review it and try again.')` (line 9812) — a static string with no interpolated disposition, status, or any other item-specific value. This is the identical pattern found in Phase 8's `confirmClaimTransition` (P04) and Buyer's `confirmBuyerTaskUpdate` (B06): the shared generic error-catch wrapper (`askOrchestrator.service.ts:11579–11634`) renders the result as a `WORKFLOW_PROGRESS` block with `details: []` and `actions: []` hardcoded empty, so "review it" is an instruction, not a display. Only `MAINTENANCE_TASK_COMPLETE`/`UPDATE`'s `maintenanceConflictDescription` genuinely interpolates real current-record values into the conflict message anywhere in this codebase.
+
+Scored PARTIAL: the block itself is real and correctly engineered; the disclosure half of the requirement is confirmed absent.
 
 ## D08 — Prospective renovation question has no tracked case
 
@@ -103,7 +114,7 @@ None of these restore **position** (which scenario tab was open, which section o
 | D04 | Outcome report: revalidate linkage, reject stale target | **PASS** |
 | D05 | Workspace round-trip: workflow/item/scenario/position restored | **PARTIAL** — durable identity substitutes for restoration; no position cache anywhere |
 | D06 | Abandon: history retained, next actions suppressed | **PARTIAL** — history retention real; no Home Action suppression |
-| D07 | Seller-prep item changed elsewhere: stale action blocked | **PASS** |
+| D07 | Seller-prep item changed elsewhere: stale action blocked, current disposition shown | **PARTIAL** — corrected from PASS: block is real; disposition-shown fails (static conflict message, same defect as Phase 8's P04 and Buyer's B06) |
 | D08 | No tracked renovation case: distinct guidance, not fabricated readiness | **PARTIAL** — honest limitation shown; no distinct guidance destination exists |
 
-**3 full passes, 5 partial passes, 0 outright fails, out of 8 scenarios.** This track is genuinely more mature than Buyer's — every partial pass here fails on one specific, narrow, well-defined gap rather than lacking the underlying mechanism entirely, and three of the platform's more sophisticated safety mechanisms (per-thread staleness marking, disputable-outcome gating, scenario-revision persistence with original-retained disclosure) live here. The recurring theme across the partials is under-disclosure and under-propagation, not fabrication or missing safety: assumptions/evidence exist but aren't shown (D01); a staleness signal exists but only fires from one of two related actions (D03); durable identity substitutes for, but doesn't fully deliver, position restoration (D05); a real lifecycle transition doesn't reach into the one adjacent system (Home Actions) it plausibly should (D06); and one track (renovation) has no distinct destination for a whole category of question (D08).
+**2 full passes, 6 partial passes, 0 outright fails, out of 8 scenarios.** Originally scored 3/5/0 before external review corrected D07. This track remains genuinely more mature than Buyer's — every partial pass here fails on one specific, narrow, well-defined gap rather than lacking the underlying mechanism entirely, and the platform's more sophisticated safety mechanisms (per-thread staleness marking, disputable-outcome gating, scenario-revision persistence with original-retained disclosure) still live here. The recurring theme across the partials is under-disclosure and under-propagation, not fabrication or missing safety: assumptions/evidence exist but aren't shown (D01); a staleness signal exists but only fires from one of two related actions (D03); durable identity substitutes for, but doesn't fully deliver, position restoration (D05); a real lifecycle transition doesn't reach into the one adjacent system (Home Actions) it plausibly should (D06); a stale-write guard exists but its conflict message carries no current-record data (D07, the newly-corrected finding — also true of Claims' P04 and Buyer's B06, suggesting this is a platform-wide gap rather than a Decisions-specific one); and one track (renovation) has no distinct destination for a whole category of question (D08).

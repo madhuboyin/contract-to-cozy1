@@ -1,10 +1,17 @@
 # Ask Cozy Cross-Domain Interaction Rollout — Phase 6 Buyer Acceptance Scenario Verification
 
-**Status:** Complete — all 10 acceptance scenarios (B01–B10) plus the Phase 6 exit criterion's "no undeclared item mutation" clause evaluated.
-**Verdict: Phase 6's exit criterion ("B01–B10 pass and the buyer operation family has no undeclared item mutation") is NOT currently met.** 4 of 10 scenarios pass fully, 2 pass partially with a specific, named gap, and 4 fail. The mutation-discipline half of the exit criterion does pass.
+**Status:** Complete — all 10 acceptance scenarios (B01–B10) plus the Phase 6 exit criterion's "no undeclared item mutation" clause evaluated. **B06 revised 2026-09-17 after external review found the same "generic conflict message ≠ current state shown" defect already corrected in Phase 8's P04 and Phase 7's D07.**
+**Verdict: Phase 6's exit criterion ("B01–B10 pass and the buyer operation family has no undeclared item mutation") is NOT currently met.** Originally scored 4 of 10 fully passing; now 3 of 10 pass fully, 3 pass partially with a specific, named gap, and 4 fail. The mutation-discipline half of the exit criterion does pass.
 **Governs:** [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) §10.3 (B01–B10) and §21 Phase 6's exit criterion.
 **Builds on:** [Phase 0 Coverage Audit](ASK_COZY_PHASE0_COVERAGE_AUDIT.md) §4.10, which traced all 18 Buyer operations to the handler level. This document re-reads the code against each specific acceptance scenario rather than re-deriving the underlying evidence from scratch.
 **Verification level: STATIC.** Every verdict below is derived from reading `askOrchestrator.service.ts`'s buyer handlers, `askDomainCommandRegistry.ts`, `HomeBuyerTask.service.ts`, and `buyerPurchaseLenderReadiness.service.ts` directly, plus the `tsc`-clean, test-green state confirmed in the Phase 0 audit. Nothing here is database- or browser-verified — no live Buyer Plan was exercised end to end.
+
+| Field | Status |
+| --- | --- |
+| Audit coverage | Complete — all 10 acceptance scenarios (B01–B10) + mutation-discipline clause evaluated |
+| Static (code-read) acceptance | 3 pass, 3 partial, 4 fail (scenarios); mutation-discipline clause passes separately |
+| Runtime/browser acceptance | Not evaluated this session — no live database or browser exercised |
+| Phase 6 exit criterion | **Not met** — 7 of 10 scenarios are partial or fail |
 
 ## Methodology
 
@@ -64,9 +71,15 @@ There is no phase-based filtering mechanism anywhere in `buyerDeadlinesResult` (
 
 **Required:** "Stale proposal blocked; current date/state shown for renewed review."
 
-**Verdict: PASS, with a scoping note.**
+**Verdict: PARTIAL — corrected from an original PASS after external review; the same defect independently found in Phase 8's P04 and Phase 7's D07.**
 
-`BUYER_CONTRACT_TIMELINE` itself is a pure read with no domain command — there is no direct "edit the contract" confirmation flow to test this scenario against literally. The underlying mechanism it's really testing — a confirmation rejected because the record changed after the review card was shown — is real and verified elsewhere in the Buyer family: `confirmBuyerTaskUpdate`/`confirmBuyerTaskComplete`/`confirmBuyerFindingDisposition` all carry a real per-entity version (`buyerTaskVersion`, `matched.buyerDispositionAt`) checked against the value captured at propose time, on top of the platform-wide `confirmAskExecution` mechanism (atomic version re-check inside the claim transaction, `ASK_CONTEXT_VERSION_CONFLICT` on drift — confirmed platform-wide in Phase 0 §2.5). A stale Buyer confirmation is genuinely blocked, and the retry path re-reads current state rather than replaying stale data. Scored PASS on the mechanism the scenario is really probing; flagged that "contract revision" specifically has no directly testable write path in the current operation family.
+`BUYER_CONTRACT_TIMELINE` itself is a pure read with no domain command — there is no direct "edit the contract" confirmation flow to test this scenario against literally. The underlying mechanism it's really testing — a confirmation rejected because the record changed after the review card was shown — is scoped here to the closest directly-testable analogue: `confirmBuyerTaskUpdate`/`confirmBuyerTaskComplete`/`confirmBuyerFindingDisposition`.
+
+*Stale proposal blocked*: genuinely real. All three carry a real per-entity version (`buyerTaskVersion`, `matched.buyerDispositionAt`) checked against the value captured at propose time, on top of the platform-wide `confirmAskExecution` mechanism (atomic version re-check inside the claim transaction, `ASK_CONTEXT_VERSION_CONFLICT` on drift — confirmed platform-wide in Phase 0 §2.5).
+
+*Current date/state shown*: **not satisfied, confirmed by direct re-read.** `confirmBuyerTaskUpdate`'s conflict is thrown as `new Error('This task changed while the confirmation was open. Review its current status and try again.')` (`askOrchestrator.service.ts:10161`) — a static string with zero task-specific dynamic content (no title, no current due date, no current status). This is the identical pattern independently found in Phase 8's `confirmClaimTransition` (P04) and Phase 7's `confirmSellerPrepItemDecision` (D07): the shared generic error-catch wrapper (`askOrchestrator.service.ts:11579–11634`) renders `details: []` and `actions: []` hardcoded empty regardless of operation, so "review its current status" is an instruction to look elsewhere, not a display of the current state itself. Only `MAINTENANCE_TASK_COMPLETE`/`UPDATE`'s dynamic `maintenanceConflictDescription` genuinely interpolates real current-record values anywhere in this codebase — a pattern this scenario's own comparable Buyer handlers do not share.
+
+Scored PARTIAL: the retry path does genuinely re-read and act on current state internally (it isn't fooled by stale data), and the block itself is real — but nothing is actually *shown* to the homeowner about what changed, so "current date/state shown for renewed review" is not met. Also retained: "contract revision" specifically has no directly testable write path in the current operation family, so this verdict is scoped to the closest analogue, not a literal contract-edit flow.
 
 ## B07 — Open a buyer workspace and return
 
@@ -117,11 +130,11 @@ All 5 Buyer command operations are registered in `askDomainCommandRegistry.ts` (
 | B03 | Complete a task: review, one write, receipt, reconciliation | **PARTIAL** — reconciliation not wired |
 | B04 | Reschedule discloses old/new date, refreshes affected views | **FAIL** — only the new date is shown, no editable field, reconciliation not wired |
 | B05 | Ambiguous finding → target clarification | **PASS** |
-| B06 | Stale confirmation blocked, current state shown | **PASS** (mechanism verified; no direct contract-edit path to test literally) |
+| B06 | Stale confirmation blocked, current state shown | **PARTIAL** — corrected from PASS: block is real; current-state-shown fails (static conflict message, same defect as Phase 8's P04 and Phase 7's D07); no direct contract-edit path to test literally |
 | B07 | Workspace round-trip restores plan/filter/selection/position | **FAIL** — no view-state mechanism exists for Buyer |
 | B08 | Missing source document handled honestly | **PASS** |
 | B09 | Role-appropriate read/action surface | **PASS** (interpretive) |
 | B10 | No forced suggestions when nothing is relevant | **FAIL** — suggestions are always static |
 | — | No undeclared item mutation | **PASS** |
 
-**4 full passes, 2 partial passes, 4 fails, out of 10 scenarios.** The FRD's own Phase 6 exit criterion ("B01–B10 pass") is not met as of this verification. The gaps cluster around two of the same platform-wide findings the Phase 0 audit already identified — the missing `refreshedExecutions` reconciliation (B03, B04) and the absence of a Maintenance-style view-state mechanism outside that one track (B07) — plus Buyer-specific gaps not previously scored against a concrete scenario: no phase-based filtering (B02), a weaker old/new-value disclosure than Maintenance's own reference implementation (B04), and unconditional suggestion text (B10).
+**3 full passes, 3 partial passes, 4 fails, out of 10 scenarios.** Originally scored 4/2/4 before external review corrected B06. The FRD's own Phase 6 exit criterion ("B01–B10 pass") is not met as of this verification. The gaps cluster around three of the same platform-wide findings this audit series has now identified across multiple tracks — the missing `refreshedExecutions` reconciliation (B03, B04), the absence of a Maintenance-style view-state mechanism outside that one track (B07), and the static, non-dynamic conflict message every confirm handler except Maintenance's shares (B06, confirmed the same root cause as Phase 8's P04 and Phase 7's D07) — plus Buyer-specific gaps not previously scored against a concrete scenario: no phase-based filtering (B02), a weaker old/new-value disclosure than Maintenance's own reference implementation (B04), and unconditional suggestion text (B10).
