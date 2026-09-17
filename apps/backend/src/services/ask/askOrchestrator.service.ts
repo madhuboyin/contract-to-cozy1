@@ -1086,6 +1086,46 @@ export function buyerFindingConflictDescription(finding: { homeSystem: string; s
   return `"${label}" changed in another session before this could be confirmed -- it is now classified as ${dispositionLabel}. Review its current state and try again.`;
 }
 
+// P04 fix (same defect independently found in Phase 8's Protection doc,
+// same root cause and same fix shape as B06's Buyer conflict descriptions
+// above -- confirmClaimTransition previously threw a static "This claim
+// changed while confirmation was open..." with zero claim-specific
+// content; the shared generic error-catch wrapper renders error.message
+// directly with details/actions hardcoded empty, so the static string WAS
+// the entire disclosure). CLOSED gets its own phrasing (a claim closing is
+// the one status here analogous to Maintenance/Buyer's "already
+// completed" terminal case); every other status falls back to naming the
+// claim's current status plainly.
+const CLAIM_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'a draft', IN_PROGRESS: 'in progress', SUBMITTED: 'submitted', UNDER_REVIEW: 'under review', APPROVED: 'approved', DENIED: 'denied', CLOSED: 'closed',
+};
+
+export function claimConflictDescription(claim: { title: string; status: string }): string {
+  if (claim.status === 'CLOSED') {
+    return `"${claim.title}" was closed in another session before this change could be applied.`;
+  }
+  const statusLabel = CLAIM_STATUS_LABELS[claim.status] ?? claim.status.toLowerCase().replace(/_/g, ' ');
+  return `"${claim.title}" changed in another session before this could be confirmed -- it is now ${statusLabel}. Review its current state and try again.`;
+}
+
+// D07 fix (same defect independently found in Phase 7's Decisions doc,
+// same root cause and fix shape as B06/P04 above -- confirmSellerPrepItemDecision
+// previously threw a static "This checklist item changed while confirmation
+// was open..." with zero item-specific content). No single status here is
+// as clearly a "nothing further to do" terminal case as Maintenance's
+// COMPLETED/CANCELLED (OPEN/PURSUING/RESOLVED/WAIVED are all legitimate,
+// equally "current" states a homeowner might want disclosed), so this
+// stays a single, unconditional current-status phrasing rather than
+// special-casing any one of them.
+const SALE_READINESS_ITEM_STATUS_LABELS: Record<string, string> = {
+  OPEN: 'open', RESOLVED: 'resolved', WAIVED: 'waived', PURSUING: 'pursuing',
+};
+
+export function saleReadinessItemConflictDescription(item: { title: string; status: string }): string {
+  const statusLabel = SALE_READINESS_ITEM_STATUS_LABELS[item.status] ?? item.status.toLowerCase().replace(/_/g, ' ');
+  return `"${item.title}" changed in another session before this could be confirmed -- it is now ${statusLabel}. Review its current state and try again.`;
+}
+
 function maintenanceCompletionSubject(message: string): string {
   return message.toLowerCase()
     .replace(/^\s*(?:please\s+)?(?:mark|set|complete|finish)\s+/i, '')
@@ -10036,7 +10076,7 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
     const claim = await prisma.claim.findFirst({ where: { id: claimId, propertyId: execution.propertyId }, select: { id: true, title: true, status: true, updatedAt: true } });
     if (!claim) throw Object.assign(new Error('The selected claim is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
     const currentVersion = createHash('sha256').update(`${claim.id}:${claim.status}:${claim.updatedAt.toISOString()}`).digest('hex');
-    if (parameters.claimContextVersion !== currentVersion && claim.status !== nextStatus) throw Object.assign(new Error('This claim changed while confirmation was open. Review its current status and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    if (parameters.claimContextVersion !== currentVersion && claim.status !== nextStatus) throw Object.assign(new Error(claimConflictDescription(claim)), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
     const updated = claim.status === nextStatus ? await ClaimsService.getClaim(execution.propertyId, claim.id) : await ClaimsService.updateClaim(execution.propertyId, claim.id, userId, { status: nextStatus as ClaimStatus });
     artifactType = 'CLAIM'; artifactId = claim.id;
     result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['Show my open claims'] };
@@ -10093,7 +10133,7 @@ async function confirmSellerPrepItemDecision(ctx: ConfirmCapabilityContext): Pro
   if (!item) throw Object.assign(new Error('The selected checklist item is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const currentVersion = sellerPrepItemContextVersion(item);
   if (parameters.saleReadinessItemContextVersion !== currentVersion) {
-    throw Object.assign(new Error('This checklist item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    throw Object.assign(new Error(saleReadinessItemConflictDescription(item)), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   }
   await PropertySaleCaseService.setItemDecision(userId, execution.propertyId, item.id, action as 'WAIVE' | 'PURSUE' | 'REOPEN' | 'UNPURSUE', reason);
   const result: AskOperationResult = {
