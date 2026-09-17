@@ -57,6 +57,23 @@ const MONITOR_VAGUE_FOLLOWUP_PATTERN = /^\s*(?:what should i do(?: about (?:this
 // suppliedInput-backed operation to force-route to yet.
 const MAINTENANCE_COMPLETE_VERB_PATTERN = /\b(?:complete|finish)\b/i;
 
+// FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md Phase 4 exit
+// criterion / G04 (docs/architecture/ASK_COZY_PHASE4_SELL_HOLD_RENT_UX_COMPLETION_VERIFICATION.md):
+// sell/hold/rent had no vague-follow-up branch here at all -- a message
+// like "what's the status on my plan?" after a SELL_HOLD_RENT_ANALYSIS or
+// SELL_HOLD_RENT_GOAL_CAPTURE turn fell through to ordinary top-level
+// intent classification with no pinning to the active goal thread, unlike
+// HVAC_SPECIALIST_ENGAGE, Maintenance, and Envelope/Radar just below and
+// above. Anchored to the whole message (like MONITOR_VAGUE_FOLLOWUP_PATTERN)
+// rather than a broad word-boundary scan (like SPECIALIST_CONTINUATION_PATTERN)
+// deliberately -- SELL_HOLD_RENT_ANALYSIS is a deterministic snapshot read
+// with no message-driven branching of its own (confirmed by its own
+// signature, which takes no `message` parameter), not an open-ended agent
+// conversation, so a narrow, closed set of genuinely bare continuation
+// phrasings is the right shape here, not a permissive keyword scan that
+// could hijack an unrelated question.
+const SELL_HOLD_RENT_VAGUE_FOLLOWUP_PATTERN = /^\s*(?:what(?:'s| is) (?:the )?(?:status|update|progress)(?: on| for| of)?(?: my| the| this)?(?: plan| decision)?|how(?:'s| is)(?: my| the)? plan (?:going|doing)|what(?:'s| is) next(?: (?:on|for|with)(?: it| that| this| the plan))?|(?:keep going|continue|move forward) with (?:it|that|this|the plan)|any (?:updates?|changes?)(?: on| to| for)?(?: my| the| this)?(?: plan| decision)|should i still (?:sell|hold|rent)|is (?:it|that|this) still (?:accurate|current|the same|up to date)|what about(?: my| the| this)?(?: plan| decision))\s*\??\s*$/i;
+
 export interface AskFollowUpResolution {
   effectiveMessage: string;
   forcedOperationId: AskOperationId | null;
@@ -205,7 +222,8 @@ export async function resolveAskFollowUpMessage(input: {
   const isEnvelopePagination = ENVELOPE_PAGINATION_PATTERN.test(input.message);
   const isSpecialistContinuation = SPECIALIST_CONTINUATION_PATTERN.test(input.message);
   const isMonitorVagueFollowup = MONITOR_VAGUE_FOLLOWUP_PATTERN.test(input.message);
-  if (!entityMatch && !isFilterContinuation && !isEnvelopePagination && !isSpecialistContinuation && !isMonitorVagueFollowup) return fallback;
+  const isSellHoldRentVagueFollowup = SELL_HOLD_RENT_VAGUE_FOLLOWUP_PATTERN.test(input.message);
+  if (!entityMatch && !isFilterContinuation && !isEnvelopePagination && !isSpecialistContinuation && !isMonitorVagueFollowup && !isSellHoldRentVagueFollowup) return fallback;
 
   const prior = await findRecentPriorExecution(input.sessionId, input.propertyId, input.declaredSourceExecutionId);
   if (!prior || !prior.operationId) return fallback;
@@ -277,6 +295,26 @@ export async function resolveAskFollowUpMessage(input: {
     return {
       effectiveMessage: `${prior.message}. Homeowner follow-up: ${input.message}`,
       forcedOperationId: 'HVAC_SPECIALIST_ENGAGE',
+      sourceExecutionId: prior.id,
+      continuationCursor: null,
+      suppliedInput: null,
+      isFilterRefinement: false,
+    };
+  }
+
+  // G04 fix (see SELL_HOLD_RENT_VAGUE_FOLLOWUP_PATTERN above): always routes
+  // to SELL_HOLD_RENT_ANALYSIS, never SELL_HOLD_RENT_GOAL_CAPTURE, even when
+  // the prior turn was the goal-capture attachment -- GOAL_CAPTURE is not
+  // directly message-routable at all (goalCaptureNotDirectlyRoutableResult
+  // in askOrchestrator.service.ts), while ANALYSIS already reads and
+  // surfaces the same active thread's current progress (FRD §22 Option B),
+  // giving the homeowner the exact thread's current, bounded, structured
+  // state rather than re-deriving anything from the raw follow-up text.
+  if (isSellHoldRentVagueFollowup
+    && (prior.operationId === 'SELL_HOLD_RENT_ANALYSIS' || prior.operationId === 'SELL_HOLD_RENT_GOAL_CAPTURE')) {
+    return {
+      effectiveMessage: input.message,
+      forcedOperationId: 'SELL_HOLD_RENT_ANALYSIS',
       sourceExecutionId: prior.id,
       continuationCursor: null,
       suppliedInput: null,

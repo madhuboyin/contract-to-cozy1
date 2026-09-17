@@ -342,3 +342,62 @@ test('"Now complete it" against a non-monitor MAINTENANCE_STATUS turn with no ex
   assert.equal(result.suppliedInput, null);
   assert.equal(result.effectiveMessage, 'Now complete it.');
 });
+
+// FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md Phase 4 exit
+// criterion / G04 fix: sell/hold/rent previously had no vague-follow-up
+// branch at all, confirmed absent in
+// docs/architecture/ASK_COZY_PHASE4_SELL_HOLD_RENT_UX_COMPLETION_VERIFICATION.md.
+test('a vague sell/hold/rent follow-up after SELL_HOLD_RENT_ANALYSIS is forced back to the same operation', async () => {
+  mockRow = priorRow({
+    operationId: 'SELL_HOLD_RENT_ANALYSIS',
+    message: 'Should I sell, hold, or rent this home?',
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: "What's the status on my plan?" });
+  assert.equal(result.forcedOperationId, 'SELL_HOLD_RENT_ANALYSIS');
+  assert.equal(result.sourceExecutionId, 'prior-execution-1');
+  assert.equal(result.effectiveMessage, "What's the status on my plan?", 'SELL_HOLD_RENT_ANALYSIS takes no message parameter, so the original text is preserved unchanged, unlike the HVAC Specialist concatenation');
+});
+
+test('a vague sell/hold/rent follow-up after SELL_HOLD_RENT_GOAL_CAPTURE is forced to SELL_HOLD_RENT_ANALYSIS, never back to GOAL_CAPTURE', async () => {
+  mockRow = priorRow({
+    operationId: 'SELL_HOLD_RENT_GOAL_CAPTURE',
+    message: 'We are thinking about selling next year.',
+  });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'How is my plan going?' });
+  // GOAL_CAPTURE is not directly message-routable at all
+  // (goalCaptureNotDirectlyRoutableResult) -- ANALYSIS already reads and
+  // surfaces the same active thread's progress (FRD §22 Option B).
+  assert.equal(result.forcedOperationId, 'SELL_HOLD_RENT_ANALYSIS');
+  assert.equal(result.sourceExecutionId, 'prior-execution-1');
+});
+
+test('several bare sell/hold/rent continuation phrasings are all recognized', async () => {
+  mockRow = priorRow({ operationId: 'SELL_HOLD_RENT_ANALYSIS' });
+  const phrasings = [
+    'Any updates on my plan?',
+    'Should I still sell?',
+    'Is that still accurate?',
+    'Keep going with the plan',
+    "What's next for it?",
+    'What about my decision?',
+  ];
+  for (const message of phrasings) {
+    const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message });
+    assert.equal(result.forcedOperationId, 'SELL_HOLD_RENT_ANALYSIS', `expected "${message}" to route back to SELL_HOLD_RENT_ANALYSIS`);
+  }
+});
+
+test('a vague sell/hold/rent follow-up is NOT forced when the prior turn was an unrelated operation', async () => {
+  mockRow = priorRow({ operationId: 'MAINTENANCE_STATUS', message: 'What maintenance is overdue?' });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: "What's the status on my plan?" });
+  assert.equal(result.forcedOperationId, null);
+  assert.equal(result.sourceExecutionId, null);
+});
+
+test('an unrelated question after a SELL_HOLD_RENT_ANALYSIS turn is never rewritten', async () => {
+  mockRow = priorRow({ operationId: 'SELL_HOLD_RENT_ANALYSIS', message: 'Should I sell, hold, or rent this home?' });
+  const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'What is my current mortgage rate?' });
+  assert.equal(result.forcedOperationId, null);
+  assert.equal(result.sourceExecutionId, null);
+  assert.equal(result.effectiveMessage, 'What is my current mortgage rate?');
+});
