@@ -10062,6 +10062,129 @@ async function refreshAskSourceExecution(userId: string, currentExecutionId: str
   }
 }
 
+// B04 design (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md,
+// per explicit user design decision): refreshAskSourceExecution above only
+// ever refreshes the ONE list a mutation's row-action was launched from --
+// XREC-001 requires "each source result whose membership, totals, status
+// or next actions may have changed", not just that one. A server-owned,
+// operation-level "this mutation may affect these sibling READ operations"
+// map, conservative by design (XREC-001 says "may have changed", not
+// "definitely changed for this exact record" -- refreshing a sibling that
+// turns out unaffected just re-renders identically, which is harmless, not
+// a correctness bug). Deliberately NOT client-supplied: the server already
+// has the authoritative userId/sessionId/propertyId, and a client-supplied
+// list would be untrusted and would still need the server to know which
+// operations are even eligible siblings.
+export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly AskOperationId[]>> = {
+  BUYER_TASK_UPDATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
+};
+
+// Pure decision core, extracted for direct unit testing (same convention as
+// mergeEvidence/isCapitalTimelineAnalysisStale/formatUnavailableHomeActionProducers):
+// BUYER_MOVE_STATUS is only added when the specific task being mutated is
+// itself a move task -- same taskType === 'MOVE' field buyerMoveStatusResult
+// already filters on, not a new heuristic. Any other sibling map entry
+// (added for other operations later) is unconditional.
+export function siblingOperationIdsForBuyerTaskUpdate(baseSiblings: readonly AskOperationId[], taskType: string | null | undefined): readonly AskOperationId[] {
+  return taskType === 'MOVE' ? [...baseSiblings, 'BUYER_MOVE_STATUS'] : baseSiblings;
+}
+
+async function impactedSiblingOperationIds(execution: AskExecution, parameters: Record<string, unknown>): Promise<readonly AskOperationId[]> {
+  const declared = execution.operationId ? ASK_MUTATION_IMPACT_MAP[execution.operationId as AskOperationId] ?? [] : [];
+  if (execution.operationId !== 'BUYER_TASK_UPDATE') return declared;
+  const taskId = parameters.buyerTaskId;
+  if (typeof taskId !== 'string' || !execution.propertyId) return declared;
+  const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } }, select: { taskType: true } });
+  return siblingOperationIdsForBuyerTaskUpdate(declared, task?.taskType);
+}
+
+const ASK_SIBLING_REFRESH_ELIGIBLE_STATUSES: readonly AskExecutionStatus[] = ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NOT_APPLICABLE', 'BLOCKED', 'NEEDS_ENTITY'];
+
+// Pure, extracted for direct unit testing with an injected predicate rather
+// than the real registry lookup. Defense in depth (never trust the impact
+// map alone): a row whose operationId is a registered domain command is a
+// mutation/proposal, not a read -- calling refreshAskExecutionAfterConflict
+// on one would re-run its PROPOSE-time read, silently injecting a
+// brand-new, unrequested confirmation proposal into the transcript rather
+// than refreshing a read. Most-recent-per-operation only: an older,
+// superseded row for the same operation (asked the same read question
+// twice this session) isn't worth refreshing -- only the newest one is
+// still what the homeowner would actually revisit.
+export function selectSiblingRefreshTargets<T extends { operationId: string | null }>(
+  candidates: readonly T[],
+  isCommandOperation: (operationId: string) => boolean,
+): T[] {
+  const seenOperationIds = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (!candidate.operationId || isCommandOperation(candidate.operationId)) return false;
+    if (seenOperationIds.has(candidate.operationId)) return false;
+    seenOperationIds.add(candidate.operationId);
+    return true;
+  });
+}
+
+async function refreshImpactedSiblingExecutions(
+  userId: string,
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  excludeExecutionIds: ReadonlySet<string>,
+): Promise<AskSourceRefreshOutcome> {
+  if (!execution.propertyId) return { refreshedExecutions: [], attemptedAndFailed: false };
+  const siblingOperationIds = await impactedSiblingOperationIds(execution, parameters);
+  if (!siblingOperationIds.length) return { refreshedExecutions: [], attemptedAndFailed: false };
+  const candidates = await prisma.askExecution.findMany({
+    where: {
+      userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+      operationId: { in: [...siblingOperationIds] },
+      status: { in: [...ASK_SIBLING_REFRESH_ELIGIBLE_STATUSES] },
+      id: { notIn: [execution.id, ...excludeExecutionIds] },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+  const targets = selectSiblingRefreshTargets(candidates, (operationId) => Boolean(getAskDomainCommandByOperation(operationId)));
+  if (!targets.length) return { refreshedExecutions: [], attemptedAndFailed: false };
+  // Promise.allSettled per explicit design decision: one sibling's refresh
+  // failing must never prevent the others from refreshing.
+  const outcomes = await Promise.allSettled(targets.map((target) => refreshAskExecutionAfterConflict(userId, target.id)));
+  return {
+    refreshedExecutions: outcomes.filter((outcome): outcome is PromiseFulfilledResult<AskExecutionResponse> => outcome.status === 'fulfilled').map((outcome) => outcome.value),
+    attemptedAndFailed: outcomes.some((outcome) => outcome.status === 'rejected'),
+  };
+}
+
+// Combines the explicit, frontend-supplied single-target refresh with the
+// server-owned sibling-impact refresh, so both a confirm handler's first
+// run AND confirmAskExecution's completed-replay branch (below) can call
+// one function and get the full, current reconciliation behavior.
+// AskExecutionResponseSchema's own childExecutions field is capped at 3
+// (ask.contract.ts) -- the explicit sourceExecutionId refresh plus up to 3
+// declared siblings (BUYER_MOVE_STATUS included) can together exceed that,
+// which would fail response validation on an otherwise-successful mutation.
+// The explicit source (the one list this row-action was actually launched
+// from -- definitely still visible) always keeps its slot; sibling
+// refreshes fill whatever budget remains, in the map's own declared order.
+const ASK_RECONCILED_CHILD_EXECUTIONS_LIMIT = 3;
+
+// Pure, extracted for direct unit testing -- a boundary bug here would be a
+// silent regression (a successful mutation's response failing schema
+// validation only on the specific combination that exceeds the cap).
+export function capReconciledChildExecutions<T>(sourceExecutions: readonly T[], siblingExecutions: readonly T[]): T[] {
+  const remainingBudget = Math.max(0, ASK_RECONCILED_CHILD_EXECUTIONS_LIMIT - sourceExecutions.length);
+  return [...sourceExecutions, ...siblingExecutions.slice(0, remainingBudget)];
+}
+
+async function reconcileAskExecutionSideEffects(userId: string, execution: AskExecution, parameters: Record<string, unknown>): Promise<AskSourceRefreshOutcome> {
+  const sourceExecutionId = typeof parameters.sourceExecutionId === 'string' ? parameters.sourceExecutionId : null;
+  const [sourceOutcome, siblingOutcome] = await Promise.all([
+    refreshAskSourceExecution(userId, execution.id, parameters),
+    refreshImpactedSiblingExecutions(userId, execution, parameters, new Set(sourceExecutionId ? [sourceExecutionId] : [])),
+  ]);
+  return {
+    refreshedExecutions: capReconciledChildExecutions(sourceOutcome.refreshedExecutions, siblingOutcome.refreshedExecutions),
+    attemptedAndFailed: sourceOutcome.attemptedAndFailed || siblingOutcome.attemptedAndFailed,
+  };
+}
+
 async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
   let result: AskOperationResult;
@@ -10316,10 +10439,13 @@ async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<Co
     // B04 fix: previously never reconciled any other visible Buyer result
     // (e.g. BUYER_DEADLINES, which the rescheduled/reassigned task may
     // appear in) after this write succeeded -- confirmed by direct read that
-    // this handler never populated refreshedExecutions at all. Reuses the
-    // same generalized mechanism Maintenance's own reference implementation
-    // uses, not a new one.
-    const refresh = await refreshAskSourceExecution(userId, execution.id, parameters);
+    // this handler never populated refreshedExecutions at all. Reconciles
+    // both the explicit sourceExecutionId (the one list this row-action was
+    // launched from) AND the server-owned sibling-impact map (every OTHER
+    // still-visible Buyer result this operation may have affected) via
+    // reconcileAskExecutionSideEffects, not just the single-target mechanism
+    // Maintenance's own reference implementation used alone.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
     if (refresh.attemptedAndFailed) {
       result.blocks.push({
         type: 'LIMITATION', id: `buyer-task-list-refresh-failed-${updated.id}`, title: 'Saved; list could not refresh',
@@ -11526,7 +11652,20 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_IDEMPOTENCY_CONFLICT';
       throw error;
     }
-    if (previous.status === 'COMPLETED') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    if (previous.status === 'COMPLETED') {
+      // B04 design: a retried confirm after a lost response used to return
+      // bare, with no childExecutions -- meaning a client that never saw the
+      // original success response also never received the reconciled
+      // sibling refreshes, even though the mutation itself (protected by
+      // this same idempotency receipt) genuinely already succeeded. This
+      // must never replay the mutation -- it only reruns the safe,
+      // read-only reconciliation step and redelivers its result inline.
+      const replayParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+        ? execution.parametersJson as Record<string, unknown>
+        : {};
+      const { refreshedExecutions } = await reconcileAskExecutionSideEffects(userId, execution, replayParameters);
+      return mapPersistedExecution(execution, await propertySummary(execution.propertyId), refreshedExecutions);
+    }
   }
   const access = await ensurePropertyAccess(userId, execution.propertyId);
   const command = getAskDomainCommandByOperation(execution.operationId ?? '');
