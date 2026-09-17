@@ -723,10 +723,32 @@ function earlierTiming(a: HomeAction['timing'], b: HomeAction['timing']): HomeAc
   return aMs <= bMs ? a : b;
 }
 
+// T02 fix (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md,
+// ATT-105: "grouped or deduplicated without hiding materially different
+// evidence, deadlines or actions"). Merges every merged-away duplicate's own
+// evidence into the winner's, deduped by EvidenceRef.id -- previously only
+// the winning action's own evidence survived a merge (confirmed by direct
+// read: the return below used to spread `...winner` with no evidence
+// override at all), so a second producer's distinct supporting evidence
+// (e.g. a specific dollar estimate the winner's own evidence lacked) was
+// silently dropped, with only its action id left as a bare trace in
+// mergedActionIds. Timing already had this discipline (earliest/later wins,
+// not just the winner's own value); this brings evidence to the same bar.
+function mergeEvidence(current: HomeAction['evidence'], incoming: HomeAction['evidence']): HomeAction['evidence'] {
+  const seenIds = new Set(current.map((item) => item.id));
+  const merged = [...current];
+  for (const item of incoming) {
+    if (seenIds.has(item.id)) continue;
+    seenIds.add(item.id);
+    merged.push(item);
+  }
+  return merged;
+}
+
 export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHomeAction[] {
   const weatherRevisionCanonicalIds = weatherPreparationRevisionCanonicalIds(actions);
   const byCanonicalKey = new Map<string, {
-    winner: HomeAction; score: ReturnType<typeof scoreHomeAction>; ids: string[]; timing: HomeAction['timing'];
+    winner: HomeAction; score: ReturnType<typeof scoreHomeAction>; ids: string[]; timing: HomeAction['timing']; evidence: HomeAction['evidence'];
   }>();
 
   for (const action of actions) {
@@ -737,7 +759,7 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
     const scored = scoreHomeAction(action);
     const current = byCanonicalKey.get(canonicalKey);
     if (!current) {
-      byCanonicalKey.set(canonicalKey, { winner: action, score: scored, ids: [action.id], timing: action.timing });
+      byCanonicalKey.set(canonicalKey, { winner: action, score: scored, ids: [action.id], timing: action.timing, evidence: action.evidence });
       continue;
     }
     current.ids.push(action.id);
@@ -748,6 +770,10 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
     current.timing = isWeatherPreparationRevision
       ? laterWeatherPreparationTiming(current.timing, action.timing)
       : earlierTiming(current.timing, action.timing);
+    // T02 fix: accumulate evidence regardless of which action ends up as
+    // the winner below -- a duplicate's evidence must not be discarded just
+    // because it lost the merge on score/priority.
+    current.evidence = mergeEvidence(current.evidence, action.evidence);
     const durablePreparationWins = action.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
       action.source.kind === 'INCIDENT' && current.winner.source.kind !== 'INCIDENT';
     const currentIsDurablePreparation = current.winner.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
@@ -771,6 +797,7 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
       return {
         ...winner,
         timing: entry.timing,
+        evidence: entry.evidence,
         ranking: { rank: index + 1, ...entry.score },
         deduplication: {
           canonicalKey,

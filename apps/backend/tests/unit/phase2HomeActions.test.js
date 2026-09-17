@@ -188,6 +188,58 @@ test('canonical feed surfaces one winner for duplicate cross-source signals and 
   assert.deepEqual(result.map((item) => item.ranking.rank), [1, 2]);
 });
 
+// FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md §14.2 ATT-105 / T02 fix
+// (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md):
+// a merged-away duplicate's own supporting evidence used to be silently
+// dropped -- only the winner's own evidence survived. These tests cover the
+// mergeEvidence union directly through rankAndDeduplicateHomeActions's
+// public return shape.
+test('a merged duplicate\'s distinct evidence is retained on the winner, not dropped', () => {
+  const lower = actionFixture('lower', { lineageId: 'shared-lineage', priority: 'PLAN' });
+  const higher = actionFixture('higher', { lineageId: 'shared-lineage', priority: 'NOW' });
+  lower.evidence = [{ id: 'evidence-lower-specific', type: 'USER_INPUT', label: 'Homeowner reported a specific dollar estimate', source: 'Personalization producer', observedAt: lower.evidence[0].observedAt, freshness: 'CURRENT', confidence: 0.7 }];
+  higher.evidence = [{ id: 'evidence-higher-specific', type: 'USER_INPUT', label: 'Maintenance record shows the same concern', source: 'Maintenance producer', observedAt: higher.evidence[0].observedAt, freshness: 'CURRENT', confidence: 0.9 }];
+
+  const result = rankAndDeduplicateHomeActions([lower, higher]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'higher');
+  const evidenceIds = result[0].evidence.map((item) => item.id).sort();
+  assert.deepEqual(evidenceIds, ['evidence-higher-specific', 'evidence-lower-specific'], 'both producers\' distinct evidence must survive the merge, not just the winner\'s own');
+});
+
+test('identical evidence ids from two merged duplicates are not duplicated in the output', () => {
+  const lower = actionFixture('lower', { lineageId: 'shared-lineage', priority: 'PLAN' });
+  const higher = actionFixture('higher', { lineageId: 'shared-lineage', priority: 'NOW' });
+  // Both fixtures default to the same evidence id (evidence-<base fixture id>)
+  // unless overridden -- exercise that shared-id case explicitly rather than
+  // relying on the fixture default being unchanged.
+  const sharedEvidence = { id: 'evidence-shared', type: 'USER_INPUT', label: 'Same underlying evidence seen by both producers', source: 'Shared producer', observedAt: lower.evidence[0].observedAt, freshness: 'CURRENT', confidence: 0.8 };
+  lower.evidence = [sharedEvidence];
+  higher.evidence = [{ ...sharedEvidence }];
+
+  const result = rankAndDeduplicateHomeActions([lower, higher]);
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].evidence.map((item) => item.id), ['evidence-shared']);
+});
+
+test('a three-way merge unions evidence from all three producers, not just the winner and the runner-up', () => {
+  const first = actionFixture('first', { lineageId: 'shared-lineage', priority: 'PLAN' });
+  const second = actionFixture('second', { lineageId: 'shared-lineage', priority: 'SOON' });
+  const third = actionFixture('third', { lineageId: 'shared-lineage', priority: 'NOW' });
+  first.evidence = [{ id: 'evidence-first', type: 'USER_INPUT', label: 'First producer evidence', source: 'Producer A', observedAt: first.evidence[0].observedAt, freshness: 'CURRENT', confidence: 0.6 }];
+  second.evidence = [{ id: 'evidence-second', type: 'USER_INPUT', label: 'Second producer evidence', source: 'Producer B', observedAt: second.evidence[0].observedAt, freshness: 'CURRENT', confidence: 0.7 }];
+  third.evidence = [{ id: 'evidence-third', type: 'USER_INPUT', label: 'Third producer evidence', source: 'Producer C', observedAt: third.evidence[0].observedAt, freshness: 'CURRENT', confidence: 0.9 }];
+
+  const result = rankAndDeduplicateHomeActions([first, second, third]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'third');
+  const evidenceIds = result[0].evidence.map((item) => item.id).sort();
+  assert.deepEqual(evidenceIds, ['evidence-first', 'evidence-second', 'evidence-third']);
+});
+
 test('a durable weather preparation checklist replaces its computed environment insight', () => {
   const insight = actionFixture('environment:heat-window', {
     source: { kind: 'MAINTENANCE', entityId: 'heat-window', version: 'environment-v1' },
