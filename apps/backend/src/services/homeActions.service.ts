@@ -1231,8 +1231,19 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     logger.warn({ err: error, propertyId }, 'Work item presentation normalization failed closed');
     return 0;
   });
+  // T08 fix (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md):
+  // this failure used to be swallowed with zero disclosure -- caught,
+  // logged, and returned as a bare `null` with no diagnostic flag at all,
+  // so a homeowner asking Home Actions while the environment producer was
+  // down got a normal-looking, non-empty response with no signal that one
+  // input degraded (environmentReport?.insights feeds directly into
+  // getPromotedHomeActions below, so this is a material input, not
+  // cosmetic). Now tracked so it can be surfaced the same way
+  // INTELLIGENCE_ENVELOPE_QUERY's page.diagnostics already is.
+  let environmentReportAvailable = true;
   const environmentReportPromise = getEnvironmentReportForProperty(propertyId, userId).catch((error) => {
     logger.warn({ err: error, propertyId, userId }, 'Unified Home environment insight evaluation failed closed');
+    environmentReportAvailable = false;
     return null;
   });
   const orchestration = await getOrchestrationSummary(propertyId, userId);
@@ -1372,6 +1383,24 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
         evaluatedCount: personalization?.evaluated ?? 0,
         activeCount: personalization?.active ?? 0,
       },
+      // T08 fix: a generalized, named list of this call's producers that
+      // degraded -- previously nothing in this diagnostics object was ever
+      // read by homeActionsResult (askOrchestrator.service.ts) beyond
+      // emptyStateReason, so a partial failure here (environment report
+      // down, personalization down) produced a normal-looking, non-empty
+      // response with zero disclosure. Deliberately scoped to producers
+      // this function already safely catches and degrades from (never
+      // throwing the whole feed) -- getOrchestrationSummary/
+      // getPromotedHomeActions are NOT included here: an unhandled failure
+      // in either still throws and is caught by homeActionsResult's own
+      // outer try/catch into an honest, track-wide UNAVAILABLE, which
+      // already satisfies "no all-clear state" for that failure mode
+      // without this codebase inventing a risky synthetic fallback for
+      // either function's own large, otherwise-required return shape.
+      unavailableProducers: [
+        ...(environmentReportAvailable ? [] : ['ENVIRONMENT_REPORT' as const]),
+        ...(personalizationStatus === 'FAILED' ? ['PERSONALIZATION' as const] : []),
+      ],
       emptyStateReason,
       // Truth containment: a bare suppressedCount cannot answer "why isn't
       // this on Home?" — the homeowner (or support) needs to see that the

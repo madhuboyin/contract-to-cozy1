@@ -4532,6 +4532,19 @@ async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: st
   };
 }
 
+// T08 fix, extracted as a pure function for direct unit testing (same
+// convention as mergeEvidence/isCapitalTimelineAnalysisStale -- the DB-heavy
+// orchestration around it, getHomeActionFeed, is not independently testable
+// without a live database).
+const HOME_ACTION_PRODUCER_LABELS: Record<string, string> = {
+  ENVIRONMENT_REPORT: 'environment and severe-weather insight',
+  PERSONALIZATION: 'personalized recommendation',
+};
+
+export function formatUnavailableHomeActionProducers(unavailableProducers: readonly string[]): string {
+  return unavailableProducers.map((producer) => HOME_ACTION_PRODUCER_LABELS[producer] ?? producer.toLowerCase()).join(' and ');
+}
+
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const [access, buyerContextValue] = await Promise.all([
@@ -4639,9 +4652,27 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       ?? (filteredEmpty
         ? `The full governed feed contains ${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'}, but none match this timing filter.`
         : `These are the final grounded, deduplicated, lifecycle-eligible actions from Unified Home. ${feed.buckets.NOW.length} need attention now, ${feed.buckets.SOON.length} are due soon, ${feed.buckets.PLAN.length} are for planning, and ${feed.buckets.CONSIDER.length} are optional considerations.`),
-    tone: empty?.tone ?? (selectedActions.some((action) => action.priority === 'NOW') ? 'CAUTION' : 'DEFAULT'),
+    tone: empty?.tone ?? (feed.diagnostics.unavailableProducers.length > 0 || selectedActions.some((action) => action.priority === 'NOW') ? 'CAUTION' : 'DEFAULT'),
     actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: homeHref, style: 'PRIMARY' }],
   }];
+
+  // T08 fix (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md):
+  // a source producer this feed depends on can fail without throwing (the
+  // feed itself degrades gracefully and still returns), but nothing here
+  // used to disclose that -- feed.diagnostics.personalization.status was
+  // tracked internally and never read by this function at all. Disclosed
+  // the same way INTELLIGENCE_ENVELOPE_QUERY's page.diagnostics already is:
+  // named per producer, never collapsed into a generic "something's wrong."
+  // Pushed regardless of whether the feed is otherwise empty, mirroring
+  // Envelope's own unconditional-on-diagnostics-presence placement.
+  if (feed.diagnostics.unavailableProducers.length > 0) {
+    blocks.push({
+      type: 'BOUNDARY', id: 'home-actions-producer-unavailable',
+      title: 'Some Home Action sources were unavailable',
+      body: `${formatUnavailableHomeActionProducers(feed.diagnostics.unavailableProducers)} coverage was unavailable when this feed was generated. The actions below still reflect every other source; this is not a complete "nothing else needs attention" read.`,
+      severity: 'INFO', suggestions: ['Ask again to retry'],
+    });
+  }
 
   // Phase 9B (FRD §17/§21.2): the versioned, explainable channel view of the
   // full governed feed -- independent of this message's ad hoc timing
@@ -4707,7 +4738,8 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     });
   }
 
-  const limited = captureRequests.length > 0 || permissionLimited || lowConfidence || feed.diagnostics.emptyStateReason === 'DATA_UNAVAILABLE' || feed.diagnostics.emptyStateReason === 'MISSING_FACTS';
+  const producersUnavailable = feed.diagnostics.unavailableProducers.length > 0;
+  const limited = captureRequests.length > 0 || permissionLimited || lowConfidence || producersUnavailable || feed.diagnostics.emptyStateReason === 'DATA_UNAVAILABLE' || feed.diagnostics.emptyStateReason === 'MISSING_FACTS';
   return {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length
@@ -4716,7 +4748,9 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         ? 'HOME_ACTION_CONTEXT_WRITE_PERMISSION_REQUIRED'
         : lowConfidence
           ? 'HOME_ACTION_LOW_CONFIDENCE'
-          : feed.diagnostics.emptyStateReason ? `HOME_ACTION_${feed.diagnostics.emptyStateReason}` : undefined,
+          : producersUnavailable
+            ? 'HOME_ACTION_PRODUCER_UNAVAILABLE'
+            : feed.diagnostics.emptyStateReason ? `HOME_ACTION_${feed.diagnostics.emptyStateReason}` : undefined,
     contextVersion: evaluation.contextVersion,
     captureRequests,
     blocks,
