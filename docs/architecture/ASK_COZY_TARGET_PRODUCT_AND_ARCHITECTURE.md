@@ -1,5 +1,7 @@
 # Ask Cozy — Target Product & Architecture (Stage 2)
 
+> **Governing addendum (September 17, 2026):** [Ask Cozy — Inline Workspace FRD](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) supersedes §26 only where it makes traditional pages the expected completion surface for normal homeowner work. Ask Cozy is the default inline workspace; traditional pages and navigation remain fully supported optional choices. Canonical domain ownership, confirmation, correction, security, and audit requirements are unchanged.
+
 **Implementation clarification (2026-09-14):** Ask next actions use the canonical Property Context capture registry/evaluator/writer for missing facts, with topic relevance for plain questions and readiness recomputation after saving. Event/warranty dependencies remain bidirectional; an evidence candidate independently references the same event, so all three candidates can coexist. Grounded recall renders recorded scalar facts and relevant home events deterministically, preserving event precision and attribution. Active selling-thread context is loaded before extraction filtering; ambiguous follow-ups remain non-writing. The current phase-status section in `ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` supersedes historical interim-gap descriptions.
 
 **Type:** Design and architecture definition. No implementation, no migrations, no FRD, no backlog.

@@ -7,6 +7,8 @@
 
 **Follow-on:** Cross-domain rollout beyond the completed maintenance slice is specified in [ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md](ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md).
 
+**Governing addendum:** [Ask Cozy — Inline Workspace FRD](ASK_COZY_INLINE_WORKSPACE_FRD.md) supersedes this document where it treats domain-page handoff as the normal completion mechanism or excludes a richer responsive Ask workspace. Existing result, freshness, targeting, confirmation, reconciliation, accessibility, privacy, and recovery requirements remain in force. Traditional navigation remains supported as an explicit user choice.
+
 ## 1. Purpose and authority
 
 Homeowners can ask naturally or act directly. Cozy presents the simplest useful interface, preserves context, and makes changes clear and reviewable.

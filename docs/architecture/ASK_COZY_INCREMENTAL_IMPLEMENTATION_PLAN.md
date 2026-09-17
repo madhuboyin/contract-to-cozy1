@@ -1,5 +1,7 @@
 # Ask Cozy — Incremental Implementation Plan (Stage 3, Part B)
 
+> **Later product direction:** [Ask Cozy — Inline Workspace FRD](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) governs work that makes normal homeowner journeys inline-complete while preserving traditional navigation. This plan remains the implementation history and baseline for capability invocation, confirmation, capture, next actions, continuation, goals, and exposure; its historical status statements are not rewritten by the later FRD.
+
 ## Current implementation status — 2026-09-14
 
 This section supersedes historical status notes and interim-gap descriptions below. Those notes preserve implementation history; “shipped” there is not a claim of live-runtime verification.

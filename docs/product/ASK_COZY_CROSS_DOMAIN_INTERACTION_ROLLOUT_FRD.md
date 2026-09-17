@@ -6,6 +6,8 @@
 **Scope:** Apply the completed Ask Cozy interaction model beyond maintenance, domain by domain
 **Predecessor:** [Ask Cozy — Interaction Model & UI FRD](ASK_COZY_INTERACTION_MODEL_UI_FRD.md)
 
+**Governing addendum:** [Ask Cozy — Inline Workspace FRD](ASK_COZY_INLINE_WORKSPACE_FRD.md) changes the completion target from handoff-capable hybrid interaction to inline-complete normal homeowner journeys while preserving traditional pages and navigation as explicit user choices. Handoff requirements in this document continue to govern those optional transitions and approved exceptions.
+
 **Revision 1.1:** Reorders delivery around an executable coverage audit, typed-dispatch coverage closure and five flagship interaction patterns; adds the Interaction Quality Harness; moves refinance ahead of Buyer; completes sell/hold/rent UX before adding goal families; and separates the read-only Attention MVP from dismiss/remind controls.
 
 ## 1. Purpose and authority
