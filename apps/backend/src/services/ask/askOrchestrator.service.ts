@@ -3813,15 +3813,42 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
   };
 }
 
+// F05 fix, extracted as a pure function for direct unit testing (same
+// convention as parseRefinanceScenarioEdit/isAllPropertyAttentionRequest --
+// this is the "brain" of the fix; capitalReservePlanResult's DB fetches
+// around it are not independently testable without a live database). See
+// the F05 fix comment inside capitalReservePlanResult for why this must
+// compare against getFinancialContextDecisions's contextVersion specifically,
+// not evaluateFeatureContext's.
+export function isCapitalTimelineAnalysisStale(
+  analysis: { inputsSnapshot: unknown } | null | undefined,
+  currentContextVersion: string,
+): boolean {
+  if (!analysis) return false;
+  const storedContextVersion = analysis.inputsSnapshot && typeof analysis.inputsSnapshot === 'object' && !Array.isArray(analysis.inputsSnapshot)
+    ? (analysis.inputsSnapshot as Record<string, unknown>)._propertyContextVersion
+    : undefined;
+  return storedContextVersion !== currentContextVersion;
+}
+
 async function capitalReservePlanResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/capital-timeline`;
   const reserveHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/reserve-fund`;
-  const [access, capitalContext, reserveContext, property, inventoryCount] = await Promise.all([
+  const [access, capitalContext, reserveContext, property, inventoryCount, capitalTimelineFinancialContext] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'CAPITAL_TIMELINE', operationKey: 'RUN_TIMELINE' }),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'RESERVE_FUND', operationKey: 'RECALCULATE' }),
     prisma.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } }),
     prisma.inventoryItem.count({ where: { propertyId } }),
+    // F05 fix (docs/architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md):
+    // the SAME contextVersion computation homeCapitalTimelineService.runTimeline
+    // itself uses to stamp inputsSnapshot._propertyContextVersion when a
+    // createdByUserId is supplied (confirmed by direct read of that function) --
+    // NOT evaluateFeatureContext's own contextVersion above, which is a
+    // different hash over a narrower fact set and would never match what
+    // runTimeline actually persisted. Comparing the wrong two versions would
+    // make every analysis look stale (or never stale) by construction.
+    getFinancialContextDecisions(propertyId, userId, 'CAPITAL_TIMELINE'),
   ]);
   const activeRequirement = reserveContext.requirements[0] ?? capitalContext.requirements[0];
   const captureFeature = reserveContext.requirements[0] ? 'RESERVE_FUND' as const : 'CAPITAL_TIMELINE' as const;
@@ -3829,7 +3856,15 @@ async function capitalReservePlanResult(userId: string, propertyId: string): Pro
     ? [askCaptureRequest(activeRequirement, activeRequirement === reserveContext.requirements[0] ? reserveContext.contextVersion : capitalContext.contextVersion, 'Saved to the Living Home Record and reused by capital planning', `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`)]
     : [];
   let analysis: any = await homeCapitalTimelineService.getLatestTimeline(propertyId);
-  if (!analysis && property && inventoryCount > 0) {
+  // F05 fix: previously only recomputed when no analysis existed at all, so a
+  // timeline was served unchanged forever regardless of later inventory or
+  // property changes (no staleness check anywhere in
+  // homeCapitalTimeline.service.ts, confirmed by direct read). Now also
+  // recomputes when the stored snapshot's own contextVersion no longer
+  // matches the current one -- the same "digest mismatch -> recompute"
+  // pattern already used by sellHoldRentDecisionFamilyAdapter's selectThread.
+  const isStale = isCapitalTimelineAnalysisStale(analysis, capitalTimelineFinancialContext.contextVersion);
+  if ((!analysis || isStale) && property && inventoryCount > 0) {
     analysis = await homeCapitalTimelineService.runTimeline(propertyId, property.homeownerProfileId, 10, { createdByUserId: userId, propertyContextVersion: capitalContext.contextVersion, awaitReserveFundSync: true });
   }
   const fund: any = await homeReserveFundService.getSummary(propertyId);
