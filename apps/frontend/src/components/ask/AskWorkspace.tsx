@@ -391,7 +391,21 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
   );
 }
 
-function BlockView({ block, executionId, onItemAction, itemActionsDisabled, onFilterClick }: { block: AskPresentationBlock; executionId: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void }) {
+// B07 fix: exported (previously module-private) so the generic
+// GROUPED_LIST renderer's selection marker/highlight can be tested
+// directly, same convention as MaintenanceResultList's own export.
+export function BlockView({ block, executionId, onItemAction, itemActionsDisabled, onFilterClick }: { block: AskPresentationBlock; executionId: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void }) {
+  // B07 fix: the generic GROUPED_LIST renderer previously had no way to
+  // show which item restoreResultPosition/reconcileResultView already
+  // track as "selected" (captured generically from an outbound ?taskId=
+  // link click, per AskContextLink/the article's own onClickCapture
+  // handler) -- selection was tracked in storage but never rendered.
+  // Read-only here: unlike MaintenanceResultList, this renderer has no
+  // "Select task" control of its own -- it only reflects selection state
+  // that already exists from navigation, mirroring MaintenanceResultList's
+  // data-ask-task-id/highlight convention so restoreResultPosition's
+  // existing scroll-to-selected-item logic has something to find.
+  const controls = useContext(ResultViewContext);
   if (block.type === 'SUMMARY') {
     return (
       <section className={cn(
@@ -475,7 +489,8 @@ function BlockView({ block, executionId, onItemAction, itemActionsDisabled, onFi
                 <ul className="space-y-3">
                   {section.items.map((sourceItem) => {
                     const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
-                    return <li key={item.id} className="rounded-xl bg-slate-50 p-3">
+                    const selected = controls?.view.selectedTaskId === item.id;
+                    return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}

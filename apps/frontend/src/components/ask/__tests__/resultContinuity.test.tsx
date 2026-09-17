@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, act } from '@testing-library/react';
 import { ResultRevalidationBoundary } from '../ResultRevalidationBoundary';
 import { MaintenanceResultList } from '../MaintenanceResultList';
+import { BlockView } from '../AskWorkspace';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -88,4 +89,53 @@ test('a filter request invalidates an earlier refresh of the same result but not
   expect(tracker.current(key, filter)).toBe(false);
   tracker.begin(key);
   expect(tracker.current(key, refresh)).toBe(false);
+});
+
+// B07 fix: Buyer (and any other operation using the generic GROUPED_LIST
+// renderer, i.e. BlockView, not the bespoke MaintenanceResultList) has no
+// viewState of its own -- useResultView's key falls back to the raw
+// executionId, which stays stable across a genuine refresh of the SAME
+// row (unlike a brand-new ask, which mints a new executionId).
+const buyerBlock: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }> = {
+  type: 'GROUPED_LIST', id: 'buyer-deadlines-tasks', title: 'Buyer deadlines', filters: [], actions: [],
+  sections: [{ id: 'deadlines', title: 'Deadlines', count: 2, items: [
+    { id: 'buyer-task-1', title: 'Order inspection', meta: ['Due tomorrow'], href: '/dashboard/properties/home/buyer-plan?taskId=buyer-task-1' },
+    { id: 'buyer-task-2', title: 'Sign disclosure', meta: ['Due next week'], href: '/dashboard/properties/home/buyer-plan?taskId=buyer-task-2' },
+  ] }],
+};
+function buyerExecution(updatedAt: string, block: typeof buyerBlock = buyerBlock): AskExecutionResponse {
+  return { executionId: 'buyer-execution', sessionId: 'session', property: { id: 'home', label: 'Home' }, blocks: [block], updatedAt, viewState: null } as AskExecutionResponse;
+}
+function BuyerList({ response }: { response: AskExecutionResponse }) {
+  const controls = useResultView(response);
+  return <ResultViewContext.Provider value={controls}>
+    <BlockView block={response.blocks[0]} executionId={response.executionId} onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} />
+  </ResultViewContext.Provider>;
+}
+function storeBuyerSelection(taskId: string) {
+  sessionStorage.setItem(resultViewKey('session', 'home', 'buyer-execution'), JSON.stringify({ selectedTaskId: taskId, expandedRows: [], visibleCounts: {}, scrollOffset: null }));
+}
+
+test('a selected generic row receives the marker and visible highlight', () => {
+  storeBuyerSelection('buyer-task-1');
+  render(<BuyerList response={buyerExecution('2026-09-14T00:00:01.000Z')} />);
+  const row = screen.getByText('Order inspection').closest('li')!;
+  expect(row).toHaveAttribute('data-ask-task-id', 'buyer-task-1');
+  expect(row).toHaveClass('border-teal-600', 'bg-teal-50');
+  expect(screen.getByText('Sign disclosure').closest('li')).not.toHaveClass('border-teal-600');
+});
+
+test('Buyer selection survives a refresh of the same execution (non-Maintenance lists do not lose selection on refresh)', () => {
+  storeBuyerSelection('buyer-task-1');
+  const { rerender } = render(<BuyerList response={buyerExecution('2026-09-14T00:00:01.000Z')} />);
+  rerender(<BuyerList response={buyerExecution('2026-09-14T00:00:02.000Z')} />);
+  expect(screen.getByText('Order inspection').closest('li')).toHaveClass('border-teal-600', 'bg-teal-50');
+});
+
+test('a Buyer task leaving the result clears selection rather than substituting another', () => {
+  storeBuyerSelection('buyer-task-1');
+  const { rerender } = render(<BuyerList response={buyerExecution('2026-09-14T00:00:01.000Z')} />);
+  const nextBlock = { ...buyerBlock, sections: [{ ...buyerBlock.sections[0], items: buyerBlock.sections[0].items.filter((item) => item.id !== 'buyer-task-1') }] };
+  rerender(<BuyerList response={buyerExecution('2026-09-14T00:00:02.000Z', nextBlock)} />);
+  expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'buyer-execution')).selectedTaskId).toBeNull();
 });

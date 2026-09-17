@@ -33,8 +33,16 @@ export function clearResultViews(storage: Storage, sessionId: string, keepKeys?:
     if (key?.startsWith(`${PREFIX}${sessionId}:`) && !keepKeys?.has(key)) storage.removeItem(key);
   }
 }
+// B07 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+// this used to only recognize the 'maintenance-groups' block id, so any
+// other GROUPED_LIST-shaped result (Buyer, or any future operation) always
+// got an empty ids set here -- selectedTaskId was silently nulled out on
+// every hydration, regardless of whether the item was still there.
+// Generalized across every GROUPED_LIST block in the result, not just one
+// named block id. Never substitutes a different item for a missing one --
+// the exact id must still be present, or selection clears to null.
 export function reconcileResultView(view: ResultView, execution: AskExecutionResponse): ResultView {
-  const sections = execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups' ? block.sections : []);
+  const sections = execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' ? block.sections : []);
   const ids = new Set(sections.flatMap((section) => section.items.map((item) => item.id)));
   return {
     ...view,
