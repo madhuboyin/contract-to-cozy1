@@ -4853,6 +4853,36 @@ const BUYER_PROFESSIONAL_BOUNDARY: AskPresentationBlock = {
   suggestions: [],
 };
 
+// B01 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+// journey.stage was already computed by the underlying service and
+// returned to Ask, but buyerPlanStatusResult never read or surfaced it --
+// BUY-001's own "current phase" requirement was silently unmet despite the
+// data already being there. No canonical display-label helper for this
+// exact 9-value BuyerJourneyStage enum existed anywhere in the backend
+// (checked: currentBuyerPhase in HomeBuyerTask.service.ts maps a narrower,
+// lossy 4-way subset for task-ranking purposes, not display; the frontend's
+// own STAGE_LABELS in RecentOwnerTransition.tsx only covers the 4 post-close
+// values). Labels chosen to read naturally in a sentence ("You're in the
+// ... phase"), not as standalone badge text.
+const BUYER_JOURNEY_STAGE_LABELS: Record<string, string> = {
+  EXPLORING: 'Exploring',
+  OFFER_CONTRACT: 'Contract',
+  DUE_DILIGENCE: 'Due Diligence',
+  CLOSING_PREP: 'Closing Preparation',
+  CLOSED: 'Closed',
+  MOVE_IN: 'Move-In',
+  FIRST_30_DAYS: 'First 30 Days',
+  DAYS_31_TO_90: 'Days 31-90',
+  HANDED_OFF: 'Handed Off',
+};
+
+// Pure, extracted for direct unit testing (same convention as
+// formatUnavailableHomeActionProducers). Falls back to a humanized raw enum
+// value for any stage not yet named explicitly above.
+export function buyerJourneyStageLabel(stage: string): string {
+  return BUYER_JOURNEY_STAGE_LABELS[stage] ?? stage.replace(/_/g, ' ');
+}
+
 async function buyerPlanStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s Buyer Plan status right now.');
@@ -4866,6 +4896,16 @@ async function buyerPlanStatusResult(userId: string, propertyId: string): Promis
   const nextHref = overview.nextAction
     ? `${planHref}?${new URLSearchParams({ taskId: overview.nextAction.id, ...(overview.nextAction.checklistSection ? { section: overview.nextAction.checklistSection } : {}) }).toString()}`
     : planHref;
+  // B01 fix: surface the current phase Ask already has (overview.journey.stage)
+  // rather than only counts/blockers -- falls back to the raw enum value,
+  // humanized, for any stage this map doesn't yet name explicitly, so a
+  // future stage addition degrades gracefully instead of showing nothing.
+  const phaseLabel = buyerJourneyStageLabel(overview.journey.stage);
+  // B10 fix: previously an unconditional pair regardless of whether either
+  // suggestion was actually relevant -- ROLL-009's "the valid outcome of no
+  // suggestion" wasn't implemented here. With no open next task and no
+  // blocker, there is genuinely nothing left to ask about proactively.
+  const hasOpenWork = Boolean(overview.nextAction) || overview.blockers.length > 0;
   return {
     status: overview.blockers.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: overview.blockers.length ? 'BUYER_PLAN_HAS_BLOCKERS' : undefined,
@@ -4876,14 +4916,14 @@ async function buyerPlanStatusResult(userId: string, propertyId: string): Promis
         id: 'buyer-plan-status-summary',
         title: overview.nextAction ? `Next before closing: ${overview.nextAction.title}` : 'No open next task is currently recorded',
         body: overview.nextAction
-          ? `The Closing Plan is ${overview.journey.progress.percent}% complete with ${remaining} of ${overview.journey.progress.total} applicable pre-close tasks remaining.${overview.blockers.length ? ` ${overview.blockers.length} item${overview.blockers.length === 1 ? ' is' : 's are'} blocked.` : ''}`
-          : `The canonical Buyer Plan has no executable pre-close task right now. It is ${overview.journey.progress.percent}% complete.`,
+          ? `You're in the ${phaseLabel} phase. The Closing Plan is ${overview.journey.progress.percent}% complete with ${remaining} of ${overview.journey.progress.total} applicable pre-close tasks remaining.${overview.blockers.length ? ` ${overview.blockers.length} item${overview.blockers.length === 1 ? ' is' : 's are'} blocked.` : ''}`
+          : `You're in the ${phaseLabel} phase. The canonical Buyer Plan has no executable pre-close task right now. It is ${overview.journey.progress.percent}% complete.`,
         tone: overview.blockers.length ? 'CAUTION' : 'DEFAULT',
         actions: [{ id: overview.nextAction ? 'open-next-buyer-task' : 'open-buyer-plan', label: overview.nextAction ? 'Open exact next task' : 'Open Buyer Plan', href: nextHref, style: 'PRIMARY' }],
       },
       BUYER_PROFESSIONAL_BOUNDARY,
     ],
-    suggestions: ['What is due before closing?', 'Which transaction documents are missing?'],
+    suggestions: hasOpenWork ? ['What is due before closing?', 'Which transaction documents are missing?'] : [],
   };
 }
 
@@ -5701,7 +5741,11 @@ async function buyerCostReadinessResult(userId: string, propertyId: string): Pro
     status: 'ANSWERED',
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+    // B10 fix: previously an unconditional pair even with zero costed
+    // tasks -- the response itself already covers "what to do next" via
+    // the SUMMARY block's own "Add an estimated cost..." CTA in that case,
+    // so a chat-level suggestion has nothing genuinely relevant to add.
+    suggestions: costedTasks.length ? ['What is due before closing?', 'What should I do next for this purchase?'] : [],
   };
 }
 
