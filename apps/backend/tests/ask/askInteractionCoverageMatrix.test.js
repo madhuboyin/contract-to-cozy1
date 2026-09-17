@@ -93,7 +93,25 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW',
   'RENOVATION_PERMIT_READINESS', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'INCIDENT_CLAIM_STATUS', 'CLAIM_FILE', 'CLAIM_TRANSITION', 'INCIDENT_CONTINUATION',
+  'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'REFINANCE_RATE_MONITOR',
+  'EMERGENCY_BOUNDARY', 'UNSAFE_RESTRICTED_BOUNDARY', 'OUT_OF_SCOPE_BOUNDARY',
+  'HOUSEHOLD_INVITATION', 'CAPABILITY_DISCOVERY', 'GROUNDED_GUIDANCE',
+  'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE',
+  'OPERATIONAL_WORK_UPDATE', 'INSPECTION_FINDING_UPDATE', 'HOME_DEADLINE_MONITOR',
 ]);
+// Phase 0 Stage 2 is now complete: every one of the 77 registered operations
+// has been traced. This assertion is the actual completion signal -- if a
+// 78th operation is ever registered, the earlier "every operation has an
+// entry" test still catches it as PENDING, but THIS test is what breaks the
+// moment someone believes Stage 2 is finished when it silently isn't.
+test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED, none left PENDING', () => {
+  for (const [operationId, entry] of Object.entries(ASK_INTERACTION_COVERAGE_MATRIX)) {
+    for (const field of STAGE_2_FIELDS) {
+      assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
+    }
+  }
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 77);
+});
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
 test('Stage 2 fields are TRACED with real notes only for operations actually traced this pass; every other operation stays honestly PENDING', () => {
