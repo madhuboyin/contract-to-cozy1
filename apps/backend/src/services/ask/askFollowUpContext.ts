@@ -16,6 +16,13 @@ const FILTER_CONTINUABLE_OPERATIONS: ReadonlySet<AskOperationId> = new Set([
   'INVENTORY_LOOKUP',
   'PROPERTY_SUMMARY',
   'HOME_ACTIONS',
+  // B02 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+  // without this, a declared lane-filter chip's own canned message (which
+  // does carry sourceExecutionId) would not be recognized as continuing
+  // BUYER_DEADLINES -- it would instead route through ordinary
+  // classification, which is not guaranteed to land back on the same
+  // operation.
+  'BUYER_DEADLINES',
 ]);
 
 const ENVELOPE_PAGINATION_PATTERN = /^\s*(?:(?:show|load|see|get)\s+(?:me\s+)?(?:the\s+)?(?:next|more)|continue\s+(?:the\s+)?(?:intelligence|results?))\b/i;

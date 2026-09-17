@@ -821,12 +821,34 @@ const BuyerClosingHomeDeadlineSchema = z.strictObject({
   dueAt: z.string().datetime(),
 });
 
+// Shared by BuyerClosingHomeReadinessLaneSchema and, for B02's phase-filter
+// fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md),
+// BuyerClosingHomeBlockersByLaneEntrySchema below -- one canonical key set,
+// not two independent enums that could drift.
+export const BuyerClosingHomeLaneKeySchema = z.enum(['CONTRACT', 'DUE_DILIGENCE', 'CLOSING', 'MOVE']);
+export type BuyerClosingHomeLaneKey = z.infer<typeof BuyerClosingHomeLaneKeySchema>;
+
 const BuyerClosingHomeReadinessLaneSchema = z.strictObject({
-  key: z.enum(['CONTRACT', 'DUE_DILIGENCE', 'CLOSING', 'MOVE']),
+  key: BuyerClosingHomeLaneKeySchema,
   label: z.string().min(1),
   completed: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
   blocked: z.number().int().nonnegative(),
+});
+
+// B02 fix: overview.blockers (below) is capped to 5 across ALL lanes before
+// Ask ever sees it (HomeBuyerTask.service.ts's getClosingHomePresentation),
+// so filtering that array by lane and reporting its length as "how many
+// match this lane" would be a doubly-truncated, understated count whenever
+// the top-5 cap already excluded some of a lane's own blockers. This is a
+// separate, additive field computed from the FULL, pre-cap blocker set --
+// it does not change what `blockers` itself contains or means, so no other
+// consumer of this contract is affected.
+const BuyerClosingHomeBlockersByLaneEntrySchema = z.strictObject({
+  key: BuyerClosingHomeLaneKeySchema,
+  label: z.string().min(1),
+  total: z.number().int().nonnegative(),
+  items: z.array(BuyerClosingHomeTaskSummarySchema),
 });
 
 export const BuyerNextActionGuidanceSchema = z.strictObject({
@@ -871,6 +893,7 @@ export const BuyerClosingHomeOverviewSchema = z.strictObject({
   milestones: z.array(BuyerClosingHomeMilestoneSchema),
   upcomingDeadlines: z.array(BuyerClosingHomeDeadlineSchema).default([]),
   readinessLanes: z.array(BuyerClosingHomeReadinessLaneSchema),
+  blockersByLane: z.array(BuyerClosingHomeBlockersByLaneEntrySchema),
   evidence: z.strictObject({
     inspectionState: z.enum(['NOT_STARTED', 'PROCESSING', 'REVIEW_PENDING', 'CONFIRMED']),
     inspectionReportCount: z.number().int().nonnegative(),

@@ -78,7 +78,11 @@ function taskAnchorForEntry(
   return plan.planStartDate;
 }
 
-const CLOSING_HOME_LANES = [
+// Exported (previously module-private) for B02's phase-filter fix
+// (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md) --
+// Ask needed the SAME phase->lane grouping already used for readinessLanes
+// below, not a second, independently-maintained mapping that could drift.
+export const CLOSING_HOME_LANES = [
   { key: 'CONTRACT' as const, label: 'Contract', phases: ['OFFER_CONTRACT'] as BuyerPlanPhase[] },
   { key: 'DUE_DILIGENCE' as const, label: 'Due diligence', phases: ['DUE_DILIGENCE'] as BuyerPlanPhase[] },
   { key: 'CLOSING' as const, label: 'Closing readiness', phases: ['CLOSING_PREP'] as BuyerPlanPhase[] },
@@ -592,6 +596,20 @@ export class HomeBuyerTaskService {
           ...deadline,
           dueAt: deadline.dueAt.toISOString(),
         })),
+        // B02 fix: computed from the FULL `blockers` array above, before the
+        // `.slice(0, 5)` cap on the legacy `blockers` field below -- a lane
+        // filter reporting counts/candidates from an already-capped array
+        // would understate "how many blocking tasks are in this lane"
+        // whenever the top-5 cap excluded some of that lane's own items.
+        blockersByLane: CLOSING_HOME_LANES.map((lane) => {
+          const laneBlockers = blockers.filter((task) => lane.phases.includes(task.phase));
+          return {
+            key: lane.key,
+            label: lane.label,
+            total: laneBlockers.length,
+            items: laneBlockers.slice(0, 20).map(closingTaskSummary),
+          };
+        }),
         readinessLanes: CLOSING_HOME_LANES.map((lane) => {
           const tasks = visibleTasks.filter((task) => lane.phases.includes(task.phase));
           return {

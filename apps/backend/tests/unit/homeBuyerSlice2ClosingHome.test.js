@@ -39,6 +39,15 @@ function buyerOverview() {
     readinessLanes: [
       { key: 'DUE_DILIGENCE', label: 'Due diligence', completed: 2, total: 4, blocked: 0 },
     ],
+    // B02 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+    // computed from the full, pre-cap blocker set, not the legacy
+    // `blockers` field's own 5-item cap -- see HomeBuyerTask.service.ts.
+    blockersByLane: [
+      { key: 'CONTRACT', label: 'Contract', total: 0, items: [] },
+      { key: 'DUE_DILIGENCE', label: 'Due diligence', total: 0, items: [] },
+      { key: 'CLOSING', label: 'Closing readiness', total: 0, items: [] },
+      { key: 'MOVE', label: 'Move & possession', total: 0, items: [] },
+    ],
     evidence: {
       inspectionState: 'NOT_STARTED', inspectionReportCount: 0, openMaterialFindingCount: 0,
       documentCount: 1, verifiedDocumentCount: 0, documentsNeedingReviewCount: 1,

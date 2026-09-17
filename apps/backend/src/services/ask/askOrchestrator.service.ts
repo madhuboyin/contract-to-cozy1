@@ -28,7 +28,8 @@ import { readAskOperationalControls } from '../../config/askOperationalControls'
 import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
-import { HomeBuyerTaskService } from '../HomeBuyerTask.service';
+import { HomeBuyerTaskService, CLOSING_HOME_LANES } from '../HomeBuyerTask.service';
+import type { BuyerClosingHomeLaneKey } from '../../productFramework/buyerAcquisition.contract';
 import { BuyerPurchaseLenderReadinessService } from '../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../buyerTitleEscrow.service';
 import { BuyerWalkthroughService } from '../buyerWalkthrough.service';
@@ -1517,18 +1518,25 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
 // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/FRESH-001: an explicit
 // representation of "what the homeowner is currently looking at," separate
 // from any single conversational turn. `resultId` is minted once (the
-// first time a distinct maintenance query is asked) and carried forward
-// unchanged across every filter-chip click and refresh of that SAME
-// interactive result -- it is NOT the executionId, which is a new row per
-// turn. Stored inside the execution's own parametersJson (no new table);
-// looked up by launchContext.sourceExecutionId, which a declared filter
-// chip already carries per round 9's fix.
-interface MaintenanceViewState {
+// first time a distinct query for this result is asked) and carried
+// forward unchanged across every filter-chip click and refresh of that
+// SAME interactive result -- it is NOT the executionId, which is a new row
+// per turn. Stored inside the execution's own parametersJson (no new
+// table); looked up by launchContext.sourceExecutionId, which a declared
+// filter chip already carries per round 9's fix. Deliberately generic
+// (not Maintenance-only) in shape, matching `viewState`'s own schema
+// comment in ask.contract.ts -- renamed from MaintenanceViewState/
+// loadMaintenanceViewState as part of B02's Buyer Deadlines phase-filter
+// fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md),
+// its second real consumer, same convention as B04's
+// refreshMaintenanceSourceExecution -> refreshAskSourceExecution rename.
+interface AskViewState {
   resultId: string;
   // The raw matched phrase behind each still-applied dimension (e.g.
   // "hvac", "this month") -- not the derived boolean/label -- so it can be
   // re-fed into the same regex-based parsing a fresh query already uses,
-  // rather than requiring a second, parallel parsing path.
+  // rather than requiring a second, parallel parsing path. Maintenance-only
+  // concept; other consumers (e.g. Buyer Deadlines) leave these null.
   domainScopePhrase: string | null;
   dateScopePhrase: string | null;
   // External review [P2]: room scope was derived fresh every turn from
@@ -1536,20 +1544,25 @@ interface MaintenanceViewState {
   // domain/date, it was silently dropped by any status-chip continuation
   // (missing from a plain object, `undefined` behaves like a stored row
   // predating this field -- both correctly drop out of the merge below).
+  // Maintenance-only; other consumers omit it.
   roomScopePhrase?: string | null;
-  statusFilter: 'ALL_OPEN' | 'OVERDUE' | 'DUE_SOON' | 'URGENT';
+  // Not narrowed to Maintenance's own 4 values -- a generic identifier for
+  // whatever filter/scope dimension a given operation's own chips select
+  // (Maintenance: 'ALL_OPEN'/'OVERDUE'/'DUE_SOON'/'URGENT'; Buyer
+  // Deadlines: a BuyerClosingHomeLaneKey or 'ALL').
+  statusFilter: string;
   selectedTaskId: string | null;
   revision: number;
 }
 
-async function loadMaintenanceViewState(executionId: string, userId: string): Promise<MaintenanceViewState | null> {
+async function loadAskViewState(executionId: string, userId: string): Promise<AskViewState | null> {
   const row = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { parametersJson: true } });
   const parameters = row?.parametersJson && typeof row.parametersJson === 'object' && !Array.isArray(row.parametersJson)
     ? row.parametersJson as { viewState?: unknown }
     : null;
   const viewState = parameters?.viewState;
   if (!viewState || typeof viewState !== 'object' || Array.isArray(viewState) || typeof (viewState as { resultId?: unknown }).resultId !== 'string') return null;
-  return viewState as MaintenanceViewState;
+  return viewState as AskViewState;
 }
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD item 2 (view-state continuity): a
@@ -1566,7 +1579,7 @@ async function loadMaintenanceViewState(executionId: string, userId: string): Pr
 // exercise at all) so this specific merge behavior is directly unit
 // -testable.
 export function mergeMaintenanceViewContinuation(
-  priorViewState: Pick<MaintenanceViewState, 'domainScopePhrase' | 'dateScopePhrase' | 'roomScopePhrase'> | null | undefined,
+  priorViewState: Pick<AskViewState, 'domainScopePhrase' | 'dateScopePhrase' | 'roomScopePhrase'> | null | undefined,
   message: string,
   intent: 'FILTER' | 'REFRESH' = 'FILTER',
 ): { effectiveMessage: string; isClearAllFilters: boolean } {
@@ -1585,7 +1598,7 @@ async function maintenanceResult(
   userId: string,
   propertyId: string,
   message: string,
-  priorViewState: MaintenanceViewState | null | undefined,
+  priorViewState: AskViewState | null | undefined,
   context: MaintenanceTaskContext,
   seasonalContext: SeasonalChecklistContext | null,
   seasonalContextAvailable: boolean,
@@ -1853,8 +1866,8 @@ async function maintenanceResult(
   // the next), statusFilter derived in the same precedence the chips
   // display, selectedTaskId untouched by a filter change, revision bumped
   // so a stale response can be detected by comparing against it.
-  const statusFilter: MaintenanceViewState['statusFilter'] = overdueOnly ? 'OVERDUE' : dueSoonOnly ? 'DUE_SOON' : highPriorityOnly ? 'URGENT' : 'ALL_OPEN';
-  const viewState: MaintenanceViewState = {
+  const statusFilter: string = overdueOnly ? 'OVERDUE' : dueSoonOnly ? 'DUE_SOON' : highPriorityOnly ? 'URGENT' : 'ALL_OPEN';
+  const viewState: AskViewState = {
     resultId: priorViewState?.resultId ?? randomUUID(),
     domainScopePhrase: scopeTerms[0] ?? null,
     dateScopePhrase: timeframe?.label ?? null,
@@ -4874,7 +4887,21 @@ async function buyerPlanStatusResult(userId: string, propertyId: string): Promis
   };
 }
 
-async function buyerDeadlinesResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+// B02 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md,
+// per explicit user design decision): reuses CLOSING_HOME_LANES' own labels
+// directly (a lowercased substring check against the message) rather than
+// a second, independently-maintained set of regexes -- generating chip
+// messages and parsing them off the SAME label text keeps the two from
+// drifting apart. Returns null for "no lane phrase recognized," which the
+// caller treats identically to an explicit "All" reset (both mean
+// unfiltered) -- the distinction only matters for which chip renders
+// `active`.
+export function parseBuyerDeadlineLaneFilter(message: string, lanes: readonly { key: BuyerClosingHomeLaneKey; label: string }[]): BuyerClosingHomeLaneKey | null {
+  const lowerMessage = message.toLowerCase();
+  return lanes.find((lane) => lowerMessage.includes(lane.label.toLowerCase()))?.key ?? null;
+}
+
+async function buyerDeadlinesResult(userId: string, propertyId: string, message: string, priorViewState: AskViewState | null | undefined): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s deadlines right now.');
   const { data } = context;
@@ -4883,11 +4910,24 @@ async function buyerDeadlinesResult(userId: string, propertyId: string): Promise
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there are no recorded closing deadlines.');
   }
   const { overview } = data;
+  const laneFilter = parseBuyerDeadlineLaneFilter(message, CLOSING_HOME_LANES);
+  const activeLane = laneFilter ? overview.blockersByLane.find((lane) => lane.key === laneFilter) : null;
   const upcomingMilestones = overview.milestones.filter((milestone) => milestone.status !== 'COMPLETED');
+  // B02 fix: milestones have no phase field at all (confirmed by direct
+  // read of closingTaskSummary/plan.milestones' own DTO shape) -- there is
+  // no canonical mapping from a milestone to one of these 4 lanes, so
+  // filtering them would require inventing one inside Ask rather than
+  // reusing a domain-owned mapping. Kept unfiltered and, when a lane
+  // filter is active, relabeled to disclose exactly that rather than
+  // silently implying they were scoped by the filter too.
+  const milestonesTitle = activeLane ? 'Purchase-wide milestones — not affected by this task-phase filter' : 'Upcoming milestones';
+  const blockerTasks = activeLane ? activeLane.items : overview.blockers;
+  const blockerTotal = activeLane ? activeLane.total : overview.blockers.length;
+  const blockersTitle = activeLane ? `${activeLane.label} blocking tasks` : 'Blocking before closing';
   const sections = [];
   if (upcomingMilestones.length) {
     sections.push({
-      id: 'milestones', title: 'Upcoming milestones', count: upcomingMilestones.length,
+      id: 'milestones', title: milestonesTitle, count: upcomingMilestones.length,
       items: upcomingMilestones.map((milestone) => ({
         id: milestone.id, title: milestone.label, description: null,
         meta: [humanDate(milestone.dueAt ? new Date(milestone.dueAt) : null) ? `Due ${humanDate(new Date(milestone.dueAt!))}` : 'No date recorded'],
@@ -4895,34 +4935,53 @@ async function buyerDeadlinesResult(userId: string, propertyId: string): Promise
       })),
     });
   }
-  if (overview.blockers.length) {
+  if (blockerTotal) {
     sections.push({
-      id: 'blockers', title: 'Blocking before closing', count: overview.blockers.length,
-      items: overview.blockers.map((task) => ({
+      id: 'blockers', title: blockersTitle, count: blockerTotal,
+      items: blockerTasks.map((task) => ({
         id: task.id, title: task.title, description: task.description,
         meta: [task.priority === 'NOW' ? 'Now' : task.priority, humanDate(task.dueAt ? new Date(task.dueAt) : null) ? `Due ${humanDate(new Date(task.dueAt!))}` : null].filter((value): value is string => Boolean(value)),
         status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
       })),
     });
   }
+  const resultId = priorViewState?.resultId ?? randomUUID();
+  const viewState: AskViewState = {
+    resultId, domainScopePhrase: null, dateScopePhrase: null,
+    statusFilter: laneFilter ?? 'ALL',
+    selectedTaskId: priorViewState?.selectedTaskId ?? null,
+    revision: (priorViewState?.revision ?? 0) + 1,
+  };
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY',
     id: 'buyer-deadlines-summary',
     title: sections.length ? 'Recorded deadlines before closing' : 'Nothing recorded is putting closing at risk right now',
     body: sections.length
-      ? `${upcomingMilestones.length} milestone${upcomingMilestones.length === 1 ? '' : 's'} and ${overview.blockers.length} blocking task${overview.blockers.length === 1 ? '' : 's'} are open. Dates reflect what you or your professionals recorded, not a certified closing date.`
+      ? `${upcomingMilestones.length} milestone${upcomingMilestones.length === 1 ? '' : 's'} and ${blockerTotal} blocking task${blockerTotal === 1 ? '' : 's'}${activeLane ? ` match ${activeLane.label}` : ''} are open. Dates reflect what you or your professionals recorded, not a certified closing date.`
       : 'No milestone or blocking task threatens this closing right now. This does not guarantee no deadline exists — only recorded ones are shown.',
-    tone: overview.blockers.length ? 'CAUTION' : 'DEFAULT',
+    tone: blockerTotal ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
   }];
   if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'buyer-deadlines-list', title: 'Deadlines and blockers', description: 'From the canonical Buyer Plan.', sections, actions: [] });
+    blocks.push({
+      type: 'GROUPED_LIST',
+      // B02 fix: declared chips reuse CLOSING_HOME_LANES' own key/label
+      // (same source parseBuyerDeadlineLaneFilter reads), so a chip's
+      // canned message and the parser that recognizes it can never drift
+      // apart into two independently-maintained lists.
+      filters: [
+        { id: 'all', label: 'All', message: 'Now show all blocking deadlines', active: !laneFilter },
+        ...CLOSING_HOME_LANES.map((lane) => ({ id: lane.key.toLowerCase(), label: lane.label, message: `Only show ${lane.label} deadlines`, active: laneFilter === lane.key })),
+      ],
+      id: 'buyer-deadlines-list', title: 'Deadlines and blockers', description: 'From the canonical Buyer Plan.', sections, actions: [],
+    });
   }
   blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
   return {
     status: overview.blockers.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: overview.blockers.length ? 'BUYER_PLAN_HAS_BLOCKERS' : undefined,
     contextVersion: data.contextVersion,
+    parameters: { viewState },
     blocks,
     suggestions: ['What should I do next for this purchase?', 'Which transaction documents are missing?'],
   };
@@ -7443,7 +7502,7 @@ registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   // stored view state so maintenanceResult can merge the carried-over
   // domain/date scope with the chip's own status change.
   const priorViewState = envelope.launchContext?.sourceExecutionId
-    ? await loadMaintenanceViewState(envelope.launchContext.sourceExecutionId, envelope.userId)
+    ? await loadAskViewState(envelope.launchContext.sourceExecutionId, envelope.userId)
     : null;
   return maintenanceResult(
     envelope.userId,
@@ -7530,7 +7589,17 @@ registerCapabilityHandler('decision-platform.hvac.outcome.report', async (envelo
 registerCapabilityHandler('decision-platform.hvac.outcome.view', async (envelope) => hvacDecisionOutcomeViewResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('decision-platform.hvac.outcome.unlink', async (envelope) => hvacDecisionOutcomeUnlinkResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('buyer.plan.status', async (envelope) => buyerPlanStatusResult(envelope.userId, envelope.propertyId!));
-registerCapabilityHandler('buyer.deadlines', async (envelope) => buyerDeadlinesResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.deadlines', async (envelope) => {
+  // B02 fix: a declared filter chip names the exact execution it was
+  // rendered on (round 9's own convention, reused here) -- look up its
+  // stored view state so the resultId/revision/selectedTaskId carry
+  // forward across a lane-filter refinement, same mechanism Maintenance's
+  // own filter chips already use.
+  const priorViewState = envelope.launchContext?.sourceExecutionId
+    ? await loadAskViewState(envelope.launchContext.sourceExecutionId, envelope.userId)
+    : null;
+  return buyerDeadlinesResult(envelope.userId, envelope.propertyId!, envelope.message, priorViewState);
+});
 registerCapabilityHandler('buyer.document-readiness', async (envelope) => buyerDocumentReadinessResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.inspection-review', async (envelope) => buyerInspectionReviewResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.task.complete', async (envelope) => buyerTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext?.sourceExecutionId ?? null));

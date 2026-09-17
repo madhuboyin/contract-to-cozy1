@@ -151,6 +151,23 @@ test('filter continuation combines the prior question with the refinement and fo
   assert.equal(result.sourceExecutionId, 'prior-execution-1');
 });
 
+// B02 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+// without BUYER_DEADLINES in FILTER_CONTINUABLE_OPERATIONS, a declared
+// lane-filter chip click would not be recognized as continuing the same
+// operation -- it would route through ordinary classification instead,
+// not guaranteed to land back on BUYER_DEADLINES.
+test('a declared lane-filter chip continues BUYER_DEADLINES, self-sufficient (no concatenation)', async () => {
+  mockRow = priorRow({ id: 'buyer-deadlines-card', operationId: 'BUYER_DEADLINES', message: 'What is due before closing?' });
+  const result = await resolveAskFollowUpMessage({
+    sessionId: 'session-1', propertyId: 'property-1', message: 'Only show Closing readiness deadlines',
+    declaredSourceExecutionId: 'buyer-deadlines-card',
+  });
+  assert.equal(result.forcedOperationId, 'BUYER_DEADLINES');
+  assert.equal(result.sourceExecutionId, 'buyer-deadlines-card');
+  assert.equal(result.isFilterRefinement, true);
+  assert.equal(result.effectiveMessage, 'Only show Closing readiness deadlines');
+});
+
 test('filter continuation does not force a non-continuable (command/analysis) operation', async () => {
   mockRow = priorRow({ operationId: 'REFINANCE_ANALYSIS', message: 'Is refinancing worth it now?' });
   const result = await resolveAskFollowUpMessage({ sessionId: 'session-1', propertyId: 'property-1', message: 'Only show the urgent ones.' });
