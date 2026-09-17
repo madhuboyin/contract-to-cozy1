@@ -1,4 +1,6 @@
 import {
+  BuyerMilestoneStatus,
+  BuyerMilestoneType,
   BuyerPlanPhase,
   BuyerPlanPriority,
   BuyerTaskSourceType,
@@ -89,9 +91,65 @@ export const CLOSING_HOME_LANES = [
   { key: 'MOVE' as const, label: 'Move & possession', phases: ['MOVE_IN'] as BuyerPlanPhase[] },
 ];
 
+// Canonical milestone->lane mapping, defined alongside CLOSING_HOME_LANES
+// per explicit user design decision (B02's milestone-filtering follow-up,
+// docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md) --
+// tasks have their own BuyerPlanPhase already covered by CLOSING_HOME_LANES
+// above; milestones are a structurally different closing-timeline concept
+// (BuyerMilestoneType) with no existing phase field of their own, so this
+// is a second, independent mapping, not a reuse of the first. `null` means
+// "no lane applies" -- DAY_30/60/90 are genuinely post-closing (none of
+// the 4 pre/at-closing lanes describe them), and CUSTOM is an arbitrary
+// homeowner-defined milestone with no type-based signal to bucket by.
+// Deliberately not silently forced into the nearest lane -- an explicit
+// null lets callers disclose these as "not affected by this filter"
+// rather than mis-attributing them.
+export const BUYER_MILESTONE_TYPE_LANE: Record<BuyerMilestoneType, 'CONTRACT' | 'DUE_DILIGENCE' | 'CLOSING' | 'MOVE' | null> = {
+  OFFER_SUBMITTED: 'CONTRACT',
+  CONTRACT_ACCEPTED: 'CONTRACT',
+  EARNEST_MONEY_DUE: 'CONTRACT',
+  INSPECTION: 'DUE_DILIGENCE',
+  INSPECTION_CONTINGENCY: 'DUE_DILIGENCE',
+  ATTORNEY_REVIEW: 'DUE_DILIGENCE',
+  FINANCING_CONTINGENCY: 'DUE_DILIGENCE',
+  APPRAISAL: 'DUE_DILIGENCE',
+  TITLE_SURVEY: 'DUE_DILIGENCE',
+  INSURANCE_EFFECTIVE: 'CLOSING',
+  CLOSING_DISCLOSURE: 'CLOSING',
+  FINAL_WALKTHROUGH: 'CLOSING',
+  CLOSING: 'CLOSING',
+  MOVE_IN: 'MOVE',
+  DAY_30: null,
+  DAY_60: null,
+  DAY_90: null,
+  CUSTOM: null,
+};
+
 function milestoneLabel(type: string, customLabel: string | null): string {
   if (customLabel) return customLabel;
   return type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+// B02 fix: shared by milestonesByLane/unmappedMilestones below, mirroring
+// closingTaskSummary's own convention -- previously each of the 4 existing
+// inline milestone-DTO constructions in this file duplicated this same
+// {id, milestoneKey, type, label, status, dueAt} shape independently.
+function closingMilestoneSummary(milestone: {
+  id: string;
+  milestoneKey: string;
+  type: BuyerMilestoneType;
+  customLabel: string | null;
+  status: BuyerMilestoneStatus;
+  dueAt: Date | null;
+}) {
+  return {
+    id: milestone.id,
+    milestoneKey: milestone.milestoneKey,
+    type: milestone.type,
+    label: milestoneLabel(milestone.type, milestone.customLabel),
+    status: milestone.status,
+    dueAt: milestone.dueAt?.toISOString() ?? null,
+  };
 }
 
 function closingTaskSummary(task: {
@@ -542,6 +600,12 @@ export class HomeBuyerTaskService {
         candidate.label === deadline.label && candidate.dueAt.getTime() === deadline.dueAt.getTime(),
       ) === index)
       .slice(0, 8);
+    // B02 fix: the FULL, pre-cap non-terminal milestone set -- shared by
+    // the legacy `milestones` field's own `.slice(0, 6)` below AND the new
+    // `milestonesByLane`/`unmappedMilestones` fields, so a lane's reported
+    // total/candidates are never understated by that unrelated cap (same
+    // discipline as `blockersByLane` above).
+    const nonTerminalMilestones = plan.milestones.filter((milestone) => !['CANCELLED', 'WAIVED'].includes(milestone.status));
     const completed = visibleTasks.filter((task) => task.status === 'COMPLETED').length;
     const total = visibleTasks.length;
     const verifiedDocumentCount = property.documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
@@ -581,17 +645,7 @@ export class HomeBuyerTaskService {
         nextAction: nextAction ? closingTaskSummary(nextAction) : null,
         nextActionGuidance: nextAction ? buyerNextActionGuidance(nextAction, property.id) : null,
         blockers: blockers.slice(0, 5).map(closingTaskSummary),
-        milestones: plan.milestones
-          .filter((milestone) => !['CANCELLED', 'WAIVED'].includes(milestone.status))
-          .slice(0, 6)
-          .map((milestone) => ({
-            id: milestone.id,
-            milestoneKey: milestone.milestoneKey,
-            type: milestone.type,
-            label: milestoneLabel(milestone.type, milestone.customLabel),
-            status: milestone.status,
-            dueAt: milestone.dueAt?.toISOString() ?? null,
-          })),
+        milestones: nonTerminalMilestones.slice(0, 6).map(closingMilestoneSummary),
         upcomingDeadlines: upcomingDeadlines.map((deadline) => ({
           ...deadline,
           dueAt: deadline.dueAt.toISOString(),
@@ -610,6 +664,26 @@ export class HomeBuyerTaskService {
             items: laneBlockers.slice(0, 20).map(closingTaskSummary),
           };
         }),
+        // B02 milestone-filtering follow-up, per explicit user design
+        // decision: BUYER_MILESTONE_TYPE_LANE maps each milestone to one
+        // of the 4 lanes, or null when none applies (DAY_30/60/90, CUSTOM
+        // -- see that map's own comment for why). unmappedMilestones is
+        // that null bucket, kept separate rather than a 5th synthetic lane
+        // key, since BuyerClosingHomeLaneKeySchema is shared with
+        // readinessLanes above and has no such 5th value.
+        milestonesByLane: CLOSING_HOME_LANES.map((lane) => {
+          const laneMilestones = nonTerminalMilestones.filter((milestone) => BUYER_MILESTONE_TYPE_LANE[milestone.type] === lane.key);
+          return {
+            key: lane.key,
+            label: lane.label,
+            total: laneMilestones.length,
+            items: laneMilestones.slice(0, 20).map(closingMilestoneSummary),
+          };
+        }),
+        unmappedMilestones: nonTerminalMilestones
+          .filter((milestone) => BUYER_MILESTONE_TYPE_LANE[milestone.type] === null)
+          .slice(0, 20)
+          .map(closingMilestoneSummary),
         readinessLanes: CLOSING_HOME_LANES.map((lane) => {
           const tasks = visibleTasks.filter((task) => lane.phases.includes(task.phase));
           return {

@@ -48,6 +48,15 @@ function buyerOverview() {
       { key: 'CLOSING', label: 'Closing readiness', total: 0, items: [] },
       { key: 'MOVE', label: 'Move & possession', total: 0, items: [] },
     ],
+    // B02 milestone-filtering follow-up (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+    // computed from the full, pre-cap milestone set, mirroring blockersByLane.
+    milestonesByLane: [
+      { key: 'CONTRACT', label: 'Contract', total: 0, items: [] },
+      { key: 'DUE_DILIGENCE', label: 'Due diligence', total: 0, items: [] },
+      { key: 'CLOSING', label: 'Closing readiness', total: 0, items: [] },
+      { key: 'MOVE', label: 'Move & possession', total: 0, items: [] },
+    ],
+    unmappedMilestones: [],
     evidence: {
       inspectionState: 'NOT_STARTED', inspectionReportCount: 0, openMaterialFindingCount: 0,
       documentCount: 1, verifiedDocumentCount: 0, documentsNeedingReviewCount: 1,

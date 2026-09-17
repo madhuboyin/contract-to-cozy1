@@ -5025,6 +5025,51 @@ export function parseBuyerDeadlineLaneFilter(message: string, lanes: readonly { 
   return lanes.find((lane) => lowerMessage.includes(lane.label.toLowerCase()))?.key ?? null;
 }
 
+// B02 milestone-filtering follow-up, per explicit user design decision.
+// Pure, extracted for direct unit testing without a live database --
+// `overview` is already-loaded data by the time this runs. DAY_30/60/90
+// and CUSTOM milestones (BUYER_MILESTONE_TYPE_LANE's null bucket) have no
+// lane mapping; they stay in their own always-shown "unmapped" set
+// whenever a lane filter is active (so they aren't silently dropped), but
+// deliberately return empty when no filter is active -- the caller's own
+// unfiltered `overview.milestones` fallback already includes them once,
+// and adding them again here would render every unmapped milestone twice.
+export function selectBuyerDeadlineMilestones<M extends { status: string }>(
+  overview: { milestones: readonly M[]; milestonesByLane: readonly { key: BuyerClosingHomeLaneKey; items: readonly M[] }[]; unmappedMilestones: readonly M[] },
+  activeLaneKey: BuyerClosingHomeLaneKey | null,
+): { matching: M[]; unmapped: M[] } {
+  const notCompleted = (item: M) => item.status !== 'COMPLETED';
+  if (!activeLaneKey) return { matching: overview.milestones.filter(notCompleted), unmapped: [] };
+  const laneEntry = overview.milestonesByLane.find((lane) => lane.key === activeLaneKey);
+  return {
+    matching: (laneEntry?.items ?? []).filter(notCompleted),
+    unmapped: overview.unmappedMilestones.filter(notCompleted),
+  };
+}
+
+// B07 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md,
+// per explicit user design decision): extracted so the "lane filter
+// round-trips across a refresh/return" claim is directly testable without
+// mocking loadBuyerPlanContext's DB access. resultId carries forward
+// unchanged (or mints fresh for a genuinely new query), statusFilter is
+// re-derived from this turn's parsed laneFilter every call (so a refresh
+// that reissues the same lane-filtered message reproduces the same
+// statusFilter), selectedTaskId is untouched by a filter change, and
+// revision increments so a stale response can be detected.
+export function buildBuyerDeadlinesViewState(
+  priorViewState: AskViewState | null | undefined,
+  laneFilter: BuyerClosingHomeLaneKey | null,
+): AskViewState {
+  return {
+    resultId: priorViewState?.resultId ?? randomUUID(),
+    domainScopePhrase: null,
+    dateScopePhrase: null,
+    statusFilter: laneFilter ?? 'ALL',
+    selectedTaskId: priorViewState?.selectedTaskId ?? null,
+    revision: (priorViewState?.revision ?? 0) + 1,
+  };
+}
+
 async function buyerDeadlinesResult(userId: string, propertyId: string, message: string, priorViewState: AskViewState | null | undefined): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s deadlines right now.');
@@ -5036,23 +5081,39 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
   const { overview } = data;
   const laneFilter = parseBuyerDeadlineLaneFilter(message, CLOSING_HOME_LANES);
   const activeLane = laneFilter ? overview.blockersByLane.find((lane) => lane.key === laneFilter) : null;
-  const upcomingMilestones = overview.milestones.filter((milestone) => milestone.status !== 'COMPLETED');
-  // B02 fix: milestones have no phase field at all (confirmed by direct
-  // read of closingTaskSummary/plan.milestones' own DTO shape) -- there is
-  // no canonical mapping from a milestone to one of these 4 lanes, so
-  // filtering them would require inventing one inside Ask rather than
-  // reusing a domain-owned mapping. Kept unfiltered and, when a lane
-  // filter is active, relabeled to disclose exactly that rather than
-  // silently implying they were scoped by the filter too.
-  const milestonesTitle = activeLane ? 'Purchase-wide milestones — not affected by this task-phase filter' : 'Upcoming milestones';
+  const activeMilestoneLane = laneFilter ? overview.milestonesByLane.find((lane) => lane.key === laneFilter) : null;
+  // B02 fix (milestone-filtering follow-up, per explicit user design
+  // decision): milestones now DO filter by lane, via a canonical
+  // BUYER_MILESTONE_TYPE_LANE mapping owned in HomeBuyerTask.service.ts,
+  // not invented here. DAY_30/60/90 and CUSTOM milestones have no lane
+  // mapping (genuinely post-closing, or arbitrary) -- these stay in their
+  // own always-shown "purchase-wide" section whenever a lane filter is
+  // active, disclosing that explicitly rather than silently omitting or
+  // mis-attributing them. Milestone counts are small and bounded (at most
+  // the 18 declared BuyerMilestoneType values per property), so unlike
+  // blockers/tasks (which can genuinely exceed their own cap), the
+  // resulting `.length` itself -- after excluding completed ones -- is a
+  // truthful count, not an understatement of a larger pre-cap total.
+  const { matching: matchingMilestones, unmapped: unmappedMilestones } = selectBuyerDeadlineMilestones(overview, laneFilter);
+  const milestonesTitle = activeMilestoneLane ? `${activeMilestoneLane.label} milestones` : 'Upcoming milestones';
   const blockerTasks = activeLane ? activeLane.items : overview.blockers;
   const blockerTotal = activeLane ? activeLane.total : overview.blockers.length;
   const blockersTitle = activeLane ? `${activeLane.label} blocking tasks` : 'Blocking before closing';
   const sections = [];
-  if (upcomingMilestones.length) {
+  if (matchingMilestones.length) {
     sections.push({
-      id: 'milestones', title: milestonesTitle, count: upcomingMilestones.length,
-      items: upcomingMilestones.map((milestone) => ({
+      id: 'milestones', title: milestonesTitle, count: matchingMilestones.length,
+      items: matchingMilestones.map((milestone) => ({
+        id: milestone.id, title: milestone.label, description: null,
+        meta: [humanDate(milestone.dueAt ? new Date(milestone.dueAt) : null) ? `Due ${humanDate(new Date(milestone.dueAt!))}` : 'No date recorded'],
+        status: milestone.status, href: planHref,
+      })),
+    });
+  }
+  if (unmappedMilestones.length) {
+    sections.push({
+      id: 'milestones-unmapped', title: 'Purchase-wide milestones — not affected by this filter', count: unmappedMilestones.length,
+      items: unmappedMilestones.map((milestone) => ({
         id: milestone.id, title: milestone.label, description: null,
         meta: [humanDate(milestone.dueAt ? new Date(milestone.dueAt) : null) ? `Due ${humanDate(new Date(milestone.dueAt!))}` : 'No date recorded'],
         status: milestone.status, href: planHref,
@@ -5069,19 +5130,13 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
       })),
     });
   }
-  const resultId = priorViewState?.resultId ?? randomUUID();
-  const viewState: AskViewState = {
-    resultId, domainScopePhrase: null, dateScopePhrase: null,
-    statusFilter: laneFilter ?? 'ALL',
-    selectedTaskId: priorViewState?.selectedTaskId ?? null,
-    revision: (priorViewState?.revision ?? 0) + 1,
-  };
+  const viewState = buildBuyerDeadlinesViewState(priorViewState, laneFilter);
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY',
     id: 'buyer-deadlines-summary',
     title: sections.length ? 'Recorded deadlines before closing' : 'Nothing recorded is putting closing at risk right now',
     body: sections.length
-      ? `${upcomingMilestones.length} milestone${upcomingMilestones.length === 1 ? '' : 's'} and ${blockerTotal} blocking task${blockerTotal === 1 ? '' : 's'}${activeLane ? ` match ${activeLane.label}` : ''} are open. Dates reflect what you or your professionals recorded, not a certified closing date.`
+      ? `${matchingMilestones.length} milestone${matchingMilestones.length === 1 ? '' : 's'} and ${blockerTotal} blocking task${blockerTotal === 1 ? '' : 's'}${activeLane ? ` match ${activeLane.label}` : ''} are open.${unmappedMilestones.length ? ` ${unmappedMilestones.length} additional milestone${unmappedMilestones.length === 1 ? '' : 's'} aren't scoped to a phase and are shown separately.` : ''} Dates reflect what you or your professionals recorded, not a certified closing date.`
       : 'No milestone or blocking task threatens this closing right now. This does not guarantee no deadline exists — only recorded ones are shown.',
     tone: blockerTotal ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],

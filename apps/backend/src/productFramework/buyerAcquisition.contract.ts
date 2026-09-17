@@ -851,6 +851,18 @@ const BuyerClosingHomeBlockersByLaneEntrySchema = z.strictObject({
   items: z.array(BuyerClosingHomeTaskSummarySchema),
 });
 
+// B02 milestone-filtering follow-up, per explicit user design decision:
+// mirrors BuyerClosingHomeBlockersByLaneEntrySchema's own shape exactly
+// (same pre-cap-total rationale), for BuyerMilestoneType instead of task
+// phase -- see HomeBuyerTask.service.ts's BUYER_MILESTONE_TYPE_LANE for
+// the canonical type->lane mapping this is computed from.
+const BuyerClosingHomeMilestonesByLaneEntrySchema = z.strictObject({
+  key: BuyerClosingHomeLaneKeySchema,
+  label: z.string().min(1),
+  total: z.number().int().nonnegative(),
+  items: z.array(BuyerClosingHomeMilestoneSchema),
+});
+
 export const BuyerNextActionGuidanceSchema = z.strictObject({
   actionId: z.string().min(1),
   rationale: z.string().min(1),
@@ -894,6 +906,8 @@ export const BuyerClosingHomeOverviewSchema = z.strictObject({
   upcomingDeadlines: z.array(BuyerClosingHomeDeadlineSchema).default([]),
   readinessLanes: z.array(BuyerClosingHomeReadinessLaneSchema),
   blockersByLane: z.array(BuyerClosingHomeBlockersByLaneEntrySchema),
+  milestonesByLane: z.array(BuyerClosingHomeMilestonesByLaneEntrySchema),
+  unmappedMilestones: z.array(BuyerClosingHomeMilestoneSchema),
   evidence: z.strictObject({
     inspectionState: z.enum(['NOT_STARTED', 'PROCESSING', 'REVIEW_PENDING', 'CONFIRMED']),
     inspectionReportCount: z.number().int().nonnegative(),
