@@ -4370,6 +4370,133 @@ function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title
   }
 }
 
+// FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md §14.2 ATT-104 / T03
+// fix (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md):
+// no operation in the 77-operation registry supported an all-property
+// attention view at all -- every attention operation is requiresProperty:
+// true, and no all-property/portfolio concept existed anywhere in the ask
+// services directory. Rather than changing HOME_ACTIONS's registry
+// contract (a `requiresProperty: false` change would ripple through
+// routing/execution creation and every other assumption that a Home
+// Actions turn always has exactly one property), this keeps the anchor
+// property required to invoke the operation at all, and adds an explicit,
+// message-detected "all my properties" mode inside the handler itself that
+// aggregates every property the homeowner can access -- additive and
+// backward compatible; an ordinary single-property ask is unaffected.
+const ALL_PROPERTY_ATTENTION_MAX_PROPERTIES = 10;
+
+export function isAllPropertyAttentionRequest(message: string): boolean {
+  return /\b(?:all (?:my |our )?(?:propert(?:y|ies)|homes)|across (?:all )?(?:my |our )?(?:propert(?:y|ies)|homes)|every propert(?:y|ies))\b/i.test(message);
+}
+
+// Deliberately the SAME owned+household-member access boundary
+// property.service.ts's own getUserProperties uses, but without its heavy
+// hydration (appliance/health-score/warranty enrichment this attention
+// view has no use for) -- the query itself is the access check, so no
+// separate per-property recheck is needed.
+async function accessiblePropertiesForAllPropertyAttention(userId: string): Promise<{ properties: { id: string; label: string }[]; totalAccessibleCount: number }> {
+  const homeownerProfile = await prisma.homeownerProfile.findFirst({ where: { userId }, select: { id: true } });
+  const [owned, memberships] = await Promise.all([
+    homeownerProfile
+      ? prisma.property.findMany({ where: { homeownerProfileId: homeownerProfile.id }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }], select: { id: true, name: true, address: true, city: true, state: true } })
+      : Promise.resolve([]),
+    prisma.householdMember.findMany({
+      where: { userId, ...(homeownerProfile ? { property: { homeownerProfileId: { not: homeownerProfile.id } } } : {}) },
+      select: { property: { select: { id: true, name: true, address: true, city: true, state: true } } },
+    }),
+  ]);
+  const all = [...owned, ...memberships.map((membership) => membership.property)];
+  return {
+    properties: all.slice(0, ALL_PROPERTY_ATTENTION_MAX_PROPERTIES).map((property) => ({ id: property.id, label: propertyLabel(property) })),
+    totalAccessibleCount: all.length,
+  };
+}
+
+// ATT-104: "All-property mode must label property on every item and cannot
+// merge records across properties." Each property's feed is computed via
+// its OWN full governed getHomeActionFeed call (the same canonical
+// pipeline the single-property view uses) and kept in its own GROUPED_LIST
+// section -- never re-ranked, re-deduplicated, or combined with another
+// property's items. Every item's href comes directly from that property's
+// own primaryCta, already scoped to its originating propertyId by
+// construction (confirmed true for the single-property view below), so no
+// cross-property action retargeting is possible. Returns null when there's
+// nothing distinct to aggregate (0 or 1 accessible property), letting the
+// caller fall through to the ordinary single-property read.
+async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: string): Promise<AskOperationResult | null> {
+  const { properties, totalAccessibleCount } = await accessiblePropertiesForAllPropertyAttention(userId);
+  if (properties.length <= 1) return null;
+
+  const perProperty = await Promise.all(properties.map(async (property) => {
+    try {
+      return { property, feed: await getHomeActionFeed(property.id, userId) };
+    } catch (error) {
+      logger.warn({ error, propertyId: property.id }, "[ask-orchestrator] all-property Home Actions: one property's feed failed, excluding it rather than failing the whole read");
+      return { property, feed: null };
+    }
+  }));
+
+  const sections = perProperty.map(({ property, feed }) => {
+    if (!feed) {
+      return {
+        id: `property-${property.id}`, title: property.label, count: 1,
+        items: [{ id: `property-${property.id}-unavailable`, title: "This property's actions are temporarily unavailable", description: 'Ask about this property individually to try again.', meta: [], status: 'UNAVAILABLE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
+      };
+    }
+    if (!feed.actions.length) {
+      return {
+        id: `property-${property.id}`, title: property.label, count: 1,
+        items: [{ id: `property-${property.id}-empty`, title: 'No governed actions are currently surfaced', description: null, meta: [], status: 'NONE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
+      };
+    }
+    return {
+      id: `property-${property.id}`, title: property.label, count: feed.actions.length,
+      items: feed.actions.slice(0, MAX_RESULT_ITEMS).map((action) => ({
+        id: action.id,
+        title: action.presentation?.headline ?? action.recommendedAction,
+        description: action.presentation?.summary ?? action.whyItMatters,
+        meta: [
+          action.priority === 'NOW' ? 'Now' : action.priority === 'SOON' ? 'Soon' : action.priority === 'PLAN' ? 'Plan' : 'Consider',
+          action.timing.dueAt ? `Due ${humanDate(new Date(action.timing.dueAt))}` : action.timing.rationale,
+          `${action.confidence.label.toLowerCase()} confidence`,
+        ].filter((value): value is string => Boolean(value)),
+        status: action.state,
+        href: action.primaryCta.href,
+      })),
+    };
+  });
+
+  const totalCount = perProperty.reduce((sum, { feed }) => sum + (feed?.actions.length ?? 0), 0);
+  const unavailableCount = perProperty.filter(({ feed }) => !feed).length;
+  const truncated = totalAccessibleCount > properties.length;
+
+  return {
+    status: unavailableCount > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: unavailableCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PARTIAL' : 'HOME_ACTION_ALL_PROPERTY_VIEW',
+    contextVersion: createHash('sha256').update(JSON.stringify(perProperty.map(({ property, feed }) => ({ id: property.id, count: feed?.actions.length ?? null, generatedAt: feed?.generatedAt ?? null })))).digest('hex'),
+    blocks: [{
+      type: 'SUMMARY', id: 'home-actions-all-property-summary',
+      title: totalCount > 0 ? `${totalCount} governed Home Action${totalCount === 1 ? '' : 's'} across ${properties.length} propert${properties.length === 1 ? 'y' : 'ies'}` : `No Home Actions are currently surfaced across your ${properties.length} properties`,
+      body: [
+        "Each property's actions come from that property's own governed feed and are never merged or reranked together.",
+        unavailableCount ? `${unavailableCount} propert${unavailableCount === 1 ? 'y is' : 'ies are'} temporarily unavailable and excluded above.` : null,
+        truncated ? `Showing the first ${properties.length} of ${totalAccessibleCount} accessible properties.` : null,
+      ].filter(Boolean).join(' '),
+      tone: 'DEFAULT',
+      actions: [{ id: 'open-home', label: 'Open Home', href: `/dashboard?propertyId=${encodeURIComponent(anchorPropertyId)}`, style: 'PRIMARY' }],
+    }, {
+      type: 'GROUPED_LIST', filters: [], id: 'home-actions-all-property-list', title: 'By property',
+      description: 'Grouped strictly by property. Items from different properties are never combined, deduplicated together, or reranked against each other; opening or acting on an item always applies to the specific property it belongs to.',
+      sections, actions: [],
+    }, {
+      type: 'BOUNDARY', id: 'home-actions-all-property-boundary', title: 'All-property view',
+      body: "This combines each property's own governed action feed for display only. It does not create a new ranked view, merge records across properties, or change which property an action applies to.",
+      severity: 'INFO', suggestions: [],
+    }],
+    suggestions: [],
+  };
+}
+
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const [access, buyerContextValue] = await Promise.all([
@@ -4385,6 +4512,11 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     ? buildBuyerPlanHomeActionsResult(buyerContextValue.data)
     : null;
   if (buyerResult) return buyerResult;
+
+  if (!focusedActionId && isAllPropertyAttentionRequest(message)) {
+    const allPropertyResult = await allPropertyHomeActionsResult(userId, propertyId);
+    if (allPropertyResult) return allPropertyResult;
+  }
 
   const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_ACTIONS', operationKey: 'VIEW_FEED' });
   const activeRequirement = evaluation.requirements[0];
