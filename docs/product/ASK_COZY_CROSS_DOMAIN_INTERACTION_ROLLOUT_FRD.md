@@ -1,10 +1,12 @@
 # Ask Cozy — Cross-Domain Interaction Rollout FRD
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** September 16, 2026
 **Status:** Proposed follow-on requirements; implementation is not claimed
 **Scope:** Apply the completed Ask Cozy interaction model beyond maintenance, domain by domain
 **Predecessor:** [Ask Cozy — Interaction Model & UI FRD](ASK_COZY_INTERACTION_MODEL_UI_FRD.md)
+
+**Revision 1.1:** Reorders delivery around an executable coverage audit, typed-dispatch coverage closure and five flagship interaction patterns; adds the Interaction Quality Harness; moves refinance ahead of Buyer; completes sell/hold/rent UX before adding goal families; and separates the read-only Attention MVP from dismiss/remind controls.
 
 ## 1. Purpose and authority
 
@@ -198,7 +200,7 @@ A homeowner can find home records, report information naturally, review the inte
 
 **REC-002:** A capture proposal displays the interpreted record type, property, provenance, confidence or uncertainty where useful, and every material value that will be written.
 
-**REC-003:** Date precision remains first-class. Editing a season/year, range or approximate date cannot silently convert it to an exact day.
+**REC-003:** Date precision remains first-class. Relative dates use the originating message timestamp and property timezone. Editing a season/year, range or approximate date cannot silently convert it to an exact day, and phrases such as “last summer” cannot be assigned a year when the supported interpretation remains materially ambiguous.
 
 **REC-004:** Fact, event, warranty and evidence candidates retain parent/child execution identity and declared relationships. Confirming one candidate cannot implicitly confirm a sibling unless the canonical transaction explicitly defines that atomic group.
 
@@ -219,7 +221,7 @@ A homeowner can find home records, report information naturally, review the inte
 | ID | Scenario | Required outcome |
 | --- | --- | --- |
 | R01 | Filter inventory or documents, open a record and return | Same result/view restored and revalidated; no substituted record |
-| R02 | Capture an approximate or ranged event date, then edit it | Precision retained; old proposal version rejected |
+| R02 | Capture an approximate, ranged or materially ambiguous relative event date, then edit it | Precision/uncertainty retained; no invented year/day; old proposal version rejected |
 | R03 | Capture an event with related warranty/evidence | Relationships explicit; only confirmed canonical effects occur |
 | R04 | Proposed fact conflicts with current canonical value | Conflict shown with sources; supported correction/selection path offered |
 | R05 | Correct a prior home event | New current revision and audit lineage; historical record retained |
@@ -528,52 +530,131 @@ At minimum, implementation must make it possible to measure:
 
 Analytics must not contain transcript text, document contents, sensitive proposal values or unrestricted identifiers beyond existing approved conventions.
 
-## 20. Delivery phases
+## 20. Interaction quality harness
 
-### Phase 0 — Operation and contract audit
+Correctness is necessary but does not establish that an interaction is understandable, efficient or pleasant. Each flagship journey therefore has a repeatable quality review in addition to its functional acceptance scenarios.
 
+**QLT-001:** Maintain golden homeowner journeys for maintenance action, conversational record capture, refinance decisioning, sell/hold/rent continuation and the read-only attention experience.
+
+**QLT-002:** Record turns to outcome, direct-control activations to outcome, clarification count, confirmation count, navigation count and recoverable errors encountered. These observations diagnose regressions; they are not universal KPI targets and never justify removing a domain-required confirmation.
+
+**QLT-003:** Record whether the interaction lost property, entity, result, proposal or durable-workflow context; appended a duplicate live surface; repeated a completed action; or required the homeowner to rediscover a module.
+
+**QLT-004:** Review information hierarchy, progressive disclosure, action hierarchy, density, conversation rhythm, transition continuity, mutation feedback, empty/degraded states and narrow-width behavior.
+
+**QLT-005:** The primary next action, when one exists, is visually and semantically clear. Secondary actions remain available without presenting every possible action at equal weight.
+
+**QLT-006:** Structured surfaces support the conversation rather than overwhelming it. The initial state shows the minimum information needed to understand the result and decide what to do next.
+
+**QLT-007:** A functionally correct journey still fails quality review when it introduces unnecessary turns, forms, pages, confirmations or repeated context gathering relative to the established baseline.
+
+**QLT-008:** Do not invent numeric pass thresholds without evidence from real use. Initially preserve annotated baselines and compare changes for regression, with reviewer reasoning recorded alongside measurements.
+
+**QLT-009:** Repeated successful patterns become a small Ask Cozy interaction-design reference—component usage, hierarchy, copy and transition guidance—not a parallel architecture or arbitrary generated design system.
+
+**QLT-010:** Browser review covers desktop, narrow viewport and keyboard-only use when an existing runnable environment is available. Slow request, failed request, stale target and property-switch behavior are exercised where the environment supports them. Lack of such an environment is reported, not hidden or worked around by provisioning one solely for this review.
+
+## 21. Delivery phases
+
+The sequence deliberately proves five different product capabilities before broad rollout: act, remember, decide, continue and anticipate.
+
+### Phase 0 — Executable operation and interaction coverage audit
+
+- Generate or mechanically verify a coverage matrix from the live `AskOperationId` registry rather than maintaining a document-only inventory.
 - Classify every operation in §7 against ROLL-001.
-- Identify canonical owner, role floor, confirmation rule, freshness/version source, idempotency mechanism and handoff destination.
+- Record interaction class, canonical owner, role floor, current UI surface, typed dispatch path, confirmation/edit behavior, freshness/version source, idempotency, reconciliation, handoff and static/database/browser verification level.
 - Record which operations already meet the shared interaction requirements and which require product or engineering work.
+- Add a drift check so a newly registered user-visible operation cannot remain unclassified silently.
 - Resolve conflicts between current code, domain FRDs and this document before implementation.
 
-**Exit:** a reviewed coverage matrix with no unclassified user-visible operation.
+**Exit:** an executable or mechanically checked coverage matrix with no unclassified user-visible operation and no status inferred solely from the presence of a backend handler.
 
-### Phase 1 — Records, capture and correction
+### Phase 0.5 — Typed-dispatch coverage closure
+
+- Audit every live direct control against the existing typed item dispatcher and the dedicated filter, refresh, confirmation/edit and navigation paths.
+- Preserve the current separation of concerns: confirmation/editing may remain on ConfirmationCard endpoints, navigation may remain a validated link, and record mutations may continue through AskExecution when that is required for receipt/reconciliation/history.
+- Ensure no rendered live control reaches an `UNSUPPORTED` outcome. A conceptual interaction type may remain unsupported only when no live control exposes it or when its blocking domain policy is explicitly documented.
+- Keep exhaustiveness checks so a new interaction type fails validation until assigned a safe dispatch outcome.
+
+**Exit:** every rendered direct control has a tested typed outcome; no generic text-routing fallback is the sole identity of a declared action.
+
+### Phase 1 — Interaction quality harness and maintenance flagship journey
+
+- Establish §20's golden-journey format and baseline the completed maintenance slice.
+- Review the full maintenance journey: query → filter → select → prepare reschedule → edit → confirm → reconcile → exact-task explanation → handoff → return.
+- Include desktop, narrow viewport, keyboard-only, failed/slow request, stale target and property-switch variants when an existing runnable environment is available.
+- Treat the predecessor FRD's existing unit, component, database and browser evidence as baseline; do not describe already-implemented A16/A23 continuity or typed dispatch as new implementation.
+
+**Exit:** the maintenance journey has a recorded functional and interaction-quality baseline, with any unexecuted live scenarios distinguished from missing implementation.
+
+### Phase 2 — Records, conversational capture and correction
 
 - Implement §9, including general typed proposal fields needed by the selected capture writers.
 - Prove related-candidate, conflict, correction, async-delivery and canonical-record handoff behavior.
+- Preserve temporal ambiguity and date precision; do not turn “last summer” into a specific year/day unless the supported interpretation is sufficiently grounded.
+- Add the capture journey to the interaction quality harness.
 
-**Exit:** R01–R10 pass for the selected canonical record types; unsupported writers remain explicitly non-actionable.
+**Exit:** R01–R10 pass for the selected canonical record types; unsupported writers remain explicitly non-actionable; the capture quality baseline is recorded.
 
-### Phase 2 — Buyer journey
+### Phase 3 — Refinance decision experience
 
-- Implement §10 across buyer read, task/action and lifecycle operations.
+- Deliver `REFINANCE_ANALYSIS` as the first focused §11 slice before the broader Buyer family.
+- Separate recorded facts, editable scenario assumptions, external observations, estimates and recommendations.
+- Support missing-context capture, recalculation, explanation, financial-workspace handoff and a separately declared monitor action.
+- Editing an analysis assumption must not silently overwrite a canonical mortgage fact or enable monitoring.
+- Add the refinance journey to the interaction quality harness.
+
+**Exit:** F01–F05, F07 and F08 pass for refinance, with monitor creation remaining a separate explicit action and the quality baseline recorded.
+
+### Phase 4 — Sell/hold/rent persistent-decision UX completion
+
+- Treat the existing DecisionThread create-or-resume and non-duplication implementation as baseline, not new backend work.
+- Complete and validate the user experience for progress, target timing, assumptions, open questions, missing context, changes since the prior visit and supported next actions.
+- Exercise cross-session return and unambiguous vague follow-up behavior.
+- Resolve whether direct `SELL_HOLD_RENT_ANALYSIS` attaches to an existing active family thread before changing that path.
+- Add the persistent-decision journey to the interaction quality harness.
+
+**Exit:** the relevant D01/D05/D07 and G02/G04/G07 scenarios pass for sell/hold/rent at the level claimed; live model/browser limitations remain explicit.
+
+### Phase 5 — Read-only “What needs my attention?” MVP
+
+- Implement the non-mutating portion of §14: aggregation, category, deterministic ordering, property boundary, exact source, observation time, uncertainty, explanation and existing domain action/navigation.
+- Do not expose `DISMISS`, `ALREADY_HANDLED` or `REMIND_LATER` in this phase.
+- Avoid a universal risk score and preserve required safety guidance.
+- Add the attention journey to the interaction quality harness.
+
+**Exit:** T01–T03 and T08–T10 pass without depending on unresolved attention-control semantics.
+
+### Phase 6 — Buyer journey
+
+- Implement §10 across buyer read, task/action and lifecycle operations after the list, capture, decision, persistent-workflow and attention primitives have proven reusable.
 - Reuse maintenance's list/action/reconciliation grammar while preserving Buyer Plan revisions and domain requirements.
 
 **Exit:** B01–B10 pass and the buyer operation family has no undeclared item mutation.
 
-### Phase 3 — Financial and decision workspaces
+### Phase 7 — Remaining decisions, projects and seller preparation
 
-- Implement §§11 and 13 for the approved operations.
+- Implement the remaining approved portions of §§11 and 13, including ownership/savings, HVAC, quote comparison, renovation readiness and seller-prep interactions.
 - Generalize editable scenario assumptions without turning analysis inputs into silent canonical writes.
 
-**Exit:** F01–F08 and D01–D08 pass for the selected slices.
+**Exit:** applicable F01–F08 and D01–D08 scenarios pass for the delivered slices.
 
-### Phase 4 — Protection and claims
+### Phase 8 — Protection and claims
 
-- Implement §12 with evidence/privacy review and exact incident/claim targeting.
+- Implement §12 only after lower-risk slices have proven the shared interaction grammar.
+- Include evidence/privacy review, exact incident/claim targeting, stale transitions, access loss and unknown-outcome recovery.
 
-**Exit:** P01–P08 pass, including stale transitions, access loss and unknown outcomes.
+**Exit:** P01–P08 pass.
 
-### Phase 5 — Cross-domain attention and proactive controls
+### Phase 9 — Full attention controls
 
-- Resolve the product decisions in §21 for scope/order/dismiss/reminder.
-- Implement §14 using existing domain assessments and notification policy.
+- Resolve the product decisions in §22 for dismissal, already-handled and reminder semantics.
+- Implement `DISMISS`, `ALREADY_HANDLED` and `REMIND_LATER` only for domains with explicit duration, scope, persistence, channel and underlying-record effects.
+- Reuse the read-only Attention MVP; do not create a second aggregation surface.
 
-**Exit:** T01–T10 pass without a universal model-generated risk score.
+**Exit:** T04–T07 pass and every exposed control has a tested typed dispatch outcome.
 
-### Phase 6 — Additional persistent goal family
+### Phase 10 — Additional persistent goal families
 
 - Verify the selected family's canonical adapter and identity policy.
 - Register a distinct goal operation and implement §15 without altering the sell/hold/rent identity contract.
@@ -582,7 +663,7 @@ Analytics must not contain transcript text, document contents, sensitive proposa
 
 Phases may proceed in parallel only where their shared contract changes do not overlap. A phase does not need a release flag or staged cohort solely because it is a phase in this document.
 
-## 21. Open product decisions
+## 22. Open product decisions
 
 These decisions block only their dependent behavior:
 
@@ -590,17 +671,18 @@ These decisions block only their dependent behavior:
 | --- | --- |
 | Cross-domain attention category precedence and tie-breaking | Phase 5 aggregation |
 | Selected-property versus all-property default and switching behavior | Phase 5 all-property view |
-| Dismiss duration, scope and persistence by domain/category | Exposing `DISMISS` |
-| Meaning of already handled for domains without a canonical completion operation | Exposing `ALREADY_HANDLED` |
-| Reminder duration presets, custom-time support and allowed channels | Exposing `REMIND_LATER` |
-| First additional goal family | Phase 6 implementation |
-| Whether direct analysis attaches to an existing family thread | Each decision family rollout |
-| Which proposal field types are justified by the first capture slices | Phase 1 shared proposal contract |
+| Dismiss duration, scope and persistence by domain/category | Phase 9 `DISMISS` exposure |
+| Meaning of already handled for domains without a canonical completion operation | Phase 9 `ALREADY_HANDLED` exposure |
+| Reminder duration presets, custom-time support and allowed channels | Phase 9 `REMIND_LATER` exposure |
+| Whether direct sell/hold/rent analysis attaches to an existing family thread | Phase 4 analysis/thread convergence |
+| First additional goal family | Phase 10 implementation |
+| Whether direct analysis attaches to an existing family thread | Each later decision-family rollout |
+| Which proposal field types are justified by the first capture slices | Phase 2 shared proposal contract |
 | Which destination filters warrant API expansion versus honest disclosure | Each domain handoff |
 
 Do not invent these answers in implementation. Unrelated tracks may proceed.
 
-## 22. Validation strategy
+## 23. Validation strategy
 
 Each phase must provide:
 
@@ -609,12 +691,13 @@ Each phase must provide:
 3. Focused tests for pure targeting, view-state, proposal-version and reconciliation logic.
 4. Domain service tests for authorization, idempotency, stale versions and canonical writes where an environment-independent setup exists.
 5. Component-level coverage for keyboard/focus, access redaction, validation retention and result continuity where practical.
-6. Browser acceptance for the phase's representative vertical slice when an existing runnable environment is available.
-7. Honest disclosure of database, provider, worker, browser or external-integration scenarios not executed.
+6. Interaction-quality review against the applicable §20 golden journey.
+7. Browser acceptance for the phase's representative vertical slice when an existing runnable environment is available.
+8. Honest disclosure of database, provider, worker, browser or external-integration scenarios not executed.
 
 Do not provision new services or weaken safeguards solely to satisfy this FRD. Runtime unavailability does not convert a code-path review into an executed acceptance test.
 
-## 23. Cross-domain acceptance gates
+## 24. Cross-domain acceptance gates
 
 A phase cannot be marked complete until all applicable gates pass:
 
@@ -630,17 +713,20 @@ A phase cannot be marked complete until all applicable gates pass:
 | Accessibility | Keyboard, labels, focus and announcements verified for representative flow |
 | Privacy | Access loss redacts; URLs/analytics avoid sensitive contents |
 | Next action | Relevant bounded set or intentionally none; no unauthorized/unavailable action |
+| Interaction quality | Golden journey reviewed; unnecessary turns/forms/navigation and lost context recorded; no unexplained regression from baseline |
 
-## 24. Definition of done for the program
+## 25. Definition of done for the program
 
 The cross-domain interaction rollout is complete when:
 
-- every user-visible `AskOperationId` is classified and either covered by a delivered domain slice, intentionally retained as a simple terminal/read response, or explicitly excluded with rationale;
+- every user-visible `AskOperationId` is classified by the executable coverage matrix and either covered by a delivered domain slice, intentionally retained as a simple terminal/read response, or explicitly excluded with rationale;
 - every declared direct control has a typed dispatch outcome and no live control falls into an unsupported branch;
 - every confirmation-capable operation has current-state, stale-version, duplicate-submit, unknown-outcome and receipt behavior appropriate to its domain;
 - all implemented handoffs have destination capability maps and tested return behavior;
-- cross-domain attention, dismissal and reminder semantics are implemented only after their policy decisions are recorded;
+- the read-only attention experience is delivered before dismissal/reminder controls, and those controls are implemented only after their policy decisions are recorded;
+- the sell/hold/rent persistent-decision experience has a quality baseline before additional goal-family expansion;
 - at least one additional persistent-goal family is delivered without duplicating or weakening sell/hold/rent behavior;
+- the flagship golden journeys have recorded quality baselines and unexplained interaction regressions are resolved;
 - the representative acceptance scenarios in each delivered track pass at the level actually claimed; and
 - documentation distinguishes implemented behavior, code-path/static verification, database verification and browser/runtime verification.
 
