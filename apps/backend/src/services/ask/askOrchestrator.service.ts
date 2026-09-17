@@ -4458,6 +4458,69 @@ async function accessiblePropertiesForAllPropertyAttention(userId: string): Prom
 // cross-property action retargeting is possible. Returns null when there's
 // nothing distinct to aggregate (0 or 1 accessible property), letting the
 // caller fall through to the ordinary single-property read.
+// T03 fix (ATT-104 "labels property on every item"): every item below --
+// including the unavailable/empty/degraded placeholders, not just real
+// actions -- gets the property's own label as the FIRST entry of its own
+// meta array, not only as the section's title. A section title is lost the
+// moment an item is read or displayed independent of its GROUPED_LIST
+// wrapper (a flattened list, a screen reader landing directly on a result);
+// each item now carries its own property attribution regardless.
+// T08 fix (all-property mode): the single-property path's
+// diagnostics.unavailableProducers disclosure never got reached here
+// because allPropertyHomeActionsResult is an early return, before that code
+// runs. Each property's own feed.diagnostics.unavailableProducers is now
+// read directly (same field, same formatUnavailableHomeActionProducers
+// helper T08 already built) and surfaced as an explicit CAUTION item, so a
+// property whose feed call SUCCEEDS but has a degraded producer no longer
+// renders as indistinguishable from a fully healthy one.
+// Extracted as a pure function (feed already fetched, no I/O) so this logic
+// is directly unit-testable without DB mocking, same convention as
+// mergeEvidence/isCapitalTimelineAnalysisStale/formatUnavailableHomeActionProducers.
+export function buildAllPropertyHomeActionSection(
+  property: { id: string; label: string },
+  feed: Awaited<ReturnType<typeof getHomeActionFeed>> | null,
+) {
+  if (!feed) {
+    return {
+      id: `property-${property.id}`, title: property.label, count: 1,
+      items: [{ id: `property-${property.id}-unavailable`, title: "This property's actions are temporarily unavailable", description: 'Ask about this property individually to try again.', meta: [property.label], status: 'UNAVAILABLE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
+    };
+  }
+  const degradedItems = feed.diagnostics.unavailableProducers.length ? [{
+    id: `property-${property.id}-degraded`,
+    title: 'Some information for this property is temporarily limited',
+    description: `${formatUnavailableHomeActionProducers(feed.diagnostics.unavailableProducers)} could not be checked for this property right now. The items below still reflect every other source.`,
+    meta: [property.label],
+    status: 'CAUTION',
+    href: `/dashboard?propertyId=${encodeURIComponent(property.id)}`,
+  }] : [];
+  if (!feed.actions.length) {
+    return {
+      id: `property-${property.id}`, title: property.label, count: 1 + degradedItems.length,
+      items: [...degradedItems, { id: `property-${property.id}-empty`, title: 'No governed actions are currently surfaced', description: null, meta: [property.label], status: 'NONE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
+    };
+  }
+  return {
+    id: `property-${property.id}`, title: property.label, count: feed.actions.length,
+    items: [
+      ...degradedItems,
+      ...feed.actions.slice(0, MAX_RESULT_ITEMS).map((action) => ({
+        id: action.id,
+        title: action.presentation?.headline ?? action.recommendedAction,
+        description: action.presentation?.summary ?? action.whyItMatters,
+        meta: [
+          property.label,
+          action.priority === 'NOW' ? 'Now' : action.priority === 'SOON' ? 'Soon' : action.priority === 'PLAN' ? 'Plan' : 'Consider',
+          action.timing.dueAt ? `Due ${humanDate(new Date(action.timing.dueAt))}` : action.timing.rationale,
+          `${action.confidence.label.toLowerCase()} confidence`,
+        ].filter((value): value is string => Boolean(value)),
+        status: action.state,
+        href: action.primaryCta.href,
+      })),
+    ],
+  };
+}
+
 async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: string): Promise<AskOperationResult | null> {
   const { properties, totalAccessibleCount } = await accessiblePropertiesForAllPropertyAttention(userId);
   if (properties.length <= 1) return null;
@@ -4471,53 +4534,27 @@ async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: st
     }
   }));
 
-  const sections = perProperty.map(({ property, feed }) => {
-    if (!feed) {
-      return {
-        id: `property-${property.id}`, title: property.label, count: 1,
-        items: [{ id: `property-${property.id}-unavailable`, title: "This property's actions are temporarily unavailable", description: 'Ask about this property individually to try again.', meta: [], status: 'UNAVAILABLE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
-      };
-    }
-    if (!feed.actions.length) {
-      return {
-        id: `property-${property.id}`, title: property.label, count: 1,
-        items: [{ id: `property-${property.id}-empty`, title: 'No governed actions are currently surfaced', description: null, meta: [], status: 'NONE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
-      };
-    }
-    return {
-      id: `property-${property.id}`, title: property.label, count: feed.actions.length,
-      items: feed.actions.slice(0, MAX_RESULT_ITEMS).map((action) => ({
-        id: action.id,
-        title: action.presentation?.headline ?? action.recommendedAction,
-        description: action.presentation?.summary ?? action.whyItMatters,
-        meta: [
-          action.priority === 'NOW' ? 'Now' : action.priority === 'SOON' ? 'Soon' : action.priority === 'PLAN' ? 'Plan' : 'Consider',
-          action.timing.dueAt ? `Due ${humanDate(new Date(action.timing.dueAt))}` : action.timing.rationale,
-          `${action.confidence.label.toLowerCase()} confidence`,
-        ].filter((value): value is string => Boolean(value)),
-        status: action.state,
-        href: action.primaryCta.href,
-      })),
-    };
-  });
+  const sections = perProperty.map(({ property, feed }) => buildAllPropertyHomeActionSection(property, feed));
 
   const totalCount = perProperty.reduce((sum, { feed }) => sum + (feed?.actions.length ?? 0), 0);
   const unavailableCount = perProperty.filter(({ feed }) => !feed).length;
+  const degradedCount = perProperty.filter(({ feed }) => feed && feed.diagnostics.unavailableProducers.length > 0).length;
   const truncated = totalAccessibleCount > properties.length;
 
   return {
-    status: unavailableCount > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: unavailableCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PARTIAL' : 'HOME_ACTION_ALL_PROPERTY_VIEW',
-    contextVersion: createHash('sha256').update(JSON.stringify(perProperty.map(({ property, feed }) => ({ id: property.id, count: feed?.actions.length ?? null, generatedAt: feed?.generatedAt ?? null })))).digest('hex'),
+    status: unavailableCount > 0 || degradedCount > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: unavailableCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PARTIAL' : degradedCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PRODUCER_UNAVAILABLE' : 'HOME_ACTION_ALL_PROPERTY_VIEW',
+    contextVersion: createHash('sha256').update(JSON.stringify(perProperty.map(({ property, feed }) => ({ id: property.id, count: feed?.actions.length ?? null, generatedAt: feed?.generatedAt ?? null, unavailableProducers: feed?.diagnostics.unavailableProducers ?? null })))).digest('hex'),
     blocks: [{
       type: 'SUMMARY', id: 'home-actions-all-property-summary',
       title: totalCount > 0 ? `${totalCount} governed Home Action${totalCount === 1 ? '' : 's'} across ${properties.length} propert${properties.length === 1 ? 'y' : 'ies'}` : `No Home Actions are currently surfaced across your ${properties.length} properties`,
       body: [
         "Each property's actions come from that property's own governed feed and are never merged or reranked together.",
         unavailableCount ? `${unavailableCount} propert${unavailableCount === 1 ? 'y is' : 'ies are'} temporarily unavailable and excluded above.` : null,
+        degradedCount ? `${degradedCount} propert${degradedCount === 1 ? 'y has' : 'ies have'} some information temporarily limited (see the notes in that property's own section).` : null,
         truncated ? `Showing the first ${properties.length} of ${totalAccessibleCount} accessible properties.` : null,
       ].filter(Boolean).join(' '),
-      tone: 'DEFAULT',
+      tone: unavailableCount > 0 || degradedCount > 0 ? 'CAUTION' : 'DEFAULT',
       actions: [{ id: 'open-home', label: 'Open Home', href: `/dashboard?propertyId=${encodeURIComponent(anchorPropertyId)}`, style: 'PRIMARY' }],
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'home-actions-all-property-list', title: 'By property',
