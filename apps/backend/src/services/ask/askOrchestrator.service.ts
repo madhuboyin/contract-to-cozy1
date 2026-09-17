@@ -5008,7 +5008,7 @@ function buyerTaskVersion(task: { id: string; status: HomeBuyerTaskStatus; userE
   return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, userEditedAt: task.userEditedAt })).digest('hex');
 }
 
-async function buyerTaskCompleteResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function buyerTaskCompleteResult(userId: string, propertyId: string, message: string, sourceExecutionId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const planHref = buyerPlanHref(propertyId);
   if (access.role === HouseholdRole.VIEWER) {
@@ -5057,6 +5057,11 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
       buyerTaskId: matched.id,
       buyerTaskTitle: matched.title,
       buyerTaskVersion: buyerTaskVersion(matched),
+      // B03 fix: carried to confirm-time so the source list (if this came
+      // from a row action) can be refreshed in place after the completion
+      // succeeds -- see confirmBuyerTaskComplete, mirroring B04's own
+      // BUYER_TASK_UPDATE pattern.
+      sourceExecutionId: sourceExecutionId ?? null,
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
     },
@@ -7528,7 +7533,7 @@ registerCapabilityHandler('buyer.plan.status', async (envelope) => buyerPlanStat
 registerCapabilityHandler('buyer.deadlines', async (envelope) => buyerDeadlinesResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.document-readiness', async (envelope) => buyerDocumentReadinessResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.inspection-review', async (envelope) => buyerInspectionReviewResult(envelope.userId, envelope.propertyId!));
-registerCapabilityHandler('buyer.task.complete', async (envelope) => buyerTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('buyer.task.complete', async (envelope) => buyerTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('buyer.task.create', async (envelope) => buyerTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('buyer.task.update', async (envelope) => buyerTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('buyer.move-status', async (envelope) => buyerMoveStatusResult(envelope.userId, envelope.propertyId!));
@@ -10077,6 +10082,12 @@ async function refreshAskSourceExecution(userId: string, currentExecutionId: str
 // operations are even eligible siblings.
 export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly AskOperationId[]>> = {
   BUYER_TASK_UPDATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
+  // B03 fix: BUYER_TASK_COMPLETE previously called no reconciliation
+  // mechanism at all (not even the single-target one BUYER_TASK_UPDATE had
+  // before B04) -- completing a task changes the same BUYER_PLAN_STATUS/
+  // BUYER_DEADLINES membership/counts a reschedule does, so it shares the
+  // exact same sibling set.
+  BUYER_TASK_COMPLETE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
 };
 
 // Pure decision core, extracted for direct unit testing (same convention as
@@ -10085,17 +10096,22 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
 // itself a move task -- same taskType === 'MOVE' field buyerMoveStatusResult
 // already filters on, not a new heuristic. Any other sibling map entry
 // (added for other operations later) is unconditional.
-export function siblingOperationIdsForBuyerTaskUpdate(baseSiblings: readonly AskOperationId[], taskType: string | null | undefined): readonly AskOperationId[] {
+export function siblingOperationIdsForBuyerTaskMutation(baseSiblings: readonly AskOperationId[], taskType: string | null | undefined): readonly AskOperationId[] {
   return taskType === 'MOVE' ? [...baseSiblings, 'BUYER_MOVE_STATUS'] : baseSiblings;
 }
 
+// BUYER_TASK_UPDATE and BUYER_TASK_COMPLETE both store the mutated task's id
+// as parameters.buyerTaskId (confirmed by direct read of both propose-time
+// functions) -- the move-task lookup below is keyed on that shared field
+// name, not a per-operation branch, so any current or future buyer-task
+// mutation using the same field automatically gets the same conditional
+// sibling without needing its own case here.
 async function impactedSiblingOperationIds(execution: AskExecution, parameters: Record<string, unknown>): Promise<readonly AskOperationId[]> {
   const declared = execution.operationId ? ASK_MUTATION_IMPACT_MAP[execution.operationId as AskOperationId] ?? [] : [];
-  if (execution.operationId !== 'BUYER_TASK_UPDATE') return declared;
   const taskId = parameters.buyerTaskId;
   if (typeof taskId !== 'string' || !execution.propertyId) return declared;
   const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } }, select: { taskType: true } });
-  return siblingOperationIdsForBuyerTaskUpdate(declared, task?.taskType);
+  return siblingOperationIdsForBuyerTaskMutation(declared, task?.taskType);
 }
 
 const ASK_SIBLING_REFRESH_ELIGIBLE_STATUSES: readonly AskExecutionStatus[] = ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NOT_APPLICABLE', 'BLOCKED', 'NEEDS_ENTITY'];
@@ -10339,7 +10355,21 @@ async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<
     };
     artifactType = 'HOME_BUYER_TASK';
     artifactId = updated.id;
-  return { result, artifactType, artifactId };
+    // B03 fix: previously called no reconciliation mechanism at all -- not
+    // even the single-target one BUYER_TASK_UPDATE had before B04.
+    // Completing a task changes the same BUYER_PLAN_STATUS/BUYER_DEADLINES
+    // membership/counts a reschedule does, so it shares B04's exact
+    // mechanism (reconcileAskExecutionSideEffects), not a new one.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `buyer-task-list-refresh-failed-${updated.id}`, title: 'Saved; list could not refresh',
+        body: 'This completion was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmBuyerTaskCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;

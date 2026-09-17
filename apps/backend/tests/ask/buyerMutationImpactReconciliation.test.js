@@ -14,7 +14,7 @@ require('ts-node/register');
 // applied throughout this audit series.
 const {
   ASK_MUTATION_IMPACT_MAP,
-  siblingOperationIdsForBuyerTaskUpdate,
+  siblingOperationIdsForBuyerTaskMutation,
   selectSiblingRefreshTargets,
   capReconciledChildExecutions,
 } = require('../../src/services/ask/askOrchestrator.service.ts');
@@ -23,16 +23,24 @@ test('BUYER_TASK_UPDATE declares BUYER_PLAN_STATUS and BUYER_DEADLINES as siblin
   assert.deepEqual(ASK_MUTATION_IMPACT_MAP.BUYER_TASK_UPDATE, ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES']);
 });
 
+// B03 fix: BUYER_TASK_COMPLETE previously called no reconciliation
+// mechanism at all -- shares the same sibling set as BUYER_TASK_UPDATE
+// since completing a task changes the same BUYER_PLAN_STATUS/
+// BUYER_DEADLINES membership/counts a reschedule does.
+test('BUYER_TASK_COMPLETE declares the same BUYER_PLAN_STATUS/BUYER_DEADLINES siblings', () => {
+  assert.deepEqual(ASK_MUTATION_IMPACT_MAP.BUYER_TASK_COMPLETE, ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES']);
+});
+
 test('a move task adds BUYER_MOVE_STATUS to the base sibling set', () => {
   const base = ASK_MUTATION_IMPACT_MAP.BUYER_TASK_UPDATE;
-  assert.deepEqual(siblingOperationIdsForBuyerTaskUpdate(base, 'MOVE'), ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_MOVE_STATUS']);
+  assert.deepEqual(siblingOperationIdsForBuyerTaskMutation(base, 'MOVE'), ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_MOVE_STATUS']);
 });
 
 test('a non-move task (or unknown/null taskType) leaves the base sibling set unchanged', () => {
   const base = ASK_MUTATION_IMPACT_MAP.BUYER_TASK_UPDATE;
-  assert.deepEqual(siblingOperationIdsForBuyerTaskUpdate(base, 'ACTION'), base);
-  assert.deepEqual(siblingOperationIdsForBuyerTaskUpdate(base, null), base);
-  assert.deepEqual(siblingOperationIdsForBuyerTaskUpdate(base, undefined), base);
+  assert.deepEqual(siblingOperationIdsForBuyerTaskMutation(base, 'ACTION'), base);
+  assert.deepEqual(siblingOperationIdsForBuyerTaskMutation(base, null), base);
+  assert.deepEqual(siblingOperationIdsForBuyerTaskMutation(base, undefined), base);
 });
 
 test('selectSiblingRefreshTargets excludes rows with no operationId', () => {
