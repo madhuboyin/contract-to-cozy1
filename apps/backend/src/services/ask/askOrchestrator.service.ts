@@ -1,5 +1,5 @@
 import { getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
-import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
+import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, BuyerPlanPriority, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -1040,6 +1040,50 @@ function maintenanceConflictDescription(task: { title: string; status: Maintenan
   const priorityPhrase = `${task.priority.toLowerCase()} priority`;
   const duePhrase = task.nextDueDate ? `due ${humanDate(task.nextDueDate) ?? 'on an unrecorded date'}` : 'unscheduled';
   return `"${task.title}" changed in another session before this could be confirmed -- it ${statusPhrase ? `${statusPhrase}, ` : ''}is now ${priorityPhrase} and ${duePhrase}. Review its current state and try again.`;
+}
+
+// B06 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
+// confirmBuyerTaskUpdate/confirmBuyerTaskComplete previously threw a static
+// "This task changed while the confirmation was open. Review its current
+// status and try again." on every conflict, regardless of operation or
+// what actually changed -- the shared generic error-catch wrapper renders
+// error.message directly as the WORKFLOW_PROGRESS block's description with
+// details/actions hardcoded empty, so a static message IS the entire
+// disclosure. Mirrors maintenanceConflictDescription's own shape exactly
+// (same "already completed/cancelled" special cases, same "current
+// status, priority and due date" fallback), adapted to Buyer's own
+// HomeBuyerTaskStatus/BuyerPlanPriority enums rather than Maintenance's.
+export function buyerTaskConflictDescription(task: { title: string; status: HomeBuyerTaskStatus; priority: BuyerPlanPriority; dueAt: Date | null }): string {
+  if (task.status === 'COMPLETED') {
+    return `"${task.title}" was already completed in another session. No further action was taken here.`;
+  }
+  if (task.status === 'CANCELLED') {
+    return `"${task.title}" was cancelled in another session before this change could be applied.`;
+  }
+  if (task.status === 'NOT_NEEDED') {
+    return `"${task.title}" was marked not needed in another session before this change could be applied.`;
+  }
+  const statusPhrase = task.status === 'IN_PROGRESS'
+    ? 'is now in progress'
+    : task.status === 'BLOCKED'
+      ? 'is now blocked'
+      : null;
+  const priorityPhrase = `${task.priority.toLowerCase()} priority`;
+  const duePhrase = task.dueAt ? `due ${humanDate(task.dueAt) ?? 'on an unrecorded date'}` : 'unscheduled';
+  return `"${task.title}" changed in another session before this could be confirmed -- it ${statusPhrase ? `${statusPhrase}, ` : ''}is now ${priorityPhrase} and ${duePhrase}. Review its current state and try again.`;
+}
+
+// Shared with confirmBuyerFindingDisposition's own result copy, so the
+// conflict message and the eventual success message describe a
+// disposition the same way, not two independently-maintained label sets.
+const BUYER_FINDING_DISPOSITION_LABELS: Record<string, string> = {
+  VERIFIED_FACT: 'verified fact', PRE_CLOSE_NEGOTIATION: 'seller negotiation', POST_CLOSE_ACTION: 'post-close work', DISMISSED: 'dismissed', PENDING_REVIEW: 'pending review',
+};
+
+export function buyerFindingConflictDescription(finding: { homeSystem: string; subsystem: string | null; buyerDisposition: string }): string {
+  const label = [finding.homeSystem, finding.subsystem].filter(Boolean).join(' ');
+  const dispositionLabel = BUYER_FINDING_DISPOSITION_LABELS[finding.buyerDisposition] ?? finding.buyerDisposition;
+  return `"${label}" changed in another session before this could be confirmed -- it is now classified as ${dispositionLabel}. Review its current state and try again.`;
 }
 
 function maintenanceCompletionSubject(message: string): string {
@@ -10441,7 +10485,7 @@ async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<
       || task.status === 'CANCELLED'
       || task.status === 'NOT_NEEDED'
       || parameters.buyerTaskVersion !== buyerTaskVersion(task))) {
-      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      const error = new Error(buyerTaskConflictDescription(task));
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
@@ -10551,7 +10595,7 @@ async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<Co
     }
     const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } } });
     if (!task || parameters.buyerTaskVersion !== buyerTaskVersion(task)) {
-      const error = new Error('This task changed while the confirmation was open. Review its current status and try again.');
+      const error = new Error(task ? buyerTaskConflictDescription(task) : 'The selected Buyer Plan task is no longer available.');
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
@@ -10625,14 +10669,14 @@ async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Pr
     const expectedFindingVersion = parameters.buyerFindingVersion;
     const currentFindingVersion = finding.buyerDispositionAt ? finding.buyerDispositionAt.toISOString() : null;
     if (expectedFindingVersion !== currentFindingVersion) {
-      const error = new Error('This finding changed while the confirmation was open. Review its current status and try again.');
+      const error = new Error(buyerFindingConflictDescription(finding));
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
     const dispositionResult = await BuyerAcquisitionService.dispositionFinding(userId, execution.propertyId, finding.id, {
       disposition: disposition as Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>,
     });
-    const dispositionLabel = ({ VERIFIED_FACT: 'verified fact', PRE_CLOSE_NEGOTIATION: 'seller negotiation', POST_CLOSE_ACTION: 'post-close work', DISMISSED: 'dismissed' } as Record<string, string>)[disposition] ?? disposition;
+    const dispositionLabel = BUYER_FINDING_DISPOSITION_LABELS[disposition] ?? disposition;
     const inspectionHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection-hub`;
     result = {
       status: 'COMPLETED', reasonCode: 'BUYER_FINDING_DISPOSITIONED', contextVersion: dispositionResult.finding.buyerDispositionAt?.toISOString() ?? null,
