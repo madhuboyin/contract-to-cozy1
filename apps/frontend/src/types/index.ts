@@ -2123,7 +2123,10 @@ export interface PropertyRecordOverviewDTO {
   };
   sections: {
     rooms: PropertyRecordLoadState<{ count: number; items: Array<{ id: string; name: string; type: string | null; updatedAt: string }> }>;
-    inventory: PropertyRecordLoadState<{ totalCount: number; majorSystemCount: number; verifiedCount: number; withDocumentCount: number }>;
+    inventory: PropertyRecordLoadState<{
+      totalCount: number; majorSystemCount: number; verifiedCount: number; withDocumentCount: number;
+      items: Array<{ id: string; name: string; category: string; condition: string; isVerified: boolean; updatedAt: string }>;
+    }>;
     documents: PropertyRecordLoadState<{
       totalCount: number;
       verifiedCount: number;
@@ -2141,7 +2144,10 @@ export interface PropertyRecordOverviewDTO {
       byType: Array<{ type: string; count: number }>;
       latest: { id: string; name: string; type: string; verificationStatus: string; createdAt: string } | null;
     }>;
-    household: PropertyRecordLoadState<{ totalCount: number; roles: Array<{ role: string; count: number }> }>;
+    household: PropertyRecordLoadState<{
+      totalCount: number; roles: Array<{ role: string; count: number }>;
+      items: Array<{ id: string; userId: string; role: HouseholdRole; isPrimaryOwner: boolean; joinedAt: string; displayName: string | null; user: { firstName: string; lastName: string; email: string } }>;
+    }>;
   };
   tools: {
     eligibility: Record<string, { state: 'ELIGIBLE' | 'NEEDS_CONTEXT'; reasons: string[]; releaseStage: 'ACTIVE' | 'BETA'; rolloutKey: string }>;

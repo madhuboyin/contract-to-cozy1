@@ -63,8 +63,13 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, type: true, verificationStatus: true, propertyId: true, inventoryItemId: true, createdAt: true },
     })),
-    settled(prisma.householdMember.groupBy({
-      by: ['role'], where: { propertyId }, _count: { _all: true },
+    settled(prisma.householdMember.findMany({
+      where: { propertyId },
+      orderBy: [{ isPrimaryOwner: 'desc' }, { joinedAt: 'asc' }],
+      select: {
+        id: true, userId: true, role: true, isPrimaryOwner: true, joinedAt: true, displayName: true,
+        user: { select: { firstName: true, lastName: true, email: true } },
+      },
     })),
     settled(prisma.homeCapitalTimelineAnalysis.findFirst({
       where: { propertyId }, orderBy: { computedAt: 'desc' },
@@ -168,6 +173,7 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
         majorSystemCount: majorSystems.length,
         verifiedCount: itemRows.filter((item) => item.isVerified).length,
         withDocumentCount: itemRows.filter((item) => item.documents.length > 0).length,
+        items: itemRows,
       }) : unavailable(),
       documents: documents.status === 'AVAILABLE' ? available({
         totalCount: documentRows.length,
@@ -182,8 +188,12 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
         latest: latestDocument,
       }) : unavailable(),
       household: household.status === 'AVAILABLE' ? available({
-        totalCount: householdRows.reduce((sum, row) => sum + row._count._all, 0),
-        roles: householdRows.map((row) => ({ role: row.role, count: row._count._all })),
+        totalCount: householdRows.length,
+        roles: Object.entries(householdRows.reduce<Record<string, number>>((acc, member) => {
+          acc[member.role] = (acc[member.role] ?? 0) + 1;
+          return acc;
+        }, {})).map(([role, count]) => ({ role, count })),
+        items: householdRows,
       }) : unavailable(),
     },
     tools: {

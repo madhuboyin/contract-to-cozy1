@@ -4606,18 +4606,42 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         { id: 'roof', values: { fact: 'Roof type', value: readablePropertyValue(property.roofType) } },
       ],
       actions: [],
-    }, {
-      type: 'GROUPED_LIST', filters: [], id: 'property-record-sections', title: 'What the record contains',
-      description: 'Counts describe canonical records available to this household member.',
-      sections: [{
-        id: 'record-sections', title: 'Living Home Record', count: 2,
-        items: [
-          { id: 'inventory', title: 'Systems and inventory', description: inventory ? `${inventory.totalCount} items · ${inventory.majorSystemCount} major systems · ${inventory.verifiedCount} verified` : 'Temporarily unavailable', meta: inventory ? [`${inventory.withDocumentCount} with documents`] : [], status: inventory ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/inventory` },
-          { id: 'household', title: 'Household access', description: household ? `${household.totalCount} household member${household.totalCount === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: household?.roles.map((role) => `${role.count} ${role.role.toLowerCase()}`) ?? [], status: household ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/household` },
-        ],
-      }],
-      actions: [],
     });
+    if (inventory) {
+      blocks.push({
+        type: 'GROUPED_LIST', filters: [], id: 'property-inventory', title: 'Systems and inventory',
+        description: inventory.totalCount > 50
+          ? 'Showing the first 50 canonical inventory records. Open home inventory for the full collection.'
+          : 'Select an item to inspect its current canonical details without leaving Ask Cozy.',
+        sections: [{
+          id: 'inventory', title: 'Recorded items', count: inventory.totalCount,
+          items: inventory.items.slice(0, 50).map((item) => ({
+            id: item.id, title: item.name, description: null, entityType: 'INVENTORY_ITEM', href: null,
+            status: item.isVerified ? 'VERIFIED' : null,
+            meta: [readablePropertyValue(item.category), readablePropertyValue(item.condition), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`],
+          })),
+        }],
+        actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `${propertyHref}/inventory`, style: 'SECONDARY' }],
+      });
+    }
+    if (household) {
+      blocks.push({
+        type: 'GROUPED_LIST', filters: [], id: 'property-household', title: 'Household access',
+        description: household.totalCount > 50
+          ? 'Showing the first 50 canonical household members. Open household access for the full collection.'
+          : 'Select a household member to inspect their current canonical role without leaving Ask Cozy.',
+        sections: [{
+          id: 'household', title: 'Household members', count: household.totalCount,
+          items: household.items.slice(0, 50).map((member) => ({
+            id: member.id, title: member.displayName?.trim() || `${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email,
+            description: null, entityType: 'HOUSEHOLD_MEMBER', href: null,
+            status: member.isPrimaryOwner ? 'PRIMARY OWNER' : null,
+            meta: [readablePropertyValue(member.role), `Joined ${humanDate(member.joinedAt) ?? 'date unavailable'}`],
+          })),
+        }],
+        actions: [{ id: 'open-household', label: 'Open household access', href: `${propertyHref}/household`, style: 'SECONDARY' }],
+      });
+    }
     if (rooms) {
       blocks.push({
         type: 'GROUPED_LIST', filters: [], id: 'property-rooms', title: 'Rooms',

@@ -6,6 +6,7 @@ import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompa
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
+import { HouseholdResultList } from '../HouseholdResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
 import { RoomResultList } from '../RoomResultList';
@@ -103,20 +104,23 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   );
 }
 
-// Four bespoke rendering exceptions in the whole registry: a
-// `GROUPED_LIST` block with id `maintenance-groups`; one of Inventory's
-// two item-detail-eligible ids (`inventory-results`, the primary result,
-// and `inventory-entity-selection`, the disambiguation list -- both list
-// the same INVENTORY_ITEM entity shape, so both open the same inline
-// detail); one of the HomeEvent detail blocks (`inventory-history`, events
-// linked to an inventory item, or `property-recent-events`, events surfaced
-// by PROPERTY_SUMMARY -- a different entity type, so its own component); or
-// `property-rooms` (canonical InventoryRoom records from PROPERTY_SUMMARY);
-// or `document-lookup-groups` / `property-documents` (canonical documents
-// surfaced by DOCUMENT_LOOKUP or PROPERTY_SUMMARY). All
-// are still registered under the single `GROUPED_LIST` type (see
-// ./registry.tsx) -- the split is by block id, not a second block type.
-const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection']);
+// Five bespoke rendering exceptions in the whole registry: a
+// `GROUPED_LIST` block with id `maintenance-groups`; Inventory's
+// item-detail-eligible ids (`inventory-results`, the primary result;
+// `inventory-entity-selection`, the disambiguation list; and
+// `property-inventory`, PROPERTY_SUMMARY's own bounded collection -- all
+// three list the same INVENTORY_ITEM entity shape, so all three open the
+// same inline detail); one of the HomeEvent detail blocks (`inventory-history`,
+// events linked to an inventory item, or `property-recent-events`, events
+// surfaced by PROPERTY_SUMMARY -- a different entity type, so its own
+// component); `property-rooms` (canonical InventoryRoom records from
+// PROPERTY_SUMMARY); `document-lookup-groups` / `property-documents`
+// (canonical documents surfaced by DOCUMENT_LOOKUP or PROPERTY_SUMMARY);
+// or `property-household` (canonical HouseholdMember records from
+// PROPERTY_SUMMARY). All are still registered under the single
+// `GROUPED_LIST` type (see ./registry.tsx) -- the split is by block id,
+// not a second block type.
+const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection', 'property-inventory']);
 const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-recent-events']);
 
 export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
@@ -139,6 +143,10 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }
   if (block.id === 'document-lookup-groups' || block.id === 'property-documents') {
     return <DocumentResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  if (block.id === 'property-household') {
+    return <HouseholdResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

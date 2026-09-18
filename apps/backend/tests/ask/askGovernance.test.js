@@ -190,6 +190,41 @@ test('Property Summary declares bounded Document identities for inline detail an
   assert.match(overview, /linkedCount: linkedDocuments,[\s\S]*items: documentRows/);
 });
 
+test('Property Summary declares bounded InventoryItem identities for inline detail and a separate inventory choice', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const start = orchestrator.indexOf("id: 'property-inventory'");
+  const end = orchestrator.indexOf("if (household)", start);
+  assert.ok(start > 0 && end > start, 'property-inventory producer not found');
+  const producer = orchestrator.slice(start, end);
+  assert.match(producer, /inventory\.items\.slice\(0, 50\)/);
+  assert.match(producer, /id: item\.id[\s\S]*entityType: 'INVENTORY_ITEM'[\s\S]*href: null/);
+  assert.match(producer, /id: 'open-inventory'[\s\S]*label: 'Open home inventory'[\s\S]*style: 'SECONDARY'/);
+
+  const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
+  assert.match(overview, /withDocumentCount: itemRows\.filter\(\(item\) => item\.documents\.length > 0\)\.length,[\s\S]*items: itemRows/);
+
+  const groupedListBlock = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'), 'utf8');
+  assert.match(groupedListBlock, /INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set\(\[[^\]]*'property-inventory'[^\]]*\]\)/);
+});
+
+test('Property Summary declares bounded HouseholdMember identities for inline detail and a separate household choice', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const start = orchestrator.indexOf("id: 'property-household'");
+  const end = orchestrator.indexOf("if (rooms)", start);
+  assert.ok(start > 0 && end > start, 'property-household producer not found');
+  const producer = orchestrator.slice(start, end);
+  assert.match(producer, /household\.items\.slice\(0, 50\)/);
+  assert.match(producer, /id: member\.id[\s\S]*entityType: 'HOUSEHOLD_MEMBER'[\s\S]*href: null/);
+  assert.match(producer, /id: 'open-household'[\s\S]*label: 'Open household access'[\s\S]*style: 'SECONDARY'/);
+
+  const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
+  assert.match(overview, /prisma\.householdMember\.findMany\(\{[\s\S]*user: \{ select: \{ firstName: true, lastName: true, email: true \} \}/);
+  assert.match(overview, /roles: Object\.entries\(householdRows\.reduce[\s\S]*items: householdRows/);
+
+  const groupedListBlock = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'), 'utf8');
+  assert.match(groupedListBlock, /block\.id === 'property-household'[\s\S]*HouseholdResultList/);
+});
+
 test('evidence claim mappings resolve exact response block and item identities', () => {
   const base = {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
