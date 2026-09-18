@@ -225,6 +225,27 @@ test('Property Summary declares bounded HouseholdMember identities for inline de
   assert.match(groupedListBlock, /block\.id === 'property-household'[\s\S]*HouseholdResultList/);
 });
 
+test('Property Summary declares bounded Warranty identities for inline detail and a separate warranties choice', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const start = orchestrator.indexOf("id: 'property-warranties'");
+  const end = orchestrator.indexOf("if (rooms)", start);
+  assert.ok(start > 0 && end > start, 'property-warranties producer not found');
+  const producer = orchestrator.slice(start, end);
+  assert.match(producer, /warranties\.items\.slice\(0, 50\)/);
+  assert.match(producer, /id: warranty\.id[\s\S]*entityType: 'WARRANTY'[\s\S]*href: null/);
+  assert.match(producer, /id: 'open-warranties'[\s\S]*label: 'Open Warranties'[\s\S]*style: 'SECONDARY'/);
+
+  const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
+  assert.match(overview, /prisma\.warranty\.findMany\(\{[\s\S]*where: \{ propertyId \}/);
+  assert.match(overview, /activeCount: warrantyRows\.filter[\s\S]*items: warrantyRows/);
+
+  const client = readFileSync(resolve(__dirname, '../../../frontend/src/lib/api/client.ts'), 'utf8');
+  assert.match(client, /getPropertyWarranties[\s\S]*\/api\/properties\/\$\{propertyId\}\/warranties/);
+
+  const groupedListBlock = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'), 'utf8');
+  assert.match(groupedListBlock, /block\.id === 'property-warranties'[\s\S]*WarrantyResultList/);
+});
+
 test('evidence claim mappings resolve exact response block and item identities', () => {
   const base = {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,

@@ -2148,6 +2148,10 @@ export interface PropertyRecordOverviewDTO {
       totalCount: number; roles: Array<{ role: string; count: number }>;
       items: Array<{ id: string; userId: string; role: HouseholdRole; isPrimaryOwner: boolean; joinedAt: string; displayName: string | null; user: { firstName: string; lastName: string; email: string } }>;
     }>;
+    warranties: PropertyRecordLoadState<{
+      totalCount: number; activeCount: number;
+      items: Array<{ id: string; providerName: string; category: WarrantyCategory; expiryDate: string; startDate: string }>;
+    }>;
   };
   tools: {
     eligibility: Record<string, { state: 'ELIGIBLE' | 'NEEDS_CONTEXT'; reasons: string[]; releaseStage: 'ACTIVE' | 'BETA'; rolloutKey: string }>;

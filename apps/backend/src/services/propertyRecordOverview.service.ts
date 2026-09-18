@@ -41,7 +41,7 @@ async function settled<T>(work: Promise<T>): Promise<LoadState<T>> {
 }
 
 async function loadPropertyRecordOverview(propertyId: string, userId: string, access: PropertyAccess) {
-  const [context, rooms, inventory, documents, household, capitalTimeline, continuityPlan, plantState, latestBrief, confirmedEvents] = await Promise.all([
+  const [context, rooms, inventory, documents, household, warranties, capitalTimeline, continuityPlan, plantState, latestBrief, confirmedEvents] = await Promise.all([
     settled(getPropertyContext(propertyId, { userId }, { scopes: PROPERTY_RECORD_CONTEXT_SCOPES })),
     settled(prisma.inventoryRoom.findMany({
       where: { propertyId },
@@ -70,6 +70,11 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
         id: true, userId: true, role: true, isPrimaryOwner: true, joinedAt: true, displayName: true,
         user: { select: { firstName: true, lastName: true, email: true } },
       },
+    })),
+    settled(prisma.warranty.findMany({
+      where: { propertyId },
+      orderBy: { expiryDate: 'asc' },
+      select: { id: true, providerName: true, category: true, expiryDate: true, startDate: true },
     })),
     settled(prisma.homeCapitalTimelineAnalysis.findFirst({
       where: { propertyId }, orderBy: { computedAt: 'desc' },
@@ -116,6 +121,7 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
   const itemRows = inventory.data ?? [];
   const documentRows = documents.data ?? [];
   const householdRows = household.data ?? [];
+  const warrantyRows = warranties.data ?? [];
   const majorSystems = itemRows.filter((item) => MAJOR_SYSTEM_CATEGORIES.has(item.category));
   const inventoryUpdatedAt = itemRows
     .map((item) => item.updatedAt)
@@ -194,6 +200,11 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
           return acc;
         }, {})).map(([role, count]) => ({ role, count })),
         items: householdRows,
+      }) : unavailable(),
+      warranties: warranties.status === 'AVAILABLE' ? available({
+        totalCount: warrantyRows.length,
+        activeCount: warrantyRows.filter((warranty) => warranty.expiryDate > new Date()).length,
+        items: warrantyRows,
       }) : unavailable(),
     },
     tools: {

@@ -10,6 +10,7 @@ import { HouseholdResultList } from '../HouseholdResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
 import { RoomResultList } from '../RoomResultList';
+import { WarrantyResultList } from '../WarrantyResultList';
 import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 
@@ -104,7 +105,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   );
 }
 
-// Five bespoke rendering exceptions in the whole registry: a
+// Six bespoke rendering exceptions in the whole registry: a
 // `GROUPED_LIST` block with id `maintenance-groups`; Inventory's
 // item-detail-eligible ids (`inventory-results`, the primary result;
 // `inventory-entity-selection`, the disambiguation list; and
@@ -116,8 +117,9 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 // component); `property-rooms` (canonical InventoryRoom records from
 // PROPERTY_SUMMARY); `document-lookup-groups` / `property-documents`
 // (canonical documents surfaced by DOCUMENT_LOOKUP or PROPERTY_SUMMARY);
-// or `property-household` (canonical HouseholdMember records from
-// PROPERTY_SUMMARY). All are still registered under the single
+// `property-household` (canonical HouseholdMember records from
+// PROPERTY_SUMMARY); or `property-warranties` (canonical Warranty records
+// from PROPERTY_SUMMARY). All are still registered under the single
 // `GROUPED_LIST` type (see ./registry.tsx) -- the split is by block id,
 // not a second block type.
 const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection', 'property-inventory']);
@@ -147,6 +149,10 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }
   if (block.id === 'property-household') {
     return <HouseholdResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  if (block.id === 'property-warranties') {
+    return <WarrantyResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

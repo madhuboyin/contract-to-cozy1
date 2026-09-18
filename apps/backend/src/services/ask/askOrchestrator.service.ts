@@ -4554,6 +4554,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   const inventory = overview.sections.inventory.status === 'AVAILABLE' ? overview.sections.inventory.data : null;
   const documents = overview.sections.documents.status === 'AVAILABLE' ? overview.sections.documents.data : null;
   const household = overview.sections.household.status === 'AVAILABLE' ? overview.sections.household.data : null;
+  const warranties = overview.sections.warranties.status === 'AVAILABLE' ? overview.sections.warranties.data : null;
   const timeline = overview.tools.homeTimeline.status === 'AVAILABLE' ? overview.tools.homeTimeline.data : null;
   const incompleteScopes = (completeness?.scopes ?? [])
     .filter((scope) => scope.completenessPercent < 100
@@ -4640,6 +4641,23 @@ async function propertySummaryResult(userId: string, propertyId: string, message
           })),
         }],
         actions: [{ id: 'open-household', label: 'Open household access', href: `${propertyHref}/household`, style: 'SECONDARY' }],
+      });
+    }
+    if (warranties) {
+      blocks.push({
+        type: 'GROUPED_LIST', filters: [], id: 'property-warranties', title: 'Warranties',
+        description: warranties.totalCount > 50
+          ? 'Showing the first 50 canonical warranty records. Open Warranties for the full collection.'
+          : 'Select a warranty to inspect its current canonical details without leaving Ask Cozy.',
+        sections: [{
+          id: 'warranties', title: 'Recorded warranties', count: warranties.totalCount,
+          items: warranties.items.slice(0, 50).map((warranty) => ({
+            id: warranty.id, title: warranty.providerName, description: null, entityType: 'WARRANTY', href: null,
+            status: warranty.expiryDate > new Date() ? 'ACTIVE' : 'EXPIRED',
+            meta: [readablePropertyValue(warranty.category), `Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`],
+          })),
+        }],
+        actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' }],
       });
     }
     if (rooms) {

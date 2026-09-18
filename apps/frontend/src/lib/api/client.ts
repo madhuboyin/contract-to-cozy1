@@ -2083,6 +2083,17 @@ class APIClient {
     });
   }
 
+  // Property-scoped warranties (propertyAuthMiddleware VIEWER floor), distinct from
+  // listWarranties above (home-management, requester's own homeownerProfile) --
+  // this is the one Ask's inline warranty detail re-fetches, matching the
+  // VIEWER-floor access every other Property Summary collection re-fetch uses.
+  async getPropertyWarranties(propertyId: string): Promise<import('@/types').Warranty[]> {
+    const res = await this.get<{ warranties: import('@/types').Warranty[] }>(
+      `/api/properties/${propertyId}/warranties`,
+    );
+    return res.data?.warranties ?? [];
+  }
+
   // --- INSURANCE POLICIES ---
   async createInsurancePolicy(data: CreateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
     return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data });
