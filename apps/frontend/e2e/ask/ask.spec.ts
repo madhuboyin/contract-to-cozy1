@@ -395,6 +395,29 @@ test('created output records open as authoritative response context while workfl
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('related records show the authoritative document-to-event relationship without replacing the conversation', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show the evidence relationship');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-related-records');
+  await expect(response.getByRole('heading', { name: 'Attached to your home timeline' })).toBeVisible();
+  await expect(response.getByText('Roof invoice.pdf is now attached as evidence on your home timeline.')).toBeVisible();
+  await expect(response.getByRole('link', { name: 'Open home timeline' })).toHaveCount(0);
+  await response.getByRole('button', { name: 'View response context' }).click();
+
+  const panel = page.getByRole('complementary', { name: 'Response context' });
+  await expect(panel.getByRole('heading', { name: 'Related records' })).toBeVisible();
+  await expect(panel.getByText('Roof invoice.pdf')).toBeVisible();
+  await expect(panel.getByText('Evidence for')).toBeVisible();
+  await expect(panel.getByText('Roof replacement')).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Open home timeline' })).toBeVisible();
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

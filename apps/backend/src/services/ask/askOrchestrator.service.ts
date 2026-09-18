@@ -12153,7 +12153,15 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
     blocks: [{
       type: 'SUMMARY', id: `evidence-attached-${link.id}`, title: 'Attached to your home timeline', tone: 'POSITIVE',
       body: `${link.document?.name ?? 'The document'} is now attached as evidence on your home timeline.`,
-      actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: homeTimelineHref, style: 'PRIMARY' }],
+      actions: [],
+    }, {
+      type: 'RELATED_RECORDS', id: `evidence-related-records-${link.id}`, title: 'Related records',
+      relationships: [{
+        relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT',
+        source: { recordType: 'DOCUMENT', recordId: link.documentId, label: link.document?.name ?? 'Attached document' },
+        target: { recordType: 'HOME_EVENT', recordId: link.eventId, label: link.event.title },
+        navigation: { label: 'Open home timeline', href: homeTimelineHref },
+      }],
     }],
     confirmation: null, suggestions: [],
   };

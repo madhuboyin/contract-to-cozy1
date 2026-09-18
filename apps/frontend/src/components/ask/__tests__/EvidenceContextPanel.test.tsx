@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { hasResponseContext, InlineEvidenceBlock, InlineOutputArtifactsBlock, ResponseContextContent, ResponseContextSummary, responseContextCounts } from '../EvidenceContextPanel';
+import { hasResponseContext, InlineEvidenceBlock, InlineOutputArtifactsBlock, InlineRelatedRecordsBlock, ResponseContextContent, ResponseContextSummary, responseContextCounts } from '../EvidenceContextPanel';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 
 type EvidenceBlock = Extract<AskPresentationBlock, { type: 'EVIDENCE' }>;
@@ -22,6 +22,14 @@ const outputArtifact: Extract<AskPresentationBlock, { type: 'OUTPUT_ARTIFACTS' }
   items: [{
     artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: 'task-1', relationship: 'CREATED', label: 'Replace HVAC filter', status: 'PENDING',
     createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open task in Maintenance', href: '/dashboard/maintenance?taskId=task-1' },
+  }],
+};
+const relatedRecords: Extract<AskPresentationBlock, { type: 'RELATED_RECORDS' }> = {
+  type: 'RELATED_RECORDS', id: 'related-records', title: 'Related records', relationships: [{
+    relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT',
+    source: { recordType: 'DOCUMENT', recordId: 'document-1', label: 'Roof invoice.pdf' },
+    target: { recordType: 'HOME_EVENT', recordId: 'event-1', label: 'Roof replacement' },
+    navigation: { label: 'Open home timeline', href: '/dashboard/properties/home/timeline' },
   }],
 };
 
@@ -64,7 +72,7 @@ test('context content remains response-scoped and groups evidence, assumptions a
 });
 
 test('context availability and counts ignore empty contextual blocks', () => {
-  expect(responseContextCounts(execution)).toEqual({ sources: 2, claims: 1, assumptions: 1, limitations: 1, outputs: 0 });
+  expect(responseContextCounts(execution)).toEqual({ sources: 2, claims: 1, assumptions: 1, limitations: 1, outputs: 0, relationships: 0 });
   expect(hasResponseContext(execution)).toBe(true);
   expect(hasResponseContext({ blocks: [{ type: 'EVIDENCE', id: 'empty', title: 'None', items: [] }] })).toBe(false);
 });
@@ -89,4 +97,27 @@ test('archived output artifacts retain an inline disclosure fallback', () => {
   render(<InlineOutputArtifactsBlock block={outputArtifact} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
   expect(screen.getByText('Created record (1)')).toBeInTheDocument();
   expect(screen.getByText('Replace HVAC filter')).toBeInTheDocument();
+});
+
+test('related records render the exact producer-declared relationship and navigation', () => {
+  const relatedExecution = { ...execution, blocks: [
+    { type: 'SUMMARY', id: 'attached', title: 'Attached to your home timeline', body: 'The document is attached.', tone: 'POSITIVE', actions: [] },
+    relatedRecords,
+  ] } as AskExecutionResponse;
+  render(<ResponseContextSummary execution={relatedExecution} open={false} onOpen={() => undefined} />);
+  expect(screen.getByText('1 record relationship attached to this response')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'View response context' })).toBeInTheDocument();
+
+  render(<ResponseContextContent execution={relatedExecution} onClose={() => undefined} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
+  expect(screen.getByText('Roof invoice.pdf')).toBeInTheDocument();
+  expect(screen.getByText('Evidence for')).toBeInTheDocument();
+  expect(screen.getByText('Roof replacement')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Open home timeline' })).toHaveAttribute('href', '/dashboard/properties/home/timeline');
+});
+
+test('archived related records retain an inline disclosure fallback', () => {
+  render(<InlineRelatedRecordsBlock block={relatedRecords} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
+  expect(screen.getByText('Related records (1)')).toBeInTheDocument();
+  expect(screen.getByText('Roof invoice.pdf')).toBeInTheDocument();
+  expect(screen.getByText('Roof replacement')).toBeInTheDocument();
 });

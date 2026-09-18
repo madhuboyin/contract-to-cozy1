@@ -193,6 +193,30 @@ test('output artifacts require exact canonical maintenance identity and safe int
   assert.match(createHandler, /createdAt: task\.createdAt\.toISOString\(\)/);
 });
 
+test('related records require an exact document-to-home-event relationship from the evidence producer', () => {
+  const related = {
+    type: 'RELATED_RECORDS', id: 'evidence-related-records-link-1', title: 'Related records',
+    relationships: [{
+      relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT',
+      source: { recordType: 'DOCUMENT', recordId: 'document-1', label: 'Roof invoice.pdf' },
+      target: { recordType: 'HOME_EVENT', recordId: 'event-1', label: 'Roof replacement' },
+      navigation: { label: 'Open home timeline', href: '/dashboard/properties/home-1/timeline' },
+    }],
+  };
+  assert.equal(AskPresentationBlockSchema.safeParse(related).success, true);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...related, relationships: [{ ...related.relationships[0], source: { ...related.relationships[0].source, recordId: '' } }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...related, relationships: [{ ...related.relationships[0], relationshipType: 'INFERRED_FROM_LABEL' }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...related, relationships: [{ ...related.relationships[0], navigation: { label: 'Unsafe', href: 'https://example.com/event-1' } }] }).success, false);
+
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const handlerStart = orchestrator.indexOf('async function confirmCaptureEvidence(');
+  const handlerEnd = orchestrator.indexOf("registerConfirmCapabilityHandler('capture.evidence.confirm'", handlerStart);
+  const handler = orchestrator.slice(handlerStart, handlerEnd);
+  assert.match(handler, /type: 'RELATED_RECORDS'/);
+  assert.match(handler, /source: \{ recordType: 'DOCUMENT', recordId: link\.documentId/);
+  assert.match(handler, /target: \{ recordType: 'HOME_EVENT', recordId: link\.eventId/);
+});
+
 test('RECEIVED is a genuinely reachable execution.status, not just an AskExecutionEvent.eventType', () => {
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
   const createIndex = orchestrator.indexOf('const execution = await prisma.askExecution.create({');

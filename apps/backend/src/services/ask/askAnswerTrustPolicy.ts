@@ -207,6 +207,7 @@ export function nestedAskHrefs(block: AskPresentationBlock): string[] {
   if (block.type === 'TIMELINE') return block.items.flatMap((item) => item.href ? [item.href] : []);
   if (block.type === 'CHANGE_SUMMARY') return block.linkedAction ? [block.linkedAction.href] : [];
   if (block.type === 'OUTPUT_ARTIFACTS') return block.items.flatMap((item) => item.navigation ? [item.navigation.href] : []);
+  if (block.type === 'RELATED_RECORDS') return block.relationships.flatMap((relationship) => relationship.navigation ? [relationship.navigation.href] : []);
   return [];
 }
 

@@ -229,6 +229,31 @@ test('confirmed command completions receive audience presentation, source eviden
   assert.equal(checked.result.parameters.answerTrustEvidence.sources[0].sourceId, 'maintenance.create');
 });
 
+test('related-record navigation is preserved only for the authorized property', () => {
+  const result = {
+    status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',
+    blocks: [{ type: 'SUMMARY', id: 'attached', title: 'Attached to your home timeline', body: 'The document is now attached.', tone: 'POSITIVE', actions: [] }, {
+      type: 'RELATED_RECORDS', id: 'related', title: 'Related records', relationships: [{
+        relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT',
+        source: { recordType: 'DOCUMENT', recordId: 'document-1', label: 'Roof invoice.pdf' },
+        target: { recordType: 'HOME_EVENT', recordId: 'event-1', label: 'Roof replacement' },
+        navigation: { label: 'Open home timeline', href: '/dashboard/properties/home-1/timeline' },
+      }],
+    }], suggestions: [],
+  };
+  const checked = validateAskConfirmedCompletion({
+    question: 'Attach the roof invoice to that event', operationId: 'CAPTURE_EVIDENCE_CONFIRM', propertyId: 'home-1', householdRole: 'CONTRIBUTOR', result,
+  });
+  assert.equal(checked.trust.outcome, 'PASS');
+  assert.equal(checked.result.blocks.find((block) => block.type === 'RELATED_RECORDS').relationships[0].navigation.href, '/dashboard/properties/home-1/timeline');
+
+  const mismatched = validateAskConfirmedCompletion({
+    question: 'Attach the roof invoice to that event', operationId: 'CAPTURE_EVIDENCE_CONFIRM', propertyId: 'home-2', householdRole: 'CONTRIBUTOR', result,
+  });
+  assert.equal(mismatched.trust.outcome, 'REPAIRABLE');
+  assert.equal(mismatched.result.blocks.find((block) => block.type === 'RELATED_RECORDS').relationships[0].navigation, null);
+});
+
 test('TA5 semantic relevance passes direct answers and detects a different-operation answer', () => {
   const direct = validateAskSemanticAnswerRelevance({
     question: 'Are there any pending home details to be filled in?', operationId: 'PROPERTY_SUMMARY',

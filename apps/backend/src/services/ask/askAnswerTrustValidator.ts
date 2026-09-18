@@ -64,6 +64,7 @@ function authoredPresentationText(block: AskPresentationBlock): string {
     ].filter(Boolean).join(' ');
   }
   if (block.type === 'EVIDENCE') return block.title;
+  if (block.type === 'OUTPUT_ARTIFACTS' || block.type === 'RELATED_RECORDS') return block.title;
   if (block.type === 'TABLE') {
     return [block.title, block.description, ...block.columns.map((column) => column.label)]
       .filter(Boolean).join(' ');
@@ -168,6 +169,14 @@ export function validateAskAnswerTrust(input: {
           ...item,
           navigation: item.navigation && source !== 'UNAVAILABLE' && isAskHrefSafeForProperty(item.navigation.href, input.propertyId)
             ? item.navigation
+            : null,
+        })) };
+      }
+      if (block.type === 'RELATED_RECORDS') {
+        return { ...block, relationships: block.relationships.map((relationship) => ({
+          ...relationship,
+          navigation: relationship.navigation && source !== 'UNAVAILABLE' && isAskHrefSafeForProperty(relationship.navigation.href, input.propertyId)
+            ? relationship.navigation
             : null,
         })) };
       }

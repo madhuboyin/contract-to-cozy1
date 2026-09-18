@@ -108,6 +108,29 @@ function maintenanceOutputExecution() {
   };
 }
 
+function relatedRecordsExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-related-records', sessionId: 'ask-acceptance-session',
+    question: 'Show the evidence relationship', status: 'COMPLETED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'CAPTURE_EVIDENCE_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: 'timeline-context-v2',
+    blocks: [{
+      type: 'SUMMARY', id: 'evidence-attached', title: 'Attached to your home timeline', tone: 'POSITIVE',
+      body: 'Roof invoice.pdf is now attached as evidence on your home timeline.', actions: [],
+    }, {
+      type: 'RELATED_RECORDS', id: 'evidence-related-records-link-1', title: 'Related records', relationships: [{
+        relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT',
+        source: { recordType: 'DOCUMENT', recordId: 'document-1', label: 'Roof invoice.pdf' },
+        target: { recordType: 'HOME_EVENT', recordId: 'event-1', label: 'Roof replacement' },
+        navigation: { label: 'Open home timeline', href: `/dashboard/properties/${propertyId}/timeline` },
+      }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-18T12:00:00.000Z', updatedAt: '2026-09-18T12:00:00.000Z',
+  };
+}
+
 function adaptiveTableExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-adaptive-table', sessionId: 'ask-acceptance-session',
@@ -336,6 +359,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
           href: `/dashboard/maintenance?propertyId=${propertyId}&taskId=maintenance-task-51&from=ask`, entityType: 'MAINTENANCE_TASK', actions: [],
         }] }];
       }
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/show the evidence relationship/i.test(body.message)) {
+      const response = relatedRecordsExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

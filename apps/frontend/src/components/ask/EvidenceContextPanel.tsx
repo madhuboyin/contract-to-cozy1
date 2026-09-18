@@ -1,15 +1,16 @@
 'use client';
 
 import type { ReactNode, Ref } from 'react';
-import { BookOpen, ExternalLink, FileCheck2 } from 'lucide-react';
+import { ArrowRight, BookOpen, ExternalLink, FileCheck2, Link2 } from 'lucide-react';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 
 type EvidenceBlock = Extract<AskPresentationBlock, { type: 'EVIDENCE' }>;
 type AssumptionsBlock = Extract<AskPresentationBlock, { type: 'ASSUMPTIONS' }>;
 type LimitationBlock = Extract<AskPresentationBlock, { type: 'LIMITATION' }>;
 type OutputArtifactsBlock = Extract<AskPresentationBlock, { type: 'OUTPUT_ARTIFACTS' }>;
+type RelatedRecordsBlock = Extract<AskPresentationBlock, { type: 'RELATED_RECORDS' }>;
 
-export type ResponseContextCounts = { sources: number; claims: number; assumptions: number; limitations: number; outputs: number };
+export type ResponseContextCounts = { sources: number; claims: number; assumptions: number; limitations: number; outputs: number; relationships: number };
 
 export function responseContextCounts(execution: Pick<AskExecutionResponse, 'blocks'>): ResponseContextCounts {
   return execution.blocks.reduce<ResponseContextCounts>((counts, block) => {
@@ -20,13 +21,14 @@ export function responseContextCounts(execution: Pick<AskExecutionResponse, 'blo
     if (block.type === 'ASSUMPTIONS') counts.assumptions += block.items.length;
     if (block.type === 'LIMITATION' && block.body.trim()) counts.limitations += 1;
     if (block.type === 'OUTPUT_ARTIFACTS') counts.outputs += block.items.length;
+    if (block.type === 'RELATED_RECORDS') counts.relationships += block.relationships.length;
     return counts;
-  }, { sources: 0, claims: 0, assumptions: 0, limitations: 0, outputs: 0 });
+  }, { sources: 0, claims: 0, assumptions: 0, limitations: 0, outputs: 0, relationships: 0 });
 }
 
 export function hasResponseContext(execution: Pick<AskExecutionResponse, 'blocks'>): boolean {
   const counts = responseContextCounts(execution);
-  return counts.sources + counts.assumptions + counts.limitations + counts.outputs > 0;
+  return counts.sources + counts.assumptions + counts.limitations + counts.outputs + counts.relationships > 0;
 }
 
 function observedDate(value: string | null): string | null {
@@ -53,6 +55,18 @@ export function InlineOutputArtifactsBlock({ block, renderNavigation }: { block:
   </details>;
 }
 
+export function InlineRelatedRecordsBlock({ block, renderNavigation }: { block: RelatedRecordsBlock; renderNavigation: (navigation: RelatedRecordsBlock['relationships'][number]['navigation']) => ReactNode }) {
+  return <details className="rounded-2xl border border-slate-200 bg-white p-4">
+    <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.relationships.length})</summary>
+    <ul className="mt-3 space-y-2">{block.relationships.map((relationship) => <li key={`${relationship.relationshipType}-${relationship.source.recordId}-${relationship.target.recordId}`} className="rounded-xl border border-slate-100 p-3">
+      <p className="text-sm font-medium text-slate-900">{relationship.source.label}</p>
+      <p className="my-1 text-xs font-semibold text-teal-700">Evidence for</p>
+      <p className="text-sm text-slate-700">{relationship.target.label}</p>
+      {relationship.navigation && <div className="mt-2">{renderNavigation(relationship.navigation)}</div>}
+    </li>)}</ul>
+  </details>;
+}
+
 function countSummary(counts: ResponseContextCounts): string {
   return [
     counts.sources ? `${counts.sources} ${counts.sources === 1 ? 'source' : 'sources'}` : '',
@@ -60,12 +74,13 @@ function countSummary(counts: ResponseContextCounts): string {
     counts.assumptions ? `${counts.assumptions} ${counts.assumptions === 1 ? 'assumption' : 'assumptions'}` : '',
     counts.limitations ? `${counts.limitations} ${counts.limitations === 1 ? 'limitation' : 'limitations'}` : '',
     counts.outputs ? `${counts.outputs} created ${counts.outputs === 1 ? 'record' : 'records'}` : '',
+    counts.relationships ? `${counts.relationships} record ${counts.relationships === 1 ? 'relationship' : 'relationships'}` : '',
   ].filter(Boolean).join(' · ');
 }
 
 export function ResponseContextSummary({ execution, open, onOpen }: { execution: AskExecutionResponse; open: boolean; onOpen: (trigger: HTMLButtonElement) => void }) {
   const counts = responseContextCounts(execution);
-  const evidenceOnly = counts.sources > 0 && counts.assumptions === 0 && counts.limitations === 0 && counts.outputs === 0;
+  const evidenceOnly = counts.sources > 0 && counts.assumptions === 0 && counts.limitations === 0 && counts.outputs === 0 && counts.relationships === 0;
   const hasSources = counts.sources > 0;
 
   return <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3" aria-label="Response sources and context">
@@ -79,11 +94,12 @@ export function ResponseContextSummary({ execution, open, onOpen }: { execution:
   </section>;
 }
 
-export function ResponseContextContent({ execution, headingRef, onClose, renderNavigation }: { execution: AskExecutionResponse; headingRef?: Ref<HTMLHeadingElement>; onClose: () => void; renderNavigation: (item: OutputArtifactsBlock['items'][number]['navigation']) => ReactNode }) {
+export function ResponseContextContent({ execution, headingRef, onClose, renderNavigation }: { execution: AskExecutionResponse; headingRef?: Ref<HTMLHeadingElement>; onClose: () => void; renderNavigation: (navigation: { label: string; href: string } | null) => ReactNode }) {
   const evidenceBlocks = execution.blocks.filter((block): block is EvidenceBlock => block.type === 'EVIDENCE' && block.items.length > 0);
   const assumptionBlocks = execution.blocks.filter((block): block is AssumptionsBlock => block.type === 'ASSUMPTIONS' && block.items.length > 0);
   const limitationBlocks = execution.blocks.filter((block): block is LimitationBlock => block.type === 'LIMITATION' && Boolean(block.body.trim()));
   const outputBlocks = execution.blocks.filter((block): block is OutputArtifactsBlock => block.type === 'OUTPUT_ARTIFACTS' && block.items.length > 0);
+  const relatedRecordBlocks = execution.blocks.filter((block): block is RelatedRecordsBlock => block.type === 'RELATED_RECORDS' && block.relationships.length > 0);
   const counts = responseContextCounts(execution);
 
   return <div id="ask-response-context" className="flex h-full min-h-0 flex-col">
@@ -124,6 +140,17 @@ export function ResponseContextContent({ execution, headingRef, onClose, renderN
         <ul className="mt-2 space-y-2">{block.items.map((item) => <li key={`${item.artifactType}-${item.artifactId}`} className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><FileCheck2 className="h-4 w-4" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{item.label}</p><p className="mt-1 text-xs text-slate-500">Maintenance task · {item.status.toLowerCase().replace(/_/g, ' ')} · Created {observedDate(item.createdAt) ?? 'date unavailable'}</p></div></div>
           {item.navigation && <div className="mt-3">{renderNavigation(item.navigation)}</div>}
+        </li>)}</ul>
+      </section>)}
+      {relatedRecordBlocks.map((block) => <section key={block.id} aria-labelledby={`related-group-${block.id}`}>
+        <h3 id={`related-group-${block.id}`} className="text-sm font-semibold text-slate-900">{block.title}</h3>
+        <ul className="mt-2 space-y-2">{block.relationships.map((relationship) => <li key={`${relationship.relationshipType}-${relationship.source.recordId}-${relationship.target.recordId}`} className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><Link2 className="h-4 w-4" aria-hidden="true" /></span><div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Document</p><p className="mt-1 text-sm font-medium text-slate-900">{relationship.source.label}</p>
+            <div className="my-2 flex items-center gap-2 text-xs font-semibold text-teal-700"><ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />Evidence for</div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Home timeline event</p><p className="mt-1 text-sm text-slate-800">{relationship.target.label}</p>
+          </div></div>
+          {relationship.navigation && <div className="mt-3">{renderNavigation(relationship.navigation)}</div>}
         </li>)}</ul>
       </section>)}</div>
     </div>

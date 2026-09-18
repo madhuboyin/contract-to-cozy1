@@ -20,7 +20,7 @@ import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
 import { MaintenanceResultList } from './MaintenanceResultList';
 import { AdaptiveTableBlock } from './AdaptiveTableBlock';
 import { ComparisonStripBlock } from './ComparisonStripBlock';
-import { hasResponseContext, InlineEvidenceBlock, InlineOutputArtifactsBlock, ResponseContextContent, ResponseContextSummary } from './EvidenceContextPanel';
+import { hasResponseContext, InlineEvidenceBlock, InlineOutputArtifactsBlock, InlineRelatedRecordsBlock, ResponseContextContent, ResponseContextSummary } from './EvidenceContextPanel';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
@@ -610,6 +610,10 @@ export function BlockView({ block, executionId, propertyId, onItemAction, itemAc
 
   if (block.type === 'OUTPUT_ARTIFACTS') {
     return onOpenContext ? null : <InlineOutputArtifactsBlock block={block} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="text-sm font-semibold text-teal-700 hover:underline">{navigation.label}</AskContextLink> : null} />;
+  }
+
+  if (block.type === 'RELATED_RECORDS') {
+    return onOpenContext ? null : <InlineRelatedRecordsBlock block={block} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="text-sm font-semibold text-teal-700 hover:underline">{navigation.label}</AskContextLink> : null} />;
   }
 
   if (block.type === 'BOUNDARY') {
@@ -2417,7 +2421,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         <SheetContent side="right" className="flex w-[min(24rem,94vw)] flex-col p-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:max-w-sm">
           <SheetHeader className="sr-only">
             <SheetTitle>Response context</SheetTitle>
-            <SheetDescription>Sources, assumptions, limitations, and output records for the selected Ask Cozy response.</SheetDescription>
+            <SheetDescription>Sources, assumptions, limitations, related records, and output records for the selected Ask Cozy response.</SheetDescription>
           </SheetHeader>
           {contextExecution && contextContentAvailable && <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />}
         </SheetContent>

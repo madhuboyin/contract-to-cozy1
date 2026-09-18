@@ -386,7 +386,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_WARRANTY_CONFIRM: definition('CAPTURE_WARRANTY_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.warranty.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
-  CAPTURE_EVIDENCE_CONFIRM: definition('CAPTURE_EVIDENCE_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.evidence.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  CAPTURE_EVIDENCE_CONFIRM: definition('CAPTURE_EVIDENCE_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.evidence.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'RELATED_RECORDS', 'BOUNDARY']),
   // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). safetyClass
   // is STANDARD, not MATERIAL_DECISION, unlike the three CAPTURE_* operations
   // above -- this is the materiality carve-out's own point: attaching/

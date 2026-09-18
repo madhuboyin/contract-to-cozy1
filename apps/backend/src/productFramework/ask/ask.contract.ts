@@ -268,6 +268,32 @@ const OutputArtifactsBlockSchema = z.object({
   })).min(1).max(10),
 });
 
+// IW-SHELL-006 contextual related-record category. Relationships are
+// producer-declared from canonical IDs; the client must never derive them
+// from matching labels, URLs, or neighboring blocks.
+const RelatedRecordsBlockSchema = z.object({
+  type: z.literal('RELATED_RECORDS'),
+  id: z.string(),
+  title: z.string(),
+  relationships: z.array(z.object({
+    relationshipType: z.literal('DOCUMENT_EVIDENCE_FOR_HOME_EVENT'),
+    source: z.object({
+      recordType: z.literal('DOCUMENT'),
+      recordId: z.string().trim().min(1).max(160),
+      label: z.string().trim().min(1).max(240),
+    }),
+    target: z.object({
+      recordType: z.literal('HOME_EVENT'),
+      recordId: z.string().trim().min(1).max(160),
+      label: z.string().trim().min(1).max(240),
+    }),
+    navigation: z.object({
+      label: z.string().trim().min(1).max(120),
+      href: z.string().regex(/^\/dashboard\//),
+    }).nullable().default(null),
+  })).min(1).max(20),
+});
+
 const MetricRowBlockSchema = z.object({
   type: z.literal('METRIC_ROW'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
   metrics: z.array(z.object({ label: z.string(), value: z.string(), detail: z.string().nullable().optional(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).min(1).max(6),
@@ -481,6 +507,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   MonitorBlockSchema,
   WorkflowProgressBlockSchema,
   OutputArtifactsBlockSchema,
+  RelatedRecordsBlockSchema,
   MetricRowBlockSchema,
   TimelineBlockSchema,
   ComparisonBlockSchema,

@@ -1146,7 +1146,7 @@ export class HomeEventsService {
         caption: args.caption !== undefined ? args.caption : undefined,
         sortOrder: args.sortOrder !== undefined ? args.sortOrder : undefined,
       },
-      include: { document: true },
+      include: { document: true, event: { select: { id: true, title: true } } },
     });
     await prisma.homeEventEvidence.upsert({
       where: {
