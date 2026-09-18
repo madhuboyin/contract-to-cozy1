@@ -151,6 +151,17 @@ test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections alread
   assert.match(orchestrator, /id: 'capital-timeline-table'.*totalCount: items\.length/);
 });
 
+test('Property Summary declares recent HomeEvent identity for inline detail and a separate timeline choice', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const start = orchestrator.indexOf("id: 'property-recent-events'");
+  const end = orchestrator.indexOf("const freshness =", start);
+  assert.ok(start > 0 && end > start, 'property-recent-events producer not found');
+  const producer = orchestrator.slice(start, end);
+  assert.match(producer, /id: event\.id[\s\S]*href: null, entityType: 'HOME_EVENT'/);
+  assert.match(producer, /id: 'open-home-timeline'[\s\S]*label: 'Open home timeline'[\s\S]*style: 'SECONDARY'/);
+  assert.doesNotMatch(producer, /status: event\.verificationStatus, href: `\$\{propertyHref\}\/timeline`/);
+});
+
 test('evidence claim mappings resolve exact response block and item identities', () => {
   const base = {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,

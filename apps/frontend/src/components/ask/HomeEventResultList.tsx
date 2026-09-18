@@ -124,12 +124,13 @@ function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, onAccessLo
   );
 }
 
-// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: renders the `inventory-history`
-// block (HomeEvent timeline entries linked to an inventory item) with the
-// same inline-detail pattern as InventoryResultList/MaintenanceResultList,
-// but for a different canonical entity (HomeEvent, via the existing
-// homeEventsApi.getHomeEvent -- no new API client method needed). No
-// per-item mutation actions exist for this block either.
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: renders authoritative HomeEvent
+// collections (`inventory-history` and PROPERTY_SUMMARY's
+// `property-recent-events`) with the same inline-detail pattern as
+// InventoryResultList/MaintenanceResultList, but for a different canonical
+// entity (HomeEvent, via the existing homeEventsApi.getHomeEvent -- no new
+// API client method needed). No per-item mutation actions exist for these
+// blocks.
 export function HomeEventResultList({ block, propertyId, onFilter, onPage, onAccessLost, link }: {
   block: Block;
   propertyId?: string;

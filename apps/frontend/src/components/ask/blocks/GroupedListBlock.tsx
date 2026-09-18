@@ -107,13 +107,15 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 // two item-detail-eligible ids (`inventory-results`, the primary result,
 // and `inventory-entity-selection`, the disambiguation list -- both list
 // the same INVENTORY_ITEM entity shape, so both open the same inline
-// detail); `inventory-history` (HomeEvent timeline entries linked to an
-// inventory item -- a different entity type, so its own component); or
+// detail); one of the HomeEvent detail blocks (`inventory-history`, events
+// linked to an inventory item, or `property-recent-events`, events surfaced
+// by PROPERTY_SUMMARY -- a different entity type, so its own component); or
 // `document-lookup-groups` (Documents by type, DOCUMENT_LOOKUP's own
 // result -- a Property-records sub-domain, not Inventory-adjacent). All
 // are still registered under the single `GROUPED_LIST` type (see
 // ./registry.tsx) -- the split is by block id, not a second block type.
 const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection']);
+const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-recent-events']);
 
 export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
@@ -125,7 +127,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
     return <InventoryResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'inventory-history') {
+  if (HOME_EVENT_DETAIL_BLOCK_IDS.has(block.id)) {
     return <HomeEventResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }

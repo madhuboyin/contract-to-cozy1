@@ -141,6 +141,23 @@ test('capability explorer progressively reveals registry-backed examples', async
   await expect.poll(() => api.executionQuestions).toContain('Give me a summary of my home record.');
 });
 
+test('Property Summary timeline events open canonical detail inline with traditional timeline navigation secondary', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
+  await expect(response.getByRole('link', { name: 'Roof replacement' })).toHaveCount(0);
+  await expect(response.getByRole('button', { name: 'Roof replacement' })).toBeVisible();
+  await expect(response.getByRole('link', { name: /Open home timeline/ })).toHaveAttribute('href', `/dashboard/properties/${propertyId}/timeline`);
+
+  await response.getByRole('button', { name: 'Roof replacement' }).click();
+  await expect(response.getByText('The roof replacement is recorded with verified evidence.')).toBeVisible();
+  await expect(response.getByText('$18,500')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

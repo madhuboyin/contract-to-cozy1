@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HomeEventResultList } from '../HomeEventResultList';
+import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -53,6 +54,27 @@ test('clicking a timeline event title opens canonical detail inline without navi
   expect(screen.getByText('$850')).toBeInTheDocument();
   expect(window.location.pathname).toBe('/dashboard/ask');
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('event-0');
+});
+
+test('Property Summary timeline events use the same inline canonical detail and keep traditional navigation secondary', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  mockedGetHomeEvent.mockResolvedValueOnce(canonicalEvent({ id: 'event-summary', title: 'Roof replacement' }));
+  const propertySummaryBlock: typeof block = {
+    type: 'GROUPED_LIST', id: 'property-recent-events', title: 'Recent verified home activity', filters: [],
+    sections: [{ id: 'recent-events', title: 'Home Timeline', count: 1, items: [{
+      id: 'event-summary', title: 'Roof replacement', entityType: 'HOME_EVENT', meta: ['Sep 1, 2026', 'improvement'], description: null, status: 'EVIDENCE_VERIFIED', href: null,
+    }] }],
+    actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: '/dashboard/properties/home/timeline', style: 'SECONDARY' }],
+  };
+
+  render(<BlockView block={propertySummaryBlock} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={() => {}} onFilterClick={() => {}} onCollectionPage={() => {}} onAccessLost={() => {}} />);
+  expect(screen.queryByRole('link', { name: 'Roof replacement' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Open home timeline/ })).toHaveAttribute('href', '/dashboard/properties/home/timeline');
+  fireEvent.click(screen.getByRole('button', { name: 'Roof replacement' }));
+
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Roof replacement' })).toBeInTheDocument());
+  expect(mockedGetHomeEvent).toHaveBeenCalledWith('home', 'event-summary');
+  expect(window.location.pathname).toBe('/dashboard/ask');
 });
 
 test('deleted event detail is distinct from an access-loss failure', async () => {

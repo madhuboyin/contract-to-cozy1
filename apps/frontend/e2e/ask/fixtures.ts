@@ -59,6 +59,30 @@ function heatPreparationExecution() {
   };
 }
 
+function propertySummaryTimelineExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-property-summary', sessionId: 'ask-acceptance-session',
+    question: 'Give me a summary of my home record.', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'PROPERTY_SUMMARY', version: '1.0', family: 'STATUS_SUMMARY' }, contextVersion: 'property-summary-context-v1',
+    blocks: [{
+      type: 'SUMMARY', id: 'property-summary', title: 'Here is the current Living Home Record for Acceptance Home',
+      body: 'Recent verified home activity is available below.', tone: 'DEFAULT', actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'property-recent-events', title: 'Recent verified home activity', filters: [],
+      description: 'One current confirmed or evidence-verified event is visible to you.',
+      sections: [{ id: 'recent-events', title: 'Home Timeline', count: 1, items: [{
+        id: 'event-property-summary', title: 'Roof replacement', entityType: 'HOME_EVENT', description: null,
+        meta: ['Sep 1, 2026', 'improvement', 'evidence verified', 'home record'], status: 'EVIDENCE_VERIFIED', href: null,
+      }] }],
+      actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: `/dashboard/properties/${propertyId}/timeline`, style: 'SECONDARY' }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: false, homeRecord: true, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-18T12:00:00.000Z', updatedAt: '2026-09-18T12:00:00.000Z',
+  };
+}
+
 function maintenanceExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance', sessionId: 'ask-acceptance-session',
@@ -282,6 +306,16 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
       seasonalChecklistItemId: null, actionKey: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-17T00:00:00.000Z', completedAt: null,
     } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/home-events/event-property-summary`, (route) => fulfill(route, { success: true, data: { event: {
+    id: 'event-property-summary', propertyId, type: 'IMPROVEMENT', subtype: 'ROOF', importance: 'HIGH', visibility: 'HOUSEHOLD',
+    occurredAt: '2026-09-01T12:00:00.000Z', endAt: null, datePrecision: 'EXACT_DATE', dateRangeStart: null, dateRangeEnd: null,
+    observationKind: 'EVIDENCE_DERIVED', verificationStatus: 'EVIDENCE_VERIFIED', title: 'Roof replacement',
+    summary: 'The roof replacement is recorded with verified evidence.', amount: '18500', currency: 'USD', valueDelta: null,
+    meta: null, groupKey: null, createdAt: '2026-09-01T12:00:00.000Z', updatedAt: '2026-09-02T12:00:00.000Z', documents: [{
+      id: 'event-document-1', eventId: 'event-property-summary', documentId: 'document-1', kind: 'INVOICE', caption: null, sortOrder: 0,
+      createdAt: '2026-09-01T12:00:00.000Z', document: { id: 'document-1', name: 'Roof invoice.pdf' },
+    }],
+  } } }));
   await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
     const pendingExecution = {
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',
@@ -354,6 +388,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/multi-day heat risk/i.test(body.message)) {
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
+      return;
+    }
+    if (/summary of my home record/i.test(body.message)) {
+      const response = propertySummaryTimelineExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
       return;
     }
     if (/compare ownership costs/i.test(body.message)) {

@@ -4648,10 +4648,10 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         items: timeline.recent.map((event) => ({
           id: event.id, title: event.title, description: null,
           meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
-          status: event.verificationStatus, href: `${propertyHref}/timeline`,
+          status: event.verificationStatus, href: null, entityType: 'HOME_EVENT',
         })),
       }],
-      actions: [],
+      actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: `${propertyHref}/timeline`, style: 'SECONDARY' }],
     });
   }
 
