@@ -299,11 +299,19 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // never creates or resumes a thread itself -- rollClass in the Phase 0 coverage
   // matrix stays READ_RESULT, not WORKFLOW_CONTINUATION.
   SELL_HOLD_RENT_ANALYSIS: definition('SELL_HOLD_RENT_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'sale-case.analysis', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY', 'DECISION_PROGRESS', 'WHY_NOW']),
-  HOUSEHOLD_INVITATION: definition('HOUSEHOLD_INVITATION', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'household.invitation', ['SUMMARY', 'WORKFLOW_PROGRESS']),
-  GUIDANCE_JOURNEY_CREATE: definition('GUIDANCE_JOURNEY_CREATE', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance.journey.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
-  QUOTE_COMPARISON_CREATE: definition('QUOTE_COMPARISON_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'quote-comparison.create', ['SUMMARY', 'WORKFLOW_PROGRESS', 'OUTPUT_ARTIFACTS']),
+  // IW-FRESH-003 fix: BOUNDARY added to HOUSEHOLD_INVITATION, GUIDANCE_JOURNEY_CREATE,
+  // and QUOTE_COMPARISON_CREATE so each one's new reconciliation-failure
+  // block (see ASK_MUTATION_IMPACT_MAP / the confirm handlers below) isn't
+  // silently stripped by askAnswerTrustValidator or, for QUOTE_COMPARISON_CREATE
+  // and HOUSEHOLD_INVITATION (both skill-routed), hit assertSkillResultBlocksAllowed's
+  // hard throw -- same second-order gap found and fixed for the earlier
+  // reconciliation slice (Documents/Inventory/Buyer/Refinance).
+  HOUSEHOLD_INVITATION: definition('HOUSEHOLD_INVITATION', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'household.invitation', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  GUIDANCE_JOURNEY_CREATE: definition('GUIDANCE_JOURNEY_CREATE', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance.journey.create', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  QUOTE_COMPARISON_CREATE: definition('QUOTE_COMPARISON_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'quote-comparison.create', ['SUMMARY', 'WORKFLOW_PROGRESS', 'OUTPUT_ARTIFACTS', 'BOUNDARY']),
   QUOTE_COMPARISON_REVIEW: definition('QUOTE_COMPARISON_REVIEW', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'quote-comparison.review', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
-  HOME_DEADLINE_MONITOR: definition('HOME_DEADLINE_MONITOR', 'MONITOR', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-deadline.monitor', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // IW-FRESH-003 fix: BOUNDARY added, same reason as above.
+  HOME_DEADLINE_MONITOR: definition('HOME_DEADLINE_MONITOR', 'MONITOR', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-deadline.monitor', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPITAL_RESERVE_PLAN: definition('CAPITAL_RESERVE_PLAN', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-reserve.plan', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   RENOVATION_PERMIT_READINESS: definition('RENOVATION_PERMIT_READINESS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'renovation-permit.readiness', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
@@ -334,13 +342,15 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // (§7.4), never raw AgentRun / AgentState rows.
   HVAC_SPECIALIST_ENGAGE: definition('HVAC_SPECIALIST_ENGAGE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.specialist-engage', ['SUMMARY', 'GROUPED_LIST', 'ASSUMPTIONS', 'LIMITATION', 'EMPTY_STATE', 'BOUNDARY']),
   HVAC_DECISION_SCENARIO: definition('HVAC_DECISION_SCENARIO', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.scenario', ['SUMMARY', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'LIMITATION', 'BOUNDARY']),
-  HVAC_DECISION_ABANDON: definition('HVAC_DECISION_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.abandon', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // IW-FRESH-003 fix: BOUNDARY added, same reason as above.
+  HVAC_DECISION_ABANDON: definition('HVAC_DECISION_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.abandon', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // Ask Intelligence FRD Phase 8B — confirmed ownership-horizon
   // personalization (FRD §11). Preferences are sensitive/material, hence
   // MATERIAL_DECISION for save; forget/revoke is safety-neutral, matching
   // HVAC_DECISION_ABANDON's STANDARD choice.
   HVAC_PREFERENCE_SAVE: definition('HVAC_PREFERENCE_SAVE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.preference.save', ['SUMMARY', 'PREFERENCE_REFERENCE', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
-  HVAC_PREFERENCE_FORGET: definition('HVAC_PREFERENCE_FORGET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.preference.forget', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // IW-FRESH-003 fix: BOUNDARY added, same reason as above.
+  HVAC_PREFERENCE_FORGET: definition('HVAC_PREFERENCE_FORGET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.preference.forget', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // Ask Intelligence FRD Phase 9A ("What changed?", §16). Pure read-only,
   // mirrors INCIDENT_CLAIM_STATUS's shape: no confirmation, no
   // askDomainCommandRegistry entry, VIEWER floor.
@@ -350,9 +360,11 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // disputing a reported outcome never changes a recommendation or ranking
   // (Phase 10A exit criterion: "no production calibration is active" --
   // that only happens in the separate, unbuilt Phase 10B).
-  HVAC_DECISION_OUTCOME_REPORT: definition('HVAC_DECISION_OUTCOME_REPORT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.outcome.report', ['SUMMARY', 'OUTCOME_SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE']),
+  // IW-FRESH-003 fix: BOUNDARY added, same reason as above.
+  HVAC_DECISION_OUTCOME_REPORT: definition('HVAC_DECISION_OUTCOME_REPORT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.outcome.report', ['SUMMARY', 'OUTCOME_SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   HVAC_DECISION_OUTCOME_VIEW: definition('HVAC_DECISION_OUTCOME_VIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'decision-platform.hvac.outcome.view', ['OUTCOME_SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE']),
-  HVAC_DECISION_OUTCOME_UNLINK: definition('HVAC_DECISION_OUTCOME_UNLINK', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.outcome.unlink', ['SUMMARY', 'WORKFLOW_PROGRESS', 'GROUPED_LIST', 'EMPTY_STATE']),
+  // IW-FRESH-003 fix: BOUNDARY added, same reason as above.
+  HVAC_DECISION_OUTCOME_UNLINK: definition('HVAC_DECISION_OUTCOME_UNLINK', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.outcome.unlink', ['SUMMARY', 'WORKFLOW_PROGRESS', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   // Home Buyer FRD §13.3. Reads are VIEWER-floor STATUS_SUMMARY/RECORD_QUERY
   // operations grounded in the canonical Buyer Plan overview; the completion
   // command mirrors MAINTENANCE_TASK_COMPLETE's CONTRIBUTOR-floor COMMAND shape.
@@ -375,7 +387,10 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // reconciliation mechanism at all and pushes no LIMITATION block, a
   // separate, not-yet-fixed gap outside this fix's scope.
   BUYER_TASK_COMPLETE: definition('BUYER_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.complete', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
-  BUYER_TASK_CREATE: definition('BUYER_TASK_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // IW-FRESH-003 fix: LIMITATION added -- matches BUYER_TASK_COMPLETE/UPDATE's
+  // own "Saved; list could not refresh" idiom now that this handler also
+  // calls reconcileAskExecutionSideEffects.
+  BUYER_TASK_CREATE: definition('BUYER_TASK_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.create', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   BUYER_TASK_UPDATE: definition('BUYER_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   BUYER_MOVE_STATUS: definition('BUYER_MOVE_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.move-status', ['SUMMARY', 'GROUPED_LIST']),
   BUYER_FINANCING_READINESS: definition('BUYER_FINANCING_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.financing-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
@@ -389,7 +404,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // Reclassification is a canonical, transactional obligation change (FRD
   // §10.2), not a routine edit -- CONTRIBUTOR floor with explicit confirmation,
   // matching the domain command registry entry below.
-  BUYER_FINDING_DISPOSITION: definition('BUYER_FINDING_DISPOSITION', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer.finding.disposition', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // IW-FRESH-003 fix: LIMITATION added, same reason as BUYER_TASK_CREATE above.
+  BUYER_FINDING_DISPOSITION: definition('BUYER_FINDING_DISPOSITION', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer.finding.disposition', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   // Scoped to cancellation and lifecycle-date changes only. The close
   // transition itself is deliberately NOT exposed here -- FRD §14.13/§21.1
   // require the dedicated Closing Day Companion's own wire-fraud/ID/funds

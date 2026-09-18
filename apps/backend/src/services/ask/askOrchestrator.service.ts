@@ -10408,7 +10408,17 @@ async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Pr
     artifactType = 'INSPECTION_FINDING'; artifactId = finding.id;
     const findingReasonCode = action === 'ACCEPT' ? 'INSPECTION_FINDING_ACCEPTED' : action === 'DISMISS' ? 'INSPECTION_FINDING_DISMISSED' : 'INSPECTION_FINDING_RESOLVED';
     result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: ['Show remaining inspection findings'] };
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's INSPECTION_FINDING_UPDATE entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `inspection-finding-refresh-failed-${finding.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'This update was saved to the canonical inspection record. The findings list you were viewing could not refresh automatically -- ask "Show remaining inspection findings" to see its current state.',
+        suggestions: ['Show remaining inspection findings'],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 
 // Ask Cozy Stage 3, Phase 7 write-path slice (implementation plan §13; FRD
@@ -10454,7 +10464,17 @@ async function confirmSellerPrepItemDecision(ctx: ConfirmCapabilityContext): Pro
     }],
     suggestions: ['Check my sale readiness'],
   };
-  return { result, artifactType: 'SALE_READINESS_ITEM', artifactId: item.id };
+  // IW-FRESH-003 fix: previously called no reconciliation mechanism at all
+  // -- see ASK_MUTATION_IMPACT_MAP's SELLER_PREP_ITEM_DECISION entry.
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'BOUNDARY', id: `seller-prep-refresh-failed-${item.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+      body: 'This decision was saved to the shared seller-prep checklist. The checklist you were viewing could not refresh automatically -- ask "Check my sale readiness" to see its current state.',
+      suggestions: ['Check my sale readiness'],
+    });
+  }
+  return { result, artifactType: 'SALE_READINESS_ITEM', artifactId: item.id, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmDocumentPromotionConfirm(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -10541,7 +10561,17 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
     artifactType = 'OPERATIONAL_WORK_ITEM'; artifactId = item.id;
     const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : 'OPERATIONAL_WORK_COMPLETED';
     result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's OPERATIONAL_WORK_UPDATE entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `operational-work-refresh-failed-${item.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'This update was saved to the canonical Operational Work item. The list you were viewing could not refresh automatically -- ask "What needs my attention next?" to see its current state.',
+        suggestions: ['What needs my attention next?'],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: after a confirmation-
 // gated mutation succeeds, refresh the list execution it was clicked from
@@ -10643,6 +10673,69 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // (the refinance decision read a "set up a monitor" action is typically
   // launched from) shows about current monitoring state.
   REFINANCE_RATE_MONITOR: ['REFINANCE_ANALYSIS'],
+  // Finishing the remaining XREC-001 backlog surfaced by the coverage audit
+  // (docs/architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md), same
+  // reconcileAskExecutionSideEffects mechanism, same conservative-sibling
+  // design as every entry above.
+  //
+  // The finding's own status/work-disposition is exactly what INSPECTION_FINDINGS's
+  // list shows per row.
+  INSPECTION_FINDING_UPDATE: ['INSPECTION_FINDINGS'],
+  // The item's status is exactly what SELLER_PREP_CHECKLIST's list shows per row.
+  SELLER_PREP_ITEM_DECISION: ['SELLER_PREP_CHECKLIST'],
+  // Accepting/deferring/snoozing/completing an Operational Work item changes
+  // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
+  // handler's own suggested follow-up ("What needs my attention next?").
+  OPERATIONAL_WORK_UPDATE: ['HOME_ACTIONS'],
+  // Creating a task changes the same BUYER_PLAN_STATUS/BUYER_DEADLINES
+  // membership/counts BUYER_TASK_UPDATE/BUYER_TASK_COMPLETE already declare.
+  BUYER_TASK_CREATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
+  // BUYER_INSPECTION_REVIEW's own open-finding count is exactly what changes
+  // when a finding's disposition is classified (confirmed by the coverage
+  // audit's own read of that operation).
+  BUYER_FINDING_DISPOSITION: ['BUYER_INSPECTION_REVIEW'],
+  // Creating (or reusing) a workspace changes what QUOTE_COMPARISON_REVIEW
+  // shows for this property.
+  QUOTE_COMPARISON_CREATE: ['QUOTE_COMPARISON_REVIEW'],
+  // All 7 HVAC decision-platform operations affect what HVAC_DECISION_CONTINUE
+  // (the thread's own status/recommendation read) shows for that thread;
+  // OUTCOME_REPORT/OUTCOME_UNLINK additionally affect HVAC_DECISION_OUTCOME_VIEW's
+  // own outcome list directly. No entity-specific filtering beyond the shared
+  // same-session/same-property scoping `refreshImpactedSiblingExecutions`
+  // already does -- a homeowner with multiple open HVAC threads may see an
+  // unrelated thread's still-visible card re-fetch using ITS OWN stored
+  // parameters (harmless, same conservative design as every sibling above).
+  HVAC_DECISION_START: ['HVAC_DECISION_CONTINUE'],
+  HVAC_DECISION_SCENARIO: ['HVAC_DECISION_CONTINUE'],
+  HVAC_DECISION_ABANDON: ['HVAC_DECISION_CONTINUE'],
+  HVAC_DECISION_OUTCOME_REPORT: ['HVAC_DECISION_OUTCOME_VIEW', 'HVAC_DECISION_CONTINUE'],
+  HVAC_DECISION_OUTCOME_UNLINK: ['HVAC_DECISION_OUTCOME_VIEW', 'HVAC_DECISION_CONTINUE'],
+  // Saving/forgetting a preference already calls
+  // decisionThreadService.markThreadsStaleByIds on every canonically
+  // affected DecisionThread (a stronger, entity-precise mechanism than this
+  // map provides) -- but that only marks the CANONICAL record stale; it does
+  // not itself re-fetch an already-rendered Ask conversation card in the
+  // same session, which is what this sibling declaration is for.
+  HVAC_PREFERENCE_SAVE: ['HVAC_DECISION_CONTINUE'],
+  HVAC_PREFERENCE_FORGET: ['HVAC_DECISION_CONTINUE'],
+  // The MATERIAL_DEADLINE/insurance branch of confirmHomeDeadlineMonitor
+  // creates or updates a real PropertyMaintenanceTask (confirmed by direct
+  // read) -- MAINTENANCE_STATUS's own list is exactly what would show it.
+  HOME_DEADLINE_MONITOR: ['MAINTENANCE_STATUS'],
+  // Both are generic property-record writers, same reasoning as
+  // CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM above.
+  CAPTURE_WARRANTY_CONFIRM: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  // Attaches a document to a canonical HomeEvent -- DOCUMENT_LOOKUP (the
+  // document vault) is the direct sibling; PROPERTY_SUMMARY as the general
+  // one, matching the other three CAPTURE_*_CONFIRM operations.
+  CAPTURE_EVIDENCE_CONFIRM: ['DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY'],
+  // GUIDANCE_JOURNEY_CREATE and HOUSEHOLD_INVITATION have no still-visible
+  // Ask read operation whose membership/status they plausibly affect (no
+  // "list my guidance journeys" or "list household members" read exists) --
+  // deliberately left out of this map. Their confirm handlers still call
+  // reconcileAskExecutionSideEffects for the explicit sourceExecutionId
+  // refresh (the one result a launched-from row-action would refresh), just
+  // with zero declared siblings.
 };
 
 // Pure decision core, extracted for direct unit testing (same convention as
@@ -10973,7 +11066,18 @@ async function confirmBuyerTaskCreate(ctx: ConfirmCapabilityContext): Promise<Co
     };
     artifactType = 'HOME_BUYER_TASK';
     artifactId = created.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's BUYER_TASK_CREATE entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `buyer-task-create-refresh-failed-${created.id}`, title: 'Saved; list could not refresh',
+        body: 'This task was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11092,7 +11196,18 @@ async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Pr
     };
     artifactType = 'INSPECTION_FINDING';
     artifactId = finding.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's BUYER_FINDING_DISPOSITION entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `buyer-finding-disposition-refresh-failed-${finding.id}`, title: 'Saved; list could not refresh',
+        body: 'This classification was saved to the canonical record. The findings list you were viewing could not refresh automatically -- ask "Which inspection findings still need a decision?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'Which inspection findings still need a decision?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11411,7 +11526,19 @@ async function confirmGuidanceJourneyCreate(ctx: ConfirmCapabilityContext): Prom
     result = { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-${journey.id}`, title: 'Guided plan started', status: 'COMPLETED', description: 'The resumable guidance journey is now linked to this home.', details: [{ label: 'Scope', value: candidate.data.label }, { label: 'Plan', value: candidate.data.issueType.replace(/_/g, ' ') }], actions: [{ id: 'open-journey', label: 'Open guided plan', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
     artifactType = command.artifactType;
     artifactId = journey.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all. No sibling declared in ASK_MUTATION_IMPACT_MAP (no "list my
+    // guidance journeys" read exists) -- this still gets the explicit
+    // sourceExecutionId refresh for free.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `guidance-journey-refresh-failed-${journey.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The guided plan was started successfully. A result you were viewing could not refresh automatically -- open the guided plan directly to see its current state.',
+        suggestions: [],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11453,7 +11580,17 @@ async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Prom
     };
     artifactType = command.artifactType;
     artifactId = created.workspace.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's QUOTE_COMPARISON_CREATE entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `quote-comparison-create-refresh-failed-${created.workspace.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The comparison workspace was saved. A result you were viewing could not refresh automatically -- open the workspace directly to see its current state.',
+        suggestions: [],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHvacDecisionStart(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11491,7 +11628,18 @@ async function confirmHvacDecisionStart(ctx: ConfirmCapabilityContext): Promise<
     };
     artifactType = command.artifactType;
     artifactId = createdThread.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HVAC_DECISION_START entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `hvac-decision-start-refresh-failed-${createdThread.id}`, title: 'Saved; list could not refresh',
+        body: 'The decision thread was started successfully. A result you were viewing could not refresh automatically -- ask "Should I repair or replace my HVAC?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'Should I repair or replace my HVAC?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHvacDecisionScenario(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11532,7 +11680,18 @@ async function confirmHvacDecisionScenario(ctx: ConfirmCapabilityContext): Promi
     };
     artifactType = command.artifactType;
     artifactId = scenario.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HVAC_DECISION_SCENARIO entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `hvac-decision-scenario-refresh-failed-${scenario.id}`, title: 'Saved; list could not refresh',
+        body: 'The scenario was saved successfully. A result you were viewing could not refresh automatically -- ask "Should I repair or replace my HVAC?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'Should I repair or replace my HVAC?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHvacDecisionAbandon(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11558,7 +11717,17 @@ async function confirmHvacDecisionAbandon(ctx: ConfirmCapabilityContext): Promis
     };
     artifactType = command.artifactType;
     artifactId = abandonedThread.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HVAC_DECISION_ABANDON entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `hvac-decision-abandon-refresh-failed-${abandonedThread.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The decision was abandoned successfully. A result you were viewing could not refresh automatically -- ask about this HVAC system again to see its current state.',
+        suggestions: [],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHvacDecisionOutcomeReport(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11588,7 +11757,17 @@ async function confirmHvacDecisionOutcomeReport(ctx: ConfirmCapabilityContext): 
     };
     artifactType = command.artifactType;
     artifactId = observation.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HVAC_DECISION_OUTCOME_REPORT entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `hvac-outcome-report-refresh-failed-${observation.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The outcome was recorded successfully. A result you were viewing could not refresh automatically -- ask about this decision again to see its current state.',
+        suggestions: [],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHvacDecisionOutcomeUnlink(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11614,7 +11793,17 @@ async function confirmHvacDecisionOutcomeUnlink(ctx: ConfirmCapabilityContext): 
     };
     artifactType = command.artifactType;
     artifactId = disputed.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HVAC_DECISION_OUTCOME_UNLINK entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `hvac-outcome-unlink-refresh-failed-${disputed.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The outcome was disputed successfully. A result you were viewing could not refresh automatically -- ask about this decision again to see its current state.',
+        suggestions: [],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHvacPreferenceSave(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11680,7 +11869,20 @@ async function confirmHvacPreferenceSave(ctx: ConfirmCapabilityContext): Promise
     };
     artifactType = command.artifactType;
     artifactId = savedIds[0] ?? '';
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HVAC_PREFERENCE_SAVE entry. This
+    // is in addition to, not instead of, the markThreadsStaleByIds call
+    // above (that marks the canonical DecisionThread stale; this refreshes
+    // an already-rendered Ask conversation card in the same session).
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: 'hvac-preference-save-refresh-failed', severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The preference was saved successfully. A result you were viewing could not refresh automatically -- ask "Should I repair or replace my HVAC?" to see its current state.',
+        suggestions: ['Should I repair or replace my HVAC?'],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHvacPreferenceForget(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11716,7 +11918,19 @@ async function confirmHvacPreferenceForget(ctx: ConfirmCapabilityContext): Promi
     };
     artifactType = command.artifactType;
     artifactId = candidate.preferenceValueId;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HVAC_PREFERENCE_FORGET entry
+    // (same markThreadsStaleByIds-plus-refresh reasoning as
+    // confirmHvacPreferenceSave above).
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `hvac-preference-forget-refresh-failed-${candidate.preferenceValueId}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The preference was forgotten successfully. A result you were viewing could not refresh automatically -- ask "Should I repair or replace my HVAC?" to see its current state.',
+        suggestions: ['Should I repair or replace my HVAC?'],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHomeDeadlineMonitor(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11783,7 +11997,19 @@ async function confirmHomeDeadlineMonitor(ctx: ConfirmCapabilityContext): Promis
     result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [`Reschedule ${task.title}`, `Archive ${task.title}`] };
     artifactType = command.artifactType;
     artifactId = task.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's HOME_DEADLINE_MONITOR entry
+    // (the non-maintenance branch above creates/updates a real
+    // PropertyMaintenanceTask, so MAINTENANCE_STATUS is a genuine sibling).
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `home-deadline-monitor-refresh-failed-${task.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The reminder was saved successfully. A result you were viewing could not refresh automatically -- ask "What maintenance is still pending?" to see its current state.',
+        suggestions: ['What maintenance is still pending?'],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11834,7 +12060,19 @@ async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promis
     };
     artifactType = 'HOUSEHOLD_INVITE';
     artifactId = invite.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all. No sibling declared in ASK_MUTATION_IMPACT_MAP (no "list
+    // household members" read exists) -- this still gets the explicit
+    // sourceExecutionId refresh for free.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'BOUNDARY', id: `household-invitation-refresh-failed-${invite.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+        body: 'The invitation was saved successfully. A result you were viewing could not refresh automatically -- ask "Who currently has access to this home?" to see its current state.',
+        suggestions: ['Who currently has access to this home?'],
+      });
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmRefinanceRateMonitor(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -12216,7 +12454,17 @@ async function confirmCaptureWarranty(ctx: ConfirmCapabilityContext): Promise<Co
     }],
     confirmation: null, suggestions: [],
   };
-  return { result, artifactType: command.artifactType, artifactId: warranty.id };
+  // IW-FRESH-003 fix: previously called no reconciliation mechanism at all
+  // -- see ASK_MUTATION_IMPACT_MAP's CAPTURE_WARRANTY_CONFIRM entry.
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'BOUNDARY', id: `capture-warranty-refresh-failed-${warranty.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+      body: 'This warranty was saved to your Living Home Record. A list you were viewing could not refresh automatically -- ask again to see its current state.',
+      suggestions: [],
+    });
+  }
+  return { result, artifactType: command.artifactType, artifactId: warranty.id, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('capture.warranty.confirm', confirmCaptureWarranty);
 
@@ -12286,7 +12534,17 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
     }],
     confirmation: null, suggestions: [],
   };
-  return { result, artifactType: command.artifactType, artifactId: link.id };
+  // IW-FRESH-003 fix: previously called no reconciliation mechanism at all
+  // -- see ASK_MUTATION_IMPACT_MAP's CAPTURE_EVIDENCE_CONFIRM entry.
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'BOUNDARY', id: `capture-evidence-refresh-failed-${link.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+      body: 'This evidence was attached to your home timeline. A list you were viewing could not refresh automatically -- ask again to see its current state.',
+      suggestions: [],
+    });
+  }
+  return { result, artifactType: command.artifactType, artifactId: link.id, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('capture.evidence.confirm', confirmCaptureEvidence);
 

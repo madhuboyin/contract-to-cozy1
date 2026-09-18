@@ -59,9 +59,15 @@ export const HOUSEHOLD_SKILL = Object.freeze({
     "reversibility": "REVERSIBLE"
   },
   "authorizationFloor": "OWNER",
+  // IW-FRESH-003 fix: BOUNDARY added -- resolveEffectiveSkillOperationPolicy
+  // intersects this list with HOUSEHOLD_INVITATION's own allowedBlockTypes
+  // (askOperationRegistry.ts, fixed for the same reason), so both lists
+  // need it or confirmHouseholdInvitation's new reconciliation-failure
+  // block would hit assertSkillResultBlocksAllowed's hard throw.
   "allowedResultBlocks": [
     "SUMMARY",
-    "WORKFLOW_PROGRESS"
+    "WORKFLOW_PROGRESS",
+    "BOUNDARY"
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },

@@ -141,7 +141,8 @@ export const HOUSEHOLD_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   "expectedBlockTypes": [
     "SUMMARY",
-    "WORKFLOW_PROGRESS"
+    "WORKFLOW_PROGRESS",
+    "BOUNDARY"
   ],
   "expectedCanonicalCalls": [
     {
