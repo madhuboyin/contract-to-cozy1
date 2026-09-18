@@ -4,6 +4,7 @@ import { useContext } from 'react';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 import { ResultViewContext } from '@/features/ask/useResultView';
+import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
@@ -101,13 +102,15 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   );
 }
 
-// Three bespoke rendering exceptions in the whole registry: a
+// Four bespoke rendering exceptions in the whole registry: a
 // `GROUPED_LIST` block with id `maintenance-groups`; one of Inventory's
 // two item-detail-eligible ids (`inventory-results`, the primary result,
 // and `inventory-entity-selection`, the disambiguation list -- both list
 // the same INVENTORY_ITEM entity shape, so both open the same inline
-// detail); or `inventory-history` (HomeEvent timeline entries linked to an
-// inventory item -- a different entity type, so its own component). All
+// detail); `inventory-history` (HomeEvent timeline entries linked to an
+// inventory item -- a different entity type, so its own component); or
+// `document-lookup-groups` (Documents by type, DOCUMENT_LOOKUP's own
+// result -- a Property-records sub-domain, not Inventory-adjacent). All
 // are still registered under the single `GROUPED_LIST` type (see
 // ./registry.tsx) -- the split is by block id, not a second block type.
 const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection']);
@@ -124,6 +127,10 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }
   if (block.id === 'inventory-history') {
     return <HomeEventResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  if (block.id === 'document-lookup-groups') {
+    return <DocumentResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

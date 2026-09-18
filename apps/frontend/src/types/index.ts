@@ -1456,6 +1456,12 @@ export interface Document {
   warrantyId: string | null;
   policyId: string | null;
   createdAt: string;
+  // Optional: present on a full canonical row (e.g. Ask's inline document
+  // detail, ASK_COZY_INLINE_WORKSPACE_FRD Phase 3) but not every existing
+  // caller's own select/projection.
+  verificationStatus?: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+  verifiedAt?: string | null;
+  updatedAt?: string;
 }
 
 /**

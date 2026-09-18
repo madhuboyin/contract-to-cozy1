@@ -3428,6 +3428,15 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
     tone: unverifiedCount ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }],
   }, {
+    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType lets
+    // GroupedListBlock.tsx route this block through DocumentResultList
+    // instead of the generic renderer's bare href. Detail is fetched via
+    // GET /api/documents/property/:propertyId/:documentId
+    // (propertyAuthMiddleware, VIEWER floor matching this operation's own
+    // floor) -- deliberately NOT the existing GET /api/documents/:id
+    // (requireDocumentOwnership, CONTRIBUTOR floor for a non-uploaded
+    // document), which would 404 for every VIEWER-role household member
+    // opening a document they didn't personally upload.
     type: 'GROUPED_LIST', filters: [],
     id: 'document-lookup-groups',
     title: 'Documents by type',
@@ -3439,6 +3448,7 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
       items: docs.slice(0, 20).map((document) => ({
         id: document.id,
         title: document.name,
+        entityType: 'DOCUMENT',
         description: document.description ?? null,
         meta: [document.verificationStatus.toLowerCase().replace(/_/g, ' '), humanDate(document.createdAt)].filter((value): value is string => Boolean(value)),
         status: document.verificationStatus,

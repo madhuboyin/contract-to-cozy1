@@ -4,6 +4,7 @@ import { Router, Response } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireDocumentOwnership } from '../middleware/documentAuth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 // Use the unified, extended request type
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
@@ -369,6 +370,59 @@ router.get('/warranties', authenticate, async (req: CustomRequest, res: Response
   } catch (err: any) {
     logger.error({ err }, '[DOCUMENTS] list warranties failed');
     return res.status(500).json({ success: false, message: err?.message || 'Failed to list warranties' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/documents/property/{propertyId}/{documentId}:
+ *   get:
+ *     summary: Get a single document scoped to a property (VIEWER floor)
+ *     description: >
+ *       ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: a property-scoped detail read
+ *       for Ask's inline document detail, deliberately separate from
+ *       GET /:id (requireDocumentOwnership, CONTRIBUTOR floor for a
+ *       non-uploaded document). DOCUMENT_LOOKUP's own list is VIEWER-floor
+ *       (ensurePropertyAccess) -- reusing requireDocumentOwnership here
+ *       would make every household VIEWER who can see the list get a false
+ *       "not found" opening any document they didn't personally upload.
+ *       propertyAuthMiddleware matches the list's own floor instead.
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: propertyId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: The document
+ *       404:
+ *         description: Property not found/access denied, or the document does not belong to this property
+ */
+router.get('/property/:propertyId/:documentId', authenticate, propertyAuthMiddleware, async (req: CustomRequest, res: Response) => {
+  try {
+    const { propertyId, documentId } = req.params;
+    const document = await prisma.document.findFirst({ where: { id: documentId, propertyId, deletedAt: null } });
+    if (!document) {
+      return res.status(404).json({ success: false, error: { message: 'Document not found', code: 'DOCUMENT_NOT_FOUND' } });
+    }
+    const bucket = process.env.S3_BUCKET;
+    const isS3Key = Boolean(bucket && document.fileUrl && !document.fileUrl.startsWith('data:'));
+    const fileSignedUrl = isS3Key
+      ? await presignGetObject({ bucket: bucket as string, key: document.fileUrl, expiresInSeconds: 3600, downloadFilename: document.name })
+      : null;
+    return res.json({ success: true, data: { document: { ...document, fileUrl: undefined, fileSignedUrl } } });
+  } catch (err: any) {
+    logger.error({ err }, '[DOCUMENTS] get property document failed');
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to retrieve document' });
   }
 });
 

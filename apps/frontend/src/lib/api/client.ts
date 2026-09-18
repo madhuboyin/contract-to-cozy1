@@ -4334,6 +4334,24 @@ class APIClient {
   }
 
   /**
+   * Get a single canonical document by ID, scoped to its property (VIEWER
+   * floor, matching DOCUMENT_LOOKUP's own Ask floor). Deliberately a
+   * different endpoint from the existing document-ownership routes
+   * (GET /api/documents/:id etc., CONTRIBUTOR floor for a non-uploaded
+   * document) -- see the route's own doc comment. Response is nested
+   * ({ data: { document } }), same shape as getInventoryItem.
+   *
+   * @param propertyId - Property ID the document belongs to
+   * @param documentId - Document ID
+   * @returns The document wrapped in { document }
+   */
+  async getPropertyDocument(propertyId: string, documentId: string): Promise<APIResponse<{ document: Document }>> {
+    return this.request<{ document: Document }>(`/api/documents/property/${propertyId}/${documentId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
    * Get maintenance task statistics for a property
    * 
    * @param propertyId - Property ID

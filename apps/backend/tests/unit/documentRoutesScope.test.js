@@ -9,6 +9,7 @@ let propertyAccess = { propertyId: 'owned-property-id', role: 'OWNER' };
 let autoCreateWarrantyCalls = 0;
 let updateCalls = [];
 let deleteCalls = 0;
+let propertyDocumentRecord = null;
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -24,6 +25,12 @@ require.cache[prismaPath] = {
         findMany: async (args) => {
           documentWhere = args.where;
           return [];
+        },
+        findFirst: async (args) => {
+          documentWhere = args.where;
+          return propertyDocumentRecord && propertyDocumentRecord.id === args.where.id && propertyDocumentRecord.propertyId === args.where.propertyId
+            ? propertyDocumentRecord
+            : null;
         },
         create: async (args) => ({
           id: 'doc-created',
@@ -339,4 +346,49 @@ test('restoring a document clears the trash fields', async () => {
   assert.equal(res.statusCode, 200);
   assert.equal(updateCalls.length, 1);
   assert.deepEqual(updateCalls[0].data, { deletedAt: null, deletedByUserId: null });
+});
+
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 (Documents inline detail): the
+// terminal handler only -- propertyAuthMiddleware itself (the earlier
+// stack entry, skipped by getRouteHandler's "last handler" extraction,
+// same as every other test in this file) is already covered by
+// propertyAuthMiddlewareMetrics.test.js. This route deliberately uses
+// propertyAuthMiddleware (VIEWER floor, matching DOCUMENT_LOOKUP's own
+// floor), not requireDocumentOwnership (CONTRIBUTOR floor) -- see the
+// route's own doc comment and the "household VIEWER... cannot act on a
+// file they did not upload" test above, which is exactly the case this
+// route exists to avoid for read-only Ask detail.
+test('the property-scoped document detail route returns the canonical document when it belongs to the given property', async () => {
+  documentWhere = null;
+  propertyDocumentRecord = {
+    id: 'doc-1', propertyId: 'home', name: 'Homeowners policy declaration', type: 'INSURANCE_CERTIFICATE',
+    description: null, fileSize: 1024, mimeType: 'application/pdf', fileUrl: 'documents/doc-1.pdf',
+    verificationStatus: 'VERIFIED', verifiedAt: null, createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+  };
+
+  const handler = getRouteHandler('/property/:propertyId/:documentId', 'get');
+  const req = { params: { propertyId: 'home', documentId: 'doc-1' } };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.success, true);
+  assert.equal(res.payload.data.document.id, 'doc-1');
+  assert.equal(res.payload.data.document.fileUrl, undefined, 'the raw S3 key must not be exposed, same as the list/analyze routes');
+  assert.deepEqual(documentWhere, { id: 'doc-1', propertyId: 'home', deletedAt: null });
+});
+
+test('the property-scoped document detail route returns a DOCUMENT_NOT_FOUND-coded 404 when the document does not belong to this property', async () => {
+  propertyDocumentRecord = { id: 'doc-1', propertyId: 'a-different-property' };
+
+  const handler = getRouteHandler('/property/:propertyId/:documentId', 'get');
+  const req = { params: { propertyId: 'home', documentId: 'doc-1' } };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.payload.success, false);
+  assert.equal(res.payload.error.code, 'DOCUMENT_NOT_FOUND', 'must be a distinguishable code, not the same bare message propertyAuthMiddleware uses for access denial, so the frontend can tell the two apart');
 });
