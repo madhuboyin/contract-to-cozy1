@@ -54,6 +54,26 @@ test('clicking an inventory item title opens canonical detail inline without nav
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('item-0');
 });
 
+test('selecting an item from the ambiguous-match disambiguation list also opens inline detail, not a navigation', async () => {
+  const disambiguation: typeof block = {
+    type: 'GROUPED_LIST', id: 'inventory-entity-selection', title: 'Which inventory item do you mean?', filters: [], actions: [],
+    sections: [{ id: 'matches', title: 'Matching records', count: 2, items: [
+      { id: 'item-0', title: 'Water heater', entityType: 'INVENTORY_ITEM', meta: ['Basement'], description: 'Rheem', status: 'GOOD', href: '/dashboard/properties/home/inventory?tab=items&openItemId=item-0' },
+      { id: 'item-1', title: 'Tankless water heater', entityType: 'INVENTORY_ITEM', meta: ['Garage'], description: 'Rinnai', status: 'GOOD', href: '/dashboard/properties/home/inventory?tab=items&openItemId=item-1' },
+    ] }],
+  };
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValueOnce({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+
+  const response = execution();
+  response.blocks = [disambiguation];
+  render(<List response={response} />);
+  expect(screen.queryByRole('link', { name: 'Water heater' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
+
+  await waitFor(() => expect(screen.getByText('Tank-style, in basement utility closet.')).toBeInTheDocument());
+  expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('item-0');
+});
+
 test('deleted item detail is distinct from an access-loss failure', async () => {
   jest.spyOn(api, 'getInventoryItem').mockRejectedValueOnce({ status: 404, payload: { success: false, error: { message: 'Inventory item not found', code: 'ITEM_NOT_FOUND' } } });
   render(<List response={execution()} />);

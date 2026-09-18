@@ -129,13 +129,15 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, onAcces
   );
 }
 
-// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, first slice: modeled directly on
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: modeled directly on
 // MaintenanceResultList.tsx (the proven reference pattern) but simpler --
 // no per-item mutation actions exist for inventory yet, so there is no
 // actionsForCanonicalStatus-equivalent staleness filtering to do, and
 // opening detail IS the selection mechanic (no separate "Select item"
 // toggle, since nothing else currently targets a selected-but-unopened
-// item).
+// item). Renders both `inventory-results` (the primary result) and
+// `inventory-entity-selection` (the ambiguous-match disambiguation list,
+// same INVENTORY_ITEM item shape) -- see GroupedListBlock.tsx's own id set.
 export function InventoryResultList({ block, propertyId, onFilter, onPage, onAccessLost, link }: {
   block: Block;
   propertyId?: string;

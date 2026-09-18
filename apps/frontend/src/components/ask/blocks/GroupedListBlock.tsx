@@ -101,17 +101,25 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 }
 
 // Two bespoke rendering exceptions in the whole registry: a `GROUPED_LIST`
-// block with id `maintenance-groups` or `inventory-results` gets a
-// dedicated, view-state-aware treatment instead of the generic list above.
-// Both are still registered under the single `GROUPED_LIST` type (see
-// ./registry.tsx) -- the split is by block id, not a second block type.
+// block with id `maintenance-groups`, or one of Inventory's two
+// item-detail-eligible ids (`inventory-results`, the primary result, and
+// `inventory-entity-selection`, the disambiguation list -- both list the
+// same INVENTORY_ITEM entity shape, so both open the same inline detail),
+// gets a dedicated, view-state-aware treatment instead of the generic list
+// above. All are still registered under the single `GROUPED_LIST` type
+// (see ./registry.tsx) -- the split is by block id, not a second block
+// type. `inventory-history` is deliberately NOT included here -- it lists
+// HomeEvent timeline entries, a different entity type with no inline
+// detail component yet.
+const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection']);
+
 export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
   if (block.id === 'maintenance-groups') {
     return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'inventory-results') {
+  if (INVENTORY_ITEM_DETAIL_BLOCK_IDS.has(block.id)) {
     return <InventoryResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }

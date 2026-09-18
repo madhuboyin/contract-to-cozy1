@@ -4336,8 +4336,14 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
         description: 'More than one Living Home Record matches this question. Open the intended item, or ask again using its room, brand, or model.',
         sections: [{
           id: 'matches', title: 'Matching records', count: matches.length,
+          // IW-PRIN-002 fix: entityType added so this disambiguation list
+          // also routes through InventoryResultList (GroupedListBlock.tsx
+          // matches both 'inventory-results' and this block's id) instead
+          // of the generic renderer's plain href -- selecting an ambiguous
+          // match now opens inline detail instead of implicitly ejecting to
+          // /inventory before the homeowner even confirmed which item they meant.
           items: matches.slice(0, MAX_RESULT_ITEMS).map((item) => ({
-            id: item.id, title: item.name, description: [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ') || null,
+            id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', description: [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ') || null,
             meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' '), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`].filter((value): value is string => Boolean(value)),
             status: item.condition, href: inventoryItemHref(propertyId, item.id),
           })),
@@ -4393,9 +4399,13 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     // place of navigating to /inventory. No item `actions` are declared yet
     // -- this is a read-only OPEN_INLINE_ENTITY slice; inline mutation would
     // need real per-item operations registered first. 'inventory-entity-selection'
-    // and 'inventory-history' below are unaffected and still hand off via a
-    // bare href, matching Maintenance's own "flagship surface first, broader
-    // entry points later" rollout shape.
+    // above (the disambiguation list) is also routed through
+    // InventoryResultList as of the same day -- selecting an ambiguous match
+    // opens inline detail instead of implicitly ejecting to /inventory.
+    // 'inventory-history' below is still unaffected and hands off via a bare
+    // href (it lists HomeEvent timeline entries, a different entity type
+    // with no inline detail component yet) -- a genuine remaining "broader
+    // entry points" gap, matching Maintenance's own flagship-first shape.
     type: 'GROUPED_LIST', filters: [], id: 'inventory-results', title: incompleteFocus ? 'Incomplete inventory records' : lifecycleFocus ? 'Recorded lifecycle dates approaching' : 'Inventory details',
     description: lifecycleFocus ? 'Only items with a recorded expected-expiry date within the next three years are included.' : null,
     sections: [{
