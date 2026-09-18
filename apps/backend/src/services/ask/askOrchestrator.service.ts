@@ -1669,6 +1669,12 @@ interface AskViewState {
   // Deadlines: a BuyerClosingHomeLaneKey or 'ALL').
   statusFilter: string;
   selectedTaskId: string | null;
+  // The last effective collection query, retained so paging never has to
+  // reconstruct scope/status intent from a display label or UI message.
+  queryMessage?: string | null;
+  // Per-section server windows. Optional for older executions and other
+  // consumers of this otherwise generic view-state shape.
+  collectionOffsets?: Record<string, number>;
   revision: number;
 }
 
@@ -1696,10 +1702,19 @@ async function loadAskViewState(executionId: string, userId: string): Promise<As
 // exercise at all) so this specific merge behavior is directly unit
 // -testable.
 export function mergeMaintenanceViewContinuation(
-  priorViewState: Pick<AskViewState, 'domainScopePhrase' | 'dateScopePhrase' | 'roomScopePhrase'> | null | undefined,
+  priorViewState: (Pick<AskViewState, 'domainScopePhrase' | 'dateScopePhrase' | 'roomScopePhrase' | 'queryMessage'> & { statusFilter?: string }) | null | undefined,
   message: string,
-  intent: 'FILTER' | 'REFRESH' = 'FILTER',
+  intent: 'FILTER' | 'REFRESH' | 'PAGINATION' = 'FILTER',
 ): { effectiveMessage: string; isClearAllFilters: boolean } {
+  if (intent === 'PAGINATION' && priorViewState) {
+    const statusPhrase = priorViewState.statusFilter === 'OVERDUE' ? 'overdue maintenance tasks'
+      : priorViewState.statusFilter === 'DUE_SOON' ? 'maintenance tasks due soon'
+        : priorViewState.statusFilter === 'URGENT' ? 'urgent maintenance tasks'
+          : 'all open maintenance tasks';
+    const restoredQuery = priorViewState.queryMessage
+      ?? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, priorViewState.roomScopePhrase, statusPhrase].filter(Boolean).join(' ');
+    return { effectiveMessage: restoredQuery || message, isClearAllFilters: false };
+  }
   // A refresh reads an existing view; it must not replay a historical UI command.
   const isClearAllFilters = intent === 'FILTER' && /\bclear all filters\b/i.test(message);
   // External review [P2]: roomScopePhrase joins domain/date here so a room
@@ -1711,6 +1726,18 @@ export function mergeMaintenanceViewContinuation(
   return { effectiveMessage, isClearAllFilters };
 }
 
+export function resolveMaintenanceCollectionOffset(
+  totalCount: number,
+  currentOffset: number,
+  direction: 'CURRENT' | 'NEXT' | 'PREVIOUS',
+): number {
+  const requested = direction === 'NEXT' ? currentOffset + MAX_RESULT_ITEMS
+    : direction === 'PREVIOUS' ? currentOffset - MAX_RESULT_ITEMS
+      : currentOffset;
+  const lastPageOffset = Math.max(0, Math.floor(Math.max(0, totalCount - 1) / MAX_RESULT_ITEMS) * MAX_RESULT_ITEMS);
+  return Math.min(Math.max(0, requested), lastPageOffset);
+}
+
 async function maintenanceResult(
   userId: string,
   propertyId: string,
@@ -1719,7 +1746,8 @@ async function maintenanceResult(
   context: MaintenanceTaskContext,
   seasonalContext: SeasonalChecklistContext | null,
   seasonalContextAvailable: boolean,
-  viewIntent: 'FILTER' | 'REFRESH' = 'FILTER',
+  viewIntent: 'FILTER' | 'REFRESH' | 'PAGINATION' = 'FILTER',
+  pageRequest?: { sectionId: string; direction: 'NEXT' | 'PREVIOUS' } | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const now = new Date();
@@ -1844,6 +1872,8 @@ async function maintenanceResult(
     };
   };
 
+  const requestedOffsets = viewIntent === 'PAGINATION' ? { ...(priorViewState?.collectionOffsets ?? {}) } : {};
+  const normalizedOffsets: Record<string, number> = {};
   const sections = [
     ...(showOpen ? [{
       id: overdueOnly ? 'overdue' : dueSoonOnly || openTimeframe ? 'due' : 'open',
@@ -1852,10 +1882,15 @@ async function maintenanceResult(
     }] : []),
     ...(showCompleted ? [{ id: 'completed', title: `Completed${timeframe ? ` ${timeframe.label}` : ''}`, records: filteredCompleted, kind: 'COMPLETED' as const }] : []),
     ...(includeCancelled ? [{ id: 'cancelled', title: 'Cancelled', records: cancelled, kind: 'CANCELLED' as const }] : []),
-  ].map((section) => ({
-    id: section.id, title: section.title, count: section.records.length,
-    items: section.records.slice(0, MAX_RESULT_ITEMS).map((task) => recordItem(task, section.kind)),
-  }));
+  ].map((section) => {
+    const direction = pageRequest?.sectionId === section.id ? pageRequest.direction : 'CURRENT';
+    const offset = resolveMaintenanceCollectionOffset(section.records.length, requestedOffsets[section.id] ?? 0, direction);
+    normalizedOffsets[section.id] = offset;
+    return {
+      id: section.id, title: section.title, count: section.records.length, offset,
+      items: section.records.slice(offset, offset + MAX_RESULT_ITEMS).map((task) => recordItem(task, section.kind)),
+    };
+  });
   const displayed = sections.reduce((sum, section) => sum + section.count, 0);
   const overdueCount = active.filter((task) => task.nextDueDate && task.nextDueDate < now).length;
   const unscheduledCount = active.filter((task) => !task.nextDueDate).length;
@@ -1926,7 +1961,7 @@ async function maintenanceResult(
     // "urgent" here is the existing canonical interpretation (URGENT or HIGH
     // priority, not URGENT alone), so it is labeled accurately rather than
     // implying a narrower or newly-invented urgency score.
-    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing up to ${MAX_RESULT_ITEMS} items per section.${
+    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing ${MAX_RESULT_ITEMS}-item server pages when a section exceeds that size.${
       // ASK_COZY_INTERACTION_MODEL_UI_FRD HAND-002: the Maintenance page
       // now receives priority/overdue/due-soon/system, but has no
       // date-range or room filter UI at all -- disclose that explicitly
@@ -2004,6 +2039,8 @@ async function maintenanceResult(
     roomScopePhrase: roomScope,
     statusFilter,
     selectedTaskId: isClearAllFilters ? null : priorViewState?.selectedTaskId ?? null,
+    queryMessage: viewIntent === 'PAGINATION' ? priorViewState?.queryMessage ?? effectiveMessage : effectiveMessage,
+    collectionOffsets: normalizedOffsets,
     revision: (priorViewState?.revision ?? 0) + 1,
   };
   return {
@@ -7825,6 +7862,11 @@ registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   const priorViewState = envelope.launchContext?.sourceExecutionId
     ? await loadAskViewState(envelope.launchContext.sourceExecutionId, envelope.userId)
     : null;
+  const pageRequest = envelope.launchContext?.entityType === 'ASK_COLLECTION_SECTION'
+    && envelope.launchContext.entityId
+    && (envelope.launchContext.actionId === 'NEXT_PAGE' || envelope.launchContext.actionId === 'PREVIOUS_PAGE')
+    ? { sectionId: envelope.launchContext.entityId, direction: envelope.launchContext.actionId === 'NEXT_PAGE' ? 'NEXT' as const : 'PREVIOUS' as const }
+    : null;
   return maintenanceResult(
     envelope.userId,
     envelope.propertyId!,
@@ -7833,7 +7875,8 @@ registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
     composedContext.values[skillContextProviderKey(MAINTENANCE_TASK_CONTEXT_PROVIDER)] as MaintenanceTaskContext,
     (composedContext.values[skillContextProviderKey(SEASONAL_CHECKLIST_CONTEXT_PROVIDER)] as SeasonalChecklistContext | undefined) ?? null,
     seasonalEntry?.status === 'AVAILABLE',
-    envelope.launchContext?.surface === 'ASK_REFRESH' ? 'REFRESH' : 'FILTER',
+    pageRequest ? 'PAGINATION' : envelope.launchContext?.surface === 'ASK_REFRESH' ? 'REFRESH' : 'FILTER',
+    pageRequest,
   );
 });
 registerCapabilityHandler('maintenance.forecast', async (envelope) => maintenanceForecastResult(envelope.userId, envelope.propertyId!));
@@ -8467,7 +8510,7 @@ function mapPersistedExecution(execution: {
     : null;
   const rawViewState = storedParameters?.viewState;
   const viewState = rawViewState && typeof rawViewState === 'object' && !Array.isArray(rawViewState) && typeof (rawViewState as { resultId?: unknown }).resultId === 'string'
-    ? rawViewState as { resultId: string; domainScopePhrase: string | null; dateScopePhrase: string | null; statusFilter: string; selectedTaskId: string | null; revision: number }
+    ? rawViewState as AskViewState
     : null;
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
   const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;

@@ -147,6 +147,9 @@ const GroupedListBlockSchema = z.object({
     id: z.string(),
     title: z.string(),
     count: z.number().int().nonnegative(),
+    // Server-owned window into the full collection. Omitted by legacy
+    // producers; Maintenance uses it for stable inline pagination.
+    offset: z.number().int().nonnegative().optional(),
     items: z.array(GroupedListItemSchema).max(100),
   })).max(12),
   actions: z.array(AskActionSchema).max(3).default([]),
@@ -683,6 +686,8 @@ const AskExecutionResponseBaseSchema = z.object({
     dateScopePhrase: z.string().nullable(),
     statusFilter: z.string(),
     selectedTaskId: z.string().nullable(),
+    queryMessage: z.string().nullable().optional(),
+    collectionOffsets: z.record(z.string(), z.number().int().nonnegative()).optional(),
     revision: z.number().int().nonnegative(),
   }).nullable().default(null),
   contextVersion: z.string().nullable(),

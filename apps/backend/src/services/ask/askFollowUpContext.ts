@@ -25,7 +25,7 @@ const FILTER_CONTINUABLE_OPERATIONS: ReadonlySet<AskOperationId> = new Set([
   'BUYER_DEADLINES',
 ]);
 
-const ENVELOPE_PAGINATION_PATTERN = /^\s*(?:(?:show|load|see|get)\s+(?:me\s+)?(?:the\s+)?(?:next|more)|continue\s+(?:the\s+)?(?:intelligence|results?))\b/i;
+const ENVELOPE_PAGINATION_PATTERN = /^\s*(?:(?:show|load|see|get)\s+(?:me\s+)?(?:the\s+)?(?:next|more|previous)|continue\s+(?:the\s+)?(?:intelligence|results?))\b/i;
 const SPECIALIST_CONTINUATION_PATTERN = /\b(?:new|good|fair|poor|unknown|installed|installation|year|cost|estimate|quote|assessment|wrong|incorrect|not right|dispute|resume|continue|hvac|furnace|heater|heat pump|boiler|air conditioner|a\/?c|unit|system|one)\b/i;
 
 // Resolved executions worth treating as follow-up context. Boundary,
@@ -296,6 +296,21 @@ export async function resolveAskFollowUpMessage(input: {
         isFilterRefinement: false,
       };
     }
+  }
+
+  // Maintenance collection paging updates the same stable result rather
+  // than adding a second live list. The exact section and direction remain
+  // structured launch context owned by the declared UI control; this
+  // resolver only pins the read operation and source execution.
+  if (isEnvelopePagination && prior.operationId === 'MAINTENANCE_STATUS') {
+    return {
+      effectiveMessage: input.message,
+      forcedOperationId: 'MAINTENANCE_STATUS',
+      sourceExecutionId: prior.id,
+      continuationCursor: null,
+      suppliedInput: null,
+      isFilterRefinement: true,
+    };
   }
 
   if (isSpecialistContinuation && prior.operationId === 'HVAC_SPECIALIST_ENGAGE') {

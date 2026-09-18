@@ -16,9 +16,9 @@ function execution(revision = 1, executionId = 'execution'): AskExecutionRespons
     viewState: { resultId: 'result', revision, domainScopePhrase: 'hvac', dateScopePhrase: 'this month', statusFilter: 'ALL_OPEN', selectedTaskId: null },
   } as AskExecutionResponse;
 }
-function List({ response }: { response: AskExecutionResponse }) {
+function List({ response, onPage = () => {} }: { response: AskExecutionResponse; onPage?: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void }) {
   const controls = useResultView(response);
-  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onAction={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onPage={onPage} onAction={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
 }
 beforeEach(() => window.sessionStorage.clear());
 
@@ -84,6 +84,23 @@ test('clicking a maintenance task title opens canonical detail inline without na
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('task-0');
 });
 
+test('server-paged maintenance sections navigate inline and retain the traditional page as a separate option', () => {
+  const onPage = jest.fn();
+  const response = execution();
+  response.blocks = [{
+    ...block,
+    sections: [{ ...block.sections[0], count: 120, offset: 50 }],
+    actions: [{ id: 'view-all-maintenance', label: 'View all in Maintenance', href: '/dashboard/maintenance?propertyId=home', style: 'SECONDARY' }],
+  }];
+  render(<List response={response} onPage={onPage} />);
+  fireEvent.click(screen.getByRole('button', { name: /Previous page of Open/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Next page of Open/ }));
+  expect(onPage).toHaveBeenNthCalledWith(1, 'open', 'PREVIOUS');
+  expect(onPage).toHaveBeenNthCalledWith(2, 'open', 'NEXT');
+  expect(screen.getByText('Server results 51–58 of 120')).toBeInTheDocument();
+  expect(screen.getByText('View all in Maintenance')).toBeInTheDocument();
+});
+
 test('session deletion removes view state without affecting another session', () => {
   const key = resultViewKey('session', 'home', 'result');
   sessionStorage.setItem(key, '{}');
@@ -134,7 +151,7 @@ function buyerExecution(updatedAt: string, block: typeof buyerBlock = buyerBlock
 function BuyerList({ response }: { response: AskExecutionResponse }) {
   const controls = useResultView(response);
   return <ResultViewContext.Provider value={controls}>
-    <BlockView block={response.blocks[0]} executionId={response.executionId} onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} />
+    <BlockView block={response.blocks[0]} executionId={response.executionId} onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} />
   </ResultViewContext.Provider>;
 }
 function storeBuyerSelection(taskId: string) {

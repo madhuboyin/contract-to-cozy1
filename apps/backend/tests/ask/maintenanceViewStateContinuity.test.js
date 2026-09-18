@@ -12,6 +12,7 @@ require('ts-node/register');
 const {
   preservedExecutionHistory,
   mergeMaintenanceViewContinuation,
+  resolveMaintenanceCollectionOffset,
 } = require('../../src/services/ask/askOrchestrator.service.ts');
 
 test('preservedExecutionHistory stamps a fresh original when the row has no prior result at all', () => {
@@ -121,4 +122,33 @@ test('mergeMaintenanceViewContinuation treats a stored row with no roomScopePhra
   const { effectiveMessage } = mergeMaintenanceViewContinuation(priorViewState, 'Only show urgent tasks');
   assert.match(effectiveMessage, /hvac/i);
   assert.match(effectiveMessage, /urgent/i);
+});
+
+test('maintenance pagination reuses the exact effective query instead of parsing the paging control text', () => {
+  const priorViewState = {
+    domainScopePhrase: 'hvac', dateScopePhrase: 'this month', roomScopePhrase: 'basement',
+    queryMessage: 'hvac this month basement Only show urgent tasks',
+  };
+  const result = mergeMaintenanceViewContinuation(priorViewState, 'Show next maintenance results', 'PAGINATION');
+  assert.equal(result.effectiveMessage, priorViewState.queryMessage);
+  assert.equal(result.isClearAllFilters, false);
+});
+
+test('maintenance pagination restores scope and status for older view state without queryMessage', () => {
+  const result = mergeMaintenanceViewContinuation({
+    domainScopePhrase: 'hvac', dateScopePhrase: 'this month', roomScopePhrase: 'basement', statusFilter: 'URGENT',
+  }, 'Show next maintenance results', 'PAGINATION');
+  assert.match(result.effectiveMessage, /hvac/i);
+  assert.match(result.effectiveMessage, /this month/i);
+  assert.match(result.effectiveMessage, /basement/i);
+  assert.match(result.effectiveMessage, /urgent maintenance tasks/i);
+  assert.doesNotMatch(result.effectiveMessage, /show next/i);
+});
+
+test('maintenance collection offsets page and clamp against canonical totals', () => {
+  assert.equal(resolveMaintenanceCollectionOffset(121, 0, 'NEXT'), 50);
+  assert.equal(resolveMaintenanceCollectionOffset(121, 50, 'NEXT'), 100);
+  assert.equal(resolveMaintenanceCollectionOffset(121, 100, 'NEXT'), 100);
+  assert.equal(resolveMaintenanceCollectionOffset(121, 100, 'PREVIOUS'), 50);
+  assert.equal(resolveMaintenanceCollectionOffset(1, 50, 'CURRENT'), 0);
 });

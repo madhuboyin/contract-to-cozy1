@@ -75,6 +75,16 @@ test('Envelope pagination reuses the prior server-side cursor without exposing i
   assert.equal(result.effectiveMessage.includes('opaque-cursor'), false);
 });
 
+test('Maintenance pagination pins and replaces the same stable result', async () => {
+  mockRow = priorRow({ parametersJson: { viewState: { resultId: 'result-1' } } });
+  const result = await resolveAskFollowUpMessage({
+    sessionId: 'session-1', propertyId: 'property-1', message: 'Show next maintenance results', declaredSourceExecutionId: 'prior-execution-1',
+  });
+  assert.equal(result.forcedOperationId, 'MAINTENANCE_STATUS');
+  assert.equal(result.sourceExecutionId, 'prior-execution-1');
+  assert.equal(result.isFilterRefinement, true);
+});
+
 test('a Specialist fact reply is forced back to the shared Specialist operation', async () => {
   mockRow = priorRow({
     operationId: 'HVAC_SPECIALIST_ENGAGE',

@@ -69,7 +69,7 @@ function maintenanceExecution() {
     blocks: [
       { type: 'SUMMARY', id: 'maintenance-summary', title: '1 maintenance record matches this request', body: 'The task is recorded for this home.', tone: 'DEFAULT', actions: [] },
       { type: 'GROUPED_LIST', id: 'maintenance-groups', title: 'Maintenance record', description: 'Showing current recorded tasks.', filters: [], sections: [{
-        id: 'open', title: 'Pending and in progress', count: 1, items: [{
+        id: 'open', title: 'Pending and in progress', count: 51, offset: 0, items: [{
           id: 'maintenance-task-1', title: 'Service the heat pump', description: 'Annual preventive service.', meta: ['HVAC', 'Due Oct 1, 2026', 'high priority'], status: 'PENDING',
           href: `/dashboard/maintenance?propertyId=${propertyId}&taskId=maintenance-task-1&from=ask`, entityType: 'MAINTENANCE_TASK',
           actions: [{ id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_COMPLETE' }],
@@ -205,6 +205,23 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/multi-day heat risk/i.test(body.message)) {
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
+      return;
+    }
+    if (/show next maintenance results/i.test(body.message)) {
+      const response = maintenanceExecution();
+      response.executionId = 'execution-maintenance-page-2';
+      response.question = body.message;
+      (response as typeof response & { continuesExecutionId: string }).continuesExecutionId = 'execution-maintenance';
+      response.viewState = { ...response.viewState, revision: 2 };
+      const list = response.blocks.find((block) => block.type === 'GROUPED_LIST');
+      if (list?.type === 'GROUPED_LIST') {
+        list.sections = [{ id: 'open', title: 'Pending and in progress', count: 51, offset: 50, items: [{
+          id: 'maintenance-task-51', title: 'Inspect the attic fan', description: 'Final matching task.', meta: ['Attic', 'Due Nov 1, 2026', 'medium priority'], status: 'PENDING',
+          href: `/dashboard/maintenance?propertyId=${propertyId}&taskId=maintenance-task-51&from=ask`, entityType: 'MAINTENANCE_TASK', actions: [],
+        }] }];
+      }
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
       return;
     }
     if (/create a maintenance task/i.test(body.message)) {

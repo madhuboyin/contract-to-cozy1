@@ -223,6 +223,21 @@ test('maintenance create starts its capture inline and keeps setup optional', as
   await expect(page.getByRole('link', { name: 'Maintenance Setup' })).toBeVisible();
 });
 
+test('maintenance collection pages through the full server result without leaving Ask', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  await page.getByRole('button', { name: /Next page of Pending and in progress/ }).click();
+
+  await expect(page.getByText('Inspect the attic fan')).toBeVisible();
+  await expect(page.getByText('Server results 51–51 of 51')).toBeVisible();
+  await expect(page.locator('[id^="ask-execution-"]').filter({ hasText: 'Maintenance record' })).toHaveCount(1);
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect(page.getByRole('link', { name: 'View all in Maintenance' })).toBeVisible();
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

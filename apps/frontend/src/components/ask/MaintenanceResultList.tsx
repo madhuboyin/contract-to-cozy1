@@ -97,11 +97,12 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   );
 }
 
-export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onAction, link }: {
+export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, link }: {
   block: Block;
   propertyId?: string;
   disabled: boolean;
   onFilter: (message: string) => void;
+  onPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void;
   onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
@@ -131,6 +132,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
       </div>
     </div>
     {block.sections.map((section) => {
+      const offset = section.offset ?? 0;
       const visible = controls?.view.visibleCounts[section.id] ?? 5;
       return <div key={section.id} className="border-b border-slate-100 p-4">
         <h4 className="font-semibold">{section.title} · {section.count}</h4>
@@ -159,8 +161,14 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
             </li>;
           })}
         </ul>
-        {controls && visible < section.items.length && <button type="button" disabled={disabled} className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} tasks ({Math.min(visible, section.items.length)} of {section.count} shown)</button>}
-        {section.count > section.items.length && block.actions[0]?.href && <p className="mt-3 text-sm">{link(block.actions[0].href, `View all ${section.count} in Maintenance`)}</p>}
+        {controls && visible < section.items.length && <button type="button" disabled={disabled} className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} tasks ({offset + Math.min(visible, section.items.length)} of {section.count} reached)</button>}
+        {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
+          <p className="text-xs text-slate-500">Server results {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
+          <div className="flex gap-2">
+            {offset > 0 && <button type="button" disabled={disabled} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
+            {offset + section.items.length < section.count && <button type="button" disabled={disabled} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
+          </div>
+        </nav>}
       </div>;
     })}
     {detailTaskId && detailItem && <MaintenanceTaskDetail key={detailTaskId} taskId={detailTaskId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onClose={closeDetail} />}
