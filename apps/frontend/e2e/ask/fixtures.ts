@@ -76,6 +76,14 @@ function propertySummaryTimelineExecution() {
         meta: ['Sep 1, 2026', 'improvement', 'evidence verified', 'home record'], status: 'EVIDENCE_VERIFIED', href: null,
       }] }],
       actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: `/dashboard/properties/${propertyId}/timeline`, style: 'SECONDARY' }],
+    }, {
+      type: 'GROUPED_LIST', id: 'property-rooms', title: 'Rooms', filters: [],
+      description: 'Select a room to inspect its current canonical details without leaving Ask Cozy.',
+      sections: [{ id: 'rooms', title: 'Recorded rooms', count: 1, items: [{
+        id: 'room-property-summary', title: 'Kitchen', entityType: 'INVENTORY_ROOM', description: null,
+        meta: ['Kitchen', 'Updated Sep 18, 2026'], status: null, href: null,
+      }] }],
+      actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${propertyId}/rooms`, style: 'SECONDARY' }],
     }],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: false, homeRecord: true, retryResponse: false }, suggestions: [],
@@ -316,6 +324,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       createdAt: '2026-09-01T12:00:00.000Z', document: { id: 'document-1', name: 'Roof invoice.pdf' },
     }],
   } } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/inventory/rooms/room-property-summary/insights`, (route) => fulfill(route, { success: true, data: {
+    room: { id: 'room-property-summary', name: 'Kitchen', type: 'KITCHEN', profile: null },
+    stats: { itemCount: 8, replacementTotalCents: 1250000, coverageGapsCount: 1, appliancesCount: 4, docsLinkedCount: 3 },
+    healthScore: { score: 82, band: 'GOOD', label: 'Good', evaluationState: 'SCORED', badges: [], improvements: [] },
+    kitchen: { missingAppliances: [], quickWins: [] },
+  } }));
   await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
     const pendingExecution = {
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',

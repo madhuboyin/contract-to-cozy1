@@ -73,7 +73,7 @@ export class RoomInsightsService {
       },
     });
 
-    if (!room) throw new APIError('Room not found', 404);
+    if (!room) throw new APIError('Room not found', 404, 'ROOM_NOT_FOUND');
 
     const items = room.items || [];
 

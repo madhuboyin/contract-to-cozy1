@@ -4610,9 +4610,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       type: 'GROUPED_LIST', filters: [], id: 'property-record-sections', title: 'What the record contains',
       description: 'Counts describe canonical records available to this household member.',
       sections: [{
-        id: 'record-sections', title: 'Living Home Record', count: 4,
+        id: 'record-sections', title: 'Living Home Record', count: 3,
         items: [
-          { id: 'rooms', title: 'Rooms', description: rooms ? `${rooms.count} room record${rooms.count === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: [], status: rooms ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/rooms` },
           { id: 'inventory', title: 'Systems and inventory', description: inventory ? `${inventory.totalCount} items · ${inventory.majorSystemCount} major systems · ${inventory.verifiedCount} verified` : 'Temporarily unavailable', meta: inventory ? [`${inventory.withDocumentCount} with documents`] : [], status: inventory ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/inventory` },
           { id: 'documents', title: 'Documents', description: documents ? `${documents.totalCount} documents · ${documents.verifiedCount} verified · ${documents.needsReviewCount} need review` : 'Temporarily unavailable', meta: documents ? [`${documents.linkedCount} linked to the home or an item`] : [], status: documents ? 'AVAILABLE' : 'UNAVAILABLE', href: `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}` },
           { id: 'household', title: 'Household access', description: household ? `${household.totalCount} household member${household.totalCount === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: household?.roles.map((role) => `${role.count} ${role.role.toLowerCase()}`) ?? [], status: household ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/household` },
@@ -4620,6 +4619,22 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       }],
       actions: [],
     });
+    if (rooms) {
+      blocks.push({
+        type: 'GROUPED_LIST', filters: [], id: 'property-rooms', title: 'Rooms',
+        description: rooms.count > 50
+          ? 'Showing the first 50 canonical room records. Open Rooms for the full collection.'
+          : 'Select a room to inspect its current canonical details without leaving Ask Cozy.',
+        sections: [{
+          id: 'rooms', title: 'Recorded rooms', count: rooms.count,
+          items: rooms.items.slice(0, 50).map((room) => ({
+            id: room.id, title: room.name, description: null, entityType: 'INVENTORY_ROOM', href: null, status: null,
+            meta: [readablePropertyValue(room.type), `Updated ${humanDate(room.updatedAt) ?? 'date unavailable'}`],
+          })),
+        }],
+        actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `${propertyHref}/rooms`, style: 'SECONDARY' }],
+      });
+    }
   }
 
   if (incompleteScopes.length) {

@@ -8,6 +8,7 @@ import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
+import { RoomResultList } from '../RoomResultList';
 import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 
@@ -110,7 +111,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 // detail); one of the HomeEvent detail blocks (`inventory-history`, events
 // linked to an inventory item, or `property-recent-events`, events surfaced
 // by PROPERTY_SUMMARY -- a different entity type, so its own component); or
-// `document-lookup-groups` (Documents by type, DOCUMENT_LOOKUP's own
+// `property-rooms` (canonical InventoryRoom records from PROPERTY_SUMMARY);
+// or `document-lookup-groups` (Documents by type, DOCUMENT_LOOKUP's own
 // result -- a Property-records sub-domain, not Inventory-adjacent). All
 // are still registered under the single `GROUPED_LIST` type (see
 // ./registry.tsx) -- the split is by block id, not a second block type.
@@ -129,6 +131,10 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }
   if (HOME_EVENT_DETAIL_BLOCK_IDS.has(block.id)) {
     return <HomeEventResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  if (block.id === 'property-rooms') {
+    return <RoomResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.id === 'document-lookup-groups') {

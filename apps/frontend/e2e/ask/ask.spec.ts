@@ -158,6 +158,23 @@ test('Property Summary timeline events open canonical detail inline with traditi
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Property Summary rooms open canonical detail inline with the full Rooms collection secondary', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Rooms', exact: true }) });
+  await expect(response.getByRole('link', { name: 'Kitchen' })).toHaveCount(0);
+  await expect(response.getByRole('button', { name: 'Kitchen' })).toBeVisible();
+  await expect(response.getByRole('link', { name: /Open Rooms/ })).toHaveAttribute('href', `/dashboard/properties/${propertyId}/rooms`);
+
+  await response.getByRole('button', { name: 'Kitchen' }).click();
+  await expect(response.getByText('Good · 82/100')).toBeVisible();
+  await expect(response.getByText('$12,500')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

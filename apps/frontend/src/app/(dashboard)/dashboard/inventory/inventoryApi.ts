@@ -396,10 +396,18 @@ export async function lookupInventoryBarcodeWithDiagnostics(
   return res?.data ?? res?.body ?? res?.payload ?? res?.result ?? res;
 }
 
-export async function getRoomInsights(propertyId: string, roomId: string) {
+export type RoomInsightsDTO = {
+  room: { id: string; name: string; type: string; profile: Record<string, unknown> | null };
+  stats: { itemCount: number; replacementTotalCents: number; coverageGapsCount: number; appliancesCount: number; docsLinkedCount: number };
+  healthScore: { score: number | null; band: string | null; label: string; evaluationState: string; badges: string[]; improvements: Array<{ title: string; detail?: string }> };
+  kitchen?: { missingAppliances: string[]; quickWins: Array<{ title: string; detail: string }> };
+  livingRoom?: { comfortScoreHint: 'LOW' | 'MEDIUM' | 'HIGH'; quickWins: Array<{ title: string; detail: string }> };
+};
+
+export async function getRoomInsights(propertyId: string, roomId: string): Promise<RoomInsightsDTO> {
   const res = await api.get(`/api/properties/${propertyId}/inventory/rooms/${roomId}/insights`);
   // support { success, data } or direct
-  return (res as any)?.data?.data ?? (res as any)?.data ?? res;
+  return ((res as any)?.data?.data ?? (res as any)?.data ?? res) as RoomInsightsDTO;
 }
 
 export async function patchRoomMeta(propertyId: string, roomId: string, input: { type?: string; profile?: any; heroImage?: string | null }) {

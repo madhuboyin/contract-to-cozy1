@@ -162,6 +162,20 @@ test('Property Summary declares recent HomeEvent identity for inline detail and 
   assert.doesNotMatch(producer, /status: event\.verificationStatus, href: `\$\{propertyHref\}\/timeline`/);
 });
 
+test('Property Summary declares bounded InventoryRoom identities for inline detail and a separate Rooms choice', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const start = orchestrator.indexOf("id: 'property-rooms'");
+  const end = orchestrator.indexOf("if (incompleteScopes.length)", start);
+  assert.ok(start > 0 && end > start, 'property-rooms producer not found');
+  const producer = orchestrator.slice(start, end);
+  assert.match(producer, /rooms\.items\.slice\(0, 50\)/);
+  assert.match(producer, /id: room\.id[\s\S]*entityType: 'INVENTORY_ROOM'[\s\S]*href: null/);
+  assert.match(producer, /id: 'open-rooms'[\s\S]*label: 'Open Rooms'[\s\S]*style: 'SECONDARY'/);
+
+  const roomInsights = readFileSync(resolve(__dirname, '../../src/services/roomInsights.service.ts'), 'utf8');
+  assert.match(roomInsights, /APIError\('Room not found', 404, 'ROOM_NOT_FOUND'\)/);
+});
+
 test('evidence claim mappings resolve exact response block and item identities', () => {
   const base = {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
