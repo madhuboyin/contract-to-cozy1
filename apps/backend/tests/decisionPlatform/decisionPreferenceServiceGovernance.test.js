@@ -67,6 +67,33 @@ test('saveOwnershipHorizonPreference never creates a Household as a side effect 
   assert.match(body, /HouseholdProfileNotEnabledError/);
 });
 
+// D03 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
+// saving a preference previously had no equivalent of revokeHvacPreference's
+// own affectedThreadIds computation, so a just-saved preference wasn't
+// guaranteed to reach any thread's next recommendation until something else
+// (an unrelated fact change, a manual resume) triggered a recompute --
+// a confirmed asymmetry with forget, which does mark threads stale.
+test('saveOwnershipHorizonPreference computes affectedThreadIds across every property in the household, not just the asking property — OWNERSHIP_HORIZON is household-wide (FRD §7.4)', () => {
+  const body = functionBody(preferenceServiceSource, /export async function saveOwnershipHorizonPreference\(/);
+  assert.match(body, /affectedThreadIds/);
+  assert.match(body, /householdProperty\.findMany/);
+  assert.doesNotMatch(body, /propertyId,\s*\n\s*decisionDefinitionId: 'HVAC_REPAIR_REPLACE'/, 'must not scope the affected-thread query to only the asking property');
+});
+
+test('saveRepairReplaceApproachPreference scopes affectedThreadIds to this same user\'s own threads on this property — REPAIR_REPLACE_APPROACH is (userId, propertyId)-scoped and only this user\'s threads would apply it on recompute', () => {
+  const body = functionBody(preferenceServiceSource, /export async function saveRepairReplaceApproachPreference\(/);
+  assert.match(body, /affectedThreadIds/);
+  assert.match(body, /createdByUserId:\s*userId/);
+});
+
+test('the HVAC_PREFERENCE_SAVE confirm handler marks affected threads stale after saving, closing the save/forget staleness asymmetry', () => {
+  const branchStart = orchestratorSource.indexOf('async function confirmHvacPreferenceSave(');
+  const branchEnd = orchestratorSource.indexOf('async function confirmHvacPreferenceForget(', branchStart);
+  assert.ok(branchStart >= 0 && branchEnd > branchStart);
+  const branch = orchestratorSource.slice(branchStart, branchEnd);
+  assert.match(branch, /markThreadsStaleByIds/);
+});
+
 test('createHvacScenario never calls a preference-save function — no scenario-to-profile leakage (FRD §13.3 / Phase 8B exit criterion)', () => {
   const body = functionBody(threadServiceSource, /export async function createHvacScenario\(/);
   assert.doesNotMatch(body, /saveOwnershipHorizonPreference|saveRepairReplaceApproachPreference/);
@@ -100,9 +127,16 @@ test('HVAC_DECISION_START/CONTINUE/SCENARIO declare every block type their own r
   // scanning source, since the two files must simply agree.
   const registrySource = readFileSync(resolve(__dirname, '../../src/services/ask/askOperationRegistry.ts'), 'utf8');
   const expectations = {
-    HVAC_DECISION_START: ['DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE'],
-    HVAC_DECISION_CONTINUE: ['DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE'],
+    // D01 fix: hvacDecisionDisclosureBlocks now also pushes EVIDENCE and
+    // ASSUMPTIONS on every read path (HVAC_DECISION_START's own 1 branch,
+    // HVAC_DECISION_CONTINUE's 2). HVAC_DECISION_CONTINUE's own registry
+    // entry already declared EVIDENCE (unused until this fix) but not
+    // ASSUMPTIONS -- the exact undeclared-block-type bug class this test
+    // exists to catch.
+    HVAC_DECISION_START: ['DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE', 'EVIDENCE', 'ASSUMPTIONS'],
+    HVAC_DECISION_CONTINUE: ['DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE', 'EVIDENCE', 'ASSUMPTIONS'],
     HVAC_DECISION_SCENARIO: ['SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE'],
+    HVAC_PREFERENCE_SAVE: ['WORKFLOW_PROGRESS'],
   };
   for (const [operationId, requiredBlockTypes] of Object.entries(expectations)) {
     const lineMatch = registrySource.match(new RegExp(`${operationId}: definition\\([^\\n]*\\)`));

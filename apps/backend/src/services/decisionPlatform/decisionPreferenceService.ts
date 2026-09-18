@@ -34,6 +34,18 @@ export class PreferenceNotAuthorizedError extends Error {
 
 const PREFERENCE_CONSENT_POLICY_VERSION = '1.0';
 
+// D03 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
+// mirrors decisionThreadService.ts's own ACTIVE_LIFECYCLE_STATUSES exactly.
+// Duplicated, not imported, for the same reason revokeHvacPreference below
+// returns affectedThreadIds to its caller instead of calling
+// decisionThreadService directly: decisionThreadService.ts already imports
+// FROM this module (getActiveHvacPreferences), so an import the other way
+// would be circular.
+const ACTIVE_DECISION_THREAD_LIFECYCLE_STATUSES = [
+  'OPEN', 'GATHERING_CONTEXT', 'READY_TO_COMPARE', 'RECOMMENDATION_AVAILABLE',
+  'ACTION_IN_PROGRESS', 'DECIDED',
+] as const;
+
 function addMonths(date: Date, months: number): Date {
   const next = new Date(date.getTime());
   next.setMonth(next.getMonth() + months);
@@ -255,7 +267,7 @@ export async function getActiveHvacPreferences(propertyId: string, userId: strin
 // this contributor owns), not a silent write to someone else's household.
 export async function saveOwnershipHorizonPreference(
   propertyId: string, userId: string, input: ParsedOwnershipHorizon,
-): Promise<{ preferenceValueId: string }> {
+): Promise<{ preferenceValueId: string; affectedThreadIds: string[] }> {
   const household = await prisma.household.findFirst({
     where: { ownerUserId: userId, properties: { some: { propertyId, effectiveTo: null } } },
     select: { id: true },
@@ -287,18 +299,37 @@ export async function saveOwnershipHorizonPreference(
       propertyId: null, definitionId: 'OWNERSHIP_HORIZON', subjectType: 'HOUSEHOLD', subjectId: household.id,
       preferenceValueId: created.id, action: previous ? 'SAVED_REVISED' : 'SAVED_NEW',
     }, tx);
-    return { preferenceValueId: created.id, isNew: !previous };
+    // D03 fix: OWNERSHIP_HORIZON is household-wide (FRD §7.4 -- any
+    // authorized household member benefits from it, not just its OWNER
+    // creator), so every active HVAC decision thread across every property
+    // in this household is a candidate to reflect the new value on its next
+    // recompute -- not just threads on the property this was asked from.
+    const householdProperties = await tx.householdProperty.findMany({
+      where: { householdId: household.id, effectiveTo: null },
+      select: { propertyId: true },
+    });
+    const affectedThreads = householdProperties.length
+      ? await tx.decisionThread.findMany({
+        where: {
+          propertyId: { in: householdProperties.map((link) => link.propertyId) },
+          decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+          lifecycleStatus: { in: [...ACTIVE_DECISION_THREAD_LIFECYCLE_STATUSES] },
+        },
+        select: { id: true },
+      })
+      : [];
+    return { preferenceValueId: created.id, isNew: !previous, affectedThreadIds: affectedThreads.map((thread) => thread.id) };
   });
 
   // propertyId: null here -- OWNERSHIP_HORIZON is household-wide (see
   // decisionPlatformChangeEmitter.ts's guard), so this is a documented no-op
   // today, not silently skipped logic.
-  return { preferenceValueId: result.preferenceValueId };
+  return { preferenceValueId: result.preferenceValueId, affectedThreadIds: result.affectedThreadIds };
 }
 
 export async function saveRepairReplaceApproachPreference(
   propertyId: string, userId: string, input: ParsedRepairReplaceApproach,
-): Promise<{ preferenceValueId: string }> {
+): Promise<{ preferenceValueId: string; affectedThreadIds: string[] }> {
   const definition = DECISION_PREFERENCE_DEFINITIONS.REPAIR_REPLACE_APPROACH;
 
   const result = await prisma.$transaction(async (tx) => {
@@ -325,10 +356,23 @@ export async function saveRepairReplaceApproachPreference(
       propertyId, definitionId: 'REPAIR_REPLACE_APPROACH', subjectType: 'USER', subjectId: userId,
       preferenceValueId: created.id, action: previous ? 'SAVED_REVISED' : 'SAVED_NEW',
     }, tx);
-    return { preferenceValueId: created.id, isNew: !previous };
+    // D03 fix: REPAIR_REPLACE_APPROACH is scoped to (userId, propertyId) --
+    // getActiveHvacPreferences only applies it to threads recomputed under
+    // this same acting user (recomputeStaleThread uses thread.createdByUserId
+    // to look up preferences), so only this user's own active threads on
+    // this property are genuine candidates, not every thread on the property.
+    const affectedThreads = await tx.decisionThread.findMany({
+      where: {
+        propertyId, createdByUserId: userId,
+        decisionDefinitionId: 'HVAC_REPAIR_REPLACE',
+        lifecycleStatus: { in: [...ACTIVE_DECISION_THREAD_LIFECYCLE_STATUSES] },
+      },
+      select: { id: true },
+    });
+    return { preferenceValueId: created.id, isNew: !previous, affectedThreadIds: affectedThreads.map((thread) => thread.id) };
   });
 
-  return { preferenceValueId: result.preferenceValueId };
+  return { preferenceValueId: result.preferenceValueId, affectedThreadIds: result.affectedThreadIds };
 }
 
 // FRD §7.5: "revocation prevents all future use before the API returns

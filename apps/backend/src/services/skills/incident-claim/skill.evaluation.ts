@@ -56,7 +56,7 @@ export const INCIDENT_CLAIM_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.insurer-portal'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED'],
-  expectedBlockTypes: ['BOUNDARY', 'EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'SUMMARY', 'WORKFLOW_PROGRESS'],
+  expectedBlockTypes: ['BOUNDARY', 'EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'LIMITATION', 'SUMMARY', 'WORKFLOW_PROGRESS'],
   expectedCanonicalCalls: [{ id: 'incident-claim.status', version: '1.0' }, { id: 'incident-claim.file', version: '1.0' }, { id: 'incident-claim.transition', version: '1.0' }, { id: 'incident-claim.continuation', version: '1.0' }],
   prohibitedCanonicalCalls: ['coverage.review'],
   modelDisabledCase: { message: 'What is the status of my insurance claim?', expectedOperationId: 'INCIDENT_CLAIM_STATUS' },

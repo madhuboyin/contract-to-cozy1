@@ -31,6 +31,15 @@ test('BUYER_TASK_COMPLETE declares the same BUYER_PLAN_STATUS/BUYER_DEADLINES si
   assert.deepEqual(ASK_MUTATION_IMPACT_MAP.BUYER_TASK_COMPLETE, ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES']);
 });
 
+// P05 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
+// reuses this exact mechanism for Claims -- neither confirm handler called
+// any reconciliation at all before this fix (confirmed absent, not merely
+// unverified, per the audit's own direct re-read of both function bodies).
+test('CLAIM_FILE and CLAIM_TRANSITION both declare INCIDENT_CONTINUATION as their sole sibling', () => {
+  assert.deepEqual(ASK_MUTATION_IMPACT_MAP.CLAIM_FILE, ['INCIDENT_CONTINUATION']);
+  assert.deepEqual(ASK_MUTATION_IMPACT_MAP.CLAIM_TRANSITION, ['INCIDENT_CONTINUATION']);
+});
+
 test('a move task adds BUYER_MOVE_STATUS to the base sibling set', () => {
   const base = ASK_MUTATION_IMPACT_MAP.BUYER_TASK_UPDATE;
   assert.deepEqual(siblingOperationIdsForBuyerTaskMutation(base, 'MOVE'), ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_MOVE_STATUS']);

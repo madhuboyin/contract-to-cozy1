@@ -56,3 +56,59 @@ export function recommendationChangeBlock(id: string, decisionThreadId: string, 
     changedAt: new Date().toISOString(),
   };
 }
+
+// D01 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
+// HVAC_DECISION_START/CONTINUE's own registry entries declare EVIDENCE and
+// ASSUMPTIONS as allowed block types, but neither function ever pushed one --
+// the audit found this by direct grep. RecommendationSnapshot.canonicalFactReferences
+// only stores {entityType, entityId, fieldPath} references, not the values
+// themselves (by design -- a snapshot is immutable, but "current...evidence
+// loaded" per the FRD's own wording means CURRENT values, resolved against
+// the live InventoryItem passed in here, not what the values were when the
+// snapshot was generated). Pure and exported for direct unit testing --
+// callers resolve the live item and pass it in rather than this function
+// reading the database itself.
+export type CanonicalFactReference = { entityType?: unknown; entityId?: unknown; fieldPath?: unknown };
+export type HvacEvidenceSourceItem = { condition: string; installedOn: Date | string | null; updatedAt: Date | string };
+
+export function evidenceItemsForCanonicalFacts(
+  canonicalFactReferences: unknown,
+  item: HvacEvidenceSourceItem,
+): { label: string; source: string | null; observedAt: string | null }[] {
+  const references = Array.isArray(canonicalFactReferences) ? canonicalFactReferences as CanonicalFactReference[] : [];
+  const observedAt = typeof item.updatedAt === 'string' ? item.updatedAt : item.updatedAt.toISOString();
+  const items: { label: string; source: string | null; observedAt: string | null }[] = [];
+  for (const reference of references) {
+    if (reference.fieldPath === 'condition' && !items.some((existing) => existing.label.startsWith('Recorded condition'))) {
+      items.push({ label: `Recorded condition: ${item.condition.replace(/_/g, ' ').toLowerCase()}`, source: 'Home inventory record', observedAt });
+    } else if (reference.fieldPath === 'installedOn' && !items.some((existing) => existing.label.startsWith('Installed') || existing.label.startsWith('Install date'))) {
+      const installedOn = item.installedOn ? (typeof item.installedOn === 'string' ? item.installedOn : item.installedOn.toISOString()).slice(0, 10) : null;
+      items.push({ label: installedOn ? `Installed on ${installedOn}` : 'Install date not recorded', source: 'Home inventory record', observedAt });
+    }
+  }
+  return items;
+}
+
+// The recurring gap this fix's design deliberately avoids: PREFERENCE_REFERENCE
+// blocks only render when a preference was actually used, so a homeowner
+// with no saved preference sees nothing telling them none was assumed. This
+// makes that state explicit, from the same preferenceReferenceIds-resolved
+// detail set already fetched for PREFERENCE_REFERENCE (not a second,
+// independent preference read) -- plus the engine version, so a resumed
+// decision discloses which calibration produced it.
+export function assumptionsItemsForSnapshot(
+  preferenceDetails: readonly { definitionId: string }[],
+  engineVersion: string,
+): string[] {
+  const hasOwnershipHorizon = preferenceDetails.some((detail) => detail.definitionId === 'OWNERSHIP_HORIZON');
+  const hasApproach = preferenceDetails.some((detail) => detail.definitionId === 'REPAIR_REPLACE_APPROACH');
+  return [
+    hasOwnershipHorizon
+      ? 'Uses your saved ownership-horizon plan, shown below.'
+      : 'No ownership-horizon preference on file — this calculation does not assume any planned sale timeline.',
+    hasApproach
+      ? 'Uses your confirmed repair/replace approach, shown below.'
+      : 'No cost-preference on file — this calculation does not weight toward minimizing upfront cost or maximizing reliability.',
+    `Calculated using HVAC decision engine version ${engineVersion}.`,
+  ];
+}

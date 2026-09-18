@@ -1,5 +1,5 @@
 import { getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
-import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, BuyerPlanPriority, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
+import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, BuyerPlanPriority, ClaimType as PrismaClaimType, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -152,7 +152,7 @@ import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
 import * as decisionPreferenceService from '../decisionPlatform/decisionPreferenceService';
-import { decisionProgressBlock, whyNowBlock, recommendationChangeBlock } from './decisionThreadPresentationBlocks';
+import { decisionProgressBlock, whyNowBlock, recommendationChangeBlock, evidenceItemsForCanonicalFacts, assumptionsItemsForSnapshot, type HvacEvidenceSourceItem } from './decisionThreadPresentationBlocks';
 // FRD Sec22 decision (DECIDED 2026-09-17, Option B -- docs/architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md
 // SS4.8): sellHoldRentAnalysisResult reads an existing thread's progress via
 // the same read-only selectThread already used elsewhere (conversationalCapture.ts's
@@ -2551,8 +2551,43 @@ async function preferenceReferenceBlocksForSnapshot(idPrefix: string, preference
   }));
 }
 
-async function findHvacItemForMessage(propertyId: string, message: string, focusedInventoryItemId?: string | null): Promise<{ items: { id: string; name: string }[]; item: { id: string; name: string } | null }> {
-  const items = await prisma.inventoryItem.findMany({ where: { propertyId, category: 'HVAC' }, select: { id: true, name: true }, take: 50 });
+// D01 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
+// a separate, wider function from preferenceReferenceBlocksForSnapshot above
+// -- NOT a drop-in replacement -- because it also pushes EVIDENCE and
+// ASSUMPTIONS blocks, and only HVAC_DECISION_START/CONTINUE's registry
+// entries declare those (HVAC_DECISION_SCENARIO's confirm handler, the
+// other consumer of the plain preference-only function, does not). Used
+// only by hvacDecisionStartResult/hvacDecisionContinueResult's own 3 read
+// paths below, never by a confirm handler. RecommendationSnapshot.canonicalFactReferences
+// only stores {entityType, entityId, fieldPath} references, not values --
+// EVIDENCE resolves them against the live, currently-passed InventoryItem
+// (per "current...evidence loaded"), not what the values were at generation
+// time. `item` is optional only for defensiveness -- every real call site
+// has already resolved one by the time this is called.
+async function hvacDecisionDisclosureBlocks(
+  idPrefix: string,
+  snapshot: { preferenceReferenceIds: string[]; canonicalFactReferences: unknown; engineVersion: string } | null | undefined,
+  item: HvacEvidenceSourceItem | null,
+): Promise<AskPresentationBlock[]> {
+  if (!snapshot) return [];
+  const details = await decisionPreferenceService.getPreferenceReferenceDetails(snapshot.preferenceReferenceIds);
+  const blocks: AskPresentationBlock[] = details.map((detail) => ({
+    type: 'PREFERENCE_REFERENCE', id: `${idPrefix}-preference-${detail.definitionId.toLowerCase().replace(/_/g, '-')}`,
+    title: detail.definitionId === 'OWNERSHIP_HORIZON' ? 'Using your confirmed plan' : 'Using your confirmed preference',
+    preferenceKey: detail.definitionId, summary: detail.summary, visibility: detail.visibility,
+    confirmedAt: detail.confirmedAt ? detail.confirmedAt.toISOString() : null,
+    expiresAt: detail.expiresAt ? detail.expiresAt.toISOString() : null,
+  }));
+  if (item) {
+    const evidenceItems = evidenceItemsForCanonicalFacts(snapshot.canonicalFactReferences, item);
+    if (evidenceItems.length) blocks.push({ type: 'EVIDENCE', id: `${idPrefix}-evidence`, title: 'What this is based on', items: evidenceItems });
+  }
+  blocks.push({ type: 'ASSUMPTIONS', id: `${idPrefix}-assumptions`, title: 'Assumptions used', items: assumptionsItemsForSnapshot(details, snapshot.engineVersion) });
+  return blocks;
+}
+
+async function findHvacItemForMessage(propertyId: string, message: string, focusedInventoryItemId?: string | null): Promise<{ items: { id: string; name: string }[]; item: { id: string; name: string; condition: string; installedOn: Date | null; updatedAt: Date } | null }> {
+  const items = await prisma.inventoryItem.findMany({ where: { propertyId, category: 'HVAC' }, select: { id: true, name: true, condition: true, installedOn: true, updatedAt: true }, take: 50 });
   const lower = message.toLowerCase();
   const matched = focusedInventoryItemId
     ? items.find((candidate) => candidate.id === focusedInventoryItemId)
@@ -2602,7 +2637,7 @@ async function hvacDecisionStartResult(userId: string, propertyId: string, messa
       blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
       blocks.push(recommendationChangeBlock('hvac-decision-change', thread.id, change));
     }
-    blocks.push(...await preferenceReferenceBlocksForSnapshot('hvac-decision', thread.currentRecommendationSnapshot?.preferenceReferenceIds ?? []));
+    blocks.push(...await hvacDecisionDisclosureBlocks('hvac-decision', thread.currentRecommendationSnapshot, item));
     return {
       status: 'ANSWERED', reasonCode: 'HVAC_DECISION_ALREADY_ACTIVE',
       blocks,
@@ -2657,7 +2692,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
     }
     const focusedItem = await prisma.inventoryItem.findFirst({
       where: { id: focusedThread.primaryEntityId, propertyId, category: 'HVAC' },
-      select: { id: true, name: true },
+      select: { id: true, name: true, condition: true, installedOn: true, updatedAt: true },
     });
     if (!focusedItem) {
       return {
@@ -2679,7 +2714,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
       blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
       blocks.push(recommendationChangeBlock('hvac-decision-change', thread.id, change));
     }
-    blocks.push(...await preferenceReferenceBlocksForSnapshot('hvac-decision', thread.currentRecommendationSnapshot?.preferenceReferenceIds ?? []));
+    blocks.push(...await hvacDecisionDisclosureBlocks('hvac-decision', thread.currentRecommendationSnapshot, focusedItem));
     return {
       status: 'ANSWERED',
       reasonCode: 'HVAC_DECISION_RESUMED',
@@ -2714,7 +2749,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
     blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
     blocks.push(recommendationChangeBlock('hvac-decision-change', thread.id, change));
   }
-  blocks.push(...await preferenceReferenceBlocksForSnapshot('hvac-decision', thread.currentRecommendationSnapshot?.preferenceReferenceIds ?? []));
+  blocks.push(...await hvacDecisionDisclosureBlocks('hvac-decision', thread.currentRecommendationSnapshot, item));
   return {
     status: 'ANSWERED', reasonCode: 'HVAC_DECISION_RESUMED',
     blocks,
@@ -3056,16 +3091,31 @@ function claimTypeFromMessage(message: string): ClaimType | null {
     ?? (/\bother\b/i.test(message) ? 'OTHER' : null);
 }
 
+// P03 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
+// hoisted out of claimTitleFromMessage so the same label set also backs the
+// CLAIM_FILE_INPUTS capture form's SINGLE_SELECT options below -- one source
+// of truth for the 10 declared ClaimType values, not two independently
+// maintained lists.
+const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
+  WATER_DAMAGE: 'Water damage claim', FIRE_SMOKE: 'Fire or smoke claim', STORM_WIND_HAIL: 'Storm, wind, or hail claim',
+  THEFT_VANDALISM: 'Theft or vandalism claim', LIABILITY: 'Liability claim', HVAC: 'HVAC claim', PLUMBING: 'Plumbing claim',
+  ELECTRICAL: 'Electrical claim', APPLIANCE: 'Appliance claim', OTHER: 'Home incident claim',
+};
+
 function claimTitleFromMessage(message: string, type: ClaimType): string {
   const explicit = message.match(/\b(?:titled?|called)\s+["']?([^"'.]{3,120})/i)?.[1]?.trim();
-  if (explicit) return explicit;
-  const labels: Record<ClaimType, string> = {
-    WATER_DAMAGE: 'Water damage claim', FIRE_SMOKE: 'Fire or smoke claim', STORM_WIND_HAIL: 'Storm, wind, or hail claim',
-    THEFT_VANDALISM: 'Theft or vandalism claim', LIABILITY: 'Liability claim', HVAC: 'HVAC claim', PLUMBING: 'Plumbing claim',
-    ELECTRICAL: 'Electrical claim', APPLIANCE: 'Appliance claim', OTHER: 'Home incident claim',
-  };
-  return labels[type];
+  return explicit || CLAIM_TYPE_LABELS[type];
 }
+
+// P03 fix: mirrors MaintenanceTaskWorkflowInputSchema's own convention --
+// the structured answer a homeowner submits through CLAIM_FILE_INPUTS'
+// capture form once the incident type can't be parsed from free text alone.
+export const ClaimFileWorkflowInputSchema = z.object({
+  type: z.nativeEnum(PrismaClaimType),
+  title: z.string().trim().min(3).max(160).optional(),
+  description: z.string().trim().min(1).max(1000),
+}).strict();
+type ClaimFileWorkflowInput = z.infer<typeof ClaimFileWorkflowInputSchema>;
 
 function nextClaimStatus(message: string): ClaimStatus | null {
   if (/\bunder review\b/i.test(message)) return 'UNDER_REVIEW';
@@ -3088,20 +3138,49 @@ function exactEntityMatch<T extends { id: string }>(rows: readonly T[], message:
   return matches.length === 1 ? matches[0] : null;
 }
 
-async function claimFileResult(propertyId: string, message: string): Promise<AskOperationResult> {
-  const type = claimTypeFromMessage(message);
+export async function claimFileResult(propertyId: string, message: string, suppliedInput?: ClaimFileWorkflowInput): Promise<AskOperationResult> {
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
-  if (!type) return {
-    status: 'NEEDS_CLARIFICATION', reasonCode: 'CLAIM_TYPE_REQUIRED',
-    ...durableFreeTextClarification('CLAIM_FILE', 'What happened? Include the incident type, such as water damage, storm/hail, fire/smoke, theft, HVAC, electrical, appliance, or other.'),
-    blocks: [{ type: 'SUMMARY', id: 'claim-type-required', title: 'Describe the incident before filing', body: 'Ask will create only a draft canonical claim after you identify the incident type and confirm. It will not submit anything to an insurer.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }], suggestions: [],
-  };
-  const title = claimTitleFromMessage(message, type);
+  const type = suppliedInput?.type ?? claimTypeFromMessage(message);
+  // P03 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
+  // the audit found the missing-type branch used durableFreeTextClarification,
+  // which carries forward none of the original message -- a homeowner whose
+  // first message didn't match a recognized incident-type pattern had to
+  // retype the whole description, not just add the missing type. Switched to
+  // a real captureRequests GROUP form (CLAIM_FILE_INPUTS) with
+  // currentAnswer pre-filling the original message as the description and
+  // any explicit "titled X" match, mirroring MAINTENANCE_TASK_CREATE's own
+  // richer pattern exactly.
+  if (!type) {
+    const explicitTitle = message.match(/\b(?:titled?|called)\s+["']?([^"'.]{3,120})/i)?.[1]?.trim();
+    const currentAnswer: Record<string, unknown> = { description: message };
+    if (explicitTitle) currentAnswer.title = explicitTitle;
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'CLAIM_TYPE_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'claim-type-required', title: 'Describe the incident before filing', body: 'Ask will create only a draft canonical claim after you identify the incident type and confirm. It will not submit anything to an insurer.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }],
+      captureRequests: [{
+        requirementId: `claim-file-${createHash('sha256').update(message).digest('hex').slice(0, 20)}`,
+        captureKey: 'CLAIM_FILE_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+        title: 'Claim details', question: 'What happened, and what type of incident is this?',
+        helpText: 'Nothing is filed with an insurer or warranty provider yet — you will review the draft claim before it is created.',
+        inputSchema: { type: 'GROUP', fields: [
+          { key: 'type', label: 'Incident type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: Object.entries(CLAIM_TYPE_LABELS).map(([value, label]) => ({ label, value })) } },
+          { key: 'title', label: 'Title', helpText: 'Optional — Ask will suggest one from the incident type otherwise.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+          { key: 'description', label: 'What happened', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 1000 } },
+        ] },
+        currentAnswer, allowNotSure: false, sensitivity: 'STANDARD',
+        destinationLabel: 'Used to prepare the draft claim; nothing is saved until you confirm', confirmationText: null,
+        expectedContextVersion: `claim-file-${createHash('sha256').update(message).digest('hex').slice(0, 20)}`,
+      }],
+      suggestions: [],
+    };
+  }
+  const description = suppliedInput?.description ?? message;
+  const title = suppliedInput?.title || claimTitleFromMessage(description, type);
   const contextVersion = createHash('sha256').update(JSON.stringify({ propertyId, title, type })).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'CLAIM_FILE_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { claimTitle: title, claimType: type, claimDescription: message, claimSourceType: /warranty/i.test(message) ? 'HOME_WARRANTY' : /insurance/i.test(message) ? 'INSURANCE' : 'UNKNOWN', confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    parameters: { claimTitle: title, claimType: type, claimDescription: description, claimSourceType: /warranty/i.test(description) ? 'HOME_WARRANTY' : /insurance/i.test(description) ? 'INSURANCE' : 'UNKNOWN', confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'claim-file-review', title: 'Review the draft claim', body: 'Confirming creates a draft claim, its checklist, timeline event, and linked Operational Work Item. It does not transmit the claim to an insurer or warranty provider.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims instead', href, style: 'SECONDARY' }] }],
     confirmation: { confirmationId: `claim-file-${contextVersion.slice(0, 16)}`, version: 1, title: 'Create this draft claim?', description: 'The claim stays in ContractToCozy until you separately submit it through the appropriate provider channel.', fields: [{ label: 'Title', value: title }, { label: 'Incident type', value: type.toLowerCase().replace(/_/g, ' ') }, { label: 'Initial status', value: 'Draft' }], editableFields: [], confirmLabel: 'Create draft claim', consentText: 'I confirm this incident record is accurate and authorize creating the draft claim and linked home work.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
@@ -6587,7 +6666,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
         blocks: [{
           type: 'SUMMARY', id: 'refinance-scenario-summary',
           title: `Illustrative ${termLabel} scenario at ${targetRatePct.toFixed(3)}%`,
-          body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. Ask "Is refinancing worth it?" to see the current comparison again.',
+          body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. The current comparison is shown below, unchanged, alongside it.',
           tone: 'DEFAULT',
           actions: [{ id: 'open-radar', label: 'Explore in Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
         }, {
@@ -6601,6 +6680,26 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
             { id: 'scenario-lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(scenario.lifetimeSavings) } },
             { id: 'scenario-closing-cost', values: { metric: 'Modeled closing costs', value: money(scenario.closingCostUsd) } },
             { id: 'scenario-break-even', values: { metric: 'Estimated break-even', value: scenario.breakEvenMonths == null ? 'Not reached' : `${scenario.breakEvenMonths} months` } },
+          ],
+          actions: [],
+        }, {
+          // F02 fix, round 2 (external review, docs/architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md):
+          // the review found the scenario returned alone, with only a text
+          // pointer back to the canonical comparison, did not satisfy
+          // "revision shown alongside the original" the way HVAC_DECISION_SCENARIO's
+          // D02 comparator does (current + scenario in one response). `result`
+          // (the canonical evaluateProperty output) is already computed above
+          // this branch -- this table surfaces it unchanged, in the same
+          // response, rather than requiring a separate question to see it.
+          type: 'TABLE', id: 'refinance-scenario-current-comparison', title: 'Your current comparison (unchanged)',
+          description: 'The canonical comparison this scenario was run against. Nothing here was recalculated or saved by this hypothetical.',
+          columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }],
+          rows: [
+            { id: 'current-comparison-rate', values: { metric: 'Your recorded mortgage rate', value: `${result.currentRatePct.toFixed(3)}%` } },
+            { id: 'current-comparison-market-rate', values: { metric: 'Market benchmark rate', value: `${result.marketRatePct.toFixed(3)}%` } },
+            { id: 'current-comparison-monthly-savings', values: { metric: 'Modeled monthly savings', value: money(result.monthlySavings) } },
+            { id: 'current-comparison-lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(result.lifetimeSavings) } },
+            { id: 'current-comparison-break-even', values: { metric: 'Estimated break-even', value: result.breakEvenMonths == null ? 'Not reached' : `${result.breakEvenMonths} months` } },
           ],
           actions: [],
         }, {
@@ -9464,7 +9563,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -9709,6 +9808,36 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'PropertyMaintenanceTaskWorkflow';
+  } else if (execution.operationId === 'CLAIM_FILE') {
+    // P03 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
+    // resumes claimFileResult with the structured answer from CLAIM_FILE_INPUTS
+    // instead of re-parsing the original message. No live "workflow version"
+    // exists to check for drift here (unlike Maintenance's task list) --
+    // nothing about the property invalidates a not-yet-created draft claim --
+    // so expectedContextVersion is just the same requirementId the capture
+    // request was issued with; the generic `active` check above already
+    // confirms it matches.
+    if (input.captureKey !== 'CLAIM_FILE_INPUTS') {
+      const error = new Error('This claim capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to file a claim.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const candidate = ClaimFileWorkflowInputSchema.safeParse(input.answer);
+    if (!candidate.success) {
+      const error = new Error('Choose an incident type and describe what happened.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    result = await claimFileResult(execution.propertyId, execution.message, candidate.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = input.expectedContextVersion;
+    canonicalOwner = 'Claim';
   } else if (execution.operationId === 'HOUSEHOLD_INVITATION') {
     if (input.captureKey !== 'HOUSEHOLD_INVITATION_INPUTS') {
       const error = new Error('This household invitation capture is no longer active.');
@@ -10118,7 +10247,20 @@ async function confirmClaimFile(ctx: ConfirmCapabilityContext): Promise<ConfirmC
     });
     artifactType = 'CLAIM'; artifactId = claim.id;
     result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['What should I gather for this claim?'] };
-  return { result, artifactType, artifactId };
+    // P05 fix: previously never called any reconciliation mechanism -- a
+    // durable receipt existed, but the incidents/claims list the homeowner
+    // may have been viewing (INCIDENT_CONTINUATION) had no read-retry path
+    // back to its current state beyond re-asking from scratch.
+    const claimFileRefresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (claimFileRefresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `claim-list-refresh-failed-${claim.id}`, title: 'Saved; list could not refresh',
+        body: 'This draft claim was created. The list you were viewing could not refresh automatically -- ask "Show my recorded claims" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'Show my recorded claims'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: claimFileRefresh.refreshedExecutions };
 }
 async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -10135,7 +10277,18 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
     const updated = claim.status === nextStatus ? await ClaimsService.getClaim(execution.propertyId, claim.id) : await ClaimsService.updateClaim(execution.propertyId, claim.id, userId, { status: nextStatus as ClaimStatus });
     artifactType = 'CLAIM'; artifactId = claim.id;
     result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['Show my open claims'] };
-  return { result, artifactType, artifactId };
+    // P05 fix: see confirmClaimFile's identical fix above -- same missing
+    // reconciliation mechanism, same INCIDENT_CONTINUATION sibling.
+    const claimTransitionRefresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (claimTransitionRefresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `claim-list-refresh-failed-${claim.id}`, title: 'Saved; list could not refresh',
+        body: 'This claim status change was saved. The list you were viewing could not refresh automatically -- ask "Show my open claims" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'Show my open claims'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: claimTransitionRefresh.refreshedExecutions };
 }
 async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -10340,6 +10493,16 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // BUYER_DEADLINES membership/counts a reschedule does, so it shares the
   // exact same sibling set.
   BUYER_TASK_COMPLETE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
+  // P05 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
+  // neither Claims confirm handler called any reconciliation mechanism at
+  // all -- a homeowner viewing INCIDENT_CONTINUATION's combined
+  // incidents/claims list (the one read that shows claim state) had no way
+  // for that list to refresh after filing or transitioning a claim except
+  // asking again from scratch. INCIDENT_CONTINUATION is the sole sibling:
+  // it is the only read in this track whose membership/status can change
+  // from either mutation.
+  CLAIM_FILE: ['INCIDENT_CONTINUATION'],
+  CLAIM_TRANSITION: ['INCIDENT_CONTINUATION'],
 };
 
 // Pure decision core, extracted for direct unit testing (same convention as
@@ -11284,10 +11447,12 @@ async function confirmHvacPreferenceSave(ctx: ConfirmCapabilityContext): Promise
     }
     const savedIds: string[] = [];
     const savedBlocks: AskPresentationBlock[] = [];
+    const affectedThreadIds = new Set<string>();
     try {
       if (candidate.ownership) {
         const saved = await decisionPreferenceService.saveOwnershipHorizonPreference(execution.propertyId, userId, candidate.ownership);
         savedIds.push(saved.preferenceValueId);
+        saved.affectedThreadIds.forEach((id) => affectedThreadIds.add(id));
         savedBlocks.push({
           type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-ownership-horizon', title: 'Ownership horizon saved',
           preferenceKey: 'OWNERSHIP_HORIZON', summary: `Saved: plan to sell in about ${candidate.ownership.horizonMonths} months.`,
@@ -11297,6 +11462,7 @@ async function confirmHvacPreferenceSave(ctx: ConfirmCapabilityContext): Promise
       if (candidate.approach) {
         const saved = await decisionPreferenceService.saveRepairReplaceApproachPreference(execution.propertyId, userId, candidate.approach);
         savedIds.push(saved.preferenceValueId);
+        saved.affectedThreadIds.forEach((id) => affectedThreadIds.add(id));
         savedBlocks.push({
           type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-approach', title: 'Approach saved',
           preferenceKey: 'REPAIR_REPLACE_APPROACH', summary: `Saved: ${candidate.approach.approach.replace(/_/g, ' ').toLowerCase()}.`,
@@ -11311,6 +11477,18 @@ async function confirmHvacPreferenceSave(ctx: ConfirmCapabilityContext): Promise
       }
       throw caught;
     }
+    // D03 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
+    // saving a preference now marks every thread it could apply to stale,
+    // the same way confirmHvacPreferenceForget already does on revoke --
+    // closing the save/forget asymmetry the audit found.
+    if (affectedThreadIds.size) {
+      await decisionThreadService.markThreadsStaleByIds([...affectedThreadIds], 'PREFERENCE_SAVED');
+    }
+    savedBlocks.push({
+      type: 'WORKFLOW_PROGRESS', id: 'hvac-preference-saved-refresh', title: 'Refresh scheduled', status: 'COMPLETED',
+      description: affectedThreadIds.size ? 'Affected decisions will be recalculated the next time you open them.' : 'No active decision currently uses this preference.',
+      details: [], actions: [],
+    });
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_SAVED',
       blocks: savedBlocks, confirmation: null, suggestions: ['Should I repair or replace my HVAC?'],
