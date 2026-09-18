@@ -18,6 +18,7 @@ import { formatLegacyAskCurrency, formatLegacyAskMaintenanceItem, workflowProgre
 import { resolveItemActionDispatch } from '@/features/ask/interactionDispatch';
 import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
 import { MaintenanceResultList } from './MaintenanceResultList';
+import { AdaptiveTableBlock } from './AdaptiveTableBlock';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
@@ -877,35 +878,7 @@ export function BlockView({ block, executionId, propertyId, onItemAction, itemAc
     return <section className={cn('rounded-2xl border p-4', block.type === 'ERROR_STATE' ? 'border-red-200 bg-red-50' : block.type === 'LIMITATION' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}><h3 className="font-semibold text-slate-950">{block.title}</h3><p className="mt-2 text-sm leading-6 text-slate-700">{block.body}</p>{actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}</section>;
   }
 
-  if (block.type === 'TABLE') return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4">
-      <h3 className="font-semibold text-slate-950">{block.title}</h3>
-      {/* Below sm, a horizontally-scrolling table is hard to read on a
-          phone-width viewport — stack each row as a labeled card instead. */}
-      <div className="mt-3 space-y-3 sm:hidden">
-        {block.rows.map((row) => (
-          <dl key={row.id} className="divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50 px-3">
-            {block.columns.map((column) => (
-              <div key={column.key} className="grid grid-cols-[7rem_1fr] gap-2 py-2 text-sm">
-                <dt className="text-slate-500">{column.label}</dt>
-                <dd className="text-slate-800">{row.values[column.key]}</dd>
-              </div>
-            ))}
-          </dl>
-        ))}
-      </div>
-      <div className="mt-3 hidden overflow-x-auto sm:block">
-        <table className="min-w-full text-left text-sm"><thead><tr>{block.columns.map((column) => <th key={column.key} className="border-b px-2 py-2 text-xs text-slate-500">{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr key={row.id}>{block.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-2 py-2 text-slate-700">{row.values[column.key]}</td>)}</tr>)}</tbody></table>
-      </div>
-      {block.totalCount != null && block.totalCount > block.rows.length ? (
-        block.actions[0]?.href
-          ? <AskContextLink href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{block.totalCount - block.rows.length} more · {block.actions[0].label}</AskContextLink>
-          : <p className="mt-3 text-sm text-slate-500">+{block.totalCount - block.rows.length} more not shown here.</p>
-      ) : block.actions.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>
-      )}
-    </section>
-  );
+  if (block.type === 'TABLE') return <AdaptiveTableBlock block={block} renderAction={(action) => <ActionLink action={action} />} />;
 
   const unsupported = block as { type?: string; title?: string };
   return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4" role="status"><h3 className="font-semibold text-slate-950">{unsupported.title ?? 'Response unavailable'}</h3><p className="mt-2 text-sm text-slate-700">This response section uses an unsupported format ({unsupported.type ?? 'unknown'}). Refresh Ask or ask the question again.</p></section>;

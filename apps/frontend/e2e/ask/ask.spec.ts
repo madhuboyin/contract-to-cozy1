@@ -255,6 +255,30 @@ test('maintenance collection pages through the full server result without leavin
   await expect(page.getByRole('link', { name: 'View all in Maintenance' })).toBeVisible();
 });
 
+test('adaptive table view switches locally and persists the homeowner choice without duplicating the result', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare ownership costs');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-adaptive-table');
+  await expect(response.getByRole('button', { name: 'Auto' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(response.getByRole('table', { name: 'Cost by category' })).toBeVisible();
+  await response.getByRole('button', { name: 'Cards' }).click();
+
+  await expect(response.getByRole('table')).toHaveCount(0);
+  await expect(response.locator('[data-table-presentation="cards"]')).toBeVisible();
+  await expect(response.getByText('Showing 2 of 3 records. View: cards.')).toBeVisible();
+  await expect(response.getByRole('link', { name: 'Open ownership costs' })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('ctc:ask-result-view:v1:ask-acceptance-session:ask-property-fixture:adaptive-table-result') ?? '{}').presentationModes?.['ownership-cost-categories'])).toBe('CARDS');
+
+  await response.getByRole('button', { name: 'Table' }).click();
+  await expect(response.getByRole('table', { name: 'Cost by category' })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

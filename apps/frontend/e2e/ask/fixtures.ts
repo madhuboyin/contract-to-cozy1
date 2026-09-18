@@ -86,6 +86,29 @@ function maintenanceExecution() {
   };
 }
 
+function adaptiveTableExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-adaptive-table', sessionId: 'ask-acceptance-session',
+    question: 'Compare ownership costs', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'OWNERSHIP_COSTS', version: '1.0', family: 'STATUS_SUMMARY' }, contextVersion: 'ownership-cost-context-v1',
+    viewState: { resultId: 'adaptive-table-result', domainScopePhrase: null, dateScopePhrase: null, statusFilter: 'ALL', selectedTaskId: null, revision: 1 },
+    blocks: [{
+      type: 'TABLE', id: 'ownership-cost-categories', title: 'Cost by category', description: 'Recorded annual ownership costs.',
+      columns: [{ key: 'category', label: 'Category' }, { key: 'amount', label: 'Annual amount' }, { key: 'source', label: 'Source' }],
+      rows: [
+        { id: 'tax', values: { category: 'Property tax', amount: '$6,200', source: 'Tax record' } },
+        { id: 'insurance', values: { category: 'Insurance', amount: '$1,900', source: 'Policy' } },
+      ],
+      totalCount: 3,
+      actions: [{ id: 'open-costs', label: 'Open ownership costs', href: `/dashboard/ownership-costs?propertyId=${propertyId}`, style: 'SECONDARY' }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
 function execution(kind: 'refrigerator' | 'refinance', captured = false) {
   const capture = kind === 'refrigerator' ? {
     requirementId: 'repair-replace:refrigerator:lifecycle', captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE', classification: 'ENHANCEMENT_ACCURACY', state: 'UNKNOWN',
@@ -207,6 +230,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/multi-day heat risk/i.test(body.message)) {
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
+      return;
+    }
+    if (/compare ownership costs/i.test(body.message)) {
+      const response = adaptiveTableExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
       return;
     }
     if (/show next maintenance results/i.test(body.message)) {

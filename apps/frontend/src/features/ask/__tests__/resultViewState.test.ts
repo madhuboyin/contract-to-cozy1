@@ -1,4 +1,4 @@
-import { reconcileResultView, EMPTY_RESULT_VIEW } from '../resultViewState';
+import { readResultView, reconcileResultView, EMPTY_RESULT_VIEW } from '../resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '../types';
 
 // B07 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
@@ -40,4 +40,17 @@ test('a non-GROUPED_LIST block (e.g. SUMMARY) contributes no ids, clearing any s
   const view = { ...EMPTY_RESULT_VIEW, selectedTaskId: 'buyer-task-1' };
   const reconciled = reconcileResultView(view, execution(summaryBlock));
   expect(reconciled.selectedTaskId).toBeNull();
+});
+
+test('presentation choice survives reconciliation only while its table remains in the result', () => {
+  const table = { type: 'TABLE', id: 'cost-table', title: 'Costs', columns: [{ key: 'name', label: 'Name' }], rows: [], actions: [] } as AskPresentationBlock;
+  const view = { ...EMPTY_RESULT_VIEW, presentationModes: { 'cost-table': 'CARDS' as const, stale: 'TABLE' as const } };
+  expect(reconcileResultView(view, execution(table)).presentationModes).toEqual({ 'cost-table': 'CARDS' });
+  expect(reconcileResultView(view, execution({ type: 'SUMMARY', id: 'summary', title: 'x', body: 'y', tone: 'DEFAULT', actions: [] })).presentationModes).toEqual({});
+});
+
+test('stored presentation modes are bounded to known values', () => {
+  const storage = window.sessionStorage;
+  storage.setItem('view', JSON.stringify({ presentationModes: { safe: 'TABLE', invalid: 'GRID' } }));
+  expect(readResultView(storage, 'view').presentationModes).toEqual({ safe: 'TABLE' });
 });

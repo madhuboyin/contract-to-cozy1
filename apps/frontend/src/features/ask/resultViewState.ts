@@ -5,9 +5,10 @@ export type ResultView = {
   detailTaskId: string | null;
   expandedRows: string[];
   visibleCounts: Record<string, number>;
+  presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
   scrollOffset: number | null;
 };
-export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, expandedRows: [], visibleCounts: {}, scrollOffset: null };
+export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, scrollOffset: null };
 const PREFIX = 'ctc:ask-result-view:v1:';
 export const resultViewKey = (sessionId: string, propertyId: string, resultId: string) => `${PREFIX}${sessionId}:${propertyId}:${resultId}`;
 
@@ -21,6 +22,9 @@ export function readResultView(storage: Storage, key: string): ResultView {
       detailTaskId: typeof value.detailTaskId === 'string' ? value.detailTaskId : null,
       expandedRows: Array.isArray(value.expandedRows) ? value.expandedRows.filter((id: unknown) => typeof id === 'string').slice(0, 100) : [],
       visibleCounts: Object.fromEntries(Object.entries(value.visibleCounts ?? {}).filter(([, count]) => Number.isInteger(count) && Number(count) >= 5 && Number(count) <= 100).map(([key, count]) => [key, Number(count)])),
+      presentationModes: Object.fromEntries(Object.entries(value.presentationModes ?? {})
+        .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'TABLE', 'CARDS'].includes(String(mode)))
+        .slice(0, 50)) as ResultView['presentationModes'],
       scrollOffset: Number.isFinite(value.scrollOffset) ? value.scrollOffset : null,
     };
   } catch { return EMPTY_RESULT_VIEW; }
@@ -46,12 +50,14 @@ export function clearResultViews(storage: Storage, sessionId: string, keepKeys?:
 export function reconcileResultView(view: ResultView, execution: AskExecutionResponse): ResultView {
   const sections = execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' ? block.sections : []);
   const ids = new Set(sections.flatMap((section) => section.items.map((item) => item.id)));
+  const tableIds = new Set(execution.blocks.filter((block) => block.type === 'TABLE').map((block) => block.id));
   return {
     ...view,
     selectedTaskId: view.selectedTaskId && ids.has(view.selectedTaskId) ? view.selectedTaskId : null,
     detailTaskId: view.detailTaskId && ids.has(view.detailTaskId) ? view.detailTaskId : null,
     expandedRows: view.expandedRows.filter((id) => ids.has(id)),
     visibleCounts: Object.fromEntries(sections.map((section) => [section.id, Math.max(5, Math.min(view.visibleCounts[section.id] ?? 5, section.items.length))])),
+    presentationModes: Object.fromEntries(Object.entries(view.presentationModes ?? {}).filter(([blockId]) => tableIds.has(blockId))),
   };
 }
 export function mergeResultExecutions(current: AskExecutionResponse[], incoming: AskExecutionResponse[]): AskExecutionResponse[] {
