@@ -4442,12 +4442,18 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
       select: { id: true, type: true, title: true, summary: true, occurredAt: true, datePrecision: true, verificationStatus: true, sourceBadge: true },
     });
     blocks.push({
+      // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType lets
+      // GroupedListBlock.tsx route this block through HomeEventResultList
+      // (the disambiguation-list fix's own follow-up) instead of the
+      // generic renderer's bare href -- opening event detail inline
+      // instead of ejecting to the inventory item's page for a
+      // per-event question the homeowner never asked.
       type: 'GROUPED_LIST', filters: [], id: 'inventory-history', title: `${selectedItem.name} history`,
       description: events.length ? 'Current, non-deleted Home Timeline events visible to you.' : 'No visible Home Timeline events are linked to this item yet.',
       sections: [{
         id: 'events', title: 'Timeline', count: events.length,
         items: events.map((event) => ({
-          id: event.id, title: event.title, description: event.summary,
+          id: event.id, title: event.title, entityType: 'HOME_EVENT', description: event.summary,
           meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
           status: event.datePrecision, href: inventoryItemHref(propertyId, selectedItem.id),
         })),
