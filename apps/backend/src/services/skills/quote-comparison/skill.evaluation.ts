@@ -162,6 +162,7 @@ export const QUOTE_COMPARISON_SKILL_EVALUATION = deepFreezeSkillPackage({
     "GROUPED_LIST",
     "TABLE",
     "EVIDENCE",
+    "OUTPUT_ARTIFACTS",
     "BOUNDARY"
   ],
   "expectedCanonicalCalls": [

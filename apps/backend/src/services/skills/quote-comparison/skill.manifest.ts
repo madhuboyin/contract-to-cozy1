@@ -71,6 +71,13 @@ export const QUOTE_COMPARISON_SKILL = Object.freeze({
     "reversibility": "REVERSIBLE"
   },
   "authorizationFloor": "VIEWER",
+  // Unrelated pre-existing gap found while fixing IW-FRESH-003 elsewhere:
+  // QUOTE_COMPARISON_CREATE's own allowedBlockTypes (askOperationRegistry.ts)
+  // already declares OUTPUT_ARTIFACTS, but this skill-level list didn't --
+  // resolveEffectiveSkillOperationPolicy's intersection was silently
+  // dropping it, and assertSkillResultBlocksAllowed's hard-throw check
+  // ("uses undeclared result block OUTPUT_ARTIFACTS") was already failing
+  // in this suite before this fix.
   "allowedResultBlocks": [
     "SUMMARY",
     "WORKFLOW_PROGRESS",
@@ -78,6 +85,7 @@ export const QUOTE_COMPARISON_SKILL = Object.freeze({
     "GROUPED_LIST",
     "TABLE",
     "EVIDENCE",
+    "OUTPUT_ARTIFACTS",
     "BOUNDARY"
   ],
   "dependencies": [
