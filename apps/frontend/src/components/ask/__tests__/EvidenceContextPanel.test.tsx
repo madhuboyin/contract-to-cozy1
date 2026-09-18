@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { hasResponseContext, InlineEvidenceBlock, ResponseContextContent, ResponseContextSummary, responseContextCounts } from '../EvidenceContextPanel';
+import { hasResponseContext, InlineEvidenceBlock, InlineOutputArtifactsBlock, ResponseContextContent, ResponseContextSummary, responseContextCounts } from '../EvidenceContextPanel';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 
 type EvidenceBlock = Extract<AskPresentationBlock, { type: 'EVIDENCE' }>;
@@ -17,6 +17,13 @@ const execution = {
     { type: 'LIMITATION', id: 'cost-limitation', title: 'Planning limitation', body: 'Future premiums may differ.', severity: 'CAUTION' },
   ],
 } as AskExecutionResponse;
+const outputArtifact: Extract<AskPresentationBlock, { type: 'OUTPUT_ARTIFACTS' }> = {
+  type: 'OUTPUT_ARTIFACTS', id: 'maintenance-output-task-1', title: 'Created record',
+  items: [{
+    artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: 'task-1', relationship: 'CREATED', label: 'Replace HVAC filter', status: 'PENDING',
+    createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open task in Maintenance', href: '/dashboard/maintenance?taskId=task-1' },
+  }],
+};
 
 test('current response renders one compact trigger with aggregate context counts', () => {
   const onOpen = jest.fn();
@@ -43,8 +50,8 @@ test('evidence-only responses retain the concise View sources label', () => {
 
 test('context content remains response-scoped and groups evidence, assumptions and limitations', () => {
   const onClose = jest.fn();
-  render(<ResponseContextContent execution={execution} onClose={onClose} />);
-  expect(screen.getByRole('heading', { name: 'Sources and context' })).toBeInTheDocument();
+  render(<ResponseContextContent execution={execution} onClose={onClose} renderNavigation={() => null} />);
+  expect(screen.getByRole('heading', { name: 'Response context' })).toBeInTheDocument();
   expect(screen.getByText(/for this response about Maple Home/)).toBeInTheDocument();
   expect(screen.getByText(/This context belongs to the response “Compare ownership costs”/)).toBeInTheDocument();
   expect(screen.getByText(/County assessor · Observed/)).toBeInTheDocument();
@@ -57,7 +64,29 @@ test('context content remains response-scoped and groups evidence, assumptions a
 });
 
 test('context availability and counts ignore empty contextual blocks', () => {
-  expect(responseContextCounts(execution)).toEqual({ sources: 2, claims: 1, assumptions: 1, limitations: 1 });
+  expect(responseContextCounts(execution)).toEqual({ sources: 2, claims: 1, assumptions: 1, limitations: 1, outputs: 0 });
   expect(hasResponseContext(execution)).toBe(true);
   expect(hasResponseContext({ blocks: [{ type: 'EVIDENCE', id: 'empty', title: 'None', items: [] }] })).toBe(false);
+});
+
+test('output artifacts are counted and rendered from explicit canonical identity', () => {
+  const artifactExecution = { ...execution, blocks: [
+    { type: 'WORKFLOW_PROGRESS', id: 'workflow', title: 'Maintenance task created', status: 'COMPLETED', description: 'The task was saved.', details: [{ label: 'Task', value: 'Replace HVAC filter' }], actions: [] },
+    outputArtifact,
+  ] } as AskExecutionResponse;
+  const onOpen = jest.fn();
+  render(<ResponseContextSummary execution={artifactExecution} open={false} onOpen={onOpen} />);
+  expect(screen.getByText('1 created record attached to this response')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'View response context' })).toBeInTheDocument();
+
+  render(<ResponseContextContent execution={artifactExecution} onClose={() => undefined} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
+  expect(screen.getByText('Replace HVAC filter')).toBeInTheDocument();
+  expect(screen.getByText(/Maintenance task · pending · Created/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Open task in Maintenance' })).toHaveAttribute('href', '/dashboard/maintenance?taskId=task-1');
+});
+
+test('archived output artifacts retain an inline disclosure fallback', () => {
+  render(<InlineOutputArtifactsBlock block={outputArtifact} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
+  expect(screen.getByText('Created record (1)')).toBeInTheDocument();
+  expect(screen.getByText('Replace HVAC filter')).toBeInTheDocument();
 });

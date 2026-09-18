@@ -206,6 +206,7 @@ export function nestedAskHrefs(block: AskPresentationBlock): string[] {
   if (block.type === 'GROUPED_LIST') return block.sections.flatMap((section) => section.items.flatMap((item) => item.href ? [item.href] : []));
   if (block.type === 'TIMELINE') return block.items.flatMap((item) => item.href ? [item.href] : []);
   if (block.type === 'CHANGE_SUMMARY') return block.linkedAction ? [block.linkedAction.href] : [];
+  if (block.type === 'OUTPUT_ARTIFACTS') return block.items.flatMap((item) => item.navigation ? [item.navigation.href] : []);
   return [];
 }
 

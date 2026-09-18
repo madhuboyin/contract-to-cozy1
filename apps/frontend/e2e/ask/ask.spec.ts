@@ -334,8 +334,8 @@ test('response sources open beside the desktop conversation without replacing th
   await expect(response.getByText('Future taxes and premiums may differ from the recorded amounts.')).toBeVisible();
   await sourceTrigger.click();
 
-  const panel = page.getByRole('complementary', { name: 'Sources and context' });
-  await expect(panel.getByRole('heading', { name: 'Sources and context' })).toBeVisible();
+  const panel = page.getByRole('complementary', { name: 'Response context' });
+  await expect(panel.getByRole('heading', { name: 'Response context' })).toBeVisible();
   await expect(panel.getByText('2026 property tax assessment')).toBeVisible();
   await expect(panel.getByText(/County assessor/)).toBeVisible();
   await expect(panel.getByText('Property tax: $6,200 per year.')).toBeVisible();
@@ -363,13 +363,35 @@ test('response sources use a dismissible sheet on mobile and restore trigger foc
 
   const sourceTrigger = page.locator('#ask-execution-execution-adaptive-table').getByRole('button', { name: /View sources and context/ });
   await sourceTrigger.click();
-  const sheet = page.getByRole('dialog', { name: 'Sources and context' });
+  const sheet = page.getByRole('dialog', { name: 'Response context' });
   await expect(sheet.getByText('Home insurance premium')).toBeVisible();
   await expect(sheet.getByText('Insurance: $1,900 per year.')).toBeVisible();
   await expect(sheet.getByText('Recorded insurance premiums remain representative for this planning view.')).toBeVisible();
   await sheet.getByText('Close', { exact: true }).click();
   await expect(sheet).toHaveCount(0);
   await expect(sourceTrigger).toBeFocused();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('created output records open as authoritative response context while workflow status stays in the conversation', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show the task output');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-maintenance-output');
+  await expect(response.getByRole('heading', { name: 'Maintenance task created' })).toBeVisible();
+  await expect(response.getByText('The task is now part of this home’s canonical Maintenance record.')).toBeVisible();
+  await expect(response.getByRole('link', { name: 'Open task in Maintenance' })).toHaveCount(0);
+  await response.getByRole('button', { name: 'View response context' }).click();
+
+  const panel = page.getByRole('complementary', { name: 'Response context' });
+  await expect(panel.getByRole('heading', { name: 'Created record' })).toBeVisible();
+  await expect(panel.getByText('Replace HVAC filter')).toBeVisible();
+  await expect(panel.getByText(/Maintenance task · pending · Created/)).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Open task in Maintenance' })).toBeVisible();
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 

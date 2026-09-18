@@ -11209,7 +11209,14 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
           { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
           { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
         ],
-        actions: [{ id: 'open-task', label: 'Open task in Maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+        actions: [],
+      }, {
+        type: 'OUTPUT_ARTIFACTS', id: `maintenance-output-${task.id}`, title: 'Created record',
+        items: [{
+          artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: task.id, relationship: 'CREATED',
+          label: task.title, status: task.status, createdAt: task.createdAt.toISOString(),
+          navigation: { label: 'Open task in Maintenance', href: maintenanceHref },
+        }],
       }],
       confirmation: null,
       suggestions: ['What maintenance is still pending?', 'Create another maintenance task'],

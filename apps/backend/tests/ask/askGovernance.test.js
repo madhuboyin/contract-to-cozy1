@@ -171,6 +171,28 @@ test('evidence claim mappings resolve exact response block and item identities',
   assert.match(ownershipEvidence, /targetItemId: category\.category/);
 });
 
+test('output artifacts require exact canonical maintenance identity and safe internal navigation', () => {
+  const artifact = {
+    type: 'OUTPUT_ARTIFACTS', id: 'maintenance-output-task-1', title: 'Created record',
+    items: [{
+      artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: 'task-1', relationship: 'CREATED', label: 'Replace HVAC filter', status: 'PENDING',
+      createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open task in Maintenance', href: '/dashboard/maintenance?propertyId=home-1&taskId=task-1&from=ask' },
+    }],
+  };
+  assert.equal(AskPresentationBlockSchema.safeParse(artifact).success, true);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], artifactId: '' }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], artifactType: 'GUESSED_RECORD' }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], navigation: { label: 'Unsafe', href: 'https://example.com/task-1' } }] }).success, false);
+
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const createStart = orchestrator.indexOf('async function confirmMaintenanceTaskCreate(');
+  const createEnd = orchestrator.indexOf('\nasync function confirmMaintenanceTaskUpdate(', createStart);
+  const createHandler = orchestrator.slice(createStart, createEnd);
+  assert.match(createHandler, /type: 'OUTPUT_ARTIFACTS'/);
+  assert.match(createHandler, /artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: task\.id/);
+  assert.match(createHandler, /createdAt: task\.createdAt\.toISOString\(\)/);
+});
+
 test('RECEIVED is a genuinely reachable execution.status, not just an AskExecutionEvent.eventType', () => {
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
   const createIndex = orchestrator.indexOf('const execution = await prisma.askExecution.create({');

@@ -163,6 +163,14 @@ export function validateAskAnswerTrust(input: {
         && (source === 'UNAVAILABLE' || !isAskHrefSafeForProperty(block.linkedAction.href, input.propertyId))) {
         return { ...block, linkedAction: null };
       }
+      if (block.type === 'OUTPUT_ARTIFACTS') {
+        return { ...block, items: block.items.map((item) => ({
+          ...item,
+          navigation: item.navigation && source !== 'UNAVAILABLE' && isAskHrefSafeForProperty(item.navigation.href, input.propertyId)
+            ? item.navigation
+            : null,
+        })) };
+      }
       return 'actions' in block && Array.isArray(block.actions)
         ? { ...block, actions: block.actions.filter(actionApplicable) } as AskPresentationBlock
         : block;

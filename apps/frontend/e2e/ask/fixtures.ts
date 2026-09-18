@@ -86,6 +86,28 @@ function maintenanceExecution() {
   };
 }
 
+function maintenanceOutputExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
+    question: 'Show the task output', status: 'COMPLETED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'MAINTENANCE_TASK_CREATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'maintenance-context-v2',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: 'maintenance-task-created', title: 'Maintenance task created', status: 'COMPLETED',
+      description: 'The task is now part of this home’s canonical Maintenance record.',
+      details: [{ label: 'Task', value: 'Replace HVAC filter' }, { label: 'Status', value: 'Pending' }], actions: [],
+    }, {
+      type: 'OUTPUT_ARTIFACTS', id: 'maintenance-output-task-2', title: 'Created record', items: [{
+        artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: 'maintenance-task-2', relationship: 'CREATED', label: 'Replace HVAC filter', status: 'PENDING',
+        createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open task in Maintenance', href: `/dashboard/maintenance?propertyId=${propertyId}&taskId=maintenance-task-2&from=ask` },
+      }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-18T12:00:00.000Z', updatedAt: '2026-09-18T12:00:00.000Z',
+  };
+}
+
 function adaptiveTableExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-adaptive-table', sessionId: 'ask-acceptance-session',
@@ -314,6 +336,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
           href: `/dashboard/maintenance?propertyId=${propertyId}&taskId=maintenance-task-51&from=ask`, entityType: 'MAINTENANCE_TASK', actions: [],
         }] }];
       }
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/show the task output/i.test(body.message)) {
+      const response = maintenanceOutputExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -20,7 +20,7 @@ import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
 import { MaintenanceResultList } from './MaintenanceResultList';
 import { AdaptiveTableBlock } from './AdaptiveTableBlock';
 import { ComparisonStripBlock } from './ComparisonStripBlock';
-import { hasResponseContext, InlineEvidenceBlock, ResponseContextContent, ResponseContextSummary } from './EvidenceContextPanel';
+import { hasResponseContext, InlineEvidenceBlock, InlineOutputArtifactsBlock, ResponseContextContent, ResponseContextSummary } from './EvidenceContextPanel';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
@@ -606,6 +606,10 @@ export function BlockView({ block, executionId, propertyId, onItemAction, itemAc
 
   if (block.type === 'EVIDENCE') {
     return onOpenContext ? null : <InlineEvidenceBlock block={block} />;
+  }
+
+  if (block.type === 'OUTPUT_ARTIFACTS') {
+    return onOpenContext ? null : <InlineOutputArtifactsBlock block={block} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="text-sm font-semibold text-teal-700 hover:underline">{navigation.label}</AskContextLink> : null} />;
   }
 
   if (block.type === 'BOUNDARY') {
@@ -2412,10 +2416,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <Sheet open={Boolean(contextExecution && contextContentAvailable && !wideContextPanel)} onOpenChange={(open) => { if (!open) closeResponseContext(); }}>
         <SheetContent side="right" className="flex w-[min(24rem,94vw)] flex-col p-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:max-w-sm">
           <SheetHeader className="sr-only">
-            <SheetTitle>Sources and context</SheetTitle>
-            <SheetDescription>Sources, assumptions, and limitations for the selected Ask Cozy response.</SheetDescription>
+            <SheetTitle>Response context</SheetTitle>
+            <SheetDescription>Sources, assumptions, limitations, and output records for the selected Ask Cozy response.</SheetDescription>
           </SheetHeader>
-          {contextExecution && contextContentAvailable && <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} />}
+          {contextExecution && contextContentAvailable && <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />}
         </SheetContent>
       </Sheet>
 
@@ -2505,8 +2509,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
       {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
         </div>
-        {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Sources and context">
-          <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} />
+        {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
+          <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />
         </aside>}
       </div>
     </div>

@@ -246,6 +246,28 @@ const WorkflowProgressBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3),
 });
 
+// IW-SHELL-006 contextual output category. This first bounded producer is
+// intentionally narrow: a completed maintenance-create command can point to
+// the exact canonical task it created. The client must not infer artifacts
+// from workflow copy, action URLs, or display order.
+const OutputArtifactsBlockSchema = z.object({
+  type: z.literal('OUTPUT_ARTIFACTS'),
+  id: z.string(),
+  title: z.string(),
+  items: z.array(z.object({
+    artifactType: z.literal('PROPERTY_MAINTENANCE_TASK'),
+    artifactId: z.string().trim().min(1).max(160),
+    relationship: z.literal('CREATED'),
+    label: z.string().trim().min(1).max(240),
+    status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NEEDS_REVIEW']),
+    createdAt: z.string().datetime(),
+    navigation: z.object({
+      label: z.string().trim().min(1).max(120),
+      href: z.string().regex(/^\/dashboard\//),
+    }).nullable().default(null),
+  })).min(1).max(10),
+});
+
 const MetricRowBlockSchema = z.object({
   type: z.literal('METRIC_ROW'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
   metrics: z.array(z.object({ label: z.string(), value: z.string(), detail: z.string().nullable().optional(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).min(1).max(6),
@@ -458,6 +480,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   BoundaryBlockSchema,
   MonitorBlockSchema,
   WorkflowProgressBlockSchema,
+  OutputArtifactsBlockSchema,
   MetricRowBlockSchema,
   TimelineBlockSchema,
   ComparisonBlockSchema,

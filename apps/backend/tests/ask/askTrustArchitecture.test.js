@@ -212,12 +212,18 @@ test('confirmed command completions receive audience presentation, source eviden
         type: 'WORKFLOW_PROGRESS', id: 'created', title: 'Maintenance task created', status: 'COMPLETED',
         description: 'The task is now in the maintenance record.', details: [],
         actions: [{ id: 'open-task', label: 'Open task', href: '/dashboard/maintenance?propertyId=home-1', style: 'PRIMARY' }],
+      }, {
+        type: 'OUTPUT_ARTIFACTS', id: 'created-record', title: 'Created record', items: [{
+          artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: 'task-1', relationship: 'CREATED', label: 'Clean the gutters', status: 'PENDING',
+          createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open task in Maintenance', href: '/dashboard/maintenance?propertyId=home-1&taskId=task-1' },
+        }],
       }],
       suggestions: [],
     },
   });
   assert.equal(checked.result.status, 'COMPLETED');
   assert.equal(checked.trust.outcome, 'PASS');
+  assert.equal(checked.result.blocks.find((block) => block.type === 'OUTPUT_ARTIFACTS').items[0].artifactId, 'task-1');
   assert.equal(checked.trust.checks.sourceIntegrity, 'PASS');
   assert.equal(checked.result.parameters.audiencePresentation.householdRole, 'CONTRIBUTOR');
   assert.equal(checked.result.parameters.answerTrustEvidence.sources[0].sourceId, 'maintenance.create');
