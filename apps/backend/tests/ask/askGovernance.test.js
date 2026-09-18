@@ -171,7 +171,7 @@ test('evidence claim mappings resolve exact response block and item identities',
   assert.match(ownershipEvidence, /targetItemId: category\.category/);
 });
 
-test('output artifacts require exact canonical maintenance identity and safe internal navigation', () => {
+test('output artifacts require exact canonical identity, type-specific lifecycle semantics, and safe internal navigation', () => {
   const artifact = {
     type: 'OUTPUT_ARTIFACTS', id: 'maintenance-output-task-1', title: 'Created record',
     items: [{
@@ -182,7 +182,20 @@ test('output artifacts require exact canonical maintenance identity and safe int
   assert.equal(AskPresentationBlockSchema.safeParse(artifact).success, true);
   assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], artifactId: '' }] }).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], artifactType: 'GUESSED_RECORD' }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], relationship: 'REUSED' }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], status: 'DRAFT' }] }).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse({ ...artifact, items: [{ ...artifact.items[0], navigation: { label: 'Unsafe', href: 'https://example.com/task-1' } }] }).success, false);
+
+  const quoteWorkspace = {
+    type: 'OUTPUT_ARTIFACTS', id: 'quote-workspace-output-1', title: 'Workspace record',
+    items: [{
+      artifactType: 'QUOTE_COMPARISON_WORKSPACE', artifactId: 'workspace-1', relationship: 'REUSED', label: 'Plumbing quote comparison', status: 'DRAFT',
+      createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open comparison', href: '/dashboard/properties/home-1/tools/quote-comparison?workspaceId=workspace-1' },
+    }],
+  };
+  assert.equal(AskPresentationBlockSchema.safeParse(quoteWorkspace).success, true);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...quoteWorkspace, items: [{ ...quoteWorkspace.items[0], relationship: 'UPDATED' }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...quoteWorkspace, items: [{ ...quoteWorkspace.items[0], status: 'PENDING' }] }).success, false);
 
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
   const createStart = orchestrator.indexOf('async function confirmMaintenanceTaskCreate(');
@@ -191,6 +204,14 @@ test('output artifacts require exact canonical maintenance identity and safe int
   assert.match(createHandler, /type: 'OUTPUT_ARTIFACTS'/);
   assert.match(createHandler, /artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: task\.id/);
   assert.match(createHandler, /createdAt: task\.createdAt\.toISOString\(\)/);
+
+  const quoteStart = orchestrator.indexOf('async function confirmQuoteComparisonCreate(');
+  const quoteEnd = orchestrator.indexOf('\nasync function confirmHvacDecisionStart(', quoteStart);
+  const quoteHandler = orchestrator.slice(quoteStart, quoteEnd);
+  assert.match(quoteHandler, /type: 'OUTPUT_ARTIFACTS'/);
+  assert.match(quoteHandler, /artifactType: 'QUOTE_COMPARISON_WORKSPACE', artifactId: created\.workspace\.id/);
+  assert.match(quoteHandler, /relationship: created\.reused \? 'REUSED' : 'CREATED'/);
+  assert.match(quoteHandler, /createdAt: created\.workspace\.createdAt\.toISOString\(\)/);
 });
 
 test('related records require an exact document-to-home-event relationship from the evidence producer', () => {

@@ -51,7 +51,10 @@ export type AskPresentationBlock =
   | { type: 'BOUNDARY'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' | 'EMERGENCY'; suggestions: string[]; actions?: AskAction[] }
   | { type: 'MONITOR'; id: string; monitorId: string; title: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED'; threshold: string; product: string; channel: string; cadence: string; quietHours: string | null; sourceBoundary: string; actions: AskAction[] }
   | { type: 'WORKFLOW_PROGRESS'; id: string; title: string; status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED'; description: string; details: Array<{ label: string; value: string }>; actions: AskAction[] }
-  | { type: 'OUTPUT_ARTIFACTS'; id: string; title: string; items: Array<{ artifactType: 'PROPERTY_MAINTENANCE_TASK'; artifactId: string; relationship: 'CREATED'; label: string; status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'NEEDS_REVIEW'; createdAt: string; navigation: { label: string; href: string } | null }> }
+  | { type: 'OUTPUT_ARTIFACTS'; id: string; title: string; items: Array<
+    | { artifactType: 'PROPERTY_MAINTENANCE_TASK'; artifactId: string; relationship: 'CREATED'; label: string; status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'NEEDS_REVIEW'; createdAt: string; navigation: { label: string; href: string } | null }
+    | { artifactType: 'QUOTE_COMPARISON_WORKSPACE'; artifactId: string; relationship: 'CREATED' | 'REUSED'; label: string; status: 'DRAFT' | 'SHORTLISTED' | 'DECIDED' | 'ARCHIVED'; createdAt: string; navigation: { label: string; href: string } | null }
+  > }
   | { type: 'RELATED_RECORDS'; id: string; title: string; relationships: Array<{ relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT'; source: { recordType: 'DOCUMENT'; recordId: string; label: string }; target: { recordType: 'HOME_EVENT'; recordId: string; label: string }; navigation: { label: string; href: string } | null }> }
   | { type: 'METRIC_ROW'; id: string; title: string; description?: string | null; metrics: Array<{ label: string; value: string; detail?: string | null; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL' }> }
   | { type: 'TIMELINE'; id: string; title: string; description?: string | null; items: Array<{ id: string; label: string; date?: string | null; description?: string | null; status?: string | null; href?: string | null }> }

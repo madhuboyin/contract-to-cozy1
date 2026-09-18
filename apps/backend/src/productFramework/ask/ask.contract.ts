@@ -246,26 +246,40 @@ const WorkflowProgressBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3),
 });
 
-// IW-SHELL-006 contextual output category. This first bounded producer is
-// intentionally narrow: a completed maintenance-create command can point to
-// the exact canonical task it created. The client must not infer artifacts
-// from workflow copy, action URLs, or display order.
+// IW-SHELL-006 contextual output category. Each governed producer has its own
+// discriminated artifact lifecycle: maintenance creation can only declare a
+// created task, while quote comparison can declare the exact workspace the
+// canonical create-or-reuse service returned. The client must not infer
+// artifacts from workflow copy, action URLs, or display order.
+const OutputArtifactNavigationSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  href: z.string().regex(/^\/dashboard\//),
+}).nullable().default(null);
+
 const OutputArtifactsBlockSchema = z.object({
   type: z.literal('OUTPUT_ARTIFACTS'),
   id: z.string(),
   title: z.string(),
-  items: z.array(z.object({
-    artifactType: z.literal('PROPERTY_MAINTENANCE_TASK'),
-    artifactId: z.string().trim().min(1).max(160),
-    relationship: z.literal('CREATED'),
-    label: z.string().trim().min(1).max(240),
-    status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NEEDS_REVIEW']),
-    createdAt: z.string().datetime(),
-    navigation: z.object({
-      label: z.string().trim().min(1).max(120),
-      href: z.string().regex(/^\/dashboard\//),
-    }).nullable().default(null),
-  })).min(1).max(10),
+  items: z.array(z.discriminatedUnion('artifactType', [
+    z.object({
+      artifactType: z.literal('PROPERTY_MAINTENANCE_TASK'),
+      artifactId: z.string().trim().min(1).max(160),
+      relationship: z.literal('CREATED'),
+      label: z.string().trim().min(1).max(240),
+      status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NEEDS_REVIEW']),
+      createdAt: z.string().datetime(),
+      navigation: OutputArtifactNavigationSchema,
+    }),
+    z.object({
+      artifactType: z.literal('QUOTE_COMPARISON_WORKSPACE'),
+      artifactId: z.string().trim().min(1).max(160),
+      relationship: z.enum(['CREATED', 'REUSED']),
+      label: z.string().trim().min(1).max(240),
+      status: z.enum(['DRAFT', 'SHORTLISTED', 'DECIDED', 'ARCHIVED']),
+      createdAt: z.string().datetime(),
+      navigation: OutputArtifactNavigationSchema,
+    }),
+  ])).min(1).max(10),
 });
 
 // IW-SHELL-006 contextual related-record category. Relationships are

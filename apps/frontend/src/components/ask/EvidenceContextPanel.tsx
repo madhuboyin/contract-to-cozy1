@@ -37,6 +37,19 @@ function observedDate(value: string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString();
 }
 
+function outputArtifactKind(item: OutputArtifactsBlock['items'][number]): string {
+  return item.artifactType === 'PROPERTY_MAINTENANCE_TASK' ? 'Maintenance task' : 'Quote comparison workspace';
+}
+
+function outputArtifactRelationship(item: OutputArtifactsBlock['items'][number]): string {
+  return item.relationship === 'REUSED' ? 'Existing record reused' : 'Created';
+}
+
+function outputArtifactLifecycle(item: OutputArtifactsBlock['items'][number]): string {
+  const date = observedDate(item.createdAt) ?? 'date unavailable';
+  return item.relationship === 'REUSED' ? `Existing record reused · Originally created ${date}` : `Created ${date}`;
+}
+
 export function InlineEvidenceBlock({ block }: { block: EvidenceBlock }) {
   return <details className="rounded-2xl border border-slate-200 bg-white p-4">
     <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.items.length})</summary>
@@ -49,7 +62,7 @@ export function InlineOutputArtifactsBlock({ block, renderNavigation }: { block:
     <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.items.length})</summary>
     <ul className="mt-3 space-y-2">{block.items.map((item) => <li key={`${item.artifactType}-${item.artifactId}`} className="rounded-xl border border-slate-100 p-3">
       <p className="text-sm font-medium text-slate-900">{item.label}</p>
-      <p className="mt-1 text-xs text-slate-500">Maintenance task · {item.status.toLowerCase().replace(/_/g, ' ')}</p>
+      <p className="mt-1 text-xs text-slate-500">{outputArtifactKind(item)} · {item.status.toLowerCase().replace(/_/g, ' ')} · {outputArtifactRelationship(item)}</p>
       {item.navigation && <div className="mt-2">{renderNavigation(item.navigation)}</div>}
     </li>)}</ul>
   </details>;
@@ -73,7 +86,7 @@ function countSummary(counts: ResponseContextCounts): string {
     counts.claims ? `${counts.claims} mapped ${counts.claims === 1 ? 'claim' : 'claims'}` : '',
     counts.assumptions ? `${counts.assumptions} ${counts.assumptions === 1 ? 'assumption' : 'assumptions'}` : '',
     counts.limitations ? `${counts.limitations} ${counts.limitations === 1 ? 'limitation' : 'limitations'}` : '',
-    counts.outputs ? `${counts.outputs} created ${counts.outputs === 1 ? 'record' : 'records'}` : '',
+    counts.outputs ? `${counts.outputs} output ${counts.outputs === 1 ? 'record' : 'records'}` : '',
     counts.relationships ? `${counts.relationships} record ${counts.relationships === 1 ? 'relationship' : 'relationships'}` : '',
   ].filter(Boolean).join(' · ');
 }
@@ -138,7 +151,7 @@ export function ResponseContextContent({ execution, headingRef, onClose, renderN
       {outputBlocks.map((block) => <section key={block.id} aria-labelledby={`output-group-${block.id}`}>
         <h3 id={`output-group-${block.id}`} className="text-sm font-semibold text-slate-900">{block.title}</h3>
         <ul className="mt-2 space-y-2">{block.items.map((item) => <li key={`${item.artifactType}-${item.artifactId}`} className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><FileCheck2 className="h-4 w-4" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{item.label}</p><p className="mt-1 text-xs text-slate-500">Maintenance task · {item.status.toLowerCase().replace(/_/g, ' ')} · Created {observedDate(item.createdAt) ?? 'date unavailable'}</p></div></div>
+          <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><FileCheck2 className="h-4 w-4" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{item.label}</p><p className="mt-1 text-xs text-slate-500">{outputArtifactKind(item)} · {item.status.toLowerCase().replace(/_/g, ' ')} · {outputArtifactLifecycle(item)}</p></div></div>
           {item.navigation && <div className="mt-3">{renderNavigation(item.navigation)}</div>}
         </li>)}</ul>
       </section>)}

@@ -11376,7 +11376,26 @@ async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Prom
     }
     const created = await getOrCreateQuoteComparisonWorkspace(execution.propertyId, userId, candidate.data);
     const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/quote-comparison?workspaceId=${encodeURIComponent(created.workspace.id)}`;
-    result = { status: 'COMPLETED', reasonCode: created.reused ? 'QUOTE_COMPARISON_REUSED' : 'QUOTE_COMPARISON_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED', description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.', details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }], actions: [{ id: 'open-workspace', label: 'Open comparison', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
+    const workspaceLabel = created.workspace.scopeSummary?.trim()
+      || `${String(created.workspace.serviceCategory ?? candidate.data.serviceCategory).toLowerCase().replace(/_/g, ' ')} quote comparison`;
+    result = {
+      status: 'COMPLETED', reasonCode: created.reused ? 'QUOTE_COMPARISON_REUSED' : 'QUOTE_COMPARISON_CREATED',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED',
+        description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.',
+        details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }],
+        actions: [],
+      }, {
+        type: 'OUTPUT_ARTIFACTS', id: `quote-workspace-output-${created.workspace.id}`, title: 'Workspace record',
+        items: [{
+          artifactType: 'QUOTE_COMPARISON_WORKSPACE', artifactId: created.workspace.id,
+          relationship: created.reused ? 'REUSED' : 'CREATED', label: workspaceLabel,
+          status: created.workspace.status, createdAt: created.workspace.createdAt.toISOString(),
+          navigation: { label: 'Open comparison', href },
+        }],
+      }],
+      confirmation: null, suggestions: [],
+    };
     artifactType = command.artifactType;
     artifactId = created.workspace.id;
   return { result, artifactType, artifactId };

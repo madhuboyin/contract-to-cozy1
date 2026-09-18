@@ -108,6 +108,28 @@ function maintenanceOutputExecution() {
   };
 }
 
+function quoteWorkspaceOutputExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-quote-workspace-output', sessionId: 'ask-acceptance-session',
+    question: 'Show the quote workspace output', status: 'COMPLETED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'QUOTE_COMPARISON_CREATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'quote-workspace-context-v2',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: 'quote-workspace-workspace-1', title: 'Existing comparison workspace opened', status: 'COMPLETED',
+      description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.',
+      details: [{ label: 'Service', value: 'plumbing' }, { label: 'Status', value: 'draft' }], actions: [],
+    }, {
+      type: 'OUTPUT_ARTIFACTS', id: 'quote-workspace-output-workspace-1', title: 'Workspace record', items: [{
+        artifactType: 'QUOTE_COMPARISON_WORKSPACE', artifactId: 'workspace-1', relationship: 'REUSED', label: 'Plumbing quote comparison', status: 'DRAFT',
+        createdAt: '2026-09-17T12:00:00.000Z', navigation: { label: 'Open comparison', href: `/dashboard/properties/${propertyId}/tools/quote-comparison?workspaceId=workspace-1` },
+      }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-18T12:00:00.000Z', updatedAt: '2026-09-18T12:00:00.000Z',
+  };
+}
+
 function relatedRecordsExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-related-records', sessionId: 'ask-acceptance-session',
@@ -371,6 +393,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/show the task output/i.test(body.message)) {
       const response = maintenanceOutputExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/show the quote workspace output/i.test(body.message)) {
+      const response = quoteWorkspaceOutputExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -395,6 +395,28 @@ test('created output records open as authoritative response context while workfl
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('a reused quote workspace is disclosed as an exact output artifact without hiding the no-selection receipt', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show the quote workspace output');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-quote-workspace-output');
+  await expect(response.getByRole('heading', { name: 'Existing comparison workspace opened' })).toBeVisible();
+  await expect(response.getByText('No provider or quote was selected. Add comparable proposals in the governed workspace.')).toBeVisible();
+  await expect(response.getByRole('link', { name: 'Open comparison' })).toHaveCount(0);
+  await response.getByRole('button', { name: 'View response context' }).click();
+
+  const panel = page.getByRole('complementary', { name: 'Response context' });
+  await expect(panel.getByRole('heading', { name: 'Workspace record' })).toBeVisible();
+  await expect(panel.getByText('Plumbing quote comparison')).toBeVisible();
+  await expect(panel.getByText(/Quote comparison workspace · draft · Existing record reused · Originally created/)).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Open comparison' })).toHaveAttribute('href', `/dashboard/properties/${propertyId}/tools/quote-comparison?workspaceId=workspace-1`);
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('related records show the authoritative document-to-event relationship without replacing the conversation', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await installAskApi(page);

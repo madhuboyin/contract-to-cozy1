@@ -229,6 +229,35 @@ test('confirmed command completions receive audience presentation, source eviden
   assert.equal(checked.result.parameters.answerTrustEvidence.sources[0].sourceId, 'maintenance.create');
 });
 
+test('quote workspace output keeps the no-selection receipt visible and property-checks canonical navigation', () => {
+  const result = {
+    status: 'COMPLETED', reasonCode: 'QUOTE_COMPARISON_REUSED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: 'quote-workspace-workspace-1', title: 'Existing comparison workspace opened', status: 'COMPLETED',
+      description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.',
+      details: [{ label: 'Service', value: 'plumbing' }, { label: 'Status', value: 'draft' }], actions: [],
+    }, {
+      type: 'OUTPUT_ARTIFACTS', id: 'quote-workspace-output-workspace-1', title: 'Workspace record', items: [{
+        artifactType: 'QUOTE_COMPARISON_WORKSPACE', artifactId: 'workspace-1', relationship: 'REUSED', label: 'Plumbing quote comparison', status: 'DRAFT',
+        createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open comparison', href: '/dashboard/properties/home-1/tools/quote-comparison?workspaceId=workspace-1' },
+      }],
+    }], suggestions: [],
+  };
+  const checked = validateAskConfirmedCompletion({
+    question: 'Create a quote comparison workspace for plumbing bids', operationId: 'QUOTE_COMPARISON_CREATE', propertyId: 'home-1', householdRole: 'CONTRIBUTOR', result,
+  });
+  assert.equal(checked.trust.outcome, 'PASS');
+  assert.match(checked.result.blocks.find((block) => block.type === 'WORKFLOW_PROGRESS').description, /No provider or quote was selected/);
+  assert.equal(checked.result.blocks.find((block) => block.type === 'OUTPUT_ARTIFACTS').items[0].navigation.href, '/dashboard/properties/home-1/tools/quote-comparison?workspaceId=workspace-1');
+
+  const wrongProperty = validateAskConfirmedCompletion({
+    question: 'Create a quote comparison workspace for plumbing bids', operationId: 'QUOTE_COMPARISON_CREATE', propertyId: 'home-2', householdRole: 'CONTRIBUTOR', result,
+  });
+  assert.equal(wrongProperty.trust.outcome, 'REPAIRABLE');
+  assert.equal(wrongProperty.result.blocks.find((block) => block.type === 'OUTPUT_ARTIFACTS').items[0].navigation, null);
+  assert.match(wrongProperty.result.blocks.find((block) => block.type === 'WORKFLOW_PROGRESS').description, /No provider or quote was selected/);
+});
+
 test('related-record navigation is preserved only for the authorized property', () => {
   const result = {
     status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',

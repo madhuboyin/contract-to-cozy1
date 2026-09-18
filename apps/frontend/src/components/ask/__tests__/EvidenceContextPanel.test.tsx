@@ -24,6 +24,13 @@ const outputArtifact: Extract<AskPresentationBlock, { type: 'OUTPUT_ARTIFACTS' }
     createdAt: '2026-09-18T12:00:00.000Z', navigation: { label: 'Open task in Maintenance', href: '/dashboard/maintenance?taskId=task-1' },
   }],
 };
+const reusedQuoteWorkspace: Extract<AskPresentationBlock, { type: 'OUTPUT_ARTIFACTS' }> = {
+  type: 'OUTPUT_ARTIFACTS', id: 'quote-workspace-output-workspace-1', title: 'Workspace record',
+  items: [{
+    artifactType: 'QUOTE_COMPARISON_WORKSPACE', artifactId: 'workspace-1', relationship: 'REUSED', label: 'Plumbing quote comparison', status: 'DRAFT',
+    createdAt: '2026-09-17T12:00:00.000Z', navigation: { label: 'Open comparison', href: '/dashboard/properties/home/tools/quote-comparison?workspaceId=workspace-1' },
+  }],
+};
 const relatedRecords: Extract<AskPresentationBlock, { type: 'RELATED_RECORDS' }> = {
   type: 'RELATED_RECORDS', id: 'related-records', title: 'Related records', relationships: [{
     relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT',
@@ -84,7 +91,7 @@ test('output artifacts are counted and rendered from explicit canonical identity
   ] } as AskExecutionResponse;
   const onOpen = jest.fn();
   render(<ResponseContextSummary execution={artifactExecution} open={false} onOpen={onOpen} />);
-  expect(screen.getByText('1 created record attached to this response')).toBeInTheDocument();
+  expect(screen.getByText('1 output record attached to this response')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'View response context' })).toBeInTheDocument();
 
   render(<ResponseContextContent execution={artifactExecution} onClose={() => undefined} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
@@ -97,6 +104,21 @@ test('archived output artifacts retain an inline disclosure fallback', () => {
   render(<InlineOutputArtifactsBlock block={outputArtifact} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
   expect(screen.getByText('Created record (1)')).toBeInTheDocument();
   expect(screen.getByText('Replace HVAC filter')).toBeInTheDocument();
+});
+
+test('reused quote workspace renders its authoritative type, lifecycle, and original identity', () => {
+  const quoteExecution = { ...execution, blocks: [
+    { type: 'WORKFLOW_PROGRESS', id: 'workflow', title: 'Existing comparison workspace opened', status: 'COMPLETED', description: 'No provider or quote was selected.', details: [], actions: [] },
+    reusedQuoteWorkspace,
+  ] } as AskExecutionResponse;
+  render(<ResponseContextContent execution={quoteExecution} onClose={() => undefined} renderNavigation={(navigation) => navigation ? <a href={navigation.href}>{navigation.label}</a> : null} />);
+  expect(screen.getByText('Plumbing quote comparison')).toBeInTheDocument();
+  expect(screen.getByText(/Quote comparison workspace · draft · Existing record reused/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Open comparison' })).toHaveAttribute('href', '/dashboard/properties/home/tools/quote-comparison?workspaceId=workspace-1');
+
+  render(<InlineOutputArtifactsBlock block={reusedQuoteWorkspace} renderNavigation={() => null} />);
+  expect(screen.getByText('Workspace record (1)')).toBeInTheDocument();
+  expect(screen.getByText('Quote comparison workspace · draft · Existing record reused')).toBeInTheDocument();
 });
 
 test('related records render the exact producer-declared relationship and navigation', () => {
