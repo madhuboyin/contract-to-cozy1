@@ -175,6 +175,23 @@ test('Property Summary rooms open canonical detail inline with the full Rooms co
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Property Summary documents open canonical detail inline with the full Documents collection secondary', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Documents', exact: true }) });
+  await expect(response.getByRole('link', { name: 'Homeowners policy declaration' })).toHaveCount(0);
+  await expect(response.getByRole('button', { name: 'Homeowners policy declaration' })).toBeVisible();
+  await expect(response.getByRole('link', { name: /Open Documents/ })).toHaveAttribute('href', `/dashboard/documents?propertyId=${propertyId}`);
+
+  await response.getByRole('button', { name: 'Homeowners policy declaration' }).click();
+  await expect(response.getByText('Annual declarations page from the carrier.')).toBeVisible();
+  await expect(response.getByText('240.0 KB')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

@@ -386,7 +386,10 @@ router.get('/warranties', authenticate, async (req: CustomRequest, res: Response
  *       (ensurePropertyAccess) -- reusing requireDocumentOwnership here
  *       would make every household VIEWER who can see the list get a false
  *       "not found" opening any document they didn't personally upload.
- *       propertyAuthMiddleware matches the list's own floor instead.
+ *       propertyAuthMiddleware matches the list's own floor instead. The
+ *       property scope includes documents attached directly to the property
+ *       and documents attached through one of its inventory items, matching
+ *       the Property Record Overview contract used by PROPERTY_SUMMARY.
  *     tags: [Documents]
  *     security:
  *       - bearerAuth: []
@@ -410,7 +413,13 @@ router.get('/warranties', authenticate, async (req: CustomRequest, res: Response
 router.get('/property/:propertyId/:documentId', authenticate, propertyAuthMiddleware, async (req: CustomRequest, res: Response) => {
   try {
     const { propertyId, documentId } = req.params;
-    const document = await prisma.document.findFirst({ where: { id: documentId, propertyId, deletedAt: null } });
+    const document = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        deletedAt: null,
+        OR: [{ propertyId }, { inventoryItem: { propertyId } }],
+      },
+    });
     if (!document) {
       return res.status(404).json({ success: false, error: { message: 'Document not found', code: 'DOCUMENT_NOT_FOUND' } });
     }

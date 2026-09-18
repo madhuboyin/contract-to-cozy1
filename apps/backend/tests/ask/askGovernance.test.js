@@ -176,6 +176,20 @@ test('Property Summary declares bounded InventoryRoom identities for inline deta
   assert.match(roomInsights, /APIError\('Room not found', 404, 'ROOM_NOT_FOUND'\)/);
 });
 
+test('Property Summary declares bounded Document identities for inline detail and a separate Documents choice', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const start = orchestrator.indexOf("id: 'property-documents'");
+  const end = orchestrator.indexOf("if (incompleteScopes.length)", start);
+  assert.ok(start > 0 && end > start, 'property-documents producer not found');
+  const producer = orchestrator.slice(start, end);
+  assert.match(producer, /documents\.items\.slice\(0, 50\)/);
+  assert.match(producer, /id: document\.id[\s\S]*entityType: 'DOCUMENT'[\s\S]*href: null/);
+  assert.match(producer, /id: 'open-documents'[\s\S]*label: 'Open Documents'[\s\S]*style: 'SECONDARY'/);
+
+  const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
+  assert.match(overview, /linkedCount: linkedDocuments,[\s\S]*items: documentRows/);
+});
+
 test('evidence claim mappings resolve exact response block and item identities', () => {
   const base = {
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,

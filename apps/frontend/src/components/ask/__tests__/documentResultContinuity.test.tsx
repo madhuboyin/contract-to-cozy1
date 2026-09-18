@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DocumentResultList } from '../DocumentResultList';
+import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -74,6 +75,7 @@ test('an unauthenticated 401 also invokes whole-result redaction', async () => {
 });
 
 test('a document leaving the result clears selection rather than selecting a substitute', () => {
+  jest.spyOn(api, 'getPropertyDocument').mockResolvedValueOnce({ success: true, data: { document: canonicalDocument() } } as Awaited<ReturnType<typeof api.getPropertyDocument>>);
   const { rerender } = render(<List response={execution()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Homeowners policy declaration' }));
   const next = execution(2);
@@ -85,4 +87,23 @@ test('a document leaving the result clears selection rather than selecting a sub
 test('"Open Documents" remains available as a separate, secondary option', () => {
   render(<List response={execution()} />);
   expect(screen.getByText('Open Documents')).toBeInTheDocument();
+});
+
+test('Property Summary documents dispatch through the registry and open canonical detail inline', async () => {
+  const propertySummaryBlock: typeof block = {
+    ...block,
+    id: 'property-documents',
+    title: 'Documents',
+    description: 'Select a document to inspect its current canonical details without leaving Ask Cozy.',
+    sections: [{ ...block.sections[0], id: 'documents', title: 'Recorded documents', count: 2 }],
+  };
+  jest.spyOn(api, 'getPropertyDocument').mockResolvedValueOnce({ success: true, data: { document: canonicalDocument() } } as Awaited<ReturnType<typeof api.getPropertyDocument>>);
+
+  render(<BlockView block={propertySummaryBlock} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={() => {}} onFilterClick={() => {}} onCollectionPage={() => {}} onAccessLost={() => {}} />);
+  expect(screen.queryByRole('link', { name: 'Homeowners policy declaration' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Open Documents/ })).toHaveAttribute('href', '/dashboard/properties/home/documents');
+  fireEvent.click(screen.getByRole('button', { name: 'Homeowners policy declaration' }));
+
+  await waitFor(() => expect(screen.getByText('Annual declarations page from the carrier.')).toBeInTheDocument());
+  expect(api.getPropertyDocument).toHaveBeenCalledWith('home', 'doc-0');
 });

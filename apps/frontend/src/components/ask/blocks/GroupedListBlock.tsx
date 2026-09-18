@@ -112,8 +112,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 // linked to an inventory item, or `property-recent-events`, events surfaced
 // by PROPERTY_SUMMARY -- a different entity type, so its own component); or
 // `property-rooms` (canonical InventoryRoom records from PROPERTY_SUMMARY);
-// or `document-lookup-groups` (Documents by type, DOCUMENT_LOOKUP's own
-// result -- a Property-records sub-domain, not Inventory-adjacent). All
+// or `document-lookup-groups` / `property-documents` (canonical documents
+// surfaced by DOCUMENT_LOOKUP or PROPERTY_SUMMARY). All
 // are still registered under the single `GROUPED_LIST` type (see
 // ./registry.tsx) -- the split is by block id, not a second block type.
 const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection']);
@@ -137,7 +137,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
     return <RoomResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'document-lookup-groups') {
+  if (block.id === 'document-lookup-groups' || block.id === 'property-documents') {
     return <DocumentResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }

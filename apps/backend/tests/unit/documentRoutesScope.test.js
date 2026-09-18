@@ -10,6 +10,7 @@ let autoCreateWarrantyCalls = 0;
 let updateCalls = [];
 let deleteCalls = 0;
 let propertyDocumentRecord = null;
+let propertyDocumentInventoryPropertyId = null;
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -28,7 +29,12 @@ require.cache[prismaPath] = {
         },
         findFirst: async (args) => {
           documentWhere = args.where;
-          return propertyDocumentRecord && propertyDocumentRecord.id === args.where.id && propertyDocumentRecord.propertyId === args.where.propertyId
+          const requestedPropertyId = args.where.propertyId
+            ?? args.where.OR?.find((clause) => clause.propertyId)?.propertyId
+            ?? args.where.OR?.find((clause) => clause.inventoryItem?.propertyId)?.inventoryItem?.propertyId;
+          return propertyDocumentRecord
+            && propertyDocumentRecord.id === args.where.id
+            && (propertyDocumentRecord.propertyId === requestedPropertyId || propertyDocumentInventoryPropertyId === requestedPropertyId)
             ? propertyDocumentRecord
             : null;
         },
@@ -360,6 +366,7 @@ test('restoring a document clears the trash fields', async () => {
 // route exists to avoid for read-only Ask detail.
 test('the property-scoped document detail route returns the canonical document when it belongs to the given property', async () => {
   documentWhere = null;
+  propertyDocumentInventoryPropertyId = null;
   propertyDocumentRecord = {
     id: 'doc-1', propertyId: 'home', name: 'Homeowners policy declaration', type: 'INSURANCE_CERTIFICATE',
     description: null, fileSize: 1024, mimeType: 'application/pdf', fileUrl: 'documents/doc-1.pdf',
@@ -376,10 +383,34 @@ test('the property-scoped document detail route returns the canonical document w
   assert.equal(res.payload.success, true);
   assert.equal(res.payload.data.document.id, 'doc-1');
   assert.equal(res.payload.data.document.fileUrl, undefined, 'the raw S3 key must not be exposed, same as the list/analyze routes');
-  assert.deepEqual(documentWhere, { id: 'doc-1', propertyId: 'home', deletedAt: null });
+  assert.deepEqual(documentWhere, {
+    id: 'doc-1', deletedAt: null,
+    OR: [{ propertyId: 'home' }, { inventoryItem: { propertyId: 'home' } }],
+  });
+});
+
+test('the property-scoped document detail route includes a document linked through this property inventory', async () => {
+  documentWhere = null;
+  propertyDocumentInventoryPropertyId = 'home';
+  propertyDocumentRecord = {
+    id: 'doc-inventory', propertyId: null, inventoryItemId: 'item-1', name: 'Furnace receipt', type: 'RECEIPT',
+    description: null, fileSize: 2048, mimeType: 'application/pdf', fileUrl: 'documents/doc-inventory.pdf',
+    verificationStatus: 'VERIFIED', verifiedAt: null, createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+  };
+
+  const handler = getRouteHandler('/property/:propertyId/:documentId', 'get');
+  const req = { params: { propertyId: 'home', documentId: 'doc-inventory' } };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.data.document.id, 'doc-inventory');
+  assert.deepEqual(documentWhere.OR, [{ propertyId: 'home' }, { inventoryItem: { propertyId: 'home' } }]);
 });
 
 test('the property-scoped document detail route returns a DOCUMENT_NOT_FOUND-coded 404 when the document does not belong to this property', async () => {
+  propertyDocumentInventoryPropertyId = null;
   propertyDocumentRecord = { id: 'doc-1', propertyId: 'a-different-property' };
 
   const handler = getRouteHandler('/property/:propertyId/:documentId', 'get');

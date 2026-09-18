@@ -4610,10 +4610,9 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       type: 'GROUPED_LIST', filters: [], id: 'property-record-sections', title: 'What the record contains',
       description: 'Counts describe canonical records available to this household member.',
       sections: [{
-        id: 'record-sections', title: 'Living Home Record', count: 3,
+        id: 'record-sections', title: 'Living Home Record', count: 2,
         items: [
           { id: 'inventory', title: 'Systems and inventory', description: inventory ? `${inventory.totalCount} items · ${inventory.majorSystemCount} major systems · ${inventory.verifiedCount} verified` : 'Temporarily unavailable', meta: inventory ? [`${inventory.withDocumentCount} with documents`] : [], status: inventory ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/inventory` },
-          { id: 'documents', title: 'Documents', description: documents ? `${documents.totalCount} documents · ${documents.verifiedCount} verified · ${documents.needsReviewCount} need review` : 'Temporarily unavailable', meta: documents ? [`${documents.linkedCount} linked to the home or an item`] : [], status: documents ? 'AVAILABLE' : 'UNAVAILABLE', href: `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}` },
           { id: 'household', title: 'Household access', description: household ? `${household.totalCount} household member${household.totalCount === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: household?.roles.map((role) => `${role.count} ${role.role.toLowerCase()}`) ?? [], status: household ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/household` },
         ],
       }],
@@ -4633,6 +4632,24 @@ async function propertySummaryResult(userId: string, propertyId: string, message
           })),
         }],
         actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `${propertyHref}/rooms`, style: 'SECONDARY' }],
+      });
+    }
+    if (documents) {
+      const documentsHref = `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`;
+      blocks.push({
+        type: 'GROUPED_LIST', filters: [], id: 'property-documents', title: 'Documents',
+        description: documents.totalCount > 50
+          ? 'Showing the 50 most recent canonical document records. Open Documents for the full collection.'
+          : 'Select a document to inspect its current canonical details without leaving Ask Cozy.',
+        sections: [{
+          id: 'documents', title: 'Recorded documents', count: documents.totalCount,
+          items: documents.items.slice(0, 50).map((document) => ({
+            id: document.id, title: document.name, description: null, entityType: 'DOCUMENT', href: null,
+            status: document.verificationStatus,
+            meta: [readablePropertyValue(document.type), `Uploaded ${humanDate(document.createdAt) ?? 'date unavailable'}`],
+          })),
+        }],
+        actions: [{ id: 'open-documents', label: 'Open Documents', href: documentsHref, style: 'SECONDARY' }],
       });
     }
   }

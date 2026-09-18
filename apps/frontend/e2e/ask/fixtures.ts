@@ -84,6 +84,14 @@ function propertySummaryTimelineExecution() {
         meta: ['Kitchen', 'Updated Sep 18, 2026'], status: null, href: null,
       }] }],
       actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${propertyId}/rooms`, style: 'SECONDARY' }],
+    }, {
+      type: 'GROUPED_LIST', id: 'property-documents', title: 'Documents', filters: [],
+      description: 'Select a document to inspect its current canonical details without leaving Ask Cozy.',
+      sections: [{ id: 'documents', title: 'Recorded documents', count: 1, items: [{
+        id: 'document-property-summary', title: 'Homeowners policy declaration', entityType: 'DOCUMENT', description: null,
+        meta: ['Insurance certificate', 'Uploaded Sep 10, 2026'], status: 'VERIFIED', href: null,
+      }] }],
+      actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/documents?propertyId=${propertyId}`, style: 'SECONDARY' }],
     }],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: false, homeRecord: true, retryResponse: false }, suggestions: [],
@@ -330,6 +338,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     healthScore: { score: 82, band: 'GOOD', label: 'Good', evaluationState: 'SCORED', badges: [], improvements: [] },
     kitchen: { missingAppliances: [], quickWins: [] },
   } }));
+  await page.route(`${apiOrigin}/api/documents/property/${propertyId}/document-property-summary`, (route) => fulfill(route, { success: true, data: { document: {
+    id: 'document-property-summary', name: 'Homeowners policy declaration', type: 'INSURANCE_CERTIFICATE',
+    description: 'Annual declarations page from the carrier.', fileSize: 245760, mimeType: 'application/pdf',
+    propertyId, warrantyId: null, policyId: null, verificationStatus: 'VERIFIED', verifiedAt: '2026-09-11T00:00:00.000Z',
+    createdAt: '2026-09-10T00:00:00.000Z', updatedAt: '2026-09-11T00:00:00.000Z', fileSignedUrl: null,
+  } } }));
   await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
     const pendingExecution = {
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',

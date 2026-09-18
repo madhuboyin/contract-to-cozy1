@@ -2129,6 +2129,15 @@ export interface PropertyRecordOverviewDTO {
       verifiedCount: number;
       needsReviewCount: number;
       linkedCount: number;
+      items: Array<{
+        id: string;
+        name: string;
+        type: string;
+        verificationStatus: string;
+        propertyId: string | null;
+        inventoryItemId: string | null;
+        createdAt: string;
+      }>;
       byType: Array<{ type: string; count: number }>;
       latest: { id: string; name: string; type: string; verificationStatus: string; createdAt: string } | null;
     }>;

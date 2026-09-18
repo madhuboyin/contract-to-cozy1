@@ -127,10 +127,11 @@ function DocumentDetail({ documentId, expectedPropertyId, fallbackItem, onAccess
   );
 }
 
-// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: renders the `document-lookup-groups`
-// block (Documents grouped by type) with the same inline-detail pattern as
-// InventoryResultList/HomeEventResultList/MaintenanceResultList. No
-// per-item mutation actions exist for this block either.
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: renders authoritative document
+// collections from both DOCUMENT_LOOKUP (`document-lookup-groups`) and
+// PROPERTY_SUMMARY (`property-documents`) with the same inline-detail pattern
+// as InventoryResultList/HomeEventResultList/MaintenanceResultList. No per-item
+// mutation actions exist for these blocks.
 export function DocumentResultList({ block, propertyId, onFilter, onPage, onAccessLost, link }: {
   block: Block;
   propertyId?: string;

@@ -174,6 +174,7 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
         verifiedCount: verifiedDocuments,
         needsReviewCount: documentRows.length - verifiedDocuments,
         linkedCount: linkedDocuments,
+        items: documentRows,
         byType: Object.entries(documentRows.reduce<Record<string, number>>((acc, document) => {
           acc[document.type] = (acc[document.type] ?? 0) + 1;
           return acc;
