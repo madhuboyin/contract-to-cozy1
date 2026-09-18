@@ -180,11 +180,15 @@ test('confirmCaptureEvent\'s correction branch recovers from a concurrent P2002 
   const body = orchestratorSource.slice(eventIdx, orchestratorSource.indexOf('registerConfirmCapabilityHandler(\'capture.event.confirm\'', eventIdx));
   const catchIdx = body.indexOf('} catch (error) {');
   assert.ok(catchIdx > 0);
-  const catchBlock = body.slice(catchIdx, body.indexOf('return { result: captureEventResult(execution.propertyId, replacement, true)', catchIdx));
+  const catchBlock = body.slice(catchIdx, body.indexOf('return captureEventConfirmResult(execution, userId, parameters, replacement, true', catchIdx));
   assert.match(catchBlock, /error instanceof Prisma\.PrismaClientKnownRequestError && error\.code === 'P2002'/);
   assert.match(catchBlock, /prisma\.homeEvent\.findFirst\(\{\s*where: \{ propertyId: execution\.propertyId, idempotencyKey: correctionIdempotencyKey \}/);
-  // Must return the winner's row (marked corrected: true), not throw.
-  assert.match(catchBlock, /return \{ result: captureEventResult\(execution\.propertyId, winner, true\)/);
+  // Must return the winner's row (marked corrected: true), not throw. The
+  // IW-FRESH-003 reconciliation fix wraps this in captureEventConfirmResult
+  // (which still calls captureEventResult(execution.propertyId, winner,
+  // true) internally, plus reconcileAskExecutionSideEffects) rather than
+  // constructing the result inline -- same outcome, extracted helper.
+  assert.match(catchBlock, /return captureEventConfirmResult\(execution, userId, parameters, winner, true, command\.artifactType\)/);
 });
 
 test('confirmAskExecution\'s shared expire-on-conflict catch only overwrites an execution still in RUNNING, and re-reads current state instead of assuming its own EXPIRED write won', () => {
@@ -242,7 +246,7 @@ test('confirmCaptureEvent\'s correction branch re-checks the winner on HOME_EVEN
   assert.ok(notFoundIdx > 0);
   const notFoundBlock = body.slice(notFoundIdx, body.indexOf('// Code review finding (2026-09-12): the pre-check above', notFoundIdx));
   assert.match(notFoundBlock, /prisma\.homeEvent\.findFirst\(\{\s*where: \{ propertyId: execution\.propertyId, idempotencyKey: correctionIdempotencyKey \}/);
-  assert.match(notFoundBlock, /if \(winner\) \{\s*return \{ result: captureEventResult\(execution\.propertyId, winner, true\)/);
+  assert.match(notFoundBlock, /if \(winner\) \{\s*return captureEventConfirmResult\(execution, userId, parameters, winner, true, command\.artifactType\)/);
   // The rejection must come AFTER the winner check, not before it.
   const winnerCheckIdx = notFoundBlock.indexOf('if (winner)');
   const rejectIdx = notFoundBlock.indexOf("code: 'ASK_CONFIRMATION_NOT_ACTIVE'");

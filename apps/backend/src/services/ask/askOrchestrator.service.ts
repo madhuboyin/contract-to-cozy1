@@ -10492,7 +10492,18 @@ async function confirmDocumentPromotionConfirm(ctx: ConfirmCapabilityContext): P
       artifactType = 'INSPECTION_REPORT'; artifactId = report.id;
     } else throw Object.assign(new Error('This document-promotion action must be reviewed again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
     result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/documents`, style: 'PRIMARY' }] }], suggestions: ['Show remaining document reviews'] };
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's DOCUMENT_PROMOTION_CONFIRM entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `document-promotion-refresh-failed-${candidateId}`, title: 'Saved; list could not refresh',
+        body: 'This decision was saved to the canonical record. The document review list you were viewing could not refresh automatically -- ask "Show remaining document reviews" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'Show remaining document reviews'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -10599,6 +10610,39 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // from either mutation.
   CLAIM_FILE: ['INCIDENT_CONTINUATION'],
   CLAIM_TRANSITION: ['INCIDENT_CONTINUATION'],
+  // IW-FRESH-003 fix (docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md §15):
+  // confirmDocumentPromotionConfirm, confirmCaptureFact/confirmCaptureEvent,
+  // confirmBuyerLifecycleUpdate, and confirmRefinanceRateMonitor previously
+  // called no reconciliation mechanism at all -- not even the single-target
+  // refreshAskSourceExecution the Maintenance reference implementation has
+  // had since Phase 2. Same mechanism as the Buyer/Claims fixes above, not a
+  // new one; sibling sets below are deliberately conservative (XREC-001:
+  // "may have changed", not "definitely changed for this exact record" --
+  // refreshing an unaffected sibling just re-renders identically).
+  //
+  // Confirming or rejecting one candidate changes DOCUMENT_PROMOTION_REVIEW's
+  // own still-visible pending-candidates membership; a CONFIRMED material
+  // spec / insurance policy fact / inspection report write-back can also
+  // change what DOCUMENT_LOOKUP (the document vault) and PROPERTY_SUMMARY
+  // (canonical property facts) show.
+  DOCUMENT_PROMOTION_CONFIRM: ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY'],
+  // Both are generic property-record writers (capturePropertyFact /
+  // HomeEventsService.createHomeEvent) that can capture a fact or event
+  // about any part of the home, including an inventory item -- the exact
+  // "still-visible inventory result can go stale after a related capture
+  // confirms" gap the coverage audit named. PROPERTY_SUMMARY is the more
+  // general sibling; INVENTORY_LOOKUP the specific one the audit called out.
+  CAPTURE_FACT_CONFIRM: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  CAPTURE_EVENT_CONFIRM: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  // Pause/resume/cancel/reschedule all change the same BUYER_PLAN_STATUS/
+  // BUYER_DEADLINES membership and counts a task update or completion does
+  // (reschedule explicitly recalculates every unedited task's due date) --
+  // shares BUYER_TASK_UPDATE/BUYER_TASK_COMPLETE's exact sibling set.
+  BUYER_LIFECYCLE_UPDATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
+  // Creating or updating the rate monitor changes what REFINANCE_ANALYSIS
+  // (the refinance decision read a "set up a monitor" action is typically
+  // launched from) shows about current monitoring state.
+  REFINANCE_RATE_MONITOR: ['REFINANCE_ANALYSIS'],
 };
 
 // Pure decision core, extracted for direct unit testing (same convention as
@@ -11140,7 +11184,18 @@ async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promi
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
       throw error;
     }
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's BUYER_LIFECYCLE_UPDATE entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `buyer-lifecycle-refresh-failed-${artifactId}`, title: 'Saved; list could not refresh',
+        body: 'This change was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -11827,7 +11882,18 @@ async function confirmRefinanceRateMonitor(ctx: ConfirmCapabilityContext): Promi
     };
     artifactType = 'REFINANCE_RATE_MONITOR';
     artifactId = monitor.id;
-  return { result, artifactType, artifactId };
+    // IW-FRESH-003 fix: previously called no reconciliation mechanism at
+    // all -- see ASK_MUTATION_IMPACT_MAP's REFINANCE_RATE_MONITOR entry.
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `refinance-monitor-refresh-failed-${monitor.id}`, title: 'Saved; list could not refresh',
+        body: 'This monitor was saved. A refinance result you were viewing could not refresh automatically -- ask "Is refinancing worth reviewing now?" to see its current state.',
+        severity: 'CAUTION',
+      });
+      result.suggestions = [...new Set([...result.suggestions, 'Is refinancing worth reviewing now?'])];
+    }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('incident-claim.file', confirmClaimFile);
 registerConfirmCapabilityHandler('incident-claim.transition', confirmClaimTransition);
@@ -11931,9 +11997,45 @@ async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<Confir
     }],
     confirmation: null, suggestions: [],
   };
-  return { result, artifactType: command.artifactType, artifactId: evidenceId };
+  // IW-FRESH-003 fix: previously called no reconciliation mechanism at all
+  // -- see ASK_MUTATION_IMPACT_MAP's CAPTURE_FACT_CONFIRM entry.
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `capture-fact-refresh-failed-${evidenceId}`, title: 'Saved; list could not refresh',
+      body: 'This fact was saved to your Living Home Record. A list you were viewing could not refresh automatically -- ask again to see its current state.',
+      severity: 'CAUTION',
+    });
+  }
+  return { result, artifactType: command.artifactType, artifactId: evidenceId, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('capture.fact.confirm', confirmCaptureFact);
+
+// IW-FRESH-003 fix: confirmCaptureEvent previously called no reconciliation
+// mechanism at all on any of its five return paths (idempotent replay, two
+// concurrent-write-race recoveries, the normal correction write, and the
+// normal create) -- see ASK_MUTATION_IMPACT_MAP's CAPTURE_EVENT_CONFIRM
+// entry. Extracted once so every path reconciles identically instead of
+// duplicating the same three lines five times.
+async function captureEventConfirmResult(
+  execution: ConfirmCapabilityContext['execution'],
+  userId: string,
+  parameters: Record<string, unknown>,
+  event: { id: string; title: string },
+  corrected: boolean,
+  artifactType: string,
+): Promise<ConfirmCapabilityResult> {
+  const result = captureEventResult(execution.propertyId, event, corrected);
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `capture-event-refresh-failed-${event.id}`, title: 'Saved; list could not refresh',
+      body: 'This event was saved to your home timeline. A list you were viewing could not refresh automatically -- ask again to see its current state.',
+      severity: 'CAUTION',
+    });
+  }
+  return { result, artifactType, artifactId: event.id, refreshedExecutions: refresh.refreshedExecutions };
+}
 
 function captureEventResult(propertyId: string, event: { id: string; title: string }, corrected: boolean): AskOperationResult {
   const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
@@ -11977,7 +12079,7 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
       where: { propertyId: execution.propertyId, idempotencyKey: correctionIdempotencyKey },
     });
     if (alreadyCorrected) {
-      return { result: captureEventResult(execution.propertyId, alreadyCorrected, true), artifactType: command.artifactType, artifactId: alreadyCorrected.id };
+      return captureEventConfirmResult(execution, userId, parameters, alreadyCorrected, true, command.artifactType);
     }
     let replacement: Awaited<ReturnType<typeof homeEventsServiceForCapture.updateHomeEvent>>;
     try {
@@ -12016,7 +12118,7 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
           where: { propertyId: execution.propertyId, idempotencyKey: correctionIdempotencyKey },
         });
         if (winner) {
-          return { result: captureEventResult(execution.propertyId, winner, true), artifactType: command.artifactType, artifactId: winner.id };
+          return captureEventConfirmResult(execution, userId, parameters, winner, true, command.artifactType);
         }
         throw Object.assign(new Error('The event to correct is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
       }
@@ -12039,12 +12141,12 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
           where: { propertyId: execution.propertyId, idempotencyKey: correctionIdempotencyKey },
         });
         if (winner) {
-          return { result: captureEventResult(execution.propertyId, winner, true), artifactType: command.artifactType, artifactId: winner.id };
+          return captureEventConfirmResult(execution, userId, parameters, winner, true, command.artifactType);
         }
       }
       throw error;
     }
-    return { result: captureEventResult(execution.propertyId, replacement, true), artifactType: command.artifactType, artifactId: replacement.id };
+    return captureEventConfirmResult(execution, userId, parameters, replacement, true, command.artifactType);
   }
 
   const type = parameters.type;
@@ -12064,7 +12166,7 @@ async function confirmCaptureEvent(ctx: ConfirmCapabilityContext): Promise<Confi
       idempotencyKey: execution.id,
     },
   });
-  return { result: captureEventResult(execution.propertyId, created, false), artifactType: command.artifactType, artifactId: created.id };
+  return captureEventConfirmResult(execution, userId, parameters, created, false, command.artifactType);
 }
 registerConfirmCapabilityHandler('capture.event.confirm', confirmCaptureEvent);
 

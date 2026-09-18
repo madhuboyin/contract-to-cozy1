@@ -34,7 +34,13 @@ export const REFINANCE_SKILL = Object.freeze({
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'TABLE', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'MONITOR', 'CAPABILITY_LIST', 'BOUNDARY'],
+  // IW-FRESH-003 fix: LIMITATION added -- resolveEffectiveSkillOperationPolicy
+  // intersects this list with REFINANCE_RATE_MONITOR's own allowedBlockTypes
+  // (askOperationRegistry.ts, fixed for the same reason), so both lists need
+  // it or confirmRefinanceRateMonitor's new reconciliation-failure block
+  // would hit assertSkillResultBlocksAllowed's hard throw instead of
+  // degrading honestly.
+  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'TABLE', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'MONITOR', 'CAPABILITY_LIST', 'LIMITATION', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

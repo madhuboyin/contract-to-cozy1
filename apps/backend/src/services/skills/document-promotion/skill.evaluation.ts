@@ -21,7 +21,7 @@ export const DOCUMENT_PROMOTION_SKILL_EVALUATION = deepFreezeSkillPackage({
   degradedModeCases: [{ dependencyType: 'ADAPTER', dependency: { id: 'document-promotion.confirm', version: '1.0' }, expectedBehavior: 'DEGRADED_OR_UNAVAILABLE' }],
   expectedAdapters: [{ id: 'document-promotion.review', version: '1.0' }, { id: 'document-promotion.confirm', version: '1.0' }], prohibitedAdapters: ['property.summary'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER], prohibitedContextProviders: ['unreviewed.raw-document'],
-  expectedStatuses: ['ANSWERED', 'NEEDS_CONFIRMATION', 'COMPLETED'], expectedBlockTypes: ['BOUNDARY', 'EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'SUMMARY', 'WORKFLOW_PROGRESS'],
+  expectedStatuses: ['ANSWERED', 'NEEDS_CONFIRMATION', 'COMPLETED'], expectedBlockTypes: ['BOUNDARY', 'EMPTY_STATE', 'EVIDENCE', 'GROUPED_LIST', 'LIMITATION', 'SUMMARY', 'WORKFLOW_PROGRESS'],
   expectedCanonicalCalls: [{ id: 'document-promotion.review', version: '1.0' }, { id: 'document-promotion.confirm', version: '1.0' }], prohibitedCanonicalCalls: ['property.summary'],
   modelDisabledCase: { message: 'Show document facts waiting for review', expectedOperationId: 'DOCUMENT_PROMOTION_REVIEW' },
   continuationCase: { message: 'Confirm this reviewed document extraction', sourceOperationId: 'DOCUMENT_PROMOTION_REVIEW', expectedOperationId: 'DOCUMENT_PROMOTION_CONFIRM' },

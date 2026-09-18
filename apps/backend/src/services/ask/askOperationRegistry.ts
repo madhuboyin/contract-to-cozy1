@@ -279,11 +279,19 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   INSPECTION_FINDINGS: definition('INSPECTION_FINDINGS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-findings.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   INSPECTION_FINDING_UPDATE: definition('INSPECTION_FINDING_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-findings.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   DOCUMENT_PROMOTION_REVIEW: definition('DOCUMENT_PROMOTION_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'document-promotion.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
-  DOCUMENT_PROMOTION_CONFIRM: definition('DOCUMENT_PROMOTION_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'document-promotion.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // IW-FRESH-003 fix: LIMITATION added so confirmDocumentPromotionConfirm's
+  // "Saved; list could not refresh" reconciliation-failure block (same
+  // pattern CLAIM_FILE/CLAIM_TRANSITION already declare) survives
+  // askAnswerTrustValidator's allowedBlockTypes filter instead of being
+  // silently stripped as DISALLOWED_BLOCK_REMOVED.
+  DOCUMENT_PROMOTION_CONFIRM: definition('DOCUMENT_PROMOTION_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'document-promotion.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CAPABILITY_DISCOVERY: definition('CAPABILITY_DISCOVERY', 'CAPABILITY_DISCOVERY', false, 'DETERMINISTIC', 'STANDARD', null, 'capability.discovery', ['SUMMARY', 'CAPABILITY_LIST']),
   REPLACEMENT_GUIDANCE: definition('REPLACEMENT_GUIDANCE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'inventory.replacement', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   REFINANCE_ANALYSIS: definition('REFINANCE_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'refinance.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
-  REFINANCE_RATE_MONITOR: definition('REFINANCE_RATE_MONITOR', 'MONITOR', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'refinance.monitor', ['SUMMARY', 'MONITOR', 'WORKFLOW_PROGRESS']),
+  // IW-FRESH-003 fix: LIMITATION added for the same reason as
+  // DOCUMENT_PROMOTION_CONFIRM above -- confirmRefinanceRateMonitor's
+  // reconciliation-failure block would otherwise be silently stripped.
+  REFINANCE_RATE_MONITOR: definition('REFINANCE_RATE_MONITOR', 'MONITOR', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'refinance.monitor', ['SUMMARY', 'MONITOR', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   // FRD Sec22 decision (DECIDED 2026-09-17, Option B --
   // docs/architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md SS4.8): DECISION_PROGRESS/
   // WHY_NOW added so this read can surface an existing SELL_HOLD_RENT_GOAL_CAPTURE
@@ -352,9 +360,23 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   BUYER_DEADLINES: definition('BUYER_DEADLINES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.deadlines', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_DOCUMENT_READINESS: definition('BUYER_DOCUMENT_READINESS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.document-readiness', ['SUMMARY', 'EVIDENCE']),
   BUYER_INSPECTION_REVIEW: definition('BUYER_INSPECTION_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.inspection-review', ['SUMMARY', 'EVIDENCE', 'BOUNDARY']),
-  BUYER_TASK_COMPLETE: definition('BUYER_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // IW-FRESH-003 fix: LIMITATION added to BUYER_TASK_COMPLETE and
+  // BUYER_TASK_UPDATE. Pre-existing gap found while fixing
+  // BUYER_LIFECYCLE_UPDATE's own missing reconciliation: confirmBuyerTaskComplete/
+  // confirmBuyerTaskUpdate already call reconcileAskExecutionSideEffects and
+  // push a "Saved; list could not refresh" LIMITATION block on refresh
+  // failure, but neither operation declared LIMITATION here -- since both
+  // are routed through the buyer-closing skill, whose
+  // resolveEffectiveSkillOperationPolicy intersects the skill's
+  // allowedResultBlocks with this list, the undeclared block would have hit
+  // assertSkillResultBlocksAllowed's hard throw (turning an already-successful
+  // mutation into an apparent confirm failure) instead of degrading honestly
+  // per CONF-005. BUYER_TASK_CREATE is unchanged -- it calls no
+  // reconciliation mechanism at all and pushes no LIMITATION block, a
+  // separate, not-yet-fixed gap outside this fix's scope.
+  BUYER_TASK_COMPLETE: definition('BUYER_TASK_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.complete', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   BUYER_TASK_CREATE: definition('BUYER_TASK_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
-  BUYER_TASK_UPDATE: definition('BUYER_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS']),
+  BUYER_TASK_UPDATE: definition('BUYER_TASK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'buyer.task.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   BUYER_MOVE_STATUS: definition('BUYER_MOVE_STATUS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'buyer.move-status', ['SUMMARY', 'GROUPED_LIST']),
   BUYER_FINANCING_READINESS: definition('BUYER_FINANCING_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.financing-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_TITLE_ESCROW_READINESS: definition('BUYER_TITLE_ESCROW_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.title-escrow-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
@@ -375,7 +397,10 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // must not bypass that. Pause is not yet backed by a real lifecycle
   // transition in the service layer, so it is intentionally unavailable
   // rather than simulated (FRD §21.1).
-  BUYER_LIFECYCLE_UPDATE: definition('BUYER_LIFECYCLE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer.lifecycle.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // IW-FRESH-003 fix: LIMITATION added for the same reason as
+  // DOCUMENT_PROMOTION_CONFIRM above -- confirmBuyerLifecycleUpdate's
+  // reconciliation-failure block would otherwise be silently stripped.
+  BUYER_LIFECYCLE_UPDATE: definition('BUYER_LIFECYCLE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer.lifecycle.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20/§22).
   // MATERIAL_DECISION: these write durable canonical facts/events. Never
   // routed to directly (see the AskOperationId union comment above) -- the
@@ -383,8 +408,14 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // no coverage gap; it returns a boundary explaining this, not a
   // confirmation card. The real work happens confirm-time
   // (confirmCapabilityHandlerRegistry.ts).
-  CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
-  CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // IW-FRESH-003 fix: LIMITATION added to CAPTURE_FACT_CONFIRM and
+  // CAPTURE_EVENT_CONFIRM (which now call reconcileAskExecutionSideEffects
+  // and can emit a "Saved; list could not refresh" block) for the same
+  // reason as DOCUMENT_PROMOTION_CONFIRM above. CAPTURE_WARRANTY_CONFIRM
+  // and CAPTURE_EVIDENCE_CONFIRM below are unchanged -- they still don't
+  // call the reconciliation mechanism, so they have no such block to allow.
+  CAPTURE_FACT_CONFIRM: definition('CAPTURE_FACT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.fact.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  CAPTURE_EVENT_CONFIRM: definition('CAPTURE_EVENT_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.event.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CAPTURE_WARRANTY_CONFIRM: definition('CAPTURE_WARRANTY_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.warranty.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   CAPTURE_EVIDENCE_CONFIRM: definition('CAPTURE_EVIDENCE_CONFIRM', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capture.evidence.confirm', ['SUMMARY', 'WORKFLOW_PROGRESS', 'RELATED_RECORDS', 'BOUNDARY']),
   // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). safetyClass

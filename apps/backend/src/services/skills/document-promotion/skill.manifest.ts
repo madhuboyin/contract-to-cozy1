@@ -15,7 +15,13 @@ export const DOCUMENT_PROMOTION_SKILL = Object.freeze({
   consumerPolicy: [{ consumer: 'ASK', operations: DOCUMENT_PROMOTION_SKILL_OPERATIONS }],
   autonomyLevel: 2,
   riskPolicy: { effects: ['READ', 'WRITE'], materiality: 'MATERIAL', riskDomains: ['PRIVACY', 'COVERAGE'], reversibility: 'PARTIALLY_REVERSIBLE' },
-  authorizationFloor: 'VIEWER', allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'WORKFLOW_PROGRESS', 'BOUNDARY'],
+  // IW-FRESH-003 fix: LIMITATION added -- resolveEffectiveSkillOperationPolicy
+  // intersects this list with DOCUMENT_PROMOTION_CONFIRM's own
+  // allowedBlockTypes (askOperationRegistry.ts, fixed for the same reason),
+  // so both lists need it or confirmDocumentPromotionConfirm's new
+  // reconciliation-failure block would hit assertSkillResultBlocksAllowed's
+  // hard throw instead of degrading honestly.
+  authorizationFloor: 'VIEWER', allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
