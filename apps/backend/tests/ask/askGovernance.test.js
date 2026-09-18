@@ -358,7 +358,10 @@ test('Ask durable response contract accepts clarification and every planned pres
   const blocks = [
     { type: 'METRIC_ROW', id: 'm', title: 'Metrics', metrics: [{ label: 'Open', value: '2' }] },
     { type: 'TIMELINE', id: 't', title: 'Timeline', items: [{ id: '1', label: 'Inspect', date: null }] },
-    { type: 'COMPARISON', id: 'c', title: 'Compare', options: [{ id: 'a', label: 'A', attributes: [] }, { id: 'b', label: 'B', attributes: [] }], actions: [] },
+    { type: 'COMPARISON', id: 'c', title: 'Compare', options: [
+      { id: 'a', label: 'A', badge: { label: 'Lowest cost', basis: 'Option A has the lowest declared cost.', policyCode: 'LOWEST_DECLARED_COST' }, attributes: [], actions: [{ id: 'a-action', label: 'Review A', message: 'Review option A', operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'START_WORKFLOW', style: 'PRIMARY' }] },
+      { id: 'b', label: 'B', attributes: [] },
+    ], actions: [] },
     { type: 'DECISION_TRACE', id: 'd', title: 'Why', steps: [{ label: 'Evidence', detail: 'Recorded fact' }] },
     { type: 'ASSUMPTIONS', id: 'a', title: 'Assumptions', items: ['Recorded inputs remain current'] },
     { type: 'LIMITATION', id: 'l', title: 'Limit', body: 'Planning only', severity: 'CAUTION' },
@@ -366,6 +369,10 @@ test('Ask durable response contract accepts clarification and every planned pres
     { type: 'ERROR_STATE', id: 'x', title: 'Unavailable', body: 'Try again', retryable: true, actions: [] },
   ];
   assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks }).success, true);
+  const parsedComparison = AskPresentationBlockSchema.parse(blocks[2]);
+  assert.equal(parsedComparison.type, 'COMPARISON');
+  assert.deepEqual(parsedComparison.options[1].actions, []);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...blocks[2], options: [{ id: 'a', label: 'A', badge: { label: 'Best', basis: 'Trust me', policyCode: 'free text' }, attributes: [] }, { id: 'b', label: 'B', attributes: [] }] }).success, false);
   const execution = AskExecutionResponseSchema.parse({ ...base, blocks: [], status: 'NEEDS_CLARIFICATION' });
   assert.equal(AskPendingWorkItemSchema.safeParse({ pendingKind: 'CLARIFICATION', actionLabel: 'Answer one question', execution }).success, true);
 });

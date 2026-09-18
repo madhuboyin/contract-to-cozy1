@@ -249,7 +249,21 @@ const TimelineBlockSchema = z.object({
 
 const ComparisonBlockSchema = z.object({
   type: z.literal('COMPARISON'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
-  options: z.array(z.object({ id: z.string(), label: z.string(), summary: z.string().nullable().optional(), attributes: z.array(z.object({ label: z.string(), value: z.string(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).max(12) })).min(2).max(4),
+  options: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    summary: z.string().nullable().optional(),
+    // Badges are server-declared decisions, never labels inferred by the
+    // renderer. The policy code makes the governing rule inspectable while
+    // basis provides the homeowner-facing explanation required by IW-PRES-006.
+    badge: z.object({
+      label: z.string().trim().min(1).max(48),
+      basis: z.string().trim().min(1).max(300),
+      policyCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,79}$/),
+    }).nullable().optional(),
+    attributes: z.array(z.object({ label: z.string(), value: z.string(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).max(12),
+    actions: z.array(AskActionSchema).max(2).default([]),
+  })).min(2).max(4),
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 

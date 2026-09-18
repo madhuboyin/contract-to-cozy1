@@ -115,6 +115,51 @@ function adaptiveTableExecution() {
   };
 }
 
+function comparisonStripExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-comparison-strip', sessionId: 'ask-acceptance-session',
+    question: 'Compare repair options', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'REPLACEMENT_GUIDANCE', version: '1.0', family: 'DECISION' }, contextVersion: 'replacement-context-v1',
+    viewState: { resultId: 'comparison-strip-result', domainScopePhrase: null, dateScopePhrase: null, statusFilter: 'ALL', selectedTaskId: null, revision: 1 },
+    blocks: [{
+      type: 'COMPARISON', id: 'refrigerator-options', title: 'Compare refrigerator options', description: 'Planning estimates based on the recorded refrigerator and current assumptions.',
+      options: [
+        {
+          id: 'repair', label: 'Repair', summary: 'Address the current failure and retain the appliance.',
+          badge: { label: 'Lowest upfront cost', basis: 'The recorded $650 repair estimate is lower than the modeled replacement estimate.', policyCode: 'LOWEST_RECORDED_UPFRONT_COST' },
+          attributes: [
+            { label: 'Estimated cost', value: '$650', tone: 'POSITIVE' },
+            { label: 'Expected useful life', value: '2–3 years', tone: 'CAUTION' },
+          ],
+          actions: [{ id: 'review-repair', label: 'Review repair', message: 'Review the repair option for my refrigerator', operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'START_WORKFLOW', style: 'PRIMARY' }],
+        },
+        {
+          id: 'replace', label: 'Replace', summary: 'Install a comparable efficient refrigerator.',
+          badge: { label: 'Longest horizon', basis: 'Replacement has the longest modeled useful-life range among these options.', policyCode: 'LONGEST_MODELED_USEFUL_LIFE' },
+          attributes: [
+            { label: 'Estimated cost', value: '$2,400', tone: 'CAUTION' },
+            { label: 'Expected useful life', value: '10–12 years', tone: 'POSITIVE' },
+          ],
+          actions: [{ id: 'review-replacement', label: 'Review replacement', message: 'Review the replacement option for my refrigerator', operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'START_WORKFLOW', style: 'PRIMARY' }],
+        },
+        {
+          id: 'monitor', label: 'Monitor', summary: 'Defer work and watch for a material condition change.',
+          attributes: [
+            { label: 'Estimated cost', value: '$0 now', tone: 'DEFAULT' },
+            { label: 'Failure risk', value: 'Higher uncertainty', tone: 'CRITICAL' },
+          ],
+          actions: [{ id: 'review-monitoring', label: 'Review monitoring', message: 'Review the monitoring option for my refrigerator', operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'START_WORKFLOW', style: 'PRIMARY' }],
+        },
+      ],
+      actions: [],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
 function execution(kind: 'refrigerator' | 'refinance', captured = false) {
   const capture = kind === 'refrigerator' ? {
     requirementId: 'repair-replace:refrigerator:lifecycle', captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE', classification: 'ENHANCEMENT_ACCURACY', state: 'UNKNOWN',
@@ -240,6 +285,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/compare ownership costs/i.test(body.message)) {
       const response = adaptiveTableExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/compare repair options/i.test(body.message)) {
+      const response = comparisonStripExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

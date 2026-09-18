@@ -279,6 +279,45 @@ test('adaptive table view switches locally and persists the homeowner choice wit
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
 
+test('bounded comparison strip explains declared badges and offers a persistent show-all path without leaving Ask', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare repair options');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-comparison-strip');
+  await expect(response.getByRole('listitem')).toHaveCount(3);
+  await expect(response.getByRole('button', { name: 'Card strip' })).toHaveAttribute('aria-pressed', 'true');
+  await response.getByText('Why this label').first().click();
+  await expect(response.getByText('The recorded $650 repair estimate is lower than the modeled replacement estimate.')).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Review repair' })).toBeVisible();
+
+  await response.getByRole('button', { name: 'Next option in Compare refrigerator options' }).click();
+  await expect(response.getByText(/Option 2 of 3/)).toBeVisible();
+  await response.getByRole('button', { name: 'Show all' }).click();
+  await expect(response.locator('[data-comparison-presentation="grid"]')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('ctc:ask-result-view:v1:ask-acceptance-session:ask-property-fixture:comparison-strip-result') ?? '{}').comparisonLayouts?.['refrigerator-options'])).toBe('GRID');
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('bounded comparison adapts to stacked cards on mobile without losing options or actions', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare repair options');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-comparison-strip');
+  await expect(response.getByRole('listitem')).toHaveCount(3);
+  await expect(response.getByRole('listitem', { name: /Option 1 of 3: Repair/ })).toBeVisible();
+  await expect(response.getByRole('listitem', { name: /Option 3 of 3: Monitor/ })).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Review replacement' })).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Next option in Compare refrigerator options' })).toBeHidden();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
 test('response sources open beside the desktop conversation without replacing the Ask canvas', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

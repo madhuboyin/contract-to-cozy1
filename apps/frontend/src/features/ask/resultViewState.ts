@@ -6,9 +6,10 @@ export type ResultView = {
   expandedRows: string[];
   visibleCounts: Record<string, number>;
   presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
+  comparisonLayouts: Record<string, 'STRIP' | 'GRID'>;
   scrollOffset: number | null;
 };
-export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, scrollOffset: null };
+export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, scrollOffset: null };
 const PREFIX = 'ctc:ask-result-view:v1:';
 export const resultViewKey = (sessionId: string, propertyId: string, resultId: string) => `${PREFIX}${sessionId}:${propertyId}:${resultId}`;
 
@@ -25,6 +26,9 @@ export function readResultView(storage: Storage, key: string): ResultView {
       presentationModes: Object.fromEntries(Object.entries(value.presentationModes ?? {})
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'TABLE', 'CARDS'].includes(String(mode)))
         .slice(0, 50)) as ResultView['presentationModes'],
+      comparisonLayouts: Object.fromEntries(Object.entries(value.comparisonLayouts ?? {})
+        .filter(([key, mode]) => key.length <= 120 && ['STRIP', 'GRID'].includes(String(mode)))
+        .slice(0, 50)) as ResultView['comparisonLayouts'],
       scrollOffset: Number.isFinite(value.scrollOffset) ? value.scrollOffset : null,
     };
   } catch { return EMPTY_RESULT_VIEW; }
@@ -51,6 +55,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
   const sections = execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' ? block.sections : []);
   const ids = new Set(sections.flatMap((section) => section.items.map((item) => item.id)));
   const tableIds = new Set(execution.blocks.filter((block) => block.type === 'TABLE').map((block) => block.id));
+  const comparisonIds = new Set(execution.blocks.filter((block) => block.type === 'COMPARISON').map((block) => block.id));
   return {
     ...view,
     selectedTaskId: view.selectedTaskId && ids.has(view.selectedTaskId) ? view.selectedTaskId : null,
@@ -58,6 +63,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
     expandedRows: view.expandedRows.filter((id) => ids.has(id)),
     visibleCounts: Object.fromEntries(sections.map((section) => [section.id, Math.max(5, Math.min(view.visibleCounts[section.id] ?? 5, section.items.length))])),
     presentationModes: Object.fromEntries(Object.entries(view.presentationModes ?? {}).filter(([blockId]) => tableIds.has(blockId))),
+    comparisonLayouts: Object.fromEntries(Object.entries(view.comparisonLayouts ?? {}).filter(([blockId]) => comparisonIds.has(blockId))),
   };
 }
 export function mergeResultExecutions(current: AskExecutionResponse[], incoming: AskExecutionResponse[]): AskExecutionResponse[] {

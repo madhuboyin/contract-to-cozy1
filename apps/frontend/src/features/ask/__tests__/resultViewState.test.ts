@@ -54,3 +54,20 @@ test('stored presentation modes are bounded to known values', () => {
   storage.setItem('view', JSON.stringify({ presentationModes: { safe: 'TABLE', invalid: 'GRID' } }));
   expect(readResultView(storage, 'view').presentationModes).toEqual({ safe: 'TABLE' });
 });
+
+test('comparison layout survives only while its exact comparison remains and rejects unknown modes', () => {
+  const comparison = {
+    type: 'COMPARISON', id: 'repair-options', title: 'Options',
+    options: [
+      { id: 'repair', label: 'Repair', attributes: [], actions: [] },
+      { id: 'replace', label: 'Replace', attributes: [], actions: [] },
+    ],
+    actions: [],
+  } as AskPresentationBlock;
+  const view = { ...EMPTY_RESULT_VIEW, comparisonLayouts: { 'repair-options': 'GRID' as const, stale: 'STRIP' as const } };
+  expect(reconcileResultView(view, execution(comparison)).comparisonLayouts).toEqual({ 'repair-options': 'GRID' });
+  expect(reconcileResultView(view, execution({ type: 'SUMMARY', id: 'summary', title: 'x', body: 'y', tone: 'DEFAULT', actions: [] })).comparisonLayouts).toEqual({});
+
+  window.sessionStorage.setItem('comparison-view', JSON.stringify({ comparisonLayouts: { safe: 'STRIP', invalid: 'CARDS' } }));
+  expect(readResultView(window.sessionStorage, 'comparison-view').comparisonLayouts).toEqual({ safe: 'STRIP' });
+});
