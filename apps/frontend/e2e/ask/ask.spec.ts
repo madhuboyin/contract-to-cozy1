@@ -326,20 +326,26 @@ test('response sources open beside the desktop conversation without replacing th
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-adaptive-table');
-  const sourceTrigger = response.getByRole('button', { name: /View sources/ });
+  const sourceTrigger = response.getByRole('button', { name: /View sources and context/ });
+  await expect(response.getByText('Recorded insurance premiums remain representative for this planning view.')).toHaveCount(0);
+  await expect(response.getByText('Future taxes and premiums may differ from the recorded amounts.')).toBeVisible();
   await sourceTrigger.click();
 
-  const panel = page.getByRole('complementary', { name: 'Sources and evidence' });
-  await expect(panel.getByRole('heading', { name: 'Sources and evidence' })).toBeVisible();
+  const panel = page.getByRole('complementary', { name: 'Sources and context' });
+  await expect(panel.getByRole('heading', { name: 'Sources and context' })).toBeVisible();
   await expect(panel.getByText('2026 property tax assessment')).toBeVisible();
   await expect(panel.getByText(/County assessor/)).toBeVisible();
+  await expect(panel.getByText('Recorded insurance premiums remain representative for this planning view.')).toBeVisible();
+  await expect(panel.getByText('Future taxes and premiums may differ from the recorded amounts.')).toBeVisible();
   await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   await expect.poll(() => api.executionBodies.length).toBe(1);
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('ctc:ask-context-panel:v1:ask-acceptance-session:ask-property-fixture'))).toBe('execution-adaptive-table');
 
   await panel.getByRole('button', { name: 'Close' }).click();
   await expect(panel).toHaveCount(0);
   await expect(sourceTrigger).toBeFocused();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('ctc:ask-context-panel:v1:ask-acceptance-session:ask-property-fixture'))).toBeNull();
 });
 
 test('response sources use a dismissible sheet on mobile and restore trigger focus', async ({ page }) => {
@@ -349,10 +355,11 @@ test('response sources use a dismissible sheet on mobile and restore trigger foc
   await page.getByPlaceholder('Ask anything about your home…').fill('Compare ownership costs');
   await page.getByRole('button', { name: 'Send question' }).click();
 
-  const sourceTrigger = page.locator('#ask-execution-execution-adaptive-table').getByRole('button', { name: /View sources/ });
+  const sourceTrigger = page.locator('#ask-execution-execution-adaptive-table').getByRole('button', { name: /View sources and context/ });
   await sourceTrigger.click();
-  const sheet = page.getByRole('dialog', { name: 'Sources and evidence' });
+  const sheet = page.getByRole('dialog', { name: 'Sources and context' });
   await expect(sheet.getByText('Home insurance premium')).toBeVisible();
+  await expect(sheet.getByText('Recorded insurance premiums remain representative for this planning view.')).toBeVisible();
   await sheet.getByText('Close', { exact: true }).click();
   await expect(sheet).toHaveCount(0);
   await expect(sourceTrigger).toBeFocused();

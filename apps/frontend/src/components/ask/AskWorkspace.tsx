@@ -20,7 +20,7 @@ import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
 import { MaintenanceResultList } from './MaintenanceResultList';
 import { AdaptiveTableBlock } from './AdaptiveTableBlock';
 import { ComparisonStripBlock } from './ComparisonStripBlock';
-import { EvidenceContextContent, EvidenceSummaryBlock } from './EvidenceContextPanel';
+import { hasResponseContext, InlineEvidenceBlock, ResponseContextContent, ResponseContextSummary } from './EvidenceContextPanel';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
@@ -124,6 +124,10 @@ function captureDraftStorageKey(executionId: string, requirementId: string): str
 
 function confirmationAttemptStorageKey(executionId: string, version: number): string {
   return `ctc:ask-confirmation-attempt:v1:${executionId}:${version}`;
+}
+
+function contextPanelStorageKey(sessionId: string, propertyId?: string | null): string {
+  return `ctc:ask-context-panel:v1:${sessionId}:${propertyId ?? 'general'}`;
 }
 
 const capturePolicy = {
@@ -445,7 +449,7 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
 // B07 fix: exported (previously module-private) so the generic
 // GROUPED_LIST renderer's selection marker/highlight can be tested
 // directly, same convention as MaintenanceResultList's own export.
-export function BlockView({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage, onAccessLost, evidenceOpen = false, onOpenEvidence }: { block: AskPresentationBlock; executionId: string; propertyId?: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void; onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost: () => void; evidenceOpen?: boolean; onOpenEvidence?: (trigger: HTMLButtonElement) => void }) {
+export function BlockView({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage, onAccessLost, onOpenContext }: { block: AskPresentationBlock; executionId: string; propertyId?: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void; onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost: () => void; onOpenContext?: (trigger: HTMLButtonElement) => void }) {
   // B07 fix: the generic GROUPED_LIST renderer previously had no way to
   // show which item restoreResultPosition/reconcileResultView already
   // track as "selected" (captured generically from an outbound ?taskId=
@@ -601,7 +605,7 @@ export function BlockView({ block, executionId, propertyId, onItemAction, itemAc
   }
 
   if (block.type === 'EVIDENCE') {
-    return <EvidenceSummaryBlock block={block} open={evidenceOpen} onOpen={onOpenEvidence} />;
+    return onOpenContext ? null : <InlineEvidenceBlock block={block} />;
   }
 
   if (block.type === 'BOUNDARY') {
@@ -881,7 +885,7 @@ export function BlockView({ block, executionId, propertyId, onItemAction, itemAc
     );
   }
 
-  if (block.type === 'ASSUMPTIONS') return <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title}</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">{block.items.map((item) => <li key={item}>{item}</li>)}</ul></details>;
+  if (block.type === 'ASSUMPTIONS') return onOpenContext ? null : <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title}</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">{block.items.map((item) => <li key={item}>{item}</li>)}</ul></details>;
 
   if (block.type === 'LIMITATION' || block.type === 'EMPTY_STATE' || block.type === 'ERROR_STATE') {
     const actions = 'actions' in block ? block.actions : [];
@@ -1560,7 +1564,7 @@ function ConversationHistoryNav({ items, activeSessionId, loading, openingId, on
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, evidenceOpen, onOpenEvidence,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1587,8 +1591,8 @@ function ExecutionCard({
   // same access-lost redaction refreshResult's own catch already performs,
   // for its OWN failed request -- not only a refresh round trip.
   onAccessLost: (execution: Pick<AskExecutionResponse, 'sessionId' | 'property' | 'executionId'>) => void;
-  evidenceOpen: boolean;
-  onOpenEvidence: (trigger: HTMLButtonElement) => void;
+  contextOpen: boolean;
+  onOpenContext: (trigger: HTMLButtonElement) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1727,7 +1731,8 @@ function ExecutionCard({
         )}
         <div ref={bodyRef} className="space-y-3">
           <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} evidenceOpen={evidenceOpen} onOpenEvidence={onOpenEvidence} />)}
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} />)}
+            {hasResponseContext(execution) && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
           </AskBlockActionContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
@@ -1826,28 +1831,40 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
   const safeBackTo = resolveDashboardBackHref(initialBackTo, '');
   const contextExecution = contextExecutionId ? executions.find((execution) => execution.executionId === contextExecutionId) ?? null : null;
-  const contextEvidenceAvailable = Boolean(contextExecution?.blocks.some((block) => block.type === 'EVIDENCE' && block.items.length > 0));
+  const contextContentAvailable = Boolean(contextExecution && hasResponseContext(contextExecution));
 
-  const closeEvidenceContext = () => {
+  const closeResponseContext = () => {
+    const contextSessionId = contextExecution?.sessionId ?? sessionId;
+    if (contextSessionId) window.sessionStorage.removeItem(contextPanelStorageKey(contextSessionId, contextExecution?.property?.id ?? selectedPropertyId));
     setContextExecutionId(null);
-    const returnTarget = contextReturnFocusRef.current;
+    const returnTarget = contextReturnFocusRef.current
+      ?? document.querySelector<HTMLButtonElement>('button[aria-controls="ask-response-context"][aria-expanded="true"]');
     contextReturnFocusRef.current = null;
     window.requestAnimationFrame(() => returnTarget?.isConnected && returnTarget.focus({ preventScroll: true }));
   };
-  const openEvidenceContext = (executionId: string, trigger: HTMLButtonElement) => {
+  const openResponseContext = (execution: AskExecutionResponse, trigger: HTMLButtonElement) => {
     contextReturnFocusRef.current = trigger;
-    setContextExecutionId(executionId);
+    setContextExecutionId(execution.executionId);
+    window.sessionStorage.setItem(contextPanelStorageKey(execution.sessionId, execution.property?.id), execution.executionId);
   };
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 
   useEffect(() => {
-    if (contextExecutionId && !contextEvidenceAvailable) setContextExecutionId(null);
-  }, [contextEvidenceAvailable, contextExecutionId]);
+    if (contextExecutionId && !contextContentAvailable) setContextExecutionId(null);
+  }, [contextContentAvailable, contextExecutionId]);
 
   useEffect(() => {
-    if (contextExecution && contextEvidenceAvailable) contextHeadingRef.current?.focus({ preventScroll: true });
-  }, [contextExecution, contextEvidenceAvailable, wideContextPanel]);
+    if (contextExecution && contextContentAvailable) contextHeadingRef.current?.focus({ preventScroll: true });
+  }, [contextExecution, contextContentAvailable, wideContextPanel]);
+
+  useEffect(() => {
+    if (!sessionId || executions.length === 0 || contextExecutionId) return;
+    const storedExecutionId = window.sessionStorage.getItem(contextPanelStorageKey(sessionId, selectedPropertyId));
+    if (storedExecutionId && executions.some((execution) => execution.executionId === storedExecutionId && hasResponseContext(execution))) {
+      setContextExecutionId(storedExecutionId);
+    }
+  }, [contextExecutionId, executions, selectedPropertyId, sessionId]);
 
   useEffect(() => {
     activeSessionRef.current = sessionId;
@@ -2388,13 +2405,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         </Sheet>
       )}
 
-      <Sheet open={Boolean(contextExecution && contextEvidenceAvailable && !wideContextPanel)} onOpenChange={(open) => { if (!open) closeEvidenceContext(); }}>
+      <Sheet open={Boolean(contextExecution && contextContentAvailable && !wideContextPanel)} onOpenChange={(open) => { if (!open) closeResponseContext(); }}>
         <SheetContent side="right" className="flex w-[min(24rem,94vw)] flex-col p-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:max-w-sm">
           <SheetHeader className="sr-only">
-            <SheetTitle>Sources and evidence</SheetTitle>
-            <SheetDescription>Source context for the selected Ask Cozy response.</SheetDescription>
+            <SheetTitle>Sources and context</SheetTitle>
+            <SheetDescription>Sources, assumptions, and limitations for the selected Ask Cozy response.</SheetDescription>
           </SheetHeader>
-          {contextExecution && contextEvidenceAvailable && <EvidenceContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeEvidenceContext} />}
+          {contextExecution && contextContentAvailable && <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} />}
         </SheetContent>
       </Sheet>
 
@@ -2471,8 +2488,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   refreshResult={refreshResult}
                   refreshPending={Boolean(refreshRequests[resultRequestKey(execution)])}
                   onAccessLost={redactAccessLostResult}
-                  evidenceOpen={contextExecutionId === execution.executionId}
-                  onOpenEvidence={(trigger) => openEvidenceContext(execution.executionId, trigger)}
+                  contextOpen={contextExecutionId === execution.executionId}
+                  onOpenContext={(trigger) => openResponseContext(execution, trigger)}
                 />
               </AskActionReturnContext.Provider>;
             })}
@@ -2484,8 +2501,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
       {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
         </div>
-        {wideContextPanel && contextExecution && contextEvidenceAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Sources and evidence">
-          <EvidenceContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeEvidenceContext} />
+        {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Sources and context">
+          <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} />
         </aside>}
       </div>
     </div>

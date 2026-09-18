@@ -108,6 +108,12 @@ function adaptiveTableExecution() {
         { label: '2026 property tax assessment', source: 'County assessor', observedAt: '2026-08-14T12:00:00.000Z' },
         { label: 'Home insurance premium', source: 'Recorded insurance policy', observedAt: '2026-09-01T12:00:00.000Z' },
       ],
+    }, {
+      type: 'ASSUMPTIONS', id: 'ownership-cost-assumptions', title: 'Assumptions used',
+      items: ['Recorded insurance premiums remain representative for this planning view.'],
+    }, {
+      type: 'LIMITATION', id: 'ownership-cost-limitation', title: 'Planning limitation',
+      body: 'Future taxes and premiums may differ from the recorded amounts.', severity: 'CAUTION',
     }],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
