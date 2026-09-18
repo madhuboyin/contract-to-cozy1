@@ -199,6 +199,15 @@ const EvidenceBlockSchema = z.object({
     label: z.string(),
     source: z.string().nullable(),
     observedAt: z.string().nullable(),
+    // IW-SHELL-006 phase 2: producers may bind a source to the exact
+    // schema-validated result item it supports. The response-level schema
+    // below rejects dangling block/item references; the client never
+    // infers this relationship from labels, URLs, or display order.
+    claim: z.object({
+      targetBlockId: z.string().trim().min(1).max(160),
+      targetItemId: z.string().trim().min(1).max(160).nullable().default(null),
+      text: z.string().trim().min(1).max(500),
+    }).nullable().optional(),
   })).max(30),
 });
 
@@ -720,13 +729,55 @@ const AskExecutionResponseBaseSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+function validateEvidenceClaimMappings(
+  response: z.infer<typeof AskExecutionResponseBaseSchema>,
+  ctx: z.RefinementCtx,
+) {
+  const validateBlocks = (
+    blocks: z.infer<typeof AskPresentationBlockSchema>[],
+    pathPrefix: Array<string | number>,
+  ) => {
+    const blocksById = new Map(blocks.map((block) => [block.id, block]));
+
+    blocks.forEach((block, blockIndex) => {
+      if (block.type !== 'EVIDENCE') return;
+      block.items.forEach((item, itemIndex) => {
+        if (!item.claim) return;
+        const target = blocksById.get(item.claim.targetBlockId);
+        const path = [...pathPrefix, blockIndex, 'items', itemIndex, 'claim'];
+        if (!target || target.type === 'EVIDENCE') {
+          ctx.addIssue({ code: 'custom', path: [...path, 'targetBlockId'], message: 'Evidence claims must reference a non-evidence block in the same response.' });
+          return;
+        }
+        if (!item.claim.targetItemId) return;
+
+        const targetItemExists = target.type === 'TABLE'
+          ? target.rows.some((row) => row.id === item.claim!.targetItemId)
+          : target.type === 'GROUPED_LIST'
+            ? target.sections.some((section) => section.items.some((entry) => entry.id === item.claim!.targetItemId))
+            : target.type === 'COMPARISON'
+              ? target.options.some((option) => option.id === item.claim!.targetItemId)
+              : target.type === 'TIMELINE'
+                ? target.items.some((entry) => entry.id === item.claim!.targetItemId)
+                : false;
+        if (!targetItemExists) {
+          ctx.addIssue({ code: 'custom', path: [...path, 'targetItemId'], message: 'Evidence claim item must exist in the referenced result block.' });
+        }
+      });
+    });
+  };
+
+  validateBlocks(response.blocks, ['blocks']);
+  if (response.originalResponse) validateBlocks(response.originalResponse.blocks, ['originalResponse', 'blocks']);
+}
+
 const AskExecutionResponseChildSchema = AskExecutionResponseBaseSchema.extend({
   childExecutions: z.tuple([]).default([]),
-});
+}).superRefine(validateEvidenceClaimMappings);
 
 export const AskExecutionResponseSchema = AskExecutionResponseBaseSchema.extend({
   childExecutions: z.array(AskExecutionResponseChildSchema).max(3).default([]),
-});
+}).superRefine(validateEvidenceClaimMappings);
 
 export const AskPendingWorkItemSchema = z.object({
   pendingKind: z.enum(['CLARIFICATION', 'PROPERTY_SELECTION', 'ENTITY_SELECTION', 'CONTEXT_CAPTURE', 'CONFIRMATION', 'COMMAND_RECOVERY']),

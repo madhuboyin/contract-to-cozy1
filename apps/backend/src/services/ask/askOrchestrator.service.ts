@@ -4037,6 +4037,11 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
       ? `${category.sourceDomain.toLowerCase().replace(/_/g, ' ')} · ${category.evidenceStatus?.toLowerCase().replace(/_/g, ' ') ?? 'evidence status unknown'}`
       : 'Ownership Cost Intelligence',
     observedAt: category.periodEnd ?? costs.snapshot.calculatedAt,
+    claim: {
+      targetBlockId: 'ownership-cost-categories',
+      targetItemId: category.category,
+      text: `${category.label}: ${category.monthlyAmountCents == null ? 'monthly amount unknown' : `${money(category.monthlyAmountCents / 100)} per month`} and ${category.amountCents == null ? 'annual amount unknown' : `${money(category.amountCents / 100)} per year`}.`,
+    },
   }));
   if (evidence.length) blocks.push({ type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources and periods', items: evidence });
   blocks.push({

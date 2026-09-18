@@ -335,6 +335,9 @@ test('response sources open beside the desktop conversation without replacing th
   await expect(panel.getByRole('heading', { name: 'Sources and context' })).toBeVisible();
   await expect(panel.getByText('2026 property tax assessment')).toBeVisible();
   await expect(panel.getByText(/County assessor/)).toBeVisible();
+  await expect(panel.getByText('Property tax: $6,200 per year.')).toBeVisible();
+  await expect(panel.getByText('Insurance: $1,900 per year.')).toBeVisible();
+  await expect(panel.getByText('Supports this claim')).toHaveCount(2);
   await expect(panel.getByText('Recorded insurance premiums remain representative for this planning view.')).toBeVisible();
   await expect(panel.getByText('Future taxes and premiums may differ from the recorded amounts.')).toBeVisible();
   await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
@@ -359,6 +362,7 @@ test('response sources use a dismissible sheet on mobile and restore trigger foc
   await sourceTrigger.click();
   const sheet = page.getByRole('dialog', { name: 'Sources and context' });
   await expect(sheet.getByText('Home insurance premium')).toBeVisible();
+  await expect(sheet.getByText('Insurance: $1,900 per year.')).toBeVisible();
   await expect(sheet.getByText('Recorded insurance premiums remain representative for this planning view.')).toBeVisible();
   await sheet.getByText('Close', { exact: true }).click();
   await expect(sheet).toHaveCount(0);

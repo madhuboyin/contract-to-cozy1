@@ -6,13 +6,13 @@ type EvidenceBlock = Extract<AskPresentationBlock, { type: 'EVIDENCE' }>;
 const evidence: EvidenceBlock = {
   type: 'EVIDENCE', id: 'cost-evidence', title: 'Sources for this estimate',
   items: [
-    { label: '2026 property tax assessment', source: 'County assessor', observedAt: '2026-08-14T12:00:00.000Z' },
+    { label: '2026 property tax assessment', source: 'County assessor', observedAt: '2026-08-14T12:00:00.000Z', claim: { targetBlockId: 'cost-table', targetItemId: 'property-tax', text: 'Property tax: $517 per month and $6,200 per year.' } },
     { label: 'Insurance premium', source: null, observedAt: null },
   ],
 };
 const execution = {
   executionId: 'execution', sessionId: 'session', question: 'Compare ownership costs',
-  property: { id: 'home', label: 'Maple Home' }, blocks: [evidence,
+  property: { id: 'home', label: 'Maple Home' }, blocks: [{ type: 'TABLE', id: 'cost-table', title: 'Costs', columns: [{ key: 'cost', label: 'Cost' }], rows: [{ id: 'property-tax', values: { cost: '$6,200' } }], actions: [] }, evidence,
     { type: 'ASSUMPTIONS', id: 'cost-assumptions', title: 'Assumptions used', items: ['Insurance premium remains unchanged.'] },
     { type: 'LIMITATION', id: 'cost-limitation', title: 'Planning limitation', body: 'Future premiums may differ.', severity: 'CAUTION' },
   ],
@@ -21,7 +21,7 @@ const execution = {
 test('current response renders one compact trigger with aggregate context counts', () => {
   const onOpen = jest.fn();
   render(<ResponseContextSummary execution={execution} open={false} onOpen={onOpen} />);
-  expect(screen.getByText('2 sources · 1 assumption · 1 limitation attached to this response')).toBeInTheDocument();
+  expect(screen.getByText('2 sources · 1 mapped claim · 1 assumption · 1 limitation attached to this response')).toBeInTheDocument();
   const trigger = screen.getByRole('button', { name: /View sources and context/ });
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
   expect(trigger).toHaveAttribute('aria-controls', 'ask-response-context');
@@ -38,7 +38,7 @@ test('archived evidence retains the inline disclosure fallback', () => {
 test('evidence-only responses retain the concise View sources label', () => {
   render(<ResponseContextSummary execution={{ ...execution, blocks: [evidence] }} open={false} onOpen={() => undefined} />);
   expect(screen.getByRole('button', { name: 'View sources' })).toBeInTheDocument();
-  expect(screen.getByText('2 sources attached to this response')).toBeInTheDocument();
+  expect(screen.getByText('2 sources · 1 mapped claim attached to this response')).toBeInTheDocument();
 });
 
 test('context content remains response-scoped and groups evidence, assumptions and limitations', () => {
@@ -48,6 +48,7 @@ test('context content remains response-scoped and groups evidence, assumptions a
   expect(screen.getByText(/for this response about Maple Home/)).toBeInTheDocument();
   expect(screen.getByText(/This context belongs to the response “Compare ownership costs”/)).toBeInTheDocument();
   expect(screen.getByText(/County assessor · Observed/)).toBeInTheDocument();
+  expect(screen.getByText('Property tax: $517 per month and $6,200 per year.')).toBeInTheDocument();
   expect(screen.getByText('Source name not provided')).toBeInTheDocument();
   expect(screen.getByText('Insurance premium remains unchanged.')).toBeInTheDocument();
   expect(screen.getByText('Future premiums may differ.')).toBeInTheDocument();
@@ -56,7 +57,7 @@ test('context content remains response-scoped and groups evidence, assumptions a
 });
 
 test('context availability and counts ignore empty contextual blocks', () => {
-  expect(responseContextCounts(execution)).toEqual({ sources: 2, assumptions: 1, limitations: 1 });
+  expect(responseContextCounts(execution)).toEqual({ sources: 2, claims: 1, assumptions: 1, limitations: 1 });
   expect(hasResponseContext(execution)).toBe(true);
   expect(hasResponseContext({ blocks: [{ type: 'EVIDENCE', id: 'empty', title: 'None', items: [] }] })).toBe(false);
 });

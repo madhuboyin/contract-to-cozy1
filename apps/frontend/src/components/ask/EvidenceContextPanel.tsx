@@ -8,15 +8,18 @@ type EvidenceBlock = Extract<AskPresentationBlock, { type: 'EVIDENCE' }>;
 type AssumptionsBlock = Extract<AskPresentationBlock, { type: 'ASSUMPTIONS' }>;
 type LimitationBlock = Extract<AskPresentationBlock, { type: 'LIMITATION' }>;
 
-export type ResponseContextCounts = { sources: number; assumptions: number; limitations: number };
+export type ResponseContextCounts = { sources: number; claims: number; assumptions: number; limitations: number };
 
 export function responseContextCounts(execution: Pick<AskExecutionResponse, 'blocks'>): ResponseContextCounts {
   return execution.blocks.reduce<ResponseContextCounts>((counts, block) => {
-    if (block.type === 'EVIDENCE') counts.sources += block.items.length;
+    if (block.type === 'EVIDENCE') {
+      counts.sources += block.items.length;
+      counts.claims += block.items.filter((item) => item.claim).length;
+    }
     if (block.type === 'ASSUMPTIONS') counts.assumptions += block.items.length;
     if (block.type === 'LIMITATION' && block.body.trim()) counts.limitations += 1;
     return counts;
-  }, { sources: 0, assumptions: 0, limitations: 0 });
+  }, { sources: 0, claims: 0, assumptions: 0, limitations: 0 });
 }
 
 export function hasResponseContext(execution: Pick<AskExecutionResponse, 'blocks'>): boolean {
@@ -33,13 +36,14 @@ function observedDate(value: string | null): string | null {
 export function InlineEvidenceBlock({ block }: { block: EvidenceBlock }) {
   return <details className="rounded-2xl border border-slate-200 bg-white p-4">
     <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.items.length})</summary>
-    <ul className="mt-3 space-y-2 text-xs text-slate-600">{block.items.map((item, index) => <li key={`${item.label}-${index}`}>{item.label}{item.source ? ` · ${item.source}` : ''}{observedDate(item.observedAt) ? ` · ${observedDate(item.observedAt)}` : ''}</li>)}</ul>
+    <ul className="mt-3 space-y-2 text-xs text-slate-600">{block.items.map((item, index) => <li key={`${item.label}-${index}`}>{item.claim && <span className="block font-medium text-slate-700">Supports: {item.claim.text}</span>}{item.label}{item.source ? ` · ${item.source}` : ''}{observedDate(item.observedAt) ? ` · ${observedDate(item.observedAt)}` : ''}</li>)}</ul>
   </details>;
 }
 
 function countSummary(counts: ResponseContextCounts): string {
   return [
     counts.sources ? `${counts.sources} ${counts.sources === 1 ? 'source' : 'sources'}` : '',
+    counts.claims ? `${counts.claims} mapped ${counts.claims === 1 ? 'claim' : 'claims'}` : '',
     counts.assumptions ? `${counts.assumptions} ${counts.assumptions === 1 ? 'assumption' : 'assumptions'}` : '',
     counts.limitations ? `${counts.limitations} ${counts.limitations === 1 ? 'limitation' : 'limitations'}` : '',
   ].filter(Boolean).join(' · ');
@@ -82,6 +86,10 @@ export function ResponseContextContent({ execution, headingRef, onClose }: { exe
         <ol className="mt-2 space-y-2">{block.items.map((item, index) => {
           const date = observedDate(item.observedAt);
           return <li key={`${item.label}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
+            {item.claim && <div className="mb-2 border-b border-slate-100 pb-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700">Supports this claim</p>
+              <p className="mt-1 text-sm leading-5 text-slate-800">{item.claim.text}</p>
+            </div>}
             <p className="text-sm font-medium leading-5 text-slate-900">{item.label}</p>
             <p className="mt-1 text-xs leading-5 text-slate-500">{item.source || 'Source name not provided'}{date && ` · Observed ${date}`}</p>
           </li>;

@@ -105,8 +105,8 @@ function adaptiveTableExecution() {
     }, {
       type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources for these costs',
       items: [
-        { label: '2026 property tax assessment', source: 'County assessor', observedAt: '2026-08-14T12:00:00.000Z' },
-        { label: 'Home insurance premium', source: 'Recorded insurance policy', observedAt: '2026-09-01T12:00:00.000Z' },
+        { label: '2026 property tax assessment', source: 'County assessor', observedAt: '2026-08-14T12:00:00.000Z', claim: { targetBlockId: 'ownership-cost-categories', targetItemId: 'tax', text: 'Property tax: $6,200 per year.' } },
+        { label: 'Home insurance premium', source: 'Recorded insurance policy', observedAt: '2026-09-01T12:00:00.000Z', claim: { targetBlockId: 'ownership-cost-categories', targetItemId: 'insurance', text: 'Insurance: $1,900 per year.' } },
       ],
     }, {
       type: 'ASSUMPTIONS', id: 'ownership-cost-assumptions', title: 'Assumptions used',

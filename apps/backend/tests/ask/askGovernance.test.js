@@ -151,6 +151,26 @@ test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections alread
   assert.match(orchestrator, /id: 'capital-timeline-table'.*totalCount: items\.length/);
 });
 
+test('evidence claim mappings resolve exact response block and item identities', () => {
+  const base = {
+    schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+    executionId: 'execution-claim-map', sessionId: 'session-claim-map', question: 'What are my ownership costs?', status: 'ANSWERED',
+    property: null, operation: null, contextVersion: null, captureRequests: [], confirmation: null,
+    suggestions: [], createdAt: '2026-09-18T00:00:00.000Z', updatedAt: '2026-09-18T00:00:00.000Z',
+  };
+  const table = { type: 'TABLE', id: 'ownership-cost-categories', title: 'Cost by category', columns: [{ key: 'annual', label: 'Annual' }], rows: [{ id: 'PROPERTY_TAX', values: { annual: '$6,200' } }], actions: [] };
+  const evidence = { type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources and periods', items: [{ label: 'Property tax', source: 'property tax · confirmed', observedAt: null, claim: { targetBlockId: table.id, targetItemId: 'PROPERTY_TAX', text: 'Property tax: $517 per month and $6,200 per year.' } }] };
+
+  assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks: [table, evidence] }).success, true);
+  assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks: [table, { ...evidence, items: [{ ...evidence.items[0], claim: { ...evidence.items[0].claim, targetBlockId: 'missing-block' } }] }] }).success, false);
+  assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks: [table, { ...evidence, items: [{ ...evidence.items[0], claim: { ...evidence.items[0].claim, targetItemId: 'missing-row' } }] }] }).success, false);
+
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const ownershipEvidence = orchestrator.slice(orchestrator.indexOf("id: 'ownership-cost-evidence'") - 1200, orchestrator.indexOf("id: 'ownership-cost-evidence'") + 300);
+  assert.match(ownershipEvidence, /targetBlockId: 'ownership-cost-categories'/);
+  assert.match(ownershipEvidence, /targetItemId: category\.category/);
+});
+
 test('RECEIVED is a genuinely reachable execution.status, not just an AskExecutionEvent.eventType', () => {
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
   const createIndex = orchestrator.indexOf('const execution = await prisma.askExecution.create({');
