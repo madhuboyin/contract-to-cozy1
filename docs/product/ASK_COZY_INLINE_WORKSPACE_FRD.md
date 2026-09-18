@@ -2,7 +2,7 @@
 
 **Version:** 1.2
 **Date:** September 17, 2026  
-**Status:** Approved product direction; implementation is not claimed  
+**Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
 
 ## 1. Purpose and authority
@@ -915,3 +915,16 @@ Completion does not authorize progressive removal of traditional pages or naviga
 | Quality | §§23–25 | QLT-001–010 |
 | Traditional navigation preservation | §18 | New governing requirements |
 | Inline completion | §§4, 8–13, 19–21 | New governing requirements |
+
+## Appendix C — Implementation status
+
+Static implementation status as of September 17, 2026:
+
+| Slice | Status | Evidence and remaining boundary |
+| --- | --- | --- |
+| Conversational shell/history foundation | Partially implemented; TypeScript and focused ESLint verified | Full-page Ask now keeps a desktop conversation rail available during active conversations, provides a mobile history drawer, highlights the active session, supports New conversation, writes opaque session/execution identity into the existing Ask URL, and restores same-property session navigation through browser history. It reuses the authorization-checked recent-session and session-read endpoints. |
+| History data contract | Baseline only | The service remains property-scoped and limited to five sessions from the previous seven days. Authorized pagination, server-side search, all-home scope, and privacy-safe indexing remain required. |
+| Session lifecycle controls | Not implemented | Rename, pin/unpin, archive/restore, per-session menus, and durable user-authored-title semantics require backend contracts and, where necessary, Prisma schema changes. |
+| Adaptive presentation runtime | Not implemented by this slice | Existing registered presentation blocks remain in use; the deterministic cross-mode resolver and view switch are still required. |
+| Contextual information panel | Not implemented by this slice | Existing evidence blocks remain inline; the optional responsive sources/evidence panel is still required. |
+| Runtime verification | Not claimed | Browser acceptance scenarios were added for persistent desktop history, active-session URL state, browser-back restoration, and the mobile drawer, but were not executed in this documentation/code review environment. |

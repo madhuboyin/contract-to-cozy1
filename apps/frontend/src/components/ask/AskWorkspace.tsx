@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { ComponentProps, createContext, FormEvent, KeyboardEvent, MutableRefObject, Ref, useContext, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, Loader2, Maximize2, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskPresentationBlock, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { track } from '@/lib/analytics/events';
 import { addAskReturnContext, buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
@@ -58,6 +59,20 @@ function newId(): string {
 
 function askSuggestionKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function updateAskLocation(input: { sessionId?: string | null; propertyId?: string | null; executionId?: string | null }, mode: 'push' | 'replace') {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  const setOrDelete = (key: string, value?: string | null) => {
+    const normalized = value?.trim();
+    if (normalized) url.searchParams.set(key, normalized);
+    else url.searchParams.delete(key);
+  };
+  setOrDelete('propertyId', input.propertyId);
+  setOrDelete('sessionId', input.sessionId);
+  setOrDelete('executionId', input.executionId);
+  window.history[mode === 'push' ? 'pushState' : 'replaceState'](window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 const ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED = 'ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED';
@@ -1468,32 +1483,76 @@ function recentSessionStatus(status: AskRecentSessionSummary['latestStatus']): s
   return status.toLowerCase().replace(/_/g, ' ');
 }
 
-function RecentAskSessions({ items, loading, openingId, onOpen }: {
+function recentSessionGroup(lastActiveAt: string): string {
+  const now = new Date();
+  const value = new Date(lastActiveAt);
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startYesterday = startToday - 24 * 60 * 60 * 1000;
+  const timestamp = value.getTime();
+  if (timestamp >= startToday) return 'Today';
+  if (timestamp >= startYesterday) return 'Yesterday';
+  return 'Previous 7 days';
+}
+
+function ConversationHistoryNav({ items, activeSessionId, loading, openingId, onOpen, onNew }: {
   items: AskRecentSessionSummary[];
+  activeSessionId: string;
   loading: boolean;
   openingId: string | null;
   onOpen: (session: AskRecentSessionSummary) => void;
+  onNew: () => void;
 }) {
-  if (loading) return <p className="mt-7 text-xs text-slate-400" role="status">Loading recent Ask Cozy sessions…</p>;
-  if (!items.length) return null;
+  const [query, setQuery] = useState('');
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = items.filter((session) => !normalizedQuery || session.title.toLowerCase().includes(normalizedQuery) || session.property.label.toLowerCase().includes(normalizedQuery));
+  const grouped = filtered.reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
+    const label = recentSessionGroup(session.lastActiveAt);
+    const group = groups.find((candidate) => candidate.label === label);
+    if (group) group.items.push(session);
+    else groups.push({ label, items: [session] });
+    return groups;
+  }, []);
   return (
-    <section className="mt-8" aria-labelledby="ask-recent-sessions-title">
-      <div className="flex items-end justify-between gap-3">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Continue a recent conversation</p><h2 id="ask-recent-sessions-title" className="mt-1 text-lg font-semibold text-slate-950">Recent Ask Cozy sessions</h2></div>
-        <p className="text-xs text-slate-500">Last 7 days · Up to 5</p>
-      </div>
-      <ul className="mt-3 space-y-2">
-        {items.map((session) => (
-          <li key={session.sessionId}>
-            <button type="button" disabled={Boolean(openingId)} onClick={() => onOpen(session)} className="flex min-h-16 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-teal-300 hover:shadow-md disabled:opacity-60">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700"><MessageCircle className="h-4 w-4" /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{session.title}</span><span className="mt-1 block text-xs text-slate-500">{new Date(session.lastActiveAt).toLocaleString()} · {recentSessionStatus(session.latestStatus)} · {session.executionCount} {session.executionCount === 1 ? 'question' : 'questions'}</span></span>
-              <span className="shrink-0 text-xs font-semibold text-teal-700">{openingId === session.sessionId ? 'Opening…' : 'Open'}</span>
-            </button>
-          </li>
+    <nav className="flex min-h-0 flex-1 flex-col" aria-label="Ask Cozy conversations">
+      <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
+        <Plus className="h-4 w-4" aria-hidden="true" />New conversation
+      </button>
+      <label className="relative mt-4 block">
+        <span className="sr-only">Search conversations</span>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+      </label>
+      <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+        {loading ? <p className="px-2 py-3 text-xs text-slate-400" role="status">Loading recent conversations…</p> : grouped.length === 0 ? (
+          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query ? 'No conversations match your search.' : 'Your recent conversations will appear here.'}</p>
+        ) : grouped.map((group) => (
+          <section key={group.label} className="mb-5" aria-labelledby={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
+            <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</h3>
+            <ul className="mt-1 space-y-1">
+              {group.items.map((session) => {
+                const active = session.sessionId === activeSessionId;
+                return <li key={session.sessionId}>
+                  <button
+                    type="button"
+                    aria-current={active ? 'page' : undefined}
+                    disabled={Boolean(openingId)}
+                    onClick={() => onOpen(session)}
+                    className={cn('w-full rounded-xl px-3 py-2.5 text-left transition disabled:opacity-60', active ? 'bg-teal-50 text-teal-950 ring-1 ring-inset ring-teal-200' : 'text-slate-700 hover:bg-white hover:text-slate-950')}
+                  >
+                    <span className="block truncate text-sm font-semibold">{session.title}</span>
+                    <span className="mt-1 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                      <span className="truncate">{session.property.label}</span>
+                      <span className="shrink-0">{openingId === session.sessionId ? 'Opening…' : recentSessionStatus(session.latestStatus)}</span>
+                    </span>
+                  </button>
+                </li>;
+              })}
+            </ul>
+          </section>
         ))}
-      </ul>
-    </section>
+      </div>
+      <p className="border-t border-slate-200 pt-3 text-[11px] leading-4 text-slate-400">Recent conversations for the selected home. Traditional navigation remains available in the application menu.</p>
+    </nav>
   );
 }
 
@@ -1707,6 +1766,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [recentSessionsLoading, setRecentSessionsLoading] = useState(false);
   const [openingRecentSessionId, setOpeningRecentSessionId] = useState<string | null>(null);
   const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   // Marks the execution whose pending card should receive focus: set right
   // after a turn this session actually produced (a new question answered,
   // or an existing execution advancing after a capture/clarification/
@@ -1853,6 +1913,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     if (loading) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [loading]);
   useEffect(() => {
+    if (mode !== 'page' || historyLoading || !sessionId || executions.length === 0) return;
+    const latest = executions.at(-1)!;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('sessionId') === sessionId && url.searchParams.get('executionId') === latest.executionId) return;
+    updateAskLocation({ sessionId, propertyId: latest.property?.id ?? selectedPropertyId, executionId: latest.executionId }, 'replace');
+  }, [executions, historyLoading, mode, selectedPropertyId, sessionId]);
+  useEffect(() => {
     if (!justUpdatedExecutionId || loading) return;
     const timeout = window.setTimeout(() => {
       document.getElementById(`ask-execution-${justUpdatedExecutionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1929,6 +1996,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       // agnostic to whether it arrived as the "main" response or here.
       setExecutions((current) => mergeResultExecutions(current, [response.data!, ...(response.data!.childExecutions ?? [])]));
       setJustUpdatedExecutionId(response.data.executionId);
+      if (mode === 'page') updateAskLocation({ sessionId: requestedSessionId, propertyId: response.data.property?.id ?? selectedPropertyId, executionId: response.data.executionId }, 'replace');
+      setRecentSessionsEpoch((current) => current + 1);
       if (attribution) track('ask_prompt_outcome', {
         propertyId: selectedPropertyId ?? null,
         ...attribution,
@@ -1980,6 +2049,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       activeSessionPropertyRef.current = selectedPropertyId;
       setSessionId(nextSession); setExecutions([]); setConfirmClear(false);
       setRecentSessionsEpoch((current) => current + 1);
+      if (mode === 'page') updateAskLocation({ propertyId: selectedPropertyId }, 'replace');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not clear Ask history.');
     } finally { setLoading(false); }
@@ -1997,6 +2067,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setInput('');
     window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
     setRecentSessionsEpoch((current) => current + 1);
+    setHistoryDrawerOpen(false);
+    if (mode === 'page') updateAskLocation({ propertyId: selectedPropertyId }, 'push');
     window.setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
@@ -2013,6 +2085,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       setSessionId(recent.sessionId);
       setExecutions(history.data.executions);
       setJustUpdatedExecutionId(null);
+      setHistoryDrawerOpen(false);
+      if (mode === 'page') updateAskLocation({ sessionId: recent.sessionId, propertyId: recent.property.id, executionId: recent.latestExecutionId }, 'push');
     } catch (caught) {
       if (askServiceIsPaused(caught)) {
         setServiceUnavailable(true);
@@ -2025,6 +2099,52 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       setOpeningRecentSessionId(null);
     }
   };
+
+  useEffect(() => {
+    if (mode !== 'page') return;
+    const restoreFromBrowserHistory = () => {
+      const url = new URL(window.location.href);
+      const targetSessionId = url.searchParams.get('sessionId')?.trim() ?? '';
+      const targetPropertyId = url.searchParams.get('propertyId')?.trim() ?? '';
+      if (targetSessionId === activeSessionRef.current) return;
+      if (targetPropertyId && targetPropertyId !== selectedPropertyId) {
+        // Let the server-authored page props and PropertyProvider establish a
+        // different property's session atomically instead of briefly showing
+        // it under the current home's label.
+        window.location.reload();
+        return;
+      }
+      if (!targetSessionId) {
+        const nextSession = newId();
+        activeSessionRef.current = nextSession;
+        activeSessionPropertyRef.current = selectedPropertyId;
+        setSessionId(nextSession);
+        setExecutions([]);
+        setJustUpdatedExecutionId(null);
+        setInput(window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
+        setHistoryLoading(false);
+        return;
+      }
+      setHistoryLoading(true);
+      setError(null);
+      api.getAskSession(targetSessionId)
+        .then((response) => {
+          if (!response.success || !response.data) throw new Error(response.message || 'Could not restore that Ask Cozy conversation.');
+          activeSessionRef.current = targetSessionId;
+          activeSessionPropertyRef.current = selectedPropertyId;
+          setSessionId(targetSessionId);
+          setExecutions(response.data.executions);
+          setJustUpdatedExecutionId(null);
+        })
+        .catch((caught) => {
+          if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+          else setError(caught instanceof Error ? caught.message : 'Could not restore that Ask Cozy conversation.');
+        })
+        .finally(() => setHistoryLoading(false));
+    };
+    window.addEventListener('popstate', restoreFromBrowserHistory);
+    return () => window.removeEventListener('popstate', restoreFromBrowserHistory);
+  }, [mode, selectedPropertyId]);
 
   function restoreResultPosition(execution: AskExecutionResponse) {
     const article = document.getElementById(`ask-execution-${execution.executionId}`);
@@ -2117,6 +2237,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       setExecutions(history.data.executions);
       setJustUpdatedExecutionId(resumed.executionId);
       setPendingWork((current) => current.filter((pending) => pending.execution.sessionId !== resumed.sessionId));
+      if (mode === 'page') updateAskLocation({ sessionId: resumed.sessionId, propertyId: resumed.property?.id ?? selectedPropertyId, executionId: resumed.executionId }, 'push');
     } catch (caught) {
       if (askServiceIsPaused(caught)) {
         setServiceUnavailable(true);
@@ -2145,10 +2266,21 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId);
+  const latestExecution = executions.at(-1);
+  const activeConversation = executions.length > 0 && latestExecution ? {
+    sessionId,
+    title: executions[0].question,
+    property: latestExecution.property ?? { id: selectedPropertyId ?? 'general', label: selectedPropertyId ? 'Selected home' : 'General home guidance' },
+    latestStatus: latestExecution.status,
+    latestExecutionId: latestExecution.executionId,
+    executionCount: executions.length,
+    lastActiveAt: latestExecution.updatedAt,
+  } satisfies AskRecentSessionSummary : null;
+  const historySessions = activeConversation ? [activeConversation, ...visibleRecentSessions] : visibleRecentSessions;
   const personalizedFeaturedPrompts = concierge.view ? visibleConciergeFeaturedPrompts(concierge.view) : [];
   const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
   const featuredPrompts = usingFallbackPrompts ? fallbackPrompts : personalizedFeaturedPrompts;
-  const latestExecutionId = executions.at(-1)?.executionId ?? '';
+  const latestExecutionId = latestExecution?.executionId ?? '';
   const fullWorkspaceHref = buildAskWorkspaceHref({
     propertyId: selectedPropertyId,
     sessionId,
@@ -2191,16 +2323,38 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-11 w-11 rounded-2xl' : 'h-9 w-9 rounded-xl')}><Sparkles className={mode === 'page' ? 'h-5 w-5' : 'h-4 w-4'} /></span><div>{mode === 'page' ? <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className={cn('truncate text-slate-500', mode === 'page' ? 'mt-1 text-sm' : 'text-xs')}>{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
           {selectedPropertyId && <IntelligenceRefreshStatus propertyId={selectedPropertyId} />}
-          {mode === 'page' && executions.length > 0 && !askUnavailable && <><button type="button" aria-label="New Ask Cozy session" onClick={startNewSession} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">New conversation</span></button><button type="button" aria-label="Clear history" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" /><span className="hidden md:inline">Clear history</span></button></>}
+          {mode === 'page' && !askUnavailable && <button type="button" aria-label="Open conversation history" onClick={() => setHistoryDrawerOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:hidden"><History className="h-4 w-4" /><span className="hidden sm:inline">Conversations</span></button>}
+          {mode === 'page' && executions.length > 0 && !askUnavailable && <><button type="button" aria-label="New Ask Cozy session" onClick={startNewSession} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 lg:hidden"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">New conversation</span></button><button type="button" aria-label="Delete current conversation" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" /><span className="hidden md:inline">Delete</span></button></>}
           {mode === 'panel' && <Link href={fullWorkspaceHref} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
           {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
         </div>
       </header>
 
-      {confirmClear && !askUnavailable && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Clear this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Clear conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
+      {mode === 'page' && (
+        <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
+          <SheetContent side="left" className="flex w-[min(22rem,92vw)] flex-col bg-slate-50 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] lg:hidden">
+            <SheetHeader className="pr-12 text-left">
+              <SheetTitle>Ask Cozy conversations</SheetTitle>
+              <SheetDescription>Start something new or continue a recent conversation for this home.</SheetDescription>
+            </SheetHeader>
+            <div className="mt-5 min-h-0 flex-1">
+              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
+
+      {confirmClear && !askUnavailable && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Delete this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Delete conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
 
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{askUnavailable ? 'Ask Cozy is temporarily unavailable. Your saved data is unchanged.' : loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
-      <main className={cn('min-h-0 flex-1 overflow-y-auto', mode === 'page' ? 'px-1 pb-8' : 'px-4 py-5 sm:px-5')}>
+      <div className="flex min-h-0 flex-1">
+        {mode === 'page' && !askUnavailable && (
+          <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-slate-50/80 px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
+            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} />
+          </aside>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+      <main className={cn('min-h-0 flex-1 overflow-y-auto', mode === 'page' ? 'px-1 pb-8 lg:px-6' : 'px-4 py-5 sm:px-5')}>
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (
           <section className="mx-auto mt-6 max-w-2xl rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-8 text-center sm:px-8" role="status" aria-labelledby="ask-paused-title">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-amber-700 shadow-sm"><AlertTriangle className="h-5 w-5" /></span>
@@ -2214,7 +2368,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           <div className="mx-auto max-w-3xl">
             <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>
             {renderComposer('hero')}
-            <RecentAskSessions items={visibleRecentSessions} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} />
             <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, usingFallbackPrompts ? 'FALLBACK' : prompt.source)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
@@ -2274,6 +2427,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       </main>
 
       {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
+        </div>
+      </div>
     </div>
   );
 }

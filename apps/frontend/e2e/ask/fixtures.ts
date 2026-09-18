@@ -153,13 +153,13 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       }] : [] } });
     }
     if (url.pathname.endsWith('/recent-session-1')) {
-      return fulfill(route, { success: true, data: { executions: [execution('refrigerator')] } });
+      return fulfill(route, { success: true, data: { executions: [{ ...execution('refrigerator'), sessionId: 'recent-session-1' }] } });
     }
     return fulfill(route, { success: true, data: { executions: [] } });
   });
   await page.route(`${apiOrigin}/api/ask/executions`, async (route) => {
     assertAuthenticated(route.request());
-    const body = route.request().postDataJSON() as { message: string } & Record<string, unknown>;
+    const body = route.request().postDataJSON() as { message: string; sessionId?: string } & Record<string, unknown>;
     executionBodies.push(body);
     executionQuestions.push(body.message);
     if (/disabled refinance tool/i.test(body.message)) {
@@ -176,6 +176,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     const response = execution(/refinanc/i.test(body.message) ? 'refinance' : 'refrigerator');
     response.question = body.message;
+    if (body.sessionId) response.sessionId = body.sessionId;
     if (options.repeatedSuggestion) (response as { suggestions: string[] }).suggestions = [body.message, 'List all appliances'];
     await fulfill(route, { success: true, data: response }, 201);
   });

@@ -15,6 +15,21 @@ test('mobile starting surface keeps the composer visible without duplicate headi
   await expect(page.getByRole('heading', { name: 'Plan and monitor' })).toBeVisible();
 });
 
+test('mobile conversation history opens as a drawer and restores a recent session', async ({ page }) => {
+  await installAskApi(page, { recentSessions: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+
+  await page.getByRole('button', { name: 'Open conversation history' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Ask Cozy conversations' });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByPlaceholder('Search conversations')).toBeVisible();
+  await drawer.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
+
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
+  await expect(page).toHaveURL(/sessionId=recent-session-1/);
+});
+
 test('mobile inline capture retains a full-form escape path', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
