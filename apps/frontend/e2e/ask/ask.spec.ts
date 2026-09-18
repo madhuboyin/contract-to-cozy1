@@ -279,6 +279,47 @@ test('adaptive table view switches locally and persists the homeowner choice wit
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
 
+test('response sources open beside the desktop conversation without replacing the Ask canvas', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare ownership costs');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-adaptive-table');
+  const sourceTrigger = response.getByRole('button', { name: /View sources/ });
+  await sourceTrigger.click();
+
+  const panel = page.getByRole('complementary', { name: 'Sources and evidence' });
+  await expect(panel.getByRole('heading', { name: 'Sources and evidence' })).toBeVisible();
+  await expect(panel.getByText('2026 property tax assessment')).toBeVisible();
+  await expect(panel.getByText(/County assessor/)).toBeVisible();
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+
+  await panel.getByRole('button', { name: 'Close' }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(sourceTrigger).toBeFocused();
+});
+
+test('response sources use a dismissible sheet on mobile and restore trigger focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare ownership costs');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const sourceTrigger = page.locator('#ask-execution-execution-adaptive-table').getByRole('button', { name: /View sources/ });
+  await sourceTrigger.click();
+  const sheet = page.getByRole('dialog', { name: 'Sources and evidence' });
+  await expect(sheet.getByText('Home insurance premium')).toBeVisible();
+  await sheet.getByText('Close', { exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(sourceTrigger).toBeFocused();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

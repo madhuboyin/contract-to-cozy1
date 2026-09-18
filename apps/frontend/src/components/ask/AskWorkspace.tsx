@@ -19,6 +19,7 @@ import { resolveItemActionDispatch } from '@/features/ask/interactionDispatch';
 import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
 import { MaintenanceResultList } from './MaintenanceResultList';
 import { AdaptiveTableBlock } from './AdaptiveTableBlock';
+import { EvidenceContextContent, EvidenceSummaryBlock } from './EvidenceContextPanel';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
@@ -52,6 +53,19 @@ function useAutoFocusFirstControl<T extends HTMLElement>(autoFocus: boolean) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return ref;
+}
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+  return matches;
 }
 
 function newId(): string {
@@ -430,7 +444,7 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
 // B07 fix: exported (previously module-private) so the generic
 // GROUPED_LIST renderer's selection marker/highlight can be tested
 // directly, same convention as MaintenanceResultList's own export.
-export function BlockView({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage, onAccessLost }: { block: AskPresentationBlock; executionId: string; propertyId?: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void; onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost: () => void }) {
+export function BlockView({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage, onAccessLost, evidenceOpen = false, onOpenEvidence }: { block: AskPresentationBlock; executionId: string; propertyId?: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void; onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost: () => void; evidenceOpen?: boolean; onOpenEvidence?: (trigger: HTMLButtonElement) => void }) {
   // B07 fix: the generic GROUPED_LIST renderer previously had no way to
   // show which item restoreResultPosition/reconcileResultView already
   // track as "selected" (captured generically from an outbound ?taskId=
@@ -586,12 +600,7 @@ export function BlockView({ block, executionId, propertyId, onItemAction, itemAc
   }
 
   if (block.type === 'EVIDENCE') {
-    return (
-      <details className="rounded-2xl border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.items.length})</summary>
-        <ul className="mt-3 space-y-2 text-xs text-slate-600">{block.items.map((item, index) => <li key={`${item.label}-${index}`}>{item.label}{item.source ? ` · ${item.source}` : ''}{item.observedAt ? ` · ${new Date(item.observedAt).toLocaleDateString()}` : ''}</li>)}</ul>
-      </details>
-    );
+    return <EvidenceSummaryBlock block={block} open={evidenceOpen} onOpen={onOpenEvidence} />;
   }
 
   if (block.type === 'BOUNDARY') {
@@ -1550,7 +1559,7 @@ function ConversationHistoryNav({ items, activeSessionId, loading, openingId, on
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, evidenceOpen, onOpenEvidence,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1577,6 +1586,8 @@ function ExecutionCard({
   // same access-lost redaction refreshResult's own catch already performs,
   // for its OWN failed request -- not only a refresh round trip.
   onAccessLost: (execution: Pick<AskExecutionResponse, 'sessionId' | 'property' | 'executionId'>) => void;
+  evidenceOpen: boolean;
+  onOpenEvidence: (trigger: HTMLButtonElement) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1715,7 +1726,7 @@ function ExecutionCard({
         )}
         <div ref={bodyRef} className="space-y-3">
           <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} />)}
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} evidenceOpen={evidenceOpen} onOpenEvidence={onOpenEvidence} />)}
           </AskBlockActionContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
@@ -1773,6 +1784,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [openingRecentSessionId, setOpeningRecentSessionId] = useState<string | null>(null);
   const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [contextExecutionId, setContextExecutionId] = useState<string | null>(null);
+  const contextHeadingRef = useRef<HTMLHeadingElement>(null);
+  const contextReturnFocusRef = useRef<HTMLButtonElement | null>(null);
+  const contextPanelWideViewport = useMediaQuery('(min-width: 1280px)');
+  const wideContextPanel = mode === 'page' && contextPanelWideViewport;
   // Marks the execution whose pending card should receive focus: set right
   // after a turn this session actually produced (a new question answered,
   // or an existing execution advancing after a capture/clarification/
@@ -1808,8 +1824,29 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     || concierge.failureCode === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
   const safeBackTo = resolveDashboardBackHref(initialBackTo, '');
+  const contextExecution = contextExecutionId ? executions.find((execution) => execution.executionId === contextExecutionId) ?? null : null;
+  const contextEvidenceAvailable = Boolean(contextExecution?.blocks.some((block) => block.type === 'EVIDENCE' && block.items.length > 0));
+
+  const closeEvidenceContext = () => {
+    setContextExecutionId(null);
+    const returnTarget = contextReturnFocusRef.current;
+    contextReturnFocusRef.current = null;
+    window.requestAnimationFrame(() => returnTarget?.isConnected && returnTarget.focus({ preventScroll: true }));
+  };
+  const openEvidenceContext = (executionId: string, trigger: HTMLButtonElement) => {
+    contextReturnFocusRef.current = trigger;
+    setContextExecutionId(executionId);
+  };
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
+
+  useEffect(() => {
+    if (contextExecutionId && !contextEvidenceAvailable) setContextExecutionId(null);
+  }, [contextEvidenceAvailable, contextExecutionId]);
+
+  useEffect(() => {
+    if (contextExecution && contextEvidenceAvailable) contextHeadingRef.current?.focus({ preventScroll: true });
+  }, [contextExecution, contextEvidenceAvailable, wideContextPanel]);
 
   useEffect(() => {
     activeSessionRef.current = sessionId;
@@ -2350,6 +2387,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         </Sheet>
       )}
 
+      <Sheet open={Boolean(contextExecution && contextEvidenceAvailable && !wideContextPanel)} onOpenChange={(open) => { if (!open) closeEvidenceContext(); }}>
+        <SheetContent side="right" className="flex w-[min(24rem,94vw)] flex-col p-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:max-w-sm">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Sources and evidence</SheetTitle>
+            <SheetDescription>Source context for the selected Ask Cozy response.</SheetDescription>
+          </SheetHeader>
+          {contextExecution && contextEvidenceAvailable && <EvidenceContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeEvidenceContext} />}
+        </SheetContent>
+      </Sheet>
+
       {confirmClear && !askUnavailable && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Delete this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Delete conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
 
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{askUnavailable ? 'Ask Cozy is temporarily unavailable. Your saved data is unchanged.' : loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
@@ -2423,6 +2470,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   refreshResult={refreshResult}
                   refreshPending={Boolean(refreshRequests[resultRequestKey(execution)])}
                   onAccessLost={redactAccessLostResult}
+                  evidenceOpen={contextExecutionId === execution.executionId}
+                  onOpenEvidence={(trigger) => openEvidenceContext(execution.executionId, trigger)}
                 />
               </AskActionReturnContext.Provider>;
             })}
@@ -2434,6 +2483,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
       {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{renderComposer('footer')}</footer>}
         </div>
+        {wideContextPanel && contextExecution && contextEvidenceAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Sources and evidence">
+          <EvidenceContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeEvidenceContext} />
+        </aside>}
       </div>
     </div>
   );
