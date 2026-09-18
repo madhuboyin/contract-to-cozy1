@@ -2,11 +2,12 @@ import type { AskExecutionResponse } from './types';
 
 export type ResultView = {
   selectedTaskId: string | null;
+  detailTaskId: string | null;
   expandedRows: string[];
   visibleCounts: Record<string, number>;
   scrollOffset: number | null;
 };
-export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, expandedRows: [], visibleCounts: {}, scrollOffset: null };
+export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, expandedRows: [], visibleCounts: {}, scrollOffset: null };
 const PREFIX = 'ctc:ask-result-view:v1:';
 export const resultViewKey = (sessionId: string, propertyId: string, resultId: string) => `${PREFIX}${sessionId}:${propertyId}:${resultId}`;
 
@@ -17,6 +18,7 @@ export function readResultView(storage: Storage, key: string): ResultView {
     if (!value || typeof value !== 'object') return EMPTY_RESULT_VIEW;
     return {
       selectedTaskId: typeof value.selectedTaskId === 'string' ? value.selectedTaskId : null,
+      detailTaskId: typeof value.detailTaskId === 'string' ? value.detailTaskId : null,
       expandedRows: Array.isArray(value.expandedRows) ? value.expandedRows.filter((id: unknown) => typeof id === 'string').slice(0, 100) : [],
       visibleCounts: Object.fromEntries(Object.entries(value.visibleCounts ?? {}).filter(([, count]) => Number.isInteger(count) && Number(count) >= 5 && Number(count) <= 100).map(([key, count]) => [key, Number(count)])),
       scrollOffset: Number.isFinite(value.scrollOffset) ? value.scrollOffset : null,
@@ -47,6 +49,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
   return {
     ...view,
     selectedTaskId: view.selectedTaskId && ids.has(view.selectedTaskId) ? view.selectedTaskId : null,
+    detailTaskId: view.detailTaskId && ids.has(view.detailTaskId) ? view.detailTaskId : null,
     expandedRows: view.expandedRows.filter((id) => ids.has(id)),
     visibleCounts: Object.fromEntries(sections.map((section) => [section.id, Math.max(5, Math.min(view.visibleCounts[section.id] ?? 5, section.items.length))])),
   };

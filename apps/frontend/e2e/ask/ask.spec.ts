@@ -191,6 +191,24 @@ test('weather attention answers inline with the complete preparation checklist b
   await expect.poll(async () => (await response.boundingBox())?.y ?? 0).toBeGreaterThan(80);
 });
 
+test('maintenance task titles open canonical detail inline and keep traditional navigation optional', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-maintenance');
+  await expect(response.getByRole('button', { name: 'Service the heat pump' })).toBeVisible();
+  await expect(response.getByRole('link', { name: 'Service the heat pump' })).toHaveCount(0);
+  await response.getByRole('button', { name: 'Service the heat pump' }).click();
+
+  await expect(response.getByRole('heading', { name: 'Service the heat pump' })).toBeVisible();
+  await expect(response.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
+  await expect(response.getByText('$250')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect(response.getByRole('link', { name: /Open Maintenance/ })).toBeVisible();
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

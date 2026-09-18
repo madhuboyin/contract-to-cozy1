@@ -59,6 +59,29 @@ function heatPreparationExecution() {
   };
 }
 
+function maintenanceExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-maintenance', sessionId: 'ask-acceptance-session',
+    question: 'What maintenance tasks are due this month?', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'MAINTENANCE_QUERY', version: '1.0', family: 'MAINTENANCE' }, contextVersion: 'maintenance-context-v1',
+    viewState: { resultId: 'maintenance-result-1', domainScopePhrase: null, dateScopePhrase: 'this month', statusFilter: 'ALL_OPEN', selectedTaskId: null, revision: 1 },
+    blocks: [
+      { type: 'SUMMARY', id: 'maintenance-summary', title: '1 maintenance record matches this request', body: 'The task is recorded for this home.', tone: 'DEFAULT', actions: [] },
+      { type: 'GROUPED_LIST', id: 'maintenance-groups', title: 'Maintenance record', description: 'Showing current recorded tasks.', filters: [], sections: [{
+        id: 'open', title: 'Pending and in progress', count: 1, items: [{
+          id: 'maintenance-task-1', title: 'Service the heat pump', description: 'Annual preventive service.', meta: ['HVAC', 'Due Oct 1, 2026', 'high priority'], status: 'PENDING',
+          href: `/dashboard/maintenance?propertyId=${propertyId}&taskId=maintenance-task-1&from=ask`, entityType: 'MAINTENANCE_TASK',
+          actions: [{ id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_COMPLETE' }],
+        }],
+      }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: `/dashboard/maintenance?propertyId=${propertyId}`, style: 'SECONDARY' }] },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
 function execution(kind: 'refrigerator' | 'refinance', captured = false) {
   const capture = kind === 'refrigerator' ? {
     requirementId: 'repair-replace:refrigerator:lifecycle', captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE', classification: 'ENHANCEMENT_ACCURACY', state: 'UNKNOWN',
@@ -100,6 +123,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
   await page.route(`${apiOrigin}/api/properties*`, (route) => fulfill(route, { success: true, data: { properties: [{ id: propertyId, name: 'Acceptance Home', addressLine1: '1 Cozy Way', city: 'Boston', state: 'MA', zipCode: '02108' }] } }));
+  await page.route(`${apiOrigin}/api/maintenance-tasks/maintenance-task-1`, (route) => fulfill(route, { success: true, data: {
+    id: 'maintenance-task-1', propertyId, title: 'Service the heat pump', description: 'Annual preventive service for the recorded HVAC system.', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
+    assetType: 'HVAC', riskLevel: null, nextDueDate: '2026-10-01T00:00:00.000Z', isRecurring: true, frequency: 'ANNUALLY', lastCompletedDate: null,
+    estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
+    seasonalChecklistItemId: null, actionKey: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-17T00:00:00.000Z', completedAt: null,
+  } }));
   await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
     const pendingExecution = {
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',
@@ -172,6 +201,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/multi-day heat risk/i.test(body.message)) {
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
+      return;
+    }
+    if (/maintenance tasks are due/i.test(body.message)) {
+      const response = maintenanceExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
       return;
     }
     const response = execution(/refinanc/i.test(body.message) ? 'refinance' : 'refrigerator');

@@ -409,7 +409,7 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
 // B07 fix: exported (previously module-private) so the generic
 // GROUPED_LIST renderer's selection marker/highlight can be tested
 // directly, same convention as MaintenanceResultList's own export.
-export function BlockView({ block, executionId, onItemAction, itemActionsDisabled, onFilterClick }: { block: AskPresentationBlock; executionId: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void }) {
+export function BlockView({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick }: { block: AskPresentationBlock; executionId: string; propertyId?: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void }) {
   // B07 fix: the generic GROUPED_LIST renderer previously had no way to
   // show which item restoreResultPosition/reconcileResultView already
   // track as "selected" (captured generically from an outbound ?taskId=
@@ -464,7 +464,7 @@ export function BlockView({ block, executionId, onItemAction, itemActionsDisable
   }
 
   if (block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups') {
-    return <MaintenanceResultList block={block} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction}
+    return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.type === 'GROUPED_LIST') {
@@ -1667,7 +1667,7 @@ function ExecutionCard({
         <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
           <summary className="cursor-pointer text-xs font-semibold text-slate-500">Superseded by a refinement below · view original response</summary>
           <div className="mt-3 space-y-3 opacity-75">
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}
           </div>
         </details>
       </article>
@@ -1705,12 +1705,12 @@ function ExecutionCard({
           <details className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">Originally answered {new Date(execution.originalResponse.observedAt).toLocaleString()} · view original response</summary>
             <div className="mt-3 space-y-3 opacity-75">
-              <ResultViewContext.Provider value={null}>{execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}</ResultViewContext.Provider>
+              <ResultViewContext.Provider value={null}>{execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} />)}</ResultViewContext.Provider>
             </div>
           </details>
         )}
         <div ref={bodyRef} className="space-y-3">
-          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} />)}
+          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} />)}
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}

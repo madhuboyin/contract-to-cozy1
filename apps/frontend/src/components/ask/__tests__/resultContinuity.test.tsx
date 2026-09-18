@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, act } from '@testing-library/react';
+import { fireEvent, render, screen, act, waitFor } from '@testing-library/react';
 import { ResultRevalidationBoundary } from '../ResultRevalidationBoundary';
 import { MaintenanceResultList } from '../MaintenanceResultList';
 import { BlockView } from '../AskWorkspace';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
+import { api } from '@/lib/api/client';
 
 const block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }> = {
   type: 'GROUPED_LIST', id: 'maintenance-groups', title: 'Maintenance', filters: [], actions: [],
@@ -17,7 +18,7 @@ function execution(revision = 1, executionId = 'execution'): AskExecutionRespons
 }
 function List({ response }: { response: AskExecutionResponse }) {
   const controls = useResultView(response);
-  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} disabled={false} onFilter={() => {}} onAction={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onAction={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
 }
 beforeEach(() => window.sessionStorage.clear());
 
@@ -57,6 +58,30 @@ test('a task leaving the result clears selection rather than selecting a substit
   next.blocks = [{ ...block, sections: [{ ...block.sections[0], items: block.sections[0].items.filter((item) => item.id !== 'task-1') }] }];
   rerender(<List response={next} />);
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).selectedTaskId).toBeNull();
+});
+
+test('clicking a maintenance task title opens canonical detail inline without navigating', async () => {
+  const href = '/dashboard/maintenance?propertyId=home&taskId=task-0';
+  const response = execution();
+  response.blocks = [{ ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], href }] }] }];
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce({ success: true, data: {
+    id: 'task-0', propertyId: 'home', title: 'Task 0', description: 'Canonical task detail', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
+    assetType: 'HVAC', riskLevel: null, nextDueDate: '2026-10-01T00:00:00.000Z', isRecurring: true, frequency: 'ANNUALLY', lastCompletedDate: null,
+    estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
+    seasonalChecklistItemId: null, actionKey: null, createdAt: new Date('2026-09-01T00:00:00.000Z'), updatedAt: new Date('2026-09-17T00:00:00.000Z'), completedAt: null,
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>);
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+
+  render(<List response={response} />);
+  expect(screen.queryByRole('link', { name: 'Task 0' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+
+  await waitFor(() => expect(screen.getByText('Canonical task detail')).toBeInTheDocument());
+  expect(screen.getByText('High')).toBeInTheDocument();
+  expect(screen.getByText('$250')).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/dashboard/ask');
+  expect(window.location.search).toContain('sessionId=session');
+  expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('task-0');
 });
 
 test('session deletion removes view state without affecting another session', () => {
